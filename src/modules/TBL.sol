@@ -2,13 +2,13 @@
 pragma solidity ^0.8.10;
 
 // interfaces (enums events errors)
-import "../OlympusErrors.sol";
+import "src/OlympusErrors.sol";
 
 // libs
-import "../libraries/TransferHelper.sol";
+import "src/libraries/TransferHelper.sol";
 
 // types
-import {Kernel, Module} from "../Kernel.sol";
+import {Kernel, Module} from "src/Kernel.sol";
 
 library locklib {
     function pack(uint224 amount, uint32 timestamp)
@@ -16,7 +16,7 @@ library locklib {
         pure
         returns (uint256)
     {
-        return uint256(amount << 32) + uint256(timestamp);
+        return (uint256(amount) << 32) + uint256(timestamp);
     }
 
     function unpack(uint256 lockData) internal pure returns (uint224, uint32) {
@@ -83,19 +83,22 @@ contract TransferBalanceLock is Module {
             uint256[] memory locks = lockedBalances[owner][token];
 
             uint256 i = locks.length;
-            uint256 origAmount = amount;
+            uint224 origAmount = amount;
 
             // this extends locks on last tokens top down, to keep it logical and ordered
             while (i > 0) {
                 i--;
 
-                (uint224 balance, ) = locks[i].unpack();
+                (uint224 balance, uint32 lockTimestamp) = locks[i].unpack();
+
+                // will revert on fuckery
+                lockTimestamp = lockTimestamp + lockExtensionPeriod;
 
                 // no need to explicitly add period since its packed in first 32
                 locks[i] += lockExtensionPeriod;
 
                 if (amount <= balance) i = 0;
-                else amount -= balance;
+                amount -= balance;
             }
 
             // checks
