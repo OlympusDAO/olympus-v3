@@ -49,7 +49,6 @@ contract OlympusStaking is Module, Auth {
     ///      represented as gons.
     uint256 public gonsPerFragment;
 
-    uint256 public dormantNominalSupply;
     uint256 public nominalSupply;
     uint256 public indexedSupply;
 
@@ -83,37 +82,6 @@ contract OlympusStaking is Module, Auth {
 
     function KEYCODE() external pure override returns (bytes3) {
         return "STK";
-    }
-
-    /// @notice Initialize index and send all possible sOHM to minter, and set the debt module.
-    //function initializeState(uint256 initialIndex_) external {
-    //    if (indexGons != 0) revert AlreadyInitialized();
-
-    //    indexGons = _nominalToGons(initialIndex_);
-    //    nominalGonsBalance[address(this)] = TOTAL_GONS;
-    //}
-
-    /// @notice Stake OHM by taking in OHM and returning equivalent sOHM.
-    /// @dev Can alternatively use gOHM deposit to get equivalent gOHM.
-    // TODO warmup logic?
-    function stakeIndexed(
-        address from_,
-        address to_,
-        uint256 amount_
-    ) external returns (uint256) {
-        IERC20(ohm).safeTransferFrom(from_, address(this), amount_);
-        convertToIndexed(address(this), to_, amount_);
-    }
-
-    /// @notice Unstake OHM by taking in gOHM and returning equivalent OHM.
-    // TODO probably not necessary. can unstake and convert inside the gVault
-    function unstakeIndexed(
-        address from_,
-        address to_,
-        uint256 amount_
-    ) external returns (uint256 nominalAmount) {
-        nominalAmount = convertToNominal(from_, address(this), amount_);
-        IERC20(ohm).safeTransfer(to_, nominalAmount);
     }
 
     /* ======== REBASE LOGIC ======== */
