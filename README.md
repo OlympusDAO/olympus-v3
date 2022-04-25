@@ -11,6 +11,9 @@ mkdir my-project
 cd my-project
 forge init --template https://github.com/OlympusDAO/forge-template
 yarn build
+cp .env.example .env
+# fill it out
+vim .env
 yarn test
 ```
 
@@ -23,6 +26,11 @@ forge build
 ```
 
 ## Features
+
+### Commands
+
+`yarn test` - run forge test with max verbosity
+`yarn test:f` - run forge fork test with max verbosity
 
 ### Preinstalled dependencies
 
