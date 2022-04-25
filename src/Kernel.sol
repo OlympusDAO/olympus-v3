@@ -67,14 +67,14 @@ contract Kernel {
     error Kernel_PolicyAlreadyApproved(address policy_);
     error Kernel_PolicyNotApproved(address policy_);
 
-    address public executive;
+    address public executor;
 
     constructor() {
-        executive = msg.sender;
+        executor = msg.sender;
     }
 
     modifier onlyExecutor() {
-        if (msg.sender != executive) revert Kernel_OnlyExecutor(msg.sender);
+        if (msg.sender != executor) revert Kernel_OnlyExecutor(msg.sender);
         _;
     }
 
@@ -106,7 +106,7 @@ contract Kernel {
             if (getKeycodeForModule[target_] != "CPU")
                 revert Kernel_OnlyExecutor(target_);
 
-            executive = target_;
+            executor = target_;
         }
 
         emit ActionExecuted(action_, target_);

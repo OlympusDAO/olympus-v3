@@ -14,24 +14,17 @@ contract gOHM is Policy, IERC4626, IERC20 {
 
     address public immutable asset;
 
-    string public name;
-    string public symbol;
-    uint8 public immutable decimals;
+    string public constant name = "Governance Olympus";
+    string public constant symbol = "gOHM";
+    uint8 public constant decimals = 18;
 
-    constructor(
-        Kernel kernel_,
-        address ohm_,
-        OlympusStaking staking_
-    ) Policy(kernel_) {
+    constructor(Kernel kernel_, address ohm_) Policy(kernel_) {
         asset = ohm_;
-        STK = staking_;
-        name = "Governance Olympus";
-        symbol = "gOHM";
-        decimals = 18;
     }
 
     function configureModules() external override onlyKernel {
         STK = OlympusStaking(requireModule("STK"));
+        // TODO add CCX (cross chain transmitter)
     }
 
     /*///////////////////////////////////////////////////////////////

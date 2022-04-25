@@ -7,6 +7,7 @@ import {TransferHelper} from "../libraries/TransferHelper.sol";
 import {IERC4626} from "../interfaces/IERC4626.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
 
+/// @notice sOHM token and vault that acts as a policy
 contract sOHM is Policy, IERC4626, IERC20 {
     using TransferHelper for IERC20;
 
@@ -14,20 +15,12 @@ contract sOHM is Policy, IERC4626, IERC20 {
 
     address public immutable asset;
 
-    string public name;
-    string public symbol;
-    uint8 public immutable decimals;
+    string public constant name = "Staked Olympus";
+    string public constant symbol = "sOHM";
+    uint8 public constant decimals = 9;
 
-    constructor(
-        Kernel kernel_,
-        address ohm_,
-        OlympusStaking staking_
-    ) Policy(kernel_) {
+    constructor(Kernel kernel_, address ohm_) Policy(kernel_) {
         asset = ohm_;
-        STK = staking_;
-        name = "Staked Olympus";
-        symbol = "sOHM";
-        decimals = 9;
     }
 
     function configureModules() external override onlyKernel {
