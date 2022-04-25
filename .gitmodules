@@ -6,7 +6,7 @@
 	url = https://github.com/Rari-Capital/solmate
 [submodule "lib/forge-std"]
 	path = lib/forge-std
-	url = https://github.com/brockelmore/forge-std
+	url = https://github.com/foundry-rs/forge-std
 [submodule "lib/test-utils"]
 	path = lib/test-utils
 	url = https://github.com/OlympusDAO/test-utils
