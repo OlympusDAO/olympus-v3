@@ -36,15 +36,19 @@ contract TransferBalanceLockTest is Test {
         assertEq32("TBL", tbl.KEYCODE());
     }
 
-    function testPullTokensNoLock(uint224 amount, uint8 rounds, uint8 nusers) public {
+    function testPullTokensNoLock(
+        uint224 amount,
+        uint8 rounds,
+        uint8 nusers
+    ) public {
         /// Setup
         // vm
         vm.assume(amount > 0);
-        vm.assume(amount < 1e23);
+        vm.assume(amount < 1e40);
         vm.assume(rounds > 0);
         vm.assume(nusers > 0);
-        vm.assume(rounds < 20);
-        vm.assume(nusers < 20);
+        vm.assume(rounds < 30);
+        vm.assume(nusers < 30);
 
         // else
         address[] memory usrs = usrfac.create(nusers);
@@ -53,21 +57,16 @@ contract TransferBalanceLockTest is Test {
         Kernel(address(this)).approvedPolicies.mock(address(this), true);
 
         for (uint256 i; i < rounds; i++) {
-            uint256 index = uint256(keccak256(i)) % length;
-            address user = users[index];
-            uint256 deposit = uint256(keccak256(amount + i)) % 1e24;
+            uint256 index = uint256(keccak256(abi.encode(i))) % length;
+            address user = usrs[index];
+            uint256 deposit = uint256(keccak256(abi.encode(amount + i))) % 1e24;
             bals[index] += deposit;
 
-            ohm.transferFrom.mock(
-                user,
-                address(tbl),
-                deposit,
-                true
-            );
+            ohm.transferFrom.mock(user, address(tbl), uint224(deposit), true);
 
             // test
             /// passing
-            tbl.pullTokens(user, coins.ohm, deposit, 0);
+            tbl.pullTokens(user, coins.ohm, uint224(deposit), 0);
             assertEq(tbl.unlocked(user, coins.ohm, false), bals[index]);
             assertEq(tbl.locked(user, coins.ohm), 0);
         }
