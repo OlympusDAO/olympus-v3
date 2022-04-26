@@ -91,8 +91,10 @@ contract gOHM is Policy, IERC4626, IERC20 {
         address to_,
         uint256 nominal_
     ) internal returns (uint256) {
+        uint256 shares = convertToShares(nominal_);
         MNT.burnOhm(from_, nominal_);
-        STK.mint(msg.sender, IDX.index());
+        STK.mint(to_, shares);
+        return shares;
     }
 
     function _unstake(

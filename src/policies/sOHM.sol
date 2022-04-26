@@ -3,6 +3,8 @@ pragma solidity ^0.8.10;
 
 import {Kernel, Policy} from "../Kernel.sol";
 import {OlympusStaking} from "../modules/STK.sol";
+import {OlympusIndex} from "../modules/IDX.sol";
+import {OlympusMinter} from "../modules/MNT.sol";
 import {TransferHelper} from "../libraries/TransferHelper.sol";
 import {IERC4626} from "../interfaces/IERC4626.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
@@ -12,12 +14,14 @@ contract sOHM is Policy, IERC4626, IERC20 {
     using TransferHelper for IERC20;
 
     OlympusStaking private STK;
+    OlympusIndex private IDX;
+    OlympusMinter private MNT;
 
     address public immutable asset;
 
     string public constant name = "Staked Olympus";
     string public constant symbol = "sOHM";
-    uint8 public constant decimals = 9;
+    uint8 public constant decimals = 18;
 
     constructor(Kernel kernel_, address ohm_) Policy(kernel_) {
         asset = ohm_;
@@ -25,6 +29,8 @@ contract sOHM is Policy, IERC4626, IERC20 {
 
     function configureModules() external override onlyKernel {
         STK = OlympusStaking(requireModule("STK"));
+        IDX = OlympusIndex(requireModule("IDX"));
+        MNT = OlympusMinter(requireModule("MNT"));
     }
 
     /*///////////////////////////////////////////////////////////////
@@ -78,8 +84,8 @@ contract sOHM is Policy, IERC4626, IERC20 {
         address to_,
         uint256 amount_
     ) internal {
-        IERC20(asset).safeTransferFrom(from_, to_, amount_);
-        STK.transferNominal(address(STK), to_, amount_);
+        MNT.burnOhm(from_, amount_);
+        STK.mint(to_, amount_ / IDX.index());
         // TODO instead, mint and propagate via CCX
     }
 
@@ -88,9 +94,8 @@ contract sOHM is Policy, IERC4626, IERC20 {
         address to_,
         uint256 amount_
     ) internal {
-        STK.transferNominal(from_, to_, amount_);
-        IERC20(asset).safeTransferFrom(from_, address(STK), amount_);
-        // TODO instead, burn and propagate via CCX
+        STK.burn(from_, amount_ / IDX.index());
+        MNT.mintOhm(to_, amount_);
     }
 
     /*///////////////////////////////////////////////////////////////
@@ -102,7 +107,7 @@ contract sOHM is Policy, IERC4626, IERC20 {
         override
         returns (bool)
     {
-        STK.transferNominal(msg.sender, to_, amount_);
+        STK.transferFrom(msg.sender, to_, amount_);
 
         emit Transfer(msg.sender, to_, amount_);
         return true;
@@ -113,7 +118,7 @@ contract sOHM is Policy, IERC4626, IERC20 {
         address to_,
         uint256 amount_
     ) external override returns (bool) {
-        STK.transferNominal(from_, to_, amount_);
+        STK.transferFrom(from_, to_, amount_);
         return true;
     }
 
@@ -123,7 +128,7 @@ contract sOHM is Policy, IERC4626, IERC20 {
         override
         returns (uint256)
     {
-        return STK.getAllowanceNominal(owner, spender);
+        return STK.allowances(owner, spender);
     }
 
     function approve(address spender, uint256 amount)
@@ -131,7 +136,8 @@ contract sOHM is Policy, IERC4626, IERC20 {
         override
         returns (bool)
     {
-        return STK.approveNominal(spender, amount);
+        STK.approve(msg.sender, spender, amount);
+        return true;
     }
 
     /*///////////////////////////////////////////////////////////////
@@ -139,15 +145,15 @@ contract sOHM is Policy, IERC4626, IERC20 {
     //////////////////////////////////////////////////////////////*/
 
     function balanceOf(address who_) public view override returns (uint256) {
-        return STK.getNominalBalance(who_);
+        return STK.indexedBalance(who_) * IDX.index();
     }
 
     function totalAssets() public view override returns (uint256) {
-        return IERC20(asset).balanceOf(address(STK));
+        return STK.indexedSupply() * IDX.index();
     }
 
     function totalSupply() public view override returns (uint256) {
-        return STK.nominalSupply();
+        return STK.indexedSupply() * IDX.index();
     }
 
     /// @notice Utility function to convert sOHM value into OHM value.
@@ -197,11 +203,6 @@ contract sOHM is Policy, IERC4626, IERC20 {
         return assets;
     }
 
-    /// @notice Convenience function to get sOHM index.
-    function getIndex() public view returns (uint256) {
-        return STK.index();
-    }
-
     function previewRedeem(uint256 shares)
         public
         pure
@@ -215,19 +216,23 @@ contract sOHM is Policy, IERC4626, IERC20 {
                      DEPOSIT/WITHDRAWAL LIMIT LOGIC
     //////////////////////////////////////////////////////////////*/
 
+    // TODO verify
     function maxDeposit(address) public pure override returns (uint256) {
         return type(uint256).max;
     }
 
+    // TODO verify
     function maxMint(address) public pure override returns (uint256) {
         return type(uint256).max;
     }
 
+    // TODO verify
     function maxWithdraw(address owner) public view override returns (uint256) {
-        return STK.nominalGonsBalance(owner);
+        return STK.indexedBalance(owner) * IDX.index();
     }
 
+    // TODO verify
     function maxRedeem(address owner) public view override returns (uint256) {
-        return STK.nominalGonsBalance(owner);
+        return STK.indexedBalance(owner) * IDX.index();
     }
 }

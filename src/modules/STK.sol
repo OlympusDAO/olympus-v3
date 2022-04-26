@@ -64,11 +64,11 @@ contract OlympusStaking is Module {
     }
 
     function approve(
-        address origin_,
+        address owner_,
         address spender_,
         uint256 indexed_
     ) public onlyPolicy {
         // TODO steal from solmate
-        allowances[origin_][spender_] = indexed_;
+        allowances[owner_][spender_] = indexed_;
     }
 }

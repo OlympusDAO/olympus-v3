@@ -8,6 +8,15 @@ import {OlympusIndex} from "../modules/IDX.sol";
 import {Kernel, Policy} from "../Kernel.sol";
 
 contract Rebaser is Policy, ReentrancyGuard {
+    error Rebaser_AmountMustBeNonzero();
+
+    event Rebased(
+        uint256 indexed epoch_,
+        uint256 blockNumber_,
+        uint256 rebasePct_,
+        uint256 newIndex_
+    );
+
     struct Epoch {
         uint256 length;
         uint256 number;
@@ -52,23 +61,20 @@ contract Rebaser is Policy, ReentrancyGuard {
             // TODO when would this ever be needed?
 
             // Calculate how much next rebase will need to distribute.
-            currentEpoch.toDistribute = STK.getNextDistribution();
+            currentEpoch.toDistribute = getNextDistribution();
 
-            // messageBus.transmitGons()
-            //emit Rebased(
-            //    currentEpoch.number,
-            //    block.number,
-            //    currentEpoch.toDistribute,
-            //    circulatingSupply,
-            //    sOHM.gonsPerFragment
-            //    0
-            //);
+            emit Rebased(
+                currentEpoch.number,
+                block.number,
+                rebaseRate,
+                newIndex
+            );
         }
     }
 
-    function getNextDistribution() external view returns (uint256) {
-        uint256 currentSupply = STK.indexedSupply();
-        return currentSupply * IDX.index();
+    function getNextDistribution() public view returns (uint256) {
+        // TODO verify
+        return (STK.indexedSupply() * IDX.index() * rebaseRate) / RATE_UNITS;
     }
 
     function mintAndSync() external nonReentrant {
@@ -76,7 +82,7 @@ contract Rebaser is Policy, ReentrancyGuard {
     }
 
     function setRebaseRate(uint256 newRate_) external {
+        if (newRate_ == 0) revert Rebaser_AmountMustBeNonzero();
         rebaseRate = newRate_;
-        // TODO transmit this via messageBus
     }
 }
