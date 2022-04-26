@@ -85,4 +85,9 @@ contract Rebaser is Policy, ReentrancyGuard {
         if (newRate_ == 0) revert Rebaser_AmountMustBeNonzero();
         rebaseRate = newRate_;
     }
+
+    function setBounty(uint256 newBounty_) external {
+        if (newBounty_ == 0) revert Rebaser_AmountMustBeNonzero();
+        bounty = newBounty_;
+    }
 }
