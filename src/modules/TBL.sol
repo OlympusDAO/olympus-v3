@@ -19,16 +19,22 @@ library locklib {
         return (uint256(amount) << 32) + uint256(timestamp);
     }
 
-    function unpack(uint256 lockData) internal pure returns (uint224, uint32) {
-        return (uint224(lockData >> 32), uint32(lockData));
+    function unpack(uint256 lock) internal pure returns (uint224, uint32) {
+        return (uint224(lock >> 32), uint32(lock));
     }
 
-    function sub(uint256 lockData, uint256 toSub)
+    function sub(uint256 lock, uint256 toSub) internal pure returns (uint256) {
+        return lock - (toSub << 32);
+    }
+
+    function suicide(uint256 lock)
         internal
         pure
-        returns (uint256)
+        returns (uint256 dead, uint224 head)
     {
-        return lockData - (toSub << 32);
+        head = uint224(lock >> 32);
+        dead = uint256(head) << 32;
+        assert(dead < lock);
     }
 }
 
@@ -70,6 +76,74 @@ contract TransferBalanceLock is Module {
             lockedBalances[owner][token].push(
                 locklib.pack(amount, uint32(block.timestamp) + lockPeriod)
             );
+    }
+
+    function slashTokens(
+        address owner,
+        address receiver,
+        address token,
+        uint224 amount,
+        bool isLocked,
+        bool slashRecent
+    ) external onlyPolicy {
+        if (isLocked) {
+            uint256[] memory locks = lockedBalances[owner][token];
+            uint224 progress = amount;
+
+            if (!slashRecent) {
+                uint256 i = locks.length;
+
+                while (i > 0) {
+                    i--;
+
+                    uint224 bal;
+                    uint256 lock;
+
+                    (lock, bal) = locks[i].suicide();
+
+                    if (progress <= bal) {
+                        locks[i] = lock.sub(bal - progress);
+                        i = 0;
+                    } else {
+                        progress -= bal;
+                        locks[i] = lock;
+                    }
+                }
+            } else {
+                uint256 i = 0;
+                uint256 length = locks.length;
+
+                while (i < length) {
+                    uint224 bal;
+                    uint256 lock;
+
+                    (lock, bal) = locks[i].suicide();
+
+                    if (progress <= bal) {
+                        locks[i] = lock.sub(bal - progress);
+                        i = length;
+                    } else {
+                        progress -= bal;
+                        locks[i] = lock;
+                    }
+
+                    i++;
+                }
+            }
+
+            if (progress != 0)
+                revert TBL_NotEnoughLockedForSlashing(amount, progress);
+
+            lockedBalances[owner][token] = locks;
+        } else {
+            uint256 bal = unlockedBalances[owner][token];
+
+            if (bal < amount)
+                revert TBL_NotEnoughTokensUnlockedForSlashing(bal);
+            else unlockedBalances[owner][token] -= amount;
+        }
+
+        unlockedBalances[receiver][token] += amount;
     }
 
     function extendLock(
@@ -132,13 +206,13 @@ contract TransferBalanceLock is Module {
             // block
             while (pushable < amount) {
                 // reads
-                uint256 lockData = locks[i];
-                (uint224 balance, uint32 lockTimestamp) = lockData.unpack();
+                uint256 lock = locks[i];
+                (uint224 balance, uint32 lockTimestamp) = lock.unpack();
 
                 // check and read
                 if (ts > lockTimestamp) {
                     if (balance + pushable > amount) {
-                        locks[i] = lockData.sub(amount - pushable);
+                        locks[i] = lock.sub(amount - pushable);
                         pushable = amount; // flag
                     } else {
                         pushable += balance;

@@ -6,17 +6,19 @@ import "forge-std/Test.sol";
 import "forge-std/console2.sol";
 import "solmate/tokens/ERC20.sol";
 import "test-utils/coins.sol";
-import "test-utils/token.sol";
 import "test-utils/users.sol";
+import "test-utils/mocking.sol";
 
 //// LOCAL
 // types
 import "src/modules/TBL.sol";
 
 contract TransferBalanceLockTest is Test {
+    using mocking for *;
+
     TransferBalanceLock tbl;
-    token mock;
     users usrfac;
+    ERC20 ohm;
 
     bool pswitch;
 
@@ -26,8 +28,8 @@ contract TransferBalanceLockTest is Test {
 
     function setUp() public {
         tbl = new TransferBalanceLock(address(this));
-        mock = new token(coins.ohm);
         usrfac = new users();
+        ohm = ERC20(coins.ohm);
     }
 
     function testKEYCODE() public {
@@ -38,16 +40,12 @@ contract TransferBalanceLockTest is Test {
         /// Setup
         // vm
         vm.assume(amount > 0);
-        vm.mockCall(
-            address(this),
-            abi.encodeWithSignature("approvedPolicies(address)", address(this)),
-            abi.encode(true)
-        );
 
         // else
         address user1 = usrfac.next();
         address user2 = usrfac.next();
-        mock.transferFrom(user1, address(tbl), amount);
+        Kernel(address(this)).approvedPolicies.mock(address(this), true);
+        ohm.transferFrom.mock(user1, address(tbl), amount, true);
 
         // test
         /// passing
@@ -65,16 +63,12 @@ contract TransferBalanceLockTest is Test {
         // vm
         vm.assume(amount > 0);
         vm.assume(lockPeriod > 0);
-        vm.mockCall(
-            address(this),
-            abi.encodeWithSignature("approvedPolicies(address)", address(this)),
-            abi.encode(true)
-        );
 
         // else
         address user1 = usrfac.next();
         address user2 = usrfac.next();
-        mock.transferFrom(user1, address(tbl), amount);
+        Kernel(address(this)).approvedPolicies.mock(address(this), true);
+        ohm.transferFrom.mock(user1, address(tbl), amount, true);
 
         // test
         /// passing
@@ -97,17 +91,13 @@ contract TransferBalanceLockTest is Test {
         /// Setup
         // vm
         vm.assume(amount > 0);
-        vm.mockCall(
-            address(this),
-            abi.encodeWithSignature("approvedPolicies(address)", address(this)),
-            abi.encode(true)
-        );
 
         // else
         address user1 = usrfac.next();
         address user2 = usrfac.next();
-        mock.transferFrom(user1, address(tbl), amount);
-        mock.transfer(user1, amount);
+        Kernel(address(this)).approvedPolicies.mock(address(this), true);
+        ohm.transferFrom.mock(user1, address(tbl), amount, true);
+        ohm.transfer.mock(user1, amount, true);
 
         // test
         tbl.pullTokens(user1, coins.ohm, amount, 0);
@@ -123,18 +113,14 @@ contract TransferBalanceLockTest is Test {
         vm.assume(amount > 0);
         vm.assume(lockPeriod > 0);
         vm.assume(lockPeriod + block.timestamp <= 2**32 - 1);
-        vm.mockCall(
-            address(this),
-            abi.encodeWithSignature("approvedPolicies(address)", address(this)),
-            abi.encode(true)
-        );
 
         // else
         address user1 = usrfac.next();
         address user2 = usrfac.next();
-        mock.transferFrom(user1, address(tbl), amount);
-        mock.transferFrom(user2, address(tbl), amount);
-        mock.transfer(user1, amount);
+        Kernel(address(this)).approvedPolicies.mock(address(this), true);
+        ohm.transferFrom.mock(user1, address(tbl), amount, true);
+        ohm.transferFrom.mock(user2, address(tbl), amount, true);
+        ohm.transfer.mock(user1, amount, true);
 
         // test
         tbl.pullTokens(user1, coins.ohm, amount, lockPeriod);
@@ -169,18 +155,14 @@ contract TransferBalanceLockTest is Test {
         vm.assume(lockPeriod > 0);
         vm.assume(lockPeriod + block.timestamp <= 2**32 - 1);
         vm.assume(lockExtensionPeriod > 0);
-        vm.mockCall(
-            address(this),
-            abi.encodeWithSignature("approvedPolicies(address)", address(this)),
-            abi.encode(true)
-        );
-        uint256 origTimestamp = block.timestamp;
 
         // else
+        uint256 origTimestamp = block.timestamp;
         address user1 = usrfac.next();
         address user2 = usrfac.next();
-        mock.transferFrom(user1, address(tbl), amount);
-        mock.transfer(user1, amount);
+        Kernel(address(this)).approvedPolicies.mock(address(this), true);
+        ohm.transferFrom.mock(user1, address(tbl), amount, true);
+        ohm.transfer.mock(user1, amount, true);
 
         // test
         tbl.pullTokens(user1, coins.ohm, amount, lockPeriod);
