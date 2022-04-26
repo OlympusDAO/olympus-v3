@@ -80,6 +80,7 @@ contract sOHM is Policy, IERC4626, IERC20 {
     ) internal {
         IERC20(asset).safeTransferFrom(from_, to_, amount_);
         STK.transferNominal(address(STK), to_, amount_);
+        // TODO instead, mint and propagate via CCX
     }
 
     function _unstake(
@@ -89,6 +90,7 @@ contract sOHM is Policy, IERC4626, IERC20 {
     ) internal {
         STK.transferNominal(from_, to_, amount_);
         IERC20(asset).safeTransferFrom(from_, address(STK), amount_);
+        // TODO instead, burn and propagate via CCX
     }
 
     /*///////////////////////////////////////////////////////////////

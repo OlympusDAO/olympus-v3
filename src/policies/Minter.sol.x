@@ -17,7 +17,7 @@ import {Kernel, Policy} from "../Kernel.sol";
 /// @notice Handles minting/burning of OHM and sOHM, staking, sOHM<>gOHM conversions, and all rebase logic.
 /// Also holds all debt facility functions.
 /// @dev Minter go brrrr
-contract OlympusMinter is Policy, Auth, ReentrancyGuard {
+contract OlympusMinterr is Policy, Auth, ReentrancyGuard {
     using TransferHelper for IERC20;
     using FixedPointMathLib for uint256;
 

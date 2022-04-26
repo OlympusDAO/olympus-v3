@@ -3,14 +3,19 @@ pragma solidity >=0.8.0;
 
 import {Kernel, Policy} from "../Kernel.sol";
 import {OlympusStaking} from "../modules/STK.sol";
-import {TransferHelper} from "../libraries/TransferHelper.sol";
+import {OlympusIndex} from "../modules/IDX.sol";
+import {OlympusMinter} from "../modules/MNT.sol";
+
 import {IERC4626} from "../interfaces/IERC4626.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
+import {TransferHelper} from "../libraries/TransferHelper.sol";
 
 contract gOHM is Policy, IERC4626, IERC20 {
     using TransferHelper for IERC20;
 
-    OlympusStaking public STK;
+    OlympusStaking private STK;
+    OlympusIndex private IDX;
+    OlympusMinter private MNT;
 
     address public immutable asset;
 
@@ -24,6 +29,8 @@ contract gOHM is Policy, IERC4626, IERC20 {
 
     function configureModules() external override onlyKernel {
         STK = OlympusStaking(requireModule("STK"));
+        IDX = OlympusIndex(requireModule("IDX"));
+        MNT = OlympusMinter(requireModule("MNT"));
         // TODO add CCX (cross chain transmitter)
     }
 
@@ -31,13 +38,15 @@ contract gOHM is Policy, IERC4626, IERC20 {
                         DEPOSIT/WITHDRAWAL LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function deposit(uint256 assets, address receiver)
+    function deposit(uint256 assets_, address receiver_)
         public
         override
         returns (uint256)
     {
-        uint256 shares = _stake(msg.sender, receiver, assets);
-        emit Deposit(msg.sender, receiver, assets, shares);
+        uint256 shares = convertToShares(assets_);
+        MNT.burnOhm(msg.sender, assets_);
+        STK.mint(msg.sender, assets_ * IDX.index());
+        emit Deposit(msg.sender, receiver_, assets_, shares);
         return shares;
     }
 
@@ -82,8 +91,8 @@ contract gOHM is Policy, IERC4626, IERC20 {
         address to_,
         uint256 nominal_
     ) internal returns (uint256) {
-        IERC20(asset).safeTransferFrom(from_, address(STK), nominal_);
-        return STK.convertToIndexed(address(STK), to_, nominal_);
+        MNT.burnOhm(from_, nominal_);
+        STK.mint(msg.sender, IDX.index());
     }
 
     function _unstake(
@@ -92,8 +101,8 @@ contract gOHM is Policy, IERC4626, IERC20 {
         uint256 nominal_
     ) internal returns (uint256) {
         uint256 shares = convertToShares(nominal_);
-        STK.convertToNominal(from_, address(STK), shares);
-        IERC20(asset).safeTransferFrom(address(STK), to_, nominal_);
+        STK.burn(from_, shares);
+        MNT.mintOhm(to_, nominal_);
         return shares;
     }
 
@@ -106,7 +115,7 @@ contract gOHM is Policy, IERC4626, IERC20 {
         override
         returns (bool)
     {
-        STK.transferIndexed(msg.sender, to_, amount_);
+        STK.transferFrom(msg.sender, to_, amount_);
         emit Transfer(msg.sender, to_, amount_);
         return true;
     }
@@ -116,7 +125,7 @@ contract gOHM is Policy, IERC4626, IERC20 {
         address to_,
         uint256 amount_
     ) external override returns (bool) {
-        STK.transferIndexed(from_, to_, amount_);
+        STK.transferFrom(from_, to_, amount_);
         emit Transfer(from_, to_, amount_);
         return true;
     }
@@ -126,11 +135,11 @@ contract gOHM is Policy, IERC4626, IERC20 {
         view
         returns (uint256)
     {
-        return STK.getAllowanceIndexed(owner, spender);
+        return STK.allowances(owner, spender);
     }
 
     function approve(address spender, uint256 amount) external returns (bool) {
-        STK.approveIndexed(spender, amount);
+        STK.approve(msg.sender, spender, amount);
         emit Approval(msg.sender, spender, amount);
         return true;
     }
@@ -140,7 +149,7 @@ contract gOHM is Policy, IERC4626, IERC20 {
     //////////////////////////////////////////////////////////////*/
 
     function balanceOf(address who_) public view returns (uint256) {
-        return STK.getIndexedBalance(who_);
+        return STK.indexedBalance(who_);
     }
 
     function totalAssets() public view returns (uint256) {
@@ -148,7 +157,7 @@ contract gOHM is Policy, IERC4626, IERC20 {
     }
 
     function totalSupply() public view returns (uint256) {
-        return STK.nominalSupply();
+        return STK.indexedSupply();
     }
 
     //was fromSerialized()
@@ -159,7 +168,8 @@ contract gOHM is Policy, IERC4626, IERC20 {
         override
         returns (uint256)
     {
-        return STK.getNominalValue(shares);
+        // TODO use FullMath or equivalent
+        return shares * IDX.index();
     }
 
     //was toSerialized()
@@ -170,7 +180,8 @@ contract gOHM is Policy, IERC4626, IERC20 {
         override
         returns (uint256)
     {
-        return STK.getIndexedValue(assets);
+        // TODO use FullMath or equivalent
+        return assets / IDX.index();
     }
 
     function previewDeposit(uint256 assets)
@@ -200,9 +211,9 @@ contract gOHM is Policy, IERC4626, IERC20 {
         return convertToShares(assets);
     }
 
-    /// @notice Convenience function to get sOHM index.
+    /// @notice Convenience function to get index.
     function getIndex() public view returns (uint256) {
-        return STK.index();
+        return IDX.index();
     }
 
     function previewRedeem(uint256 shares)
@@ -218,19 +229,25 @@ contract gOHM is Policy, IERC4626, IERC20 {
                      DEPOSIT/WITHDRAWAL LIMIT LOGIC
     //////////////////////////////////////////////////////////////*/
 
+    // TODO verify
     function maxDeposit(address) public pure override returns (uint256) {
+        // TODO should be related to STK.TOTAL_GONS?
         return type(uint256).max;
     }
 
+    // TODO verify
     function maxMint(address) public pure override returns (uint256) {
+        // TODO should be related to STK.TOTAL_GONS?
         return type(uint256).max;
     }
 
+    // TODO verify
     function maxWithdraw(address owner) public view override returns (uint256) {
-        return convertToAssets(STK.getIndexedBalance(owner));
+        return convertToAssets(STK.indexedBalance(owner));
     }
 
+    // TODO verify
     function maxRedeem(address owner) public view override returns (uint256) {
-        return STK.getIndexedBalance(owner);
+        return STK.indexedBalance(owner);
     }
 }
