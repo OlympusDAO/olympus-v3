@@ -19,6 +19,10 @@ library locklib {
         return (uint256(amount) << 32) + uint256(timestamp);
     }
 
+    function end(uint256 lock) internal pure returns (uint32) {
+        return uint32((lock << 224) >> 224);
+    }
+
     function unpack(uint256 lock) internal pure returns (uint224, uint32) {
         return (uint224(lock >> 32), uint32(lock));
     }
@@ -72,10 +76,7 @@ contract TransferBalanceLock is Module {
 
         // then effect
         if (lockPeriod == 0) unlockedBalances[owner][token] += amount;
-        else
-            lockedBalances[owner][token].push(
-                locklib.pack(amount, uint32(block.timestamp) + lockPeriod)
-            );
+        else _lockTokens(owner, token, amount, lockPeriod);
     }
 
     function slashTokens(
@@ -301,5 +302,51 @@ contract TransferBalanceLock is Module {
         }
 
         return unpushable;
+    }
+
+    function _lockTokens(
+        address owner,
+        address token,
+        uint224 amount,
+        uint32 lockPeriod
+    ) internal {
+        uint256[] memory locks = lockedBalances[owner][token];
+        uint256 length = locks.length;
+
+        uint256[] memory newLocks = new uint256[](length + 1);
+
+        uint32 lockEnd = uint32(block.timestamp) + lockPeriod;
+
+        if (length == 0)
+            lockedBalances[owner][token].push(locklib.pack(amount, lockEnd));
+        else {
+            for (uint256 i; i < length; i++) {
+                uint256 lock = locks[i];
+                uint32 currentLockEnd = lock.end();
+
+                newLocks[i] = lock;
+
+                if (lockEnd <= currentLockEnd) {
+                    if (currentLockEnd == lockEnd) {
+                        locks[i] += (amount << 32);
+
+                        lockedBalances[owner][token] = locks;
+                    } else {
+                        newLocks[i] = locklib.pack(amount, lockEnd);
+
+                        for (uint256 j = i; j < length; j++) {
+                            newLocks[j + 1] = locks[j];
+                        }
+
+                        lockedBalances[owner][token] = newLocks;
+                    }
+
+                    i = length;
+                } else if (i == length - 1) {
+                    newLocks[length] = locklib.pack(amount, lockEnd);
+                    lockedBalances[owner][token] = newLocks;
+                }
+            }
+        }
     }
 }

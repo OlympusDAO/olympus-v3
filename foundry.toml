@@ -1,0 +1,3 @@
+[fried]
+fuzz_runs=4096
+verbosity=3
