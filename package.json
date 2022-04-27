@@ -17,7 +17,7 @@
     "solhint:check": "solhint --config ./.solhint.json 'src/**/*.sol'",
     "lint": "npm run prettier && npm run solhint",
     "lint:check": "npm run prettier:check && npm run solhint:check",
-    "test": "source .env && forge test",
+    "test": "forge test",
     "test:f": "./shell/fork_test.sh"
   },
   "devDependencies": {
