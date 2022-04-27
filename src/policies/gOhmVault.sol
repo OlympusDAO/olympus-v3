@@ -10,7 +10,7 @@ import {IERC4626} from "../interfaces/IERC4626.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
 import {TransferHelper} from "../libraries/TransferHelper.sol";
 
-contract gOHM is Policy, IERC4626, IERC20 {
+contract gOhmVault is Policy, IERC4626, IERC20 {
     using TransferHelper for IERC20;
 
     OlympusStaking private STK;

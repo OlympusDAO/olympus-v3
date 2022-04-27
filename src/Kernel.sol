@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.10;
 
-contract Module {
+abstract contract Module {
     error Module_OnlyApprovedPolicy(address caller_);
 
     Kernel public _kernel;
@@ -10,7 +10,7 @@ contract Module {
         _kernel = kernel_;
     }
 
-    function KEYCODE() external pure virtual returns (bytes3) {}
+    function KEYCODE() external pure virtual returns (bytes3);
 
     modifier onlyPolicy() {
         if (_kernel.approvedPolicies(msg.sender) != true)
@@ -19,7 +19,7 @@ contract Module {
     }
 }
 
-contract Policy {
+abstract contract Policy {
     error Policy_ModuleDoesNotExist(bytes3 keycode_);
     error Policy_OnlyKernel(address caller_);
 

@@ -34,7 +34,6 @@ contract Rebaser is Policy, ReentrancyGuard {
 
     OlympusIndex private IDX;
     OlympusStaking private STK;
-    //OHM public ohm;
 
     /// @notice Rate at which supply of OHM rebases. 6 decimals.
     uint256 public rebaseRate;

@@ -10,7 +10,7 @@ import {IERC4626} from "../interfaces/IERC4626.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
 
 /// @notice sOHM token and vault that acts as a policy
-contract sOHM is Policy, IERC4626, IERC20 {
+contract sOhmVault is Policy, IERC4626, IERC20 {
     using TransferHelper for IERC20;
 
     OlympusStaking private STK;

@@ -1,7 +1,9 @@
 {
   "extends": "solhint:recommended", 
   "rules": {
-    "compiler-version": ["error",">=0.8.0"], 
-    "avoid-low-level-calls": "off"
+    "compiler-version": ["error",">=0.7.5"], 
+    "avoid-low-level-calls": "off",
+    "const-name-snakecase": "off",
+    "func-visibility": [ "warn", { "ignoreConstructors":true }]
   }
 }

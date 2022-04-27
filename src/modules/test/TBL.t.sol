@@ -31,6 +31,5 @@ contract TransferBalanceLockTest is Test {
         assertEq32("TBL", tbl.KEYCODE());
     }
 
-    function testPullTokens(uint256 amount) public {
-    }
+    function testPullTokens(uint256 amount) public {}
 }
