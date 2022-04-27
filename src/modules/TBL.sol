@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.10;
 
+/// LOCAL
 // interfaces (enums events errors)
 import "src/OlympusErrors.sol";
 
@@ -31,14 +32,13 @@ library locklib {
         return lock - (toSub << 32);
     }
 
-    function suicide(uint256 lock)
+    function numsuicide(uint256 lock)
         internal
         pure
         returns (uint256 dead, uint224 head)
     {
         head = uint224(lock >> 32);
         dead = uint256(head) << 32;
-        assert(dead < lock);
     }
 }
 
@@ -98,16 +98,18 @@ contract TransferBalanceLock is Module {
                     i--;
 
                     uint224 bal;
-                    uint256 lock;
+                    uint256 corpse;
+                    uint256 lock = locks[i];
 
-                    (lock, bal) = locks[i].suicide();
+                    (corpse, bal) = lock.numsuicide();
 
                     if (progress <= bal) {
-                        locks[i] = lock.sub(bal - progress);
+                        locks[i] -= uint256(progress) << 32;
+                        progress = 0;
                         i = 0;
                     } else {
                         progress -= bal;
-                        locks[i] = lock;
+                        locks[i] -= corpse;
                     }
                 }
             } else {
@@ -116,16 +118,18 @@ contract TransferBalanceLock is Module {
 
                 while (i < length) {
                     uint224 bal;
-                    uint256 lock;
+                    uint256 corpse;
+                    uint256 lock = locks[i];
 
-                    (lock, bal) = locks[i].suicide();
+                    (corpse, bal) = lock.numsuicide();
 
                     if (progress <= bal) {
-                        locks[i] = lock.sub(bal - progress);
+                        locks[i] -= uint256(progress) << 32;
+                        progress = 0;
                         i = length;
                     } else {
                         progress -= bal;
-                        locks[i] = lock;
+                        locks[i] -= corpse;
                     }
 
                     i++;
@@ -133,14 +137,13 @@ contract TransferBalanceLock is Module {
             }
 
             if (progress != 0)
-                revert TBL_NotEnoughLockedForSlashing(amount, progress);
+                revert TBL_NotEnoughLockedForSlashing(amount - progress);
 
             lockedBalances[owner][token] = locks;
         } else {
             uint256 bal = unlockedBalances[owner][token];
 
-            if (bal < amount)
-                revert TBL_NotEnoughTokensUnlockedForSlashing(bal);
+            if (bal < amount) revert TBL_NotEnoughUnlockedForSlashing(bal);
             else unlockedBalances[owner][token] -= amount;
         }
 
@@ -178,7 +181,7 @@ contract TransferBalanceLock is Module {
 
             // checks
             if (amount != 0)
-                revert TBL_CouldNotExtendLockForAmount(origAmount, amount);
+                revert TBL_CouldNotExtendLockForAmount(origAmount - amount);
 
             // effects
             lockedBalances[owner][token] = locks;
@@ -328,7 +331,7 @@ contract TransferBalanceLock is Module {
 
                 if (lockEnd <= currentLockEnd) {
                     if (currentLockEnd == lockEnd) {
-                        locks[i] += (amount << 32);
+                        locks[i] += (uint256(amount) << 32);
 
                         lockedBalances[owner][token] = locks;
                     } else {

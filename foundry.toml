@@ -1,3 +1,4 @@
 [fried]
-fuzz_runs = 4096
-verbosity = 4
+fuzz_runs = 1024
+verbosity = 3
+fuzz_max_global_rejects = 40000
