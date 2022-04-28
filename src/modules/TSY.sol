@@ -24,7 +24,7 @@ contract OlympusTreasury is Module, Auth {
         Kernel kernel_,
         address owner_,
         Authority authority_
-    ) payable Module(kernel_) Auth(owner_, authority_) {}
+    ) Module(kernel_) Auth(owner_, authority_) {}
 
     function KEYCODE() external pure override returns (bytes3) {
         return "TSY";
@@ -34,7 +34,7 @@ contract OlympusTreasury is Module, Auth {
         IERC20 token_,
         address to_,
         uint256 amount_
-    ) external requiresAuth {
+    ) external onlyPolicy {
         // TODO is this all?? does this properly gate functions?
         token_.safeTransfer(to_, amount_);
     }

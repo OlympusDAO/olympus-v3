@@ -119,6 +119,7 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
         uint256 amount_
     ) external override returns (bool) {
         STK.transferFrom(from_, to_, amount_);
+        emit Transfer(from_, to_, amount_);
         return true;
     }
 

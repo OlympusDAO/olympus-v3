@@ -9,8 +9,6 @@ import {IERC20} from "../interfaces/IERC20.sol";
 
 import {Kernel, Module} from "../Kernel.sol";
 
-import "../OlympusErrors.sol";
-
 contract OlympusStaking is Module {
     uint256 private constant MAX_UINT256 = type(uint256).max;
     uint256 private constant INITIAL_FRAGMENTS_SUPPLY = 5_000_000 * 1e9;
@@ -18,15 +16,6 @@ contract OlympusStaking is Module {
     // Use the highest value that fits in a uint256 for max granularity.
     uint256 private constant TOTAL_GONS =
         MAX_UINT256 - (MAX_UINT256 % INITIAL_FRAGMENTS_SUPPLY);
-
-    uint256 public constant INDEXED_UNITS = 1e18;
-
-    /// @dev Index gons. Used for tracking rebase growth.
-    uint256 public indexGons;
-
-    /// @dev Internal accounting unit for rebasing tokens. Balances are
-    ///      represented as gons.
-    uint256 public gonsPerFragment;
 
     uint256 public indexedSupply;
 
