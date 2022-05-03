@@ -8,7 +8,7 @@ import "src/OlympusErrors.sol";
 // types
 import {Kernel, Module} from "src/Kernel.sol";
 
-contract Autists is Module {
+contract Auth is Module {
     mapping(address => bytes32) public getUserRoles;
 
     mapping(address => mapping(bytes4 => bool)) public isCapabilityPublic;
