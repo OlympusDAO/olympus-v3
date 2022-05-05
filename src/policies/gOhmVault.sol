@@ -1,23 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.10;
+pragma solidity >=0.8.0;
 
 import {Kernel, Policy} from "../Kernel.sol";
 import {OlympusStaking} from "../modules/STK.sol";
-import {TransferHelper} from "../libraries/TransferHelper.sol";
+import {OlympusIndex} from "../modules/IDX.sol";
+import {OlympusMinter} from "../modules/MNT.sol";
+
 import {IERC4626} from "../interfaces/IERC4626.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
+import {TransferHelper} from "../libraries/TransferHelper.sol";
 
-/// @notice sOHM token and vault that acts as a policy
-contract sOHM is Policy, IERC4626, IERC20 {
+contract gOhmVault is Policy, IERC4626, IERC20 {
     using TransferHelper for IERC20;
 
     OlympusStaking private STK;
+    OlympusIndex private IDX;
+    OlympusMinter private MNT;
 
     address public immutable asset;
 
-    string public constant name = "Staked Olympus";
-    string public constant symbol = "sOHM";
-    uint8 public constant decimals = 9;
+    string public constant name = "Governance Olympus";
+    string public constant symbol = "gOHM";
+    uint8 public constant decimals = 18;
 
     constructor(Kernel kernel_, address ohm_) Policy(kernel_) {
         asset = ohm_;
@@ -25,20 +29,25 @@ contract sOHM is Policy, IERC4626, IERC20 {
 
     function configureModules() external override onlyKernel {
         STK = OlympusStaking(requireModule("STK"));
+        IDX = OlympusIndex(requireModule("IDX"));
+        MNT = OlympusMinter(requireModule("MNT"));
+        // TODO add CCX (cross chain transmitter)
     }
 
     /*///////////////////////////////////////////////////////////////
                         DEPOSIT/WITHDRAWAL LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function deposit(uint256 assets, address receiver)
+    function deposit(uint256 assets_, address receiver_)
         public
         override
         returns (uint256)
     {
-        _stake(msg.sender, receiver, assets);
-        emit Deposit(msg.sender, receiver, assets, assets);
-        return assets;
+        uint256 shares = convertToShares(assets_);
+        MNT.burnOhm(msg.sender, assets_);
+        STK.mint(msg.sender, assets_ * IDX.index());
+        emit Deposit(msg.sender, receiver_, assets_, shares);
+        return shares;
     }
 
     // Like deposit(), but specifies amount of shares the user wants to receive
@@ -48,9 +57,10 @@ contract sOHM is Policy, IERC4626, IERC20 {
         override
         returns (uint256)
     {
-        _stake(msg.sender, receiver, shares);
-        emit Deposit(msg.sender, receiver, shares, shares);
-        return shares;
+        uint256 assets = convertToAssets(shares);
+        _stake(msg.sender, receiver, assets);
+        emit Deposit(msg.sender, receiver, assets, shares);
+        return assets;
     }
 
     function withdraw(
@@ -58,37 +68,44 @@ contract sOHM is Policy, IERC4626, IERC20 {
         address receiver,
         address owner
     ) public override returns (uint256) {
-        _unstake(owner, receiver, assets);
-        emit Withdraw(msg.sender, receiver, owner, assets, assets);
-        return assets;
+        //uint256 shares = convertToShares(assets);
+        //staking.unstakeIndexed(owner, receiver, shares);
+        uint256 shares = _unstake(owner, receiver, assets);
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+        return shares;
     }
 
     function redeem(
         uint256 shares,
         address receiver,
         address owner
-    ) public returns (uint256) {
-        _unstake(owner, receiver, shares);
-        emit Withdraw(msg.sender, receiver, owner, shares, shares);
-        return shares;
+    ) public override returns (uint256) {
+        uint256 assets = convertToAssets(shares);
+        _unstake(owner, receiver, assets);
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+        return assets;
     }
 
     function _stake(
         address from_,
         address to_,
-        uint256 amount_
-    ) internal {
-        IERC20(asset).safeTransferFrom(from_, to_, amount_);
-        STK.transferNominal(address(STK), to_, amount_);
+        uint256 nominal_
+    ) internal returns (uint256) {
+        uint256 shares = convertToShares(nominal_);
+        MNT.burnOhm(from_, nominal_);
+        STK.mint(to_, shares);
+        return shares;
     }
 
     function _unstake(
         address from_,
         address to_,
-        uint256 amount_
-    ) internal {
-        STK.transferNominal(from_, to_, amount_);
-        IERC20(asset).safeTransferFrom(from_, address(STK), amount_);
+        uint256 nominal_
+    ) internal returns (uint256) {
+        uint256 shares = convertToShares(nominal_);
+        STK.burn(from_, shares);
+        MNT.mintOhm(to_, nominal_);
+        return shares;
     }
 
     /*///////////////////////////////////////////////////////////////
@@ -100,8 +117,7 @@ contract sOHM is Policy, IERC4626, IERC20 {
         override
         returns (bool)
     {
-        STK.transferNominal(msg.sender, to_, amount_);
-
+        STK.transferFrom(msg.sender, to_, amount_);
         emit Transfer(msg.sender, to_, amount_);
         return true;
     }
@@ -111,121 +127,129 @@ contract sOHM is Policy, IERC4626, IERC20 {
         address to_,
         uint256 amount_
     ) external override returns (bool) {
-        STK.transferNominal(from_, to_, amount_);
+        STK.transferFrom(from_, to_, amount_);
+        emit Transfer(from_, to_, amount_);
         return true;
     }
 
     function allowance(address owner, address spender)
-        public
+        external
         view
-        override
         returns (uint256)
     {
-        return STK.getAllowanceNominal(owner, spender);
+        return STK.allowances(owner, spender);
     }
 
-    function approve(address spender, uint256 amount)
-        public
-        override
-        returns (bool)
-    {
-        return STK.approveNominal(spender, amount);
+    function approve(address spender, uint256 amount) external returns (bool) {
+        STK.approve(msg.sender, spender, amount);
+        emit Approval(msg.sender, spender, amount);
+        return true;
     }
 
     /*///////////////////////////////////////////////////////////////
                            ACCOUNTING LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function balanceOf(address who_) public view override returns (uint256) {
-        return STK.getNominalBalance(who_);
+    function balanceOf(address who_) public view returns (uint256) {
+        return STK.indexedBalance(who_);
     }
 
-    function totalAssets() public view override returns (uint256) {
+    function totalAssets() public view returns (uint256) {
         return IERC20(asset).balanceOf(address(STK));
     }
 
-    function totalSupply() public view override returns (uint256) {
-        return STK.nominalSupply();
+    function totalSupply() public view returns (uint256) {
+        return STK.indexedSupply();
     }
 
-    /// @notice Utility function to convert sOHM value into OHM value.
+    //was fromSerialized()
+    /// @notice Utility function to convert gOHM value into OHM value.
     function convertToAssets(uint256 shares)
         public
-        pure
+        view
         override
         returns (uint256)
     {
-        return shares;
+        // TODO use FullMath or equivalent
+        return shares * IDX.index();
     }
 
-    /// @notice Utility function to convert OHM value into sOHM value.
+    //was toSerialized()
+    /// @notice Utility function to convert OHM value into gOHM value.
     function convertToShares(uint256 assets)
         public
-        pure
+        view
         override
         returns (uint256)
     {
-        return assets;
+        // TODO use FullMath or equivalent
+        return assets / IDX.index();
     }
 
     function previewDeposit(uint256 assets)
         public
-        pure
+        view
         override
         returns (uint256)
     {
-        return assets;
+        return convertToShares(assets);
     }
 
     function previewMint(uint256 shares)
         public
-        pure
+        view
         override
         returns (uint256)
     {
-        return shares;
+        return convertToAssets(shares);
     }
 
     function previewWithdraw(uint256 assets)
         public
-        pure
+        view
         override
         returns (uint256)
     {
-        return assets;
+        return convertToShares(assets);
     }
 
-    /// @notice Convenience function to get sOHM index.
+    /// @notice Convenience function to get index.
     function getIndex() public view returns (uint256) {
-        return STK.index();
+        return IDX.index();
     }
 
     function previewRedeem(uint256 shares)
         public
-        pure
+        view
         override
         returns (uint256)
     {
-        return shares;
+        return convertToAssets(shares);
     }
 
     /*///////////////////////////////////////////////////////////////
                      DEPOSIT/WITHDRAWAL LIMIT LOGIC
     //////////////////////////////////////////////////////////////*/
 
+    // TODO verify
     function maxDeposit(address) public pure override returns (uint256) {
+        // TODO should be related to STK.TOTAL_GONS?
         return type(uint256).max;
     }
 
+    // TODO verify
     function maxMint(address) public pure override returns (uint256) {
+        // TODO should be related to STK.TOTAL_GONS?
         return type(uint256).max;
     }
 
+    // TODO verify
     function maxWithdraw(address owner) public view override returns (uint256) {
-        return STK.nominalGonsBalance(owner);
+        return convertToAssets(STK.indexedBalance(owner));
     }
 
+    // TODO verify
     function maxRedeem(address owner) public view override returns (uint256) {
-        return STK.nominalGonsBalance(owner);
+        return STK.indexedBalance(owner);
     }
 }
