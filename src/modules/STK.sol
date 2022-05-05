@@ -27,7 +27,7 @@ contract OlympusStaking is Module {
     // TODO Add auth
     constructor(Kernel kernel_) Module(kernel_) {}
 
-    function KEYCODE() external pure override returns (bytes3) {
+    function KEYCODE() public pure override returns (bytes3) {
         return "STK";
     }
 

@@ -51,7 +51,7 @@ contract TransferBalanceLock is Module {
 
     constructor(address kernel_) Module(Kernel(kernel_)) {}
 
-    function KEYCODE() external pure virtual override returns (bytes3) {
+    function KEYCODE() public pure virtual override returns (bytes3) {
         return "TBL";
     }
 
@@ -70,7 +70,7 @@ contract TransferBalanceLock is Module {
         address token,
         uint224 amount,
         uint32 lockPeriod
-    ) external onlyPolicy {
+    ) external {
         // interaction
         IERC20(token).safeTransferFrom(owner, address(this), amount);
 
@@ -86,7 +86,7 @@ contract TransferBalanceLock is Module {
         uint224 amount,
         bool isLocked,
         bool slashRecent
-    ) external onlyPolicy {
+    ) external {
         if (isLocked) {
             uint256[] memory locks = lockedBalances[owner][token];
             uint224 progress = amount;
@@ -155,7 +155,7 @@ contract TransferBalanceLock is Module {
         address token,
         uint224 amount,
         uint32 lockExtensionPeriod
-    ) external onlyPolicy {
+    ) external {
         if (lockExtensionPeriod != 0) {
             // reads
             uint256[] memory locks = lockedBalances[owner][token];
@@ -193,7 +193,7 @@ contract TransferBalanceLock is Module {
         address token,
         uint224 amount,
         bool fromLocked
-    ) public onlyPolicy {
+    ) public {
         // logic
         // the assumption is never so many locks that linear complexity
         // will bust block size, you know it won't happen

@@ -26,7 +26,7 @@ contract OlympusTreasury is Module, Auth {
         Authority authority_
     ) Module(kernel_) Auth(owner_, authority_) {}
 
-    function KEYCODE() external pure override returns (bytes3) {
+    function KEYCODE() public pure override returns (bytes3) {
         return "TSY";
     }
 

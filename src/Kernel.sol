@@ -3,6 +3,7 @@ pragma solidity ^0.8.10;
 
 abstract contract Module {
     error Module_OnlyApprovedPolicy(address caller_);
+    error Module_OnlyPermissionedPolicy(address caller_);
 
     Kernel public _kernel;
 
@@ -10,11 +11,11 @@ abstract contract Module {
         _kernel = kernel_;
     }
 
-    function KEYCODE() external pure virtual returns (bytes3);
+    function KEYCODE() public pure virtual returns (bytes3) {}
 
-    modifier onlyPolicy() {
-        if (_kernel.approvedPolicies(msg.sender) != true)
-            revert Module_OnlyApprovedPolicy(msg.sender);
+    modifier onlyPermitted() {
+        if (!_kernel.verifyCall(msg.sender, KEYCODE()))
+            revert Module_OnlyPermissionedPolicy(msg.sender);
         _;
     }
 }
@@ -28,6 +29,8 @@ abstract contract Policy {
     constructor(Kernel kernel_) {
         _kernel = kernel_;
     }
+
+    function PERMS() external pure virtual returns (bytes3[] memory keycodes) {}
 
     function requireModule(bytes3 keycode_) internal view returns (address) {
         address moduleForKeycode = _kernel.getModuleForKeycode(keycode_);
@@ -85,6 +88,7 @@ contract Kernel {
     mapping(bytes3 => address) public getModuleForKeycode; // get contract for module keycode
     mapping(address => bytes3) public getKeycodeForModule; // get module keycode for contract
     mapping(address => bool) public approvedPolicies; // whitelisted apps
+    mapping(address => bytes3) public permissions; // can policy (address) call keycode (bytes3)?
     address[] public allPolicies;
 
     event ActionExecuted(Actions action_, address target_);
@@ -110,6 +114,18 @@ contract Kernel {
         }
 
         emit ActionExecuted(action_, target_);
+    }
+
+    function permitCall(address policy_, bytes3 keycode_) public onlyExecutor {
+        permissions[policy_] = keycode_;
+    }
+
+    function verifyCall(address policy_, bytes3 keycode_)
+        public
+        view
+        returns (bool)
+    {
+        return permissions[policy_] == keycode_;
     }
 
     function _installModule(address newModule_) internal {

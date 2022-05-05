@@ -24,7 +24,7 @@ contract OlympusIndex is Module {
         lastUpdated = block.timestamp;
     }
 
-    function KEYCODE() external pure override returns (bytes3) {
+    function KEYCODE() public pure override returns (bytes3) {
         return "IDX";
     }
 

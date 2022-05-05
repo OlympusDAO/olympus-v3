@@ -37,7 +37,7 @@ contract Auth is Module {
 
     constructor(address kernel_) Module(Kernel(kernel_)) {}
 
-    function KEYCODE() external pure virtual override returns (bytes3) {
+    function KEYCODE() public pure virtual override returns (bytes3) {
         return "AUT";
     }
 
@@ -76,7 +76,7 @@ contract Auth is Module {
         address target,
         bytes4 functionSig,
         bool enabled
-    ) public virtual onlyPolicy {
+    ) public virtual onlyPermitted {
         isCapabilityPublic[target][functionSig] = enabled;
 
         emit AUT_PublicCapabilityUpdated(target, functionSig, enabled);
@@ -87,7 +87,7 @@ contract Auth is Module {
         address target,
         bytes4 functionSig,
         bool enabled
-    ) public virtual onlyPolicy {
+    ) public virtual onlyPermitted {
         if (enabled) {
             getRolesWithCapability[target][functionSig] |= bytes32(1 << role);
         } else {
@@ -101,7 +101,7 @@ contract Auth is Module {
         address user,
         uint8 role,
         bool enabled
-    ) public virtual onlyPolicy {
+    ) public virtual onlyPermitted {
         if (enabled) {
             getUserRoles[user] |= bytes32(1 << role);
         } else {

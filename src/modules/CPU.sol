@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.10;
 
-import {Kernel, Module, Instruction, Actions} from "../Kernel.sol";
+import "../Kernel.sol";
 
 // CPU is the module that stores and executes batched instructions for the kernel
 contract Processor is Module {
@@ -11,7 +11,7 @@ contract Processor is Module {
 
     constructor(Kernel kernel_) Module(kernel_) {}
 
-    function KEYCODE() external pure override returns (bytes3) {
+    function KEYCODE() public pure override returns (bytes3) {
         return "CPU";
     }
 
@@ -48,7 +48,7 @@ contract Processor is Module {
 
     function storeInstructions(Instruction[] calldata instructions_)
         external
-        onlyPolicy
+        onlyPermitted
         returns (uint256)
     {
         uint256 instructionsId = totalInstructions + 1;
@@ -90,7 +90,10 @@ contract Processor is Module {
         return instructionsId;
     }
 
-    function executeInstructions(uint256 instructionsId_) external onlyPolicy {
+    function executeInstructions(uint256 instructionsId_)
+        external
+        onlyPermitted
+    {
         Instruction[] storage proposal = storedInstructions[instructionsId_];
 
         require(
@@ -99,7 +102,27 @@ contract Processor is Module {
         );
 
         for (uint256 step = 0; step < proposal.length; step++) {
-            _kernel.executeAction(proposal[step].action, proposal[step].target);
+            Actions action = proposal[step].action;
+            address target = proposal[step].target;
+
+            _kernel.executeAction(action, target);
+
+            if (
+                action == Actions.ApprovePolicy ||
+                action == Actions.TerminatePolicy
+            ) {
+                bytes3[] memory codesToSet;
+                bytes3[] memory keycodes = Policy(target).PERMS();
+
+                uint256 length = codesToSet.length;
+
+                // meaning if terminate then set all zeroes
+                if (action == Actions.ApprovePolicy) codesToSet = keycodes;
+
+                for (uint256 i; i < length; i++) {
+                    _kernel.permitCall(target, codesToSet[i]);
+                }
+            }
         }
 
         emit InstructionsExecuted(instructionsId_);
