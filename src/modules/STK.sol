@@ -31,13 +31,13 @@ contract OlympusStaking is Module {
         return "STK";
     }
 
-    function mint(address to_, uint256 indexed_) public onlyPolicy {
+    function mint(address to_, uint256 indexed_) public onlyPermitted {
         // TODO add checks for max supply
         indexedSupply += indexed_;
         indexedBalance[to_] += indexed_;
     }
 
-    function burn(address from_, uint256 indexed_) public onlyPolicy {
+    function burn(address from_, uint256 indexed_) public onlyPermitted {
         // TODO add checks for underflow
         indexedBalance[from_] -= indexed_;
         indexedSupply -= indexed_;
@@ -47,7 +47,7 @@ contract OlympusStaking is Module {
         address from_,
         address to_,
         uint256 indexed_
-    ) public onlyPolicy {
+    ) public onlyPermitted {
         indexedBalance[from_] -= indexed_;
         indexedBalance[to_] += indexed_;
     }
@@ -56,7 +56,7 @@ contract OlympusStaking is Module {
         address owner_,
         address spender_,
         uint256 indexed_
-    ) public onlyPolicy {
+    ) public onlyPermitted {
         // TODO steal from solmate
         allowances[owner_][spender_] = indexed_;
     }

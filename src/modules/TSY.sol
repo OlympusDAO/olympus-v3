@@ -34,7 +34,7 @@ contract OlympusTreasury is Module, Auth {
         IERC20 token_,
         address to_,
         uint256 amount_
-    ) external onlyPolicy {
+    ) external onlyPermitted {
         // TODO is this all?? does this properly gate functions?
         token_.safeTransfer(to_, amount_);
     }
