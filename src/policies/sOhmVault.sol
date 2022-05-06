@@ -33,6 +33,17 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
         MNT = OlympusMinter(requireModule("MNT"));
     }
 
+    function requestPermissions()
+        external
+        view
+        override
+        onlyKernel
+        returns (bytes3[] memory permissions)
+    {
+        permissions[1] = "STK";
+        permissions[2] = "MNT";
+    }
+
     /*///////////////////////////////////////////////////////////////
                         DEPOSIT/WITHDRAWAL LOGIC
     //////////////////////////////////////////////////////////////*/
