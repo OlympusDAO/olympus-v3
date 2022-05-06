@@ -27,13 +27,13 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
         asset = ohm_;
     }
 
-    function configureModules() external override onlyKernel {
+    function configureReads() external override onlyKernel {
         STK = OlympusStaking(requireModule("STK"));
         IDX = OlympusIndex(requireModule("IDX"));
         MNT = OlympusMinter(requireModule("MNT"));
     }
 
-    function requestPermissions()
+    function requestWrites()
         external
         view
         override

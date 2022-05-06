@@ -39,9 +39,9 @@ abstract contract Policy {
         return moduleForKeycode;
     }
 
-    function configureModules() external virtual onlyKernel {}
+    function configureReads() external virtual onlyKernel {}
 
-    function requestPermissions()
+    function requestWrites()
         external
         view
         virtual
@@ -70,6 +70,12 @@ struct Instruction {
 }
 
 contract Kernel {
+    event Kernel_WritePermissionsUpdated(
+        bytes3 indexed keycode_,
+        address indexed policy_,
+        bool enabled_
+    );
+
     error Kernel_OnlyExecutor(address caller_);
     error Kernel_ModuleAlreadyInstalled(bytes3 module_);
     error Kernel_ModuleAlreadyExists(bytes3 module_);
@@ -153,9 +159,9 @@ contract Kernel {
 
         approvedPolicies[policy_] = true;
 
-        Policy(policy_).configureModules();
+        Policy(policy_).configureReads();
 
-        bytes3[] memory permissions = Policy(policy_).requestPermissions();
+        bytes3[] memory permissions = Policy(policy_).requestWrites();
         _setWritePermissions(policy_, permissions, true);
 
         allPolicies.push(policy_);
@@ -167,7 +173,7 @@ contract Kernel {
 
         approvedPolicies[policy_] = false;
 
-        bytes3[] memory permissions = Policy(policy_).requestPermissions();
+        bytes3[] memory permissions = Policy(policy_).requestWrites();
         _setWritePermissions(policy_, permissions, false);
     }
 
@@ -176,7 +182,7 @@ contract Kernel {
             address policy_ = allPolicies[i];
 
             if (approvedPolicies[policy_] == true)
-                Policy(policy_).configureModules();
+                Policy(policy_).configureReads();
         }
     }
 
@@ -187,6 +193,11 @@ contract Kernel {
     ) internal {
         for (uint256 i = 0; i < keycodes_.length; i++) {
             getWritePermissions[keycodes_[i]][policy_] = canWrite_;
+            emit Kernel_WritePermissionsUpdated(
+                keycodes_[i],
+                policy_,
+                canWrite_
+            );
         }
     }
 }
