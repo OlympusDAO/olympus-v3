@@ -28,9 +28,9 @@ contract gOhmVault is Policy, IERC4626, IERC20 {
     }
 
     function configureReads() external override onlyKernel {
-        STK = OlympusStaking(requireModule("STK"));
-        MNT = OlympusMinter(requireModule("MNT"));
-        IDX = OlympusIndex(requireModule("IDX"));
+        STK = OlympusStaking(getModuleAddress("STK"));
+        MNT = OlympusMinter(getModuleAddress("MNT"));
+        IDX = OlympusIndex(getModuleAddress("IDX"));
         // TODO add CCX (cross chain transmitter)
     }
 

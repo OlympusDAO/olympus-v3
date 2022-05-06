@@ -30,7 +30,7 @@ abstract contract Policy {
         _kernel = kernel_;
     }
 
-    function requireModule(bytes3 keycode_) internal view returns (address) {
+    function getModuleAddress(bytes3 keycode_) internal view returns (address) {
         address moduleForKeycode = _kernel.getModuleForKeycode(keycode_);
 
         if (moduleForKeycode != address(0))

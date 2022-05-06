@@ -47,8 +47,8 @@ contract Rebaser is Policy, ReentrancyGuard {
     constructor(Kernel kernel_) Policy(kernel_) {}
 
     function configureReads() external override onlyKernel {
-        STK = OlympusStaking(requireModule("STK"));
-        IDX = OlympusIndex(requireModule("IDX"));
+        STK = OlympusStaking(getModuleAddress("STK"));
+        IDX = OlympusIndex(getModuleAddress("IDX"));
     }
 
     function requestWrites()
