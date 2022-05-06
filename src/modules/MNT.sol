@@ -16,11 +16,11 @@ contract OlympusMinter is Module {
         return "MNT";
     }
 
-    function mintOhm(address to_, uint256 amount_) public onlyPolicy {
+    function mintOhm(address to_, uint256 amount_) public onlyPermitted {
         ohm.mint(to_, amount_);
     }
 
-    function burnOhm(address from_, uint256 amount_) public onlyPolicy {
+    function burnOhm(address from_, uint256 amount_) public onlyPermitted {
         ohm.burnFrom(from_, amount_);
     }
 }

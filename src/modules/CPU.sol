@@ -5,6 +5,8 @@ import "../Kernel.sol";
 
 // CPU is the module that stores and executes batched instructions for the kernel
 contract Processor is Module {
+    error Processor_ProposalDoesNotExist();
+
     /////////////////////////////////////////////////////////////////////////////////
     //                      DefaultOS Module Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
@@ -96,33 +98,10 @@ contract Processor is Module {
     {
         Instruction[] storage proposal = storedInstructions[instructionsId_];
 
-        require(
-            proposal.length > 0,
-            "cannot executeInstructions(): proposal does not exist"
-        );
+        if (proposal.length > 0) revert Processor_ProposalDoesNotExist();
 
         for (uint256 step = 0; step < proposal.length; step++) {
-            Actions action = proposal[step].action;
-            address target = proposal[step].target;
-
-            _kernel.executeAction(action, target);
-
-            if (
-                action == Actions.ApprovePolicy ||
-                action == Actions.TerminatePolicy
-            ) {
-                bytes3[] memory codesToSet;
-                bytes3[] memory keycodes = Policy(target).PERMS();
-
-                uint256 length = codesToSet.length;
-
-                // meaning if terminate then set all zeroes
-                if (action == Actions.ApprovePolicy) codesToSet = keycodes;
-
-                for (uint256 i; i < length; i++) {
-                    _kernel.permitCall(target, codesToSet[i]);
-                }
-            }
+            _kernel.executeAction(proposal[step].action, proposal[step].target);
         }
 
         emit InstructionsExecuted(instructionsId_);

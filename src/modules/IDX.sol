@@ -32,7 +32,7 @@ contract OlympusIndex is Module {
     /// @param rate_ Rate at which supply of OHM rebases. 6 decimals.
     function increaseIndex(uint256 rate_)
         external
-        onlyPolicy
+        onlyPermitted
         returns (uint256)
     {
         index *= (RATE_UNITS + rate_) / RATE_UNITS;
