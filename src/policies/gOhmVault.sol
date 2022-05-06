@@ -27,17 +27,20 @@ contract gOhmVault is Policy, IERC4626, IERC20 {
         asset = ohm_;
     }
 
-    function configureModules()
+    function configureReads() external override onlyKernel {
+        STK = OlympusStaking(getModuleAddress("STK"));
+        MNT = OlympusMinter(getModuleAddress("MNT"));
+        IDX = OlympusIndex(getModuleAddress("IDX"));
+        // TODO add CCX (cross chain transmitter)
+    }
+
+    function requestWrites()
         external
+        view
         override
         onlyKernel
         returns (bytes3[] memory permissions)
     {
-        STK = OlympusStaking(requireModule("STK"));
-        MNT = OlympusMinter(requireModule("MNT"));
-        IDX = OlympusIndex(requireModule("IDX"));
-        // TODO add CCX (cross chain transmitter)
-
         permissions[1] = "STK";
         permissions[2] = "MNT";
     }
@@ -76,8 +79,6 @@ contract gOhmVault is Policy, IERC4626, IERC20 {
         address receiver,
         address owner
     ) public override returns (uint256) {
-        //uint256 shares = convertToShares(assets);
-        //staking.unstakeIndexed(owner, receiver, shares);
         uint256 shares = _unstake(owner, receiver, assets);
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
         return shares;

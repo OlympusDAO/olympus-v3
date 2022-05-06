@@ -46,6 +46,22 @@ contract Rebaser is Policy, ReentrancyGuard {
 
     constructor(Kernel kernel_) Policy(kernel_) {}
 
+    function configureReads() external override onlyKernel {
+        STK = OlympusStaking(getModuleAddress("STK"));
+        IDX = OlympusIndex(getModuleAddress("IDX"));
+    }
+
+    function requestWrites()
+        external
+        view
+        override
+        onlyKernel
+        returns (bytes3[] memory permissions)
+    {
+        permissions[1] = "STK";
+        permissions[2] = "MNT";
+    }
+
     function rebase() external nonReentrant {
         // TODO is reentrantGuard needed?
         if (currentEpoch.end <= block.timestamp) {

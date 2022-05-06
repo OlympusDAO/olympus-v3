@@ -14,7 +14,7 @@ abstract contract Module {
     function KEYCODE() public pure virtual returns (bytes3) {}
 
     modifier onlyPermitted() {
-        if (!_kernel.getWritePermissions(KEYCODE(), msg.sender))
+        if (_kernel.getWritePermissions(KEYCODE(), msg.sender) == false)
             revert Module_OnlyPermissionedPolicy(msg.sender);
         _;
     }
@@ -30,7 +30,7 @@ abstract contract Policy {
         _kernel = kernel_;
     }
 
-    function requireModule(bytes3 keycode_) internal view returns (address) {
+    function getModuleAddress(bytes3 keycode_) internal view returns (address) {
         address moduleForKeycode = _kernel.getModuleForKeycode(keycode_);
 
         if (moduleForKeycode != address(0))
@@ -39,8 +39,11 @@ abstract contract Policy {
         return moduleForKeycode;
     }
 
-    function configureModules()
+    function configureReads() external virtual onlyKernel {}
+
+    function requestWrites()
         external
+        view
         virtual
         onlyKernel
         returns (bytes3[] memory permissions)
@@ -67,6 +70,12 @@ struct Instruction {
 }
 
 contract Kernel {
+    event Kernel_WritePermissionsUpdated(
+        bytes3 indexed keycode_,
+        address indexed policy_,
+        bool enabled_
+    );
+
     error Kernel_OnlyExecutor(address caller_);
     error Kernel_ModuleAlreadyInstalled(bytes3 module_);
     error Kernel_ModuleAlreadyExists(bytes3 module_);
@@ -150,9 +159,12 @@ contract Kernel {
 
         approvedPolicies[policy_] = true;
 
+        Policy(policy_).configureReads();
+
+        bytes3[] memory permissions = Policy(policy_).requestWrites();
+        _setWritePermissions(policy_, permissions, true);
+
         allPolicies.push(policy_);
-        bytes3[] memory permissions = Policy(policy_).configureModules();
-        _grantWritePermissions(policy_, permissions);
     }
 
     function _terminatePolicy(address policy_) internal {
@@ -160,33 +172,32 @@ contract Kernel {
             revert Kernel_PolicyNotApproved(policy_);
 
         approvedPolicies[policy_] = false;
-        bytes3[] memory permissions = Policy(policy_).configureModules();
-        _revokeWritePermissions(policy_, permissions);
+
+        bytes3[] memory permissions = Policy(policy_).requestWrites();
+        _setWritePermissions(policy_, permissions, false);
     }
 
     function _reconfigurePolicies() internal {
         for (uint256 i = 0; i < allPolicies.length; i++) {
             address policy_ = allPolicies[i];
-            if (approvedPolicies[policy_]) {
-                Policy(policy_).configureModules();
-            }
+
+            if (approvedPolicies[policy_] == true)
+                Policy(policy_).configureReads();
         }
     }
 
-    function _grantWritePermissions(address policy_, bytes3[] memory keycodes_)
-        internal
-    {
+    function _setWritePermissions(
+        address policy_,
+        bytes3[] memory keycodes_,
+        bool canWrite_
+    ) internal {
         for (uint256 i = 0; i < keycodes_.length; i++) {
-            bytes3 keycode = keycodes_[i];
-            getWritePermissions[keycode][policy_] = true;
-        }
-    }
-
-    function _revokeWritePermissions(address policy_, bytes3[] memory keycodes_)
-        internal
-    {
-        for (uint256 i = 0; i < keycodes_.length; i++) {
-            getWritePermissions[keycodes_[i]][policy_] = false;
+            getWritePermissions[keycodes_[i]][policy_] = canWrite_;
+            emit Kernel_WritePermissionsUpdated(
+                keycodes_[i],
+                policy_,
+                canWrite_
+            );
         }
     }
 }
