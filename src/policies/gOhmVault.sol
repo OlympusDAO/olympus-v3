@@ -32,6 +32,9 @@ contract gOhmVault is Policy, IERC4626, IERC20 {
         MNT = OlympusMinter(getModuleAddress("MNT"));
         IDX = OlympusIndex(getModuleAddress("IDX"));
         // TODO add CCX (cross chain transmitter)
+
+        permissions[1] = "STK";
+        permissions[2] = "MNT";
     }
 
     function requestWrites()

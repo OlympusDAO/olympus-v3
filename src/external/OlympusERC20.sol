@@ -77,7 +77,7 @@ abstract contract OlympusAccessControlled {
         _;
     }
 
-    modifier onlyPolicy() {
+    modifier onlyPermitted() {
         require(msg.sender == authority.policy(), UNAUTHORIZED);
         _;
     }

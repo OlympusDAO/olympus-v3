@@ -200,4 +200,21 @@ contract Kernel {
             );
         }
     }
+
+    function _grantWritePermissions(address policy_, bytes3[] memory keycodes_)
+        internal
+    {
+        for (uint256 i = 0; i < keycodes_.length; i++) {
+            bytes3 keycode = keycodes_[i];
+            getWritePermissions[keycode][policy_] = true;
+        }
+    }
+
+    function _revokeWritePermissions(address policy_, bytes3[] memory keycodes_)
+        internal
+    {
+        for (uint256 i = 0; i < keycodes_.length; i++) {
+            getWritePermissions[keycodes_[i]][policy_] = false;
+        }
+    }
 }
