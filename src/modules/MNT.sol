@@ -12,7 +12,7 @@ contract OlympusMinter is Module {
         ohm = ohm_;
     }
 
-    function KEYCODE() external pure override returns (bytes3) {
+    function KEYCODE() public pure override returns (bytes3) {
         return "MNT";
     }
 

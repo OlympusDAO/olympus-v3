@@ -79,8 +79,6 @@ contract gOhmVault is Policy, IERC4626, IERC20 {
         address receiver,
         address owner
     ) public override returns (uint256) {
-        //uint256 shares = convertToShares(assets);
-        //staking.unstakeIndexed(owner, receiver, shares);
         uint256 shares = _unstake(owner, receiver, assets);
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
         return shares;
