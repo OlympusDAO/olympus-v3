@@ -2,8 +2,8 @@
 pragma solidity ^0.8.10;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {OlympusStaking} from "../modules/STK.sol";
-import {OlympusIndex} from "../modules/IDX.sol";
+import {OlympusStaking} from "../modules/STKNG.sol";
+import {OlympusIndex} from "../modules/INDEX.sol";
 
 import {Kernel, Policy} from "../Kernel.sol";
 
@@ -32,8 +32,8 @@ contract Rebaser is Policy, ReentrancyGuard {
     uint256 private constant RATE_UNITS = 1e6;
     uint256 private constant SERIALIZED_UNITS = 1e18;
 
-    OlympusIndex private IDX;
-    OlympusStaking private STK;
+    OlympusIndex private INDEX;
+    OlympusStaking private STKNG;
 
     /// @notice Rate at which supply of OHM rebases. 6 decimals.
     uint256 public rebaseRate;
@@ -47,8 +47,8 @@ contract Rebaser is Policy, ReentrancyGuard {
     constructor(Kernel kernel_) Policy(kernel_) {}
 
     function configureReads() external override onlyKernel {
-        STK = OlympusStaking(getModuleAddress("STK"));
-        IDX = OlympusIndex(getModuleAddress("IDX"));
+        STKNG = OlympusStaking(getModuleAddress("STKNG"));
+        INDEX = OlympusIndex(getModuleAddress("INDEX"));
     }
 
     function requestWrites()
@@ -56,17 +56,17 @@ contract Rebaser is Policy, ReentrancyGuard {
         view
         override
         onlyKernel
-        returns (bytes3[] memory permissions)
+        returns (bytes5[] memory permissions)
     {
-        permissions[1] = "STK";
-        permissions[2] = "MNT";
+        permissions[1] = "STKNG";
+        permissions[2] = "MINTR";
     }
 
     function rebase() external nonReentrant {
         // TODO is reentrantGuard needed?
         if (currentEpoch.end <= block.timestamp) {
             // Trigger rebase by increasing the index
-            uint256 newIndex = IDX.increaseIndex(rebaseRate);
+            uint256 newIndex = INDEX.increaseIndex(rebaseRate);
 
             // Derive rebase information for next epoch
             currentEpoch.end += currentEpoch.length;
@@ -89,7 +89,8 @@ contract Rebaser is Policy, ReentrancyGuard {
 
     function getNextDistribution() public view returns (uint256) {
         // TODO verify
-        return (STK.indexedSupply() * IDX.index() * rebaseRate) / RATE_UNITS;
+        return
+            (STKNG.indexedSupply() * INDEX.index() * rebaseRate) / RATE_UNITS;
     }
 
     function mintAndSync() external nonReentrant {

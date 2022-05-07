@@ -51,8 +51,8 @@ contract TransferBalanceLock is Module {
 
     constructor(address kernel_) Module(Kernel(kernel_)) {}
 
-    function KEYCODE() public pure virtual override returns (bytes3) {
-        return "TBL";
+    function KEYCODE() public pure virtual override returns (bytes5) {
+        return "TXBLK";
     }
 
     function unlockAll(address receiver, address token) external {
@@ -137,13 +137,13 @@ contract TransferBalanceLock is Module {
             }
 
             if (progress != 0)
-                revert TBL_NotEnoughLockedForSlashing(amount - progress);
+                revert TXBLK_NotEnoughLockedForSlashing(amount - progress);
 
             lockedBalances[owner][token] = locks;
         } else {
             uint256 bal = unlockedBalances[owner][token];
 
-            if (bal < amount) revert TBL_NotEnoughUnlockedForSlashing(bal);
+            if (bal < amount) revert TXBLK_NotEnoughUnlockedForSlashing(bal);
             else unlockedBalances[owner][token] -= amount;
         }
 
@@ -181,11 +181,11 @@ contract TransferBalanceLock is Module {
 
             // checks
             if (amount != 0)
-                revert TBL_CouldNotExtendLockForAmount(origAmount - amount);
+                revert TXBLK_CouldNotExtendLockForAmount(origAmount - amount);
 
             // effects
             lockedBalances[owner][token] = locks;
-        } else revert TBL_LockExtensionPeriodIs0();
+        } else revert TXBLK_LockExtensionPeriodIs0();
     }
 
     function pushTokens(
@@ -222,7 +222,7 @@ contract TransferBalanceLock is Module {
                         pushable += balance;
                         length--;
                     }
-                } else revert TBL_NotEnoughTokensUnlocked(pushable);
+                } else revert TXBLK_NotEnoughTokensUnlocked(pushable);
 
                 i++;
             }
@@ -246,7 +246,7 @@ contract TransferBalanceLock is Module {
             uint256 balance = unlockedBalances[receiver][token];
 
             // not locked / not enough tokens
-            if (amount > balance) revert TBL_NotEnoughTokensUnlocked(balance);
+            if (amount > balance) revert TXBLK_NotEnoughTokensUnlocked(balance);
             // not locked / enough tokens
             else unlockedBalances[receiver][token] -= amount;
         }

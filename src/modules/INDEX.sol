@@ -24,8 +24,8 @@ contract OlympusIndex is Module {
         lastUpdated = block.timestamp;
     }
 
-    function KEYCODE() public pure override returns (bytes3) {
-        return "IDX";
+    function KEYCODE() public pure override returns (bytes5) {
+        return "INDEX";
     }
 
     /// @notice Increase index by a given rate. Called by Rebaser policy.

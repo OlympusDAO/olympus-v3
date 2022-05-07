@@ -27,8 +27,8 @@ contract OlympusStaking is Module {
     // TODO Add auth
     constructor(Kernel kernel_) Module(kernel_) {}
 
-    function KEYCODE() public pure override returns (bytes3) {
-        return "STK";
+    function KEYCODE() public pure override returns (bytes5) {
+        return "STKNG";
     }
 
     function mint(address to_, uint256 indexed_) public onlyPermitted {

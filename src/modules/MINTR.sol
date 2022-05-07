@@ -12,8 +12,8 @@ contract OlympusMinter is Module {
         ohm = ohm_;
     }
 
-    function KEYCODE() public pure override returns (bytes3) {
-        return "MNT";
+    function KEYCODE() public pure override returns (bytes5) {
+        return "MINTR";
     }
 
     function mintOhm(address to_, uint256 amount_) public onlyPermitted {

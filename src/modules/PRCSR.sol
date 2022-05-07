@@ -3,9 +3,9 @@ pragma solidity ^0.8.10;
 
 import "../Kernel.sol";
 
-// CPU is the module that stores and executes batched instructions for the kernel
+// Processor is the module that stores and executes batched instructions for the kernel
 contract Processor is Module {
-    error Processor_ProposalDoesNotExist();
+    error PRCSR_ProposalDoesNotExist();
 
     /////////////////////////////////////////////////////////////////////////////////
     //                      DefaultOS Module Configuration                         //
@@ -13,8 +13,8 @@ contract Processor is Module {
 
     constructor(Kernel kernel_) Module(kernel_) {}
 
-    function KEYCODE() public pure override returns (bytes3) {
-        return "CPU";
+    function KEYCODE() public pure override returns (bytes5) {
+        return "PRCSR";
     }
 
     /////////////////////////////////////////////////////////////////////////////////
@@ -24,16 +24,16 @@ contract Processor is Module {
     /* imported from Proxy.sol
 
   enum Actions {
-    ChangeExecutive,
-    ApprovePolicy,
-    TerminatePolicy,
-    InstallSystem,
-    UpgradeSystem
+      ChangeExecutive,
+      ApprovePolicy,
+      TerminatePolicy,
+      InstallSystem,
+      UpgradeSystem
   }
 
   struct Instruction {
-    Actions action;
-    address target;
+      Actions action;
+      address target;
   }
 
   */
@@ -68,7 +68,7 @@ contract Processor is Module {
                 instructions_[i].action == Actions.InstallModule ||
                 instructions_[i].action == Actions.UpgradeModule
             ) {
-                bytes4 keycode = Module(instructions_[i].target).KEYCODE();
+                bytes5 keycode = Module(instructions_[i].target).KEYCODE();
                 _ensureValidKeycode(keycode);
                 if (keycode == "CPU") {
                     require(
@@ -98,7 +98,7 @@ contract Processor is Module {
     {
         Instruction[] storage proposal = storedInstructions[instructionsId_];
 
-        if (proposal.length > 0) revert Processor_ProposalDoesNotExist();
+        if (proposal.length > 0) revert PRCSR_ProposalDoesNotExist();
 
         for (uint256 step = 0; step < proposal.length; step++) {
             _kernel.executeAction(proposal[step].action, proposal[step].target);
@@ -120,7 +120,7 @@ contract Processor is Module {
         );
     }
 
-    function _ensureValidKeycode(bytes4 keycode) internal pure {
+    function _ensureValidKeycode(bytes5 keycode) internal pure {
         for (uint256 i = 0; i < 3; i++) {
             bytes1 char = keycode[i];
             require(
