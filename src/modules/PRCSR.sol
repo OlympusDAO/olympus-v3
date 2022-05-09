@@ -8,6 +8,8 @@ contract Processor is Module {
     error PRCSR_ProposalDoesNotExist();
     error PRCSR_InstructionCannotBeEmpty();
     error PRCSR_ProcessorChangeMustBeLast();
+    error PRCSR_AddressIsNotAContract(address target_);
+    error PRCSR_InvalidKeycode(bytes5 keycode_);
 
     /////////////////////////////////////////////////////////////////////////////////
     //                      DefaultOS Module Configuration                         //
@@ -16,8 +18,7 @@ contract Processor is Module {
     constructor(Kernel kernel_) Module(kernel_) {}
 
     function KEYCODE() public pure override returns (bytes5) {
-        //return "PRCSR";
-        return "EXECR";
+        return "PRCSR";
     }
 
     /////////////////////////////////////////////////////////////////////////////////
@@ -109,19 +110,15 @@ contract Processor is Module {
         assembly {
             size := extcodesize(target_)
         }
-        require(
-            size > 0,
-            "cannot storeInstructions(): target address is not a contract"
-        );
+        if (size == 0) revert PRCSR_AddressIsNotAContract(target_);
     }
 
-    function _ensureValidKeycode(bytes5 keycode) internal pure {
-        for (uint256 i = 0; i < 3; i++) {
-            bytes1 char = keycode[i];
-            require(
-                char >= 0x41 && char <= 0x5A,
-                " cannot storeInstructions(): invalid keycode"
-            ); // A-Z only"
+    function _ensureValidKeycode(bytes5 keycode_) internal pure {
+        for (uint256 i = 0; i < 5; i++) {
+            bytes1 char = keycode_[i];
+            if (char < 0x41 || char > 0x5A)
+                revert PRCSR_InvalidKeycode(keycode_);
+            // A-Z only"
         }
     }
 }
