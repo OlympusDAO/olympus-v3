@@ -118,7 +118,7 @@ contract Kernel {
         } else if (action_ == Actions.TerminatePolicy) {
             _terminatePolicy(target_);
         } else if (action_ == Actions.ChangeExecutor) {
-            // Require kernel to install the CPU module before calling ChangeExecutor on it
+            // Require kernel to install the PRCSR module before calling ChangeExecutor on it
             if (getKeycodeForModule[target_] != "PRCSR")
                 revert Kernel_OnlyExecutor(target_);
 
