@@ -8,7 +8,7 @@ import "src/OlympusErrors.sol";
 // types
 import {Kernel, Module} from "src/Kernel.sol";
 
-contract RolesAuthority is Module {
+contract AUTHZ is Module {
     mapping(address => bytes32) public getUserRoles;
 
     mapping(address => mapping(bytes4 => bool)) public isCapabilityPublic;
@@ -16,19 +16,19 @@ contract RolesAuthority is Module {
     mapping(address => mapping(bytes4 => bytes32))
         public getRolesWithCapability;
 
-    event AUTHR_UserRoleUpdated(
+    event AUTHZ_UserRoleUpdated(
         address indexed user,
         uint8 indexed role,
         bool enabled
     );
 
-    event AUTHR_PublicCapabilityUpdated(
+    event AUTHZ_PublicCapabilityUpdated(
         address indexed target,
         bytes4 indexed functionSig,
         bool enabled
     );
 
-    event AUTHR_RoleCapabilityUpdated(
+    event AUTHZ_RoleCapabilityUpdated(
         uint8 indexed role,
         address indexed target,
         bytes4 indexed functionSig,
@@ -38,7 +38,7 @@ contract RolesAuthority is Module {
     constructor(address kernel_) Module(Kernel(kernel_)) {}
 
     function KEYCODE() public pure virtual override returns (bytes5) {
-        return "AUTHR";
+        return "AUTHZ";
     }
 
     function doesUserHaveRole(address user, uint8 role)
@@ -79,7 +79,7 @@ contract RolesAuthority is Module {
     ) public virtual onlyPermitted {
         isCapabilityPublic[target][functionSig] = enabled;
 
-        emit AUTHR_PublicCapabilityUpdated(target, functionSig, enabled);
+        emit AUTHZ_PublicCapabilityUpdated(target, functionSig, enabled);
     }
 
     function setRoleCapability(
@@ -94,7 +94,7 @@ contract RolesAuthority is Module {
             getRolesWithCapability[target][functionSig] &= ~bytes32(1 << role);
         }
 
-        emit AUTHR_RoleCapabilityUpdated(role, target, functionSig, enabled);
+        emit AUTHZ_RoleCapabilityUpdated(role, target, functionSig, enabled);
     }
 
     function setUserRole(
@@ -108,6 +108,6 @@ contract RolesAuthority is Module {
             getUserRoles[user] &= ~bytes32(1 << role);
         }
 
-        emit AUTHR_UserRoleUpdated(user, role, enabled);
+        emit AUTHZ_UserRoleUpdated(user, role, enabled);
     }
 }
