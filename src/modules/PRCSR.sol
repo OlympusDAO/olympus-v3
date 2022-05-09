@@ -6,6 +6,8 @@ import "../Kernel.sol";
 // Processor is the module that stores and executes batched instructions for the kernel
 contract Processor is Module {
     error PRCSR_ProposalDoesNotExist();
+    error PRCSR_InstructionCannotBeEmpty();
+    error PRCSR_ProcessorChangeMustBeLast();
 
     /////////////////////////////////////////////////////////////////////////////////
     //                      DefaultOS Module Configuration                         //
@@ -14,7 +16,8 @@ contract Processor is Module {
     constructor(Kernel kernel_) Module(kernel_) {}
 
     function KEYCODE() public pure override returns (bytes5) {
-        return "PRCSR";
+        //return "PRCSR";
+        return "EXECR";
     }
 
     /////////////////////////////////////////////////////////////////////////////////
@@ -53,36 +56,28 @@ contract Processor is Module {
         onlyPermitted
         returns (uint256)
     {
+        uint256 length = instructions_.length;
         uint256 instructionsId = totalInstructions + 1;
         Instruction[] storage instructions = storedInstructions[instructionsId];
 
-        require(
-            instructions_.length > 0,
-            "cannot storeInstructions(): instructions cannot be empty"
-        );
+        if (length != 0) revert PRCSR_InstructionCannotBeEmpty();
 
         // @TODO use u256
-        for (uint256 i = 0; i < instructions_.length; i++) {
-            _ensureContract(instructions_[i].target);
+        for (uint256 i = 0; i < length; i++) {
+            Instruction calldata instruction = instructions_[i];
+            _ensureContract(instruction.target);
+
             if (
-                instructions_[i].action == Actions.InstallModule ||
-                instructions_[i].action == Actions.UpgradeModule
+                instruction.action == Actions.InstallModule ||
+                instruction.action == Actions.UpgradeModule
             ) {
-                bytes5 keycode = Module(instructions_[i].target).KEYCODE();
+                bytes5 keycode = Module(instruction.target).KEYCODE();
                 _ensureValidKeycode(keycode);
-                if (keycode == "CPU") {
-                    require(
-                        instructions_[instructions_.length - 1].action ==
-                            Actions.ChangeExecutor,
-                        "cannot storeInstructions(): changes to the Executive system (EXC) requires changing the Kernel executive as the last step of the proposal"
-                    );
-                    require(
-                        instructions_[instructions_.length - 1].target ==
-                            instructions_[i].target,
-                        "cannot storeInstructions(): changeExecutive target address does not match the upgraded Executive system address"
-                    );
-                }
+
+                if (keycode == "PRCSR" && length - 1 != i)
+                    revert PRCSR_ProcessorChangeMustBeLast();
             }
+
             instructions.push(instructions_[i]);
         }
         totalInstructions++;
