@@ -27,13 +27,13 @@ contract OlympusIndex is Module {
     }
 
     /// @notice Increase index by a given rate. Called by Rebaser policy.
-    /// @param rate_ Rate at which supply of OHM rebases. 6 decimals.
-    function increaseIndex(uint256 rate_)
+    /// @param rebaseRate_ Rate at which supply of OHM rebases. 6 decimals.
+    function increaseIndex(uint256 rebaseRate_)
         external
         onlyPermitted
         returns (uint256)
     {
-        index *= (RATE_UNITS + rate_) / RATE_UNITS;
+        index = (index * (RATE_UNITS + rebaseRate_)) / RATE_UNITS;
         lastUpdated = block.timestamp;
 
         emit IndexUpdated(index, lastUpdated);
