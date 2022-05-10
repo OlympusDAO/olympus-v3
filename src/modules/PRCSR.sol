@@ -15,7 +15,7 @@ contract Processor is Module {
     //                      DefaultOS Module Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
 
-    constructor(Kernel kernel_) Module(kernel_) {}
+    constructor(BaseKernel kernel_) Module(kernel_) {}
 
     function KEYCODE() public pure override returns (bytes5) {
         return "PRCSR";
@@ -25,22 +25,20 @@ contract Processor is Module {
     //                              System Variables                               //
     /////////////////////////////////////////////////////////////////////////////////
 
-    /* imported from Proxy.sol
+    /* 
+    enum Actions {
+        ChangeExecutive,
+        ApprovePolicy,
+        TerminatePolicy,
+        InstallSystem,
+        UpgradeSystem
+    }
 
-  enum Actions {
-      ChangeExecutive,
-      ApprovePolicy,
-      TerminatePolicy,
-      InstallSystem,
-      UpgradeSystem
-  }
-
-  struct Instruction {
-      Actions action;
-      address target;
-  }
-
-  */
+    struct Instruction {
+        Actions action;
+        address target;
+    }
+    */
 
     uint256 public totalInstructions;
     mapping(uint256 => Instruction[]) public storedInstructions;
@@ -88,6 +86,7 @@ contract Processor is Module {
         return instructionsId;
     }
 
+    // TODO Add timelock
     function executeInstructions(uint256 instructionsId_)
         external
         onlyPermitted
