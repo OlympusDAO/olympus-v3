@@ -3,9 +3,13 @@ pragma solidity ^0.8.10;
 
 import "../Kernel.sol";
 
-// CPU is the module that stores and executes batched instructions for the kernel
+// Processor is the module that stores and executes batched instructions for the kernel
 contract Processor is Module {
-    error Processor_ProposalDoesNotExist();
+    error PRCSR_ProposalDoesNotExist();
+    error PRCSR_InstructionCannotBeEmpty();
+    error PRCSR_ProcessorChangeMustBeLast();
+    error PRCSR_AddressIsNotAContract(address target_);
+    error PRCSR_InvalidKeycode(bytes5 keycode_);
 
     /////////////////////////////////////////////////////////////////////////////////
     //                      DefaultOS Module Configuration                         //
@@ -13,8 +17,8 @@ contract Processor is Module {
 
     constructor(Kernel kernel_) Module(kernel_) {}
 
-    function KEYCODE() public pure override returns (bytes3) {
-        return "CPU";
+    function KEYCODE() public pure override returns (bytes5) {
+        return "PRCSR";
     }
 
     /////////////////////////////////////////////////////////////////////////////////
@@ -24,16 +28,16 @@ contract Processor is Module {
     /* imported from Proxy.sol
 
   enum Actions {
-    ChangeExecutive,
-    ApprovePolicy,
-    TerminatePolicy,
-    InstallSystem,
-    UpgradeSystem
+      ChangeExecutive,
+      ApprovePolicy,
+      TerminatePolicy,
+      InstallSystem,
+      UpgradeSystem
   }
 
   struct Instruction {
-    Actions action;
-    address target;
+      Actions action;
+      address target;
   }
 
   */
@@ -53,36 +57,28 @@ contract Processor is Module {
         onlyPermitted
         returns (uint256)
     {
+        uint256 length = instructions_.length;
         uint256 instructionsId = totalInstructions + 1;
         Instruction[] storage instructions = storedInstructions[instructionsId];
 
-        require(
-            instructions_.length > 0,
-            "cannot storeInstructions(): instructions cannot be empty"
-        );
+        if (length != 0) revert PRCSR_InstructionCannotBeEmpty();
 
         // @TODO use u256
-        for (uint256 i = 0; i < instructions_.length; i++) {
-            _ensureContract(instructions_[i].target);
+        for (uint256 i = 0; i < length; i++) {
+            Instruction calldata instruction = instructions_[i];
+            _ensureContract(instruction.target);
+
             if (
-                instructions_[i].action == Actions.InstallModule ||
-                instructions_[i].action == Actions.UpgradeModule
+                instruction.action == Actions.InstallModule ||
+                instruction.action == Actions.UpgradeModule
             ) {
-                bytes4 keycode = Module(instructions_[i].target).KEYCODE();
+                bytes5 keycode = Module(instruction.target).KEYCODE();
                 _ensureValidKeycode(keycode);
-                if (keycode == "CPU") {
-                    require(
-                        instructions_[instructions_.length - 1].action ==
-                            Actions.ChangeExecutor,
-                        "cannot storeInstructions(): changes to the Executive system (EXC) requires changing the Kernel executive as the last step of the proposal"
-                    );
-                    require(
-                        instructions_[instructions_.length - 1].target ==
-                            instructions_[i].target,
-                        "cannot storeInstructions(): changeExecutive target address does not match the upgraded Executive system address"
-                    );
-                }
+
+                if (keycode == "PRCSR" && length - 1 != i)
+                    revert PRCSR_ProcessorChangeMustBeLast();
             }
+
             instructions.push(instructions_[i]);
         }
         totalInstructions++;
@@ -98,7 +94,7 @@ contract Processor is Module {
     {
         Instruction[] storage proposal = storedInstructions[instructionsId_];
 
-        if (proposal.length > 0) revert Processor_ProposalDoesNotExist();
+        if (proposal.length > 0) revert PRCSR_ProposalDoesNotExist();
 
         for (uint256 step = 0; step < proposal.length; step++) {
             _kernel.executeAction(proposal[step].action, proposal[step].target);
@@ -114,19 +110,15 @@ contract Processor is Module {
         assembly {
             size := extcodesize(target_)
         }
-        require(
-            size > 0,
-            "cannot storeInstructions(): target address is not a contract"
-        );
+        if (size == 0) revert PRCSR_AddressIsNotAContract(target_);
     }
 
-    function _ensureValidKeycode(bytes4 keycode) internal pure {
-        for (uint256 i = 0; i < 3; i++) {
-            bytes1 char = keycode[i];
-            require(
-                char >= 0x41 && char <= 0x5A,
-                " cannot storeInstructions(): invalid keycode"
-            ); // A-Z only"
+    function _ensureValidKeycode(bytes5 keycode_) internal pure {
+        for (uint256 i = 0; i < 5; i++) {
+            bytes1 char = keycode_[i];
+            if (char < 0x41 || char > 0x5A)
+                revert PRCSR_InvalidKeycode(keycode_);
+            // A-Z only"
         }
     }
 }

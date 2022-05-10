@@ -11,13 +11,13 @@ import "test-utils/sorting.sol";
 
 //// LOCAL
 // types
-import "src/modules/TBL.sol";
+import "src/modules/TXBLK.sol";
 
 contract TransferBalanceLockTest is Test {
     using mocking for *;
     using sorting for uint256[];
 
-    TransferBalanceLock tbl;
+    TransferBalanceLock TXBLK;
     users usrfac;
     ERC20 ohm;
 
@@ -28,7 +28,7 @@ contract TransferBalanceLockTest is Test {
     }
 
     function setUp() public {
-        tbl = new TransferBalanceLock(address(this));
+        TXBLK = new TransferBalanceLock(address(this));
         usrfac = new users();
         ohm = ERC20(
             deployCode("MockERC20.t.sol:MockERC20", abi.encode("ohm", "OHM", 9))
@@ -36,7 +36,7 @@ contract TransferBalanceLockTest is Test {
     }
 
     function testKEYCODE() public {
-        assertEq32("TBL", tbl.KEYCODE());
+        assertEq32("TXBLK", TXBLK.KEYCODE());
     }
 
     function testPullTokensNoLock(
@@ -67,13 +67,13 @@ contract TransferBalanceLockTest is Test {
             uint256 deposit = uint256(keccak256(abi.encode(amount + i))) % 1e24;
             bals[index] += deposit;
 
-            ohm.transferFrom.mock(user, address(tbl), uint224(deposit), true);
+            ohm.transferFrom.mock(user, address(TXBLK), uint224(deposit), true);
 
             // test
             /// passing
-            tbl.pullTokens(user, address(ohm), uint224(deposit), 0);
-            assertEq(tbl.unlocked(user, address(ohm), false), bals[index]);
-            assertEq(tbl.locked(user, address(ohm)), 0);
+            TXBLK.pullTokens(user, address(ohm), uint224(deposit), 0);
+            assertEq(TXBLK.unlocked(user, address(ohm), false), bals[index]);
+            assertEq(TXBLK.locked(user, address(ohm)), 0);
         }
     }
 
@@ -134,12 +134,12 @@ contract TransferBalanceLockTest is Test {
                 if (maxtimestamp < lockPeriod + block.timestamp)
                     maxtimestamp = lockPeriod + block.timestamp;
 
-                ohm.transferFrom.mock(user, address(tbl), deposit, true);
+                ohm.transferFrom.mock(user, address(TXBLK), deposit, true);
 
                 data[i][0][j] = deposit; // Amount
                 data[i][1][j] = lockPeriod + block.timestamp; // ts
 
-                tbl.pullTokens(user, address(ohm), deposit, lockPeriod);
+                TXBLK.pullTokens(user, address(ohm), deposit, lockPeriod);
             }
         }
 
@@ -159,12 +159,12 @@ contract TransferBalanceLockTest is Test {
                         else unlocked += data[i][0][k];
                     }
 
-                    assertEq(tbl.locked(usrs[i], address(ohm)), locked);
+                    assertEq(TXBLK.locked(usrs[i], address(ohm)), locked);
                     assertEq(
-                        tbl.unlocked(usrs[i], address(ohm), true),
+                        TXBLK.unlocked(usrs[i], address(ohm), true),
                         unlocked
                     );
-                    assertEq(tbl.unlocked(usrs[i], address(ohm), false), 0);
+                    assertEq(TXBLK.unlocked(usrs[i], address(ohm), false), 0);
                 }
             }
         }
@@ -174,12 +174,12 @@ contract TransferBalanceLockTest is Test {
         Kernel(address(this)).approvedPolicies.mock(address(this), true);
 
         vm.warp(20);
-        ohm.transferFrom.mock(address(0), address(tbl), 1e21, true);
+        ohm.transferFrom.mock(address(0), address(TXBLK), 1e21, true);
         vm.expectRevert(stdError.arithmeticError);
-        tbl.pullTokens(address(0), address(ohm), 1e21, 2**32 - 1);
+        TXBLK.pullTokens(address(0), address(ohm), 1e21, 2**32 - 1);
 
         vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
-        tbl.pullTokens(address(0), address(ohm), 1e24, 0);
+        TXBLK.pullTokens(address(0), address(ohm), 1e24, 0);
     }
 
     function testSlashTokens(
@@ -228,13 +228,13 @@ contract TransferBalanceLockTest is Test {
                 if (lockPeriod == 0) lockPeriod = 3600 * 24;
                 if (amount == 0) amount = 1e21;
 
-                ohm.transferFrom.mock(usrs[i], address(tbl), amount, true);
+                ohm.transferFrom.mock(usrs[i], address(TXBLK), amount, true);
 
                 data[i][0][j] = amount; // Amount
                 data[i][1][j] = lockPeriod + block.timestamp; // ts
                 bals[i] += amount;
 
-                tbl.pullTokens(usrs[i], address(ohm), amount, lockPeriod);
+                TXBLK.pullTokens(usrs[i], address(ohm), amount, lockPeriod);
             }
         }
 
@@ -244,7 +244,7 @@ contract TransferBalanceLockTest is Test {
 
             uint224 slashed = uint224(bals[i] / ((amount % 10) + 1));
 
-            tbl.slashTokens(
+            TXBLK.slashTokens(
                 usrs[i],
                 receiver,
                 address(ohm),
@@ -253,37 +253,37 @@ contract TransferBalanceLockTest is Test {
                 slashRecent
             );
 
-            assertEq(tbl.locked(usrs[i], address(ohm)), bals[i] - slashed);
-            assertEq(tbl.unlocked(receiver, address(ohm), false), slashed);
+            assertEq(TXBLK.locked(usrs[i], address(ohm)), bals[i] - slashed);
+            assertEq(TXBLK.unlocked(receiver, address(ohm), false), slashed);
 
             vm.warp(data[i][1][data[i][1].length / 2]);
 
             assertEq(
-                tbl.unlocked(usrs[i], address(ohm), true) +
-                    tbl.locked(usrs[i], address(ohm)),
+                TXBLK.unlocked(usrs[i], address(ohm), true) +
+                    TXBLK.locked(usrs[i], address(ohm)),
                 bals[i] - slashed
             );
         }
 
         ohm.transfer.mock(
             usrs[length],
-            uint224(tbl.unlocked(usrs[length], address(ohm), false)),
+            uint224(TXBLK.unlocked(usrs[length], address(ohm), false)),
             true
         );
 
-        tbl.pushTokens(
+        TXBLK.pushTokens(
             usrs[length],
             address(ohm),
-            uint224(tbl.unlocked(usrs[length], address(ohm), false)),
+            uint224(TXBLK.unlocked(usrs[length], address(ohm), false)),
             false
         );
 
         vm.warp(0);
 
-        ohm.transferFrom.mock(usrs[0], address(tbl), 1e21, true);
-        tbl.pullTokens(usrs[0], address(ohm), 1e21, 0);
+        ohm.transferFrom.mock(usrs[0], address(TXBLK), 1e21, true);
+        TXBLK.pullTokens(usrs[0], address(ohm), 1e21, 0);
 
-        tbl.slashTokens(
+        TXBLK.slashTokens(
             usrs[0],
             usrs[length],
             address(ohm),
@@ -292,10 +292,10 @@ contract TransferBalanceLockTest is Test {
             false
         );
 
-        assertEq(tbl.unlocked(usrs[length], address(ohm), false), 1e19);
-        assertEq(tbl.unlocked(usrs[0], address(ohm), false), 1e21 - 1e19);
+        assertEq(TXBLK.unlocked(usrs[length], address(ohm), false), 1e19);
+        assertEq(TXBLK.unlocked(usrs[0], address(ohm), false), 1e21 - 1e19);
 
-        tbl.slashTokens(
+        TXBLK.slashTokens(
             usrs[0],
             usrs[length],
             address(ohm),
@@ -304,8 +304,8 @@ contract TransferBalanceLockTest is Test {
             false
         );
 
-        assertEq(tbl.unlocked(usrs[length], address(ohm), false), 1e21);
-        assertEq(tbl.unlocked(usrs[0], address(ohm), false), 0);
+        assertEq(TXBLK.unlocked(usrs[length], address(ohm), false), 1e21);
+        assertEq(TXBLK.unlocked(usrs[0], address(ohm), false), 0);
     }
 
     function testSlashTokensRevertAndRest() public {
@@ -313,32 +313,35 @@ contract TransferBalanceLockTest is Test {
         address usr = usrfac.next();
         address rec = usrfac.next();
 
-        ohm.transferFrom.mock(usr, address(tbl), 1e21, true);
-        ohm.transferFrom.mock(usr, address(tbl), 1e22, true);
+        ohm.transferFrom.mock(usr, address(TXBLK), 1e21, true);
+        ohm.transferFrom.mock(usr, address(TXBLK), 1e22, true);
 
-        tbl.pullTokens(usr, address(ohm), 1e21, 3600 * 24 * 54);
-        tbl.pullTokens(usr, address(ohm), 1e22, 3600 * 24 * 32);
+        TXBLK.pullTokens(usr, address(ohm), 1e21, 3600 * 24 * 54);
+        TXBLK.pullTokens(usr, address(ohm), 1e22, 3600 * 24 * 32);
 
-        assertEq(tbl.locked(usr, address(ohm)), 1e21 + 1e22);
+        assertEq(TXBLK.locked(usr, address(ohm)), 1e21 + 1e22);
 
-        tbl.slashTokens(usr, rec, address(ohm), 5e21, true, true);
-        tbl.slashTokens(usr, rec, address(ohm), 5e21, true, false);
+        TXBLK.slashTokens(usr, rec, address(ohm), 5e21, true, true);
+        TXBLK.slashTokens(usr, rec, address(ohm), 5e21, true, false);
 
-        assertEq(tbl.locked(usr, address(ohm)), 1e21);
-        assertEq(tbl.unlocked(rec, address(ohm), false), 1e22);
+        assertEq(TXBLK.locked(usr, address(ohm)), 1e21);
+        assertEq(TXBLK.unlocked(rec, address(ohm), false), 1e22);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                TBL_NotEnoughLockedForSlashing.selector,
+                TXBLK_NotEnoughLockedForSlashing.selector,
                 1e21
             )
         );
-        tbl.slashTokens(usr, rec, address(ohm), 3e21, true, false);
+        TXBLK.slashTokens(usr, rec, address(ohm), 3e21, true, false);
 
         vm.expectRevert(
-            abi.encodeWithSelector(TBL_NotEnoughUnlockedForSlashing.selector, 0)
+            abi.encodeWithSelector(
+                TXBLK_NotEnoughUnlockedForSlashing.selector,
+                0
+            )
         );
-        tbl.slashTokens(usr, rec, address(ohm), 3e21, false, true);
+        TXBLK.slashTokens(usr, rec, address(ohm), 3e21, false, true);
     }
 
     function testPushTokensUnlocked(uint224 amount) public {
@@ -350,16 +353,16 @@ contract TransferBalanceLockTest is Test {
         address user1 = usrfac.next();
         Kernel(address(this)).approvedPolicies.mock(address(this), true);
 
-        ohm.transferFrom.mock(user1, address(tbl), amount, true);
+        ohm.transferFrom.mock(user1, address(TXBLK), amount, true);
         ohm.transfer.mock(user1, amount, true);
 
         // test
-        tbl.pullTokens(user1, address(ohm), amount, 0);
-        tbl.pushTokens(user1, address(ohm), amount, false);
+        TXBLK.pullTokens(user1, address(ohm), amount, 0);
+        TXBLK.pushTokens(user1, address(ohm), amount, false);
 
-        assertEq(tbl.unlocked(user1, address(ohm), false), 0);
-        assertEq(tbl.locked(user1, address(ohm)), 0);
-        assertEq(tbl.unlocked(user1, address(ohm), true), 0);
+        assertEq(TXBLK.unlocked(user1, address(ohm), false), 0);
+        assertEq(TXBLK.locked(user1, address(ohm)), 0);
+        assertEq(TXBLK.unlocked(user1, address(ohm), true), 0);
     }
 
     function testPushTokensLocked(
@@ -405,12 +408,12 @@ contract TransferBalanceLockTest is Test {
                 if (lockPeriod == 0) lockPeriod = 3600 * 24;
                 if (amount == 0) amount = 1e21;
 
-                ohm.transferFrom.mock(usrs[i], address(tbl), amount, true);
+                ohm.transferFrom.mock(usrs[i], address(TXBLK), amount, true);
 
                 data[i][0][j] = amount; // Amount
                 data[i][1][j] = lockPeriod + block.timestamp; // ts
 
-                tbl.pullTokens(usrs[i], address(ohm), amount, lockPeriod);
+                TXBLK.pullTokens(usrs[i], address(ohm), amount, lockPeriod);
             }
         }
 
@@ -434,16 +437,16 @@ contract TransferBalanceLockTest is Test {
                     }
 
                     assertEq(
-                        tbl.unlocked(usrs[i], address(ohm), true),
+                        TXBLK.unlocked(usrs[i], address(ohm), true),
                         uint224(sum)
                     );
                     ohm.transfer.mock(usrs[i], uint224(sum), true);
-                    tbl.pushTokens(usrs[i], address(ohm), uint224(sum), true);
+                    TXBLK.pushTokens(usrs[i], address(ohm), uint224(sum), true);
                 }
             }
 
             vm.warp(0);
-            assertEq(tbl.locked(usrs[i], address(ohm)), 0);
+            assertEq(TXBLK.locked(usrs[i], address(ohm)), 0);
         }
     }
 
@@ -452,25 +455,25 @@ contract TransferBalanceLockTest is Test {
         address usr = usrfac.next();
         uint256 timestamp = block.timestamp;
 
-        ohm.transferFrom.mock(usr, address(tbl), 1e21, true);
-        tbl.pullTokens(usr, address(ohm), 1e21, 86400);
+        ohm.transferFrom.mock(usr, address(TXBLK), 1e21, true);
+        TXBLK.pullTokens(usr, address(ohm), 1e21, 86400);
 
         vm.warp(timestamp + 24000);
 
         ohm.transfer.mock(usr, 1e21, true);
         vm.expectRevert(
-            abi.encodeWithSelector(TBL_NotEnoughTokensUnlocked.selector, 0)
+            abi.encodeWithSelector(TXBLK_NotEnoughTokensUnlocked.selector, 0)
         );
-        tbl.pushTokens(usr, address(ohm), 1e21, true);
+        TXBLK.pushTokens(usr, address(ohm), 1e21, true);
 
         vm.expectRevert(
-            abi.encodeWithSelector(TBL_NotEnoughTokensUnlocked.selector, 0)
+            abi.encodeWithSelector(TXBLK_NotEnoughTokensUnlocked.selector, 0)
         );
-        tbl.pushTokens(usr, address(ohm), 1e21, false);
+        TXBLK.pushTokens(usr, address(ohm), 1e21, false);
 
         vm.warp(timestamp + 86401);
 
-        tbl.pushTokens(usr, address(ohm), 1e21, true);
+        TXBLK.pushTokens(usr, address(ohm), 1e21, true);
     }
 
     function testExtendLock(
@@ -489,36 +492,39 @@ contract TransferBalanceLockTest is Test {
         uint256 origTimestamp = block.timestamp;
         address user1 = usrfac.next();
         Kernel(address(this)).approvedPolicies.mock(address(this), true);
-        ohm.transferFrom.mock(user1, address(tbl), amount, true);
+        ohm.transferFrom.mock(user1, address(TXBLK), amount, true);
         ohm.transfer.mock(user1, amount, true);
 
         // test
-        tbl.pullTokens(user1, address(ohm), amount, lockPeriod);
+        TXBLK.pullTokens(user1, address(ohm), amount, lockPeriod);
 
         vm.expectRevert(
-            abi.encodeWithSelector(TBL_NotEnoughTokensUnlocked.selector, 0)
+            abi.encodeWithSelector(TXBLK_NotEnoughTokensUnlocked.selector, 0)
         );
-        tbl.pushTokens(user1, address(ohm), amount, true);
+        TXBLK.pushTokens(user1, address(ohm), amount, true);
 
         skip(lockPeriod);
         vm.expectRevert(
-            abi.encodeWithSelector(TBL_NotEnoughTokensUnlocked.selector, 0)
+            abi.encodeWithSelector(TXBLK_NotEnoughTokensUnlocked.selector, 0)
         );
-        tbl.pushTokens(user1, address(ohm), amount, true);
+        TXBLK.pushTokens(user1, address(ohm), amount, true);
 
         if (
             uint256(lockExtensionPeriod) + uint256(lockPeriod) + origTimestamp >
             2**32 - 1
         ) {
             vm.expectRevert(stdError.arithmeticError);
-            tbl.extendLock(user1, address(ohm), amount, lockExtensionPeriod);
+            TXBLK.extendLock(user1, address(ohm), amount, lockExtensionPeriod);
         } else {
-            tbl.extendLock(user1, address(ohm), amount, lockExtensionPeriod);
+            TXBLK.extendLock(user1, address(ohm), amount, lockExtensionPeriod);
             skip(lockExtensionPeriod - 1);
             vm.expectRevert(
-                abi.encodeWithSelector(TBL_NotEnoughTokensUnlocked.selector, 0)
+                abi.encodeWithSelector(
+                    TXBLK_NotEnoughTokensUnlocked.selector,
+                    0
+                )
             );
-            tbl.pushTokens(user1, address(ohm), amount, true);
+            TXBLK.pushTokens(user1, address(ohm), amount, true);
         }
     }
 }

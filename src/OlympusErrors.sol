@@ -21,9 +21,9 @@ error CannotTransferDueToDebt();
 error NoAssignedAllocator(address token_);
 error NoAssignedAppraiser(address token_);
 
-/// @notice TBL
-error TBL_LockExtensionPeriodIs0();
-error TBL_NotEnoughTokensUnlocked(uint256 unlocked_);
-error TBL_CouldNotExtendLockForAmount(uint256 amount_);
-error TBL_NotEnoughUnlockedForSlashing(uint256 unlocked_);
-error TBL_NotEnoughLockedForSlashing(uint256 locked_);
+/// @notice TXBLK
+error TXBLK_LockExtensionPeriodIs0();
+error TXBLK_NotEnoughTokensUnlocked(uint256 unlocked_);
+error TXBLK_CouldNotExtendLockForAmount(uint256 amount_);
+error TXBLK_NotEnoughUnlockedForSlashing(uint256 unlocked_);
+error TXBLK_NotEnoughLockedForSlashing(uint256 locked_);

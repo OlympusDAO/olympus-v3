@@ -2,9 +2,9 @@
 pragma solidity >=0.8.0;
 
 import {Kernel, Policy} from "../Kernel.sol";
-import {OlympusStaking} from "../modules/STK.sol";
-import {OlympusIndex} from "../modules/IDX.sol";
-import {OlympusMinter} from "../modules/MNT.sol";
+import {OlympusStaking} from "../modules/STKNG.sol";
+import {OlympusIndex} from "../modules/INDEX.sol";
+import {OlympusMinter} from "../modules/MINTR.sol";
 
 import {IERC4626} from "../interfaces/IERC4626.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
@@ -28,9 +28,9 @@ contract gOhmVault is Policy, IERC4626, IERC20 {
     }
 
     function configureReads() external override onlyKernel {
-        STK = OlympusStaking(getModuleAddress("STK"));
-        MNT = OlympusMinter(getModuleAddress("MNT"));
-        IDX = OlympusIndex(getModuleAddress("IDX"));
+        STK = OlympusStaking(getModuleAddress("STKNG"));
+        MNT = OlympusMinter(getModuleAddress("MINTR"));
+        IDX = OlympusIndex(getModuleAddress("INDEX"));
         // TODO add CCX (cross chain transmitter)
     }
 
@@ -39,10 +39,10 @@ contract gOhmVault is Policy, IERC4626, IERC20 {
         view
         override
         onlyKernel
-        returns (bytes3[] memory permissions)
+        returns (bytes5[] memory permissions)
     {
-        permissions[1] = "STK";
-        permissions[2] = "MNT";
+        permissions[1] = "STKNG";
+        permissions[2] = "MINTR";
     }
 
     /*///////////////////////////////////////////////////////////////

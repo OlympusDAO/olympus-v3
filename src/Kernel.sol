@@ -11,7 +11,7 @@ abstract contract Module {
         _kernel = kernel_;
     }
 
-    function KEYCODE() public pure virtual returns (bytes3) {}
+    function KEYCODE() public pure virtual returns (bytes5) {}
 
     modifier onlyPermitted() {
         if (_kernel.getWritePermissions(KEYCODE(), msg.sender) == false)
@@ -21,7 +21,7 @@ abstract contract Module {
 }
 
 abstract contract Policy {
-    error Policy_ModuleDoesNotExist(bytes3 keycode_);
+    error Policy_ModuleDoesNotExist(bytes5 keycode_);
     error Policy_OnlyKernel(address caller_);
 
     Kernel public _kernel;
@@ -30,7 +30,7 @@ abstract contract Policy {
         _kernel = kernel_;
     }
 
-    function getModuleAddress(bytes3 keycode_) internal view returns (address) {
+    function getModuleAddress(bytes5 keycode_) internal view returns (address) {
         address moduleForKeycode = _kernel.getModuleForKeycode(keycode_);
 
         if (moduleForKeycode != address(0))
@@ -46,7 +46,7 @@ abstract contract Policy {
         view
         virtual
         onlyKernel
-        returns (bytes3[] memory permissions)
+        returns (bytes5[] memory permissions)
     {}
 
     modifier onlyKernel() {
@@ -71,14 +71,14 @@ struct Instruction {
 
 contract Kernel {
     event Kernel_WritePermissionsUpdated(
-        bytes3 indexed keycode_,
+        bytes5 indexed keycode_,
         address indexed policy_,
         bool enabled_
     );
 
     error Kernel_OnlyExecutor(address caller_);
-    error Kernel_ModuleAlreadyInstalled(bytes3 module_);
-    error Kernel_ModuleAlreadyExists(bytes3 module_);
+    error Kernel_ModuleAlreadyInstalled(bytes5 module_);
+    error Kernel_ModuleAlreadyExists(bytes5 module_);
     error Kernel_PolicyAlreadyApproved(address policy_);
     error Kernel_PolicyNotApproved(address policy_);
 
@@ -97,10 +97,10 @@ contract Kernel {
     //                                 DEPENDENCY MANAGEMENT                             //
     ///////////////////////////////////////////////////////////////////////////////////////
 
-    mapping(bytes3 => address) public getModuleForKeycode; // get contract for module keycode
-    mapping(address => bytes3) public getKeycodeForModule; // get module keycode for contract
+    mapping(bytes5 => address) public getModuleForKeycode; // get contract for module keycode
+    mapping(address => bytes5) public getKeycodeForModule; // get module keycode for contract
     mapping(address => bool) public approvedPolicies; // whitelisted apps
-    mapping(bytes3 => mapping(address => bool)) public getWritePermissions; // can module (bytes3) be written to by policy (address)
+    mapping(bytes5 => mapping(address => bool)) public getWritePermissions; // can module (bytes5) be written to by policy (address)
     address[] public allPolicies;
 
     event ActionExecuted(Actions action_, address target_);
@@ -118,8 +118,8 @@ contract Kernel {
         } else if (action_ == Actions.TerminatePolicy) {
             _terminatePolicy(target_);
         } else if (action_ == Actions.ChangeExecutor) {
-            // Require kernel to install the CPU module before calling ChangeExecutor on it
-            if (getKeycodeForModule[target_] != "CPU")
+            // Require kernel to install the PRCSR module before calling ChangeExecutor on it
+            if (getKeycodeForModule[target_] != "PRCSR")
                 revert Kernel_OnlyExecutor(target_);
 
             executor = target_;
@@ -129,7 +129,7 @@ contract Kernel {
     }
 
     function _installModule(address newModule_) internal {
-        bytes3 keycode = Module(newModule_).KEYCODE();
+        bytes5 keycode = Module(newModule_).KEYCODE();
 
         // @NOTE check newModule_ != 0
         if (getModuleForKeycode[keycode] != address(0))
@@ -140,13 +140,13 @@ contract Kernel {
     }
 
     function _upgradeModule(address newModule_) internal {
-        bytes3 keycode = Module(newModule_).KEYCODE();
+        bytes5 keycode = Module(newModule_).KEYCODE();
         address oldModule = getModuleForKeycode[keycode];
 
         if (oldModule == address(0) || oldModule == newModule_)
             revert Kernel_ModuleAlreadyExists(keycode);
 
-        getKeycodeForModule[oldModule] = bytes3(0);
+        getKeycodeForModule[oldModule] = bytes5(0);
         getKeycodeForModule[newModule_] = keycode;
         getModuleForKeycode[keycode] = newModule_;
 
@@ -161,7 +161,7 @@ contract Kernel {
 
         Policy(policy_).configureReads();
 
-        bytes3[] memory permissions = Policy(policy_).requestWrites();
+        bytes5[] memory permissions = Policy(policy_).requestWrites();
         _setWritePermissions(policy_, permissions, true);
 
         allPolicies.push(policy_);
@@ -173,7 +173,7 @@ contract Kernel {
 
         approvedPolicies[policy_] = false;
 
-        bytes3[] memory permissions = Policy(policy_).requestWrites();
+        bytes5[] memory permissions = Policy(policy_).requestWrites();
         _setWritePermissions(policy_, permissions, false);
     }
 
@@ -188,7 +188,7 @@ contract Kernel {
 
     function _setWritePermissions(
         address policy_,
-        bytes3[] memory keycodes_,
+        bytes5[] memory keycodes_,
         bool canWrite_
     ) internal {
         for (uint256 i = 0; i < keycodes_.length; i++) {

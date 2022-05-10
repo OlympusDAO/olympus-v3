@@ -2,9 +2,9 @@
 pragma solidity ^0.8.10;
 
 import {Kernel, Policy} from "../Kernel.sol";
-import {OlympusStaking} from "../modules/STK.sol";
-import {OlympusIndex} from "../modules/IDX.sol";
-import {OlympusMinter} from "../modules/MNT.sol";
+import {OlympusStaking} from "../modules/STKNG.sol";
+import {OlympusIndex} from "../modules/INDEX.sol";
+import {OlympusMinter} from "../modules/MINTR.sol";
 import {TransferHelper} from "../libraries/TransferHelper.sol";
 import {IERC4626} from "../interfaces/IERC4626.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
@@ -13,9 +13,9 @@ import {IERC20} from "../interfaces/IERC20.sol";
 contract sOhmVault is Policy, IERC4626, IERC20 {
     using TransferHelper for IERC20;
 
-    OlympusStaking private STK;
-    OlympusIndex private IDX;
-    OlympusMinter private MNT;
+    OlympusStaking private STKNG;
+    OlympusIndex private INDEX;
+    OlympusMinter private MINTR;
 
     address public immutable asset;
 
@@ -28,9 +28,9 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
     }
 
     function configureReads() external override onlyKernel {
-        STK = OlympusStaking(getModuleAddress("STK"));
-        IDX = OlympusIndex(getModuleAddress("IDX"));
-        MNT = OlympusMinter(getModuleAddress("MNT"));
+        STKNG = OlympusStaking(getModuleAddress("STKNG"));
+        INDEX = OlympusIndex(getModuleAddress("INDEX"));
+        MINTR = OlympusMinter(getModuleAddress("MINTR"));
     }
 
     function requestWrites()
@@ -38,10 +38,10 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
         view
         override
         onlyKernel
-        returns (bytes3[] memory permissions)
+        returns (bytes5[] memory permissions)
     {
-        permissions[1] = "STK";
-        permissions[2] = "MNT";
+        permissions[1] = "STKNG";
+        permissions[2] = "MINTR";
     }
 
     /*///////////////////////////////////////////////////////////////
@@ -95,8 +95,8 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
         address to_,
         uint256 amount_
     ) internal {
-        MNT.burnOhm(from_, amount_);
-        STK.mint(to_, amount_ / IDX.index());
+        MINTR.burnOhm(from_, amount_);
+        STKNG.mint(to_, amount_ / INDEX.index());
         // TODO instead, mint and propagate via CCX
     }
 
@@ -105,8 +105,8 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
         address to_,
         uint256 amount_
     ) internal {
-        STK.burn(from_, amount_ / IDX.index());
-        MNT.mintOhm(to_, amount_);
+        STKNG.burn(from_, amount_ / INDEX.index());
+        MINTR.mintOhm(to_, amount_);
     }
 
     /*///////////////////////////////////////////////////////////////
@@ -118,7 +118,7 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
         override
         returns (bool)
     {
-        STK.transferFrom(msg.sender, to_, amount_);
+        STKNG.transferFrom(msg.sender, to_, amount_);
 
         emit Transfer(msg.sender, to_, amount_);
         return true;
@@ -129,7 +129,7 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
         address to_,
         uint256 amount_
     ) external override returns (bool) {
-        STK.transferFrom(from_, to_, amount_);
+        STKNG.transferFrom(from_, to_, amount_);
         emit Transfer(from_, to_, amount_);
         return true;
     }
@@ -140,7 +140,7 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
         override
         returns (uint256)
     {
-        return STK.allowances(owner, spender);
+        return STKNG.allowances(owner, spender);
     }
 
     function approve(address spender, uint256 amount)
@@ -148,7 +148,7 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
         override
         returns (bool)
     {
-        STK.approve(msg.sender, spender, amount);
+        STKNG.approve(msg.sender, spender, amount);
         return true;
     }
 
@@ -157,15 +157,15 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
     //////////////////////////////////////////////////////////////*/
 
     function balanceOf(address who_) public view override returns (uint256) {
-        return STK.indexedBalance(who_) * IDX.index();
+        return STKNG.indexedBalance(who_) * INDEX.index();
     }
 
     function totalAssets() public view override returns (uint256) {
-        return STK.indexedSupply() * IDX.index();
+        return STKNG.indexedSupply() * INDEX.index();
     }
 
     function totalSupply() public view override returns (uint256) {
-        return STK.indexedSupply() * IDX.index();
+        return STKNG.indexedSupply() * INDEX.index();
     }
 
     /// @notice Utility function to convert sOHM value into OHM value.
@@ -240,11 +240,11 @@ contract sOhmVault is Policy, IERC4626, IERC20 {
 
     // TODO verify
     function maxWithdraw(address owner) public view override returns (uint256) {
-        return STK.indexedBalance(owner) * IDX.index();
+        return STKNG.indexedBalance(owner) * INDEX.index();
     }
 
     // TODO verify
     function maxRedeem(address owner) public view override returns (uint256) {
-        return STK.indexedBalance(owner) * IDX.index();
+        return STKNG.indexedBalance(owner) * INDEX.index();
     }
 }
