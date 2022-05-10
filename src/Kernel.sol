@@ -5,9 +5,9 @@ abstract contract Module {
     error Module_OnlyApprovedPolicy(address caller_);
     error Module_OnlyPermissionedPolicy(address caller_);
 
-    BaseKernel public _kernel;
+    IKernel public _kernel;
 
-    constructor(BaseKernel kernel_) {
+    constructor(IKernel kernel_) {
         _kernel = kernel_;
     }
 
@@ -24,9 +24,9 @@ abstract contract Policy {
     error Policy_ModuleDoesNotExist(bytes5 keycode_);
     error Policy_OnlyKernel(address caller_);
 
-    BaseKernel public _kernel;
+    IKernel public _kernel;
 
-    constructor(BaseKernel kernel_) {
+    constructor(IKernel kernel_) {
         _kernel = kernel_;
     }
 
@@ -70,7 +70,7 @@ struct Instruction {
 }
 
 // Core kernel functions for modules and policies to work
-interface BaseKernel {
+interface IKernel {
     function getWritePermissions(bytes5 keycode_, address caller_)
         external
         view
@@ -84,7 +84,7 @@ interface BaseKernel {
     function executeAction(Actions action_, address target_) external;
 }
 
-contract Kernel is BaseKernel {
+contract Kernel is IKernel {
     event Kernel_WritePermissionsUpdated(
         bytes5 indexed keycode_,
         address indexed policy_,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.10;
 
-import {BaseKernel, Module} from "../Kernel.sol";
+import {IKernel, Module} from "../Kernel.sol";
 
 // Module to keep track of index and total virtual supply of OHM
 // (OHM that is staked and unstaked)
@@ -17,7 +17,7 @@ contract OlympusIndex is Module {
     // minting and burning the supply of OHM when staking/unstaking.
     uint256 public constant RATE_UNITS = 1e6;
 
-    constructor(BaseKernel kernel_, uint256 initialIndex_) Module(kernel_) {
+    constructor(IKernel kernel_, uint256 initialIndex_) Module(kernel_) {
         index = initialIndex_;
         lastUpdated = block.timestamp;
     }

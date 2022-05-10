@@ -25,13 +25,16 @@ contract IndexTest is Test {
     function setUp() public {
         kernel = new LarpKernel();
         index = new OlympusIndex(kernel, INITIAL_INDEX);
+
+        kernel.installModule(address(index));
+        kernel.grantWritePermissions(index.KEYCODE(), address(this));
     }
 
-    function testKEYCODE() public {
+    function test_KEYCODE() public {
         assertEq32("INDEX", index.KEYCODE());
     }
 
-    function testIncreaseIndex(uint256 rate_) public {
+    function test_IncreaseIndex(uint256 rate_) public {
         vm.assume(rate_ > 0);
 
         assertEq(index.increaseIndex(rate_), (INITIAL_INDEX * rate_) / 1e6);

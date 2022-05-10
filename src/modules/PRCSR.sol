@@ -15,7 +15,7 @@ contract Processor is Module {
     //                      DefaultOS Module Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
 
-    constructor(BaseKernel kernel_) Module(kernel_) {}
+    constructor(IKernel kernel_) Module(kernel_) {}
 
     function KEYCODE() public pure override returns (bytes5) {
         return "PRCSR";
