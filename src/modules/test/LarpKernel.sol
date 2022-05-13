@@ -3,7 +3,8 @@ pragma solidity ^0.8.10;
 
 import {IKernel, Actions, Module} from "../../Kernel.sol";
 
-// Kernel for testing purposes
+// Kernel for testing purposes, in order to interact with modules without
+// needing a policy to be created.
 contract LarpKernel is IKernel {
     mapping(bytes5 => address) public getModuleForKeycode; // get address for module keycode
     mapping(address => bytes5) public getKeycodeForModule; // get module keycode for contract
