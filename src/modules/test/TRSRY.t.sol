@@ -60,7 +60,7 @@ contract TRSRYTest is Test {
         TRSRY.withdraw(address(dn), alice, dnAmount);
 
         assertEq(ngmi.balanceOf(alice), amount_);
-        assertEq(dn.balanceOf(alice), amount_);
+        assertEq(dn.balanceOf(alice), dnAmount);
     }
 
     // TODO test if can withdraw more than allowed amount
