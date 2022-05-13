@@ -14,11 +14,7 @@ contract MockERC20 is ERC20 {
         _mint(to, value);
     }
 
-    function burn(uint256 value) external virtual {
-        burnFrom(msg.sender, value);
-    }
-
-    function burnFrom(address from, uint256 value) public virtual {
+    function burn(address from, uint256 value) external virtual {
         _burn(from, value);
     }
 }

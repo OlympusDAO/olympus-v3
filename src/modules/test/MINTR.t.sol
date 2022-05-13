@@ -10,7 +10,6 @@ import "test-utils/sorting.sol";
 
 import {OlympusMinter} from "src/modules/MINTR.sol";
 import {LarpKernel} from "./LarpKernel.sol";
-import {MockERC20} from "./MockERC20.sol";
 import {OlympusERC20Token} from "../../external/OlympusERC20.sol";
 import {OlympusAuthority} from "../../external/OlympusAuthority.sol";
 
@@ -19,9 +18,9 @@ contract MINTRTest is Test {
     using sorting for uint256[];
     using console2 for uint256;
 
-    OlympusAuthority auth;
     LarpKernel internal kernel;
     OlympusMinter internal MINTR;
+    OlympusAuthority auth;
     OlympusERC20Token internal ohm;
     users userCreator;
     address[] usrs;
@@ -50,6 +49,7 @@ contract MINTRTest is Test {
         usrs = userCreator.create(3);
 
         kernel.installModule(address(MINTR));
+        // Approve this test fixture as policy with write permissions
         kernel.grantWritePermissions(MINTR.KEYCODE(), address(this));
     }
 

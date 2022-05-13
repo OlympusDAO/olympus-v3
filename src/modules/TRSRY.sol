@@ -9,7 +9,7 @@ import {ERC721} from "solmate/tokens/ERC721.sol";
 import {TransferHelper} from "../libraries/TransferHelper.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
 
-import {Kernel, Module} from "../Kernel.sol";
+import {IKernel, Module} from "../Kernel.sol";
 
 //import "./OlympusErrors.sol";
 
@@ -17,26 +17,27 @@ import {Kernel, Module} from "../Kernel.sol";
 /// @notice Treasury holds reserves, LP tokens and all other assets under the control
 /// of the protocol. Any contracts that need access to treasury assets should
 /// be whitelisted by governance.
-contract OlympusTreasury is Module, Auth {
+// TODO should only allow approved amounts for a policy?
+contract OlympusTreasury is Module {
     using TransferHelper for IERC20;
 
-    constructor(
-        Kernel kernel_,
-        address owner_,
-        Authority authority_
-    ) Module(kernel_) Auth(owner_, authority_) {}
+    IKernel kernel;
+
+    constructor(IKernel kernel_) Module(kernel_) {
+        kernel = kernel_;
+    }
 
     function KEYCODE() public pure override returns (bytes5) {
         return "TRSRY";
     }
 
     function withdraw(
-        IERC20 token_,
+        address token_,
         address to_,
         uint256 amount_
     ) external onlyPermitted {
         // TODO is this all?? does this properly gate functions?
-        token_.safeTransfer(to_, amount_);
+        IERC20(token_).safeTransfer(to_, amount_);
     }
 
     /* TODO overload errors?
