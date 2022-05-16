@@ -14,8 +14,10 @@ abstract contract Module {
     function KEYCODE() public pure virtual returns (bytes5) {}
 
     modifier onlyPermitted() {
-        if (_kernel.getWritePermissions(KEYCODE(), msg.sender) == false)
-            revert Module_OnlyPermissionedPolicy(msg.sender);
+        if (
+            _kernel.approvedPolicies(msg.sender) == false ||
+            _kernel.getWritePermissions(KEYCODE(), msg.sender) == false
+        ) revert Module_OnlyPermissionedPolicy(msg.sender);
         _;
     }
 }
@@ -82,6 +84,8 @@ interface IKernel {
         returns (address);
 
     function executeAction(Actions action_, address target_) external;
+
+    function approvedPolicies(address caller_) external view returns (bool);
 }
 
 contract Kernel is IKernel {

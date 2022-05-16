@@ -10,8 +10,33 @@ import "test-utils/sorting.sol";
 
 import {OlympusMinter} from "src/modules/MINTR.sol";
 import {LarpKernel} from "./LarpKernel.sol";
-import {OlympusERC20Token} from "../../external/OlympusERC20.sol";
-import {OlympusAuthority} from "../../external/OlympusAuthority.sol";
+import {OlympusERC20Token, IOlympusAuthority} from "../../external/OlympusERC20.sol";
+
+//import {OlympusAuthority} from "../../external/OlympusAuthority.sol";
+
+contract MockLegacyAuthority is IOlympusAuthority {
+    address authz;
+
+    constructor(address authz_) {
+        authz = authz_;
+    }
+
+    function governor() external view returns (address) {
+        return authz;
+    }
+
+    function guardian() external view returns (address) {
+        return authz;
+    }
+
+    function policy() external view returns (address) {
+        return authz;
+    }
+
+    function vault() external view returns (address) {
+        return authz;
+    }
+}
 
 contract MINTRTest is Test {
     using mocking for *;
@@ -20,7 +45,7 @@ contract MINTRTest is Test {
 
     LarpKernel internal kernel;
     OlympusMinter internal MINTR;
-    OlympusAuthority auth;
+    IOlympusAuthority auth;
     OlympusERC20Token internal ohm;
     users userCreator;
     address[] usrs;
@@ -30,19 +55,21 @@ contract MINTRTest is Test {
 
     function setUp() public {
         kernel = new LarpKernel();
-        auth = new OlympusAuthority(
-            address(this),
-            address(this),
-            address(this),
-            address(this)
-        );
+        //auth = new OlympusAuthority(
+        //    address(this),
+        //    address(this),
+        //    address(this),
+        //    address(this)
+        //);
+        auth = new MockLegacyAuthority(address(0x0));
         ohm = new OlympusERC20Token(address(auth));
         MINTR = new OlympusMinter(kernel, ohm);
 
         // Set vault in authority to MINTR module
-        auth.pushVault(address(MINTR), true);
-        vm.prank(address(MINTR));
-        auth.pullVault();
+        auth.vault.mock(address(MINTR));
+        //auth.pushVault(address(MINTR), true);
+        //vm.prank(address(MINTR));
+        //auth.pullVault();
 
         // Create dummy user
         userCreator = new users();
