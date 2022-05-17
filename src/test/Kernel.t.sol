@@ -77,7 +77,6 @@ contract KernelTest is Test {
 
     function test_ApprovePolicy() public {
         address policyAddr = address(larpPolicy);
-
         kernel.executeAction(Actions.ApprovePolicy, policyAddr);
 
         // TODO test policy is added to end of allPolicies
@@ -86,5 +85,14 @@ contract KernelTest is Test {
         assertTrue(kernel.getWritePermissions("LARPR", policyAddr));
     }
 
-    function test_TerminatePolicy() public {}
+    function test_TerminatePolicy() public {
+        address policyAddr = address(larpPolicy);
+        kernel.executeAction(Actions.ApprovePolicy, policyAddr); // Tested above
+
+        kernel.executeAction(Actions.TerminatePolicy, policyAddr);
+
+        assertEq(kernel.allPolicies(0), policyAddr); // Policy does not get deleted from here
+        assertFalse(kernel.approvedPolicies(policyAddr));
+        assertFalse(kernel.getWritePermissions("LARPR", policyAddr));
+    }
 }
