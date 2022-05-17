@@ -67,9 +67,6 @@ contract MINTRTest is Test {
 
         // Set vault in authority to MINTR module
         auth.vault.mock(address(MINTR));
-        //auth.pushVault(address(MINTR), true);
-        //vm.prank(address(MINTR));
-        //auth.pullVault();
 
         // Create dummy user
         userCreator = new users();

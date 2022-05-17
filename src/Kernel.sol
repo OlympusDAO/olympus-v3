@@ -35,7 +35,7 @@ abstract contract Policy {
     function getModuleAddress(bytes5 keycode_) internal view returns (address) {
         address moduleForKeycode = _kernel.getModuleForKeycode(keycode_);
 
-        if (moduleForKeycode != address(0))
+        if (moduleForKeycode == address(0))
             revert Policy_ModuleDoesNotExist(keycode_);
 
         return moduleForKeycode;
@@ -87,6 +87,11 @@ interface IKernel {
 
     function approvedPolicies(address caller_) external view returns (bool);
 }
+error Kernel_OnlyExecutor(address caller_);
+error Kernel_ModuleAlreadyInstalled(bytes5 module_);
+error Kernel_ModuleAlreadyExists(bytes5 module_);
+error Kernel_PolicyAlreadyApproved(address policy_);
+error Kernel_PolicyNotApproved(address policy_);
 
 contract Kernel is IKernel {
     event Kernel_WritePermissionsUpdated(
@@ -94,12 +99,6 @@ contract Kernel is IKernel {
         address indexed policy_,
         bool enabled_
     );
-
-    error Kernel_OnlyExecutor(address caller_);
-    error Kernel_ModuleAlreadyInstalled(bytes5 module_);
-    error Kernel_ModuleAlreadyExists(bytes5 module_);
-    error Kernel_PolicyAlreadyApproved(address policy_);
-    error Kernel_PolicyNotApproved(address policy_);
 
     address public executor;
 
@@ -137,8 +136,8 @@ contract Kernel is IKernel {
         } else if (action_ == Actions.TerminatePolicy) {
             _terminatePolicy(target_);
         } else if (action_ == Actions.ChangeExecutor) {
-            // Require kernel to install the PRCSR module before calling ChangeExecutor on it
-            if (getKeycodeForModule[target_] != "PRCSR")
+            // Require kernel to install the EXCTR module before calling ChangeExecutor on it
+            if (getKeycodeForModule[target_] != "EXCTR")
                 revert Kernel_OnlyExecutor(target_);
 
             executor = target_;
@@ -212,6 +211,7 @@ contract Kernel is IKernel {
     ) internal {
         for (uint256 i = 0; i < keycodes_.length; i++) {
             getWritePermissions[keycodes_[i]][policy_] = canWrite_;
+
             emit Kernel_WritePermissionsUpdated(
                 keycodes_[i],
                 policy_,
