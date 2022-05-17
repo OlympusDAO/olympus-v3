@@ -7,25 +7,8 @@ import "test-utils/mocking.sol";
 import "test-utils/sorting.sol";
 
 import "../Kernel.sol";
-//import {LarpPolicy} from "./utils/LarpPolicy.sol";
+import {LarpPolicy} from "./utils/LarpPolicy.sol";
 import {LarpModule} from "./utils/LarpModule.sol";
-
-contract LarpPolicy is Policy {
-    constructor(IKernel kernel_) Policy(kernel_) {}
-
-    function configureReads() external override onlyKernel {}
-
-    function requestWrites()
-        external
-        view
-        override
-        onlyKernel
-        returns (bytes5[] memory permissions)
-    {
-        permissions = new bytes5[](1);
-        permissions[0] = "LARPR";
-    }
-}
 
 contract KernelTest is Test {
     using mocking for *;
