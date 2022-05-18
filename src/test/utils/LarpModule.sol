@@ -9,9 +9,4 @@ contract LarpModule is Module {
     function KEYCODE() public pure override returns (bytes5) {
         return "LARPR";
     }
-
-    //function configureReads() external override onlyKernel {
-    //    for(uint i=0; i < reads.length; ++i) {
-    //    }
-    //}
 }

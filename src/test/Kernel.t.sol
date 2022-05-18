@@ -2,23 +2,15 @@
 pragma solidity ^0.8.10;
 
 import {Test} from "forge-std/Test.sol";
-import "test-utils/users.sol";
-import "test-utils/mocking.sol";
-import "test-utils/sorting.sol";
 
 import "../Kernel.sol";
 import {LarpPolicy} from "./utils/LarpPolicy.sol";
 import {LarpModule} from "./utils/LarpModule.sol";
 
 contract KernelTest is Test {
-    using mocking for *;
-
     Kernel internal kernel;
     LarpPolicy internal larpPolicy;
     LarpModule internal LARPR;
-
-    //users userCreator;
-    //address[] usrs;
 
     function setUp() public {
         kernel = new Kernel();

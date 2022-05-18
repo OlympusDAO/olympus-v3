@@ -2,24 +2,24 @@
 pragma solidity ^0.8.10;
 
 import {Test} from "forge-std/Test.sol";
-import "test-utils/users.sol";
-import "test-utils/mocking.sol";
+import "test-utils/UserFactory.sol";
+import "test-utils/larping.sol";
 import "test-utils/sorting.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
-import {LarpKernel} from "./LarpKernel.sol";
+import {LarpKernel} from "../../test/utils/LarpKernel.sol";
 import {OlympusERC20Token} from "../../external/OlympusERC20.sol";
 
 contract TRSRYTest is Test {
-    using mocking for *;
+    using larping for *;
     using sorting for uint256[];
 
     LarpKernel internal kernel;
     OlympusTreasury TRSRY;
     MockERC20 ngmi;
     MockERC20 dn;
-    users userCreator;
+    UserFactory userCreator;
     address alice;
     address bob;
 
@@ -31,7 +31,7 @@ contract TRSRYTest is Test {
         ngmi = new MockERC20("NOT GONNA MAKE IT", "NGMI", 18);
         dn = new MockERC20("DEEZ NUTZ", "DN", 18);
 
-        userCreator = new users();
+        userCreator = new UserFactory();
 
         address[] memory usrs = userCreator.create(2);
         alice = usrs[0];

@@ -4,17 +4,13 @@ pragma solidity ^0.8.10;
 import {Test} from "forge-std/Test.sol";
 import "forge-std/console2.sol";
 import "solmate/tokens/ERC20.sol";
-import "test-utils/users.sol";
-import "test-utils/mocking.sol";
-import "test-utils/sorting.sol";
+import "test-utils/larping.sol";
 
 import {OlympusIndex} from "src/modules/INDEX.sol";
-//import {BaseKernel, Actions} from "src/Kernel.sol";
-import {LarpKernel} from "./LarpKernel.sol";
+import {LarpKernel} from "../../test/utils/LarpKernel.sol";
 
 contract IndexTest is Test {
-    using mocking for *;
-    using sorting for uint256[];
+    using larping for *;
     using console2 for uint256;
 
     LarpKernel kernel;
