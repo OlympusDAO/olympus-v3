@@ -7,7 +7,7 @@ import "solmate/tokens/ERC20.sol";
 import "test-utils/sorting.sol";
 
 import {OlympusMinter} from "src/modules/MINTR.sol";
-import {LarpKernel} from "../../test/utils/LarpKernel.sol";
+import {LarpKernel} from "../../test/larps/LarpKernel.sol";
 import {OlympusERC20Token} from "../../external/OlympusERC20.sol";
 
 contract STKNGTest is Test {

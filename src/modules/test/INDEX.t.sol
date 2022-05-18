@@ -7,9 +7,9 @@ import "solmate/tokens/ERC20.sol";
 import "test-utils/larping.sol";
 
 import {OlympusIndex} from "src/modules/INDEX.sol";
-import {LarpKernel} from "../../test/utils/LarpKernel.sol";
+import {LarpKernel} from "../../test/larps/LarpKernel.sol";
 
-contract IndexTest is Test {
+contract INDEXTest is Test {
     using larping for *;
     using console2 for uint256;
 

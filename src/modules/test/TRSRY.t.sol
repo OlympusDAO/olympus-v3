@@ -8,7 +8,7 @@ import "test-utils/sorting.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
-import {LarpKernel} from "../../test/utils/LarpKernel.sol";
+import {LarpKernel} from "../../test/larps/LarpKernel.sol";
 import {OlympusERC20Token} from "../../external/OlympusERC20.sol";
 
 contract TRSRYTest is Test {

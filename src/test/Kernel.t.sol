@@ -4,8 +4,8 @@ pragma solidity ^0.8.10;
 import {Test} from "forge-std/Test.sol";
 
 import "../Kernel.sol";
-import {LarpPolicy} from "./utils/LarpPolicy.sol";
-import {LarpModule} from "./utils/LarpModule.sol";
+import {LarpPolicy} from "./larps/LarpPolicy.sol";
+import {LarpModule} from "./larps/LarpModule.sol";
 
 contract KernelTest is Test {
     Kernel internal kernel;

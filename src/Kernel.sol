@@ -14,10 +14,8 @@ abstract contract Module {
     function KEYCODE() public pure virtual returns (bytes5) {}
 
     modifier onlyPermitted() {
-        if (
-            _kernel.approvedPolicies(msg.sender) == false ||
-            _kernel.getWritePermissions(KEYCODE(), msg.sender) == false
-        ) revert Module_OnlyPermissionedPolicy(msg.sender);
+        if (_kernel.getWritePermissions(KEYCODE(), msg.sender) == false)
+            revert Module_OnlyPermissionedPolicy(msg.sender);
         _;
     }
 }
@@ -87,11 +85,6 @@ interface IKernel {
 
     function approvedPolicies(address caller_) external view returns (bool);
 }
-error Kernel_OnlyExecutor(address caller_);
-error Kernel_ModuleAlreadyInstalled(bytes5 module_);
-error Kernel_ModuleAlreadyExists(bytes5 module_);
-error Kernel_PolicyAlreadyApproved(address policy_);
-error Kernel_PolicyNotApproved(address policy_);
 
 contract Kernel is IKernel {
     event Kernel_WritePermissionsUpdated(
@@ -99,6 +92,12 @@ contract Kernel is IKernel {
         address indexed policy_,
         bool enabled_
     );
+
+    error Kernel_OnlyExecutor(address caller_);
+    error Kernel_ModuleAlreadyInstalled(bytes5 module_);
+    error Kernel_ModuleAlreadyExists(bytes5 module_);
+    error Kernel_PolicyAlreadyApproved(address policy_);
+    error Kernel_PolicyNotApproved(address policy_);
 
     address public executor;
 
