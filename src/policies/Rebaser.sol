@@ -58,8 +58,8 @@ contract Rebaser is Policy, ReentrancyGuard {
         onlyKernel
         returns (bytes5[] memory permissions)
     {
-        permissions[1] = "STKNG";
-        permissions[2] = "MINTR";
+        permissions[0] = "STKNG";
+        permissions[1] = "MINTR";
     }
 
     function rebase() external nonReentrant {
