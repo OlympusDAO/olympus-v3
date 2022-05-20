@@ -15,7 +15,7 @@ contract Executor is Module {
     //                      DefaultOS Module Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
 
-    constructor(IKernel kernel_) Module(kernel_) {}
+    constructor(Kernel kernel_) Module(kernel_) {}
 
     function KEYCODE() public pure override returns (bytes5) {
         return "EXCTR";

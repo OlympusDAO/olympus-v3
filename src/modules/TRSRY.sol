@@ -9,7 +9,7 @@ import {ERC721} from "solmate/tokens/ERC721.sol";
 import {TransferHelper} from "../libraries/TransferHelper.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
 
-import {IKernel, Module} from "../Kernel.sol";
+import {Kernel, Module} from "../Kernel.sol";
 
 //import "./OlympusErrors.sol";
 
@@ -21,9 +21,9 @@ import {IKernel, Module} from "../Kernel.sol";
 contract OlympusTreasury is Module {
     using TransferHelper for IERC20;
 
-    IKernel kernel;
+    Kernel kernel;
 
-    constructor(IKernel kernel_) Module(kernel_) {
+    constructor(Kernel kernel_) Module(kernel_) {
         kernel = kernel_;
     }
 
