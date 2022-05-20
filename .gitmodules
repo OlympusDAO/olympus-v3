@@ -10,3 +10,6 @@
 [submodule "lib/test-utils"]
 	path = lib/test-utils
 	url = https://github.com/OlympusDAO/test-utils
+[submodule "lib/prb-math"]
+	path = lib/prb-math
+	url = https://github.com/paulrberg/prb-math
