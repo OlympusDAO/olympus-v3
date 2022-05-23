@@ -160,7 +160,6 @@ contract DEMAMTest is Test {
         uint224 am = amount / 2 + 2;
         uint224 am2 = amount / 3 + 3;
         uint32 per = period / 2 + 2;
-        uint32 per2 = period / 3 + 3;
 
         ohm.transferFrom.larp(usr, demama, amount, true);
         ohm.transferFrom.larp(usr, demama, am, true);
@@ -292,7 +291,6 @@ contract DEMAMTest is Test {
         uint224 am = amount / 2 + 2;
         uint224 am2 = amount / 3 + 3;
         uint32 per = period / 2 + 2;
-        uint32 per2 = period / 3 + 3;
 
         ohm.transferFrom.larp(usr, demama, amount, true);
         ohm.transferFrom.larp(usr, demama, am, true);
@@ -330,10 +328,7 @@ contract DEMAMTest is Test {
         address[] memory usrs = victims.create(3);
         address usr = usrs[0];
 
-        uint224 am = amount / 2 + 2;
         uint224 am2 = amount / 3 + 3;
-        uint32 per = period / 2 + 2;
-        uint32 per2 = period / 3 + 3;
 
         ohm.transferFrom.larp(usr, demama, amount, true);
 
@@ -399,9 +394,6 @@ contract DEMAMTest is Test {
         address[] memory usrs = victims.create(2);
         address usr = usrs[0];
         address rec = usrs[1];
-
-        uint224 am = amount / 2 + 2;
-        uint224 am2 = amount / 3 + 3;
 
         ohm.transferFrom.larp(usr, demama, amount, true);
 

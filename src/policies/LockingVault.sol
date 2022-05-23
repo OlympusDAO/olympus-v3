@@ -4,7 +4,7 @@ pragma solidity ^0.8.10;
 /// DEPS
 
 import "solmate/auth/Auth.sol";
-import "forge-std/console2.sol";
+
 /// LOCAL
 
 // types
@@ -153,7 +153,7 @@ contract LockingVault is Auth, Policy {
             reducedDepositId,
             balance.cui(),
             (balance - amount).cui(),
-            unlockTime.cui32()
+            unlockTime.cu32i()
         );
 
         if (increasedDepositId == 0) {
@@ -170,7 +170,7 @@ contract LockingVault is Auth, Policy {
                 token,
                 targetPoolId,
                 amount.cui(),
-                unlockTime.cui32()
+                unlockTime.cu32i()
             );
 
             // effects
@@ -209,7 +209,7 @@ contract LockingVault is Auth, Policy {
                 increasedDepositId,
                 balance.cui(), // old bal
                 (balance + amount).cui(), // new bal
-                unlockTime.cui32()
+                unlockTime.cu32i()
             );
         }
     }
@@ -280,8 +280,8 @@ contract LockingVault is Auth, Policy {
             msg.sender,
             deposit.idPool,
             depositId,
-            lock.cu224ushr(32).cui(),
-            lock.cui32(),
+            lock.cuishr(32),
+            lock.cu32i(),
             newEpochedUnlockTime
         );
     }
@@ -303,9 +303,42 @@ contract LockingVault is Auth, Policy {
         address receiver,
         address token,
         uint224[] memory amounts,
-        uint256[] memory indices
+        uint256[] memory depositIds
     ) external virtual requiresAuth {
-        demam.slashLockedTokens(owner, receiver, token, amounts, indices);
+        uint256 l = depositIds.length;
+
+        DepositData[] memory deposits = new DepositData[](l);
+        uint256[] memory locksBeforeSlash = new uint256[](l);
+        uint256[] memory lockIds = new uint256[](l);
+
+        for (uint256 i; i < l; i++) {
+            deposits[i] = getDepositDataForUniqueId[depositIds[i]];
+
+            locksBeforeSlash[i] = demam.getUserLock(
+                owner,
+                token,
+                deposits[i].idLock
+            );
+
+            lockIds[i] = deposits[i].idLock;
+        }
+
+        demam.slashLockedTokens(owner, receiver, token, amounts, lockIds);
+
+        for (uint256 i; i < l; i++) {
+            int256 balance = demam
+                .getUserLockBalance(owner, token, deposits[i].idLock)
+                .cui();
+
+            vopom.noteLockBalanceChange(
+                owner,
+                deposits[i].idPool,
+                depositIds[i],
+                locksBeforeSlash[i].cuishr(32),
+                balance,
+                locksBeforeSlash[i].cu32i()
+            );
+        }
     }
 
     function openPool(uint256 pool, bool dark) external virtual requiresAuth {
@@ -342,6 +375,30 @@ contract LockingVault is Auth, Policy {
 
     // kill fn
     function setOwner(address) public virtual override {}
+
+    function getDepositDataForId(uint256 idDeposit)
+        public
+        view
+        returns (DepositData memory)
+    {
+        return getDepositDataForUniqueId[idDeposit];
+    }
+
+    function getLockIdForDepositId(uint256 idDeposit)
+        public
+        view
+        returns (uint48 idLock)
+    {
+        return getDepositDataForUniqueId[idDeposit].idLock;
+    }
+
+    function getPoolIdForDepositId(uint256 idDeposit)
+        public
+        view
+        returns (uint48 idPool)
+    {
+        return getDepositDataForUniqueId[idDeposit].idPool;
+    }
 
     function calcEpochedTime(uint32 intendedUnlockTime)
         public

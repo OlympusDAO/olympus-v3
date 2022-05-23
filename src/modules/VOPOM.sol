@@ -289,7 +289,7 @@ contract VotingPowerModule is Module {
     }
 
     function getEpochTime() public view returns (int256) {
-        return block.timestamp.cui32().epochify();
+        return block.timestamp.cu32i().epochify();
     }
 
     function _noteLock(
