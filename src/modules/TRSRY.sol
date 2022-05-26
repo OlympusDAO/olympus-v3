@@ -21,7 +21,16 @@ import {Kernel, Module} from "../Kernel.sol";
 contract OlympusTreasury is Module {
     using TransferHelper for IERC20;
 
+    event PolicyApprovedForWithdrawal(
+        address indexed policy,
+        address indexed token_,
+        uint256 amount
+    );
+
     Kernel kernel;
+
+    // TODO approval token mapping
+    // TODO debt for address and token mapping
 
     constructor(Kernel kernel_) Module(kernel_) {
         kernel = kernel_;
@@ -31,23 +40,68 @@ contract OlympusTreasury is Module {
         return "TRSRY";
     }
 
-    function withdraw(
+    function getReserveBalance(address token_) external view returns (uint256) {
+        return IERC20(token_).balanceOf(address(this)); // + debt[token_];
+    }
+
+    function loanReserves() external onlyPermitted {
+        /*
+          1. update debt 
+          2. send tokens
+        */
+        // TODO check approval
+        // TODO add debt to caller
+        // TODO Withdraw to caller
+        // -> virtual reserves stay the same
+    }
+
+    function repayReserves() external onlyPermitted {
+        // TODO check approval
+        // TODO subtract debt to caller
+        // TODO Deposit from caller
+    }
+
+    // TODO Only permitted by governor. Used in case of emergency where loaned amounts cannot be repaid.
+    function clearDebt() external onlyPermitted {
+        // TODO reduce debt for specific address
+        // TODO reduce approval?
+    }
+
+    function depositReserves() external onlyPermitted {
+        // TODO safeTransferFrom caller to here
+        // TODO add to virtual reserves
+    }
+
+    function requestApproval(
+        address policy_,
+        address token_,
+        uint256 amount_
+    ) external onlyPermitted {
+        // TODO account for debt
+        //IERC20(token_).approve(policy_, amount_);
+
+        //_approveForWithdrawal(policy_, token_, amount_);
+        emit PolicyApprovedForWithdrawal(policy_, token_, amount_);
+    }
+
+    function withdrawReserves(
         address token_,
         address to_,
         uint256 amount_
     ) external onlyPermitted {
         // TODO is this all?? does this properly gate functions?
+        // TODO check approval and decrement
         IERC20(token_).safeTransfer(to_, amount_);
     }
 
-    /* TODO overload errors?
-    function withdraw(ERC721 token_, address to_, uint256 id_) external requiresAuth {
-        token_.safeTransferFrom(address(this), to_, id_);
+    function revokeApproval() external {
+        // TODO make ungated
+        // TODO check in kernel if policy is terminated
+        // TODO if terminated, revoke approval
     }
 
-    function withdraw(ERC1155 token_, address to_, uint256 id_, uint256 amount_) external requiresAuth {
-        token_.safeTransferFrom(address(this), to_, id_, amount_);
-    }
-    */
     // TODO make payable function to receive eth and wrap?
+    receive() external payable {
+        // TODO
+    }
 }
