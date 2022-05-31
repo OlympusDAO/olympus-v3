@@ -26,23 +26,6 @@ library VOPOM_Library {
     }
 }
 
-struct Point {
-    int256 bias;
-    int256 slope;
-    int128 period;
-    int128 tst;
-}
-
-struct VoteConfig {
-    int128 multiplier;
-    int128 maxlock;
-}
-
-struct Lock {
-    int256 balance;
-    int256 end;
-}
-
 error VOPOM_ZeroLock();
 error VOPOM_NoLockFound();
 error VOPOM_LockExpired();
@@ -52,35 +35,72 @@ error VOPOM_ValueScaleLow();
 error VOPOM_OnlyLockExtensions();
 error VOPOM_UnlockTimeNotEpoched();
 error VOPOM_UnlockCouldNotHaveHappened();
-error VOPOM_AlreadyConfiguredFor(uint256 poolId_);
-error VOPOM_VotingNotConfiguredFor(uint256 poolId_);
+error VOPOM_AlreadyConfiguredFor(uint64 poolId_);
+error VOPOM_VotingNotConfiguredFor(uint64 poolId_);
+error VOPOM_InvalidBiasPercentForDelegation(
+    int128 biasPercent_,
+    int128 totalPercentDelegated_
+);
 
 contract VotingPowerModule is Module {
     using VOPOM_Library for int32;
-    using PRBMathSD59x18 for int256;
-    using PRBMath for int256;
+    using PRBMathSD59x18 for *;
+    using PRBMath for *;
     using convert for *;
+
+    struct Point {
+        int128 bias;
+        int128 slope;
+        uint64 poolId;
+        int64 period;
+        int128 tst;
+    }
+
+    struct VoteConfig {
+        int128 multiplier;
+        int128 maxlock;
+    }
+
+    struct Lock {
+        int128 balance;
+        int128 end;
+    }
+
+    // ######################## ~ MATH ~ ########################
 
     mapping(uint256 => VoteConfig) public configurations;
 
+    mapping(uint256 => mapping(int128 => int128)) public slopeChanges;
+
+    // ######################## ~ POINTS ~ ########################
+
     mapping(uint256 => Point) public globalPointSet;
 
-    mapping(uint256 => mapping(int256 => int256)) public slopeChanges;
+    mapping(address => Point[]) public userPointSets;
 
-    mapping(address => mapping(uint256 => Point)) public userPointSets;
+    mapping(address => uint256[]) public userOpenPoolPointIds;
 
-    uint256 public nextUniquePointId;
+    // ######################## ~ DELEGATIONS ~ ########################
 
-    constructor(address kernel_) Module(Kernel(kernel_)) {
-        nextUniquePointId = 1;
-    }
+    mapping(address => mapping(address => int128))
+        public biasPercentDelegations;
+
+    mapping(address => address[]) public userDelegators;
+
+    // ###############################################################
+    // ######################## ~ MAIN BODY ~ ########################
+    // ###############################################################
+
+    constructor(address kernel_) Module(Kernel(kernel_)) {}
 
     function KEYCODE() public pure virtual override returns (bytes5) {
         return "VOPOM";
     }
 
+    // ######################## ~ SETTERS ~ ########################
+
     function configureUniquely(
-        uint256 poolId,
+        uint64 poolId,
         int128 multiplier,
         int128 maxLock
     ) external onlyPermitted {
@@ -94,18 +114,18 @@ contract VotingPowerModule is Module {
         configurations[poolId] = VoteConfig(multiplier, maxLock);
     }
 
-    function checkpoint(uint256 poolId) external {
+    function checkpoint(uint64 poolId) external {
         _checkpoint(address(0), poolId, 0, Lock(0, 0), Lock(0, 0));
     }
 
     function noteLockCreation(
         address user,
-        uint256 poolId,
-        int256 balance,
+        uint64 poolId,
+        int128 balance,
         int32 epochedUnlockTime
-    ) external onlyPermitted returns (uint256 uniquePointId) {
-        uniquePointId = nextUniquePointId;
+    ) external onlyPermitted returns (uint256 pointId) {
         int256 timestamp = block.timestamp.cui();
+        pointId = userPointSets[user].length;
 
         if (epochedUnlockTime % VOPOM_WEEK != 0)
             revert VOPOM_UnlockTimeNotEpoched();
@@ -121,22 +141,19 @@ contract VotingPowerModule is Module {
         _noteLock(
             user,
             poolId,
-            uniquePointId,
+            userPointSets[user].length,
             0,
             balance,
             0,
             epochedUnlockTime
         );
-
-        nextUniquePointId++;
     }
 
     function noteLockBalanceChange(
         address user,
-        uint256 poolId,
         uint256 pointId,
-        int256 oldBalance,
-        int256 newBalance,
+        int128 oldBalance,
+        int128 newBalance,
         int32 epochedUnlockTime
     ) external onlyPermitted {
         if (userPointSets[user][pointId].tst == 0) revert VOPOM_NoLockFound();
@@ -146,7 +163,7 @@ contract VotingPowerModule is Module {
 
         _noteLock(
             user,
-            poolId,
+            userPointSets[user][pointId].poolId,
             pointId,
             oldBalance,
             newBalance,
@@ -157,13 +174,13 @@ contract VotingPowerModule is Module {
 
     function noteLockExtension(
         address user,
-        uint256 poolId,
         uint256 pointId,
-        int256 balance,
+        int128 balance,
         int32 oldEpochedUnlockTime,
         int32 newEpochedUnlockTime
     ) external onlyPermitted {
         int256 timestamp = block.timestamp.cui();
+        uint64 poolId = userPointSets[user][pointId].poolId;
 
         if (newEpochedUnlockTime % VOPOM_WEEK != 0)
             revert VOPOM_UnlockTimeNotEpoched();
@@ -187,72 +204,194 @@ contract VotingPowerModule is Module {
         );
     }
 
-    function getVotingPowerShare(
-        address user,
-        uint256 poolId,
-        uint256 pointId
-    ) public view returns (int256 fixedPointSharePercent) {
-        int256 glvp = getGlobalVotingPower(poolId);
-        if (glvp > 0) return getVotingPower(user, pointId).div(glvp);
-        else return 0;
+    function noteVotingPowerDelegation(
+        address from,
+        address to,
+        int128 biasPercent
+    ) external onlyPermitted {
+        // reads
+        int128 totalPercentDelegated = biasPercentDelegations[from][from];
+        int128 newPercentDelegated = biasPercent + totalPercentDelegated;
+
+        // checks
+        if (0 <= newPercentDelegated && newPercentDelegated <= VOPOM_SCALE)
+            revert VOPOM_InvalidBiasPercentForDelegation(
+                biasPercent,
+                totalPercentDelegated
+            );
+
+        // TODO: think
+
+        // effects
+        // += so it can be decremented
+        biasPercentDelegations[from][to] += biasPercent;
+
+        // total percent delegated
+        biasPercentDelegations[from][from] = newPercentDelegated;
     }
 
-    function getVotingPowerShare(
-        address user,
-        uint256[] memory poolIds,
-        uint256[] memory pointIds
-    ) public view returns (int256 fixedPointSharePercent) {
-        uint256 length = poolIds.length;
-        int256 glvp;
-        int256 vp;
-
-        for (uint256 i; i < length; i++) {
-            glvp += getGlobalVotingPower(poolIds[i]);
-        }
-
-        length = pointIds.length;
-
-        for (uint256 i; i < length; i++) {
-            vp += getVotingPower(user, pointIds[i]);
-        }
-
-        if (glvp > 0) return vp.div(glvp);
-        else return 0;
-    }
-
-    function getVotingPower(address user, uint256 pointId)
-        public
-        view
-        returns (int256 votingPower)
+    function noteDelegators(address user, address[] calldata delegators)
+        external
+        onlyPermitted
     {
-        // get user point
-        Point memory upoint = userPointSets[user][pointId];
-        // check if exists
-        if (upoint.tst == 0) revert VOPOM_NoLockFound();
-        // decrement bias passed on time passing and slope
-        upoint.bias -= upoint.slope * (block.timestamp.cui() - upoint.tst);
-        // if neg passed, so 0
-        if (upoint.bias < 0) return 0;
-        // return
-        return upoint.bias;
+        userDelegators[user] = delegators;
     }
 
-    function getGlobalVotingPower(uint256 poolId)
+    function noteOpenPoolPointAddition(address user, uint256 pointId)
+        external
+        onlyPermitted
+    {
+        userOpenPoolPointIds[user].push(pointId);
+    }
+
+    // ######################## ~ ALMIGHTY GETTERS ~ ########################
+
+    function getVotingPower(
+        address user,
+        int128 timestamp,
+        uint256[] memory pointIds
+    ) public view returns (int256 votingPower) {
+        uint256 l = pointIds.length;
+
+        for (uint256 i; i < l; ) {
+            Point memory upoint = userPointSets[user][pointIds[i]];
+
+            if (upoint.tst == 0) revert VOPOM_NoLockFound();
+
+            upoint.bias -= upoint.slope * (timestamp - upoint.tst);
+
+            if (upoint.bias < 0) upoint.bias = 0;
+
+            votingPower += upoint.bias;
+
+            unchecked {
+                i++;
+            }
+        }
+    }
+
+    function getVotingPower(address user, uint256[] memory pointIds)
         public
         view
         returns (int256 globalVotingPower)
     {
-        // get point
-        Point memory glpoint = globalPointSet[poolId];
-        // decrement bias passed on time passing and slope
-        glpoint.bias -= glpoint.slope * (block.timestamp.cui() - glpoint.tst);
-        // if neg passed, so 0
-        if (glpoint.bias < 0) return 0;
-        // return
-        return glpoint.bias;
+        return getVotingPower(user, block.timestamp.cu128i(), pointIds);
     }
 
-    function isOpenPool(uint256 poolId) public view returns (bool) {
+    function getGlobalVotingPower(int128 timestamp, uint64[] memory poolIds)
+        public
+        view
+        returns (int256 globalVotingPower)
+    {
+        uint256 l = poolIds.length;
+
+        for (uint256 i; i < l; ) {
+            Point memory glpoint = globalPointSet[poolIds[i]];
+
+            glpoint.bias -= glpoint.slope * (timestamp - glpoint.tst);
+
+            if (glpoint.bias < 0) return 0;
+
+            globalVotingPower += glpoint.bias;
+
+            unchecked {
+                i++;
+            }
+        }
+    }
+
+    function getGlobalVotingPower(uint64[] memory poolIds)
+        public
+        view
+        returns (int256 globalVotingPower)
+    {
+        return getGlobalVotingPower(block.timestamp.cu128i(), poolIds);
+    }
+
+    function getOpenVotingPower(address user, int128 timestamp)
+        public
+        view
+        returns (int256 votingPower)
+    {
+        return
+            getVotingPower(user, timestamp, userOpenPoolPointIds[user]).mul(
+                VOPOM_SCALE - biasPercentDelegations[user][user]
+            );
+    }
+
+    function getOpenVotingPower(address user)
+        public
+        view
+        returns (int256 votingPower)
+    {
+        return getOpenVotingPower(user, block.timestamp.cu128i());
+    }
+
+    function getDelegatedVotingPower(address user, int128 timestamp)
+        public
+        view
+        returns (int256 votingPower)
+    {
+        address[] memory delegators = userDelegators[user];
+        uint256 l = delegators.length;
+
+        for (uint256 i; i < l; ) {
+            address delegator = delegators[i];
+
+            votingPower += getVotingPower(
+                delegator,
+                timestamp,
+                userOpenPoolPointIds[delegator]
+            ).mul(biasPercentDelegations[delegator][user]);
+
+            unchecked {
+                i++;
+            }
+        }
+    }
+
+    function getDelegatedVotingPower(address user)
+        public
+        view
+        returns (int256 votingPower)
+    {
+        return getDelegatedVotingPower(user, block.timestamp.cu128i());
+    }
+
+    // ######################## ~ SPECIFIC GETTERS ~ ########################
+
+    function userOpenPoolPointIdsContain(address user, uint256 poolId)
+        public
+        view
+        returns (bool)
+    {
+        uint256[] memory openPoolPointIds = getUserOpenPoolPointIds(user);
+        uint256 l = openPoolPointIds.length;
+
+        for (uint256 i; i < l; ) {
+            if (openPoolPointIds[i] == poolId) return true;
+
+            unchecked {
+                i++;
+            }
+        }
+
+        return false;
+    }
+
+    function getUserOpenPoolPointIds(address user)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        return userOpenPoolPointIds[user];
+    }
+
+    function getUserPoints(address user) public view returns (Point[] memory) {
+        return userPointSets[user];
+    }
+
+    function isOpenPool(uint64 poolId) public view returns (bool) {
         return getGlobalPoint(poolId).tst != 0;
     }
 
@@ -264,15 +403,15 @@ contract VotingPowerModule is Module {
         return getUserPoint(user, pointId).tst != 0;
     }
 
-    function getMaximumLockTime(uint256 poolId) public view returns (int128) {
+    function getMaximumLockTime(uint64 poolId) public view returns (int128) {
         return configurations[poolId].maxlock;
     }
 
-    function getMultiplier(uint256 poolId) public view returns (int128) {
+    function getMultiplier(uint64 poolId) public view returns (int128) {
         return configurations[poolId].multiplier;
     }
 
-    function getGlobalPoint(uint256 poolId)
+    function getGlobalPoint(uint64 poolId)
         public
         view
         returns (Point memory point)
@@ -288,16 +427,26 @@ contract VotingPowerModule is Module {
         return userPointSets[user][pointId];
     }
 
+    function getUserPointPoolId(address user, uint256 pointId)
+        public
+        view
+        returns (uint64 poolId)
+    {
+        return userPointSets[user][pointId].poolId;
+    }
+
     function getEpochTime() public view returns (int256) {
         return block.timestamp.cu32i().epochify();
     }
 
+    // ######################## ~ INTERNAL LOGIC ~ ########################
+
     function _noteLock(
         address user,
-        uint256 poolId,
+        uint64 poolId,
         uint256 pointId,
-        int256 oldAmount,
-        int256 newAmount,
+        int128 oldAmount,
+        int128 newAmount,
         int32 oldUnlockTime,
         int32 newUnlockTime
     ) internal {
@@ -307,12 +456,15 @@ contract VotingPowerModule is Module {
         if (configurations[poolId].maxlock == 0)
             revert VOPOM_VotingNotConfiguredFor(poolId);
 
+        if (pointId == userPointSets[user].length)
+            userPointSets[user].push(Point(0, 0, 0, 0, 0));
+
         _checkpoint(user, poolId, pointId, oldLocked, newLocked);
     }
 
     function _checkpoint(
         address user,
-        uint256 poolId,
+        uint64 poolId,
         uint256 pointId,
         Lock memory oldLocked,
         Lock memory newLocked
@@ -322,8 +474,10 @@ contract VotingPowerModule is Module {
         Point memory pointOld;
         Point memory pointNew;
 
-        int256 dSlopeOld;
-        int256 dSlopeNew;
+        int128 dSlopeOld;
+        int128 dSlopeNew;
+
+        pointNew.poolId = poolId;
 
         // The following calculates the new + old user slopes
         // new slopes are used for indicating total slope change
@@ -332,7 +486,7 @@ contract VotingPowerModule is Module {
         {
             if (user != address(0)) {
                 VoteConfig memory config = configurations[poolId];
-                int128 period = userPointSets[user][pointId].period;
+                int64 period = userPointSets[user][pointId].period;
 
                 if (oldLocked.end > timestamp && oldLocked.balance > 0) {
                     // slope basic
@@ -341,7 +495,10 @@ contract VotingPowerModule is Module {
                     // then multiplier calcs
                     // always use period
                     pointOld.slope =
-                        pointOld.slope.mul(config.multiplier * period) /
+                        pointOld
+                            .slope
+                            .mul(config.multiplier * period)
+                            .ci128i() /
                         config.maxlock;
 
                     // then bias
@@ -356,14 +513,15 @@ contract VotingPowerModule is Module {
 
                     // check if stored period should be calculated
                     if (period == 0)
-                        pointNew.period = int128(newLocked.end - timestamp);
+                        pointNew.period = int64(newLocked.end - timestamp);
                     else pointNew.period = period;
 
                     // then multiplier calcs
                     pointNew.slope =
-                        pointNew.slope.mul(
-                            config.multiplier * pointNew.period
-                        ) /
+                        pointNew
+                            .slope
+                            .mul(config.multiplier * pointNew.period)
+                            .ci128i() /
                         config.maxlock;
 
                     // then bias
@@ -386,13 +544,20 @@ contract VotingPowerModule is Module {
         Point memory pointLast;
 
         if (globalPointSet[poolId].tst != 0) pointLast = globalPointSet[poolId];
-        else pointLast = Point({bias: 0, slope: 0, period: 0, tst: timestamp});
+        else
+            pointLast = Point({
+                bias: 0,
+                slope: 0,
+                poolId: poolId,
+                period: 0,
+                tst: timestamp
+            });
 
-        int256 lastEpochTime = pointLast.tst;
-        int256 rollingEpochTime = int32(lastEpochTime).epochify();
+        int128 lastEpochTime = pointLast.tst;
+        int128 rollingEpochTime = int32(lastEpochTime).epochify();
 
-        for (uint256 i; i < 64; i++) {
-            int256 dSlope = 0;
+        for (uint256 i; i < 64; ) {
+            int128 dSlope = 0;
 
             rollingEpochTime += VOPOM_WEEK;
 
@@ -412,6 +577,10 @@ contract VotingPowerModule is Module {
             lastEpochTime = rollingEpochTime;
 
             if (rollingEpochTime == timestamp) break;
+
+            unchecked {
+                i++;
+            }
         }
 
         if (user != address(0)) {

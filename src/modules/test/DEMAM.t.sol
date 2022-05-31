@@ -77,12 +77,16 @@ contract DEMAMTest is Test {
         uint256 index = demam.takeAndLockTokens(usr, ohma, amount, period);
 
         uint256 bal1 = demam.getUserLockBalance(usr, ohma, index);
-        uint256 lock = demam.getUserLock(usr, ohma, index);
+        DepositManagementModule.Lock memory lock = demam.getUserLock(
+            usr,
+            ohma,
+            index
+        );
 
         assertEq(bal1, amount);
         assertEq(bal1, demam.lockedBalanceOf(usr, ohma));
-        assertEq(uint224(lock >> 32), bal1);
-        assertEq(uint32((lock << 32) >> 32), period);
+        assertEq(lock.balance, bal1);
+        assertEq(lock.end, period);
 
         uint224 am = amount / 2 + 2;
         uint32 per = period / 2 + 2;
@@ -95,8 +99,8 @@ contract DEMAMTest is Test {
 
         assertEq(bal2, am);
         assertEq(bal1 + bal2, demam.lockedBalanceOf(usr, ohma));
-        assertEq(uint224(lock >> 32), bal2);
-        assertEq(uint32((lock << 32) >> 32), per);
+        assertEq(lock.balance, bal2);
+        assertEq(lock.end, per);
 
         vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
         demam.takeAndLockTokens(usrs[1], ohma, 1e19 + 23, period);
@@ -252,9 +256,13 @@ contract DEMAMTest is Test {
         ohm.transfer.larp(usr, amount - am2, true);
         demam.payUnlockedTokens(usr, ohma, amount - am2, indices[0]);
 
-        uint256 lock = demam.getUserLock(usr, ohma, indices[0]);
-        assertEq(uint224(lock >> 32), am2);
-        assertEq(uint32((lock << 224) >> 224), period);
+        DepositManagementModule.Lock memory lock = demam.getUserLock(
+            usr,
+            ohma,
+            indices[0]
+        );
+        assertEq(lock.balance, am2);
+        assertEq(lock.end, period);
 
         ohm.transfer.larp(usr, am2, true);
         demam.payUnlockedTokens(usr, ohma, am2, indices[0]);

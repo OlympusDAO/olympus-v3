@@ -15,6 +15,7 @@ import "src/policies/LockingVault.sol";
 
 int32 constant rightnow = 1652036143;
 int256 constant fourYears = 4 * 365 * 24 * 3600;
+uint256 constant umax = type(uint256).max;
 
 library arrays {
     function atomici256(int256 amount)
@@ -60,6 +61,36 @@ library arrays {
         uint256 amount3
     ) internal pure returns (uint256[] memory result) {
         result = new uint256[](3);
+        result[0] = amount1;
+        result[1] = amount2;
+        result[2] = amount3;
+    }
+
+    function atomicu64(uint64 amount)
+        internal
+        pure
+        returns (uint64[] memory result)
+    {
+        result = new uint64[](1);
+        result[0] = amount;
+    }
+
+    function atomicu64(uint64 amount1, uint64 amount2)
+        internal
+        pure
+        returns (uint64[] memory result)
+    {
+        result = new uint64[](2);
+        result[0] = amount1;
+        result[1] = amount2;
+    }
+
+    function atomicu64(
+        uint64 amount1,
+        uint64 amount2,
+        uint64 amount3
+    ) internal pure returns (uint64[] memory result) {
+        result = new uint64[](3);
         result[0] = amount1;
         result[1] = amount2;
         result[2] = amount3;
@@ -193,6 +224,7 @@ contract LockingVaultTest is Test {
     enum ops {
         lock,
         move,
+        movex,
         extend,
         add,
         slash,
@@ -223,8 +255,9 @@ contract LockingVaultTest is Test {
             data[ops.add] = permutation(18, false);
             data[ops.again] = permutation(6, true);
 
-            carry = carry.clean().add(3e22).add(9e21).add(1e24).add(1e30);
-            data[ops.move] = permuteBy(16, carry, true); // 56th
+            carry = carry.clean().add(6e21).add(9e21).add(1e22).add(1e30);
+            data[ops.move] = permuteBy(16, carry, false); // 56th
+            data[ops.movex] = permutation(9, true);
 
             carry = carry
                 .clean()
@@ -259,11 +292,12 @@ contract LockingVaultTest is Test {
             times[ops.move] = permuteBy(4, carry, true);
 
             carry = carry.inflate((period * 4) / 5);
-            times[ops.again] = permuteBy(20, carry, true);
+            times[ops.again] = permuteBy(20, carry, false);
+            times[ops.movex] = permutation(13, true);
         }
 
         // env
-        vm.warp(rightnow.ciu32());
+        vm.warp(rightnow.ci32u());
 
         for (uint256 i; i < 4; i++) {
             ohm.transferFrom.larp(
@@ -309,30 +343,35 @@ contract LockingVaultTest is Test {
         uint8 flag;
 
         while (delta < period * 3) {
+            // Increase time.
             delta += step;
-            console2.log(
-                "----------------------------------- TIME: ",
-                (rightnow + delta).ciu(),
-                (delta / step).ciu(),
-                " -------------------------------"
-            );
 
-            vm.warp((rightnow + delta).ciu32());
+            _logTime(rightnow, delta, step);
+
+            vm.warp((rightnow + delta).ci32u());
+
+            // Checkpoint all pools
             vopom.checkpoint(0);
             vopom.checkpoint(1);
 
-            for (uint256 i; i < 4; i++) {
+            for (uint64 i; i < 4; i++) {
+                // select token based on parity
                 address token = i % 2 == 0 ? ohma : forka;
 
+                // is it time to add lock?
                 if (times[ops.lock][i] <= delta) {
+                    // log op
                     console.log("USER", i, "OPERATION", "LOCK");
 
-                    uint224 amount = data[ops.lock][i].ciu224();
-                    uint32 end = (rightnow + delta + period).ciu32();
+                    // set up data
+                    uint128 amount = data[ops.lock][i].ci128u();
+                    uint32 end = (rightnow + delta + period).ci32u();
                     bool reverted;
 
+                    // impersonate
                     hoax(users[i]);
 
+                    // check whether will be too short
                     if (
                         ((end.cui() / VOPOM_WEEK) * VOPOM_WEEK).ciu() <
                         (rightnow + delta + VOPOM_WEEK).ciu()
@@ -341,141 +380,195 @@ contract LockingVaultTest is Test {
                         reverted = true;
                     }
 
-                    (uint256 lockId, uint256 id) = vault.lockTokens(
+                    // lock
+                    uint256 lockId = vault.lockTokens(
                         token,
                         amount,
-                        i % 2,
+                        i % 2, // either pool 0 or 1
                         end
                     );
 
+                    // this is in the case of forge test, not forge run
                     if (reverted) return;
 
-                    data[ops.lock][i] = id.cui();
+                    // store lock id
+                    data[ops.lock][i] = lockId.cui();
+
+                    // store that operation completed
                     times[ops.lock][i] = type(int32).max;
+
+                    // set flag for logs
                     flag = (i % 2 == 1 || flag == 2) ? 2 : 1;
 
+                    // check that lock completed succesfully
                     assertEq(
                         demam.getUserLockBalance(users[i], token, lockId),
                         amount
                     );
+
+                    // is it time to add?
                 } else if (times[ops.add][i] <= delta) {
+                    // log op
                     console.log("USER", i, "OPERATION", "ADD");
 
-                    uint224 amount = data[ops.lock][i].ciu224();
-                    uint256 id = data[ops.lock][i].ciu();
-                    (, uint256 lockId, ) = vault.getDepositDataForUniqueId(id);
-                    amount += demam.getUserLockBalance(users[i], token, lockId);
+                    // which lockId?
+                    uint256 lockId = data[ops.lock][i].ciu();
 
+                    // get balance before
+                    uint128 balbef = demam
+                        .getUserLockBalance(users[i], token, lockId)
+                        .cu128u();
+                    uint128 toAdd = data[ops.add][i].ci128u();
+
+                    // impersonate
                     hoax(users[i]);
-                    vault.addToLock(token, id, data[ops.add][i].ciu224());
 
+                    // now add
+                    vault.addToLock(
+                        users[i],
+                        token,
+                        lockId,
+                        toAdd // add this much
+                    );
+
+                    // note that we added succesfully
                     times[ops.add][i] = type(int32).max;
 
-                    amount += data[ops.add][i].ciu224();
+                    // increase former balance by amount added
+                    balbef += toAdd;
 
+                    // assert that the amount added is good
                     assertGe(
                         demam.getUserLockBalance(users[i], token, lockId),
-                        amount - 100
+                        balbef - 100
                     );
+                    // is it time to extend?
                 } else if (times[ops.extend][i] <= delta) {
+                    // log op
                     console.log("USER", i, "OPERATION", "EXTEND");
 
+                    // time to extend to
                     int32 newTimeRaw = int32(rightnow + delta + period);
-                    uint256 id = data[ops.lock][i].ciu();
-                    (, uint256 lockId, ) = vault.getDepositDataForUniqueId(id);
 
+                    // get the lockId
+                    uint256 lockId = data[ops.lock][i].ciu();
+
+                    // to assert that bias shall increase
+                    uint256[] memory lockIds = new uint256[](1);
+                    lockIds[0] = lockId;
+                    int256 biasBefore = vopom.getVotingPower(users[i], lockIds);
+
+                    // impersonate
                     hoax(users[i]);
 
+                    // extend
+                    vault.extendLock(token, lockId, uint32(newTimeRaw));
+
+                    // extend
                     times[ops.extend][i] = type(int32).max;
 
+                    // assertions
                     assertEq(
                         demam.getUserLockEnd(users[i], token, lockId),
                         ((newTimeRaw / VOPOM_WEEK) * VOPOM_WEEK).ciu()
                     );
+
+                    assertTrue(
+                        biasBefore < vopom.getVotingPower(users[i], lockIds),
+                        "Bias did not increase!"
+                    );
+                    // is it time to slash?
                 } else if (times[ops.slash][i] <= delta) {
-                    console.log("USER", i, "OPERATION", "SLASH");
+                    // log op
+                    console.log(
+                        "USER",
+                        i,
+                        "OPERATION SLASH",
+                        data[ops.slash][i].ci128u()
+                    );
 
+                    // flag if reverts
                     bool reverted;
-                    uint256 id = data[ops.lock][i].ciu();
-                    (, uint256 lockId, ) = vault.getDepositDataForUniqueId(id);
 
-                    if (times[ops.move][i] == type(int32).max) {
+                    // depending on whether we moved,
+                    // we might have to split slash up
+                    bool movedOnce = times[ops.move][i] == type(int32).max ||
+                        times[ops.movex][i] == type(int32).max;
+
+                    if (movedOnce) {
+                        // if moved first prepare memory
                         uint224[] memory amounts = new uint224[](4);
-                        uint224 toSlash = data[ops.add][i].ciu224();
+                        // get toSlash amount
+                        uint128 toSlash = data[ops.slash][i].ci128u();
 
-                        amounts[0] = demam.getUserLockBalance(
-                            users[i],
-                            token,
-                            0
-                        );
+                        // now get balance in both locks and assign so we can store too
+                        amounts[0] = demam
+                            .getUserLockBalance(users[i], token, 0)
+                            .cu128u();
                         amounts[2] = amounts[0];
 
-                        amounts[1] = demam.getUserLockBalance(
-                            users[i],
-                            token,
-                            1
-                        );
+                        amounts[1] = demam
+                            .getUserLockBalance(users[i], token, 1)
+                            .cu128u();
                         amounts[3] = amounts[1];
 
+                        // take the sum so we can get percent
                         uint224 sum = amounts[0] + amounts[1];
 
+                        // if sum not large enough expect revert
                         if (sum < toSlash) {
                             vm.expectRevert(stdError.arithmeticError);
                             reverted = true;
                         }
 
+                        // calc to slash amounts per lock
                         amounts[0] = (amounts[0] * toSlash) / sum;
                         amounts[1] = (amounts[1] * toSlash) / sum;
 
-                        {
-                            uint256 id2 = data[ops.move][i].ciu();
+                        // impersonate
+                        hoax(users[i]);
 
-                            hoax(users[i]);
-                            vault.slashLockedTokens(
-                                users[i],
-                                self,
-                                token,
-                                amounts,
-                                arrays.atomicu256(id, id2)
-                            );
-                        }
+                        // slash
+                        vault.slashLockedTokens(
+                            users[i],
+                            token,
+                            0
+                        );
 
+                        // if did not revert do asserts
                         if (!reverted) {
+                            // assert new balance on 0
                             assertEq(
-                                demam.getUserLockBalance(
-                                    users[i],
-                                    token,
-                                    lockId
-                                ),
+                                demam.getUserLockBalance(users[i], token, 0),
                                 amounts[2] - amounts[0]
                             );
 
-                            id = data[ops.move][i].ciu();
-                            (, lockId, ) = vault.getDepositDataForUniqueId(id);
-
+                            // assert new balance on 1
                             assertEq(
-                                demam.getUserLockBalance(
-                                    users[i],
-                                    token,
-                                    lockId
-                                ),
+                                demam.getUserLockBalance(users[i], token, 1),
                                 amounts[3] - amounts[1]
                             );
                         }
+                        // otherwise
                     } else {
-                        uint224 toSlash = data[ops.add][i].ciu224();
+                        // get toSlash and balance
+                        uint224 toSlash = data[ops.add][i].ci224u();
                         uint224 balance = demam.getUserLockBalance(
                             users[i],
                             token,
                             0
                         );
 
+                        // expect revert if not enough
                         if (balance < toSlash) {
                             vm.expectRevert(stdError.arithmeticError);
                             reverted = true;
                         }
 
+                        // impersonate
                         hoax(users[i]);
+
+                        // slash
                         vault.slashLockedTokens(
                             users[i],
                             self,
@@ -484,170 +577,108 @@ contract LockingVaultTest is Test {
                             arrays.atomicu256(data[ops.lock][i].ciu())
                         );
 
+                        // if did not expect exact balance
                         if (!reverted)
                             assertEq(
-                                demam.getUserLockBalance(
-                                    users[i],
-                                    token,
-                                    lockId
-                                ),
+                                demam.getUserLockBalance(users[i], token, 0),
                                 balance - toSlash
                             );
                     }
 
+                    // indicate slash happened
                     times[ops.slash][i] = type(int32).max;
-                } else if (times[ops.move][i] <= delta) {
-                    console.log("USER", i, "OPERATION", "MOVE");
-                    uint256 depositId = data[ops.lock][i].ciu();
-                    uint224 toMove = data[ops.move][i].ciu224();
-                    uint224 bal = demam.getUserLockBalance(users[i], token, 0);
 
+                    // if time for moving...
+                } else if (times[ops.move][i] <= delta) {
+                    // how much to move
+                    uint128 toMove = data[ops.move][i].ci128u();
+
+                    // log operation
+                    console.log("USER", i, "OPERATION MOVE", toMove);
+
+                    // current state
+                    uint224 bal = demam.getUserLockBalance(users[i], token, 0);
+                    uint32 end = demam.getUserLockEnd(users[i], token, 0);
+
+                    // if not enough
                     if (bal < toMove) {
                         VOPOM_ZeroLock.selector.with();
                         toMove = 0;
                     }
 
+                    // impersonate
                     hoax(users[i]);
-                    (uint256 lockId, uint256 id) = vault
-                        .transferTokensBetweenLocks(
-                            token,
-                            depositId,
-                            i % 2,
-                            0,
-                            toMove
-                        );
 
-                    data[ops.move][i] = id.cui();
+                    // move
+                    uint256 lockId = vault.transferTokensToNewLock(
+                        token,
+                        0,
+                        i % 2,
+                        toMove,
+                        end
+                    );
+
+                    // store data
+                    data[ops.move][i] = lockId.cui();
                     times[ops.move][i] = type(int32).max;
 
+                    // in both cases expect correct state
                     assertEq(
                         demam.getUserLockBalance(users[i], token, 0),
                         bal - toMove
                     );
 
+                    // and if it was actually moved expect also something in second case
                     if (toMove != 0)
                         assertEq(
                             demam.getUserLockBalance(users[i], token, lockId),
                             toMove
                         );
+                    // is it time to lock again?
                 } else if (times[ops.again][i] <= delta) {
+                    // log op
                     console.log("USER", i, "OPERATION", "AGAIN");
 
+                    // impersonate
                     hoax(users[i]);
-                    (, uint256 id) = vault.lockTokens(
+
+                    // lock tokens again and get new lockId
+                    uint256 lockId = vault.lockTokens(
                         token,
-                        data[ops.again][i].ciu224(),
+                        data[ops.again][i].ci128u(),
                         i % 2,
-                        (rightnow + delta + period / 2).ciu32()
+                        (rightnow + delta + period / 2).ci32u()
                     );
 
-                    data[ops.again][i] = id.cui();
+                    // store data
+                    data[ops.again][i] = lockId.cui();
                     times[ops.again][i] = type(int32).max;
                 }
             }
 
+            // var to sum all voting power
             uint256 totalVotingPower;
 
             for (uint256 i; i < 4; i++) {
-                uint256 idLockOp = (times[ops.lock][i] == type(int32).max)
-                    ? data[ops.lock][i].ciu()
-                    : 0;
-                uint256 idMove = (times[ops.move][i] == type(int32).max)
-                    ? data[ops.move][i].ciu()
-                    : 0;
-                uint256 idAgain = (times[ops.again][i] == type(int32).max)
-                    ? data[ops.again][i].ciu()
-                    : 0;
-
-                uint256 votingPower = idLockOp == 0
-                    ? 0
-                    : vopom.getVotingPower(users[i], idLockOp).ciu();
-                votingPower += (idMove == 0)
-                    ? 0
-                    : vopom.getVotingPower(users[i], idMove).ciu();
-                votingPower += (idAgain == 0)
-                    ? 0
-                    : vopom.getVotingPower(users[i], idAgain).ciu();
+                uint256 votingPower = vopom
+                    .getVotingPower(
+                        users[i],
+                        vopom.getUserOpenPoolPointIds(users[i])
+                    )
+                    .ciu();
 
                 console2.log("USER ", i, " VP", votingPower);
 
                 totalVotingPower += votingPower;
             }
 
-            for (uint256 i; i < 4; i++) {
-                uint256 idMove = data[ops.move][i].ciu();
+            uint64[] memory poolIds = new uint64[](2);
+            poolIds[0] = 0;
+            poolIds[1] = 1;
 
-                if (times[ops.again][i] == type(int32).max) {
-                    if (idMove != 0) {
-                        console2.log(
-                            "USER ",
-                            i,
-                            " VPS ",
-                            vopom
-                                .getVotingPowerShare(
-                                    users[i],
-                                    arrays.atomicu256(0, 1),
-                                    arrays.atomicu256(
-                                        data[ops.lock][i].ciu(),
-                                        idMove,
-                                        data[ops.again][i].ciu()
-                                    )
-                                )
-                                .ciu()
-                        );
-                    } else {
-                        console2.log(
-                            "USER ",
-                            i,
-                            " VPS ",
-                            vopom
-                                .getVotingPowerShare(
-                                    users[i],
-                                    arrays.atomicu256(0, 1),
-                                    arrays.atomicu256(
-                                        data[ops.lock][i].ciu(),
-                                        data[ops.again][i].ciu()
-                                    )
-                                )
-                                .ciu()
-                        );
-                    }
-                } else if (
-                    times[ops.move][i] == type(int32).max && idMove != 0
-                ) {
-                    console2.log(
-                        "USER ",
-                        i,
-                        " VPS ",
-                        vopom
-                            .getVotingPowerShare(
-                                users[i],
-                                arrays.atomicu256(0, 1),
-                                arrays.atomicu256(
-                                    data[ops.lock][i].ciu(),
-                                    idMove
-                                )
-                            )
-                            .ciu()
-                    );
-                } else if (times[ops.lock][i] == type(int32).max) {
-                    console2.log(
-                        "USER ",
-                        i,
-                        " VPS ",
-                        vopom
-                            .getVotingPowerShare(
-                                users[i],
-                                arrays.atomicu256(0, 1),
-                                arrays.atomicu256(data[ops.lock][i].ciu())
-                            )
-                            .ciu()
-                    );
-                }
-            }
-
-            uint256 realGlobalVotingPower = (vopom.getGlobalVotingPower(0) +
-                vopom.getGlobalVotingPower(1)).ciu();
+            uint256 realGlobalVotingPower = vopom
+                .getGlobalVotingPower(poolIds)
+                .ciu();
 
             console2.log("GLOBAL BIAS: ", realGlobalVotingPower, flag);
 
@@ -664,6 +695,19 @@ contract LockingVaultTest is Test {
                         : totalVotingPower - realGlobalVotingPower
                 );
         }
+    }
+
+    function _logTime(
+        int256 rn,
+        int256 delta,
+        int256 step
+    ) internal view {
+        console2.log(
+            "----------------------------------- TIME: ",
+            (rn + delta).ciu(),
+            (delta / step).ciu(),
+            " -------------------------------"
+        );
     }
 
     uint256 seed;

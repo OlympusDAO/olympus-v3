@@ -13,32 +13,6 @@ import {Kernel, Module} from "src/Kernel.sol";
 
 /// INLINED
 
-library DEMAM_Library {
-    function pack(uint224 amount, uint32 timestamp)
-        internal
-        pure
-        returns (uint256)
-    {
-        return (uint256(amount) << 32) + uint256(timestamp);
-    }
-
-    function unpack(uint256 lock) internal pure returns (uint224, uint32) {
-        return (uint224(lock >> 32), uint32(lock));
-    }
-
-    function end(uint256 lock) internal pure returns (uint32) {
-        return uint32(lock);
-    }
-
-    function c256(uint224 number) internal pure returns (uint256) {
-        return uint256(number) << 32;
-    }
-
-    function c224(uint256 number) internal pure returns (uint224) {
-        return uint224(number >> 32);
-    }
-}
-
 error DEMAM_NoExtendingToShorterLock();
 error DEMAM_NoMergingToShorterLock();
 error DEMAM_LockDoesNotExist();
@@ -51,18 +25,23 @@ error DEMAM_TimeTooLarge();
 
 contract DepositManagementModule is Module {
     using SafeTransferLib for ERC20;
-    using DEMAM_Library for uint256;
-    using DEMAM_Library for uint224;
+
+    struct Lock {
+        uint224 balance;
+        uint32 end;
+    }
 
     mapping(address => mapping(address => uint256)) public freeBalanceOf;
     mapping(address => mapping(address => uint256)) public lockedBalanceOf;
-    mapping(address => mapping(address => uint256[])) public userLocks;
+    mapping(address => mapping(address => Lock[])) public userLocks;
 
     constructor(address kernel_) Module(Kernel(kernel_)) {}
 
     function KEYCODE() public pure virtual override returns (bytes5) {
         return "DEMAM";
     }
+
+    // ######################## ~ INCOMING TRANSFERS ~ ########################
 
     function takeTokens(
         address owner,
@@ -76,6 +55,19 @@ contract DepositManagementModule is Module {
         freeBalanceOf[owner][token] += amount;
     }
 
+    function takeTokens(
+        address benefactor,
+        address beneficiary,
+        address token,
+        uint224 amount
+    ) external onlyPermitted {
+        // interaction
+        ERC20(token).safeTransferFrom(benefactor, address(this), amount);
+
+        // effect
+        freeBalanceOf[beneficiary][token] += amount;
+    }
+
     function takeAndLockTokens(
         address owner,
         address token,
@@ -87,6 +79,20 @@ contract DepositManagementModule is Module {
 
         // eff
         return createLock(owner, token, amount, end);
+    }
+
+    function takeAndLockTokens(
+        address benefactor,
+        address beneficiary,
+        address token,
+        uint224 amount,
+        uint32 end
+    ) external returns (uint256 lockIndex) {
+        // interaction
+        ERC20(token).safeTransferFrom(benefactor, address(this), amount);
+
+        // eff
+        return createLock(beneficiary, token, amount, end);
     }
 
     function takeAndAddToLock(
@@ -103,18 +109,20 @@ contract DepositManagementModule is Module {
     }
 
     function takeAndAddToLock(
-        address sender,
-        address recipient,
+        address benefactor,
+        address beneficiary,
         address token,
         uint224 amount,
         uint256 index
     ) external onlyPermitted {
         // interaction
-        ERC20(token).safeTransferFrom(sender, address(this), amount);
+        ERC20(token).safeTransferFrom(benefactor, address(this), amount);
 
         // effects
-        mintTokensToLock(recipient, token, amount, index);
+        mintTokensToLock(beneficiary, token, amount, index);
     }
+
+    // ######################## ~ OUTGOING TRANSFERS ~ ########################
 
     function payTokens(
         address receiver,
@@ -143,19 +151,6 @@ contract DepositManagementModule is Module {
         payUnlockedTokens(receiver, token, amounts, indices);
     }
 
-    function createLock(
-        address owner,
-        address token,
-        uint224 amount,
-        uint32 end
-    ) public onlyPermitted returns (uint256 lockIndex) {
-        // effects
-        lockedBalanceOf[owner][token] += amount;
-        userLocks[owner][token].push(DEMAM_Library.pack(amount, end));
-
-        return userLocks[owner][token].length - 1;
-    }
-
     function payUnlockedTokens(
         address receiver,
         address token,
@@ -167,18 +162,23 @@ contract DepositManagementModule is Module {
         uint256 length = amounts.length;
         uint256 amount;
 
-        for (uint256 i; i < length; i++) {
-            uint256 lock = userLocks[receiver][token][indices[i]];
+        for (uint256 i; i < length; ) {
+            Lock memory lock = userLocks[receiver][token][indices[i]];
 
-            if (block.timestamp <= lock.end())
-                revert DEMAM_LockNotOver(lock.end() - block.timestamp);
+            if (block.timestamp <= lock.end)
+                revert DEMAM_LockNotOver(lock.end - block.timestamp);
 
-            if (lock.c224() < amounts[i])
-                revert DEMAM_NotEnoughTokensUnlocked(lock.c224());
+            if (lock.balance < amounts[i])
+                revert DEMAM_NotEnoughTokensUnlocked(lock.balance);
 
             amount += amounts[i];
-            userLocks[receiver][token][indices[i]] -= amounts[i].c256();
+            lock.balance -= amounts[i];
+            userLocks[receiver][token][indices[i]] = lock;
             lockedBalanceOf[receiver][token] -= amounts[i];
+
+            unchecked {
+                i++;
+            }
         }
 
         // interaction
@@ -191,20 +191,23 @@ contract DepositManagementModule is Module {
         uint224 amount,
         uint256 index
     ) public onlyPermitted {
-        uint256 lock = userLocks[receiver][token][index];
+        Lock memory lock = userLocks[receiver][token][index];
 
-        if (block.timestamp <= lock.end())
-            revert DEMAM_LockNotOver(lock.end() - block.timestamp);
+        if (block.timestamp <= lock.end)
+            revert DEMAM_LockNotOver(lock.end - block.timestamp);
 
-        if (lock.c224() < amount)
-            revert DEMAM_NotEnoughTokensUnlocked(lock.c224());
+        if (lock.balance < amount)
+            revert DEMAM_NotEnoughTokensUnlocked(lock.balance);
 
-        userLocks[receiver][token][index] -= amount.c256();
+        lock.balance -= amount;
+        userLocks[receiver][token][index] = lock;
         lockedBalanceOf[receiver][token] -= amount;
 
         // interaction
         ERC20(token).safeTransfer(receiver, amount);
     }
+
+    // ######################## ~ EXTERNAL MEMORY ~ ########################
 
     function lockDepositedByPeriod(
         address owner,
@@ -218,7 +221,7 @@ contract DepositManagementModule is Module {
         // effects
         freeBalanceOf[owner][token] -= amount;
         lockedBalanceOf[owner][token] += amount;
-        userLocks[owner][token].push(DEMAM_Library.pack(amount, end));
+        userLocks[owner][token].push(Lock(amount, end));
 
         return userLocks[owner][token].length - 1;
     }
@@ -259,14 +262,19 @@ contract DepositManagementModule is Module {
     ) external onlyPermitted {
         assert(amounts.length == indices.length);
 
-        uint256[] storage locks = userLocks[owner][token];
+        Lock[] storage locks = userLocks[owner][token];
+
         uint256 amount;
 
-        for (uint256 i; i < amounts.length; i++) {
+        for (uint256 i; i < amounts.length; ) {
             // this doesn't have errors since trusted party is
             // going to do it anyways
-            locks[indices[i]] -= amounts[i].c256();
+            locks[indices[i]].balance -= amounts[i];
             amount += amounts[i];
+
+            unchecked {
+                i++;
+            }
         }
 
         lockedBalanceOf[owner][token] -= amount;
@@ -279,21 +287,26 @@ contract DepositManagementModule is Module {
         address token,
         uint256[] memory indices
     ) external onlyPermitted {
-        uint256[] storage locks = userLocks[owner][token];
+        Lock[] storage locks = userLocks[owner][token];
+
         uint256 length = indices.length;
-        uint256 maxLockTime = locks[indices[length - 1]].end();
+        uint256 maxLockTime = locks[indices[length - 1]].end;
         uint224 amount;
 
-        for (uint256 i; i < length - 1; i++) {
-            uint256 lock = locks[indices[i]];
+        for (uint256 i; i < length - 1; ) {
+            Lock memory lock = locks[indices[i]];
 
-            if (maxLockTime < lock.end()) revert DEMAM_NoMergingToShorterLock();
+            if (maxLockTime < lock.end) revert DEMAM_NoMergingToShorterLock();
 
-            amount += lock.c224();
-            locks[indices[i]] = 0 << 32; // only empty amount
+            amount += lock.balance;
+            locks[indices[i]].balance = 0; // only empty amount
+
+            unchecked {
+                i++;
+            }
         }
 
-        locks[indices[length - 1]] += amount.c256();
+        locks[indices[length - 1]].balance += amount;
     }
 
     function extendLock(
@@ -302,13 +315,28 @@ contract DepositManagementModule is Module {
         uint256 index,
         uint32 end
     ) external onlyPermitted {
-        uint256 lock = userLocks[owner][token][index];
+        Lock memory lock = userLocks[owner][token][index];
 
         if (type(uint32).max < end) revert DEMAM_TimeTooLarge();
 
-        if (end < lock.end()) revert DEMAM_NoExtendingToShorterLock();
+        if (end < lock.end) revert DEMAM_NoExtendingToShorterLock();
 
-        userLocks[owner][token][index] = DEMAM_Library.pack(lock.c224(), end);
+        userLocks[owner][token][index] = Lock(lock.balance, end);
+    }
+
+    // ######################## ~ PUBLIC MEMORY ~ ########################
+
+    function createLock(
+        address owner,
+        address token,
+        uint224 amount,
+        uint32 end
+    ) public onlyPermitted returns (uint256 lockIndex) {
+        // effects
+        lockedBalanceOf[owner][token] += amount;
+        userLocks[owner][token].push(Lock(amount, end));
+
+        return userLocks[owner][token].length - 1;
     }
 
     function mintTokens(
@@ -325,17 +353,17 @@ contract DepositManagementModule is Module {
         uint224 amount,
         uint256 index
     ) public onlyPermitted {
-        if (userLocks[receiver][token][index].end() < block.timestamp)
+        if (userLocks[receiver][token][index].end < block.timestamp)
             revert DEMAM_LockDoesNotExist();
 
         lockedBalanceOf[receiver][token] += amount;
-        userLocks[receiver][token][index] += amount.c256();
+        userLocks[receiver][token][index].balance += amount;
     }
 
     function getUserLocks(address owner, address token)
         external
         view
-        returns (uint256[] memory)
+        returns (Lock[] memory)
     {
         return userLocks[owner][token];
     }
@@ -345,7 +373,7 @@ contract DepositManagementModule is Module {
         address token,
         uint256 index
     ) external view returns (uint224) {
-        return getUserLock(owner, token, index).c224();
+        return getUserLock(owner, token, index).balance;
     }
 
     function getUserLockEnd(
@@ -353,14 +381,14 @@ contract DepositManagementModule is Module {
         address token,
         uint256 index
     ) external view returns (uint32) {
-        return getUserLock(owner, token, index).end();
+        return getUserLock(owner, token, index).end;
     }
 
     function getUserLock(
         address owner,
         address token,
         uint256 index
-    ) public view returns (uint256) {
+    ) public view returns (Lock memory) {
         return userLocks[owner][token][index];
     }
 
@@ -369,7 +397,7 @@ contract DepositManagementModule is Module {
         view
         returns (uint224[] memory amounts, uint256[] memory indices)
     {
-        uint256[] memory locks = userLocks[owner][token];
+        Lock[] memory locks = userLocks[owner][token];
         uint256 length = locks.length;
 
         uint256[] memory indicesPadded = new uint256[](length);
@@ -380,23 +408,30 @@ contract DepositManagementModule is Module {
         uint256 j;
 
         while (i < length) {
-            (uint224 balance, uint32 lockTimestamp) = locks[i].unpack();
+            Lock memory lock = locks[i];
 
-            if (lockTimestamp < ts) {
+            if (lock.end < ts) {
                 indicesPadded[j] = i;
-                amountsPadded[j] = balance;
-                j++;
+                amountsPadded[j] = lock.balance;
+                unchecked {
+                    j++;
+                }
             }
-
-            i++;
+            unchecked {
+                i++;
+            }
         }
 
         indices = new uint256[](j);
         amounts = new uint224[](j);
 
-        for (uint256 k; k < j; k++) {
+        for (uint256 k; k < j; ) {
             indices[k] = indicesPadded[k];
             amounts[k] = amountsPadded[k];
+
+            unchecked {
+                k++;
+            }
         }
     }
 
@@ -405,7 +440,7 @@ contract DepositManagementModule is Module {
         view
         returns (uint256)
     {
-        uint256[] memory locks = userLocks[owner][token];
+        Lock[] memory locks = userLocks[owner][token];
 
         uint256 i;
         uint224 free;
@@ -413,11 +448,13 @@ contract DepositManagementModule is Module {
         uint256 ts = block.timestamp;
 
         while (i < length) {
-            (uint224 balance, uint32 lockTimestamp) = locks[i].unpack();
+            Lock memory lock = locks[i];
 
-            if (lockTimestamp < ts) free += balance;
+            if (lock.end < ts) free += lock.balance;
 
-            i++;
+            unchecked {
+                i++;
+            }
         }
 
         return free;
@@ -429,18 +466,20 @@ contract DepositManagementModule is Module {
         returns (uint256)
     {
         // reads
-        uint256[] memory locks = userLocks[owner][token];
+        Lock[] memory locks = userLocks[owner][token];
 
         uint256 ts = block.timestamp;
         uint256 i = locks.length;
         uint224 locked;
 
         while (0 < i) {
-            i--;
+            unchecked {
+                i--;
+            }
 
-            (uint224 balance, uint32 lockTimestamp) = locks[i].unpack();
+            Lock memory lock = locks[i];
 
-            if (ts <= lockTimestamp) locked += balance;
+            if (ts <= lock.end) locked += lock.balance;
         }
 
         return locked;
