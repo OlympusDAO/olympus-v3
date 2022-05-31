@@ -13,6 +13,14 @@ import "test-utils/convert.sol";
 // types
 import "src/modules/DEMAM.sol";
 
+contract MERC20 is ERC20 {
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        uint8 _decimals
+    ) ERC20(_name, _symbol, _decimals) {}
+}
+
 contract DEMAMTest is Test {
     using larping for *;
     using convert for *;
@@ -31,12 +39,7 @@ contract DEMAMTest is Test {
     function setUp() public {
         demam = new DepositManagementModule(address(this));
         victims = new UserFactory();
-        ohm = ERC20(
-            deployCode(
-                "MockERC20.t.sol:MockERC20",
-                abi.encode("ohm", "OHM", "9")
-            )
-        );
+        ohm = new MERC20("ohm", "OHM", 9);
 
         ohma = address(ohm);
         demama = address(demam);

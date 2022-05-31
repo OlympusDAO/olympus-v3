@@ -103,7 +103,7 @@ contract VotingPowerModule is Module {
         uint64 poolId,
         int128 multiplier,
         int128 maxLock
-    ) external onlyPermitted {
+    ) external onlyPermittedPolicies {
         VoteConfig memory config = configurations[poolId];
 
         if (0 < config.maxlock + config.multiplier)
@@ -123,7 +123,7 @@ contract VotingPowerModule is Module {
         uint64 poolId,
         int128 balance,
         int32 epochedUnlockTime
-    ) external onlyPermitted returns (uint256 pointId) {
+    ) external onlyPermittedPolicies returns (uint256 pointId) {
         int256 timestamp = block.timestamp.cui();
         pointId = userPointSets[user].length;
 
@@ -155,7 +155,7 @@ contract VotingPowerModule is Module {
         int128 oldBalance,
         int128 newBalance,
         int32 epochedUnlockTime
-    ) external onlyPermitted {
+    ) external onlyPermittedPolicies {
         if (userPointSets[user][pointId].tst == 0) revert VOPOM_NoLockFound();
 
         if (epochedUnlockTime <= block.timestamp.cui())
@@ -178,7 +178,7 @@ contract VotingPowerModule is Module {
         int128 balance,
         int32 oldEpochedUnlockTime,
         int32 newEpochedUnlockTime
-    ) external onlyPermitted {
+    ) external onlyPermittedPolicies {
         int256 timestamp = block.timestamp.cui();
         uint64 poolId = userPointSets[user][pointId].poolId;
 
@@ -208,7 +208,7 @@ contract VotingPowerModule is Module {
         address from,
         address to,
         int128 biasPercent
-    ) external onlyPermitted {
+    ) external onlyPermittedPolicies {
         // reads
         int128 totalPercentDelegated = biasPercentDelegations[from][from];
         int128 newPercentDelegated = biasPercent + totalPercentDelegated;
@@ -232,14 +232,14 @@ contract VotingPowerModule is Module {
 
     function noteDelegators(address user, address[] calldata delegators)
         external
-        onlyPermitted
+        onlyPermittedPolicies
     {
         userDelegators[user] = delegators;
     }
 
     function noteOpenPoolPointAddition(address user, uint256 pointId)
         external
-        onlyPermitted
+        onlyPermittedPolicies
     {
         userOpenPoolPointIds[user].push(pointId);
     }

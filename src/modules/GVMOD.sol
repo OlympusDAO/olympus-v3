@@ -34,7 +34,7 @@ contract GovernanceModule is Module {
         int96 yesThreshold,
         int96 endorsementThreshold,
         uint64 executionTimestamp
-    ) external onlyPermitted {
+    ) external onlyPermittedPolicies {
         _getConstraints[functionSignature] = ProposalConstraints(
             yesThreshold,
             endorsementThreshold,

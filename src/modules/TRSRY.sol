@@ -68,7 +68,7 @@ contract TreasuryModule is Module {
     }
 
     /// @dev make treasury policy also be able to note debt for some contracts
-    /// assumption is that caller is not malicious (onlyPermitted), modifier in changeDebt
+    /// assumption is that caller is not malicious (onlyPermittedPolicies), modifier in changeDebt
     function loanReserves(
         address recipient,
         address token,
@@ -92,7 +92,7 @@ contract TreasuryModule is Module {
         address recipient,
         address token,
         uint256 amount
-    ) external onlyPermitted {
+    ) external onlyPermittedPolicies {
         ERC20(token).safeTransfer(recipient, amount);
     }
 
@@ -104,7 +104,7 @@ contract TreasuryModule is Module {
         address token,
         uint256 delta,
         bool increase
-    ) public onlyPermitted {
+    ) public onlyPermittedPolicies {
         if (increase) {
             debt[token] += delta;
             emit DebtIncreased(token, delta);
@@ -121,7 +121,7 @@ contract TreasuryModule is Module {
         address token,
         uint256 delta,
         bool increase
-    ) public onlyPermitted {
+    ) public onlyPermittedPolicies {
         if (increase) {
             approvals[token][action] += delta;
 

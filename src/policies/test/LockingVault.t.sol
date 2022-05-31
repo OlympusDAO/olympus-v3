@@ -134,6 +134,14 @@ library arrays {
     }
 }
 
+contract MERC20 is ERC20 {
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        uint8 _decimals
+    ) ERC20(_name, _symbol, _decimals) {}
+}
+
 contract LockingVaultTest is Test {
     using larping for *;
     using convert for *;
@@ -181,19 +189,9 @@ contract LockingVaultTest is Test {
         demam = new DepositManagementModule(self);
         victims = new UserFactory();
 
-        ohm = ERC20(
-            deployCode(
-                "MockERC20.t.sol:MockERC20",
-                abi.encode("ohm", "OHM", "9")
-            )
-        );
+        ohm = new MERC20("ohm", "OHM", 9);
 
-        fork = ERC20(
-            deployCode(
-                "MockERC20.t.sol:MockERC20",
-                abi.encode("fork", "FORK", "18")
-            )
-        );
+        fork = new MERC20("fork", "FORK", 18);
 
         vopom.configureUniquely(
             0,
@@ -531,8 +529,10 @@ contract LockingVaultTest is Test {
                         // slash
                         vault.slashLockedTokens(
                             users[i],
+                            self,
                             token,
-                            0
+                            amounts,
+                            arrays.atomicu256(0, 1)
                         );
 
                         // if did not revert do asserts

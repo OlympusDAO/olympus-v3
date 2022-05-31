@@ -76,7 +76,7 @@ contract AUTHZ is Module {
         address target,
         bytes4 functionSig,
         bool enabled
-    ) public virtual onlyPermitted {
+    ) public virtual onlyPermittedPolicies {
         isCapabilityPublic[target][functionSig] = enabled;
 
         emit PublicCapabilityUpdated(target, functionSig, enabled);
@@ -87,7 +87,7 @@ contract AUTHZ is Module {
         address target,
         bytes4 functionSig,
         bool enabled
-    ) public virtual onlyPermitted {
+    ) public virtual onlyPermittedPolicies {
         if (enabled) {
             getRolesWithCapability[target][functionSig] |= bytes32(1 << role);
         } else {
@@ -101,7 +101,7 @@ contract AUTHZ is Module {
         address user,
         uint8 role,
         bool enabled
-    ) public virtual onlyPermitted {
+    ) public virtual onlyPermittedPolicies {
         if (enabled) {
             getUserRoles[user] |= bytes32(1 << role);
         } else {

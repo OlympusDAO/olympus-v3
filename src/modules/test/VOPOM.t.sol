@@ -16,6 +16,14 @@ import "src/modules/VOPOM.sol";
 int32 constant rightnow = 1652036143;
 uint256 constant fourYears = 4 * 365 * 24 * 3600;
 
+contract MERC20 is ERC20 {
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        uint8 _decimals
+    ) ERC20(_name, _symbol, _decimals) {}
+}
+
 contract VOPOMTest is Test {
     using larping for *;
     using convert for *;
@@ -37,12 +45,7 @@ contract VOPOMTest is Test {
     function setUp() public {
         vopom = new VotingPowerModule(self);
         victims = new UserFactory();
-        ohm = ERC20(
-            deployCode(
-                "MockERC20.t.sol:MockERC20",
-                abi.encode("ohm", "OHM", "9")
-            )
-        );
+        ohm = new MERC20("ohm", "OHM", 9);
 
         vopom.configureUniquely(
             0,
