@@ -31,11 +31,17 @@ address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 contract OlympusTreasury is Module {
     using TransferHelper for ERC20;
 
-    event PolicyApprovedForWithdrawal(
+    event ApprovedForWithdrawal(
         address indexed policy_,
-        address indexed token_,
+        ERC20 indexed token_,
         uint256 amount_
     );
+    event Withdrawal(
+        address indexed policy_,
+        ERC20 indexed token_,
+        uint256 amount_
+    );
+    event ApprovalRevoked(address indexed policy_, ERC20[] tokens_);
 
     Kernel private kernel;
 
@@ -64,7 +70,7 @@ contract OlympusTreasury is Module {
     }
 
     // Gov can declare a token to be treated as a reserve
-    function makeReserve(ERC20 token_) external onlyPermitted {
+    function declareReserve(ERC20 token_) external onlyPermitted {
         isReserve[token_] = true;
     }
 
@@ -89,37 +95,46 @@ contract OlympusTreasury is Module {
     }
 
     // Must be carefully managed by governance.
-    function requestApproval(
+    function requestApprovalFor(
         address policy_,
         ERC20 token_,
         uint256 amount_
     ) external onlyPermitted {
+        kernel.onlyExecutor(); // TODO should this only be called by gov?
+
         // TODO account for debtors
+        if (isReserve[token_] == false) {
+            revert TRSRY_NotReserve();
+        }
         withdrawApproval[policy_][token_] = amount_;
-        emit PolicyApprovedForWithdrawal(policy_, address(token_), amount_);
+
+        emit ApprovedForWithdrawal(policy_, token_, amount_);
     }
 
-    function withdrawReserves(
-        ERC20 token_,
-        address to_,
-        uint256 amount_
-    ) external onlyPermitted {
-        // TODO check approval and decrement
+    function withdrawReserves(ERC20 token_, uint256 amount_)
+        public
+        onlyPermitted
+    {
+        if (isReserve[token_] == false) {
+            revert TRSRY_NotReserve();
+        }
+
         uint256 approval = withdrawApproval[msg.sender][token_];
         if (approval < amount_) {
             revert TRSRY_NotApproved();
         }
+
         if (approval != type(uint256).max) {
             withdrawApproval[msg.sender][token_] = approval - amount_;
         }
 
-        token_.safeTransfer(to_, amount_);
+        token_.safeTransfer(msg.sender, amount_);
+
+        emit Withdrawal(msg.sender, token_, amount_);
     }
 
     // Anyone can call to revoke a terminated policy's approvals
-    function revokeApproval(address policy_, ERC20[] calldata tokens_)
-        external
-    {
+    function revokeApproval(address policy_, ERC20[] memory tokens_) external {
         if (kernel.approvedPolicies(policy_) == true) {
             revert TRSRY_PolicyStillActive();
         }
@@ -128,34 +143,60 @@ contract OlympusTreasury is Module {
         for (uint256 i; i < len; ) {
             withdrawApproval[policy_][tokens_[i]] = 0;
         }
+
+        emit ApprovalRevoked(policy_, tokens_);
     }
 
     /// TODO DEBT FUNCTIONS
 
-    function loanReserves(
-        address recipient_,
-        address token_,
-        uint256 amount_
-    ) external onlyPermitted {
-        /*
-          1. update debt 
-          2. send tokens
-        */
-        // TODO check approval
-        // TODO add debt to caller
-        // TODO Withdraw to caller
-        // -> virtual reserves stay the same
+    function loanReserves(ERC20 token_, uint256 amount_)
+        external
+        onlyPermitted
+    {
+        uint256 approval = withdrawApproval[msg.sender][token_];
+        if (approval < amount_) revert TRSRY_NotApproved();
+
+        // TODO verify this
+        if (approval != type(uint256).max) {
+            withdrawApproval[msg.sender][token_] = approval - amount_;
+        }
+
+        // Add debt to caller
+        reserveDebt[token_][msg.sender] += amount_;
+        totalDebt[token_] += amount_;
+
+        // Withdraw to caller
+        token_.safeTransfer(msg.sender, amount_);
     }
 
-    function repayReserves() external onlyPermitted {
-        // TODO check approval
-        // TODO subtract debt to caller
-        // TODO Deposit from caller
+    function repayDebt(ERC20 token_, uint256 amount_) external onlyPermitted {
+        // Subtract debt to caller
+        reserveDebt[token_][msg.sender] -= amount_;
+        totalDebt[token_] -= amount_;
+
+        // Deposit from caller
+        token_.safeTransferFrom(msg.sender, address(this), amount_);
     }
+
+    // TODO for repaying debt in different token
+    function repayDebtEquivalent(
+        ERC20 origToken_,
+        ERC20 repayToken_,
+        uint256 amount_
+    ) external {}
 
     // TODO Only permitted by governor. Used in case of emergency where loaned amounts cannot be repaid.
-    function clearDebt() external onlyPermitted {
+    function clearDebt(
+        ERC20 token_,
+        address debtor_,
+        uint256 amount_
+    ) external onlyPermitted {
+        kernel.onlyExecutor();
+
         // TODO reduce debt for specific address
+        reserveDebt[token_][debtor_] -= amount_;
+        totalDebt[token_] -= amount_;
+
         // TODO reduce approval?
     }
 

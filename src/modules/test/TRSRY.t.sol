@@ -32,14 +32,18 @@ contract TRSRYTest is Test {
         dn = new MockERC20("DEEZ NUTZ", "DN", 18);
 
         userCreator = new UserFactory();
-
         address[] memory usrs = userCreator.create(2);
         alice = usrs[0];
         bob = usrs[1];
 
         kernel.installModule(address(TRSRY));
-        // Approve this test fixture as policy with write permissions
+        // Approve addresses as policy with write permissions
         kernel.grantWritePermissions(TRSRY.KEYCODE(), address(this));
+        kernel.grantWritePermissions(TRSRY.KEYCODE(), alice);
+
+        // Treasury setup
+        TRSRY.declareReserve(ngmi);
+        TRSRY.declareReserve(dn);
 
         // Give TRSRY some tokens
         ngmi.mint(address(TRSRY), INITIAL_TOKEN_AMOUNT);
@@ -50,17 +54,23 @@ contract TRSRYTest is Test {
         assertEq32("TRSRY", TRSRY.KEYCODE());
     }
 
+    function test_WithdrawApproval(uint256 amount_) public {
+        vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
+
+        TRSRY.requestApprovalFor(alice, ngmi, amount_);
+
+        assertEq(TRSRY.withdrawApproval(alice, ngmi), amount_);
+    }
+
     function test_AuthorizedCanWithdrawToken(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
 
-        uint256 dnAmount = INITIAL_TOKEN_AMOUNT - amount_;
+        TRSRY.requestApprovalFor(alice, ngmi, amount_);
 
-        // This test fixture is approved
-        TRSRY.withdraw(address(ngmi), alice, amount_);
-        TRSRY.withdraw(address(dn), alice, dnAmount);
+        vm.prank(alice);
+        TRSRY.withdrawReserves(ngmi, amount_);
 
         assertEq(ngmi.balanceOf(alice), amount_);
-        assertEq(dn.balanceOf(alice), dnAmount);
     }
 
     // TODO test if can withdraw more than allowed amount
@@ -68,7 +78,7 @@ contract TRSRYTest is Test {
     function testFail_UnauthorizedCannotWithdrawToken(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
 
-        vm.prank(alice);
-        TRSRY.withdraw(address(ngmi), alice, amount_);
+        vm.prank(bob);
+        TRSRY.withdrawReserves(ngmi, amount_);
     }
 }

@@ -66,7 +66,7 @@ contract LockingVault is Auth, Policy {
     {}
 
     function configureReads() external virtual override onlyKernel {
-        setAuthority(Authority(getModuleAddress("AUTHZ")));
+        setAuthority(Authority(getModuleAddress("AUTHR")));
         demam = DepositManagementModule(getModuleAddress("DEMAM"));
         vopom = VotingPowerModule(getModuleAddress("VOPOM"));
     }
