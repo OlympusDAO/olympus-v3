@@ -8,7 +8,7 @@ import "src/OlympusErrors.sol";
 // types
 import {Kernel, Module} from "src/Kernel.sol";
 
-contract AUTHZ is Module {
+contract AUTHR is Module {
     mapping(address => bytes32) public getUserRoles;
 
     mapping(address => mapping(bytes4 => bool)) public isCapabilityPublic;
@@ -38,7 +38,7 @@ contract AUTHZ is Module {
     constructor(address kernel_) Module(Kernel(kernel_)) {}
 
     function KEYCODE() public pure virtual override returns (bytes5) {
-        return "AUTHZ";
+        return "AUTHR";
     }
 
     function doesUserHaveRole(address user, uint8 role)

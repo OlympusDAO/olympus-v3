@@ -38,7 +38,7 @@ contract TreasuryPolicy is Auth, Policy {
     {}
 
     function configureReads() external override onlyKernel {
-        setAuthority(Authority(getModuleAddress("AUTHZ")));
+        setAuthority(Authority(getModuleAddress("AUTHR")));
         treasury = TreasuryModule(payable(getModuleAddress("TRSRY")));
     }
 
