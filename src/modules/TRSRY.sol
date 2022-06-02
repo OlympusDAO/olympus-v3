@@ -42,6 +42,11 @@ contract OlympusTreasury is Module {
         uint256 amount_
     );
     event ApprovalRevoked(address indexed policy_, ERC20[] tokens_);
+    event DebtCleared(
+        ERC20 indexed token_,
+        address indexed policy_,
+        uint256 amount_
+    );
 
     Kernel private kernel;
 
@@ -49,9 +54,7 @@ contract OlympusTreasury is Module {
     // infinite approval is max(uint256). Should be reserved monitored subsystems.
     mapping(address => mapping(ERC20 => uint256)) public withdrawApproval;
 
-    // TODO approval token mapping
     mapping(ERC20 => bool) public isReserve;
-    //mapping(ERC20 => uint256) public totalReserves; // reserve -> reserves
 
     // TODO debt for address and token mapping
     mapping(ERC20 => uint256) public totalDebt; // reserve -> totalDebt
@@ -103,9 +106,7 @@ contract OlympusTreasury is Module {
         kernel.onlyExecutor(); // TODO should this only be called by gov?
 
         // TODO account for debtors
-        if (isReserve[token_] == false) {
-            revert TRSRY_NotReserve();
-        }
+        if (isReserve[token_] == false) revert TRSRY_NotReserve();
         withdrawApproval[policy_][token_] = amount_;
 
         emit ApprovedForWithdrawal(policy_, token_, amount_);
@@ -120,9 +121,7 @@ contract OlympusTreasury is Module {
         }
 
         uint256 approval = withdrawApproval[msg.sender][token_];
-        if (approval < amount_) {
-            revert TRSRY_NotApproved();
-        }
+        if (approval < amount_) revert TRSRY_NotApproved();
 
         if (approval != type(uint256).max) {
             withdrawApproval[msg.sender][token_] = approval - amount_;
@@ -148,6 +147,8 @@ contract OlympusTreasury is Module {
     }
 
     /// TODO DEBT FUNCTIONS
+
+    /// TODO incur debt?
 
     function loanReserves(ERC20 token_, uint256 amount_)
         external
@@ -193,11 +194,11 @@ contract OlympusTreasury is Module {
     ) external onlyPermitted {
         kernel.onlyExecutor();
 
-        // TODO reduce debt for specific address
+        // Reduce debt for specific address
         reserveDebt[token_][debtor_] -= amount_;
         totalDebt[token_] -= amount_;
 
-        // TODO reduce approval?
+        emit DebtCleared(token_, debtor_, amount_);
     }
 
     function setDebt(address token_, uint256 amount_) external onlyPermitted {
