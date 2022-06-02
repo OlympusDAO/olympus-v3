@@ -12,7 +12,7 @@ import "interfaces/TreasuryAction.sol";
 import "interfaces/EndStateVerifier.sol";
 
 import "src/Kernel.sol";
-import "modules/TRSRY.sol";
+import "src/modules/TRSRY.sol";
 
 /// ERRORS
 
@@ -27,7 +27,7 @@ error TreasuryPolicy_FlashOperationFailed(
 contract TreasuryPolicy is Auth, Policy {
     using convert for *;
 
-    TreasuryModule public treasury;
+    OlympusTreasury public treasury;
     EndStateVerifier public verifier;
 
     mapping(address => bool) public isAllowedBorrower;
@@ -39,7 +39,7 @@ contract TreasuryPolicy is Auth, Policy {
 
     function configureReads() external override onlyKernel {
         setAuthority(Authority(getModuleAddress("AUTHR")));
-        treasury = TreasuryModule(payable(getModuleAddress("TRSRY")));
+        treasury = OlympusTreasury(payable(getModuleAddress("TRSRY")));
     }
 
     function requestWrites()
