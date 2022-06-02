@@ -38,7 +38,22 @@ contract OlympusTreasury is Module {
         uint256 amount_
     );
     event ApprovalRevoked(address indexed policy_, ERC20[] tokens_);
+    event DebtIncurred(
+        ERC20 indexed token_,
+        address indexed policy_,
+        uint256 amount_
+    );
+    event DebtRepaid(
+        ERC20 indexed token_,
+        address indexed policy_,
+        uint256 amount_
+    );
     event DebtCleared(
+        ERC20 indexed token_,
+        address indexed policy_,
+        uint256 amount_
+    );
+    event DebtSet(
         ERC20 indexed token_,
         address indexed policy_,
         uint256 amount_
@@ -49,8 +64,6 @@ contract OlympusTreasury is Module {
     // user -> reserve -> amount
     // infinite approval is max(uint256). Should be reserved monitored subsystems.
     mapping(address => mapping(ERC20 => uint256)) public withdrawApproval;
-
-    mapping(ERC20 => bool) public isReserve;
 
     // TODO debt for address and token mapping
     mapping(ERC20 => uint256) public totalDebt; // reserve -> totalDebt
@@ -68,16 +81,7 @@ contract OlympusTreasury is Module {
         WETH(WETH_ADDRESS).deposit{value: msg.value}();
     }
 
-    // Gov can declare a token to be treated as a reserve
-    function declareReserve(ERC20 token_) external onlyPermittedPolicies {
-        isReserve[token_] = true;
-    }
-
     function getReserveBalance(ERC20 token_) external view returns (uint256) {
-        if (!isReserve[token_]) {
-            revert TRSRY_NotReserve();
-        }
-
         return token_.balanceOf(address(this)) + totalDebt[token_];
     }
 
@@ -87,10 +91,6 @@ contract OlympusTreasury is Module {
         ERC20 token_,
         uint256 amount_
     ) external onlyPermittedPolicies {
-        kernel.onlyExecutor(); // TODO should this only be called by gov?
-
-        // TODO account for debtors
-        if (isReserve[token_] == false) revert TRSRY_NotReserve();
         withdrawApproval[policy_][token_] = amount_;
 
         emit ApprovedForWithdrawal(policy_, token_, amount_);
@@ -100,10 +100,6 @@ contract OlympusTreasury is Module {
         public
         onlyPermittedPolicies
     {
-        if (isReserve[token_] == false) {
-            revert TRSRY_NotReserve();
-        }
-
         uint256 approval = withdrawApproval[msg.sender][token_];
         if (approval < amount_) revert TRSRY_NotApproved();
 
@@ -117,7 +113,7 @@ contract OlympusTreasury is Module {
     }
 
     // Anyone can call to revoke a terminated policy's approvals
-    function revokeApproval(address policy_, ERC20[] memory tokens_) external {
+    function revokeApprovals(address policy_, ERC20[] memory tokens_) external {
         if (kernel.approvedPolicies(policy_) == true) {
             revert TRSRY_PolicyStillActive();
         }
@@ -125,14 +121,15 @@ contract OlympusTreasury is Module {
         uint256 len = tokens_.length;
         for (uint256 i; i < len; ) {
             withdrawApproval[policy_][tokens_[i]] = 0;
+            unchecked {
+                ++i;
+            }
         }
 
         emit ApprovalRevoked(policy_, tokens_);
     }
 
-    /// TODO DEBT FUNCTIONS
-
-    /// TODO incur debt?
+    /// DEBT FUNCTIONS
 
     function loanReserves(ERC20 token_, uint256 amount_)
         external
@@ -141,9 +138,9 @@ contract OlympusTreasury is Module {
         uint256 approval = withdrawApproval[msg.sender][token_];
         if (approval < amount_) revert TRSRY_NotApproved();
 
-        // TODO verify this
+        // If not inf approval, subtract amount from approval
         if (approval != type(uint256).max) {
-            withdrawApproval[msg.sender][token_] = approval - amount_;
+            withdrawApproval[msg.sender][token_] -= amount_;
         }
 
         // Add debt to caller
@@ -152,9 +149,11 @@ contract OlympusTreasury is Module {
 
         // Withdraw to caller
         token_.safeTransfer(msg.sender, amount_);
+
+        emit DebtIncurred(token_, msg.sender, amount_);
     }
 
-    function repayDebt(ERC20 token_, uint256 amount_)
+    function repayLoan(ERC20 token_, uint256 amount_)
         external
         onlyPermittedPolicies
     {
@@ -164,14 +163,39 @@ contract OlympusTreasury is Module {
 
         // Deposit from caller
         token_.safeTransferFrom(msg.sender, address(this), amount_);
+
+        emit DebtRepaid(token_, msg.sender, amount_);
     }
 
-    // TODO for repaying debt in different token
+    // TODO for repaying debt in different tokens. Specifically for changing reserve assets
+    /*
     function repayDebtEquivalent(
         ERC20 origToken_,
         ERC20 repayToken_,
+        uint256 debtAmount_
+    ) external onlyPermittedPolicies {
+        // TODO reduce debt amount of original token
+        reserveDebt[origToken_][msg.sender] -= debtAmount_;
+        totalDebt[origToken_] -= debtAmount_;
+    }
+    */
+
+    // To be used as escape hatch for setting debt in special cases, like swapping reserves to another token
+    function setDebt(
+        ERC20 token_,
+        address debtor_,
         uint256 amount_
-    ) external {}
+    ) external onlyPermittedPolicies {
+        uint256 oldDebt = reserveDebt[token_][debtor_];
+
+        // Set debt for debtor
+        reserveDebt[token_][debtor_] = amount_;
+
+        if (oldDebt >= amount_) totalDebt[token_] += amount_;
+        else totalDebt[token_] -= amount_;
+
+        emit DebtSet(token_, debtor_, amount_);
+    }
 
     // TODO Only permitted by governor. Used in case of emergency where loaned amounts cannot be repaid.
     function clearDebt(
@@ -179,20 +203,10 @@ contract OlympusTreasury is Module {
         address debtor_,
         uint256 amount_
     ) external onlyPermittedPolicies {
-        kernel.onlyExecutor();
-
         // Reduce debt for specific address
         reserveDebt[token_][debtor_] -= amount_;
         totalDebt[token_] -= amount_;
 
         emit DebtCleared(token_, debtor_, amount_);
-    }
-
-    function setDebt(address token_, uint256 amount_)
-        external
-        onlyPermittedPolicies
-    {
-        // TODO check if debt is already set
-        // TODO set debt
     }
 }

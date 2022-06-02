@@ -55,7 +55,7 @@ contract TreasuryPolicy is Auth, Policy {
 
     function flashOperation(address token, uint256 amount) external {
         address action = msg.sender;
-        uint256 approved = treasury.approvals(action, token);
+        uint256 approved = treasury.withdrawApproval(action, token);
 
         // checks (TODO: think)
         if (approved < amount)

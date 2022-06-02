@@ -103,8 +103,9 @@ contract Kernel is IKernel {
         executor = msg.sender;
     }
 
-    function onlyExecutor() public view {
+    modifier onlyExecutor() {
         if (msg.sender != executor) revert Kernel_OnlyExecutor(msg.sender);
+        _;
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////
@@ -119,9 +120,10 @@ contract Kernel is IKernel {
 
     event ActionExecuted(Actions action_, address target_);
 
-    function executeAction(Actions action_, address target_) external {
-        onlyExecutor();
-
+    function executeAction(Actions action_, address target_)
+        external
+        onlyExecutor
+    {
         if (action_ == Actions.InstallModule) {
             _installModule(target_);
         } else if (action_ == Actions.UpgradeModule) {
