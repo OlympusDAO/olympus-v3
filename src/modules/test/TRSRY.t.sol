@@ -8,13 +8,13 @@ import "test-utils/sorting.sol";
 import "test-utils/errors.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {OlympusTreasury} from "src/modules/TRSRY.sol";
-import {LarpKernel} from "../../test/larps/LarpKernel.sol";
+import "src/modules/TRSRY.sol";
+import "../../test/larps/LarpKernel.sol";
 import {OlympusERC20Token} from "../../external/OlympusERC20.sol";
 
 contract TRSRYTest is Test {
     using larping for *;
-    using sorting for uint256[];
+    using errors for bytes4;
 
     LarpKernel internal kernel;
     OlympusTreasury public TRSRY;
@@ -67,6 +67,7 @@ contract TRSRYTest is Test {
 
     function test_AuthorizedCanWithdrawToken(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
+        vm.assume(amount_ > 0);
 
         TRSRY.requestApprovalFor(policyOne, ngmi, amount_);
 
@@ -80,12 +81,22 @@ contract TRSRYTest is Test {
 
     function test_UnauthorizedCannotWithdrawToken(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
+        vm.assume(amount_ > 0);
 
-        bytes memory err = abi.encodeWithSelector(
-            TRSRY.TRSRY_NotApproved.selector
+        // Fail when withdrawal using policy without write access
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Module_OnlyPermissionedPolicy.selector,
+                address(policyTwo)
+            )
         );
-        vm.expectRevert(err);
+        vm.prank(policyTwo);
+        TRSRY.withdrawReserves(ngmi, amount_);
 
+        kernel.grantWritePermissions(TRSRY.KEYCODE(), policyTwo);
+
+        // Fail withdrawal using policy without approval
+        vm.expectRevert(TRSRY_NotApproved.selector);
         vm.prank(policyTwo);
         TRSRY.withdrawReserves(ngmi, amount_);
     }
@@ -94,6 +105,7 @@ contract TRSRYTest is Test {
 
     function test_LoanReserves(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
+        vm.assume(amount_ > 0);
 
         // Ensure there is sufficient reserves in the treasury
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
@@ -134,7 +146,5 @@ contract TRSRYTest is Test {
 
     function test_SetDebt(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
-
-        vm.startPrank();
     }
 }
