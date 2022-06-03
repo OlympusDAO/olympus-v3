@@ -23,7 +23,6 @@ address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 /// @notice Treasury holds reserves, LP tokens and all other assets under the control
 /// of the protocol. Any contracts that need access to treasury assets should
 /// be whitelisted by governance and given proper role.
-// TODO should only allow approved amounts for a policy?
 contract OlympusTreasury is Module {
     using TransferHelper for ERC20;
 

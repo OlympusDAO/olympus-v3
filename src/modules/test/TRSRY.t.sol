@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import "test-utils/UserFactory.sol";
 import "test-utils/larping.sol";
 import "test-utils/sorting.sol";
+import "test-utils/errors.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
@@ -58,6 +59,12 @@ contract TRSRYTest is Test {
         assertEq(TRSRY.withdrawApproval(policyOne, ngmi), amount_);
     }
 
+    // TODO test revoke approval
+
+    function test_GetReserveBalance() public {
+        assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
+    }
+
     function test_AuthorizedCanWithdrawToken(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
 
@@ -71,10 +78,63 @@ contract TRSRYTest is Test {
 
     // TODO test if can withdraw more than allowed amount
 
-    function testFail_UnauthorizedCannotWithdrawToken(uint256 amount_) public {
+    function test_UnauthorizedCannotWithdrawToken(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
+
+        bytes memory err = abi.encodeWithSelector(
+            TRSRY.TRSRY_NotApproved.selector
+        );
+        vm.expectRevert(err);
 
         vm.prank(policyTwo);
         TRSRY.withdrawReserves(ngmi, amount_);
+    }
+
+    // TODO test debt functions
+
+    function test_LoanReserves(uint256 amount_) public {
+        vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
+
+        // Ensure there is sufficient reserves in the treasury
+        assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
+
+        TRSRY.requestApprovalFor(policyOne, ngmi, amount_);
+
+        vm.prank(policyOne);
+        TRSRY.loanReserves(ngmi, amount_);
+
+        assertEq(ngmi.balanceOf(policyOne), amount_);
+        assertEq(TRSRY.reserveDebt(ngmi, policyOne), amount_);
+        assertEq(TRSRY.totalDebt(ngmi), amount_);
+
+        // Reserve balance should remain the same, since we withdrew as debt
+        assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
+    }
+
+    function test_RepayLoan(uint256 amount_) public {
+        vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
+
+        assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
+
+        TRSRY.requestApprovalFor(policyOne, ngmi, amount_);
+
+        vm.startPrank(policyOne);
+        TRSRY.loanReserves(ngmi, amount_);
+
+        // Repay loan
+        ngmi.approve(address(TRSRY), amount_);
+        TRSRY.repayLoan(ngmi, amount_);
+
+        vm.stopPrank();
+
+        assertEq(ngmi.balanceOf(policyOne), 0);
+    }
+
+    // TODO test setDebt and clearDebt
+
+    function test_SetDebt(uint256 amount_) public {
+        vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
+
+        vm.startPrank();
     }
 }
