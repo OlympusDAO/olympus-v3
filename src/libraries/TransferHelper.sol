@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.0;
 
-import {IERC20} from "../interfaces/IERC20.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @notice Safe ERC20 and ETH transfer library that safely handles missing return values.
 /// @author Modified from Uniswap (https://github.com/Uniswap/uniswap-v3-periphery/blob/main/contracts/libraries/TransferHelper.sol)
 /// @author Taken from Solmate.
 library TransferHelper {
     function safeTransferFrom(
-        IERC20 token,
+        ERC20 token,
         address from,
         address to,
         uint256 amount
     ) internal {
         (bool success, bytes memory data) = address(token).call(
             abi.encodeWithSelector(
-                IERC20.transferFrom.selector,
+                ERC20.transferFrom.selector,
                 from,
                 to,
                 amount
@@ -29,12 +29,12 @@ library TransferHelper {
     }
 
     function safeTransfer(
-        IERC20 token,
+        ERC20 token,
         address to,
         uint256 amount
     ) internal {
         (bool success, bytes memory data) = address(token).call(
-            abi.encodeWithSelector(IERC20.transfer.selector, to, amount)
+            abi.encodeWithSelector(ERC20.transfer.selector, to, amount)
         );
 
         require(
@@ -44,12 +44,12 @@ library TransferHelper {
     }
 
     function safeApprove(
-        IERC20 token,
+        ERC20 token,
         address to,
         uint256 amount
     ) internal {
         (bool success, bytes memory data) = address(token).call(
-            abi.encodeWithSelector(IERC20.approve.selector, to, amount)
+            abi.encodeWithSelector(ERC20.approve.selector, to, amount)
         );
 
         require(

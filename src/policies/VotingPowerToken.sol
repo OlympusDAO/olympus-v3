@@ -38,7 +38,7 @@ contract VotingPowerToken is ERC20, Auth, Policy {
     // ######################## ~ DEFAULT ~ ########################
 
     function configureReads() external override onlyKernel {
-        setAuthority(Authority(getModuleAddress("AUTHZ")));
+        setAuthority(Authority(getModuleAddress("AUTHR")));
     }
 
     function requestWrites()

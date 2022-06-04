@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.10;
 
-abstract contract Module {
-    error Module_OnlyApprovedPolicy(address caller_);
-    error Module_OnlyPermissionedPolicy(address caller_);
+error Module_OnlyPermissionedPolicy(address caller_);
 
+abstract contract Module {
     IKernel public _kernel;
 
     constructor(IKernel kernel_) {

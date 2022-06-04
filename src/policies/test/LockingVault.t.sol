@@ -171,7 +171,7 @@ contract LockingVaultTest is Test {
     function getModuleForKeycode(bytes5 keycode) public view returns (address) {
         if (keycode == "DEMAM") return demama;
         else if (keycode == "VOPOM") return vopoma;
-        else if (keycode == "AUTHZ") return address(this);
+        else if (keycode == "AUTHR") return address(this);
         else return address(0);
     }
 

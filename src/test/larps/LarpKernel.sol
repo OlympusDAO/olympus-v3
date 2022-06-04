@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.10;
 
-import {Kernel, Module} from "../../Kernel.sol";
+import "../../Kernel.sol";
 
 // Kernel for testing purposes
 contract LarpKernel is Kernel {
