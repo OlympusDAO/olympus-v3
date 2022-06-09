@@ -59,7 +59,7 @@ contract Distributor is Auth, Policy {
         address ohm_,
         address staking_,
         uint256 initialRate_
-    ) Auth(kernel_, Authority(address(0))) Policy(Kernel(kernel_)) {
+    ) Auth(kernel_, Authority(msg.sender)) Policy(Kernel(kernel_)) {
         // Add in 0 address checks
         ohm = ERC20(ohm_);
         staking = staking_;
