@@ -82,8 +82,8 @@ contract Distributor is Auth, Policy {
         override
         returns (bytes5[] memory permissions)
     {
-        permissions = new bytes5[](2);
-        permissions[1] = "MINTR";
+        permissions = new bytes5[](1);
+        permissions[0] = "MINTR";
     }
 
     /////////////////////////////////////////////////////////////////////////////////
