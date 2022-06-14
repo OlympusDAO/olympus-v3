@@ -355,7 +355,7 @@ contract DistributorTest is Test {
     function test_triggerRebaseStory2() public {
         /// Set up
         vm.warp(2200);
-        (uint256 length, uint256 number, uint256 end, ) = larpStaking.epoch();
+        (, , uint256 end, ) = larpStaking.epoch();
         assertLe(end, block.timestamp);
 
         uint256 balanceBefore = ohm.balanceOf(address(larpStaking));
