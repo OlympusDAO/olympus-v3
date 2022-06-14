@@ -8,6 +8,8 @@ import "./interfaces/IsOHM.sol";
 import "./interfaces/IgOHM.sol";
 import "./types/LarpERC20.sol";
 
+import "forge-std/console2.sol";
+
 contract LarpGOHM is IgOHM, LarpERC20 {
     /* ========== DEPENDENCIES ========== */
 

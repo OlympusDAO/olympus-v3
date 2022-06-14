@@ -75,9 +75,9 @@ contract DistributorTest is Test {
                 address(ohm),
                 address(sohm),
                 address(gohm),
+                2200,
                 0,
-                0,
-                0,
+                2200,
                 address(this)
             );
 
@@ -87,6 +87,14 @@ contract DistributorTest is Test {
                 address(larpStaking),
                 1000
             );
+
+            larpStaking.setDistributor(address(distributor));
+
+            sohm.setgOHM(address(gohm));
+            sohm.initialize(address(larpStaking), address(trsry));
+            sohm.setIndex(10 gwei);
+
+            gohm.approved.larp(address(larpStaking));
         }
 
         {
@@ -96,8 +104,18 @@ contract DistributorTest is Test {
 
         {
             /// Mint OHM to Staking Contract
-            vm.prank(address(distributor));
+            vm.startPrank(address(distributor));
             mintr.mintOhm(address(larpStaking), 100000 gwei);
+            mintr.mintOhm(address(this), 100000 gwei);
+            vm.stopPrank();
+
+            ohm.approve(address(larpStaking), type(uint256).max);
+            larpStaking.stake(address(this), 100 gwei, true, true);
+        }
+
+        {
+            /// Initialize block.timestamp
+            vm.warp(0);
         }
     }
 
@@ -120,7 +138,7 @@ contract DistributorTest is Test {
         assertEq(rate, 0);
         assertEq(target, 0);
 
-        assertEq(ohm.balanceOf(address(larpStaking)), 100000 gwei);
+        assertEq(ohm.balanceOf(address(larpStaking)), 100100 gwei);
     }
 
     /////////////////////////////////////////////////////////////////////////////////
@@ -164,7 +182,7 @@ contract DistributorTest is Test {
     }
 
     function test_nextRewardFor() public {
-        uint256 larpStakingBalance = 100000 gwei;
+        uint256 larpStakingBalance = 100100 gwei;
         uint256 rewardRate = distributor.rewardRate();
         uint256 denominator = 1_000_000;
         uint256 expected = (larpStakingBalance * rewardRate) / denominator;
@@ -318,4 +336,47 @@ contract DistributorTest is Test {
     /////////////////////////////////////////////////////////////////////////////////
     ///                          User Story Interactions                          ///
     /////////////////////////////////////////////////////////////////////////////////
+
+    /// User Story 1: triggerRebase() fails when block timestamp is before epoch end
+    function test_triggerRebaseStory1() public {
+        (, , uint256 end, ) = larpStaking.epoch();
+        assertGt(end, block.timestamp);
+
+        uint256 balanceBefore = ohm.balanceOf(address(larpStaking));
+        vm.expectRevert(
+            abi.encodeWithSelector(Distributor_NoRebaseOccurred.selector)
+        );
+        distributor.triggerRebase();
+        uint256 balanceAfter = ohm.balanceOf(address(larpStaking));
+        assertEq(balanceBefore, balanceAfter);
+    }
+
+    /// User Story 2: triggerRebase() mints OHM to the staking contract when epoch is over
+    function test_triggerRebaseStory2() public {
+        /// Set up
+        vm.warp(2200);
+        (uint256 length, uint256 number, uint256 end, ) = larpStaking.epoch();
+        assertLe(end, block.timestamp);
+
+        uint256 balanceBefore = ohm.balanceOf(address(larpStaking));
+        distributor.triggerRebase();
+        uint256 balanceAfter = ohm.balanceOf(address(larpStaking));
+
+        uint256 expected = (balanceBefore * 1000) / 1_000_000;
+        assertEq(balanceAfter - balanceBefore, expected);
+    }
+
+    /// User Story 3: triggerRebase() reverts when attempted to call twice in same epoch
+    function test_triggerRebaseStory3() public {
+        /// Set up
+        vm.warp(2200);
+        distributor.triggerRebase();
+
+        /// Move forward a little bit
+        vm.warp(2500);
+        vm.expectRevert(
+            abi.encodeWithSelector(Distributor_NoRebaseOccurred.selector)
+        );
+        distributor.triggerRebase();
+    }
 }

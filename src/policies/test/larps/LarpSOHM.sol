@@ -9,6 +9,7 @@ import "./types/ERC20Permit.sol";
 import "./interfaces/IgOHM.sol";
 import "./interfaces/IsOHM.sol";
 import "src/interfaces/IStaking.sol";
+import "forge-std/console2.sol";
 
 contract LarpSOHM is IsOHM, ERC20Permit {
     /* ========== DEPENDENCIES ========== */
@@ -84,10 +85,6 @@ contract LarpSOHM is IsOHM, ERC20Permit {
     /* ========== INITIALIZATION ========== */
 
     function setIndex(uint256 _index) external {
-        require(
-            msg.sender == initializer,
-            "Initializer:  caller is not initializer"
-        );
         require(INDEX == 0, "Cannot set INDEX again");
         INDEX = gonsForBalance(_index);
     }
@@ -338,6 +335,11 @@ contract LarpSOHM is IsOHM, ERC20Permit {
 
     // Staking contract holds excess sOHM
     function circulatingSupply() public view override returns (uint256) {
+        console2.log(_totalSupply);
+        console2.log(balanceOf(stakingContract));
+        console2.log(IERC20(address(gOHM)).totalSupply());
+        console2.log(gOHM.balanceFrom(IERC20(address(gOHM)).totalSupply()));
+        console2.log(IStaking(stakingContract).supplyInWarmup());
         return
             _totalSupply
                 .sub(balanceOf(stakingContract))

@@ -72,6 +72,7 @@ contract Distributor is Auth, Policy {
 
     function configureReads() external virtual override onlyKernel {
         setAuthority(Authority(getModuleAddress("AUTHR")));
+        MINTR = OlympusMinter(getModuleAddress("MINTR"));
         TRSRY = OlympusTreasury(payable(getModuleAddress("TRSRY")));
     }
 
@@ -104,7 +105,7 @@ contract Distributor is Auth, Policy {
         if (msg.sender != staking) revert Distributor_OnlyStaking();
         if (!unlockRebase) revert Distributor_NotUnlocked();
 
-        MINTR.mintOhm(address(TRSRY), nextRewardFor(staking));
+        MINTR.mintOhm(staking, nextRewardFor(staking));
 
         for (uint256 i; i < pools.length; ) {
             address pool = pools[i];
