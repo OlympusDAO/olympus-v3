@@ -91,6 +91,11 @@ contract Distributor is Auth, Policy {
     ///                            Public Functions                               ///
     /////////////////////////////////////////////////////////////////////////////////
 
+    /// @notice Trigger rebases via distributor. There is an error in Staking's `stake` function
+    ///         which pulls forward part of the rebase for the next epoch. This path triggers a
+    ///         rebase by calling `unstake` (which does not have the issue). The patch also
+    ///         restricts `distribute` to only be able to be called from a tx originating in this
+    ///         function.
     function triggerRebase() external {
         unlockRebase = true;
         IStaking(staking).unstake(msg.sender, 0, true, true); // Give the caller the bounty OHM
@@ -101,13 +106,20 @@ contract Distributor is Auth, Policy {
     ///                            Guarded Functions                              ///
     /////////////////////////////////////////////////////////////////////////////////
 
+    /// @notice Send the epoch's reward to the staking contract, and mint rewards to Uniswap V2 pools.
+    ///         This removes opportunity cost for liquidity providers by sending rebase rewards
+    ///         directly into the liquidity pool.
+    ///
+    ///         NOTE: This does not add additional emissions (user could be staked instead and get the
+    ///         same tokens).
     function distribute() external {
         if (msg.sender != staking) revert Distributor_OnlyStaking();
         if (!unlockRebase) revert Distributor_NotUnlocked();
 
         MINTR.mintOhm(staking, nextRewardFor(staking));
 
-        for (uint256 i; i < pools.length; ) {
+        uint256 poolLength = pools.length;
+        for (uint256 i; i < poolLength; ) {
             address pool = pools[i];
             if (pool != address(0)) {
                 MINTR.mintOhm(pool, nextRewardFor(pool));
@@ -126,10 +138,11 @@ contract Distributor is Auth, Policy {
         unlockRebase = false;
     }
 
+    /// @notice Mints the bounty (if > 0) to the saking contract for distribution.
+    /// @return uint256 The amount of OHM minted as a bounty.
     function retrieveBounty() external returns (uint256) {
         if (msg.sender != staking) revert Distributor_OnlyStaking();
 
-        /// If the distributor bounty is >0, mint it for the staking contract
         if (bounty > 0) MINTR.mintOhm(staking, bounty);
 
         return bounty;
@@ -173,6 +186,9 @@ contract Distributor is Auth, Policy {
     ///                             View Functions                                ///
     /////////////////////////////////////////////////////////////////////////////////
 
+    /// @notice Returns the next reward for the given address based on their OHM balance.
+    /// @param  address The address to get the next reward for.
+    /// @return uint256 The next reward for the given address.
     function nextRewardFor(address who_) public view returns (uint256) {
         return (ohm.balanceOf(who_) * rewardRate) / DENOMINATOR;
     }
@@ -181,14 +197,24 @@ contract Distributor is Auth, Policy {
     ///                             Policy Functions                              ///
     /////////////////////////////////////////////////////////////////////////////////
 
+    /// @notice Adjusts the bounty
+    /// @param  uint256 The new bounty amount.
+    /// @dev    This function is only available to an authorized user.
     function setBounty(uint256 bounty_) external requiresAuth {
         bounty = bounty_;
     }
 
+    /// @notice Sets the Uniswap V2 pools to be minted into
+    /// @param  address[] The array of Uniswap V2 pools.
+    /// @dev    This function is only available to an authorized user.
     function setPools(address[] calldata pools_) external requiresAuth {
         pools = pools_;
     }
 
+    /// @notice Removes a liquidity pool from the list of pools to be minted into
+    /// @param  uint256 The index in the pools array of the liquidity pool to remove.
+    /// @param  address The address of the liquidity pool to remove.
+    /// @dev    This function is only available to an authorized user.
     function removePool(uint256 index_, address pool_) external requiresAuth {
         if (pools[index_] != pool_) revert Distributor_SanityCheck();
         pools[index_] = address(0);
@@ -204,6 +230,10 @@ contract Distributor is Auth, Policy {
         }
     }
 
+    /// @notice Sets an adjustment to the reward rate.
+    /// @param  bool If reward rate should increase
+    /// @param  uint256 Amount to add or decrease reward rate by
+    /// @param  uint256 Target reward rate
     function setAdjustment(
         bool add_,
         uint256 rate_,
