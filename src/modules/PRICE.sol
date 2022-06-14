@@ -8,6 +8,13 @@ import {Kernel, Module} from "../Kernel.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
+/// @title  Olympus Price Oracle
+/// @notice Olympus Price Oracle (Module) Contract
+/// @dev    The Olympus Price Oracle contract provides a standard interface for OHM price data against a reserve asset.
+///         It also implements a moving average price calculation (same as a TWAP) on the price feed data over a configured
+///         duration and observation frequency. The data provided by this contract is used by the Olympus Range Operator to
+///         perform market operations. The Olympus Price Oracle is updated each epoch by the Olympus Heart contract.
+/// @author Oighty, Zeus
 contract OlympusPrice is Module {
     using FullMath for uint256;
 
@@ -22,20 +29,37 @@ contract OlympusPrice is Module {
 
     /* ========== STATE VARIABLES ========== */
 
-    /// TODO add secondary check on TWAP
-
-    /// Moving Average
+    /// Chainlink Price Feeds
+    /// @dev Chainlink typically provides price feeds for an asset in ETH. Therefore, we use two price feeds against ETH, one for OHM and one for the Reserve asset, to calculate the relative price of OHM in the Reserve asset.
     AggregatorV2V3Interface internal _ohmEthPriceFeed;
     AggregatorV2V3Interface internal _reserveEthPriceFeed;
     uint8 internal _ohmEthDecimals;
     uint8 internal _reserveEthDecimals;
-    uint8 internal _decimals;
+
+    /// Moving average data
+    uint256 internal _movingAverage; /// See getMovingAverage()
+
+    /// @notice Array of price observations ordered by when they were observed.
+    /// @dev    Observations are continually stored and the moving average is over the last movingAverageDuration / observationFrequency observations.
+    ///         This allows the contract to maintain historical data. Observations can be cleared by changing the movingAverageDuration or observationFrequency.
     uint256[] public observations;
-    uint256 public movingAverage;
+
+    /// @notice Frequency (in seconds) that observations should be stored.
     uint48 public observationFrequency;
-    uint48 public numObservations;
+
+    /// @notice Duration (in seconds) over which the moving average is calculated.
     uint48 public movingAverageDuration;
+
+    /// @notice Number of observations used in the moving average calculation. Computed from movingAverageDuration / observationFrequency.
+    uint48 public numObservations;
+
+    /// @notice Unix timestamp of last observation (in seconds).
     uint48 public lastObservationTime;
+
+    /// @notice Number of decimals in the price values provided by the contract.
+    uint8 public decimals;
+
+    /// @notice Whether the price module is initialized (and therefore active).
     bool public initialized;
 
     /* ========== CONSTRUCTOR ========== */
@@ -58,7 +82,7 @@ contract OlympusPrice is Module {
         _reserveEthPriceFeed = reserveEthPriceFeed_;
         _reserveEthDecimals = _reserveEthPriceFeed.decimals();
 
-        _decimals = 18;
+        decimals = 18;
 
         observationFrequency = observationFrequency_;
         movingAverageDuration = movingAverageDuration_;
@@ -70,30 +94,36 @@ contract OlympusPrice is Module {
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
+    /// @inheritdoc Module
     function KEYCODE() public pure override returns (bytes5) {
         return "PRICE";
     }
 
     /* ========== POLICY FUNCTIONS ========== */
+    /// @notice Trigger an update of the moving average
+    /// @notice Access restricted to approved policies
+    /// @dev This function does not have a time-gating on the observationFrequency on this contract. It is set on the Heart policy contract.
+    ///      The Heart beat frequency should be set to the same value as the observationFrequency.
     function updateMovingAverage() external onlyPermittedPolicies {
         /// TODO determine if this should be opened up (don't want to conflict with heart beat and have that fail)
 
         /// Revert if not initialized
         if (!initialized) revert Price_NotInitialized();
 
+        /// Cache numObservations to save gas.
+        uint48 numObs = numObservations;
+
         /// Get earliest observation in window
-        uint256 earliestPrice = observations[
-            (observations.length - numObservations)
-        ];
+        uint256 earliestPrice = observations[(observations.length - numObs)];
 
         /// Get current price
         uint256 currentPrice = getCurrentPrice();
 
         /// Calculate new moving average
         if (currentPrice > earliestPrice) {
-            movingAverage += (currentPrice - earliestPrice) / numObservations;
+            _movingAverage += (currentPrice - earliestPrice) / numObs;
         } else {
-            movingAverage -= (earliestPrice - currentPrice) / numObservations;
+            _movingAverage -= (earliestPrice - currentPrice) / numObs;
         }
 
         /// Push new observation into storage
@@ -107,6 +137,7 @@ contract OlympusPrice is Module {
 
     /* ========== VIEW FUNCTIONS ========== */
 
+    /// @notice Get the current price of OHM in the Reserve asset from the price feeds
     function getCurrentPrice() public view returns (uint256) {
         /// Revert if not initialized
         if (!initialized) revert Price_NotInitialized();
@@ -124,31 +155,35 @@ contract OlympusPrice is Module {
 
         /// Convert to OHM/RESERVE price
         uint256 currentPrice = ohmEthPrice.mulDiv(
-            10**(_decimals + _reserveEthDecimals),
+            10**(decimals + _reserveEthDecimals),
             reserveEthPrice * 10**(_ohmEthDecimals)
         );
 
         return currentPrice;
     }
 
+    /// @notice Get the last stored price observation of OHM in the Reserve asset
     function getLastPrice() external view returns (uint256) {
         /// Revert if not initialized
         if (!initialized) revert Price_NotInitialized();
         return observations[observations.length - 1];
     }
 
+    /// @notice Get the moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
     function getMovingAverage() external view returns (uint256) {
         /// Revert if not initialized
         if (!initialized) revert Price_NotInitialized();
-        return movingAverage;
-    }
-
-    function getDecimals() external view returns (uint8) {
-        return _decimals;
+        return _movingAverage;
     }
 
     /* ========== ADMIN FUNCTIONS ========== */
 
+    /// @notice                     Initialize the price module
+    /// @notice                     Access restricted to approved policies
+    /// @param startObservations_   Array of observations to initialize the moving average with. Must be of length numObservations.
+    /// @param lastObservationTime_ Unix timestamp of last observation being provided (in seconds).
+    /// @dev This function must be called after the Price module is deployed to activate it and after updating the observationFrequency
+    ///      or movingAverageDuration (in certain cases) in order for the Price module to function properly.
     function initialize(
         uint256[] memory startObservations_,
         uint48 lastObservationTime_
@@ -156,25 +191,30 @@ contract OlympusPrice is Module {
         /// Revert if already initialized
         if (initialized) revert Price_AlreadyInitialized();
 
+        /// Cache numObservations to save gas.
+        uint48 numObs = numObservations;
+
         /// Check that the number of start observations matches the number expected
         if (
-            startObservations_.length != numObservations ||
+            uint48(startObservations_.length) != numObs ||
             lastObservationTime_ > uint48(block.timestamp)
         ) revert Price_InvalidParams();
 
         /// Push start observations into storage and total up observations
         uint256 total;
-        for (uint256 i = 0; i < numObservations; i++) {
+        for (uint48 i; i < numObs; ++i) {
             total += startObservations_[i];
             observations[i] = startObservations_[i];
         }
 
         /// Set moving average, last observation time, and initialized flag
-        movingAverage = total / numObservations;
+        _movingAverage = total / uint256(numObs);
         lastObservationTime = lastObservationTime_;
         initialized = true;
     }
 
+    /// @notice                         Change the moving average window (duration)
+    /// @param movingAverageDuration_   Moving average duration in seconds, must be a multiple of observation frequency
     /// @dev Setting the window to a larger number of observations than the current window will clear
     ///      the data in the current window and require the initialize function to be called again.
     ///      Ensure that you have saved the existing data and can re-populate before calling this
@@ -211,7 +251,7 @@ contract OlympusPrice is Module {
             for (uint256 i; i < newObservations; ++i) {
                 newMovingAverage += observations[startIdx + i];
             }
-            movingAverage = newMovingAverage / newObservations;
+            _movingAverage = newMovingAverage / newObservations;
         }
 
         /// Set parameters and number of observations
@@ -219,6 +259,10 @@ contract OlympusPrice is Module {
         numObservations = uint48(newObservations);
     }
 
+    /// @notice   Change the observation frequency of the moving average (i.e. how often a new observation is taken)
+    /// @param    observationFrequency_   Observation frequency in seconds, must be a divisor of the moving average duration
+    /// @dev      Changing the observation frequency clears existing observation data since it will not be taken at the right time intervals.
+    ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
     function changeObservationFrequency(uint48 observationFrequency_)
         external
         onlyPermittedPolicies

@@ -6,6 +6,13 @@ import {FullMath} from "../libraries/FullMath.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Kernel, Module} from "../Kernel.sol";
 
+/// @title  Olympus Range Data
+/// @notice Olympus Range Data (Module) Contract
+/// @dev    The Olympus Range Data contract stores information about the Olympus Range market operations status.
+///         It provides a standard interface for Range data, including range prices and capacities of each range side.
+///         The data provided by this contract is used by the Olympus Range Operator to perform market operations.
+///         The Olympus Range Data is updated each epoch by the Olympus Range Operator contract.
+/// @author Oighty, Zeus
 contract OlympusRange is Module {
     using TransferHelper for ERC20;
     using FullMath for uint256;
@@ -24,41 +31,48 @@ contract OlympusRange is Module {
     /* ========== STRUCTS =========== */
 
     struct Line {
-        uint256 price;
+        uint256 price; // Price for the specified level
     }
 
     struct Band {
-        Line high;
-        Line low;
-        uint256 spread;
+        Line high; // Price of the high side of the band
+        Line low; // Price of the low side of the band
+        uint256 spread; // Spread of the band (increase/decrease from the moving average to set the band prices), percent with 2 decimal places (i.e. 1000 = 10% spread)
     }
 
     struct Side {
-        bool active;
-        uint48 lastActive;
-        uint256 capacity;
-        uint256 threshold;
-        uint256 market;
-        uint256 lastMarketCapacity;
+        bool active; // Whether or not the side is active (i.e. the Operator is performing market operations on this side, true = active, false = inactive)
+        uint48 lastActive; // Unix timestamp when the side was last active (in seconds)
+        uint256 capacity; // Amount of tokens that can be used to defend the side of the range. Specified in OHM tokens on the high side and Reserve tokens on the low side.
+        uint256 threshold; // Amount of tokens under which the side is taken down. Specified in OHM tokens on the high side and Reserve tokens on the low side.
+        uint256 market; // Market ID of the cushion bond market for the side. If no market is active, the market ID is set to max uint256 value.
+        uint256 lastMarketCapacity; // Capacity of the side's market at the last update. Used to determine how much capacity the market sold since the last update.
     }
 
     struct Range {
-        Side low;
-        Side high;
-        Band cushion;
-        Band wall;
+        Side low; // Data specific to the low side of the range
+        Side high; // Data specific to the high side of the range
+        Band cushion; // Data relevant to cushions on both sides of the range
+        Band wall; // Data relevant to walls on both sides of the range
     }
 
     /* ========== STATE VARIABLES ========== */
 
+    /// Range data singleton. See range().
     Range internal _range;
+
+    /// @notice Threshold factor for the change, a percent in 2 decimals (i.e. 1000 = 10%). Determines how much of the capacity must be spent before the side is taken down.
+    /// @dev    A threshold is required so that a wall is not "active" with a capacity near zero, but unable to be depleted practically (dust).
     uint256 public thresholdFactor;
 
     /// Constants
     uint256 public constant FACTOR_SCALE = 1e4;
 
     /// Tokens
+    /// @notice OHM token contract address
     ERC20 public immutable ohm;
+
+    /// @notice Reserve token contract address
     ERC20 public immutable reserve;
 
     /* ========== CONSTRUCTOR ========== */
@@ -103,13 +117,17 @@ contract OlympusRange is Module {
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
-
+    /// @inheritdoc Module
     function KEYCODE() public pure override returns (bytes5) {
         return "RANGE";
     }
 
     /* ========== POLICY FUNCTIONS ========== */
-
+    /// @notice                 Update the capacity for a side of the range.
+    /// @notice                 Access restricted to approved policies.
+    /// @param high_            Specifies the side of the range to update capacity for (true = high side, false = low side).
+    /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
+    /// @param marketCapacity_  Amount to set the market capacity to (OHM tokens for high side, Reserve tokens for low side).
     function updateCapacity(
         bool high_,
         uint256 capacity_,
@@ -164,6 +182,9 @@ contract OlympusRange is Module {
         }
     }
 
+    /// @notice                 Update the prices for the low and high sides.
+    /// @notice                 Access restricted to approved policies.
+    /// @param movingAverage_   Current moving average price to set range prices from.
     function updatePrices(uint256 movingAverage_)
         external
         onlyPermittedPolicies
@@ -188,6 +209,10 @@ contract OlympusRange is Module {
             FACTOR_SCALE;
     }
 
+    /// @notice                 Regenerate a side of the range to a specific capacity.
+    /// @notice                 Access restricted to approved policies.
+    /// @param high_            Specifies the side of the range to regenerate (true = high side, false = low side).
+    /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
     function regenerate(bool high_, uint256 capacity_)
         external
         onlyPermittedPolicies
@@ -219,6 +244,11 @@ contract OlympusRange is Module {
         emit WallUp(high_, block.timestamp, capacity_);
     }
 
+    /// @notice                 Update the market ID and market capacity (cushion) for a side of the range.
+    /// @notice                 Access restricted to approved policies.
+    /// @param high_            Specifies the side of the range to update market for (true = high side, false = low side).
+    /// @param market_          Market ID to set for the side.
+    /// @param marketCapacity_  Amount to set the last market capacity to (OHM tokens for high side, Reserve tokens for low side).
     function updateMarket(
         bool high_,
         uint256 market_,
@@ -245,6 +275,10 @@ contract OlympusRange is Module {
         }
     }
 
+    /// @notice                 Set the wall and cushion spreads.
+    /// @notice                 Access restricted to approved policies.
+    /// @param cushionSpread_   Percent spread to set the cushions at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
+    /// @param wallSpread_      Percent spread to set the walls at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev The new spreads will not go into effect until the next time updatePrices() is called.
     function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
         external
@@ -264,6 +298,9 @@ contract OlympusRange is Module {
         _range.cushion.spread = cushionSpread_;
     }
 
+    /// @notice                 Set the threshold factor for when a wall is considered "down".
+    /// @notice                 Access restricted to approved policies.
+    /// @param thresholdFactor_ Percent of capacity that the wall should close below, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
     function setThresholdFactor(uint256 thresholdFactor_)
         external
@@ -279,10 +316,13 @@ contract OlympusRange is Module {
 
     /* ========== VIEW FUNCTIONS ========== */
 
+    /// @notice Get the full Range data in a struct.
     function range() external view returns (Range memory) {
         return _range;
     }
 
+    /// @notice         Get the capacity for a side of the range.
+    /// @param high_    Specifies the side of the range to get capacity for (true = high side, false = low side).
     function capacity(bool high_) external view returns (uint256) {
         if (high_) {
             return _range.high.capacity;
@@ -291,6 +331,8 @@ contract OlympusRange is Module {
         }
     }
 
+    /// @notice         Get the status of a side of the range (whether it is active or not).
+    /// @param high_    Specifies the side of the range to get status for (true = high side, false = low side).
     function active(bool high_) external view returns (bool) {
         if (high_) {
             return _range.high.active;
@@ -299,6 +341,9 @@ contract OlympusRange is Module {
         }
     }
 
+    /// @notice         Get the price for the wall or cushion for a side of the range.
+    /// @param wall_    Specifies the band to get the price for (true = wall, false = cushion).
+    /// @param high_    Specifies the side of the range to get the price for (true = high side, false = low side).
     function price(bool wall_, bool high_) external view returns (uint256) {
         if (wall_) {
             if (high_) {
@@ -315,6 +360,8 @@ contract OlympusRange is Module {
         }
     }
 
+    /// @notice        Get the spread for the wall or cushion band.
+    /// @param wall_   Specifies the band to get the spread for (true = wall, false = cushion).
     function spread(bool wall_) external view returns (uint256) {
         if (wall_) {
             return _range.wall.spread;
@@ -323,6 +370,8 @@ contract OlympusRange is Module {
         }
     }
 
+    /// @notice         Get the market ID for a side of the range.
+    /// @param high_    Specifies the side of the range to get market for (true = high side, false = low side).
     function market(bool high_) external view returns (uint256) {
         if (high_) {
             return _range.high.market;
@@ -331,6 +380,8 @@ contract OlympusRange is Module {
         }
     }
 
+    /// @notice         Get the last market capacity for a side of the range.
+    /// @param high_    Specifies the side of the range to get last market capacity for (true = high side, false = low side).
     function lastMarketCapacity(bool high_) external view returns (uint256) {
         if (high_) {
             return _range.high.lastMarketCapacity;

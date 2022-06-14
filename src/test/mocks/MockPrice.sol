@@ -61,10 +61,6 @@ contract MockPrice is Module {
         return currentPrice;
     }
 
-    function getDecimals() external view returns (uint8) {
-        return decimals;
-    }
-
     /* ========== TESTING FUNCTIONS ========== */
     function setMovingAverage(uint256 movingAverage_) external {
         movingAverage = movingAverage_;

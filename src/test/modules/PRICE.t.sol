@@ -103,7 +103,7 @@ contract PriceTest is DSTest {
 
         /// Set scaling value for calculations
         uint256 scale = 10 **
-            (price.getDecimals() +
+            (price.decimals() +
                 reserveEthPriceFeed.decimals() -
                 ohmEthPriceFeed.decimals());
 
@@ -245,7 +245,6 @@ contract PriceTest is DSTest {
     /// [X] getCurrentPrice
     /// [X] getLastPrice
     /// [X] getMovingAverage
-    /// [X] getDecimals
     /// [X] cannot get prices before initialization
 
     function testCorrectness_getCurrentPrice(uint8 nonce) public {
@@ -263,7 +262,7 @@ contract PriceTest is DSTest {
         assertEq(
             currentPrice,
             ohmEthPrice.mulDiv(
-                10**(reserveEthPriceFeed.decimals() + price.getDecimals()),
+                10**(reserveEthPriceFeed.decimals() + price.decimals()),
                 reserveEthPrice * 10**ohmEthPriceFeed.decimals()
             )
         );
@@ -297,11 +296,6 @@ contract PriceTest is DSTest {
         /// Check that the moving average is correct (use a range since the simpler method missing a little on rounding)
         assertGt(expMovingAverage, movingAverage.mulDiv(999, 1000));
         assertLt(expMovingAverage, movingAverage.mulDiv(1001, 1000));
-    }
-
-    function testCorrectness_getDecimals() public {
-        /// Check the the decimals value is set as initialized
-        assertEq(uint8(18), price.getDecimals());
     }
 
     function testCorrectness_viewsRevertBeforeInitialization() public {
@@ -405,7 +399,7 @@ contract PriceTest is DSTest {
         /// Check that the window variables and moving average are updated correctly
         assertEq(price.numObservations(), uint48(15));
         assertEq(price.movingAverageDuration(), uint48(5 days));
-        assertEq(price.movingAverage(), expMovingAverage);
+        assertEq(price.getMovingAverage(), expMovingAverage);
     }
 
     function testCorrectness_changeMovingAverageDurationLonger(uint8 nonce)

@@ -7,7 +7,7 @@ interface IHeart {
     /* ========== KEEPER FUNCTIONS ========== */
     /// @notice Beats the heart
     /// @notice Only callable when enough time has passed since last beat (determined by frequency variable)
-    /// @notice This function is incentivized with an OHM reward
+    /// @notice This function is incentivized with a token reward (see rewardToken and reward variables).
     /// @dev    Triggers price oracle update and market operations
     function beat() external;
 

@@ -20,6 +20,16 @@ import {Kernel, Policy} from "../Kernel.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
+/// @title  Olympus Range Operator
+/// @notice Olympus Range Operator (Policy) Contract
+/// @dev    The Olympus Range Operator performs market operations to enforce OlympusDAO's OHM price range
+///         guidance policies against a specific reserve asset. The Operator is maintained by a keeper-triggered
+///         function on the Olympus Heart contract, which orchestrates state updates in the correct order to ensure
+///         market operations use up to date information. When the price of OHM against the reserve asset exceeds
+///         the cushion spread, the Operator deploys bond markets to support the price. The Operator also offers
+///         zero slippage swaps at prices dictated by the wall spread from the moving average. These market operations
+///         are performed up to a specific capacity before the market must stabilize to regenerate the capacity.
+/// @author Oighty, Zeus, indigo
 contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     using TransferHelper for ERC20;
     using FullMath for uint256;
@@ -37,8 +47,11 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
     /* ========== STATE VARIABLES ========== */
 
+    /// Operator variables, defined in the interface on the external getter functions
     Status internal _status;
     Config internal _config;
+
+    /// @notice    Whether the Operator has been initialized
     bool public initialized;
 
     /// Modules
@@ -48,15 +61,19 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     OlympusMinter internal MINTR;
 
     /// External contracts
+    /// @notice     Auctioneer contract used for cushion bond market deployments
     IBondAuctioneer public auctioneer;
+    /// @notice     Callback contract used for cushion bond market payouts
     IBondCallback public callback;
 
     /// Tokens
+    /// @notice     OHM token contract
     ERC20 public immutable ohm;
+    /// @notice     Reserve token contract
     ERC20 public immutable reserve;
 
     /// Constants
-    uint32 constant FACTOR_SCALE = 1e4;
+    uint32 public constant FACTOR_SCALE = 1e4;
 
     /* ========== CONSTRUCTOR ========== */
     constructor(
@@ -93,7 +110,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
-
+    /// @inheritdoc Policy
     function configureReads() external override onlyKernel {
         PRICE = OlympusPrice(getModuleAddress("PRICE"));
         RANGE = OlympusRange(getModuleAddress("RANGE"));
@@ -103,6 +120,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         setAuthority(Authority(getModuleAddress("AUTHR")));
     }
 
+    /// @inheritdoc Policy
     function requestWrites()
         external
         view
@@ -117,9 +135,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     }
 
     /* ========== HEART FUNCTIONS ========== */
-    /// @notice     Executes market operations logic on each system heartbeat.
-    /// @notice     Access restricted
-    /// @dev        This function is triggered by a keeper on the Heart contract.
+    /// @inheritdoc IOperator
     function operate() external override requiresAuth {
         /// Revert if not initialized
         if (!initialized) revert Operator_NotInitialized();
@@ -206,7 +222,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     }
 
     /* ========== OPEN MARKET OPERATIONS (WALL) ========== */
-
+    /// @inheritdoc IOperator
     function swap(ERC20 tokenIn_, uint256 amountIn_)
         external
         override
@@ -255,7 +271,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     }
 
     /* ========== BOND MARKET OPERATIONS (CUSHION) ========== */
-
+    /// @notice      Activate a cushion by deploying a bond market
+    /// @param high_ Whether the cushion is for the high or low side of the range (true = high, false = low)
     function _activate(bool high_) internal {
         OlympusRange.Range memory range = RANGE.range();
 
@@ -267,7 +284,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
                 (priceDecimals / 2);
 
             /// Calculate scale with scale adjustment and format prices for bond market
-            uint8 oracleDecimals = PRICE.getDecimals();
+            uint8 oracleDecimals = PRICE.decimals();
             uint256 scale = 10 **
                 uint8(
                     36 +
@@ -323,7 +340,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
             RANGE.updateMarket(true, market, marketCapacity);
         } else {
             /// Calculate inverse prices from the oracle feed for the low side
-            uint8 oracleDecimals = PRICE.getDecimals();
+            uint8 oracleDecimals = PRICE.decimals();
             uint256 invCushionPrice = 10**(oracleDecimals * 2) /
                 range.cushion.low.price;
             uint256 invWallPrice = 10**(oracleDecimals * 2) /
@@ -392,6 +409,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         }
     }
 
+    /// @notice      Deactivate a cushion by closing a bond market (if it is active)
+    /// @param high_ Whether the cushion is for the high or low side of the range (true = high, false = low)
     function _deactivate(bool high_) internal {
         uint256 market = RANGE.market(high_);
         if (auctioneer.isLive(market)) {
@@ -400,6 +419,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         }
     }
 
+    /// @notice         Helper function to calculate number of price decimals based on the value returned from the price feed.
+    /// @param price_   The price to calculate the number of decimals for
+    /// @return         The number of decimals
     function _getPriceDecimals(uint256 price_) internal view returns (int8) {
         int8 decimals;
         while (price_ > 10) {
@@ -407,12 +429,13 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
             decimals++;
         }
 
-        /// Subtract the stated decimals from the calculated decimals
-        /// to get the relative price decimals
-        return decimals - int8(PRICE.getDecimals());
+        /// Subtract the stated decimals from the calculated decimals to get the relative price decimals.
+        /// Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
+        return decimals - int8(PRICE.decimals());
     }
 
     /* ========== OPERATOR CONFIGURATION ========== */
+    /// @inheritdoc IOperator
     function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
         external
         requiresAuth
@@ -424,6 +447,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         _updateRangePrices();
     }
 
+    /// @inheritdoc IOperator
     function setThresholdFactor(uint256 thresholdFactor_)
         external
         requiresAuth
@@ -432,6 +456,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         RANGE.setThresholdFactor(thresholdFactor_);
     }
 
+    /// @inheritdoc IOperator
     function setCushionFactor(uint32 cushionFactor_) external requiresAuth {
         /// Confirm factor is within allowed values
         if (cushionFactor_ > 10000 || cushionFactor_ < 100)
@@ -441,10 +466,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         _config.cushionFactor = cushionFactor_;
     }
 
-    /// @notice                 Update the parameters used to deploy the cushion bond markets
-    /// @param duration_        Duration of the market
-    /// @param debtBuffer_      Percentage over the initial debt to allow the market to accumulate at anyone time. Percent with 3 decimals, e.g. 1_000 = 1 %. See IBondAuctioneer for more info.
-    /// @param depositInterval_ Target frequency of deposits. Determines max payout of the bond market. See IBondAuctioneer for more info.
+    /// @inheritdoc IOperator
     function setCushionParams(
         uint32 duration_,
         uint32 debtBuffer_,
@@ -463,6 +485,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         _config.cushionDepositInterval = depositInterval_;
     }
 
+    /// @inheritdoc IOperator
     function setReserveFactor(uint32 reserveFactor_) external requiresAuth {
         /// Confirm factor is within allowed values
         if (reserveFactor_ > 10000 || reserveFactor_ < 100)
@@ -472,6 +495,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         _config.reserveFactor = reserveFactor_;
     }
 
+    /// @inheritdoc IOperator
     function setRegenParams(
         uint32 wait_,
         uint32 threshold_,
@@ -487,9 +511,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         _config.regenObserve = observe_;
     }
 
-    /// @notice                 Update the contracts that the Operator deploys bond markets with.
-    /// @param auctioneer_      Address of the bond auctioneer to use.
-    /// @param callback_        Address of the callback to use.
+    /// @inheritdoc IOperator
     function setBondContracts(
         IBondAuctioneer auctioneer_,
         IBondCallback callback_
@@ -503,6 +525,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         callback = callback_;
     }
 
+    /// @inheritdoc IOperator
     function initialize() external requiresAuth {
         /// Can only call once
         if (initialized) revert Operator_AlreadyInitialized();
@@ -520,6 +543,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
     /* ========== INTERNAL FUNCTIONS ========== */
 
+    /// @notice          Update the capacity on the RANGE module.
+    /// @param high_     Whether to update the high side or low side capacity (true = high, false = low).
+    /// @param reduceBy_ The amount to reduce the capacity by (OHM tokens for high side, Reserve tokens for low side).
     function _updateCapacity(bool high_, uint256 reduceBy_) internal {
         /// Get the market for the side
         uint256 market = RANGE.market(high_);
@@ -541,6 +567,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         RANGE.updateCapacity(high_, capacity, marketCapacity);
     }
 
+    /// @notice Update the prices on the RANGE module
     function _updateRangePrices() internal {
         /// Get latest moving average from the price module
         uint256 movingAverage = PRICE.getMovingAverage();
@@ -549,6 +576,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         RANGE.updatePrices(movingAverage);
     }
 
+    /// @notice Add an observation to the regeneration status variables for each side
     function _addObservation() internal {
         /// Get latest moving average from the price module
         uint256 movingAverage = PRICE.getMovingAverage();
@@ -559,7 +587,6 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         uint256 currentPrice = PRICE.getLastPrice();
 
         /// Store observations and update counts for regeneration
-        /// TODO Should this check if either side is inactive first? may save some gas
 
         /// Update low side regen status with a new observation
         /// Observation is positive if the current price is greater than the MA
@@ -595,6 +622,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         _status.high.nextObservation = (regen.nextObservation + 1) % observe;
     }
 
+    /// @notice      Regenerate the wall for a side
+    /// @param high_ Whether to regenerate the high side or low side (true = high, false = low)
     function _regenerate(bool high_) internal {
         if (high_) {
             /// Reset the regeneration data for the side
@@ -623,6 +652,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         }
     }
 
+    /// @notice      Takes down cushions (if active) when a wall is taken down
+    /// @param high_ Whether to check the high side or low side cushion (true = high, false = low)
     function _checkCushion(bool high_) internal {
         /// Check if the wall is down, if so ensure the cushion is also down
         if (!RANGE.active(high_)) {
@@ -634,7 +665,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     }
 
     /* ========== VIEW FUNCTIONS ========== */
-
+    /// @inheritdoc IOperator
     function getAmountOut(ERC20 tokenIn_, uint256 amountIn_)
         public
         view
@@ -644,7 +675,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
             /// Calculate amount out
             uint256 amountOut = amountIn_
                 .mulDiv(10**reserve.decimals(), 10**ohm.decimals())
-                .mulDiv(RANGE.price(true, false), 10**PRICE.getDecimals());
+                .mulDiv(RANGE.price(true, false), 10**PRICE.decimals());
 
             /// Revert if amount out exceeds capacity
             if (amountOut > RANGE.capacity(false))
@@ -659,28 +690,31 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
             /// Calculate amount out
             uint256 amountOut = amountIn_
                 .mulDiv(10**ohm.decimals(), 10**reserve.decimals())
-                .mulDiv(10**PRICE.getDecimals(), RANGE.price(true, true));
+                .mulDiv(10**PRICE.decimals(), RANGE.price(true, true));
 
             return amountOut;
         }
     }
 
+    /// @inheritdoc IOperator
     function fullCapacity(bool high_) public view override returns (uint256) {
         uint256 reservesInTreasury = TRSRY.getReserveBalance(reserve);
         uint256 capacity = (reservesInTreasury * _config.reserveFactor) /
             FACTOR_SCALE;
         if (high_) {
             capacity = capacity
-                .mulDiv(10**PRICE.getDecimals(), RANGE.price(true, true))
+                .mulDiv(10**PRICE.decimals(), RANGE.price(true, true))
                 .mulDiv(FACTOR_SCALE + RANGE.spread(true) * 2, FACTOR_SCALE);
         }
         return capacity;
     }
 
+    /// @inheritdoc IOperator
     function status() external view override returns (Status memory) {
         return _status;
     }
 
+    /// @inheritdoc IOperator
     function config() external view override returns (Config memory) {
         return _config;
     }

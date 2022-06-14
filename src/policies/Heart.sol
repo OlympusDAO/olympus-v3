@@ -14,6 +14,12 @@ import {Kernel, Policy} from "../Kernel.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+/// @title  Olympus Heart
+/// @notice Olympus Heart (Policy) Contract
+/// @dev    The Olympus Heart contract provides keeper rewards to call the heart beat function which fuels
+///         Olympus market operations. The Heart orchestrates state updates in the correct order to ensure
+///         market operations use up to date information.
+/// @author Oighty, Zeus, indigo
 contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
     using TransferHelper for ERC20;
 
