@@ -26,6 +26,7 @@ address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 contract OlympusTreasury is Module {
     using TransferHelper for ERC20;
 
+    // TODO are these correct tense?
     event ApprovedForWithdrawal(
         address indexed policy_,
         ERC20 indexed token_,
@@ -33,6 +34,7 @@ contract OlympusTreasury is Module {
     );
     event Withdrawal(
         address indexed policy_,
+        address indexed withdrawer_,
         ERC20 indexed token_,
         uint256 amount_
     );
@@ -76,9 +78,14 @@ contract OlympusTreasury is Module {
         return "TRSRY";
     }
 
+    /* 
+    TODO breaks getModuleAddress
+    TODO TypeError: Explicit type conversion not allowed from non-payable "address"
+    TODO to "contract OlympusTreasury", which has a payable fallback function.
     receive() external payable {
         WETH(WETH_ADDRESS).deposit{value: msg.value}();
     }
+    */
 
     function getReserveBalance(ERC20 token_) external view returns (uint256) {
         return token_.balanceOf(address(this)) + totalDebt[token_];
@@ -86,49 +93,52 @@ contract OlympusTreasury is Module {
 
     // Must be carefully managed by governance.
     function requestApprovalFor(
-        address policy_,
+        address withdrawer_,
         ERC20 token_,
         uint256 amount_
     ) external onlyPermittedPolicies {
-        withdrawApproval[policy_][token_] = amount_;
+        withdrawApproval[withdrawer_][token_] = amount_;
 
-        emit ApprovedForWithdrawal(policy_, token_, amount_);
+        emit ApprovedForWithdrawal(withdrawer_, token_, amount_);
     }
 
-    function withdrawReserves(ERC20 token_, uint256 amount_)
-        public
-        onlyPermittedPolicies
-    {
+    function withdrawReserves(
+        address to_,
+        ERC20 token_,
+        uint256 amount_
+    ) public onlyPermittedPolicies {
         uint256 approval = withdrawApproval[msg.sender][token_];
         if (approval < amount_) revert TRSRY_NotApproved();
 
-        if (approval != type(uint256).max) {
+        if (approval != type(uint256).max)
             withdrawApproval[msg.sender][token_] = approval - amount_;
-        }
 
-        token_.safeTransfer(msg.sender, amount_);
+        token_.safeTransfer(to_, amount_);
 
-        emit Withdrawal(msg.sender, token_, amount_);
+        emit Withdrawal(msg.sender, to_, token_, amount_);
     }
 
     // Anyone can call to revoke a terminated policy's approvals
-    function revokeApprovals(address policy_, ERC20[] memory tokens_) external {
-        if (kernel.approvedPolicies(policy_) == true) {
+    function revokeApprovals(address withdrawer_, ERC20[] memory tokens_)
+        external
+    {
+        if (kernel.approvedPolicies(msg.sender) == true)
             revert TRSRY_PolicyStillActive();
-        }
 
         uint256 len = tokens_.length;
         for (uint256 i; i < len; ) {
-            withdrawApproval[policy_][tokens_[i]] = 0;
+            withdrawApproval[withdrawer_][tokens_[i]] = 0;
             unchecked {
                 ++i;
             }
         }
 
-        emit ApprovalRevoked(policy_, tokens_);
+        emit ApprovalRevoked(withdrawer_, tokens_);
     }
 
     /// DEBT FUNCTIONS
+
+    // TODO add withdrawer arguments
 
     function loanReserves(ERC20 token_, uint256 amount_)
         external

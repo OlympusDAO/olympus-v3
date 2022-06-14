@@ -11,7 +11,7 @@ import "test-utils/convert.sol";
 
 //// LOCAL
 // types
-import "src/modules/DEMAM.sol";
+import "modules/DEMAM.sol";
 
 contract MERC20 is ERC20 {
     constructor(

@@ -11,7 +11,7 @@ import "test-utils/convert.sol";
 import "test-utils/errors.sol";
 
 /// LOCAL
-import "src/modules/VOPOM.sol";
+import "modules/VOPOM.sol";
 
 int32 constant rightnow = 1652036143;
 uint256 constant fourYears = 4 * 365 * 24 * 3600;

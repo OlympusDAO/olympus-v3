@@ -4,9 +4,9 @@ pragma solidity ^0.8.10;
 error Module_OnlyPermissionedPolicy(address caller_);
 
 abstract contract Module {
-    IKernel public _kernel;
+    Kernel public _kernel;
 
-    constructor(IKernel kernel_) {
+    constructor(Kernel kernel_) {
         _kernel = kernel_;
     }
 
@@ -23,9 +23,9 @@ abstract contract Policy {
     error Policy_ModuleDoesNotExist(bytes5 keycode_);
     error Policy_OnlyKernel(address caller_);
 
-    IKernel public _kernel;
+    Kernel public _kernel;
 
-    constructor(IKernel kernel_) {
+    constructor(Kernel kernel_) {
         _kernel = kernel_;
     }
 
@@ -69,21 +69,7 @@ struct Instruction {
 }
 
 // Core kernel functions for modules and policies to work
-interface IKernel {
-    function getWritePermissions(bytes5 keycode_, address caller_)
-        external
-        view
-        returns (bool);
-
-    function getModuleForKeycode(bytes5 keycode_)
-        external
-        view
-        returns (address);
-
-    function executeAction(Actions action_, address target_) external;
-}
-
-contract Kernel is IKernel {
+contract Kernel {
     event Kernel_WritePermissionsUpdated(
         bytes5 indexed keycode_,
         address indexed policy_,

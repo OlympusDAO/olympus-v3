@@ -9,7 +9,7 @@ import "test-utils/errors.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import "src/modules/TRSRY.sol";
-import "../../test/larps/LarpKernel.sol";
+import "../larps/LarpKernel.sol";
 import {OlympusERC20Token} from "../../external/OlympusERC20.sol";
 
 contract TRSRYTest is Test {
@@ -72,9 +72,9 @@ contract TRSRYTest is Test {
         TRSRY.requestApprovalFor(policyOne, ngmi, amount_);
 
         vm.prank(policyOne);
-        TRSRY.withdrawReserves(ngmi, amount_);
+        TRSRY.withdrawReserves(address(this), ngmi, amount_);
 
-        assertEq(ngmi.balanceOf(policyOne), amount_);
+        assertEq(ngmi.balanceOf(address(this)), amount_);
     }
 
     // TODO test if can withdraw more than allowed amount
@@ -91,14 +91,14 @@ contract TRSRYTest is Test {
             )
         );
         vm.prank(policyTwo);
-        TRSRY.withdrawReserves(ngmi, amount_);
+        TRSRY.withdrawReserves(address(this), ngmi, amount_);
 
         kernel.grantWritePermissions(TRSRY.KEYCODE(), policyTwo);
 
         // Fail withdrawal using policy without approval
         vm.expectRevert(TRSRY_NotApproved.selector);
         vm.prank(policyTwo);
-        TRSRY.withdrawReserves(ngmi, amount_);
+        TRSRY.withdrawReserves(address(this), ngmi, amount_);
     }
 
     // TODO test debt functions

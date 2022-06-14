@@ -21,6 +21,7 @@ contract OlympusMinter is Module {
         onlyPermittedPolicies
     {
         ohm.mint(to_, amount_);
+        // TODO emit event that shows which policy called this
     }
 
     function burnOhm(address from_, uint256 amount_)
@@ -28,5 +29,6 @@ contract OlympusMinter is Module {
         onlyPermittedPolicies
     {
         ohm.burnFrom(from_, amount_);
+        // TODO emit event that shows which policy called this
     }
 }

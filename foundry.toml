@@ -10,6 +10,7 @@ remappings = [
     'interfaces/=src/interfaces',
     'modules/=src/modules',
     'policies/=src/policies',
+    'libraries/=src/libraries',
 ]
 
 [fried]

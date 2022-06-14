@@ -7,8 +7,9 @@ import "src/OlympusErrors.sol";
 
 // types
 import {Kernel, Module} from "src/Kernel.sol";
+import {Authority} from "solmate/auth/Auth.sol";
 
-contract AUTHR is Module {
+contract OlympusAuthority is Module, Authority {
     mapping(address => bytes32) public getUserRoles;
 
     mapping(address => mapping(bytes4 => bool)) public isCapabilityPublic;
@@ -65,7 +66,7 @@ contract AUTHR is Module {
         address user,
         address target,
         bytes4 functionSig
-    ) public view virtual returns (bool) {
+    ) public view virtual override returns (bool) {
         return
             isCapabilityPublic[target][functionSig] ||
             bytes32(0) !=

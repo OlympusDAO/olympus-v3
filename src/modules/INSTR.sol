@@ -4,14 +4,14 @@
 
 pragma solidity ^0.8.10;
 
-import {IKernel, Module, Instruction, Actions} from "../Kernel.sol";
+import {Kernel, Module, Instruction, Actions} from "../Kernel.sol";
 
 contract Instructions is Module {
     /////////////////////////////////////////////////////////////////////////////////
     //                         Kernel Module Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
 
-    constructor(IKernel kernel_) Module(kernel_) {}
+    constructor(Kernel kernel_) Module(kernel_) {}
 
     function KEYCODE() public pure override returns (bytes5) {
         return "INSTR";
