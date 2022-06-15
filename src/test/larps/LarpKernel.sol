@@ -15,8 +15,4 @@ contract LarpKernel is Kernel {
         getWritePermissions[keycode_][policy_] = true;
         approvedPolicies[policy_] = true;
     }
-
-    function setExecutor(address exec_) external {
-        executor = exec_;
-    }
 }
