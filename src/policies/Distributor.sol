@@ -2,13 +2,15 @@
 pragma solidity ^0.8.10;
 
 /// Import External Dependencies
-import "solmate/auth/Auth.sol";
+import {Auth, Authority} from "solmate/auth/Auth.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// Import Local Dependencies
 import {Kernel, Policy} from "src/Kernel.sol";
-import "src/modules/TRSRY.sol";
-import "src/modules/MINTR.sol";
+import {OlympusTreasury} from "src/modules/TRSRY.sol";
+import {OlympusMinter} from "src/modules/MINTR.sol";
+
+/// Import interfaces
 import "src/interfaces/Uniswap/IUniswapV2Pair.sol";
 
 /// Define Inline Interfaces
@@ -29,6 +31,7 @@ struct Adjust {
 }
 
 /// Define Custom Errors
+error Distributor_InvalidConstruction();
 error Distributor_NoRebaseOccurred();
 error Distributor_OnlyStaking();
 error Distributor_NotUnlocked();
@@ -69,7 +72,13 @@ contract Distributor is Auth, Policy {
         address staking_,
         uint256 initialRate_
     ) Auth(kernel_, Authority(msg.sender)) Policy(Kernel(kernel_)) {
-        // Add in 0 address checks
+        if (
+            kernel_ == address(0) ||
+            ohm_ == address(0) ||
+            staking_ == address(0) ||
+            initialRate_ == 0
+        ) revert Distributor_InvalidConstruction();
+
         ohm = ERC20(ohm_);
         staking = staking_;
         rewardRate = initialRate_;
