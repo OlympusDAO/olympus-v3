@@ -8,8 +8,8 @@ import "test-utils/UserFactory.sol";
 import "test-utils/larping.sol";
 import "test-utils/sorting.sol";
 
-import {OlympusMinter} from "src/modules/MINTR.sol";
-import {LarpKernel} from "../../test/larps/LarpKernel.sol";
+import {OlympusMinter} from "modules/MINTR.sol";
+import {LarpKernel} from "../larps/LarpKernel.sol";
 import {OlympusERC20Token, IOlympusAuthority} from "../../external/OlympusERC20.sol";
 
 //import {OlympusAuthority} from "../../external/OlympusAuthority.sol";

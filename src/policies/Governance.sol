@@ -4,7 +4,7 @@
 
 pragma solidity ^0.8.10;
 
-import {IKernel, Policy} from "../Kernel.sol";
+import {Kernel, Policy} from "../Kernel.sol";
 import "../modules/INSTR.sol";
 import "../modules/VOTES.sol";
 
@@ -16,7 +16,7 @@ contract Governance is Policy {
     Instructions public INSTR;
     Votes public VOTES;
 
-    constructor(IKernel kernel_) Policy(kernel_) {}
+    constructor(Kernel kernel_) Policy(kernel_) {}
 
     function configureReads() external override {
         INSTR = Instructions(getModuleAddress("INSTR"));

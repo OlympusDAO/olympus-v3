@@ -13,15 +13,17 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 /// Import Distributor
 import "src/policies/Distributor.sol";
 import "src/Kernel.sol";
-import "src/modules/AUTHR.sol";
+import {OlympusAuthority} from "src/modules/AUTHR.sol";
+import {OlympusMinter} from "src/modules/MINTR.sol";
+import {OlympusTreasury} from "src/modules/TRSRY.sol";
 
 /// Import Mocks for non-Bophades contracts
-import {MockStaking} from "./mocks/MockStaking.sol";
-import {MockGOHM} from "./mocks/MockGOHM.sol";
-import {MockSOHM} from "./mocks/MockSOHM.sol";
-import {MockUniV2Pair} from "./mocks/MockUniV2Pair.sol";
+import {MockStaking} from "../mocks/MockStaking.sol";
+import {MockGOHM} from "../mocks/MockGOHM.sol";
+import {MockSOHM} from "../mocks/MockSOHM.sol";
+import {MockUniV2Pair} from "../mocks/MockUniV2Pair.sol";
 import {OlympusERC20Token as OHM, IOlympusAuthority} from "src/external/OlympusERC20.sol";
-import {MockLegacyAuthority} from "src/modules/test/MINTR.t.sol";
+import {MockLegacyAuthority} from "../modules/MINTR.t.sol";
 
 contract DistributorTest is Test {
     using larping for *;
@@ -32,7 +34,7 @@ contract DistributorTest is Test {
     Kernel internal kernel;
     OlympusMinter internal mintr;
     OlympusTreasury internal trsry;
-    AUTHR internal authr;
+    OlympusAuthority internal authr;
     Distributor internal distributor;
 
     /// Tokens
@@ -72,7 +74,7 @@ contract DistributorTest is Test {
             /// Deploy Bophades Modules
             mintr = new OlympusMinter(kernel, ohm);
             trsry = new OlympusTreasury(kernel);
-            authr = new AUTHR(address(kernel));
+            authr = new OlympusAuthority(address(kernel));
         }
 
         {

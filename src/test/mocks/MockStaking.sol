@@ -137,6 +137,9 @@ contract MockStaking {
     ) external returns (uint256) {
         OHM.transferFrom(msg.sender, address(this), amount_);
         amount_ = amount_ + rebase();
+        if (claim_) {
+            // Do nothing, not relevant for a mock to test Distributor
+        }
         return _send(to_, amount_, rebasing_);
     }
 

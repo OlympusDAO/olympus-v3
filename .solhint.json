@@ -4,6 +4,9 @@
     "compiler-version": ["error",">=0.7.5"], 
     "avoid-low-level-calls": "off",
     "const-name-snakecase": "off",
+    "var-name-mixedcase": "off",
+    "func-name-mixedcase": "off",
+    "not-rely-on-time": "off",
     "func-visibility": [ "warn", { "ignoreConstructors":true }]
   }
 }
