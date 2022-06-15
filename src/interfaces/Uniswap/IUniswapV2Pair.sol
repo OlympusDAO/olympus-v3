@@ -4,9 +4,9 @@ pragma solidity >=0.8.10;
 import "./IUniswapV2ERC20.sol";
 
 interface IUniswapV2Pair is IUniswapV2ERC20 {
-    function token0() external pure returns (address);
+    function token0() external view returns (address);
 
-    function token1() external pure returns (address);
+    function token1() external view returns (address);
 
     function swap(
         uint256 amount0Out,

@@ -16,19 +16,19 @@ contract AUTHR is Module {
     mapping(address => mapping(bytes4 => bytes32))
         public getRolesWithCapability;
 
-    event AUTHR_UserRoleUpdated(
+    event UserRoleUpdated(
         address indexed user,
         uint8 indexed role,
         bool enabled
     );
 
-    event AUTHR_PublicCapabilityUpdated(
+    event PublicCapabilityUpdated(
         address indexed target,
         bytes4 indexed functionSig,
         bool enabled
     );
 
-    event AUTHR_RoleCapabilityUpdated(
+    event RoleCapabilityUpdated(
         uint8 indexed role,
         address indexed target,
         bytes4 indexed functionSig,
@@ -76,10 +76,10 @@ contract AUTHR is Module {
         address target,
         bytes4 functionSig,
         bool enabled
-    ) public virtual onlyPermitted {
+    ) public virtual onlyPermittedPolicies {
         isCapabilityPublic[target][functionSig] = enabled;
 
-        emit AUTHR_PublicCapabilityUpdated(target, functionSig, enabled);
+        emit PublicCapabilityUpdated(target, functionSig, enabled);
     }
 
     function setRoleCapability(
@@ -87,27 +87,27 @@ contract AUTHR is Module {
         address target,
         bytes4 functionSig,
         bool enabled
-    ) public virtual onlyPermitted {
+    ) public virtual onlyPermittedPolicies {
         if (enabled) {
             getRolesWithCapability[target][functionSig] |= bytes32(1 << role);
         } else {
             getRolesWithCapability[target][functionSig] &= ~bytes32(1 << role);
         }
 
-        emit AUTHR_RoleCapabilityUpdated(role, target, functionSig, enabled);
+        emit RoleCapabilityUpdated(role, target, functionSig, enabled);
     }
 
     function setUserRole(
         address user,
         uint8 role,
         bool enabled
-    ) public virtual onlyPermitted {
+    ) public virtual onlyPermittedPolicies {
         if (enabled) {
             getUserRoles[user] |= bytes32(1 << role);
         } else {
             getUserRoles[user] &= ~bytes32(1 << role);
         }
 
-        emit AUTHR_UserRoleUpdated(user, role, enabled);
+        emit UserRoleUpdated(user, role, enabled);
     }
 }

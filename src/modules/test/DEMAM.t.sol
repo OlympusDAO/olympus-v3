@@ -13,6 +13,14 @@ import "test-utils/convert.sol";
 // types
 import "src/modules/DEMAM.sol";
 
+contract MERC20 is ERC20 {
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        uint8 _decimals
+    ) ERC20(_name, _symbol, _decimals) {}
+}
+
 contract DEMAMTest is Test {
     using larping for *;
     using convert for *;
@@ -31,12 +39,7 @@ contract DEMAMTest is Test {
     function setUp() public {
         demam = new DepositManagementModule(address(this));
         victims = new UserFactory();
-        ohm = ERC20(
-            deployCode(
-                "MockERC20.t.sol:MockERC20",
-                abi.encode("ohm", "OHM", "9")
-            )
-        );
+        ohm = new MERC20("ohm", "OHM", 9);
 
         ohma = address(ohm);
         demama = address(demam);
@@ -77,12 +80,16 @@ contract DEMAMTest is Test {
         uint256 index = demam.takeAndLockTokens(usr, ohma, amount, period);
 
         uint256 bal1 = demam.getUserLockBalance(usr, ohma, index);
-        uint256 lock = demam.getUserLock(usr, ohma, index);
+        DepositManagementModule.Lock memory lock = demam.getUserLock(
+            usr,
+            ohma,
+            index
+        );
 
         assertEq(bal1, amount);
         assertEq(bal1, demam.lockedBalanceOf(usr, ohma));
-        assertEq(uint224(lock >> 32), bal1);
-        assertEq(uint32((lock << 32) >> 32), period);
+        assertEq(lock.balance, bal1);
+        assertEq(lock.end, period);
 
         uint224 am = amount / 2 + 2;
         uint32 per = period / 2 + 2;
@@ -95,8 +102,8 @@ contract DEMAMTest is Test {
 
         assertEq(bal2, am);
         assertEq(bal1 + bal2, demam.lockedBalanceOf(usr, ohma));
-        assertEq(uint224(lock >> 32), bal2);
-        assertEq(uint32((lock << 32) >> 32), per);
+        assertEq(lock.balance, bal2);
+        assertEq(lock.end, per);
 
         vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
         demam.takeAndLockTokens(usrs[1], ohma, 1e19 + 23, period);
@@ -160,7 +167,6 @@ contract DEMAMTest is Test {
         uint224 am = amount / 2 + 2;
         uint224 am2 = amount / 3 + 3;
         uint32 per = period / 2 + 2;
-        uint32 per2 = period / 3 + 3;
 
         ohm.transferFrom.larp(usr, demama, amount, true);
         ohm.transferFrom.larp(usr, demama, am, true);
@@ -253,9 +259,13 @@ contract DEMAMTest is Test {
         ohm.transfer.larp(usr, amount - am2, true);
         demam.payUnlockedTokens(usr, ohma, amount - am2, indices[0]);
 
-        uint256 lock = demam.getUserLock(usr, ohma, indices[0]);
-        assertEq(uint224(lock >> 32), am2);
-        assertEq(uint32((lock << 224) >> 224), period);
+        DepositManagementModule.Lock memory lock = demam.getUserLock(
+            usr,
+            ohma,
+            indices[0]
+        );
+        assertEq(lock.balance, am2);
+        assertEq(lock.end, period);
 
         ohm.transfer.larp(usr, am2, true);
         demam.payUnlockedTokens(usr, ohma, am2, indices[0]);
@@ -292,7 +302,6 @@ contract DEMAMTest is Test {
         uint224 am = amount / 2 + 2;
         uint224 am2 = amount / 3 + 3;
         uint32 per = period / 2 + 2;
-        uint32 per2 = period / 3 + 3;
 
         ohm.transferFrom.larp(usr, demama, amount, true);
         ohm.transferFrom.larp(usr, demama, am, true);
@@ -330,10 +339,7 @@ contract DEMAMTest is Test {
         address[] memory usrs = victims.create(3);
         address usr = usrs[0];
 
-        uint224 am = amount / 2 + 2;
         uint224 am2 = amount / 3 + 3;
-        uint32 per = period / 2 + 2;
-        uint32 per2 = period / 3 + 3;
 
         ohm.transferFrom.larp(usr, demama, amount, true);
 
@@ -399,9 +405,6 @@ contract DEMAMTest is Test {
         address[] memory usrs = victims.create(2);
         address usr = usrs[0];
         address rec = usrs[1];
-
-        uint224 am = amount / 2 + 2;
-        uint224 am2 = amount / 3 + 3;
 
         ohm.transferFrom.larp(usr, demama, amount, true);
 

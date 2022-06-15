@@ -8,17 +8,18 @@ import "test-utils/UserFactory.sol";
 import "test-utils/larping.sol";
 import "test-utils/convert.sol";
 import "test-utils/errors.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 /// Import Distributor
 import "src/policies/Distributor.sol";
 import "src/Kernel.sol";
 import "src/modules/AUTHR.sol";
 
-/// Import Larps for non-Bophades contracts
-import "./larps/LarpStaking.sol";
-import "./larps/LarpOHM.sol";
-import "./larps/LarpSOHM.sol";
-import "./larps/LarpGOHM.sol";
+/// Import Mocks for non-Bophades contracts
+import {MockStaking} from "./mocks/MockStaking.sol";
+import {MockGOHM} from "./mocks/MockGOHM.sol";
+import {MockSOHM} from "./mocks/MockSOHM.sol";
+import {MockUniV2Pair} from "./mocks/MockUniV2Pair.sol";
 import {OlympusERC20Token as OHM, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {MockLegacyAuthority} from "src/modules/test/MINTR.t.sol";
 
@@ -36,12 +37,18 @@ contract DistributorTest is Test {
 
     /// Tokens
     OHM internal ohm;
-    LarpSOHM internal sohm;
-    LarpGOHM internal gohm;
+    MockSOHM internal sohm;
+    MockGOHM internal gohm;
+    MockERC20 internal dai;
+    MockERC20 internal weth;
 
     /// Legacy Contracts
-    LarpStaking internal larpStaking;
+    MockStaking internal staking;
     IOlympusAuthority internal auth;
+
+    /// External Contracts
+    MockUniV2Pair internal ohmDai;
+    MockUniV2Pair internal ohmWeth;
 
     function setUp() public {
         {
@@ -49,8 +56,16 @@ contract DistributorTest is Test {
             kernel = new Kernel();
             auth = new MockLegacyAuthority(address(0x0));
             ohm = new OHM(address(auth));
-            sohm = new LarpSOHM();
-            gohm = new LarpGOHM(address(this), address(sohm));
+            sohm = new MockSOHM();
+            gohm = new MockGOHM(address(this), address(sohm));
+            dai = new MockERC20("DAI", "DAI", 18);
+            weth = new MockERC20("WETH", "WETH", 18);
+        }
+
+        {
+            /// Deploy UniV2 Pools
+            ohmDai = new MockUniV2Pair(address(ohm), address(dai));
+            ohmWeth = new MockUniV2Pair(address(ohm), address(weth));
         }
 
         {
@@ -71,30 +86,29 @@ contract DistributorTest is Test {
 
         {
             /// Deploy Staking and Distributor
-            larpStaking = new LarpStaking(
+            staking = new MockStaking(
                 address(ohm),
                 address(sohm),
                 address(gohm),
                 2200,
                 0,
-                2200,
-                address(this)
+                2200
             );
 
             distributor = new Distributor(
                 address(kernel),
                 address(ohm),
-                address(larpStaking),
+                address(staking),
                 1000
             );
 
-            larpStaking.setDistributor(address(distributor));
+            staking.setDistributor(address(distributor));
 
             sohm.setgOHM(address(gohm));
-            sohm.initialize(address(larpStaking), address(trsry));
+            sohm.initialize(address(staking), address(trsry));
             sohm.setIndex(10 gwei);
 
-            gohm.approved.larp(address(larpStaking));
+            gohm.approved.larp(address(staking));
         }
 
         {
@@ -103,14 +117,26 @@ contract DistributorTest is Test {
         }
 
         {
-            /// Mint OHM to Staking Contract
+            /// Mint Tokens
             vm.startPrank(address(distributor));
-            mintr.mintOhm(address(larpStaking), 100000 gwei);
+            /// Mint OHM to deployer and staking contract
+            mintr.mintOhm(address(staking), 100000 gwei);
             mintr.mintOhm(address(this), 100000 gwei);
+
+            /// Mint DAI and OHM to OHM-DAI pool
+            mintr.mintOhm(address(ohmDai), 100000 gwei);
+            dai.mint(address(ohmDai), 100000 * 10**18);
+            ohmDai.sync();
+
+            /// Mint WETH and OHM to OHM-WETH pool
+            mintr.mintOhm(address(ohmWeth), 100000 gwei);
+            weth.mint(address(ohmWeth), 100000 * 10**18);
+            ohmWeth.sync();
             vm.stopPrank();
 
-            ohm.approve(address(larpStaking), type(uint256).max);
-            larpStaking.stake(address(this), 100 gwei, true, true);
+            /// Stake deployer's OHM
+            ohm.approve(address(staking), type(uint256).max);
+            staking.stake(address(this), 100 gwei, true, true);
         }
 
         {
@@ -138,7 +164,7 @@ contract DistributorTest is Test {
         assertEq(rate, 0);
         assertEq(target, 0);
 
-        assertEq(ohm.balanceOf(address(larpStaking)), 100100 gwei);
+        assertEq(ohm.balanceOf(address(staking)), 100100 gwei);
     }
 
     /////////////////////////////////////////////////////////////////////////////////
@@ -157,7 +183,7 @@ contract DistributorTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(Distributor_NotUnlocked.selector)
         );
-        vm.prank(address(larpStaking));
+        vm.prank(address(staking));
         distributor.distribute();
     }
 
@@ -172,7 +198,7 @@ contract DistributorTest is Test {
     function test_retrieveBountyIsZero() public {
         uint256 supplyBefore = ohm.totalSupply();
 
-        vm.prank(address(larpStaking));
+        vm.prank(address(staking));
         uint256 bounty = distributor.retrieveBounty();
 
         uint256 supplyAfter = ohm.totalSupply();
@@ -182,12 +208,12 @@ contract DistributorTest is Test {
     }
 
     function test_nextRewardFor() public {
-        uint256 larpStakingBalance = 100100 gwei;
+        uint256 stakingBalance = 100100 gwei;
         uint256 rewardRate = distributor.rewardRate();
         uint256 denominator = 1_000_000;
-        uint256 expected = (larpStakingBalance * rewardRate) / denominator;
+        uint256 expected = (stakingBalance * rewardRate) / denominator;
 
-        assertEq(distributor.nextRewardFor(address(larpStaking)), expected);
+        assertEq(distributor.nextRewardFor(address(staking)), expected);
     }
 
     /// setBounty() tests
@@ -204,14 +230,14 @@ contract DistributorTest is Test {
     /// setPools() tests
     function testFail_setPoolsRequiresAuth() public {
         address[] memory newPools = new address[](2);
-        newPools[0] = address(larpStaking);
+        newPools[0] = address(staking);
         newPools[1] = address(gohm);
         distributor.setPools(newPools);
     }
 
     function test_setPools() public {
         address[] memory newPools = new address[](2);
-        newPools[0] = address(larpStaking);
+        newPools[0] = address(staking);
         newPools[1] = address(gohm);
         vm.prank(address(kernel));
         distributor.setPools(newPools);
@@ -220,19 +246,19 @@ contract DistributorTest is Test {
     function testFail_removePoolRequiresAuth() public {
         /// Set up
         address[] memory newPools = new address[](2);
-        newPools[0] = address(larpStaking);
+        newPools[0] = address(staking);
         newPools[1] = address(gohm);
         vm.prank(address(kernel));
         distributor.setPools(newPools);
 
         /// Remove Pool (should fail)
-        distributor.removePool(0, address(larpStaking));
+        distributor.removePool(0, address(staking));
     }
 
     function test_removePoolSanityCheck() public {
         /// Set up
         address[] memory newPools = new address[](2);
-        newPools[0] = address(larpStaking);
+        newPools[0] = address(staking);
         newPools[1] = address(gohm);
         vm.startPrank(address(kernel));
         distributor.setPools(newPools);
@@ -248,13 +274,13 @@ contract DistributorTest is Test {
     function test_removePool() public {
         /// Set up
         address[] memory newPools = new address[](2);
-        newPools[0] = address(larpStaking);
+        newPools[0] = address(staking);
         newPools[1] = address(gohm);
         vm.startPrank(address(kernel));
         distributor.setPools(newPools);
 
         /// Remove first pool
-        distributor.removePool(0, address(larpStaking));
+        distributor.removePool(0, address(staking));
         assertEq(distributor.pools(0), address(0x0));
         assertEq(distributor.pools(1), address(gohm));
 
@@ -267,7 +293,7 @@ contract DistributorTest is Test {
 
     /// addPool() tests
     function testFail_addPoolRequiresAuth() public {
-        distributor.addPool(0, address(larpStaking));
+        distributor.addPool(0, address(staking));
     }
 
     function test_addPoolEmptySlot() public {
@@ -280,8 +306,8 @@ contract DistributorTest is Test {
         distributor.removePool(0, address(mintr));
         distributor.removePool(1, address(trsry));
 
-        distributor.addPool(0, address(larpStaking));
-        assertEq(distributor.pools(0), address(larpStaking));
+        distributor.addPool(0, address(staking));
+        assertEq(distributor.pools(0), address(staking));
     }
 
     function test_addPoolOccupiedSlot() public {
@@ -292,7 +318,7 @@ contract DistributorTest is Test {
         distributor.setPools(newPools);
         distributor.removePool(0, address(mintr));
         distributor.removePool(1, address(trsry));
-        distributor.addPool(0, address(larpStaking));
+        distributor.addPool(0, address(staking));
 
         distributor.addPool(0, address(gohm));
         assertEq(distributor.pools(2), address(gohm));
@@ -339,15 +365,15 @@ contract DistributorTest is Test {
 
     /// User Story 1: triggerRebase() fails when block timestamp is before epoch end
     function test_triggerRebaseStory1() public {
-        (, , uint256 end, ) = larpStaking.epoch();
+        (, , uint256 end, ) = staking.epoch();
         assertGt(end, block.timestamp);
 
-        uint256 balanceBefore = ohm.balanceOf(address(larpStaking));
+        uint256 balanceBefore = ohm.balanceOf(address(staking));
         vm.expectRevert(
             abi.encodeWithSelector(Distributor_NoRebaseOccurred.selector)
         );
         distributor.triggerRebase();
-        uint256 balanceAfter = ohm.balanceOf(address(larpStaking));
+        uint256 balanceAfter = ohm.balanceOf(address(staking));
         assertEq(balanceBefore, balanceAfter);
     }
 
@@ -355,12 +381,12 @@ contract DistributorTest is Test {
     function test_triggerRebaseStory2() public {
         /// Set up
         vm.warp(2200);
-        (, , uint256 end, ) = larpStaking.epoch();
+        (, , uint256 end, ) = staking.epoch();
         assertLe(end, block.timestamp);
 
-        uint256 balanceBefore = ohm.balanceOf(address(larpStaking));
+        uint256 balanceBefore = ohm.balanceOf(address(staking));
         distributor.triggerRebase();
-        uint256 balanceAfter = ohm.balanceOf(address(larpStaking));
+        uint256 balanceAfter = ohm.balanceOf(address(staking));
 
         uint256 expected = (balanceBefore * 1000) / 1_000_000;
         assertEq(balanceAfter - balanceBefore, expected);
@@ -378,5 +404,81 @@ contract DistributorTest is Test {
             abi.encodeWithSelector(Distributor_NoRebaseOccurred.selector)
         );
         distributor.triggerRebase();
+    }
+
+    /// User Story 4: triggerRebase() mints OHM to the staking contract and a single Uniswap V2 pool
+    function test_triggerRebaseStory4() public {
+        /// Set up
+        address[] memory newPools = new address[](1);
+        newPools[0] = address(ohmDai);
+        vm.prank(address(kernel));
+        distributor.setPools(newPools);
+        vm.warp(2200);
+
+        (uint256 reserve0, uint256 reserve1, ) = ohmDai.getReserves();
+        uint256 priceBefore = reserve1 / (reserve0 * 1000000000);
+        uint256 balanceBefore = ohm.balanceOf(address(ohmDai));
+        uint256 expectedBalanceAfter = balanceBefore +
+            (balanceBefore * 1000) /
+            1_000_000;
+
+        distributor.triggerRebase();
+
+        (uint256 reserve0After, uint256 reserve1After, ) = ohmDai.getReserves();
+        uint256 priceAfter = reserve1After / (reserve0After * 1000000000);
+        uint256 balanceAfter = ohm.balanceOf(address(ohmDai));
+
+        assertGt(balanceAfter, balanceBefore);
+        assertEq(balanceAfter, expectedBalanceAfter);
+        assertGt(priceBefore, priceAfter);
+    }
+
+    /// User Story 5: triggerRebase() mints OHM to the staking contract and multiple Uniswap V2 pools
+    function test_triggerRebaseStory5() public {
+        /// Set up
+        address[] memory newPools = new address[](3);
+        newPools[0] = address(ohmDai);
+        newPools[1] = address(ohmWeth);
+        vm.prank(address(kernel));
+        distributor.setPools(newPools);
+        vm.warp(2200);
+
+        (uint256 ohmDaiReserve0, uint256 ohmDaiReserve1, ) = ohmDai
+            .getReserves();
+        uint256 ohmDaiPriceBefore = ohmDaiReserve1 /
+            (ohmDaiReserve0 * 1000000000);
+        uint256 ohmDaiBalanceBefore = ohm.balanceOf(address(ohmDai));
+        uint256 expectedOhmDaiBalanceAfter = ohmDaiBalanceBefore +
+            (ohmDaiBalanceBefore * 1000) /
+            1_000_000;
+
+        (uint256 ohmWethReserve0, uint256 ohmWethReserve1, ) = ohmWeth
+            .getReserves();
+        uint256 ohmWethPriceBefore = ohmWethReserve1 /
+            (ohmWethReserve0 * 1000000000);
+        uint256 ohmWethBalanceBefore = ohm.balanceOf(address(ohmWeth));
+        uint256 expectedOhmWethBalanceAfter = ohmWethBalanceBefore +
+            (ohmWethBalanceBefore * 1000) /
+            1_000_000;
+
+        distributor.triggerRebase();
+
+        (ohmDaiReserve0, ohmDaiReserve1, ) = ohmDai.getReserves();
+        uint256 ohmDaiPriceAfter = ohmDaiReserve1 /
+            (ohmDaiReserve0 * 1000000000);
+        uint256 ohmDaiBalanceAfter = ohm.balanceOf(address(ohmDai));
+
+        (ohmWethReserve0, ohmWethReserve1, ) = ohmWeth.getReserves();
+        uint256 ohmWethPriceAfter = ohmWethReserve1 /
+            (ohmWethReserve0 * 1000000000);
+        uint256 ohmWethBalanceAfter = ohm.balanceOf(address(ohmWeth));
+
+        assertGt(ohmDaiBalanceAfter, ohmDaiBalanceBefore);
+        assertEq(ohmDaiBalanceAfter, expectedOhmDaiBalanceAfter);
+        assertGt(ohmDaiPriceBefore, ohmDaiPriceAfter);
+
+        assertGt(ohmWethBalanceAfter, ohmWethBalanceBefore);
+        assertEq(ohmWethBalanceAfter, expectedOhmWethBalanceAfter);
+        assertGt(ohmWethPriceBefore, ohmWethPriceAfter);
     }
 }

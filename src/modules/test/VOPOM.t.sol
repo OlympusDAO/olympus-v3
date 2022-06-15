@@ -16,6 +16,14 @@ import "src/modules/VOPOM.sol";
 int32 constant rightnow = 1652036143;
 uint256 constant fourYears = 4 * 365 * 24 * 3600;
 
+contract MERC20 is ERC20 {
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        uint8 _decimals
+    ) ERC20(_name, _symbol, _decimals) {}
+}
+
 contract VOPOMTest is Test {
     using larping for *;
     using convert for *;
@@ -37,12 +45,7 @@ contract VOPOMTest is Test {
     function setUp() public {
         vopom = new VotingPowerModule(self);
         victims = new UserFactory();
-        ohm = ERC20(
-            deployCode(
-                "MockERC20.t.sol:MockERC20",
-                abi.encode("ohm", "OHM", "9")
-            )
-        );
+        ohm = new MERC20("ohm", "OHM", 9);
 
         vopom.configureUniquely(
             0,
@@ -60,7 +63,7 @@ contract VOPOMTest is Test {
         assertEq(vopom.KEYCODE(), "VOPOM");
     }
 
-    function testLockCreation(int224 amount, int32 period) public {
+    function testLockCreation(int128 amount, int32 period) public {
         vm.assume(!(amount == 0 && period == 0));
         vm.assume(VOPOM_WEEK * 2 <= period);
         vm.assume(0 <= amount && 0 <= period);
@@ -84,198 +87,20 @@ contract VOPOMTest is Test {
         vopom.noteLockCreation(usr, 0, amount, epochedUnlockTime);
     }
 
-    /// @notice this function is going to print the values which can then be inspected and sorted
-    function linearity2(int224 amount, int32 period) public {
-        vm.assume(24 * 5 * 3600 < period);
-        vm.assume(period.ciu() < vopom.getMaximumLockTime(0).ciu());
-        vm.assume(1e21 < amount);
-
-        // setup
-        vm.warp((rightnow).ciu());
-        int32 timeDelta = 0;
-        int32 step = period / 20;
-        int256[] memory ams = new int256[](3);
-        int32[] memory tim = new int32[](3);
-        address[] memory us = victims.create(3);
-        ams[0] = amount;
-        ams[1] = amount / 2;
-        ams[2] = amount / 3;
-        tim[0] = 0;
-        tim[1] = period / 2;
-        tim[2] = period;
-        uint256 j;
-        uint256 counter;
-
-        while (timeDelta <= 2 * period) {
-            timeDelta += step;
-            vm.warp((rightnow + timeDelta).ciu());
-
-            vopom.checkpoint(0);
-
-            _logPoints2(counter, us, rightnow + timeDelta, j);
-
-            if (j != tim.length && tim[j] <= timeDelta) {
-                vopom.noteLockCreation(
-                    us[j],
-                    0,
-                    ams[j],
-                    rightnow + timeDelta + period
-                );
-                j++;
-                _logPoints2(counter, us, rightnow + timeDelta, j);
-            }
-            counter++;
-        }
-    }
-
-    function linearity3(int224 amount, int32 period) public {
-        vm.assume(24 * 5 * 3600 < period);
-        vm.assume(period.ciu() < vopom.getMaximumLockTime(0).ciu());
-        vm.assume(1e21 < amount);
-
-        // setup
-        vm.warp((rightnow).ciu());
-        int32 timeDelta = 0;
-        int32 step = period / 20;
-        int256[] memory ams = new int256[](3);
-        int32[] memory tim = new int32[](4);
-        address[] memory us = victims.create(3);
-        ams[0] = amount;
-        ams[1] = amount / 2;
-        ams[2] = amount / 3;
-        tim[0] = 0;
-        tim[1] = period / 2;
-        tim[2] = period;
-        tim[3] = period + period / 2;
-        uint256 j;
-        uint256 k;
-        uint256 counter;
-
-        while (timeDelta <= 2 * period + period / 4) {
-            timeDelta += step;
-            vm.warp((rightnow + timeDelta).ciu());
-
-            vopom.checkpoint(0);
-
-            _logPoints3(counter, k, us, rightnow + timeDelta, j);
-
-            if (j != ams.length && tim[j] <= timeDelta) {
-                vopom.noteLockCreation(
-                    us[j],
-                    0,
-                    ams[j],
-                    rightnow + timeDelta + period
-                );
-                j++;
-                _logPoints3(counter, k, us, rightnow + timeDelta, j);
-            }
-
-            // add second locks
-            if (
-                k != ams.length &&
-                (tim[k + 1] - tim[k]) / 2 + tim[k] <= timeDelta
-            ) {
-                vopom.noteLockCreation(
-                    us[k],
-                    0,
-                    ams[k],
-                    rightnow + timeDelta + period
-                );
-                k++;
-                console2.log("K: ", k);
-                _logPoints3(counter, k, us, rightnow + timeDelta, k);
-            }
-            counter++;
-        }
-    }
-
-    function linearity4(int224 amount, int32 period) public {
-        vm.assume(24 * 5 * 3600 < period);
-        vm.assume(period.ciu() < vopom.getMaximumLockTime(0).ciu());
-        vm.assume(1e21 < amount);
-
-        // setup
-        vm.warp(rightnow.ciu());
-        int32 timeDelta = 0;
-        int32 step = period / 20;
-        int256[] memory ams = new int256[](3);
-        int32[] memory tim = new int32[](4);
-        address[] memory us = victims.create(3);
-        ams[0] = amount;
-        ams[1] = amount / 2;
-        ams[2] = amount / 3;
-        tim[0] = 0;
-        tim[1] = period / 2;
-        tim[2] = period;
-        tim[3] = period + period / 2;
-        uint256 j;
-        uint256 k;
-        uint256 counter;
-        int32[] memory tim2 = new int32[](3);
-
-        while (timeDelta <= 2 * period + period / 4) {
-            timeDelta += step;
-            vm.warp((rightnow + timeDelta).ciu());
-
-            vopom.checkpoint(0);
-
-            _logPoints2(counter, us, rightnow + timeDelta, j);
-
-            if (j != ams.length && tim[j] <= timeDelta) {
-                vopom.noteLockCreation(
-                    us[j],
-                    0,
-                    ams[j],
-                    rightnow + timeDelta + period
-                );
-                tim2[j] = rightnow + timeDelta + period;
-                console2.log(
-                    "_________________________________________LCOKT :  ",
-                    (rightnow + timeDelta + period).ciu()
-                );
-                j++;
-                _logPoints2(counter, us, rightnow + timeDelta, j);
-            }
-
-            // increase amount
-            if (
-                k != ams.length &&
-                (tim[k + 1] - tim[k]) / 2 + tim[k] <= timeDelta
-            ) {
-                vopom.noteLockBalanceChange(
-                    us[k],
-                    0,
-                    0,
-                    ams[k],
-                    ams[k] + ams[k],
-                    (tim2[k] / VOPOM_WEEK) * VOPOM_WEEK
-                );
-                console2.log(
-                    "_________________________________________LCOKTE :  ",
-                    tim2[k].ciu()
-                );
-                console2.log("K: ", k);
-                k++;
-                _logPoints2(counter, us, rightnow + timeDelta, j);
-            }
-            counter++;
-        }
-    }
-
-    function linearity5(uint224 amountu, uint32 periodu) public {
-        int224 amount = int224(amountu);
+    function linearity(uint128 amountu, uint32 periodu) public {
+        int128 amount = int128(amountu);
         int32 period = int32(periodu);
         vm.assume(24 * 5 * 3600 < period);
         vm.assume(period.ciu() < vopom.getMaximumLockTime(0).ciu());
         vm.assume(1e21 < amount);
-        vm.assume(amount < 1e50);
+        vm.assume(amount < 1e33);
 
         // setup
         vm.warp(rightnow.ciu());
         int32 delta = 0;
         int32 step = period / 20;
         address[] memory us = victims.create(3);
-        int256[] memory ams = new int256[](6);
+        int128[] memory ams = new int128[](6);
         int32[] memory tims = new int32[](9);
 
         ams[0] = amount;
@@ -319,7 +144,6 @@ contract VOPOMTest is Test {
                     );
                     vopom.noteLockExtension(
                         us[j - 3],
-                        0,
                         j - 2,
                         ams[j - 3],
                         tims[j - 3],
@@ -332,7 +156,6 @@ contract VOPOMTest is Test {
                     );
                     vopom.noteLockBalanceChange(
                         us[j - 6],
-                        0,
                         j - 5,
                         ams[j - 6],
                         ams[j - 6] + ams[j - 3],
@@ -344,30 +167,6 @@ contract VOPOMTest is Test {
             }
             c++;
         }
-    }
-
-    function _logPoints3(
-        uint256 counter,
-        uint256 k,
-        address[] memory users,
-        int32 time,
-        uint256 bound
-    ) internal view {
-        console2.log(
-            counter,
-            "++++++++++++++++++++++",
-            time.ciu(),
-            "++++++++++++++++++++++"
-        );
-        for (uint256 i; i < bound; i++) {
-            console2.log("USER:", i);
-            console2.log("ubias:", vopom.getVotingPower(users[i], 0).ciu());
-            if (i + 1 <= k)
-                console2.log("ubias:", vopom.getVotingPower(users[i], 1).ciu());
-            console2.log("------------------------------------");
-        }
-        console2.log("glbias:", vopom.getGlobalVotingPower(0).ciu());
-        console2.log("------------------------------------");
     }
 
     function _logUsers(
@@ -397,25 +196,13 @@ contract VOPOMTest is Test {
         );
         for (uint256 i; i < bound; i++) {
             console2.log("USER:", i);
-            console2.log("ubias:", vopom.getVotingPower(users[i], i + 1).ciu());
-            console2.log(
-                "share:",
-                vopom.getVotingPowerShare(users[i], 0, i + 1).ciu()
-            );
+            console2.log("ubias:", vopom.getOpenVotingPower(users[i]).ciu());
             console2.log("------------------------------------");
         }
-        console2.log("glbias:", vopom.getGlobalVotingPower(0).ciu());
-        console2.log("------------------------------------");
-    }
 
-    function _logPoints(
-        address usr,
-        uint256 index,
-        int32 time
-    ) internal view {
-        console2.log("++++++++++++++++++++++++++++++++++++");
-        console2.log("logging for user", index, "at", time.ciu());
-        console2.log("glbias:", vopom.getGlobalVotingPower(0).ciu());
-        console2.log("ubias:", vopom.getVotingPower(usr, 0).ciu());
+        uint64[] memory poolIds = new uint64[](1);
+
+        console2.log("glbias:", vopom.getGlobalVotingPower(poolIds).ciu());
+        console2.log("------------------------------------");
     }
 }

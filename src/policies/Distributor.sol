@@ -9,10 +9,19 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Kernel, Policy} from "src/Kernel.sol";
 import "src/modules/TRSRY.sol";
 import "src/modules/MINTR.sol";
-import "src/interfaces/IStaking.sol";
 import "src/interfaces/Uniswap/IUniswapV2Pair.sol";
 
-/// Define Inline Types
+/// Define Inline Interfaces
+interface IStaking {
+    function unstake(
+        address _to,
+        uint256 _amount,
+        bool _trigger,
+        bool _rebasing
+    ) external returns (uint256);
+}
+
+/// Define Inline Data Structures
 struct Adjust {
     bool add; // whether to add or subtract from the reward rate
     uint256 rate; // the amount to add or subtract per epoch
@@ -187,7 +196,7 @@ contract Distributor is Auth, Policy {
     /////////////////////////////////////////////////////////////////////////////////
 
     /// @notice Returns the next reward for the given address based on their OHM balance.
-    /// @param  address The address to get the next reward for.
+    /// @param  who_ The address to get the next reward for.
     /// @return uint256 The next reward for the given address.
     function nextRewardFor(address who_) public view returns (uint256) {
         return (ohm.balanceOf(who_) * rewardRate) / DENOMINATOR;
@@ -198,28 +207,31 @@ contract Distributor is Auth, Policy {
     /////////////////////////////////////////////////////////////////////////////////
 
     /// @notice Adjusts the bounty
-    /// @param  uint256 The new bounty amount.
+    /// @param  bounty_ The new bounty amount.
     /// @dev    This function is only available to an authorized user.
     function setBounty(uint256 bounty_) external requiresAuth {
         bounty = bounty_;
     }
 
     /// @notice Sets the Uniswap V2 pools to be minted into
-    /// @param  address[] The array of Uniswap V2 pools.
+    /// @param  pools_ The array of Uniswap V2 pools.
     /// @dev    This function is only available to an authorized user.
     function setPools(address[] calldata pools_) external requiresAuth {
         pools = pools_;
     }
 
     /// @notice Removes a liquidity pool from the list of pools to be minted into
-    /// @param  uint256 The index in the pools array of the liquidity pool to remove.
-    /// @param  address The address of the liquidity pool to remove.
+    /// @param  index_ The index in the pools array of the liquidity pool to remove.
+    /// @param  pool_ The address of the liquidity pool to remove.
     /// @dev    This function is only available to an authorized user.
     function removePool(uint256 index_, address pool_) external requiresAuth {
         if (pools[index_] != pool_) revert Distributor_SanityCheck();
         pools[index_] = address(0);
     }
 
+    /// @notice Adds a liquidity pool to the list of pools to be minted into
+    /// @param  index_ The index in the pools array to add the liquidity pool to.
+    /// @param  pool_ The address of the liquidity pool to add.
     function addPool(uint256 index_, address pool_) external requiresAuth {
         // we want to overwrite slots where possible
         if (pools[index_] == address(0)) {
@@ -231,9 +243,9 @@ contract Distributor is Auth, Policy {
     }
 
     /// @notice Sets an adjustment to the reward rate.
-    /// @param  bool If reward rate should increase
-    /// @param  uint256 Amount to add or decrease reward rate by
-    /// @param  uint256 Target reward rate
+    /// @param  add_ If reward rate should increase
+    /// @param  rate_ Amount to add or decrease reward rate by
+    /// @param  target_ Target reward rate
     function setAdjustment(
         bool add_,
         uint256 rate_,

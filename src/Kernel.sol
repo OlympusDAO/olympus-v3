@@ -5,15 +5,15 @@ abstract contract Module {
     error Module_OnlyApprovedPolicy(address caller_);
     error Module_OnlyPermissionedPolicy(address caller_);
 
-    Kernel public _kernel;
+    IKernel public _kernel;
 
-    constructor(Kernel kernel_) {
+    constructor(IKernel kernel_) {
         _kernel = kernel_;
     }
 
     function KEYCODE() public pure virtual returns (bytes5) {}
 
-    modifier onlyPermitted() {
+    modifier onlyPermittedPolicies() {
         if (_kernel.getWritePermissions(KEYCODE(), msg.sender) == false)
             revert Module_OnlyPermissionedPolicy(msg.sender);
         _;
@@ -24,9 +24,9 @@ abstract contract Policy {
     error Policy_ModuleDoesNotExist(bytes5 keycode_);
     error Policy_OnlyKernel(address caller_);
 
-    Kernel public _kernel;
+    IKernel public _kernel;
 
-    constructor(Kernel kernel_) {
+    constructor(IKernel kernel_) {
         _kernel = kernel_;
     }
 
@@ -69,7 +69,22 @@ struct Instruction {
     address target;
 }
 
-contract Kernel {
+// Core kernel functions for modules and policies to work
+interface IKernel {
+    function getWritePermissions(bytes5 keycode_, address caller_)
+        external
+        view
+        returns (bool);
+
+    function getModuleForKeycode(bytes5 keycode_)
+        external
+        view
+        returns (address);
+
+    function executeAction(Actions action_, address target_) external;
+}
+
+contract Kernel is IKernel {
     event Kernel_WritePermissionsUpdated(
         bytes5 indexed keycode_,
         address indexed policy_,
@@ -116,8 +131,8 @@ contract Kernel {
         } else if (action_ == Actions.TerminatePolicy) {
             _terminatePolicy(target_);
         } else if (action_ == Actions.ChangeExecutor) {
-            // Require kernel to install the EXCTR module before calling ChangeExecutor on it
-            if (getKeycodeForModule[target_] != "EXCTR")
+            // Require kernel to install the INSTR module before calling ChangeExecutor on it
+            if (getKeycodeForModule[target_] != "INSTR")
                 revert Kernel_OnlyExecutor(target_);
 
             executor = target_;
@@ -191,7 +206,6 @@ contract Kernel {
     ) internal {
         for (uint256 i = 0; i < keycodes_.length; i++) {
             getWritePermissions[keycodes_[i]][policy_] = canWrite_;
-
             emit Kernel_WritePermissionsUpdated(
                 keycodes_[i],
                 policy_,
