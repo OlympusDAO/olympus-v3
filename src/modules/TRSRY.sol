@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
@@ -60,7 +60,10 @@ contract OlympusTreasury is Module {
         uint256 amount_
     );
 
-    Kernel private kernel;
+    Kernel.Role public constant APPROVER = Kernel.Role.wrap("TRSRY_Approver");
+    Kernel.Role public constant BANKER = Kernel.Role.wrap("TRSRY_Banker");
+    Kernel.Role public constant DEBT_ADMIN =
+        Kernel.Role.wrap("TRSRY_DebtAdmin");
 
     // user -> reserve -> amount
     // infinite approval is max(uint256). Should be reserved monitored subsystems.
@@ -70,12 +73,17 @@ contract OlympusTreasury is Module {
     mapping(ERC20 => uint256) public totalDebt; // reserve -> totalDebt
     mapping(ERC20 => mapping(address => uint256)) public reserveDebt; // TODO reserve -> debtor -> debt
 
-    constructor(Kernel kernel_) Module(kernel_) {
-        kernel = kernel_;
+    constructor(Kernel kernel_) Module(kernel_) {}
+
+    function KEYCODE() public pure override returns (Kernel.Keycode) {
+        return Kernel.Keycode.wrap("TRSRY");
     }
 
-    function KEYCODE() public pure override returns (bytes5) {
-        return "TRSRY";
+    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
+        roles = new Kernel.Role[](3);
+        roles[0] = APPROVER;
+        roles[1] = BANKER;
+        roles[2] = DEBT_ADMIN;
     }
 
     /* 
@@ -96,7 +104,7 @@ contract OlympusTreasury is Module {
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(APPROVER) {
         withdrawApproval[withdrawer_][token_] = amount_;
 
         emit ApprovedForWithdrawal(withdrawer_, token_, amount_);
@@ -106,10 +114,12 @@ contract OlympusTreasury is Module {
         address to_,
         ERC20 token_,
         uint256 amount_
-    ) public onlyPermittedPolicies {
+    ) public {
+        // Must be approved
         uint256 approval = withdrawApproval[msg.sender][token_];
         if (approval < amount_) revert TRSRY_NotApproved();
 
+        // Check for infinite approval
         if (approval != type(uint256).max)
             withdrawApproval[msg.sender][token_] = approval - amount_;
 
@@ -142,7 +152,7 @@ contract OlympusTreasury is Module {
 
     function loanReserves(ERC20 token_, uint256 amount_)
         external
-        onlyPermittedPolicies
+        onlyRole(BANKER)
     {
         uint256 approval = withdrawApproval[msg.sender][token_];
         if (approval < amount_) revert TRSRY_NotApproved();
@@ -164,7 +174,7 @@ contract OlympusTreasury is Module {
 
     function repayLoan(ERC20 token_, uint256 amount_)
         external
-        onlyPermittedPolicies
+        onlyRole(BANKER)
     {
         // Subtract debt to caller
         reserveDebt[token_][msg.sender] -= amount_;
@@ -194,7 +204,7 @@ contract OlympusTreasury is Module {
         ERC20 token_,
         address debtor_,
         uint256 amount_
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(DEBT_ADMIN) {
         uint256 oldDebt = reserveDebt[token_][debtor_];
 
         // Set debt for debtor
@@ -211,7 +221,7 @@ contract OlympusTreasury is Module {
         ERC20 token_,
         address debtor_,
         uint256 amount_
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(DEBT_ADMIN) {
         // Reduce debt for specific address
         reserveDebt[token_][debtor_] -= amount_;
         totalDebt[token_] -= amount_;

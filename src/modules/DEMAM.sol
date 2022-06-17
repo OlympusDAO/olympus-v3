@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 /// LOCAL
 
@@ -31,14 +31,29 @@ contract DepositManagementModule is Module {
         uint32 end;
     }
 
+    Kernel.Role public constant RECEIVER = Kernel.Role.wrap("DEMAM_Receiver");
+    Kernel.Role public constant SENDER = Kernel.Role.wrap("DEMAM_Sender");
+    Kernel.Role public constant EDITOR = Kernel.Role.wrap("DEMAM_Editor");
+    Kernel.Role public constant GODMODE = Kernel.Role.wrap("DEMAM_Godmode");
+    Kernel.Role public constant OTHER = Kernel.Role.wrap("DEMAM_Other");
+
     mapping(address => mapping(address => uint256)) public freeBalanceOf;
     mapping(address => mapping(address => uint256)) public lockedBalanceOf;
     mapping(address => mapping(address => Lock[])) public userLocks;
 
     constructor(address kernel_) Module(Kernel(kernel_)) {}
 
-    function KEYCODE() public pure virtual override returns (bytes5) {
-        return "DEMAM";
+    function KEYCODE() public pure virtual override returns (Kernel.Keycode) {
+        return Kernel.Keycode.wrap("DEMAM");
+    }
+
+    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
+        roles = new Kernel.Role[](5);
+        roles[0] = RECEIVER;
+        roles[1] = SENDER;
+        roles[2] = EDITOR;
+        roles[3] = GODMODE;
+        roles[4] = OTHER;
     }
 
     // ######################## ~ INCOMING TRANSFERS ~ ########################
@@ -47,7 +62,7 @@ contract DepositManagementModule is Module {
         address owner,
         address token,
         uint224 amount
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(RECEIVER) {
         // interaction
         ERC20(token).safeTransferFrom(owner, address(this), amount);
 
@@ -60,7 +75,7 @@ contract DepositManagementModule is Module {
         address beneficiary,
         address token,
         uint224 amount
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(RECEIVER) {
         // interaction
         ERC20(token).safeTransferFrom(benefactor, address(this), amount);
 
@@ -100,7 +115,7 @@ contract DepositManagementModule is Module {
         address token,
         uint224 amount,
         uint256 index
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(RECEIVER) {
         // interaction
         ERC20(token).safeTransferFrom(owner, address(this), amount);
 
@@ -114,7 +129,7 @@ contract DepositManagementModule is Module {
         address token,
         uint224 amount,
         uint256 index
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(RECEIVER) {
         // interaction
         ERC20(token).safeTransferFrom(benefactor, address(this), amount);
 
@@ -128,7 +143,7 @@ contract DepositManagementModule is Module {
         address receiver,
         address token,
         uint224 amount
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(SENDER) {
         if (freeBalanceOf[receiver][token] < amount)
             revert DEMAM_NotEnoughTokensUnlocked(
                 freeBalanceOf[receiver][token]
@@ -156,7 +171,7 @@ contract DepositManagementModule is Module {
         address token,
         uint224[] memory amounts,
         uint256[] memory indices
-    ) public onlyPermittedPolicies {
+    ) public onlyRole(SENDER) {
         assert(amounts.length == indices.length);
 
         uint256 length = amounts.length;
@@ -190,7 +205,7 @@ contract DepositManagementModule is Module {
         address token,
         uint224 amount,
         uint256 index
-    ) public onlyPermittedPolicies {
+    ) public onlyRole(SENDER) {
         Lock memory lock = userLocks[receiver][token][index];
 
         if (block.timestamp <= lock.end)
@@ -214,7 +229,7 @@ contract DepositManagementModule is Module {
         address token,
         uint224 amount,
         uint32 end
-    ) external onlyPermittedPolicies returns (uint256 lockIndex) {
+    ) external onlyRole(OTHER) returns (uint256 lockIndex) {
         if (freeBalanceOf[owner][token] < amount)
             revert DEMAM_NotEnoughTokensUnlocked(freeBalanceOf[owner][token]);
 
@@ -231,7 +246,7 @@ contract DepositManagementModule is Module {
         address token,
         uint224 amount,
         uint256 index // modifier in mintTokensToLock
-    ) external {
+    ) external onlyRole(OTHER) {
         if (freeBalanceOf[owner][token] < amount)
             revert DEMAM_NotEnoughTokensUnlocked(freeBalanceOf[owner][token]);
 
@@ -244,7 +259,7 @@ contract DepositManagementModule is Module {
         address receiver,
         address token,
         uint224 amount
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(EDITOR) {
         uint256 bal = freeBalanceOf[owner][token];
 
         if (bal < amount) revert DEMAM_NotEnoughUnlockedForSlashing(bal);
@@ -259,7 +274,7 @@ contract DepositManagementModule is Module {
         address token,
         uint224[] memory amounts,
         uint256[] memory indices
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(EDITOR) {
         assert(amounts.length == indices.length);
 
         Lock[] storage locks = userLocks[owner][token];
@@ -286,7 +301,7 @@ contract DepositManagementModule is Module {
         address owner,
         address token,
         uint256[] memory indices
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(OTHER) {
         Lock[] storage locks = userLocks[owner][token];
 
         uint256 length = indices.length;
@@ -314,7 +329,7 @@ contract DepositManagementModule is Module {
         address token,
         uint256 index,
         uint32 end
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(EDITOR) {
         Lock memory lock = userLocks[owner][token][index];
 
         if (type(uint32).max < end) revert DEMAM_TimeTooLarge();
@@ -331,7 +346,7 @@ contract DepositManagementModule is Module {
         address token,
         uint224 amount,
         uint32 end
-    ) public onlyPermittedPolicies returns (uint256 lockIndex) {
+    ) public onlyRole(EDITOR) returns (uint256 lockIndex) {
         // effects
         lockedBalanceOf[owner][token] += amount;
         userLocks[owner][token].push(Lock(amount, end));
@@ -343,7 +358,7 @@ contract DepositManagementModule is Module {
         address receiver,
         address token,
         uint224 amount
-    ) public onlyPermittedPolicies {
+    ) public onlyRole(GODMODE) {
         freeBalanceOf[receiver][token] += amount;
     }
 
@@ -352,7 +367,7 @@ contract DepositManagementModule is Module {
         address token,
         uint224 amount,
         uint256 index
-    ) public onlyPermittedPolicies {
+    ) public onlyRole(GODMODE) {
         if (userLocks[receiver][token][index].end < block.timestamp)
             revert DEMAM_LockDoesNotExist();
 

@@ -12,19 +12,12 @@ import {MockPriceFeed} from "../mocks/MockPriceFeed.sol";
 import {MockModuleWriter} from "../mocks/MockModuleWriter.sol";
 
 import {OlympusPrice} from "modules/PRICE.sol";
-import {Kernel, Actions} from "../../Kernel.sol";
+import "src/Kernel.sol";
 
 contract PriceTest is DSTest {
     using FullMath for uint256;
 
     Vm internal immutable vm = Vm(HEVM_ADDRESS);
-
-    UserFactory public userCreator;
-    address internal alice;
-    address internal bob;
-    address internal carol;
-    address internal protocol;
-    address internal heart;
 
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal reserveEthPriceFeed;
@@ -41,15 +34,6 @@ contract PriceTest is DSTest {
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
-        userCreator = new UserFactory();
-        {
-            address[] memory users = userCreator.create(5);
-            alice = users[0];
-            bob = users[1];
-            carol = users[2];
-            protocol = users[3];
-            heart = users[4];
-        }
 
         {
             /// Deploy protocol mocks external to guidance
@@ -83,11 +67,7 @@ contract PriceTest is DSTest {
 
         {
             /// Initialize system and kernel
-
-            /// Install modules
             kernel.executeAction(Actions.InstallModule, address(price));
-
-            /// Approve policies
             kernel.executeAction(Actions.ApprovePolicy, address(writer));
         }
     }
@@ -487,9 +467,8 @@ contract PriceTest is DSTest {
         public
     {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodeWithSignature(
-            "Module_OnlyPermissionedPolicy(address)",
-            address(this)
+        bytes memory err = abi.encodeWithSelector(
+            Module_NotAuthorized.selector
         );
 
         /// initialize

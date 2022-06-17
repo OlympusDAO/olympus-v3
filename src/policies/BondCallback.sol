@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.11;
+pragma solidity ^0.8.13;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
@@ -53,16 +53,16 @@ contract BondCallback is Policy, Auth, IBondCallback {
         MINTR = OlympusMinter(getModuleAddress("MINTR"));
     }
 
-    function requestWrites()
+    function requestRoles()
         external
         view
         override
         onlyKernel
-        returns (bytes5[] memory permissions)
+        returns (Kernel.Role[] memory roles)
     {
-        permissions = new bytes5[](2);
-        permissions[0] = "TRSRY";
-        permissions[1] = "MINTR";
+        roles = new Kernel.Role[](2);
+        roles[0] = TRSRY.BANKER();
+        roles[1] = MINTR.MINTER();
     }
 
     /* ========== WHITELISTING ========== */

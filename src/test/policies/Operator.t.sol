@@ -112,8 +112,8 @@ contract OperatorTest is Test {
                 [uint256(100), uint256(1000), uint256(2000)]
             );
             treasury = new OlympusTreasury(kernel);
-            minter = new OlympusMinter(kernel, OHM(address(ohm)));
-            authr = new OlympusAuthority(address(kernel));
+            minter = new OlympusMinter(kernel, address(ohm));
+            authr = new OlympusAuthority(kernel);
 
             /// Deploy mock writer for treasury to give withdraw permissions
             writer = new MockModuleWriter(kernel, treasury);

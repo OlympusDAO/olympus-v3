@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.11;
+pragma solidity ^0.8.13;
 
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 
@@ -8,26 +8,27 @@ import {Kernel, Module} from "../Kernel.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
+/* ========== ERRORS =========== */
+error Price_InvalidParams();
+error Price_NotInitialized();
+error Price_AlreadyInitialized();
+
 /// @title  Olympus Price Oracle
 /// @notice Olympus Price Oracle (Module) Contract
 /// @dev    The Olympus Price Oracle contract provides a standard interface for OHM price data against a reserve asset.
 ///         It also implements a moving average price calculation (same as a TWAP) on the price feed data over a configured
 ///         duration and observation frequency. The data provided by this contract is used by the Olympus Range Operator to
 ///         perform market operations. The Olympus Price Oracle is updated each epoch by the Olympus Heart contract.
-/// @author Oighty, Zeus
 contract OlympusPrice is Module {
     using FullMath for uint256;
-
-    /* ========== ERRORS =========== */
-
-    error Price_InvalidParams();
-    error Price_NotInitialized();
-    error Price_AlreadyInitialized();
 
     /* ========== EVENTS =========== */
     event NewObservation(uint256 timestamp, uint256 price);
 
     /* ========== STATE VARIABLES ========== */
+
+    Kernel.Role public constant KEEPER = Kernel.Role.wrap("PRICE_Keeper");
+    Kernel.Role public constant GUARDIAN = Kernel.Role.wrap("PRICE_Guardian");
 
     /// Chainlink Price Feeds
     /// @dev Chainlink typically provides price feeds for an asset in ETH. Therefore, we use two price feeds against ETH, one for OHM and one for the Reserve asset, to calculate the relative price of OHM in the Reserve asset.
@@ -95,8 +96,14 @@ contract OlympusPrice is Module {
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
     /// @inheritdoc Module
-    function KEYCODE() public pure override returns (bytes5) {
-        return "PRICE";
+    function KEYCODE() public pure override returns (Kernel.Keycode) {
+        return Kernel.Keycode.wrap("PRICE");
+    }
+
+    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
+        roles = new Kernel.Role[](2);
+        roles[0] = KEEPER;
+        roles[1] = GUARDIAN;
     }
 
     /* ========== POLICY FUNCTIONS ========== */
@@ -104,7 +111,7 @@ contract OlympusPrice is Module {
     /// @notice Access restricted to approved policies
     /// @dev This function does not have a time-gating on the observationFrequency on this contract. It is set on the Heart policy contract.
     ///      The Heart beat frequency should be set to the same value as the observationFrequency.
-    function updateMovingAverage() external onlyPermittedPolicies {
+    function updateMovingAverage() external onlyRole(KEEPER) {
         /// TODO determine if this should be opened up (don't want to conflict with heart beat and have that fail)
 
         /// Revert if not initialized
@@ -187,7 +194,7 @@ contract OlympusPrice is Module {
     function initialize(
         uint256[] memory startObservations_,
         uint48 lastObservationTime_
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(GUARDIAN) {
         /// Revert if already initialized
         if (initialized) revert Price_AlreadyInitialized();
 
@@ -221,7 +228,7 @@ contract OlympusPrice is Module {
     ///      function with a number of observations larger than have been recorded.
     function changeMovingAverageDuration(uint48 movingAverageDuration_)
         external
-        onlyPermittedPolicies
+        onlyRole(GUARDIAN)
     {
         /// Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
         if (
@@ -265,7 +272,7 @@ contract OlympusPrice is Module {
     ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
     function changeObservationFrequency(uint48 observationFrequency_)
         external
-        onlyPermittedPolicies
+        onlyRole(GUARDIAN)
     {
         /// Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
         if (

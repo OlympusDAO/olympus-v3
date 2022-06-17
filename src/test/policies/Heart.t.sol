@@ -59,7 +59,7 @@ contract HeartTest is Test {
 
             /// Deploy modules (some mocks)
             price = new MockPrice(kernel);
-            authr = new OlympusAuthority(address(kernel));
+            authr = new OlympusAuthority(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);

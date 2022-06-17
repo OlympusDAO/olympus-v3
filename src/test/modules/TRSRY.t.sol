@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
 import "test-utils/UserFactory.sol";
@@ -9,54 +9,61 @@ import "test-utils/errors.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import "src/modules/TRSRY.sol";
-import "../larps/LarpKernel.sol";
+import "src/Kernel.sol";
 import {OlympusERC20Token} from "../../external/OlympusERC20.sol";
+import {MockModuleWriter} from "../mocks/MockModuleWriter.sol";
 
 contract TRSRYTest is Test {
     using larping for *;
     using errors for bytes4;
 
-    LarpKernel internal kernel;
+    Kernel internal kernel;
     OlympusTreasury public TRSRY;
     MockERC20 public ngmi;
     MockERC20 public dn;
-    UserFactory public userCreator;
-    address public policyOne;
-    address public policyTwo;
+    address public testUser;
+    MockModuleWriter public testPolicy;
 
     uint256 internal constant INITIAL_TOKEN_AMOUNT = 100e18;
 
     function setUp() public {
-        kernel = new LarpKernel();
+        kernel = new Kernel();
         TRSRY = new OlympusTreasury(kernel);
-        ngmi = new MockERC20("NOT GONNA MAKE IT", "NGMI", 18);
-        dn = new MockERC20("DEEZ NUTZ", "DN", 18);
+        ngmi = new MockERC20("not gonna make it", "NGMI", 18);
+        dn = new MockERC20("deez nutz", "DN", 18);
 
-        userCreator = new UserFactory();
-        address[] memory usrs = userCreator.create(3);
-        policyOne = usrs[0];
-        policyTwo = usrs[1];
+        address[] memory users = (new UserFactory()).create(3);
+        testUser = users[0];
 
-        kernel.installModule(address(TRSRY));
-        // Approve addresses as policy with write permissions
-        kernel.grantWritePermissions(TRSRY.KEYCODE(), address(this));
-        kernel.grantWritePermissions(TRSRY.KEYCODE(), policyOne);
+        kernel.executeAction(Actions.InstallModule, address(TRSRY));
+        kernel.executeAction(Actions.ApprovePolicy, address(this));
 
         // Give TRSRY some tokens
         ngmi.mint(address(TRSRY), INITIAL_TOKEN_AMOUNT);
         dn.mint(address(TRSRY), INITIAL_TOKEN_AMOUNT);
     }
 
+    function configureReads() external {}
+
+    // Needed to allow this contract to be used as a policy with full access to module
+    function requestRoles()
+        external
+        view
+        returns (Kernel.Role[] memory requests)
+    {
+        requests = TRSRY.ROLES();
+    }
+
     function test_KEYCODE() public {
-        assertEq32("TRSRY", TRSRY.KEYCODE());
+        assertEq32("TRSRY", Kernel.Keycode.unwrap(TRSRY.KEYCODE()));
     }
 
     function test_WithdrawApproval(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
 
-        TRSRY.requestApprovalFor(policyOne, ngmi, amount_);
+        TRSRY.requestApprovalFor(testUser, ngmi, amount_);
 
-        assertEq(TRSRY.withdrawApproval(policyOne, ngmi), amount_);
+        assertEq(TRSRY.withdrawApproval(testUser, ngmi), amount_);
     }
 
     // TODO test revoke approval
@@ -69,9 +76,9 @@ contract TRSRYTest is Test {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
         vm.assume(amount_ > 0);
 
-        TRSRY.requestApprovalFor(policyOne, ngmi, amount_);
+        TRSRY.requestApprovalFor(testUser, ngmi, amount_);
 
-        vm.prank(policyOne);
+        vm.prank(testUser);
         TRSRY.withdrawReserves(address(this), ngmi, amount_);
 
         assertEq(ngmi.balanceOf(address(this)), amount_);
@@ -84,20 +91,8 @@ contract TRSRYTest is Test {
         vm.assume(amount_ > 0);
 
         // Fail when withdrawal using policy without write access
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Module_OnlyPermissionedPolicy.selector,
-                address(policyTwo)
-            )
-        );
-        vm.prank(policyTwo);
-        TRSRY.withdrawReserves(address(this), ngmi, amount_);
-
-        kernel.grantWritePermissions(TRSRY.KEYCODE(), policyTwo);
-
-        // Fail withdrawal using policy without approval
         vm.expectRevert(TRSRY_NotApproved.selector);
-        vm.prank(policyTwo);
+        vm.prank(testUser);
         TRSRY.withdrawReserves(address(this), ngmi, amount_);
     }
 
@@ -110,13 +105,13 @@ contract TRSRYTest is Test {
         // Ensure there is sufficient reserves in the treasury
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
 
-        TRSRY.requestApprovalFor(policyOne, ngmi, amount_);
+        TRSRY.requestApprovalFor(address(this), ngmi, amount_);
 
-        vm.prank(policyOne);
+        //vm.prank(testUser);
         TRSRY.loanReserves(ngmi, amount_);
 
-        assertEq(ngmi.balanceOf(policyOne), amount_);
-        assertEq(TRSRY.reserveDebt(ngmi, policyOne), amount_);
+        assertEq(ngmi.balanceOf(address(this)), amount_);
+        assertEq(TRSRY.reserveDebt(ngmi, address(this)), amount_);
         assertEq(TRSRY.totalDebt(ngmi), amount_);
 
         // Reserve balance should remain the same, since we withdrew as debt
@@ -128,18 +123,18 @@ contract TRSRYTest is Test {
 
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
 
-        TRSRY.requestApprovalFor(policyOne, ngmi, amount_);
+        TRSRY.requestApprovalFor(address(this), ngmi, amount_);
 
-        vm.startPrank(policyOne);
+        //vm.startPrank(testUser); // TODO need to test with permissioned policy
         TRSRY.loanReserves(ngmi, amount_);
 
         // Repay loan
         ngmi.approve(address(TRSRY), amount_);
         TRSRY.repayLoan(ngmi, amount_);
 
-        vm.stopPrank();
+        //vm.stopPrank();
 
-        assertEq(ngmi.balanceOf(policyOne), 0);
+        assertEq(ngmi.balanceOf(testUser), 0);
     }
 
     // TODO test setDebt and clearDebt

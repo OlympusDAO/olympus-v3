@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 /// DEPS
 
@@ -66,6 +66,11 @@ contract VotingPowerModule is Module {
         int128 end;
     }
 
+    Kernel.Role public constant REPORTER = Kernel.Role.wrap("VOPOM_Reporter");
+    Kernel.Role public constant MODIFIER = Kernel.Role.wrap("VOPOM_Modifier");
+    Kernel.Role public constant CONFIGURATOR =
+        Kernel.Role.wrap("VOPOM_Configurator");
+
     // ######################## ~ MATH ~ ########################
 
     mapping(uint256 => VoteConfig) public configurations;
@@ -93,8 +98,15 @@ contract VotingPowerModule is Module {
 
     constructor(address kernel_) Module(Kernel(kernel_)) {}
 
-    function KEYCODE() public pure virtual override returns (bytes5) {
-        return "VOPOM";
+    function KEYCODE() public pure virtual override returns (Kernel.Keycode) {
+        return Kernel.Keycode.wrap("VOPOM");
+    }
+
+    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
+        roles = new Kernel.Role[](3);
+        roles[0] = REPORTER;
+        roles[1] = MODIFIER;
+        roles[2] = CONFIGURATOR;
     }
 
     // ######################## ~ SETTERS ~ ########################
@@ -103,7 +115,7 @@ contract VotingPowerModule is Module {
         uint64 poolId,
         int128 multiplier,
         int128 maxLock
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(CONFIGURATOR) {
         VoteConfig memory config = configurations[poolId];
 
         if (0 < config.maxlock + config.multiplier)
@@ -123,7 +135,7 @@ contract VotingPowerModule is Module {
         uint64 poolId,
         int128 balance,
         int32 epochedUnlockTime
-    ) external onlyPermittedPolicies returns (uint256 pointId) {
+    ) external onlyRole(REPORTER) returns (uint256 pointId) {
         int256 timestamp = block.timestamp.cui();
         pointId = userPointSets[user].length;
 
@@ -155,7 +167,7 @@ contract VotingPowerModule is Module {
         int128 oldBalance,
         int128 newBalance,
         int32 epochedUnlockTime
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(REPORTER) {
         if (userPointSets[user][pointId].tst == 0) revert VOPOM_NoLockFound();
 
         if (epochedUnlockTime <= block.timestamp.cui())
@@ -178,7 +190,7 @@ contract VotingPowerModule is Module {
         int128 balance,
         int32 oldEpochedUnlockTime,
         int32 newEpochedUnlockTime
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(REPORTER) {
         int256 timestamp = block.timestamp.cui();
         uint64 poolId = userPointSets[user][pointId].poolId;
 
@@ -208,7 +220,7 @@ contract VotingPowerModule is Module {
         address from,
         address to,
         int128 biasPercent
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(REPORTER) {
         // reads
         int128 totalPercentDelegated = biasPercentDelegations[from][from];
         int128 newPercentDelegated = biasPercent + totalPercentDelegated;
@@ -232,14 +244,14 @@ contract VotingPowerModule is Module {
 
     function noteDelegators(address user, address[] calldata delegators)
         external
-        onlyPermittedPolicies
+        onlyRole(MODIFIER)
     {
         userDelegators[user] = delegators;
     }
 
     function noteOpenPoolPointAddition(address user, uint256 pointId)
         external
-        onlyPermittedPolicies
+        onlyRole(MODIFIER)
     {
         userOpenPoolPointIds[user].push(pointId);
     }

@@ -11,7 +11,7 @@ import {MockModuleWriter} from "../mocks/MockModuleWriter.sol";
 
 import {FullMath} from "../../libraries/FullMath.sol";
 
-import {Kernel, Actions} from "../../Kernel.sol";
+import "src/Kernel.sol";
 import {OlympusRange} from "../../modules/RANGE.sol";
 
 contract RangeTest is DSTest {
@@ -359,9 +359,8 @@ contract RangeTest is DSTest {
         public
     {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodeWithSignature(
-            "Module_OnlyPermissionedPolicy(address)",
-            address(this)
+        bytes memory err = abi.encodeWithSelector(
+            Module_NotAuthorized.selector
         );
 
         /// updatePrices

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Kernel, Module} from "../../Kernel.sol";
@@ -8,6 +8,9 @@ import {Kernel, Module} from "../../Kernel.sol";
  * @notice Mock implementation of Price to use for testing
  */
 contract MockPrice is Module {
+    Kernel.Role public constant KEEPER = Kernel.Role.wrap("PRICE_Keeper");
+    Kernel.Role public constant GUARDIAN = Kernel.Role.wrap("PRICE_Guardian");
+
     uint256 public movingAverage;
     uint256 public lastPrice;
     uint256 public currentPrice;
@@ -21,8 +24,14 @@ contract MockPrice is Module {
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
-    function KEYCODE() public pure override returns (bytes5) {
-        return "PRICE";
+    function KEYCODE() public pure override returns (Kernel.Keycode) {
+        return Kernel.Keycode.wrap("PRICE");
+    }
+
+    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
+        roles = new Kernel.Role[](2);
+        roles[0] = KEEPER;
+        roles[1] = GUARDIAN;
     }
 
     /* ========== HEART FUNCTIONS ========== */

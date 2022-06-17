@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 import {ITreasury} from "../../interfaces/ITreasury.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";

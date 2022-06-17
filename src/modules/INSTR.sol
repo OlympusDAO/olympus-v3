@@ -2,19 +2,31 @@
 
 // [INSTR] The Instructions Module caches and executes batched instructions for protocol upgrades in the Kernel
 
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
-import {Kernel, Module, Instruction, Actions} from "../Kernel.sol";
+import "src/Kernel.sol";
+
+error INSTR_CannotBeEmpty();
+error INSTR_InstructionModuleMustBeLast();
+error INSTR_NotAContract(address target_);
+error INSTR_InvalidKeycode(Kernel.Keycode keycode_);
 
 contract Instructions is Module {
     /////////////////////////////////////////////////////////////////////////////////
     //                         Kernel Module Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
 
+    Kernel.Role public constant EXECUTOR = Kernel.Role.wrap("INSTR_Executor");
+
     constructor(Kernel kernel_) Module(kernel_) {}
 
-    function KEYCODE() public pure override returns (bytes5) {
-        return "INSTR";
+    function KEYCODE() public pure override returns (Kernel.Keycode) {
+        return Kernel.Keycode.wrap("INSTR");
+    }
+
+    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
+        roles = new Kernel.Role[](1);
+        roles[0] = EXECUTOR;
     }
 
     /////////////////////////////////////////////////////////////////////////////////
@@ -23,11 +35,6 @@ contract Instructions is Module {
 
     event InstructionsStored(uint256 instructionsId);
     event InstructionsExecuted(uint256 instructionsId);
-
-    error Instructions_Cannot_Be_Empty();
-    error Instructions_Module_Must_Be_Last();
-    error Address_Is_Not_A_Contract(address target_);
-    error Invalid_Keycode(bytes5 keycode_);
 
     /* Imported from Kernel, just here for reference:
 
@@ -54,14 +61,14 @@ contract Instructions is Module {
 
     function store(Instruction[] calldata instructions_)
         external
-        onlyPermittedPolicies
+        onlyRole(EXECUTOR)
         returns (uint256)
     {
         uint256 length = instructions_.length;
         uint256 instructionsId = totalInstructions + 1;
         Instruction[] storage instructions = storedInstructions[instructionsId];
 
-        if (length == 0) revert Instructions_Cannot_Be_Empty();
+        if (length == 0) revert INSTR_CannotBeEmpty();
 
         for (uint256 i = 0; i < length; i++) {
             Instruction calldata instruction = instructions_[i];
@@ -71,7 +78,7 @@ contract Instructions is Module {
                 instruction.action == Actions.InstallModule ||
                 instruction.action == Actions.UpgradeModule
             ) {
-                bytes5 keycode = Module(instruction.target).KEYCODE();
+                Kernel.Keycode keycode = Module(instruction.target).KEYCODE();
                 _ensureValidKeycode(keycode);
 
                 /* 
@@ -83,8 +90,9 @@ contract Instructions is Module {
                 Change executor to whitelist of addresses vs. single owner?
                 */
 
-                if (keycode == "INSTR" && length - 1 != i)
-                    revert Instructions_Module_Must_Be_Last();
+                if (
+                    Kernel.Keycode.unwrap(keycode) == "INSTR" && length - 1 != i
+                ) revert INSTR_InstructionModuleMustBeLast();
             }
 
             instructions.push(instructions_[i]);
@@ -96,11 +104,11 @@ contract Instructions is Module {
         return instructionsId;
     }
 
-    function execute(uint256 instructionsId_) external onlyPermittedPolicies {
+    function execute(uint256 instructionsId_) external onlyRole(EXECUTOR) {
         Instruction[] memory instructions = storedInstructions[instructionsId_];
 
         for (uint256 step = 0; step < instructions.length; step++) {
-            _kernel.executeAction(
+            kernel.executeAction(
                 instructions[step].action,
                 instructions[step].target
             );
@@ -116,14 +124,22 @@ contract Instructions is Module {
         assembly {
             size := extcodesize(target_)
         }
-        if (size == 0) revert Address_Is_Not_A_Contract(target_);
+        if (size == 0) revert INSTR_NotAContract(target_);
     }
 
-    function _ensureValidKeycode(bytes5 keycode_) internal pure {
-        for (uint256 i = 0; i < 5; i++) {
-            bytes1 char = keycode_[i];
-            if (char < 0x41 || char > 0x5A) revert Invalid_Keycode(keycode_);
+    function _ensureValidKeycode(Kernel.Keycode keycode_) internal pure {
+        bytes5 unwrapped = Kernel.Keycode.unwrap(keycode_);
+
+        for (uint256 i = 0; i < 5; ) {
+            bytes1 char = unwrapped[i];
+
+            if (char < 0x41 || char > 0x5A)
+                revert INSTR_InvalidKeycode(keycode_);
             // A-Z only"
+
+            unchecked {
+                i++;
+            }
         }
     }
 }

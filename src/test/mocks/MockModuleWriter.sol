@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 import {Kernel, Module, Policy} from "../../Kernel.sol";
 
@@ -16,15 +16,14 @@ contract MockModuleWriter is Policy {
     /* ========== FRAMEWORK CONFIFURATION ========== */
     function configureReads() external override onlyKernel {}
 
-    function requestWrites()
+    function requestRoles()
         external
         view
         override
         onlyKernel
-        returns (bytes5[] memory permissions)
+        returns (Kernel.Role[] memory roles)
     {
-        permissions = new bytes5[](1);
-        permissions[0] = module.KEYCODE();
+        roles = module.ROLES();
     }
 
     /* ========== DELEGATE TO MODULE ========== */
