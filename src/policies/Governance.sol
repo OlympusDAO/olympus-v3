@@ -2,11 +2,11 @@
 
 // The Proposal Policy submits & activates instructions in a INSTR module
 
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 import {Kernel, Policy} from "../Kernel.sol";
-import "../modules/INSTR.sol";
-import "../modules/VOTES.sol";
+import "modules/INSTR.sol";
+import {Votes} from "modules/VOTES.sol";
 
 contract Governance is Policy {
     /////////////////////////////////////////////////////////////////////////////////
@@ -23,15 +23,15 @@ contract Governance is Policy {
         VOTES = Votes(getModuleAddress("VOTES"));
     }
 
-    function requestWrites()
+    function requestRoles()
         external
         view
         override
         onlyKernel
-        returns (bytes5[] memory permissions)
+        returns (Kernel.Role[] memory roles)
     {
-        permissions = new bytes5[](1);
-        permissions[0] = "INSTR";
+        roles = new Kernel.Role[](1);
+        roles[0] = INSTR.EXECUTOR();
     }
 
     /////////////////////////////////////////////////////////////////////////////////

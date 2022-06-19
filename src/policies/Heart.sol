@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.11;
+pragma solidity ^0.8.13;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
@@ -19,7 +19,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 /// @dev    The Olympus Heart contract provides keeper rewards to call the heart beat function which fuels
 ///         Olympus market operations. The Heart orchestrates state updates in the correct order to ensure
 ///         market operations use up to date information.
-/// @author Oighty, Zeus, indigo
 contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
     using TransferHelper for ERC20;
 
@@ -81,15 +80,15 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
         setAuthority(Authority(getModuleAddress("AUTHR")));
     }
 
-    function requestWrites()
+    function requestRoles()
         external
         view
         override
         onlyKernel
-        returns (bytes5[] memory permissions)
+        returns (Kernel.Role[] memory roles)
     {
-        permissions = new bytes5[](1);
-        permissions[0] = "PRICE";
+        roles = new Kernel.Role[](1);
+        roles[0] = PRICE.KEEPER();
     }
 
     /* ========== KEEPER FUNCTIONS ========== */

@@ -72,9 +72,9 @@ contract DistributorTest is Test {
 
         {
             /// Deploy Bophades Modules
-            mintr = new OlympusMinter(kernel, ohm);
+            mintr = new OlympusMinter(kernel, address(ohm));
             trsry = new OlympusTreasury(kernel);
-            authr = new OlympusAuthority(address(kernel));
+            authr = new OlympusAuthority(kernel);
         }
 
         {
@@ -149,10 +149,8 @@ contract DistributorTest is Test {
 
     /// Basic post-setup functionality tests
     function test_hasWriteAccess() public {
-        bool writeAccess = kernel.getWritePermissions(
-            "MINTR",
-            address(distributor)
-        );
+        Kernel.Role role = mintr.MINTER();
+        bool writeAccess = kernel.hasRole(address(distributor), role);
         assertEq(writeAccess, true);
     }
 

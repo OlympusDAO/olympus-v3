@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 /// DEPS
 
@@ -54,16 +54,18 @@ contract LockingVault is Auth, Policy {
         vopom = VotingPowerModule(getModuleAddress("VOPOM"));
     }
 
-    function requestWrites()
+    function requestRoles()
         external
-        pure
+        view
         virtual
         override
-        returns (bytes5[] memory permissions)
+        returns (Kernel.Role[] memory roles)
     {
-        permissions = new bytes5[](2);
-        permissions[0] = "DEMAM";
-        permissions[1] = "VOPOM";
+        roles = new Kernel.Role[](2);
+        roles[0] = demam.EDITOR();
+        roles[1] = demam.SENDER();
+        roles[2] = demam.GODMODE();
+        roles[3] = vopom.REPORTER();
     }
 
     function lockTokens(

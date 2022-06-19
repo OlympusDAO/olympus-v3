@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.11;
+pragma solidity ^0.8.13;
 
 import {TransferHelper} from "../libraries/TransferHelper.sol";
 import {FullMath} from "../libraries/FullMath.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Kernel, Module} from "../Kernel.sol";
+
+error RANGE_InvalidParams();
 
 /// @title  Olympus Range Data
 /// @notice Olympus Range Data (Module) Contract
@@ -12,14 +14,9 @@ import {Kernel, Module} from "../Kernel.sol";
 ///         It provides a standard interface for Range data, including range prices and capacities of each range side.
 ///         The data provided by this contract is used by the Olympus Range Operator to perform market operations.
 ///         The Olympus Range Data is updated each epoch by the Olympus Range Operator contract.
-/// @author Oighty, Zeus
 contract OlympusRange is Module {
     using TransferHelper for ERC20;
     using FullMath for uint256;
-
-    /* ========== ERRORS =========== */
-
-    error RANGE_InvalidParams();
 
     /* ========== EVENTS =========== */
 
@@ -57,6 +54,8 @@ contract OlympusRange is Module {
     }
 
     /* ========== STATE VARIABLES ========== */
+
+    Kernel.Role public constant OPERATOR = Kernel.Role.wrap("RANGE_Operator");
 
     /// Range data singleton. See range().
     Range internal _range;
@@ -118,8 +117,13 @@ contract OlympusRange is Module {
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
     /// @inheritdoc Module
-    function KEYCODE() public pure override returns (bytes5) {
-        return "RANGE";
+    function KEYCODE() public pure override returns (Kernel.Keycode) {
+        return Kernel.Keycode.wrap("RANGE");
+    }
+
+    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
+        roles = new Kernel.Role[](1);
+        roles[0] = OPERATOR;
     }
 
     /* ========== POLICY FUNCTIONS ========== */
@@ -132,7 +136,7 @@ contract OlympusRange is Module {
         bool high_,
         uint256 capacity_,
         uint256 marketCapacity_
-    ) external onlyPermittedPolicies {
+    ) external onlyRole(OPERATOR) {
         if (high_) {
             /// Update capacity and market capacity if they changed
             /// @dev the function is used by different modules which may not update both capacities at once
@@ -185,10 +189,7 @@ contract OlympusRange is Module {
     /// @notice                 Update the prices for the low and high sides.
     /// @notice                 Access restricted to approved policies.
     /// @param movingAverage_   Current moving average price to set range prices from.
-    function updatePrices(uint256 movingAverage_)
-        external
-        onlyPermittedPolicies
-    {
+    function updatePrices(uint256 movingAverage_) external onlyRole(OPERATOR) {
         /// Cache the spreads
         uint256 wallSpread = _range.wall.spread;
         uint256 cushionSpread = _range.cushion.spread;
@@ -215,7 +216,7 @@ contract OlympusRange is Module {
     /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
     function regenerate(bool high_, uint256 capacity_)
         external
-        onlyPermittedPolicies
+        onlyRole(OPERATOR)
     {
         uint256 threshold = (capacity_ * thresholdFactor) / FACTOR_SCALE;
 
@@ -253,7 +254,7 @@ contract OlympusRange is Module {
         bool high_,
         uint256 market_,
         uint256 marketCapacity_
-    ) public onlyPermittedPolicies {
+    ) public onlyRole(OPERATOR) {
         /// If market id is max uint256, then marketCapacity must be 0
         if (market_ == type(uint256).max && marketCapacity_ != 0)
             revert RANGE_InvalidParams();
@@ -282,7 +283,7 @@ contract OlympusRange is Module {
     /// @dev The new spreads will not go into effect until the next time updatePrices() is called.
     function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
         external
-        onlyPermittedPolicies
+        onlyRole(OPERATOR)
     {
         /// Confirm spreads are within allowed values
         if (
@@ -304,7 +305,7 @@ contract OlympusRange is Module {
     /// @dev The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
     function setThresholdFactor(uint256 thresholdFactor_)
         external
-        onlyPermittedPolicies
+        onlyRole(OPERATOR)
     {
         /// Confirm threshold factor is within allowed values
         if (thresholdFactor_ > 10000 || thresholdFactor_ < 100)

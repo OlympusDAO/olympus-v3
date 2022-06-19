@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
 import "forge-std/console2.sol";
@@ -9,32 +9,34 @@ import "test-utils/larping.sol";
 import "test-utils/sorting.sol";
 
 import {OlympusMinter} from "modules/MINTR.sol";
-import {LarpKernel} from "../larps/LarpKernel.sol";
 import {OlympusERC20Token, IOlympusAuthority} from "../../external/OlympusERC20.sol";
+import "../../Kernel.sol";
+
+//import "src/Kernel.sol";
 
 //import {OlympusAuthority} from "../../external/OlympusAuthority.sol";
 
 contract MockLegacyAuthority is IOlympusAuthority {
-    address authz;
+    address authr;
 
-    constructor(address authz_) {
-        authz = authz_;
+    constructor(address authr_) {
+        authr = authr_;
     }
 
     function governor() external view returns (address) {
-        return authz;
+        return authr;
     }
 
     function guardian() external view returns (address) {
-        return authz;
+        return authr;
     }
 
     function policy() external view returns (address) {
-        return authz;
+        return authr;
     }
 
     function vault() external view returns (address) {
-        return authz;
+        return authr;
     }
 }
 
@@ -43,7 +45,7 @@ contract MINTRTest is Test {
     using sorting for uint256[];
     using console2 for uint256;
 
-    LarpKernel internal kernel;
+    Kernel internal kernel;
     OlympusMinter internal MINTR;
     IOlympusAuthority internal auth;
     OlympusERC20Token internal ohm;
@@ -54,10 +56,10 @@ contract MINTRTest is Test {
     uint256 internal constant RATE_UNITS = 1e6;
 
     function setUp() public {
-        kernel = new LarpKernel();
+        kernel = new Kernel();
         auth = new MockLegacyAuthority(address(0x0));
         ohm = new OlympusERC20Token(address(auth));
-        MINTR = new OlympusMinter(kernel, ohm);
+        MINTR = new OlympusMinter(kernel, address(ohm));
 
         // Set vault in authority to MINTR module
         auth.vault.larp(address(MINTR));
@@ -66,13 +68,22 @@ contract MINTRTest is Test {
         userCreator = new UserFactory();
         usrs = userCreator.create(3);
 
-        kernel.installModule(address(MINTR));
-        // Approve this test fixture as policy with write permissions
-        kernel.grantWritePermissions(MINTR.KEYCODE(), address(this));
+        kernel.executeAction(Actions.InstallModule, address(MINTR));
+        kernel.executeAction(Actions.ApprovePolicy, address(this));
+    }
+
+    function configureReads() external pure {}
+
+    function requestRoles()
+        external
+        view
+        returns (Kernel.Role[] memory requests)
+    {
+        requests = MINTR.ROLES();
     }
 
     function test_KEYCODE() public {
-        assertEq32("MINTR", MINTR.KEYCODE());
+        assertEq("MINTR", Kernel.Keycode.unwrap(MINTR.KEYCODE()));
     }
 
     function test_ApprovedAddressMintsOhm(uint256 amount_) public {

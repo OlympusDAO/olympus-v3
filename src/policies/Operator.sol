@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.11;
+pragma solidity ^0.8.13;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -29,7 +29,6 @@ import {FullMath} from "libraries/FullMath.sol";
 ///         the cushion spread, the Operator deploys bond markets to support the price. The Operator also offers
 ///         zero slippage swaps at prices dictated by the wall spread from the moving average. These market operations
 ///         are performed up to a specific capacity before the market must stabilize to regenerate the capacity.
-/// @author Oighty, Zeus, indigo
 contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     using TransferHelper for ERC20;
     using FullMath for uint256;
@@ -111,27 +110,27 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
     /// @inheritdoc Policy
-    function configureReads() external override onlyKernel {
+    function configureReads() public override onlyKernel {
         PRICE = OlympusPrice(getModuleAddress("PRICE"));
         RANGE = OlympusRange(getModuleAddress("RANGE"));
         TRSRY = OlympusTreasury(getModuleAddress("TRSRY"));
         MINTR = OlympusMinter(getModuleAddress("MINTR"));
-        // TODO replace with kernel auth
         setAuthority(Authority(getModuleAddress("AUTHR")));
     }
 
     /// @inheritdoc Policy
-    function requestWrites()
+    function requestRoles()
         external
         view
         override
         onlyKernel
-        returns (bytes5[] memory permissions)
+        returns (Kernel.Role[] memory roles)
     {
-        permissions = new bytes5[](3);
-        permissions[0] = "RANGE";
-        permissions[1] = "TRSRY";
-        permissions[2] = "MINTR";
+        roles = new Kernel.Role[](4);
+        roles[0] = RANGE.OPERATOR();
+        roles[1] = TRSRY.BANKER();
+        roles[2] = MINTR.MINTER();
+        roles[3] = MINTR.BURNER();
     }
 
     /* ========== HEART FUNCTIONS ========== */

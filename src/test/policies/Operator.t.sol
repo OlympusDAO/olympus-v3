@@ -11,7 +11,6 @@ import {BondFixedTermTeller} from "../lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockOhm} from "../mocks/MockOhm.sol";
 import {MockPrice} from "../mocks/MockPrice.sol";
 import {MockAuthGiver} from "../mocks/MockAuthGiver.sol";
 import {MockModuleWriter} from "../mocks/MockModuleWriter.sol";
@@ -29,6 +28,22 @@ import {OlympusAuthority} from "../../modules/AUTHR.sol";
 
 import {Operator} from "../../policies/Operator.sol";
 import {BondCallback} from "../../policies/BondCallback.sol";
+
+contract MockOhm is ERC20 {
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        uint8 _decimals
+    ) ERC20(_name, _symbol, _decimals) {}
+
+    function mint(address to, uint256 value) public virtual {
+        _mint(to, value);
+    }
+
+    function burnFrom(address from, uint256 value) public virtual {
+        _burn(from, value);
+    }
+}
 
 contract OperatorTest is Test {
     using FullMath for uint256;
@@ -112,8 +127,8 @@ contract OperatorTest is Test {
                 [uint256(100), uint256(1000), uint256(2000)]
             );
             treasury = new OlympusTreasury(kernel);
-            minter = new OlympusMinter(kernel, OHM(address(ohm)));
-            authr = new OlympusAuthority(address(kernel));
+            minter = new OlympusMinter(kernel, address(ohm));
+            authr = new OlympusAuthority(kernel);
 
             /// Deploy mock writer for treasury to give withdraw permissions
             writer = new MockModuleWriter(kernel, treasury);

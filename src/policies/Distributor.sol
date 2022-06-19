@@ -94,15 +94,15 @@ contract Distributor is Auth, Policy {
         TRSRY = OlympusTreasury(payable(getModuleAddress("TRSRY")));
     }
 
-    function requestWrites()
+    function requestRoles()
         external
-        pure
+        view
         virtual
         override
-        returns (bytes5[] memory permissions)
+        returns (Kernel.Role[] memory roles)
     {
-        permissions = new bytes5[](1);
-        permissions[0] = "MINTR";
+        roles = new Kernel.Role[](1);
+        roles[0] = MINTR.MINTER();
     }
 
     /////////////////////////////////////////////////////////////////////////////////

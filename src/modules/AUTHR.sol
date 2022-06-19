@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 /// LOCAL
 // interfaces (enums events errors)
@@ -10,6 +10,8 @@ import {Kernel, Module} from "src/Kernel.sol";
 import {Authority} from "solmate/auth/Auth.sol";
 
 contract OlympusAuthority is Module, Authority {
+    Kernel.Role public constant ADMIN = Kernel.Role.wrap("AUTHR_Admin");
+
     mapping(address => bytes32) public getUserRoles;
 
     mapping(address => mapping(bytes4 => bool)) public isCapabilityPublic;
@@ -36,10 +38,15 @@ contract OlympusAuthority is Module, Authority {
         bool enabled
     );
 
-    constructor(address kernel_) Module(Kernel(kernel_)) {}
+    constructor(Kernel kernel_) Module(kernel_) {}
 
-    function KEYCODE() public pure virtual override returns (bytes5) {
-        return "AUTHR";
+    function KEYCODE() public pure virtual override returns (Kernel.Keycode) {
+        return Kernel.Keycode.wrap("AUTHR");
+    }
+
+    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
+        roles = new Kernel.Role[](1);
+        roles[0] = ADMIN;
     }
 
     function doesUserHaveRole(address user, uint8 role)
@@ -77,7 +84,7 @@ contract OlympusAuthority is Module, Authority {
         address target,
         bytes4 functionSig,
         bool enabled
-    ) public virtual onlyPermittedPolicies {
+    ) public virtual onlyRole(ADMIN) {
         isCapabilityPublic[target][functionSig] = enabled;
 
         emit PublicCapabilityUpdated(target, functionSig, enabled);
@@ -88,7 +95,7 @@ contract OlympusAuthority is Module, Authority {
         address target,
         bytes4 functionSig,
         bool enabled
-    ) public virtual onlyPermittedPolicies {
+    ) public virtual onlyRole(ADMIN) {
         if (enabled) {
             getRolesWithCapability[target][functionSig] |= bytes32(1 << role);
         } else {
@@ -102,7 +109,7 @@ contract OlympusAuthority is Module, Authority {
         address user,
         uint8 role,
         bool enabled
-    ) public virtual onlyPermittedPolicies {
+    ) public virtual onlyRole(ADMIN) {
         if (enabled) {
             getUserRoles[user] |= bytes32(1 << role);
         } else {

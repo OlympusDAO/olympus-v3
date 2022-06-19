@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 /// DEPS
 
@@ -41,14 +41,14 @@ contract VotingPowerToken is ERC20, Auth, Policy {
         setAuthority(Authority(getModuleAddress("AUTHR")));
     }
 
-    function requestWrites()
+    function requestRoles()
         external
         view
         override
         onlyKernel
-        returns (bytes5[] memory permissions)
+        returns (Kernel.Role[] memory roles)
     {
-        permissions = new bytes5[](0);
+        roles = new Kernel.Role[](0);
     }
 
     // ######################## ~  MODIFIER ~ ########################
