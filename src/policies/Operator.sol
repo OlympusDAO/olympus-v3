@@ -139,8 +139,6 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         /// Revert if not initialized
         if (!initialized) revert Operator_NotInitialized();
 
-        /// Update the moving average on the PRICE module
-
         /// Update the prices for the range, save new regen observations, and update capacities based on bond market activity
         _updateRangePrices();
         _addObservation();
@@ -682,14 +680,14 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
             return amountOut;
         } else {
-            /// Revert if amount in exceeds capacity
-            if (amountIn_ > RANGE.capacity(true))
-                revert Operator_InsufficientCapacity();
-
             /// Calculate amount out
             uint256 amountOut = amountIn_
                 .mulDiv(10**ohm.decimals(), 10**reserve.decimals())
                 .mulDiv(10**PRICE.decimals(), RANGE.price(true, true));
+
+            /// Revert if amount in exceeds capacity
+            if (amountOut > RANGE.capacity(true))
+                revert Operator_InsufficientCapacity();
 
             return amountOut;
         }
