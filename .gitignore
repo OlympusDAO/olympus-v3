@@ -3,3 +3,4 @@ cache/
 node_modules/
 .env
 remappings.txt
+broadcast/
