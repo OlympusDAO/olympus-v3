@@ -90,41 +90,18 @@ contract RangeTest is DSTest {
     /* ========== POLICY FUNCTION TESTS ========== */
 
     /// DONE
-    /// [X] updatePrices
     /// [X] updateCapacity
     ///     [X] updating capacity and lastMarketCapacity above the threshold
     ///     [X] updating capacity and lastMarketCapacity below the threshold
+    /// [X] updatePrices
+    /// [X] regenerate
     /// [X] updateMarket
     ///     [X] updating with non-max market ID and positive capacity creates a cushion
     ///     [X] updating with max-market ID takes down a cushion and sets last market capacity to zero
-    /// [X] regenerate
     /// [X] setSpreads
     /// [X] setThresholdFactor
     /// [X] cannot set parameters with invalid params
     /// [X] only permitted policies can call these functions
-
-    function testCorrectness_updatePrices() public {
-        /// Store the starting bands
-        OlympusRange.Range memory startRange = range.range();
-
-        /// Update the prices with a new moving average above the initial one
-        rangeWriter.updatePrices(110 * 1e18);
-
-        /// Check that the bands have updated
-        assertGt(range.price(false, false), startRange.cushion.low.price);
-        assertGt(range.price(true, false), startRange.wall.low.price);
-        assertGt(range.price(false, true), startRange.cushion.high.price);
-        assertGt(range.price(true, true), startRange.wall.high.price);
-
-        /// Update prices with a new moving average below the initial one
-        rangeWriter.updatePrices(90 * 1e18);
-
-        /// Check that the bands have updated
-        assertLt(range.price(false, false), startRange.cushion.low.price);
-        assertLt(range.price(true, false), startRange.wall.low.price);
-        assertLt(range.price(false, true), startRange.cushion.high.price);
-        assertLt(range.price(true, true), startRange.wall.high.price);
-    }
 
     event WallUp(bool high, uint256 timestamp, uint256 capacity);
     event WallDown(bool high, uint256 timestamp);
@@ -174,6 +151,62 @@ contract RangeTest is DSTest {
         assertEq(range.capacity(false), 10_000 * 1e18);
         assertEq(range.lastMarketCapacity(true), 0);
         assertEq(range.lastMarketCapacity(false), 0);
+    }
+
+    function testCorrectness_updatePrices() public {
+        /// Store the starting bands
+        OlympusRange.Range memory startRange = range.range();
+
+        /// Update the prices with a new moving average above the initial one
+        rangeWriter.updatePrices(110 * 1e18);
+
+        /// Check that the bands have updated
+        assertGt(range.price(false, false), startRange.cushion.low.price);
+        assertGt(range.price(true, false), startRange.wall.low.price);
+        assertGt(range.price(false, true), startRange.cushion.high.price);
+        assertGt(range.price(true, true), startRange.wall.high.price);
+
+        /// Update prices with a new moving average below the initial one
+        rangeWriter.updatePrices(90 * 1e18);
+
+        /// Check that the bands have updated
+        assertLt(range.price(false, false), startRange.cushion.low.price);
+        assertLt(range.price(true, false), startRange.wall.low.price);
+        assertLt(range.price(false, true), startRange.cushion.high.price);
+        assertLt(range.price(true, true), startRange.wall.high.price);
+    }
+
+    function testCorrectness_regenerate() public {
+        /// Confirm that the capacities, thresholds, and last market capacities are set to initial values
+        OlympusRange.Range memory startRange = range.range();
+        assertEq(startRange.low.capacity, 10_000_000 * 1e18);
+        assertEq(startRange.high.capacity, 10_000_000 * 1e18);
+        assertEq(startRange.low.threshold, 100_000 * 1e18);
+        assertEq(startRange.high.threshold, 100_000 * 1e18);
+        assertEq(startRange.low.lastMarketCapacity, 0);
+        assertEq(startRange.high.lastMarketCapacity, 0);
+
+        /// Update capacities on both sides with lower values
+        rangeWriter.updateCapacity(true, 9_000_000 * 1e18, 1_000_000 * 1e18);
+        rangeWriter.updateCapacity(false, 8_000_000 * 1e18, 500_000 * 1e18);
+
+        /// Regenerate each side of the range and confirm values are set to the regenerated values
+        vm.expectEmit(false, false, false, true);
+        emit WallUp(true, block.timestamp, 20_000_000 * 1e18);
+        rangeWriter.regenerate(true, 20_000_000 * 1e18);
+
+        vm.expectEmit(false, false, false, true);
+        emit WallUp(false, block.timestamp, 20_000_000 * 1e18);
+        rangeWriter.regenerate(false, 20_000_000 * 1e18);
+
+        /// Check that the capacities, thresholds, and last market capacities are set to the regenerated values
+        OlympusRange.Range memory endRange = range.range();
+        assertEq(endRange.low.capacity, 20_000_000 * 1e18);
+        assertEq(endRange.high.capacity, 20_000_000 * 1e18);
+        assertEq(endRange.low.threshold, 200_000 * 1e18);
+        assertEq(endRange.high.threshold, 200_000 * 1e18);
+        assertEq(endRange.low.lastMarketCapacity, 0);
+        assertEq(endRange.high.lastMarketCapacity, 0);
     }
 
     event CushionUp(bool high, uint256 timestamp, uint256 capacity);
@@ -231,39 +264,6 @@ contract RangeTest is DSTest {
 
         vm.expectRevert(err);
         rangeWriter.updateMarket(true, type(uint256).max, 1_000_000 * 1e18);
-    }
-
-    function testCorrectness_regenerate() public {
-        /// Confirm that the capacities, thresholds, and last market capacities are set to initial values
-        OlympusRange.Range memory startRange = range.range();
-        assertEq(startRange.low.capacity, 10_000_000 * 1e18);
-        assertEq(startRange.high.capacity, 10_000_000 * 1e18);
-        assertEq(startRange.low.threshold, 100_000 * 1e18);
-        assertEq(startRange.high.threshold, 100_000 * 1e18);
-        assertEq(startRange.low.lastMarketCapacity, 0);
-        assertEq(startRange.high.lastMarketCapacity, 0);
-
-        /// Update capacities on both sides with lower values
-        rangeWriter.updateCapacity(true, 9_000_000 * 1e18, 1_000_000 * 1e18);
-        rangeWriter.updateCapacity(false, 8_000_000 * 1e18, 500_000 * 1e18);
-
-        /// Regenerate each side of the range and confirm values are set to the regenerated values
-        vm.expectEmit(false, false, false, true);
-        emit WallUp(true, block.timestamp, 20_000_000 * 1e18);
-        rangeWriter.regenerate(true, 20_000_000 * 1e18);
-
-        vm.expectEmit(false, false, false, true);
-        emit WallUp(false, block.timestamp, 20_000_000 * 1e18);
-        rangeWriter.regenerate(false, 20_000_000 * 1e18);
-
-        /// Check that the capacities, thresholds, and last market capacities are set to the regenerated values
-        OlympusRange.Range memory endRange = range.range();
-        assertEq(endRange.low.capacity, 20_000_000 * 1e18);
-        assertEq(endRange.high.capacity, 20_000_000 * 1e18);
-        assertEq(endRange.low.threshold, 200_000 * 1e18);
-        assertEq(endRange.high.threshold, 200_000 * 1e18);
-        assertEq(endRange.low.lastMarketCapacity, 0);
-        assertEq(endRange.high.lastMarketCapacity, 0);
     }
 
     function testCorrectness_setSpreads() public {
