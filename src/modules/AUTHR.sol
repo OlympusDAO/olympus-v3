@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-/// LOCAL
-// interfaces (enums events errors)
-import "src/OlympusErrors.sol";
-
-// types
 import {Kernel, Module} from "src/Kernel.sol";
 import {Authority} from "solmate/auth/Auth.sol";
 

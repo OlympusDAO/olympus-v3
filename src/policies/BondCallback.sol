@@ -4,7 +4,6 @@ pragma solidity ^0.8.13;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 
-//import {AuthConsumer} from "../bases/AuthConsumer.sol";
 import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
