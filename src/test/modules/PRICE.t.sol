@@ -154,8 +154,34 @@ contract PriceTest is DSTest {
     /* ========== UPDATE TESTS ========== */
 
     /// DONE
+    /// [X] update moving average cannot be called before price initialization
     /// [X] update moving average
     /// [X] update moving average several times and expand observations
+
+    function testCorrectness_cannotUpdateMovingAverageBeforeInitialization()
+        public
+    {
+        bytes memory err = abi.encodeWithSignature("Price_NotInitialized()");
+
+        vm.expectRevert(err);
+        priceWriter.updateMovingAverage();
+    }
+
+    function testCorrectness_onlyPermittedPoliciesCanCallUpdateMovingAverage(
+        uint8 nonce
+    ) public {
+        bytes memory err = abi.encodeWithSelector(
+            Module_NotAuthorized.selector
+        );
+
+        /// Initialize price module
+        initializePrice(nonce);
+
+        /// Call updateMovingAverage with a non-approved address
+        vm.expectRevert(err);
+        vm.prank(address(0x0));
+        price.updateMovingAverage();
+    }
 
     function testCorrectness_updateMovingAverage(uint8 nonce) public {
         /// Initialize price module
@@ -222,10 +248,21 @@ contract PriceTest is DSTest {
     /* ========== VIEW TESTS ========== */
 
     /// DONE
+    /// [X] KEYCODE
+    /// [X] ROLES
     /// [X] getCurrentPrice
     /// [X] getLastPrice
     /// [X] getMovingAverage
     /// [X] cannot get prices before initialization
+
+    function testCorrectness_KEYCODE() public {
+        assertEq("PRICE", Kernel.Keycode.unwrap(price.KEYCODE()));
+    }
+
+    function testCorrectness_ROLES() public {
+        assertEq("PRICE_Keeper", Kernel.Role.unwrap(price.ROLES()[0]));
+        assertEq("PRICE_Guardian", Kernel.Role.unwrap(price.ROLES()[1]));
+    }
 
     function testCorrectness_getCurrentPrice(uint8 nonce) public {
         /// Initialize price module
@@ -295,6 +332,7 @@ contract PriceTest is DSTest {
 
     /// DONE
     /// [X] initialize the moving average with a set of observations and last observation time
+    /// [X] no observations exist before initialization
     /// [X] cannot initialize with invalid params
     /// [X] change moving average duration (shorter than current)
     /// [X] change moving average duration (longer than current)
@@ -322,6 +360,21 @@ contract PriceTest is DSTest {
 
         /// Check that the last observation time is set to the current time
         assertEq(price.lastObservationTime(), block.timestamp);
+    }
+
+    /// For some reason vm.expectRevert would not work here
+    /// TODO: convert to vm.expectRevert
+    function testFail_cannotReinitialize(uint8 nonce) public {
+        /// Check that the module is not initialized
+        assertTrue(!price.initialized());
+
+        /// Initialize price module
+        initializePrice(nonce);
+
+        /// Check the the module is initialized
+        assertTrue(price.initialized());
+
+        initializePrice(nonce);
     }
 
     function testCorrectness_noObservationsBeforeInitialized() public {

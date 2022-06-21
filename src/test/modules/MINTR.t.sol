@@ -86,29 +86,58 @@ contract MINTRTest is Test {
         assertEq("MINTR", Kernel.Keycode.unwrap(MINTR.KEYCODE()));
     }
 
-    function test_ApprovedAddressMintsOhm(uint256 amount_) public {
-        // This contract is approved
-        MINTR.mintOhm(usrs[0], amount_);
+    function test_ROLES() public {
+        assertEq("MINTR_Minter", Kernel.Role.unwrap(MINTR.ROLES()[0]));
+        assertEq("MINTR_Burner", Kernel.Role.unwrap(MINTR.ROLES()[1]));
+    }
 
-        assertEq(ohm.balanceOf(usrs[0]), amount_);
+    function test_ApprovedAddressMintsOhm(address to_, uint256 amount_) public {
+        // Will test mint not working against zero-address separately
+        vm.assume(to_ != address(0x0));
+
+        // This contract is approved
+        MINTR.mintOhm(to_, amount_);
+
+        assertEq(ohm.balanceOf(to_), amount_);
+    }
+
+    function testFail_ApprovedAddressCannotMintToZeroAddress(uint256 amount_)
+        public
+    {
+        // This contract is approved
+        MINTR.mintOhm(address(0x0), amount_);
     }
 
     // TODO use vm.expectRevert() instead. Did not work for me.
-    function testFail_UnapprovedAddressMintsOhm(uint256 amount_) public {
+    function testFail_UnapprovedAddressMintsOhm(address to_, uint256 amount_)
+        public
+    {
         // Have user try to mint
         vm.prank(usrs[0]);
-        MINTR.mintOhm(usrs[1], amount_);
+        MINTR.mintOhm(to_, amount_);
     }
 
-    function test_ApprovedAddressBurnsOhm(uint256 amount_) public {
-        // Setup: mint ohm into user0
-        MINTR.mintOhm(usrs[1], amount_);
-        assertEq(ohm.balanceOf(usrs[1]), amount_);
+    function test_ApprovedAddressBurnsOhm(address from_, uint256 amount_)
+        public
+    {
+        // Will test burn not working against zero-address separately
+        vm.assume(from_ != address(0x0));
 
-        vm.prank(usrs[1]);
+        // Setup: mint ohm into user0
+        MINTR.mintOhm(from_, amount_);
+        assertEq(ohm.balanceOf(from_), amount_);
+
+        vm.prank(from_);
         ohm.approve(address(MINTR), amount_);
-        MINTR.burnOhm(usrs[1], amount_);
-        assertEq(ohm.balanceOf(usrs[1]), 0);
+        MINTR.burnOhm(from_, amount_);
+        assertEq(ohm.balanceOf(from_), 0);
+    }
+
+    function testFail_ApprovedAddressCannotBurnFromZeroAddress(uint256 amount_)
+        public
+    {
+        // This contract is approved
+        MINTR.burnOhm(address(0x0), amount_);
     }
 
     // TODO use vm.expectRevert() instead. Did not work for me.

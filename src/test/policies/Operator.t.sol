@@ -1564,11 +1564,11 @@ contract OperatorTest is Test {
 
         /// Case 2: OHM In, more than capacity
         amountIn =
-            range.capacity(true).mulDiv(1e18, 1e9).mulDiv(
-                range.price(true, false),
-                1e18
+            range.capacity(false).mulDiv(1e9, 1e18).mulDiv(
+                1e18,
+                range.price(true, false)
             ) +
-            1;
+            1e9;
 
         bytes memory err = abi.encodeWithSignature(
             "Operator_InsufficientCapacity()"
@@ -1586,7 +1586,12 @@ contract OperatorTest is Test {
         assertEq(expAmountOut, operator.getAmountOut(reserve, amountIn));
 
         /// Case 4: Reserve In, more than capacity
-        amountIn = range.capacity(false) + 1;
+        amountIn =
+            range.capacity(true).mulDiv(1e18, 1e9).mulDiv(
+                range.price(true, true),
+                1e18
+            ) +
+            1e18;
 
         vm.expectRevert(err);
         operator.getAmountOut(reserve, amountIn);

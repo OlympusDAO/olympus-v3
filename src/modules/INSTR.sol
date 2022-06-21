@@ -6,17 +6,17 @@ pragma solidity ^0.8.13;
 
 import "src/Kernel.sol";
 
-error INSTR_CannotBeEmpty();
-error INSTR_InstructionModuleMustBeLast();
-error INSTR_NotAContract(address target_);
-error INSTR_InvalidKeycode(Kernel.Keycode keycode_);
+error INSTR_InstructionsCannotBeEmpty();
+error INSTR_InvalidChangeExecutorAction();
+error INSTR_InvalidTargetNotAContract();
+error INSTR_InvalidModuleKeycode();
 
-contract Instructions is Module {
+contract OlympusInstructions is Module {
     /////////////////////////////////////////////////////////////////////////////////
     //                         Kernel Module Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
 
-    Kernel.Role public constant EXECUTOR = Kernel.Role.wrap("INSTR_Executor");
+    Kernel.Role public constant GOVERNOR = Kernel.Role.wrap("INSTR_Governor");
 
     constructor(Kernel kernel_) Module(kernel_) {}
 
@@ -26,7 +26,7 @@ contract Instructions is Module {
 
     function ROLES() public pure override returns (Kernel.Role[] memory roles) {
         roles = new Kernel.Role[](1);
-        roles[0] = EXECUTOR;
+        roles[0] = GOVERNOR;
     }
 
     /////////////////////////////////////////////////////////////////////////////////
@@ -59,62 +59,67 @@ contract Instructions is Module {
     //                             Policy Interface                                //
     /////////////////////////////////////////////////////////////////////////////////
 
+    // view function for retrieving a list of instructions in an outside contract
+    function getInstructions(uint256 instructionsId_)
+        public
+        view
+        returns (Instruction[] memory)
+    {
+        return storedInstructions[instructionsId_];
+    }
+
     function store(Instruction[] calldata instructions_)
         external
-        onlyRole(EXECUTOR)
+        onlyRole(GOVERNOR)
         returns (uint256)
     {
         uint256 length = instructions_.length;
-        uint256 instructionsId = totalInstructions + 1;
-        Instruction[] storage instructions = storedInstructions[instructionsId];
+        totalInstructions++;
 
-        if (length == 0) revert INSTR_CannotBeEmpty();
+        // initialize an empty list of instructions that will be filled
+        Instruction[] storage instructions = storedInstructions[
+            totalInstructions
+        ];
 
+        // if there are no instructions, throw an error
+        if (length == 0) {
+            revert INSTR_InstructionsCannotBeEmpty();
+        }
+
+        // for each instruction, do the following actions:
         for (uint256 i = 0; i < length; i++) {
+            // get the instruction
             Instruction calldata instruction = instructions_[i];
+
+            // check the address that the instruction is being performed on is a contract (bytecode size > 0)
             _ensureContract(instruction.target);
 
+            // if the instruction deals with a module, make sure the module has a valid keycode (UPPERCASE A-Z ONLY)
             if (
                 instruction.action == Actions.InstallModule ||
                 instruction.action == Actions.UpgradeModule
             ) {
-                Kernel.Keycode keycode = Module(instruction.target).KEYCODE();
-                _ensureValidKeycode(keycode);
+                Module module = Module(instruction.target);
+                _ensureValidKeycode(module.KEYCODE());
+                revert INSTR_InvalidChangeExecutorAction();
+            } else if (
+                instruction.action == Actions.ChangeExecutor && i != length - 1
+            ) {
+                // throw an error if ChangeExecutor exists and is not the last Action in the instruction llist
+                // this exists because if ChangeExecutor is not the last item in the list of instructions
+                // the Kernel will not recognize any of the following instructions as valid, since the policy
+                // executing the list of instructions no longer has permissions in the Kernel. To avoid this issue
+                // and prevent invalid proposals from being saved, we perform this check.
 
-                /* 
-                CAUTION: Review the conditional below & make sure it's implemented correctly so
-                upgrades to the instructions module cannot brick the system
-
-                [INSTR] Module change must be coupled with a "changeExecutor" Instruction
-                or the old module will have executor roles while the new modules will be accessed by policies
-                Change executor to whitelist of addresses vs. single owner?
-                */
-
-                if (
-                    Kernel.Keycode.unwrap(keycode) == "INSTR" && length - 1 != i
-                ) revert INSTR_InstructionModuleMustBeLast();
+                revert INSTR_InvalidChangeExecutorAction();
             }
 
             instructions.push(instructions_[i]);
         }
-        totalInstructions++;
 
-        emit InstructionsStored(instructionsId);
+        emit InstructionsStored(totalInstructions);
 
-        return instructionsId;
-    }
-
-    function execute(uint256 instructionsId_) external onlyRole(EXECUTOR) {
-        Instruction[] memory instructions = storedInstructions[instructionsId_];
-
-        for (uint256 step = 0; step < instructions.length; step++) {
-            kernel.executeAction(
-                instructions[step].action,
-                instructions[step].target
-            );
-        }
-
-        emit InstructionsExecuted(instructionsId_);
+        return totalInstructions;
     }
 
     /////////////////////////////// INTERNAL FUNCTIONS ////////////////////////////////
@@ -124,7 +129,7 @@ contract Instructions is Module {
         assembly {
             size := extcodesize(target_)
         }
-        if (size == 0) revert INSTR_NotAContract(target_);
+        if (size == 0) revert INSTR_InvalidTargetNotAContract();
     }
 
     function _ensureValidKeycode(Kernel.Keycode keycode_) internal pure {
@@ -133,9 +138,7 @@ contract Instructions is Module {
         for (uint256 i = 0; i < 5; ) {
             bytes1 char = unwrapped[i];
 
-            if (char < 0x41 || char > 0x5A)
-                revert INSTR_InvalidKeycode(keycode_);
-            // A-Z only"
+            if (char < 0x41 || char > 0x5A) revert INSTR_InvalidModuleKeycode(); // A-Z only"
 
             unchecked {
                 i++;

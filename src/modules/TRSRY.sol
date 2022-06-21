@@ -210,10 +210,38 @@ contract OlympusTreasury is Module {
         // Set debt for debtor
         reserveDebt[token_][debtor_] = amount_;
 
-        if (oldDebt >= amount_) totalDebt[token_] += amount_;
-        else totalDebt[token_] -= amount_;
+        if (oldDebt < amount_) totalDebt[token_] += amount_ - oldDebt;
+        else totalDebt[token_] -= oldDebt - amount_;
 
         emit DebtSet(token_, debtor_, amount_);
+    }
+
+    function increaseDebt(
+        ERC20 token_,
+        address debtor_,
+        uint256 amount_
+    ) external onlyRole(DEBT_ADMIN) {
+        // Increase debt for debtor
+        reserveDebt[token_][debtor_] += amount_;
+
+        // Increase total debt
+        totalDebt[token_] += amount_;
+
+        emit DebtSet(token_, debtor_, reserveDebt[token_][debtor_]);
+    }
+
+    function decreaseDebt(
+        ERC20 token_,
+        address debtor_,
+        uint256 amount_
+    ) external onlyRole(DEBT_ADMIN) {
+        // Decrease debt for debtor
+        reserveDebt[token_][debtor_] -= amount_;
+
+        // Decrease total debt
+        totalDebt[token_] -= amount_;
+
+        emit DebtSet(token_, debtor_, reserveDebt[token_][debtor_]);
     }
 
     // TODO Only permitted by governor. Used in case of emergency where loaned amounts cannot be repaid.

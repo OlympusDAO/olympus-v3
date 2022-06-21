@@ -158,10 +158,6 @@ contract Kernel {
         } else if (action_ == Actions.TerminatePolicy) {
             _terminatePolicy(target_);
         } else if (action_ == Actions.ChangeExecutor) {
-            // Require kernel to install the INSTR module before calling ChangeExecutor on it
-            if (Keycode.unwrap(getKeycodeForModule[target_]) != bytes5("INSTR"))
-                revert Kernel_OnlyExecutor(target_);
-
             executor = target_;
         }
 
