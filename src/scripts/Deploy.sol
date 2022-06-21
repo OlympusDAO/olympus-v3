@@ -14,7 +14,7 @@ import {OlympusPrice} from "modules/PRICE.sol";
 import {OlympusRange} from "modules/RANGE.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
-import {Instructions} from "modules/INSTR.sol";
+import {OlympusInstructions} from "modules/INSTR.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {Heart} from "policies/Heart.sol";
@@ -34,7 +34,7 @@ contract OlympusDeploy is Script {
     OlympusRange public RANGE;
     OlympusTreasury public TRSRY;
     OlympusMinter public MINTR;
-    Instructions public INSTR;
+    OlympusInstructions public INSTR;
 
     /// Policies
     Operator public operator;
@@ -91,7 +91,7 @@ contract OlympusDeploy is Script {
         console2.log("Kernel deployed at:", address(kernel));
 
         /// Deploy modules
-        INSTR = new Instructions(kernel);
+        INSTR = new OlympusInstructions(kernel);
         console2.log("Instructions module deployed at:", address(INSTR));
 
         AUTHR = new OlympusAuthority(kernel);
