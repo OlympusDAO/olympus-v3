@@ -81,9 +81,9 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
         _protocol = protocol_;
         _aggregator = aggregator_;
 
-        feeTiers[0] = uint48(2500); // Default fee tier
-        feeTiers[1] = uint48(1500);
-        feeTiers[2] = uint48(1000);
+        feeTiers[0] = uint48(0); // Default fee tier
+        feeTiers[1] = uint48(0);
+        feeTiers[2] = uint48(0);
     }
 
     /// @inheritdoc IBondTeller

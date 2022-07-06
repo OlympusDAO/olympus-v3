@@ -310,11 +310,16 @@ contract OperatorTest is Test {
             testReserve * 100
         );
 
-        // Approve the operator for the tokens to swap
+        // Approve the operator and bond teller for the tokens to swap
         vm.prank(alice);
         ohm.approve(address(operator), testOhm * 20);
         vm.prank(alice);
         reserve.approve(address(operator), testReserve * 20);
+
+        vm.prank(alice);
+        ohm.approve(address(teller), testOhm * 20);
+        vm.prank(alice);
+        reserve.approve(address(teller), testReserve * 20);
     }
 
     /* ========== HELPER FUNCTIONS ========== */
@@ -357,6 +362,7 @@ contract OperatorTest is Test {
 
     /// DONE
     /// [X] Able to swap when walls are up
+    /// [X] Splippage check when swapping
     /// [X] Wall breaks when capacity drops below the configured threshold
     /// [X] Not able to swap at the walls when they are down
 
@@ -523,12 +529,79 @@ contract OperatorTest is Test {
         operator.swap(ohm, amountIn, expAmountOut);
     }
 
+    function testCorrectness_swapRevertsOnSlippage() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Confirm walls are up
+        assertTrue(range.active(true));
+        assertTrue(range.active(false));
+
+        /// Set amounts for high wall swap with minAmountOut greater than expAmountOut
+        uint256 amountIn = 100 * 1e18;
+        uint256 expAmountOut = amountIn.mulDiv(
+            1e9 * 1e18,
+            1e18 * range.price(true, true)
+        );
+        uint256 minAmountOut = expAmountOut + 1;
+
+        /// Try to swap at low wall, expect to fail
+        bytes memory err = abi.encodeWithSignature(
+            "Operator_AmountLessThanMinimum(uint256,uint256)",
+            expAmountOut,
+            minAmountOut
+        );
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.swap(reserve, amountIn, minAmountOut);
+
+        /// Set amounts for low wall swap with minAmountOut greater than expAmountOut
+        amountIn = 100 * 1e9;
+        expAmountOut = amountIn.mulDiv(
+            1e18 * range.price(true, false),
+            1e9 * 1e18
+        );
+        minAmountOut = expAmountOut + 1;
+
+        /// Try to swap at low wall, expect to fail
+        err = abi.encodeWithSignature(
+            "Operator_AmountLessThanMinimum(uint256,uint256)",
+            expAmountOut,
+            minAmountOut
+        );
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.swap(ohm, amountIn, minAmountOut);
+    }
+
+    function testCorrectness_swapRevertsWithInvalidToken() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Confirm walls are up
+        assertTrue(range.active(true));
+        assertTrue(range.active(false));
+
+        /// Try to swap with invalid token, expect to fail
+        uint256 amountIn = 100 * 1e18;
+        uint256 minAmountOut = 100 * 1e18;
+        ERC20 token = ERC20(bob);
+
+        bytes memory err = abi.encodeWithSignature("Operator_InvalidParams()");
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.swap(token, amountIn, minAmountOut);
+    }
+
     /* ========== CUSHION TESTS ========== */
 
     /// DONE
     /// [X] Cushions deployed when price set in the range and operate triggered
     /// [X] Cushions deactivated when price out of range and operate triggered or when wall goes down
     /// [X] Cushion doesn't deploy when wall is down
+    /// [X] Bond purchases update capacity
 
     function testCorrectness_highCushionDeployedInSpread() public {
         /// Initialize operator
@@ -921,6 +994,68 @@ contract OperatorTest is Test {
         assertTrue(type(uint256).max == newMarket);
         /// And the previous market is closed
         assertTrue(!auctioneer.isLive(currentMarket));
+    }
+
+    function testCorrectness_highCushionPurchasesReduceCapacity() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Get the start capacity of the high side
+        uint256 startCapacity = range.capacity(true);
+
+        /// Set price on mock oracle into the high cushion
+        price.setLastPrice(111 * 1e18);
+
+        /// Trigger the operate function manually
+        vm.prank(guardian);
+        operator.operate();
+
+        /// Check that the cushion is deployed
+        uint256 id = range.market(true);
+        assertTrue(auctioneer.isLive(id));
+
+        /// Set amount to purchase from cushion (which will be at wall price initially)
+        uint256 amountIn = auctioneer.maxAmountAccepted(id) / 2;
+        uint256 minAmountOut = auctioneer.payoutFor(amountIn, id);
+
+        /// Purchase from cushion
+        vm.prank(alice);
+        (uint256 payout, ) = teller.purchase(alice, id, amountIn, minAmountOut);
+
+        /// Check that the side capacity has been reduced by the amount of the payout
+        assertEq(range.capacity(true), startCapacity - payout);
+    }
+
+    function testCorrectness_lowCushionPurchasesReduceCapacity() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Get the start capacity of the low side
+        uint256 startCapacity = range.capacity(false);
+
+        /// Set price on mock oracle into the low cushion
+        price.setLastPrice(89 * 1e18);
+
+        /// Trigger the operate function manually
+        vm.prank(guardian);
+        operator.operate();
+
+        /// Check that the cushion is deployed
+        uint256 id = range.market(false);
+        assertTrue(auctioneer.isLive(id));
+
+        /// Set amount to purchase from cushion (which will be at wall price initially)
+        uint256 amountIn = auctioneer.maxAmountAccepted(id) / 2;
+        uint256 minAmountOut = auctioneer.payoutFor(amountIn, id);
+
+        /// Purchase from cushion
+        vm.prank(alice);
+        (uint256 payout, ) = teller.purchase(alice, id, amountIn, minAmountOut);
+
+        /// Check that the side capacity has been reduced by the amount of the payout
+        assertEq(range.capacity(false), startCapacity - payout);
     }
 
     /* ========== REGENERATION TESTS ========== */
@@ -1444,6 +1579,14 @@ contract OperatorTest is Test {
         operator.operate();
     }
 
+    function testCorrectness_cannotOperatorIfNotInitialized() public {
+        /// Call operate as heart contract and expect to revert
+        bytes memory err = abi.encodeWithSignature("Operator_NotInitialized()");
+        vm.expectRevert(err);
+        vm.prank(heart);
+        operator.operate();
+    }
+
     function testCorrectness_nonPolicyCannotSetConfig() public {
         /// Initialize operator
         vm.prank(guardian);
@@ -1548,7 +1691,21 @@ contract OperatorTest is Test {
         assertLt(newRange.wall.high.price, startRange.wall.high.price);
     }
 
-    function setThresholdFactor() public {}
+    function testCorrectness_setThresholdFactor() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Check that the threshold factor is the same as initialized
+        assertEq(range.thresholdFactor(), 100);
+
+        /// Set threshold factor larger as admin
+        vm.prank(policy);
+        operator.setThresholdFactor(150);
+
+        /// Check that the threshold factor has been updated
+        assertEq(range.thresholdFactor(), 150);
+    }
 
     function testCorrectness_cannotSetSpreadWithInvalidParams() public {
         /// Initialize operator
