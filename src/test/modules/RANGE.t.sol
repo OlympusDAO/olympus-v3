@@ -7,12 +7,12 @@ import {console2 as console} from "forge-std/console2.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockModuleWriter} from "../mocks/MockModuleWriter.sol";
+import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 
-import {FullMath} from "../../libraries/FullMath.sol";
+import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
-import {OlympusRange} from "../../modules/RANGE.sol";
+import {OlympusRange} from "modules/RANGE.sol";
 
 contract RangeTest is DSTest {
     using FullMath for uint256;

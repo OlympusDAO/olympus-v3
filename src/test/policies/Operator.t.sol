@@ -5,29 +5,29 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 
-import {BondFixedTermCDA} from "../lib/bonds/BondFixedTermCDA.sol";
-import {BondAggregator} from "../lib/bonds/BondAggregator.sol";
-import {BondFixedTermTeller} from "../lib/bonds/BondFixedTermTeller.sol";
+import {BondFixedTermCDA} from "test/lib/bonds/BondFixedTermCDA.sol";
+import {BondAggregator} from "test/lib/bonds/BondAggregator.sol";
+import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockPrice} from "../mocks/MockPrice.sol";
-import {MockAuthGiver} from "../mocks/MockAuthGiver.sol";
-import {MockModuleWriter} from "../mocks/MockModuleWriter.sol";
+import {MockPrice} from "test/mocks/MockPrice.sol";
+import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
+import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 
 import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {Kernel, Actions} from "../../Kernel.sol";
-import {OlympusRange} from "../../modules/RANGE.sol";
-import {OlympusTreasury} from "../../modules/TRSRY.sol";
-import {OlympusMinter, OHM} from "../../modules/MINTR.sol";
-import {OlympusAuthority} from "../../modules/AUTHR.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
+import {OlympusRange} from "modules/RANGE.sol";
+import {OlympusTreasury} from "modules/TRSRY.sol";
+import {OlympusMinter, OHM} from "modules/MINTR.sol";
+import {OlympusAuthority} from "modules/AUTHR.sol";
 
-import {Operator} from "../../policies/Operator.sol";
-import {BondCallback} from "../../policies/BondCallback.sol";
+import {Operator} from "policies/Operator.sol";
+import {BondCallback} from "policies/BondCallback.sol";
 
 contract MockOhm is ERC20 {
     constructor(

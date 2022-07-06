@@ -8,8 +8,8 @@ import {Vm} from "forge-std/Vm.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
-import {MockPriceFeed} from "../mocks/MockPriceFeed.sol";
-import {MockModuleWriter} from "../mocks/MockModuleWriter.sol";
+import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 
 import {OlympusPrice} from "modules/PRICE.sol";
 import "src/Kernel.sol";

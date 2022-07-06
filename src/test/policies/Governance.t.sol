@@ -5,13 +5,13 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 
-import {Kernel, Instruction, Actions} from "../../Kernel.sol";
+import {Kernel, Instruction, Actions} from "src/Kernel.sol";
 
 import {OlympusInstructions} from "modules/INSTR.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
 import {OlympusAuthority} from "modules/AUTHR.sol";
 
-import {MockAuthGiver} from "../mocks/MockAuthGiver.sol";
+import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
 import "policies/Governance.sol";
 import {VoterRegistration} from "policies/VoterRegistration.sol";
 

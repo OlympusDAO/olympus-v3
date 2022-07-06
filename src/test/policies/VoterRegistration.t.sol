@@ -5,13 +5,13 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 
-import {Kernel, Actions} from "../../Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 
-import {OlympusVotes} from "../../modules/VOTES.sol";
-import {OlympusAuthority} from "../../modules/AUTHR.sol";
+import {OlympusVotes} from "modules/VOTES.sol";
+import {OlympusAuthority} from "modules/AUTHR.sol";
 
-import {MockAuthGiver} from "../mocks/MockAuthGiver.sol";
-import {VoterRegistration} from "../../policies/VoterRegistration.sol";
+import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
+import {VoterRegistration} from "policies/VoterRegistration.sol";
 
 contract VoterRegistrationTest is Test {
     UserFactory public userCreator;
