@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import {DSTest} from "ds-test/test.sol";
+import {Test} from "forge-std/Test.sol";
+import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
-import {console2 as console} from "forge-std/console2.sol";
-import {Vm} from "forge-std/Vm.sol";
+
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -14,10 +14,8 @@ import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 import {OlympusPrice} from "modules/PRICE.sol";
 import "src/Kernel.sol";
 
-contract PriceTest is DSTest {
+contract PriceTest is Test {
     using FullMath for uint256;
-
-    Vm internal immutable vm = Vm(HEVM_ADDRESS);
 
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal reserveEthPriceFeed;
@@ -221,8 +219,8 @@ contract PriceTest is DSTest {
         priceWriter.updateMovingAverage();
 
         /// Check that the moving average was updated correctly
-        console.log(expMovingAverage);
-        console.log(price.getMovingAverage());
+        console2.log(expMovingAverage);
+        console2.log(price.getMovingAverage());
         assertEq(expMovingAverage, price.getMovingAverage());
     }
 
