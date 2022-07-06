@@ -5,7 +5,7 @@
 
 pragma solidity ^0.8.13;
 
-import {Kernel, Module} from "../Kernel.sol";
+import {Kernel, Module} from "src/Kernel.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 contract OlympusVotes is Module, ERC20 {

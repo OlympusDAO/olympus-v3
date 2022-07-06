@@ -4,11 +4,11 @@ pragma solidity ^0.8.11;
 import {Script, console2} from "forge-std/Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {Kernel, Actions} from "../Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {Heart} from "policies/Heart.sol";
-import {MockAuthGiver} from "../test/mocks/MockAuthGiver.sol";
+import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
 
 /// @notice Script to deploy and initialize the Heart contract in the Olympus Bophades system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured

@@ -9,9 +9,8 @@ import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
-// import {OlympusAuthority} from "modules/AUTHR.sol";
 import {Operator} from "policies/Operator.sol";
-import {Kernel, Policy} from "../Kernel.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 

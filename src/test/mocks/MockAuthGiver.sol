@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {OlympusAuthority} from "modules/AUTHR.sol";
-import {Kernel, Policy} from "../../Kernel.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 
 /**
  * @notice Mock policy to give authorizations to address for testing

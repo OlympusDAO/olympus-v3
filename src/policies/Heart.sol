@@ -4,12 +4,12 @@ pragma solidity ^0.8.13;
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 
-import {IHeart} from "./interfaces/IHeart.sol";
-import {IOperator} from "./interfaces/IOperator.sol";
+import {IHeart} from "policies/interfaces/IHeart.sol";
+import {IOperator} from "policies/interfaces/IOperator.sol";
 
-import {OlympusPrice} from "../modules/PRICE.sol";
+import {OlympusPrice} from "modules/PRICE.sol";
 
-import {Kernel, Policy} from "../Kernel.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";

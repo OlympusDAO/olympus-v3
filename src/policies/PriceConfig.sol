@@ -3,8 +3,8 @@ pragma solidity ^0.8.11;
 
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 
-import {Kernel, Policy} from "../Kernel.sol";
-import {OlympusPrice} from "../modules/PRICE.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
+import {OlympusPrice} from "modules/PRICE.sol";
 
 contract OlympusPriceConfig is Policy, Auth {
     /* ========== STATE VARIABLES ========== */

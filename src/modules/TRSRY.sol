@@ -3,9 +3,9 @@ pragma solidity ^0.8.13;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {TransferHelper} from "../libraries/TransferHelper.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
 
-import {Kernel, Module} from "../Kernel.sol";
+import {Kernel, Module} from "src/Kernel.sol";
 
 interface WETH {
     function deposit() external payable;
