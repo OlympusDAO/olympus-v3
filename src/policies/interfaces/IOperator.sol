@@ -12,7 +12,7 @@ interface IOperator {
     struct Config {
         uint32 cushionFactor; // percent of capacity to be used for a single cushion deployment, assumes 2 decimals (i.e. 1000 = 10%)
         uint32 cushionDuration; // duration of a single cushion deployment in seconds
-        uint32 cushionDebtBuffer; // Percentage over the initial debt to allow the market to accumulate at anyone time. Percent with 3 decimals, e.g. 1_000 = 1 %. See IBondAuctioneer for more info.
+        uint32 cushionDebtBuffer; // Percentage over the initial debt to allow the market to accumulate at any one time. Percent with 3 decimals, e.g. 1_000 = 1 %. See IBondAuctioneer for more info.
         uint32 cushionDepositInterval; // Target frequency of deposits. Determines max payout of the bond market. See IBondAuctioneer for more info.
         uint32 reserveFactor; // percent of reserves in treasury to be used for a single wall, assumes 2 decimals (i.e. 1000 = 10%)
         uint32 regenWait; // minimum duration to wait to reinstate a wall in seconds
@@ -43,15 +43,18 @@ interface IOperator {
 
     /* ========== OPEN MARKET OPERATIONS (WALL) ========== */
 
-    /// @notice             Swap at the current wall prices
-    /// @param tokenIn_     Token to swap into the wall
-    ///                     If OHM: swap at the low wall price for Reserve
-    ///                     If Reserve: swap at the high wall price for OHM
-    /// @param amountIn_    Amount of tokenIn to swap
-    /// @return amountOut   Amount of opposite token received
-    function swap(ERC20 tokenIn_, uint256 amountIn_)
-        external
-        returns (uint256 amountOut);
+    /// @notice              Swap at the current wall prices
+    /// @param tokenIn_      Token to swap into the wall
+    ///                      If OHM: swap at the low wall price for Reserve
+    ///                      If Reserve: swap at the high wall price for OHM
+    /// @param amountIn_     Amount of tokenIn to swap
+    /// @param minAmountOut_ Minimum amount of opposite token to receive
+    /// @return amountOut    Amount of opposite token received
+    function swap(
+        ERC20 tokenIn_,
+        uint256 amountIn_,
+        uint256 minAmountOut_
+    ) external returns (uint256 amountOut);
 
     /// @notice             Returns the amount to be received from a swap
     /// @param tokenIn_     Token to swap into the wall
@@ -126,6 +129,12 @@ interface IOperator {
     /// @notice                 Can only be called once
     /// @dev                    This function executes actions required to start operations that cannot be done prior to the Operator policy being approved by the Kernel.
     function initialize() external;
+
+    /// @notice      Regenerate the wall for a side
+    /// @notice      Access restricted
+    /// @param high_ Whether to regenerate the high side or low side (true = high, false = low)
+    /// @dev         This function is an escape hatch to trigger out of cycle regenerations and may be useful when doing migrations of Treasury funds
+    function regenerate(bool high_) external;
 
     /* ========== VIEW FUNCTIONS ========== */
 

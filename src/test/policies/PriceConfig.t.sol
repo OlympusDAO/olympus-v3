@@ -125,6 +125,12 @@ contract PriceConfigTest is Test {
             /// Give addresses roles
             authGiver.setUserRole(guardian, uint8(1));
         }
+
+        {
+            /// Initialize timestamps on the mock price feeds
+            ohmEthPriceFeed.setTimestamp(block.timestamp);
+            reserveEthPriceFeed.setTimestamp(block.timestamp);
+        }
     }
 
     /* ========== HELPER FUNCTIONS ========== */
@@ -215,38 +221,7 @@ contract PriceConfigTest is Test {
         }
     }
 
-    function testCorrectness_changeMovingAverageDurationShorter(uint8 nonce)
-        public
-    {
-        /// Initialize price module
-        uint256[] memory obs = getObs(nonce);
-        vm.prank(guardian);
-        priceConfig.initialize(obs, uint48(block.timestamp));
-
-        /// Calculate expected moving average based on existing observations
-        uint256 expMovingAverage;
-        uint256 length = uint256(price.numObservations());
-        for (uint256 i = length - 15; i < length; ++i) {
-            expMovingAverage += price.observations(i);
-        }
-        expMovingAverage /= 15;
-
-        /// Change from a seven day window to a five day window
-        vm.prank(guardian);
-        priceConfig.changeMovingAverageDuration(uint48(5 days));
-
-        /// Check the the module is still initialized
-        assertTrue(price.initialized());
-
-        /// Check that the window variables and moving average are updated correctly
-        assertEq(price.numObservations(), uint48(15));
-        assertEq(price.movingAverageDuration(), uint48(5 days));
-        assertEq(price.getMovingAverage(), expMovingAverage);
-    }
-
-    function testCorrectness_changeMovingAverageDurationLonger(uint8 nonce)
-        public
-    {
+    function testCorrectness_changeMovingAverageDuration(uint8 nonce) public {
         /// Initialize price module
         uint256[] memory obs = getObs(nonce);
         vm.prank(guardian);
@@ -258,6 +233,7 @@ contract PriceConfigTest is Test {
 
         /// Check the the module is not still initialized
         assertTrue(!price.initialized());
+        assertEq(price.lastObservationTime(), uint48(0));
 
         /// Re-initialize price module
         obs = getObs(nonce);

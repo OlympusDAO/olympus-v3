@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import {Kernel, Module} from "src/Kernel.sol";
+import {Kernel, Module} from "../Kernel.sol";
 import {Authority} from "solmate/auth/Auth.sol";
 
 contract OlympusAuthority is Module, Authority {

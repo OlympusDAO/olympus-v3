@@ -70,6 +70,12 @@ contract PriceTest is DSTest {
             kernel.executeAction(Actions.InstallModule, address(price));
             kernel.executeAction(Actions.ApprovePolicy, address(writer));
         }
+
+        {
+            /// Initialize timestamps on mock price feeds
+            ohmEthPriceFeed.setTimestamp(block.timestamp);
+            reserveEthPriceFeed.setTimestamp(block.timestamp);
+        }
     }
 
     /* ========== HELPER FUNCTIONS ========== */
@@ -141,13 +147,15 @@ contract PriceTest is DSTest {
 
             /// Update price feed
             ohmEthPriceFeed.setLatestAnswer(ohmEthPrice);
+            ohmEthPriceFeed.setTimestamp(block.timestamp);
+            reserveEthPriceFeed.setTimestamp(block.timestamp);
 
             /// Call update moving average on the price module
             priceWriter.updateMovingAverage();
 
             /// Shift time forward by the observation frequency
             timeIncrease += observationFrequency;
-            vm.warp(block.timestamp + timeIncrease);
+            vm.warp(block.timestamp + observationFrequency);
         }
     }
 
@@ -227,18 +235,18 @@ contract PriceTest is DSTest {
         /// Add several random observations
         makeRandomObservations(nonce, uint256(15));
 
-        /// Expect the observations array to have 15 more observations
-        /// Confirm by ensuring the last observation is at that index and is the current price
-        uint256 numObservations = uint256(price.numObservations());
-        uint256 length = numObservations + 15;
-        assertEq(price.observations(length - 1), price.getCurrentPrice());
+        /// Expect the nextObsIndex to be 15 places away from the beginning
+        /// Confirm by ensuring the last observation is at that index minus 1 and is the current price
+        assertEq(price.nextObsIndex(), uint32(15));
+        assertEq(price.observations(14), price.getCurrentPrice());
 
         /// Manually calculate the expected moving average
         uint256 expMovingAverage;
-        for (uint256 i = length - numObservations; i < length; ++i) {
+        uint256 numObs = uint256(price.numObservations());
+        for (uint256 i; i < numObs; ++i) {
             expMovingAverage += price.observations(i);
         }
-        expMovingAverage /= numObservations;
+        expMovingAverage /= numObs;
 
         /// Check that the moving average was updated correctly (use a range to account for rounding between two methods)
         assertGt(expMovingAverage, price.getMovingAverage().mulDiv(999, 1000));
@@ -283,6 +291,30 @@ contract PriceTest is DSTest {
                 reserveEthPrice * 10**ohmEthPriceFeed.decimals()
             )
         );
+
+        /// Set the timestamp on each feed to before the acceptable window and expect the call to revert
+        ohmEthPriceFeed.setTimestamp(
+            block.timestamp - uint256(price.observationFrequency()) - 1
+        );
+
+        bytes memory err = abi.encodeWithSignature(
+            "Price_BadFeed(address)",
+            address(ohmEthPriceFeed)
+        );
+        vm.expectRevert(err);
+        price.getCurrentPrice();
+
+        ohmEthPriceFeed.setTimestamp(block.timestamp);
+        reserveEthPriceFeed.setTimestamp(
+            block.timestamp - uint256(price.observationFrequency()) - 1
+        );
+
+        err = abi.encodeWithSignature(
+            "Price_BadFeed(address)",
+            address(reserveEthPriceFeed)
+        );
+        vm.expectRevert(err);
+        price.getCurrentPrice();
     }
 
     function testCorrectness_getLastPrice(uint8 nonce) public {
@@ -293,7 +325,12 @@ contract PriceTest is DSTest {
         uint256 lastPrice = price.getLastPrice();
 
         /// Check that it returns the last observation in the observations array
-        assertEq(lastPrice, price.observations(price.numObservations() - 1));
+        uint32 numObservations = price.numObservations();
+        uint32 nextObsIndex = price.nextObsIndex();
+        uint32 lastIndex = nextObsIndex == 0
+            ? numObservations - 1
+            : nextObsIndex - 1;
+        assertEq(lastPrice, price.observations(lastIndex));
     }
 
     function testCorrectness_getMovingAverage(uint8 nonce) public {
@@ -409,35 +446,7 @@ contract PriceTest is DSTest {
         priceWriter.initialize(observations, uint48(block.timestamp + 1));
     }
 
-    function testCorrectness_changeMovingAverageDurationShorter(uint8 nonce)
-        public
-    {
-        /// Initialize price module
-        initializePrice(nonce);
-
-        /// Calculate expected moving average based on existing observations
-        uint256 expMovingAverage;
-        uint256 length = uint256(price.numObservations());
-        for (uint256 i = length - 15; i < length; ++i) {
-            expMovingAverage += price.observations(i);
-        }
-        expMovingAverage /= 15;
-
-        /// Change from a seven day window to a five day window
-        priceWriter.changeMovingAverageDuration(uint48(5 days));
-
-        /// Check the the module is still initialized
-        assertTrue(price.initialized());
-
-        /// Check that the window variables and moving average are updated correctly
-        assertEq(price.numObservations(), uint48(15));
-        assertEq(price.movingAverageDuration(), uint48(5 days));
-        assertEq(price.getMovingAverage(), expMovingAverage);
-    }
-
-    function testCorrectness_changeMovingAverageDurationLonger(uint8 nonce)
-        public
-    {
+    function testCorrectness_changeMovingAverageDuration(uint8 nonce) public {
         /// Initialize price module
         initializePrice(nonce);
 
@@ -446,6 +455,7 @@ contract PriceTest is DSTest {
 
         /// Check the the module is not still initialized
         assertTrue(!price.initialized());
+        assertEq(price.lastObservationTime(), uint48(0));
 
         /// Re-initialize price module
         initializePrice(nonce);

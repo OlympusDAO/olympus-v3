@@ -7,6 +7,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {IBondAggregator} from "../interfaces/IBondAggregator.sol";
 import {IBondAuctioneer} from "../interfaces/IBondAuctioneer.sol";
+import {IWETH9} from "../interfaces/IWETH9.sol";
 
 import {Kernel, Actions} from "../Kernel.sol";
 import {OlympusAuthority} from "modules/AUTHR.sol";
@@ -15,17 +16,23 @@ import {OlympusRange} from "modules/RANGE.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
 import {OlympusInstructions} from "modules/INSTR.sol";
+import {OlympusVotes} from "modules/VOTES.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {Heart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
+import {VoterRegistration} from "policies/VoterRegistration.sol";
+import {Governance} from "policies/Governance.sol";
 import {MockAuthGiver} from "../test/mocks/MockAuthGiver.sol";
 import {MockPriceFeed} from "../test/mocks/MockPriceFeed.sol";
+
+import {TransferHelper} from "libraries/TransferHelper.sol";
 
 /// @notice Script to deploy and initialize the Olympus system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
 contract OlympusDeploy is Script {
+    using TransferHelper for ERC20;
     Kernel public kernel;
 
     /// Modules
@@ -35,12 +42,15 @@ contract OlympusDeploy is Script {
     OlympusTreasury public TRSRY;
     OlympusMinter public MINTR;
     OlympusInstructions public INSTR;
+    OlympusVotes public VOTES;
 
     /// Policies
     Operator public operator;
     Heart public heart;
     BondCallback public callback;
     OlympusPriceConfig public priceConfig;
+    VoterRegistration public voterReg;
+    Governance public governance;
     MockAuthGiver public authGiver;
 
     /// Construction variables
@@ -91,8 +101,11 @@ contract OlympusDeploy is Script {
         console2.log("Kernel deployed at:", address(kernel));
 
         /// Deploy modules
-        INSTR = new OlympusInstructions(kernel);
-        console2.log("Instructions module deployed at:", address(INSTR));
+        // INSTR = new OlympusInstructions(kernel);
+        // console2.log("Instructions module deployed at:", address(INSTR));
+
+        // VOTES = new OlympusVotes(kernel);
+        // console2.log("Votes module deployed at:", address(INSTR));
 
         AUTHR = new OlympusAuthority(kernel);
         console2.log("Authority module deployed at:", address(AUTHR));
@@ -141,18 +154,25 @@ contract OlympusDeploy is Script {
         );
         console2.log("Operator deployed at:", address(operator));
 
-        heart = new Heart(kernel, operator, uint256(8 hours), rewardToken, 0);
+        heart = new Heart(kernel, operator, rewardToken, 0);
         console2.log("Heart deployed at:", address(heart));
 
         priceConfig = new OlympusPriceConfig(kernel);
         console2.log("PriceConfig deployed at:", address(priceConfig));
+
+        // voterReg = new VoterRegistration(kernel);
+        // console2.log("VoterRegistration deployed at:", address(voterReg));
+
+        // governance = new Governance(kernel);
+        // console2.log("Governance deployed at:", address(governance));
 
         authGiver = new MockAuthGiver(kernel);
         console2.log("Auth Giver deployed at:", address(authGiver));
 
         /// Execute actions on Kernel
         /// Install modules
-        kernel.executeAction(Actions.InstallModule, address(INSTR));
+        // kernel.executeAction(Actions.InstallModule, address(INSTR));
+        // kernel.executeAction(Actions.InstallModule, address(VOTES));
         kernel.executeAction(Actions.InstallModule, address(AUTHR));
         kernel.executeAction(Actions.InstallModule, address(PRICE));
         kernel.executeAction(Actions.InstallModule, address(RANGE));
@@ -164,6 +184,8 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.ApprovePolicy, address(operator));
         kernel.executeAction(Actions.ApprovePolicy, address(heart));
         kernel.executeAction(Actions.ApprovePolicy, address(priceConfig));
+        // kernel.executeAction(Actions.ApprovePolicy, address(voterReg));
+        // kernel.executeAction(Actions.ApprovePolicy, address(governance));
         /// TODO likely to change with the auth system upgrades, using as a placeholder to enable auth setting on deployment
         kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
 
@@ -195,6 +217,11 @@ contract OlympusDeploy is Script {
         );
         authGiver.setRoleCapability(
             uint8(1),
+            address(operator),
+            operator.regenerate.selector
+        );
+        authGiver.setRoleCapability(
+            uint8(1),
             address(heart),
             heart.resetBeat.selector
         );
@@ -206,22 +233,12 @@ contract OlympusDeploy is Script {
         authGiver.setRoleCapability(
             uint8(1),
             address(heart),
-            heart.setReward.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.setRewardToken.selector
+            heart.setRewardTokenAndAmount.selector
         );
         authGiver.setRoleCapability(
             uint8(1),
             address(heart),
             heart.withdrawUnspentRewards.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.setFrequency.selector
         );
         authGiver.setRoleCapability(
             uint8(1),
@@ -294,8 +311,8 @@ contract OlympusDeploy is Script {
         /// Terminate mock auth giver
         kernel.executeAction(Actions.TerminatePolicy, address(authGiver));
 
-        /// Transfer executor powers to INSTR
-        kernel.executeAction(Actions.ChangeExecutor, address(INSTR));
+        // /// Transfer executor powers to INSTR
+        // kernel.executeAction(Actions.ChangeExecutor, address(INSTR));
 
         vm.stopBroadcast();
     }
@@ -305,6 +322,13 @@ contract OlympusDeploy is Script {
         uint256[] memory priceObservations,
         uint48 lastObservationTime
     ) external {
+        // Set addresses from deployment
+        priceConfig = OlympusPriceConfig(
+            0xE5103B14DC6d93b356745Da23A93546f1217c9fc
+        );
+        operator = Operator(0xAA0DE97a2eA6D5246BeA1EE89C770d0105cc5Cf8);
+        heart = Heart(0xEdA61E45C7Bb389A01Db483760227524E2D99cd4);
+
         /// Start broadcasting
         vm.startBroadcast();
 
@@ -313,6 +337,10 @@ contract OlympusDeploy is Script {
 
         /// Initialize the Operator policy
         operator.initialize();
+
+        // /// Deposit msg.value in WETH contract and deposit in heart
+        // IWETH9(address(rewardToken)).deposit{value: msg.value}();
+        // rewardToken.safeTransfer(address(heart), msg.value);
 
         /// Active the Heart policy by toggling the beat on
         heart.toggleBeat();
