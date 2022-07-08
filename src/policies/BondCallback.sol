@@ -62,7 +62,7 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         returns (Kernel.Role[] memory roles)
     {
         roles = new Kernel.Role[](2);
-        roles[0] = TRSRY.BANKER();
+        roles[0] = TRSRY.APPROVER();
         roles[1] = MINTR.MINTER();
     }
 
@@ -75,6 +75,20 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         requiresAuth
     {
         approvedMarkets[teller_][id_] = true;
+
+        // Get payout tokens for market
+        (, , ERC20 payoutToken, , , ) = aggregator
+            .getAuctioneer(id_)
+            .getMarketInfoForPurchase(id_);
+
+        /// If payout token is not OHM, request approval from TRSRY for withdrawals
+        if (address(payoutToken) != address(ohm)) {
+            TRSRY.requestApprovalFor(
+                address(this),
+                payoutToken,
+                type(uint256).max
+            );
+        }
     }
 
     /* ========== CALLBACK ========== */

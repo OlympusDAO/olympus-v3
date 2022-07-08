@@ -303,12 +303,12 @@ contract OperatorTest is Test {
 
         reserve.mint(address(treasury), testReserve * 100);
 
-        // Approve the callback for withdrawals on the treasury (operator requests approval on initialize())
-        treasuryWriter.requestApprovalFor(
-            address(callback),
-            reserve,
-            testReserve * 100
-        );
+        // // Approve the callback for withdrawals on the treasury (operator requests approval on initialize())
+        // treasuryWriter.requestApprovalFor(
+        //     address(callback),
+        //     reserve,
+        //     testReserve * 100
+        // );
 
         // Approve the operator and bond teller for the tokens to swap
         vm.prank(alice);
