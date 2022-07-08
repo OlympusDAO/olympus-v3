@@ -304,7 +304,7 @@ contract OperatorTest is Test {
         reserve.mint(address(treasury), testReserve * 100);
 
         // Approve the callback for withdrawals on the treasury (operator requests approval on initialize())
-        treasuryWriter.requestApprovalFor(
+        treasuryWriter.setApprovalFor(
             address(callback),
             reserve,
             testReserve * 100
