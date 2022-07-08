@@ -100,20 +100,23 @@ contract BondAggregator is IBondAggregator, Auth {
     }
 
     /// @inheritdoc IBondAggregator
-    function payoutFor(uint256 amount_, uint256 id_)
-        public
-        view
-        override
-        returns (uint256)
-    {
+    function payoutFor(
+        uint256 amount_,
+        uint256 id_,
+        address referrer_
+    ) public view override returns (uint256) {
         IBondAuctioneer auctioneer = marketsToAuctioneers[id_];
-        return auctioneer.payoutFor(amount_, id_);
+        return auctioneer.payoutFor(amount_, id_, referrer_);
     }
 
     /// @inheritdoc IBondAggregator
-    function maxAmountAccepted(uint256 id_) external view returns (uint256) {
+    function maxAmountAccepted(uint256 id_, address referrer_)
+        external
+        view
+        returns (uint256)
+    {
         IBondAuctioneer auctioneer = marketsToAuctioneers[id_];
-        return auctioneer.maxAmountAccepted(id_);
+        return auctioneer.maxAmountAccepted(id_, referrer_);
     }
 
     /// @inheritdoc IBondAggregator
@@ -248,7 +251,7 @@ contract BondAggregator is IBondAggregator, Auth {
 
             if (expiry <= maxExpiry_) {
                 payouts[i] = minAmountOut_ <= maxPayout
-                    ? payoutFor(amountIn_, ids[i])
+                    ? payoutFor(amountIn_, ids[i], address(0))
                     : 0;
 
                 if (payouts[i] > highestOut) {

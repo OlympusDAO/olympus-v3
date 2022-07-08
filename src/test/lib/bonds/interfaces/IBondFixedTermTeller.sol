@@ -46,7 +46,7 @@ interface IBondFixedTermTeller {
         external;
 
     /// @notice             Get token ID from token and expiry
-    /// @param payoutToken_   Payout token of bond
+    /// @param payoutToken_ Payout token of bond
     /// @param expiry_      Expiry of the bond
     /// @return             ID of the bond token
     function getTokenId(ERC20 payoutToken_, uint48 expiry_)

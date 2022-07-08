@@ -71,19 +71,14 @@ interface IBondAuctioneer {
     /// @notice                 Exchange quote tokens for a bond in a specified market
     /// @notice                 Must be teller
     /// @param id_              ID of the Market the bond is being purchased from
-    /// @param amount_          Amount to deposit in exchange for bond
+    /// @param amount_          Amount to deposit in exchange for bond (after fee has been deducted)
     /// @param minAmountOut_    Minimum acceptable amount of bond to receive. Prevents frontrunning
-    /// @param feeInQuote_      Should the fee be paid in quote token (true) or payout token (false)
-    /// @param fee_             Percent fee to pay the protocol
     /// @return payout          Amount of payout token to be received from the bond
-    /// @return feeAmount       Fee amount to the protocol
     function purchaseBond(
         uint256 id_,
         uint256 amount_,
-        uint256 minAmountOut_,
-        bool feeInQuote_,
-        uint48 fee_
-    ) external returns (uint256 payout, uint256 feeAmount);
+        uint256 minAmountOut_
+    ) external returns (uint256 payout);
 
     /// @notice                         Set market intervals to different values than the defaults
     /// @notice                         Must be market owner
@@ -168,15 +163,23 @@ interface IBondAuctioneer {
     /// @dev                Accounts for debt and control variable decay so it is up to date
     /// @param amount_      Amount of quote tokens to spend
     /// @param id_          ID of market
+    /// @param referrer_    Address of referrer, used to get fees to calculate accurate payout amount.
+    ///                     Inputting the zero address will take into account just the protocol fee.
     /// @return             amount of payout tokens to be paid
-    function payoutFor(uint256 amount_, uint256 id_)
-        external
-        view
-        returns (uint256);
+    function payoutFor(
+        uint256 amount_,
+        uint256 id_,
+        address referrer_
+    ) external view returns (uint256);
 
     /// @notice             Returns maximum amount of quote token accepted by the market
     /// @param id_          ID of market
-    function maxAmountAccepted(uint256 id_) external view returns (uint256);
+    /// @param referrer_    Address of referrer, used to get fees to calculate accurate payout amount.
+    ///                     Inputting the zero address will take into account just the protocol fee.
+    function maxAmountAccepted(uint256 id_, address referrer_)
+        external
+        view
+        returns (uint256);
 
     /// @notice             Does market send payout immediately
     /// @param id_          Market ID to search for

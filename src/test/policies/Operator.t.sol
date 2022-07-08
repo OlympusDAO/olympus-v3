@@ -1016,12 +1016,18 @@ contract OperatorTest is Test {
         assertTrue(auctioneer.isLive(id));
 
         /// Set amount to purchase from cushion (which will be at wall price initially)
-        uint256 amountIn = auctioneer.maxAmountAccepted(id) / 2;
-        uint256 minAmountOut = auctioneer.payoutFor(amountIn, id);
+        uint256 amountIn = auctioneer.maxAmountAccepted(id, guardian) / 2;
+        uint256 minAmountOut = auctioneer.payoutFor(amountIn, id, guardian);
 
         /// Purchase from cushion
         vm.prank(alice);
-        (uint256 payout, ) = teller.purchase(alice, id, amountIn, minAmountOut);
+        (uint256 payout, ) = teller.purchase(
+            alice,
+            guardian,
+            id,
+            amountIn,
+            minAmountOut
+        );
 
         /// Check that the side capacity has been reduced by the amount of the payout
         assertEq(range.capacity(true), startCapacity - payout);
@@ -1047,12 +1053,18 @@ contract OperatorTest is Test {
         assertTrue(auctioneer.isLive(id));
 
         /// Set amount to purchase from cushion (which will be at wall price initially)
-        uint256 amountIn = auctioneer.maxAmountAccepted(id) / 2;
-        uint256 minAmountOut = auctioneer.payoutFor(amountIn, id);
+        uint256 amountIn = auctioneer.maxAmountAccepted(id, guardian) / 2;
+        uint256 minAmountOut = auctioneer.payoutFor(amountIn, id, guardian);
 
         /// Purchase from cushion
         vm.prank(alice);
-        (uint256 payout, ) = teller.purchase(alice, id, amountIn, minAmountOut);
+        (uint256 payout, ) = teller.purchase(
+            alice,
+            guardian,
+            id,
+            amountIn,
+            minAmountOut
+        );
 
         /// Check that the side capacity has been reduced by the amount of the payout
         assertEq(range.capacity(false), startCapacity - payout);
