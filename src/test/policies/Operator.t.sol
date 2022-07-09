@@ -73,9 +73,6 @@ contract OperatorTest is Test {
     BondCallback internal callback;
     MockAuthGiver internal authGiver;
 
-    MockModuleWriter internal writer;
-    OlympusTreasury internal treasuryWriter;
-
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -129,10 +126,6 @@ contract OperatorTest is Test {
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
             authr = new OlympusAuthority(kernel);
-
-            /// Deploy mock writer for treasury to give withdraw permissions
-            writer = new MockModuleWriter(kernel, treasury);
-            treasuryWriter = OlympusTreasury(address(writer));
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -188,7 +181,6 @@ contract OperatorTest is Test {
             kernel.executeAction(Actions.ApprovePolicy, address(operator));
             kernel.executeAction(Actions.ApprovePolicy, address(callback));
             kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
-            kernel.executeAction(Actions.ApprovePolicy, address(writer));
         }
         {
             /// Configure access control
@@ -302,13 +294,6 @@ contract OperatorTest is Test {
         reserve.mint(alice, testReserve * 20);
 
         reserve.mint(address(treasury), testReserve * 100);
-
-        // // Approve the callback for withdrawals on the treasury (operator requests approval on initialize())
-        // treasuryWriter.requestApprovalFor(
-        //     address(callback),
-        //     reserve,
-        //     testReserve * 100
-        // );
 
         // Approve the operator and bond teller for the tokens to swap
         vm.prank(alice);
