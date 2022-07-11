@@ -6,6 +6,7 @@ import "test-utils/UserFactory.sol";
 import "test-utils/larping.sol";
 import "test-utils/sorting.sol";
 import "test-utils/errors.sol";
+import "forge-std/console2.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import "src/modules/TRSRY.sol";
@@ -65,14 +66,15 @@ contract TRSRYTest is Test {
     }
 
     function test_WithdrawApproval(uint256 amount_) public {
-        TRSRY.requestApprovalFor(testUser, ngmi, amount_);
+        TRSRY.setApprovalFor(testUser, ngmi, amount_);
 
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), amount_);
     }
 
+    /*
     function test_RevokeApprovals() public {
-        TRSRY.requestApprovalFor(testUser, ngmi, INITIAL_TOKEN_AMOUNT);
-        TRSRY.requestApprovalFor(testUser, dn, INITIAL_TOKEN_AMOUNT);
+        TRSRY.setApprovalFor(testUser, ngmi, INITIAL_TOKEN_AMOUNT);
+        TRSRY.setApprovalFor(testUser, dn, INITIAL_TOKEN_AMOUNT);
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), INITIAL_TOKEN_AMOUNT);
         assertEq(TRSRY.withdrawApproval(testUser, dn), INITIAL_TOKEN_AMOUNT);
 
@@ -86,15 +88,18 @@ contract TRSRYTest is Test {
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), 0);
         assertEq(TRSRY.withdrawApproval(testUser, dn), 0);
     }
+    */
 
     function test_GetReserveBalance() public {
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
         assertEq(TRSRY.getReserveBalance(dn), INITIAL_TOKEN_AMOUNT);
     }
 
-    function test_AuthorizedCanWithdrawToken(uint256 amount_) public {
+    function test_ApprovedCanWithdrawToken(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
-        TRSRY.requestApprovalFor(testUser, ngmi, amount_);
+        TRSRY.setApprovalFor(testUser, ngmi, amount_);
+
+        assertEq(TRSRY.withdrawApproval(testUser, ngmi), amount_);
 
         vm.prank(testUser);
         TRSRY.withdrawReserves(address(this), ngmi, amount_);
@@ -123,7 +128,7 @@ contract TRSRYTest is Test {
         // Ensure there is sufficient reserves in the treasury
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
 
-        TRSRY.requestApprovalFor(address(this), ngmi, amount_);
+        TRSRY.setApprovalFor(address(this), ngmi, amount_);
 
         //vm.prank(testUser);
         TRSRY.loanReserves(ngmi, amount_);
@@ -140,7 +145,7 @@ contract TRSRYTest is Test {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
         vm.assume(amount_ > 0);
 
-        TRSRY.requestApprovalFor(testUser, ngmi, amount_);
+        TRSRY.setApprovalFor(testUser, ngmi, amount_);
 
         // Fail when withdrawal using policy without write access
         vm.expectRevert(Module_NotAuthorized.selector);
@@ -153,7 +158,7 @@ contract TRSRYTest is Test {
 
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
 
-        TRSRY.requestApprovalFor(address(this), ngmi, amount_);
+        TRSRY.setApprovalFor(address(this), ngmi, amount_);
 
         //vm.startPrank(testUser); // TODO need to test with permissioned policy
         TRSRY.loanReserves(ngmi, amount_);
@@ -170,7 +175,7 @@ contract TRSRYTest is Test {
     // TODO test setDebt and clearDebt
 
     function test_SetDebt() public {
-        TRSRY.requestApprovalFor(address(this), ngmi, INITIAL_TOKEN_AMOUNT / 2);
+        TRSRY.setApprovalFor(address(this), ngmi, INITIAL_TOKEN_AMOUNT / 2);
         TRSRY.loanReserves(ngmi, INITIAL_TOKEN_AMOUNT / 2);
 
         TRSRY.setDebt(ngmi, address(this), INITIAL_TOKEN_AMOUNT / 4);
@@ -183,7 +188,7 @@ contract TRSRYTest is Test {
     }
 
     function test_UnauthorizedCannotSetDebt() public {
-        TRSRY.requestApprovalFor(address(this), ngmi, INITIAL_TOKEN_AMOUNT / 2);
+        TRSRY.setApprovalFor(address(this), ngmi, INITIAL_TOKEN_AMOUNT / 2);
         TRSRY.loanReserves(ngmi, INITIAL_TOKEN_AMOUNT / 2);
 
         // Fail when setDebt using policy without write access
@@ -193,25 +198,15 @@ contract TRSRYTest is Test {
     }
 
     function test_ClearDebt(uint256 amount_) public {
-        TRSRY.requestApprovalFor(address(this), ngmi, INITIAL_TOKEN_AMOUNT);
+        TRSRY.setApprovalFor(address(this), ngmi, INITIAL_TOKEN_AMOUNT);
         TRSRY.loanReserves(ngmi, INITIAL_TOKEN_AMOUNT);
 
         assertEq(TRSRY.reserveDebt(ngmi, address(this)), INITIAL_TOKEN_AMOUNT);
         assertEq(TRSRY.totalDebt(ngmi), INITIAL_TOKEN_AMOUNT);
 
-        TRSRY.clearDebt(ngmi, address(this), INITIAL_TOKEN_AMOUNT);
+        TRSRY.setDebt(ngmi, address(this), 0);
 
         assertEq(TRSRY.reserveDebt(ngmi, address(this)), 0);
         assertEq(TRSRY.totalDebt(ngmi), 0);
-    }
-
-    function test_UnauthorizedCannotClearDebt() public {
-        TRSRY.requestApprovalFor(address(this), ngmi, INITIAL_TOKEN_AMOUNT);
-        TRSRY.loanReserves(ngmi, INITIAL_TOKEN_AMOUNT);
-
-        // Fail when clearDebt using policy without write access
-        vm.expectRevert(Module_NotAuthorized.selector);
-        vm.prank(testUser);
-        TRSRY.clearDebt(ngmi, address(this), INITIAL_TOKEN_AMOUNT);
     }
 }

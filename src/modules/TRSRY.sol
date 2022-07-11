@@ -2,28 +2,23 @@
 pragma solidity ^0.8.13;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import {Kernel, Module} from "src/Kernel.sol";
 
-interface WETH {
-    function deposit() external payable;
-}
+import {console2} from "forge-std/console2.sol";
 
 // ERRORS
-error TRSRY_NotReserve();
 error TRSRY_NotApproved();
 error TRSRY_PolicyStillActive();
-
-// CONST
-address constant WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
 /// @title TRSRY - OlympusTreasury
 /// @notice Treasury holds reserves, LP tokens and all other assets under the control
 /// of the protocol. Any contracts that need access to treasury assets should
 /// be whitelisted by governance and given proper role.
-contract OlympusTreasury is Module {
+contract OlympusTreasury is Module, ReentrancyGuard {
     using TransferHelper for ERC20;
 
     // TODO are these correct tense?
@@ -86,21 +81,12 @@ contract OlympusTreasury is Module {
         roles[2] = DEBT_ADMIN;
     }
 
-    /* 
-    TODO breaks getModuleAddress
-    TODO TypeError: Explicit type conversion not allowed from non-payable "address"
-    TODO to "contract OlympusTreasury", which has a payable fallback function.
-    receive() external payable {
-        WETH(WETH_ADDRESS).deposit{value: msg.value}();
-    }
-    */
-
     function getReserveBalance(ERC20 token_) external view returns (uint256) {
         return token_.balanceOf(address(this)) + totalDebt[token_];
     }
 
-    // Must be carefully managed by governance.
-    function requestApprovalFor(
+    // Set approval for specific addresses
+    function setApprovalFor(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
@@ -110,63 +96,31 @@ contract OlympusTreasury is Module {
         emit ApprovedForWithdrawal(withdrawer_, token_, amount_);
     }
 
+    // Allow withdrawal of reserve funds from pre-approved addresses
     function withdrawReserves(
         address to_,
         ERC20 token_,
         uint256 amount_
     ) public {
-        // Must be approved
-        uint256 approval = withdrawApproval[msg.sender][token_];
-        if (approval < amount_) revert TRSRY_NotApproved();
-
-        // Check for infinite approval
-        if (approval != type(uint256).max)
-            withdrawApproval[msg.sender][token_] = approval - amount_;
+        _checkApproval(msg.sender, token_, amount_);
 
         token_.safeTransfer(to_, amount_);
 
         emit Withdrawal(msg.sender, to_, token_, amount_);
     }
 
-    // Anyone can call to revoke a terminated policy's approvals
-    function revokeApprovals(address withdrawer_, ERC20[] memory tokens_)
-        external
-    {
-        if (kernel.approvedPolicies(msg.sender) == true)
-            revert TRSRY_PolicyStillActive();
-
-        uint256 len = tokens_.length;
-        for (uint256 i; i < len; ) {
-            withdrawApproval[withdrawer_][tokens_[i]] = 0;
-            unchecked {
-                ++i;
-            }
-        }
-
-        emit ApprovalRevoked(withdrawer_, tokens_);
-    }
-
-    /// DEBT FUNCTIONS
-
-    // TODO add withdrawer arguments
+    // DEBT FUNCTIONS
 
     function loanReserves(ERC20 token_, uint256 amount_)
         external
         onlyRole(BANKER)
     {
-        uint256 approval = withdrawApproval[msg.sender][token_];
-        if (approval < amount_) revert TRSRY_NotApproved();
-
-        // If not inf approval, subtract amount from approval
-        if (approval != type(uint256).max) {
-            withdrawApproval[msg.sender][token_] -= amount_;
-        }
+        _checkApproval(msg.sender, token_, amount_);
 
         // Add debt to caller
         reserveDebt[token_][msg.sender] += amount_;
         totalDebt[token_] += amount_;
 
-        // Withdraw to caller
         token_.safeTransfer(msg.sender, amount_);
 
         emit DebtIncurred(token_, msg.sender, amount_);
@@ -174,30 +128,21 @@ contract OlympusTreasury is Module {
 
     function repayLoan(ERC20 token_, uint256 amount_)
         external
+        nonReentrant
         onlyRole(BANKER)
     {
-        // Subtract debt to caller
-        reserveDebt[token_][msg.sender] -= amount_;
-        totalDebt[token_] -= amount_;
-
-        // Deposit from caller
+        // Deposit from caller first (to handle nonstandard token transfers)
+        uint256 prevBalance = token_.balanceOf(address(this));
         token_.safeTransferFrom(msg.sender, address(this), amount_);
 
-        emit DebtRepaid(token_, msg.sender, amount_);
-    }
+        uint256 received = token_.balanceOf(address(this)) - prevBalance;
 
-    // TODO for repaying debt in different tokens. Specifically for changing reserve assets
-    /*
-    function repayDebtEquivalent(
-        ERC20 origToken_,
-        ERC20 repayToken_,
-        uint256 debtAmount_
-    ) external onlyPermittedPolicies {
-        // TODO reduce debt amount of original token
-        reserveDebt[origToken_][msg.sender] -= debtAmount_;
-        totalDebt[origToken_] -= debtAmount_;
+        // Subtract debt to caller
+        reserveDebt[token_][msg.sender] -= received;
+        totalDebt[token_] -= received;
+
+        emit DebtRepaid(token_, msg.sender, received);
     }
-    */
 
     // To be used as escape hatch for setting debt in special cases, like swapping reserves to another token
     function setDebt(
@@ -216,44 +161,20 @@ contract OlympusTreasury is Module {
         emit DebtSet(token_, debtor_, amount_);
     }
 
-    function increaseDebt(
+    function _checkApproval(
+        address withdrawer_,
         ERC20 token_,
-        address debtor_,
         uint256 amount_
-    ) external onlyRole(DEBT_ADMIN) {
-        // Increase debt for debtor
-        reserveDebt[token_][debtor_] += amount_;
+    ) internal {
+        // Must be approved
+        uint256 approval = withdrawApproval[withdrawer_][token_];
+        if (approval < amount_) revert TRSRY_NotApproved();
 
-        // Increase total debt
-        totalDebt[token_] += amount_;
-
-        emit DebtSet(token_, debtor_, reserveDebt[token_][debtor_]);
-    }
-
-    function decreaseDebt(
-        ERC20 token_,
-        address debtor_,
-        uint256 amount_
-    ) external onlyRole(DEBT_ADMIN) {
-        // Decrease debt for debtor
-        reserveDebt[token_][debtor_] -= amount_;
-
-        // Decrease total debt
-        totalDebt[token_] -= amount_;
-
-        emit DebtSet(token_, debtor_, reserveDebt[token_][debtor_]);
-    }
-
-    // TODO Only permitted by governor. Used in case of emergency where loaned amounts cannot be repaid.
-    function clearDebt(
-        ERC20 token_,
-        address debtor_,
-        uint256 amount_
-    ) external onlyRole(DEBT_ADMIN) {
-        // Reduce debt for specific address
-        reserveDebt[token_][debtor_] -= amount_;
-        totalDebt[token_] -= amount_;
-
-        emit DebtCleared(token_, debtor_, amount_);
+        // Check for infinite approval
+        if (approval != type(uint256).max) {
+            unchecked {
+                withdrawApproval[withdrawer_][token_] = approval - amount_;
+            }
+        }
     }
 }

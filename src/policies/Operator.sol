@@ -601,7 +601,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         if (initialized) revert Operator_AlreadyInitialized();
 
         /// Request approval for reserves from TRSRY
-        TRSRY.requestApprovalFor(address(this), reserve, type(uint256).max);
+        TRSRY.setApprovalFor(address(this), reserve, type(uint256).max);
 
         /// Update range prices (wall and cushion)
         _updateRangePrices();
