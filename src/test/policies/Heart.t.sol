@@ -4,16 +4,16 @@ pragma solidity >=0.8.0;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
-import {Vm} from "forge-std/Vm.sol";
+
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockPrice} from "../mocks/MockPrice.sol";
-import {MockAuthGiver} from "../mocks/MockAuthGiver.sol";
+import {MockPrice} from "test/mocks/MockPrice.sol";
+import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {Kernel, Policy, Actions} from "../../Kernel.sol";
+import {Kernel, Policy, Actions} from "src/Kernel.sol";
 import {OlympusAuthority} from "modules/AUTHR.sol";
 
 import {Heart} from "policies/Heart.sol";

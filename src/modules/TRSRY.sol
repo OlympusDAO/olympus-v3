@@ -4,9 +4,9 @@ pragma solidity ^0.8.13;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
-import {TransferHelper} from "../libraries/TransferHelper.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
 
-import {Kernel, Module} from "../Kernel.sol";
+import {Kernel, Module} from "src/Kernel.sol";
 
 import {console2} from "forge-std/console2.sol";
 

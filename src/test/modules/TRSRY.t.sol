@@ -11,8 +11,8 @@ import "forge-std/console2.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import "src/modules/TRSRY.sol";
 import "src/Kernel.sol";
-import {OlympusERC20Token} from "../../external/OlympusERC20.sol";
-import {MockModuleWriter} from "../mocks/MockModuleWriter.sol";
+import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
+import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 
 contract TRSRYTest is Test {
     using larping for *;

@@ -4,7 +4,7 @@
 
 pragma solidity ^0.8.13;
 
-import {Kernel, Policy} from "../Kernel.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
 

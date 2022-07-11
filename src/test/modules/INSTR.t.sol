@@ -5,11 +5,11 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 
-import {Kernel, Module, Instruction, Actions} from "../../Kernel.sol";
+import {Kernel, Module, Instruction, Actions} from "src/Kernel.sol";
 import "modules/INSTR.sol";
 import {Governance} from "policies/Governance.sol";
-import {MockModuleWriter} from "../mocks/MockModuleWriter.sol";
-import {MockInvalidModule} from "../mocks/MockInvalidModule.sol";
+import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
+import {MockInvalidModule} from "test/mocks/MockInvalidModule.sol";
 
 contract InstructionsTest is Test {
     Kernel internal kernel;

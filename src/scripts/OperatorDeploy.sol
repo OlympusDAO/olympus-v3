@@ -5,9 +5,9 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {Script, console2} from "forge-std/Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {IBondAuctioneer} from "../interfaces/IBondAuctioneer.sol";
+import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
 
-import {Kernel, Actions} from "../Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";

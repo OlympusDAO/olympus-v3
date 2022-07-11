@@ -5,11 +5,11 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {Script, console2} from "forge-std/Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {IBondAggregator} from "../interfaces/IBondAggregator.sol";
-import {IBondAuctioneer} from "../interfaces/IBondAuctioneer.sol";
-import {IWETH9} from "../interfaces/IWETH9.sol";
+import {IBondAggregator} from "interfaces/IBondAggregator.sol";
+import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IWETH9} from "interfaces/IWETH9.sol";
 
-import {Kernel, Actions} from "../Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusAuthority} from "modules/AUTHR.sol";
 import {OlympusPrice} from "modules/PRICE.sol";
 import {OlympusRange} from "modules/RANGE.sol";
@@ -24,8 +24,8 @@ import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {VoterRegistration} from "policies/VoterRegistration.sol";
 import {Governance} from "policies/Governance.sol";
-import {MockAuthGiver} from "../test/mocks/MockAuthGiver.sol";
-import {MockPriceFeed} from "../test/mocks/MockPriceFeed.sol";
+import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
+import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 

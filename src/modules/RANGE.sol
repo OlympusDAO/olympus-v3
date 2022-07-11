@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.13;
 
-import {TransferHelper} from "../libraries/TransferHelper.sol";
-import {FullMath} from "../libraries/FullMath.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
+import {FullMath} from "libraries/FullMath.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {Kernel, Module} from "../Kernel.sol";
+import {Kernel, Module} from "src/Kernel.sol";
 
 error RANGE_InvalidParams();
 

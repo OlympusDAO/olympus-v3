@@ -9,9 +9,8 @@ import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
-// import {OlympusAuthority} from "modules/AUTHR.sol";
 import {Operator} from "policies/Operator.sol";
-import {Kernel, Policy} from "../Kernel.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
@@ -62,9 +61,10 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         override
         returns (Kernel.Role[] memory roles)
     {
-        roles = new Kernel.Role[](2);
-        roles[0] = TRSRY.BANKER();
+        roles = new Kernel.Role[](3);
+        roles[0] = TRSRY.APPROVER();
         roles[1] = MINTR.MINTER();
+        roles[2] = MINTR.BURNER();
     }
 
     /* ========== WHITELISTING ========== */
@@ -76,6 +76,16 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         requiresAuth
     {
         approvedMarkets[teller_][id_] = true;
+
+        // Get payout tokens for market
+        (, , ERC20 payoutToken, , , ) = aggregator
+            .getAuctioneer(id_)
+            .getMarketInfoForPurchase(id_);
+
+        /// If payout token is not OHM, request approval from TRSRY for withdrawals
+        if (address(payoutToken) != address(ohm)) {
+            TRSRY.setApprovalFor(address(this), payoutToken, type(uint256).max);
+        }
     }
 
     /* ========== CALLBACK ========== */
@@ -112,6 +122,9 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         } else if (quoteToken == ohm) {
             // If inverse bond (buying ohm), transfer payout tokens to sender
             TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
+
+            // Burn OHM received from sender
+            MINTR.burnOhm(address(this), inputAmount_);
         } else if (payoutToken == ohm) {
             // Else (selling ohm), mint OHM to sender
             MINTR.mintOhm(msg.sender, outputAmount_);

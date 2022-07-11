@@ -38,15 +38,23 @@ interface IBondAggregator {
     /// @dev                Accounts for debt and control variable decay so it is up to date
     /// @param amount_      Amount of quote tokens to spend
     /// @param id_          ID of market
+    /// @param referrer_    Address of referrer, used to get fees to calculate accurate payout amount.
+    ///                     Inputting the zero address will take into account just the protocol fee.
     /// @return             amount of payout tokens to be paid
-    function payoutFor(uint256 amount_, uint256 id_)
-        external
-        view
-        returns (uint256);
+    function payoutFor(
+        uint256 amount_,
+        uint256 id_,
+        address referrer_
+    ) external view returns (uint256);
 
     /// @notice             Returns maximum amount of quote token accepted by the market
     /// @param id_          ID of market
-    function maxAmountAccepted(uint256 id_) external view returns (uint256);
+    /// @param referrer_    Address of referrer, used to get fees to calculate accurate payout amount.
+    ///                     Inputting the zero address will take into account just the protocol fee.
+    function maxAmountAccepted(uint256 id_, address referrer_)
+        external
+        view
+        returns (uint256);
 
     /// @notice             Does market send payout immediately
     /// @param id_          Market ID to search for
@@ -65,14 +73,14 @@ interface IBondAggregator {
 
     /// @notice             Returns an array of all active market IDs for a given quote token
     /// @param token_       Address of token to query by
-    /// @param isPayout_      If true, search by payout token, else search for quote token
+    /// @param isPayout_    If true, search by payout token, else search for quote token
     function liveMarketsFor(address token_, bool isPayout_)
         external
         view
         returns (uint256[] memory);
 
     /// @notice             Returns an array of all active market IDs for a given payout and quote token
-    /// @param payout_        Address of payout token
+    /// @param payout_      Address of payout token
     /// @param quote_       Address of quote token
     function marketsFor(address payout_, address quote_)
         external
@@ -80,11 +88,12 @@ interface IBondAggregator {
         returns (uint256[] memory);
 
     /// @notice                 Returns the market ID with the highest current payoutToken payout for depositing quoteToken
-    /// @param payout_            Address of payout token
+    /// @param payout_          Address of payout token
     /// @param quote_           Address of quote token
     /// @param amountIn_        Amount of quote tokens to deposit
     /// @param minAmountOut_    Minimum amount of payout tokens to receive as payout
     /// @param maxExpiry_       Latest acceptable vesting timestamp for bond
+    ///                         Inputting the zero address will take into account just the protocol fee.
     function findMarketFor(
         address payout_,
         address quote_,

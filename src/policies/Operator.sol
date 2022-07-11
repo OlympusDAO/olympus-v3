@@ -5,7 +5,7 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 
-import {IOperator} from "./interfaces/IOperator.sol";
+import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
 import {IBondCallback} from "interfaces/IBondCallback.sol";
 
@@ -14,7 +14,7 @@ import {OlympusMinter} from "modules/MINTR.sol";
 import {OlympusPrice} from "modules/PRICE.sol";
 import {OlympusRange} from "modules/RANGE.sol";
 
-import {Kernel, Policy} from "../Kernel.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
