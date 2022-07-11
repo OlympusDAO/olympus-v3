@@ -84,11 +84,7 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
 
         /// If payout token is not OHM, request approval from TRSRY for withdrawals
         if (address(payoutToken) != address(ohm)) {
-            TRSRY.setApprovalFor(
-                address(this),
-                payoutToken,
-                type(uint256).max
-            );
+            TRSRY.setApprovalFor(address(this), payoutToken, type(uint256).max);
         }
     }
 
