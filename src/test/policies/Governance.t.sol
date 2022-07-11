@@ -538,6 +538,14 @@ contract GovernanceTest is Test {
         assertEq(votes.balanceOf(voter5), 0);
     }
 
+    function testRevert_CannotReclaimZeroVotes() public {
+        _executeProposal();
+        vm.expectRevert(CannotReclaimZeroVotes.selector);
+
+        vm.prank(voter4);
+        governance.reclaimVotes(1);
+    }
+
     function testRevert_CannotReclaimTokensForActiveVote() public {
         _createApprovedInstructions();
 
@@ -547,13 +555,13 @@ contract GovernanceTest is Test {
         governance.reclaimVotes(1);
     }
 
-    function testRevert_VotingTokensAlreadyClaimed() public {
+    function testRevert_VotingTokensAlreadyReclaimed() public {
         _executeProposal();
 
         vm.prank(voter5);
         governance.reclaimVotes(1);
 
-        vm.expectRevert(VotingTokensAlreadyClaimed.selector);
+        vm.expectRevert(VotingTokensAlreadyReclaimed.selector);
 
         vm.prank(voter5);
         governance.reclaimVotes(1);

@@ -8,8 +8,11 @@ pragma solidity ^0.8.13;
 import {Kernel, Module} from "src/Kernel.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+error VOTES_TransferDisabled();
+
 contract OlympusVotes is Module, ERC20 {
     Kernel.Role public constant ISSUER = Kernel.Role.wrap("VOTES_Issuer");
+    Kernel.Role public constant GOVERNOR = Kernel.Role.wrap("VOTES_Governor");
 
     constructor(Kernel kernel_)
         Module(kernel_)
@@ -21,8 +24,9 @@ contract OlympusVotes is Module, ERC20 {
     }
 
     function ROLES() public pure override returns (Kernel.Role[] memory roles) {
-        roles = new Kernel.Role[](1);
+        roles = new Kernel.Role[](2);
         roles[0] = ISSUER;
+        roles[1] = GOVERNOR;
     }
 
     // Policy Interface
@@ -39,5 +43,28 @@ contract OlympusVotes is Module, ERC20 {
         onlyRole(ISSUER)
     {
         _burn(wallet_, amount_);
+    }
+
+    function transfer(address to_, uint256 amount_)
+        public
+        override
+        returns (bool)
+    {
+        revert VOTES_TransferDisabled();
+        return true;
+    }
+
+    function transferFrom(
+        address from_,
+        address to_,
+        uint256 amount_
+    ) public override onlyRole(GOVERNOR) returns (bool) {
+        balanceOf[from_] -= amount_;
+        unchecked {
+            balanceOf[to_] += amount_;
+        }
+
+        emit Transfer(from_, to_, amount_);
+        return true;
     }
 }

@@ -34,16 +34,15 @@ contract OlympusInstructions is Module {
     /////////////////////////////////////////////////////////////////////////////////
 
     event InstructionsStored(uint256 instructionsId);
-    event InstructionsExecuted(uint256 instructionsId);
 
     /* Imported from Kernel, just here for reference:
 
     enum Actions {
-        ChangeExecutive,
+        InstallModule,
+        UpgradeModule,
         ApprovePolicy,
         TerminatePolicy,
-        InstallSystem,
-        UpgradeSystem
+        ChangeExecutor
     }
 
     struct Instruction {
@@ -74,12 +73,10 @@ contract OlympusInstructions is Module {
         returns (uint256)
     {
         uint256 length = instructions_.length;
-        totalInstructions++;
+        uint256 instructionsId = ++totalInstructions;
 
         // initialize an empty list of instructions that will be filled
-        Instruction[] storage instructions = storedInstructions[
-            totalInstructions
-        ];
+        Instruction[] storage instructions = storedInstructions[instructionsId];
 
         // if there are no instructions, throw an error
         if (length == 0) {
@@ -87,7 +84,7 @@ contract OlympusInstructions is Module {
         }
 
         // for each instruction, do the following actions:
-        for (uint256 i = 0; i < length; i++) {
+        for (uint256 i; i < length; ) {
             // get the instruction
             Instruction calldata instruction = instructions_[i];
 
@@ -101,7 +98,6 @@ contract OlympusInstructions is Module {
             ) {
                 Module module = Module(instruction.target);
                 _ensureValidKeycode(module.KEYCODE());
-                revert INSTR_InvalidChangeExecutorAction();
             } else if (
                 instruction.action == Actions.ChangeExecutor && i != length - 1
             ) {
@@ -115,11 +111,14 @@ contract OlympusInstructions is Module {
             }
 
             instructions.push(instructions_[i]);
+            unchecked {
+                ++i;
+            }
         }
 
-        emit InstructionsStored(totalInstructions);
+        emit InstructionsStored(instructionsId);
 
-        return totalInstructions;
+        return instructionsId;
     }
 
     /////////////////////////////// INTERNAL FUNCTIONS ////////////////////////////////

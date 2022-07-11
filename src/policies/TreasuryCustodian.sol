@@ -12,7 +12,7 @@ error PolicyStillActive();
 
 // Generic contract to allow authorized contracts to interact with treasury
 // Use cases include setting and removing approvals, as well as allocating assets for yield
-contract OlympusTreasuryCustodian is Policy, Auth {
+contract TreasuryCustodian is Policy, Auth {
     /* ========== STATE VARIABLES ========== */
 
     /// Modules
@@ -41,6 +41,14 @@ contract OlympusTreasuryCustodian is Policy, Auth {
         roles = new Kernel.Role[](2);
         roles[0] = TRSRY.APPROVER();
         roles[1] = TRSRY.DEBT_ADMIN();
+    }
+
+    function grantApproval(
+        address for_,
+        ERC20 token_,
+        uint256 amount_
+    ) external requiresAuth {
+        TRSRY.setApprovalFor(for_, token_, amount_);
     }
 
     // Anyone can call to revoke a terminated policy's approvals

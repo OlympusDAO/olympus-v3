@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The Proposal Policy submits & activates instructions in a INSTR module
-
+// The Voter Registration Policy is a permissioned policy to mint and burn votes to arbitrary addresses
 pragma solidity ^0.8.13;
 
 import {Kernel, Policy} from "src/Kernel.sol";
@@ -35,16 +34,6 @@ contract VoterRegistration is Policy, Auth {
         roles = new Kernel.Role[](1);
         roles[0] = VOTES.ISSUER();
     }
-
-    /////////////////////////////////////////////////////////////////////////////////
-    //                             Policy Variables                                //
-    /////////////////////////////////////////////////////////////////////////////////
-
-    event IssuedVotesTo(address wallet_, uint256 amount_);
-    event RevokedVotesFrom(address wallet_, uint256 amount_);
-
-    // proposing
-    error Not_Authorized_Issuer();
 
     /////////////////////////////////////////////////////////////////////////////////
     //                               User Actions                                  //

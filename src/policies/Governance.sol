@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// The Proposal Policy submits & activates instructions in a INSTR module
+// The Governance Policy submits & activates instructions in a INSTR module
 
 pragma solidity ^0.8.13;
 
@@ -31,8 +31,9 @@ error NotEnoughVotesToExecute();
 error ExecutionTimelockStillActive();
 
 // claiming
-error VotingTokensAlreadyClaimed();
+error VotingTokensAlreadyReclaimed();
 error CannotReclaimTokensForActiveVote();
+error CannotReclaimZeroVotes();
 
 struct ProposalMetadata {
     bytes32 proposalName;
@@ -60,6 +61,7 @@ contract Governance is Policy {
         VOTES = OlympusVotes(getModuleAddress("VOTES"));
     }
 
+    // The Governor Policy is also the Kernel's Executor.
     function requestRoles()
         external
         view
@@ -67,8 +69,9 @@ contract Governance is Policy {
         onlyKernel
         returns (Kernel.Role[] memory roles)
     {
-        roles = new Kernel.Role[](1);
+        roles = new Kernel.Role[](2);
         roles[0] = INSTR.GOVERNOR();
+        roles[1] = VOTES.GOVERNOR();
     }
 
     /////////////////////////////////////////////////////////////////////////////////
@@ -205,7 +208,7 @@ contract Governance is Policy {
             revert ProposalAlreadyActivated();
         }
 
-        // ensure the current active proposal has had at least a week of voting
+        // ensure the currently active proposal has had at least a week of voting for execution
         if (block.timestamp < activeProposal.activationTimestamp + 1 weeks) {
             revert ActiveProposalNotExpired();
         }
@@ -224,7 +227,7 @@ contract Governance is Policy {
         // get the amount of user votes
         uint256 userVotes = VOTES.balanceOf(msg.sender);
 
-        // // ensure an active proposal exists
+        // ensure an active proposal exists
         if (activeProposal.instructionsId == 0) {
             revert NoActiveProposalDetected();
         }
@@ -239,7 +242,7 @@ contract Governance is Policy {
         // record the votes
         if (for_) {
             yesVotesForProposal[activeProposal.instructionsId] += userVotes;
-        } else if (!for_) {
+        } else {
             noVotesForProposal[activeProposal.instructionsId] += userVotes;
         }
 
@@ -281,11 +284,14 @@ contract Governance is Policy {
             activeProposal.instructionsId
         );
 
-        for (uint256 step = 0; step < instructions.length; step++) {
+        for (uint256 step; step < instructions.length; ) {
             kernel.executeAction(
                 instructions[step].action,
                 instructions[step].target
             );
+            unchecked {
+                ++step;
+            }
         }
 
         // emit the corresponding event
@@ -299,6 +305,11 @@ contract Governance is Policy {
         // get the amount of tokens the user voted with
         uint256 userVotes = userVotesForProposal[instructionsId_][msg.sender];
 
+        // ensure the user is not claiming empty votes
+        if (userVotes == 0) {
+            revert CannotReclaimZeroVotes();
+        }
+
         // ensure the user is not claiming for the active propsal
         if (instructionsId_ == activeProposal.instructionsId) {
             revert CannotReclaimTokensForActiveVote();
@@ -306,13 +317,13 @@ contract Governance is Policy {
 
         // ensure the user has not already claimed before for this proposal
         if (tokenClaimsForProposal[instructionsId_][msg.sender] == true) {
-            revert VotingTokensAlreadyClaimed();
+            revert VotingTokensAlreadyReclaimed();
         }
 
         // record the voting tokens being claimed from the contract
         tokenClaimsForProposal[instructionsId_][msg.sender] = true;
 
         // return the tokens back to the user
-        VOTES.transfer(msg.sender, userVotes);
+        VOTES.transferFrom(address(this), msg.sender, userVotes);
     }
 }
