@@ -61,9 +61,10 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         override
         returns (Kernel.Role[] memory roles)
     {
-        roles = new Kernel.Role[](2);
+        roles = new Kernel.Role[](3);
         roles[0] = TRSRY.APPROVER();
         roles[1] = MINTR.MINTER();
+        roles[2] = MINTR.BURNER();
     }
 
     /* ========== WHITELISTING ========== */
@@ -125,6 +126,9 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         } else if (quoteToken == ohm) {
             // If inverse bond (buying ohm), transfer payout tokens to sender
             TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
+
+            // Burn OHM received from sender
+            MINTR.burnOhm(address(this), inputAmount_);
         } else if (payoutToken == ohm) {
             // Else (selling ohm), mint OHM to sender
             MINTR.mintOhm(msg.sender, outputAmount_);

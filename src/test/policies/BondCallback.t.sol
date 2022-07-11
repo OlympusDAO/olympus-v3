@@ -444,8 +444,9 @@ contract BondCallbackTest is Test {
         callback.callback(invBond, 10, 300);
 
         /// Expect the balances of the teller and callback to be updated
+        /// Callback should be the same as the start amount since the OHM is burned
         assertEq(reserve.balanceOf(address(teller)), startBalTeller + 300);
-        assertEq(ohm.balanceOf(address(callback)), startBalCallback + 10);
+        assertEq(ohm.balanceOf(address(callback)), startBalCallback);
 
         /// Case 3: Internal Bond (OHM -> OHM)
         /// OHM is received by the callback and the difference
