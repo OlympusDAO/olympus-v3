@@ -138,20 +138,20 @@ contract GovernanceTest is Test {
 
     function _submitProposal() internal {
         // create valid instructions
-        Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(
+        Instruction[] memory instructions_ = new Instruction[](1);
+        instructions_[0] = Instruction(
             Actions.ApprovePolicy,
             address(newProposedPolicy)
         );
 
         // submit proposal as voter1 (1/15 votes)
         vm.prank(voter1);
-        governance.submitProposal(instructions, "proposalName");
+        governance.submitProposal(instructions_, "proposalName");
     }
 
     function testRevert_NotEnoughVotesToPropose() public {
-        Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(
+        Instruction[] memory instructions_ = new Instruction[](1);
+        instructions_[0] = Instruction(
             Actions.ApprovePolicy,
             address(governance)
         );
@@ -160,12 +160,12 @@ contract GovernanceTest is Test {
 
         // submit proposal as invalid voter (0/15 votes)
         vm.prank(voter0);
-        governance.submitProposal(instructions, "proposalName");
+        governance.submitProposal(instructions_, "proposalName");
     }
 
     function testEvent_ProposalSubmitted() public {
-        Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(
+        Instruction[] memory instructions_ = new Instruction[](1);
+        instructions_[0] = Instruction(
             Actions.ApprovePolicy,
             address(governance)
         );
@@ -174,12 +174,12 @@ contract GovernanceTest is Test {
         emit ProposalSubmitted(1);
 
         vm.prank(voter1);
-        governance.submitProposal(instructions, "proposalName");
+        governance.submitProposal(instructions_, "proposalName");
     }
 
     function testCorrectness_SuccessfullySubmitProposal() public {
-        Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(
+        Instruction[] memory instructions_ = new Instruction[](1);
+        instructions_[0] = Instruction(
             Actions.ApprovePolicy,
             address(governance)
         );
@@ -188,7 +188,7 @@ contract GovernanceTest is Test {
         emit InstructionsStored(1);
 
         vm.prank(voter1);
-        governance.submitProposal(instructions, "proposalName");
+        governance.submitProposal(instructions_, "proposalName");
 
         // get the proposal metadata
         ProposalMetadata memory pls = governance.getMetadata(1);
