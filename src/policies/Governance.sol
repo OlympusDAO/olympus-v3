@@ -204,7 +204,7 @@ contract Governance is Policy {
         }
 
         // ensure the proposal is being activated for the first time
-        if (proposalHasBeenActivated[instructionsId_] == true) {
+        if (proposalHasBeenActivated[instructionsId_]) {
             revert ProposalAlreadyActivated();
         }
 
@@ -316,7 +316,7 @@ contract Governance is Policy {
         }
 
         // ensure the user has not already claimed before for this proposal
-        if (tokenClaimsForProposal[instructionsId_][msg.sender] == true) {
+        if (tokenClaimsForProposal[instructionsId_][msg.sender]) {
             revert VotingTokensAlreadyReclaimed();
         }
 

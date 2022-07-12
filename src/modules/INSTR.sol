@@ -35,22 +35,6 @@ contract OlympusInstructions is Module {
 
     event InstructionsStored(uint256 instructionsId);
 
-    /* Imported from Kernel, just here for reference:
-
-    enum Actions {
-        InstallModule,
-        UpgradeModule,
-        ApprovePolicy,
-        TerminatePolicy,
-        ChangeExecutor
-    }
-
-    struct Instruction {
-        Actions action;
-        address target;
-    }
-    */
-
     uint256 public totalInstructions;
     mapping(uint256 => Instruction[]) public storedInstructions;
 
