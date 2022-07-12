@@ -152,11 +152,15 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         ERC20 token;
         uint256 balance;
         uint256 len = tokens_.length;
-        for (uint256 i; i < len; i++) {
+        for (uint256 i; i < len; ) {
             token = tokens_[i];
             balance = token.balanceOf(address(this));
             token.safeTransfer(address(TRSRY), balance);
             priorBalances[token] = token.balanceOf(address(this));
+
+            unchecked {
+                ++i;
+            }
         }
     }
 

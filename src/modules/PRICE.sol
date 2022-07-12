@@ -227,10 +227,13 @@ contract OlympusPrice is Module {
 
         /// Push start observations into storage and total up observations
         uint256 total;
-        for (uint256 i; i < numObs; ++i) {
+        for (uint256 i; i < numObs; ) {
             if (startObservations_[i] == 0) revert Price_InvalidParams();
             total += startObservations_[i];
             observations[i] = startObservations_[i];
+            unchecked {
+                ++i;
+            }
         }
 
         /// Set moving average, last observation time, and initialized flag
