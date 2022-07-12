@@ -23,24 +23,29 @@ Set up a foundry config in foundry.toml.
 
 ## Deployments
 
-### Goerli Testnet (without Governance)
+### Goerli Testnet
 
-- Kernel - [0x3B294580Fcf1F60B94eca4f4CE78A2f52D23cC83](https://goerli.etherscan.io/address/0x3b294580fcf1f60b94eca4f4ce78a2f52d23cc83)
+- Kernel - [0x64665B0429B21274d938Ed345e4520D1f5ABb9e7](https://goerli.etherscan.io/address/0x64665b0429b21274d938ed345e4520d1f5abb9e7)
 
 #### Modules
 
-- AUTHR - [0x81D58CcDCA69dd70A498b543cAA2c61D274ad9A3](https://goerli.etherscan.io/address/0x81d58ccdca69dd70a498b543caa2c61d274ad9a3)
-- TRSRY - [0x994DfcA46AB23383D8ee6B7ceAE16B725d79f503](https://goerli.etherscan.io/address/0x994dfca46ab23383d8ee6b7ceae16b725d79f503)
-- MINTR - [0xf2dFC1BE91dE38F5420DEa2fC1621Fba823c61BE](https://goerli.etherscan.io/address/0xf2dfc1be91de38f5420dea2fc1621fba823c61be)
-- PRICE - [0x69a3c50efD5214538389dd7443a0325be55D9D51](https://goerli.etherscan.io/address/0x69a3c50efd5214538389dd7443a0325be55d9d51)
-- RANGE - [0x8642DBA4B43aB5d485F57677D6605FfE9aeEe2c5](https://goerli.etherscan.io/address/0x8642dba4b43ab5d485f57677d6605ffe9aeee2c5)
+- AUTHR - [0x247Bbb6aa0549C4F8F69aab6668e65fD548f0616](https://goerli.etherscan.io/address/0x247bbb6aa0549c4f8f69aab6668e65fd548f0616)
+- TRSRY - [0x2544bF628804F13d7505E5874233e87308dC4dD2](https://goerli.etherscan.io/address/0x2544bf628804f13d7505e5874233e87308dc4dd2)
+- MINTR - [0x578114a3686b305901B548cb11EefA82B404Ce39](https://goerli.etherscan.io/address/0x578114a3686b305901b548cb11eefa82b404ce39)
+- PRICE - [0x397c70E4e7A0bd720233a3f4376A5F8d41cc8b57](https://goerli.etherscan.io/address/0x397c70e4e7a0bd720233a3f4376a5f8d41cc8b57)
+- RANGE - [0x47a22bd734885baE7E2e153E98e7137b0B96bEBD](https://goerli.etherscan.io/address/0x47a22bd734885bae7e2e153e98e7137b0b96bebd)
+- INSTR - [0xeeB45a384ced4097Ad369d48590AeD8DDBC11257](https://goerli.etherscan.io/address/0xeeb45a384ced4097ad369d48590aed8ddbc11257)
+- VOTES - [0xA7dBfcFE09ACCf66B56Fe05841618177AE188c5b](https://goerli.etherscan.io/address/0xa7dbfcfe09accf66b56fe05841618177ae188c5b)
 
 #### Policies
 
-- BondCallback - [0x308fD958B191fdAEa000a1c0c5A2EB6FceB31DeD](https://goerli.etherscan.io/address/0x308fd958b191fdaea000a1c0c5a2eb6fceb31ded)
-- Heart - [0x5358D5b1A170D49a23C61B158CC75e7f060a8134](https://goerli.etherscan.io/address/0x5358d5b1a170d49a23c61b158cc75e7f060a8134)
-- Operator - [0xcC57b829CC36D8FD121C85a19541883ccaA256b6](https://goerli.etherscan.io/address/0xcc57b829cc36d8fd121c85a19541883ccaa256b6)
-- PriceConfig - [0xE5103B14DC6d93b356745Da23A93546f1217c9fc](https://goerli.etherscan.io/address/0xe5103b14dc6d93b356745da23a93546f1217c9fc)
+- BondCallback - [0x76775f07B0dCd21DB304b6c5b14d57A2954ddAC6](https://goerli.etherscan.io/address/0x76775f07b0dcd21db304b6c5b14d57a2954ddac6)
+- Heart - [0xDF1564f0815CdcA0f5cd2dF67411fC83D981B999](https://goerli.etherscan.io/address/0xdf1564f0815cdca0f5cd2df67411fc83d981b999)
+- Operator - [0x84F334bf268821C5A8DB931105088f0369288B4c](https://goerli.etherscan.io/address/0x84f334bf268821c5a8db931105088f0369288b4c)
+- PriceConfig - [0xA938A067e5008ec2f76557ad1AB100a4CD7Dfde2](https://goerli.etherscan.io/address/0xa938a067e5008ec2f76557ad1ab100a4cd7dfde2)
+- Governance - [0xFEc5b1b96Ec2dA1494F5ad3D6E141Ce401c6C2D5](https://goerli.etherscan.io/address/0xfec5b1b96ec2da1494f5ad3d6e141ce401c6c2d5)
+- VoterRegistration - [0x5d7221dA0cF85dEC1d5bC26BeE803C53B6B87355](https://goerli.etherscan.io/address/0x5d7221da0cf85dec1d5bc26bee803c53b6b87355)
+- Auth Giver (Testnet Only) - [0x3714fDFc3b6918923e5b2AbAe0fcD74376Be45fc](https://goerli.etherscan.io/address/0x3714fdfc3b6918923e5b2abae0fcd74376be45fc)
 
 #### Dependencies
 
@@ -49,8 +54,9 @@ Set up a foundry config in foundry.toml.
 - WETH Token (for keeper rewards) - [0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7](https://goerli.etherscan.io/address/0x0bb7509324ce409f7bbc4b701f932eaca9736ab7)
 - Mock OHM/ETH Price Feed - [0x769435458365Fef4C14aCE998A0ff6AB29c376Ff](https://goerli.etherscan.io/address/0x769435458365fef4c14ace998a0ff6ab29c376ff)
 - Mock DAI/ETH Price Feed - [0x63dC91F5efAbf0c49C5a0b1f573B23A4aD40e3aA](https://goerli.etherscan.io/address/0x63dc91f5efabf0c49c5a0b1f573b23a4ad40e3aa)
-- Bond Auctioneer - [0x130a364655c5889D665caBa74FbD3bFa1448b99B](https://goerli.etherscan.io/address/0x130a364655c5889D665caBa74FbD3bFa1448b99B)
-- Bond Aggregator - [0xaD0752111901b2C0A2062c015592B1098B654458](https://goerli.etherscan.io/address/0xad0752111901b2c0a2062c015592b1098b654458)
+- Bond Auctioneer - [0x85A41eCdefAA441C71C94a47FDD04e4509a2944a](https://goerli.etherscan.io/address/0x85a41ecdefaa441c71c94a47fdd04e4509a2944a)
+- Bond Teller - [0xb4Ff2D13D277dc2c7801F2b4525b6904BB9387B9](https://goerli.etherscan.io/address/0xb4ff2d13d277dc2c7801f2b4525b6904bb9387b9)
+- Bond Aggregator - [0x2B33ABcb816AeE1BB38fa84537329955f79d900e](https://goerli.etherscan.io/address/0x2b33abcb816aee1bb38fa84537329955f79d900e)
 
 #### Privileged Testnet Accounts
 

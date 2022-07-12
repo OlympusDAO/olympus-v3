@@ -2,4 +2,4 @@
 source .env
 
 # Deploy using script
-forge script ./src/scripts/Deploy.sol:OlympusDeploy --sig $INITIALIZE_CALLDATA --rpc-url $RPC_URL --private-key $PRIVATE_KEY --slow --broadcast -vvvv
+forge script ./src/scripts/Deploy.sol:OlympusDeploy --sig "initialize()()" --rpc-url $RPC_URL --private-key $PRIVATE_KEY --slow -vvv --broadcast
