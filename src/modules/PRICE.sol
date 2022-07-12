@@ -39,9 +39,9 @@ contract OlympusPrice is Module {
     /// Moving average data
     uint256 internal _movingAverage; /// See getMovingAverage()
 
-    /// @notice Array of price observations ordered by when they were observed.
-    /// @dev    Observations are continually stored and the moving average is over the last movingAverageDuration / observationFrequency observations.
-    ///         This allows the contract to maintain historical data. Observations can be cleared by changing the movingAverageDuration or observationFrequency.
+    /// @notice Array of price observations. Check nextObsIndex to determine latest data point.
+    /// @dev    Observations are stored in a ring buffer where the moving average is the sum of all observations divided by the number of observations.
+    ///         Observations can be cleared by changing the movingAverageDuration or observationFrequency and must be re-initialized.
     uint256[] public observations;
 
     /// @notice Index of the next observation to make. The current value at this index is the oldest observation.
