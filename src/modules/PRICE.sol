@@ -160,8 +160,10 @@ contract OlympusPrice is Module {
         {
             (, int256 ohmEthPriceInt, , uint256 updatedAt, ) = _ohmEthPriceFeed
                 .latestRoundData();
-            /// TODO confirm that the observation frequency is a good cutoff for the price feed
-            if (updatedAt < block.timestamp - uint256(observationFrequency))
+            /// Use a multiple of observation frequency to determine what is too old to use.
+            /// Price feeds will not provide an updated answer if the data doesn't change much.
+            /// This would be similar to if the feed just stopped updating; therefore, we need a cutoff.
+            if (updatedAt < block.timestamp - 3 * uint256(observationFrequency))
                 revert Price_BadFeed(address(_ohmEthPriceFeed));
             ohmEthPrice = uint256(ohmEthPriceInt);
 
