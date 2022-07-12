@@ -215,7 +215,8 @@ contract Kernel {
     }
 
     function _reconfigurePolicies() internal {
-        for (uint256 i = 0; i < allPolicies.length; ) {
+        uint256 len = allPolicies.length;
+        for (uint256 i = 0; i < len; ) {
             address policy_ = allPolicies[i];
 
             if (approvedPolicies[policy_]) Policy(policy_).configureReads();
@@ -231,9 +232,9 @@ contract Kernel {
         Role[] memory requests_,
         bool grant_
     ) internal {
-        uint256 l = requests_.length;
+        uint256 len = requests_.length;
 
-        for (uint256 i = 0; i < l; ) {
+        for (uint256 i = 0; i < len; ) {
             Role request = requests_[i];
 
             hasRole[policy_][request] = grant_;
