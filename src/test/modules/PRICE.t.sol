@@ -292,7 +292,7 @@ contract PriceTest is Test {
 
         /// Set the timestamp on each feed to before the acceptable window and expect the call to revert
         ohmEthPriceFeed.setTimestamp(
-            block.timestamp - uint256(price.observationFrequency()) - 1
+            block.timestamp - 3 * uint256(price.observationFrequency()) - 1
         );
 
         bytes memory err = abi.encodeWithSignature(
@@ -304,7 +304,7 @@ contract PriceTest is Test {
 
         ohmEthPriceFeed.setTimestamp(block.timestamp);
         reserveEthPriceFeed.setTimestamp(
-            block.timestamp - uint256(price.observationFrequency()) - 1
+            block.timestamp - 3 * uint256(price.observationFrequency()) - 1
         );
 
         err = abi.encodeWithSignature(
