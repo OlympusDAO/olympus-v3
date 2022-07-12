@@ -39,9 +39,9 @@ contract OlympusPrice is Module {
     /// Moving average data
     uint256 internal _movingAverage; /// See getMovingAverage()
 
-    /// @notice Array of price observations ordered by when they were observed.
-    /// @dev    Observations are continually stored and the moving average is over the last movingAverageDuration / observationFrequency observations.
-    ///         This allows the contract to maintain historical data. Observations can be cleared by changing the movingAverageDuration or observationFrequency.
+    /// @notice Array of price observations. Check nextObsIndex to determine latest data point.
+    /// @dev    Observations are stored in a ring buffer where the moving average is the sum of all observations divided by the number of observations.
+    ///         Observations can be cleared by changing the movingAverageDuration or observationFrequency and must be re-initialized.
     uint256[] public observations;
 
     /// @notice Index of the next observation to make. The current value at this index is the oldest observation.
@@ -160,8 +160,10 @@ contract OlympusPrice is Module {
         {
             (, int256 ohmEthPriceInt, , uint256 updatedAt, ) = _ohmEthPriceFeed
                 .latestRoundData();
-            /// TODO confirm that the observation frequency is a good cutoff for the price feed
-            if (updatedAt < block.timestamp - uint256(observationFrequency))
+            /// Use a multiple of observation frequency to determine what is too old to use.
+            /// Price feeds will not provide an updated answer if the data doesn't change much.
+            /// This would be similar to if the feed just stopped updating; therefore, we need a cutoff.
+            if (updatedAt < block.timestamp - 3 * uint256(observationFrequency))
                 revert Price_BadFeed(address(_ohmEthPriceFeed));
             ohmEthPrice = uint256(ohmEthPriceInt);
 

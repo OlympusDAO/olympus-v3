@@ -89,9 +89,9 @@ contract OlympusDeploy is Script {
 
     /// Mock Price Feed addresses
     AggregatorV2V3Interface public constant ohmEthPriceFeed =
-        AggregatorV2V3Interface(0x769435458365Fef4C14aCE998A0ff6AB29c376Ff); // OHM/ETH chainlink address
+        AggregatorV2V3Interface(0x022710a589C9796dce59A0C52cA4E36f0a5e991A); // OHM/ETH chainlink address
     AggregatorV2V3Interface public constant reserveEthPriceFeed =
-        AggregatorV2V3Interface(0x63dC91F5efAbf0c49C5a0b1f573B23A4aD40e3aA); // DAI/ETH chainlink address
+        AggregatorV2V3Interface(0xdC8E4eD326cFb730a759312B6b1727C6Ef9ca233); // DAI/ETH chainlink address
 
     function deploy(address guardian_, address policy_) external {
         vm.startBroadcast();
