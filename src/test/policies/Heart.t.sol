@@ -35,7 +35,7 @@ contract MockOperator is Policy, IOperator, Auth {
     }
 
     /* ========== FRAMEWORK CONFIFURATION ========== */
-    function configureReads() external override onlyKernel {
+    function configureReads() external override {
         setAuthority(Authority(getModuleAddress("AUTHR")));
     }
 
@@ -43,7 +43,6 @@ contract MockOperator is Policy, IOperator, Auth {
         external
         view
         override
-        onlyKernel
         returns (Kernel.Role[] memory roles)
     {}
 

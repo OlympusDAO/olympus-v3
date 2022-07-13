@@ -13,7 +13,7 @@ contract MockAuthGiver is Policy {
     constructor(Kernel kernel_) Policy(kernel_) {}
 
     /* ========== FRAMEWORK CONFIFURATION ========== */
-    function configureReads() external override onlyKernel {
+    function configureReads() external override {
         AUTHR = OlympusAuthority(getModuleAddress("AUTHR"));
     }
 
@@ -21,7 +21,6 @@ contract MockAuthGiver is Policy {
         external
         view
         override
-        onlyKernel
         returns (Kernel.Role[] memory roles)
     {
         roles = new Kernel.Role[](1);

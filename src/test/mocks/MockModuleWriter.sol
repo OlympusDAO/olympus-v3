@@ -14,13 +14,12 @@ contract MockModuleWriter is Policy {
     }
 
     /* ========== FRAMEWORK CONFIFURATION ========== */
-    function configureReads() external override onlyKernel {}
+    function configureReads() external override {}
 
     function requestRoles()
         external
         view
         override
-        onlyKernel
         returns (Kernel.Role[] memory roles)
     {
         roles = module.ROLES();

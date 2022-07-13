@@ -35,7 +35,6 @@ contract TreasuryCustodian is Policy, Auth {
         external
         view
         override
-        onlyKernel
         returns (Kernel.Role[] memory roles)
     {
         roles = new Kernel.Role[](2);
