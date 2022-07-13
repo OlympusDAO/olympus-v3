@@ -2,7 +2,7 @@
 
 // The Governance Policy submits & activates instructions in a INSTR module
 
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 import {Kernel, Policy} from "src/Kernel.sol";
 import {OlympusInstructions, Actions, Instruction} from "modules/INSTR.sol";

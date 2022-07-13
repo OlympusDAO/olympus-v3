@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // The Voter Registration Policy is a permissioned policy to mint and burn votes to arbitrary addresses
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 import {Kernel, Policy} from "src/Kernel.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
