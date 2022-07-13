@@ -71,8 +71,10 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     /// Tokens
     /// @notice     OHM token contract
     ERC20 public immutable ohm;
+    uint8 public immutable ohmDecimals;
     /// @notice     Reserve token contract
     ERC20 public immutable reserve;
+    uint8 public immutable reserveDecimals;
 
     /// Constants
     uint32 public constant FACTOR_SCALE = 1e4;
@@ -90,17 +92,22 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
             address(auctioneer_) == address(0) ||
             address(callback_) == address(0)
         ) revert Operator_InvalidParams();
+
         if (
             configParams[1] > uint256(7 days) ||
             configParams[1] < uint256(1 days)
         ) revert Operator_InvalidParams();
+
         if (configParams[2] < uint32(10_000)) revert Operator_InvalidParams();
+
         if (
             configParams[3] < uint32(1 hours) ||
             configParams[3] > configParams[1]
         ) revert Operator_InvalidParams();
+
         if (configParams[4] > 10000 || configParams[4] < 100)
             revert Operator_InvalidParams();
+
         if (
             configParams[5] < 1 hours ||
             configParams[6] > configParams[7] ||
@@ -110,7 +117,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         auctioneer = auctioneer_;
         callback = callback_;
         ohm = tokens_[0];
+        ohmDecimals = tokens_[0].decimals();
         reserve = tokens_[1];
+        reserveDecimals = tokens_[1].decimals();
 
         Regen memory regen = Regen({
             count: uint32(0),
@@ -340,8 +349,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         if (high_) {
             /// Calculate scaleAdjustment for bond market
             int8 priceDecimals = _getPriceDecimals(range.cushion.high.price);
-            int8 scaleAdjustment = int8(ohm.decimals()) -
-                int8(reserve.decimals()) -
+            int8 scaleAdjustment = int8(ohmDecimals) -
+                int8(reserveDecimals) -
                 (priceDecimals / 2);
 
             /// Calculate scale with scale adjustment and format prices for bond market
@@ -350,8 +359,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
                 uint8(
                     36 +
                         scaleAdjustment +
-                        int8(reserve.decimals()) -
-                        int8(ohm.decimals()) +
+                        int8(reserveDecimals) -
+                        int8(ohmDecimals) +
                         priceDecimals
                 );
 
@@ -409,8 +418,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
             /// Calculate scaleAdjustment for bond market
             int8 priceDecimals = _getPriceDecimals(invCushionPrice);
-            int8 scaleAdjustment = int8(reserve.decimals()) -
-                int8(ohm.decimals()) -
+            int8 scaleAdjustment = int8(reserveDecimals) -
+                int8(ohmDecimals) -
                 (priceDecimals / 2);
 
             /// Calculate scale with scale adjustment and format prices for bond market
@@ -418,8 +427,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
                 uint8(
                     36 +
                         scaleAdjustment +
-                        int8(ohm.decimals()) -
-                        int8(reserve.decimals()) +
+                        int8(ohmDecimals) -
+                        int8(reserveDecimals) +
                         priceDecimals
                 );
 
@@ -745,8 +754,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         if (tokenIn_ == ohm) {
             /// Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
-                10**reserve.decimals() * RANGE.price(true, false),
-                10**ohm.decimals() * 10**PRICE.decimals()
+                10**reserveDecimals * RANGE.price(true, false),
+                10**ohmDecimals * 10**PRICE.decimals()
             );
 
             /// Revert if amount out exceeds capacity
@@ -757,8 +766,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         } else if (tokenIn_ == reserve) {
             /// Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
-                10**ohm.decimals() * 10**PRICE.decimals(),
-                10**reserve.decimals() * RANGE.price(true, true)
+                10**ohmDecimals * 10**PRICE.decimals(),
+                10**reserveDecimals * RANGE.price(true, true)
             );
 
             /// Revert if amount out exceeds capacity
@@ -779,8 +788,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         if (high_) {
             capacity =
                 (capacity.mulDiv(
-                    10**ohm.decimals() * 10**PRICE.decimals(),
-                    10**reserve.decimals() * RANGE.price(true, true)
+                    10**ohmDecimals * 10**PRICE.decimals(),
+                    10**reserveDecimals * RANGE.price(true, true)
                 ) * (FACTOR_SCALE + RANGE.spread(true) * 2)) /
                 FACTOR_SCALE;
         }
