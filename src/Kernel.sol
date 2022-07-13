@@ -216,13 +216,13 @@ contract Kernel {
 
     function _reconfigurePolicies() internal {
         uint256 len = allPolicies.length;
-        for (uint256 i = 0; i < len; ) {
+        for (uint256 i; i < len; ) {
             address policy_ = allPolicies[i];
 
             if (approvedPolicies[policy_]) Policy(policy_).configureReads();
 
             unchecked {
-                i++;
+                ++i;
             }
         }
     }
@@ -234,7 +234,7 @@ contract Kernel {
     ) internal {
         uint256 len = requests_.length;
 
-        for (uint256 i = 0; i < len; ) {
+        for (uint256 i; i < len; ) {
             Role request = requests_[i];
 
             hasRole[policy_][request] = grant_;
@@ -242,8 +242,10 @@ contract Kernel {
             emit RolesUpdated(request, policy_, grant_);
 
             unchecked {
-                i++;
+                ++i;
             }
         }
     }
+
+    function iterate(uint256 index_, uint256 condition_) internal pure {}
 }

@@ -118,13 +118,13 @@ contract OlympusInstructions is Module {
     function _ensureValidKeycode(Kernel.Keycode keycode_) internal pure {
         bytes5 unwrapped = Kernel.Keycode.unwrap(keycode_);
 
-        for (uint256 i = 0; i < 5; ) {
+        for (uint256 i; i < 5; ) {
             bytes1 char = unwrapped[i];
 
             if (char < 0x41 || char > 0x5A) revert INSTR_InvalidModuleKeycode(); // A-Z only"
 
             unchecked {
-                i++;
+                ++i;
             }
         }
     }

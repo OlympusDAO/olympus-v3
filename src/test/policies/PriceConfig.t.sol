@@ -216,7 +216,7 @@ contract PriceConfigTest is Test {
         /// Check that the oberservations array is empty (all values initialized to 0)
         uint256 numObservations = uint256(price.numObservations());
         uint256 zero = uint256(0);
-        for (uint256 i = 0; i < numObservations; ++i) {
+        for (uint256 i; i < numObservations; ++i) {
             assertEq(price.observations(i), zero);
         }
     }

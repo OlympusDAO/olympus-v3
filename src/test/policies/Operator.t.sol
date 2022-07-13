@@ -908,7 +908,7 @@ contract OperatorTest is Test {
         price.setLastPrice(99 * 1e18);
 
         /// Trigger the operator function enough times to almost regenerate the high wall
-        for (uint256 i = 0; i < 4; i++) {
+        for (uint256 i; i < 4; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1092,7 +1092,7 @@ contract OperatorTest is Test {
         price.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
-        for (uint256 i = 0; i < 5; i++) {
+        for (uint256 i; i < 5; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1136,7 +1136,7 @@ contract OperatorTest is Test {
         price.setLastPrice(98 * 1e18);
 
         /// Trigger the operator function with negative
-        for (uint256 i = 0; i < 8; i++) {
+        for (uint256 i; i < 8; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1148,7 +1148,7 @@ contract OperatorTest is Test {
         price.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
-        for (uint256 i = 0; i < 5; i++) {
+        for (uint256 i; i < 5; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1189,7 +1189,7 @@ contract OperatorTest is Test {
         price.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
-        for (uint256 i = 0; i < 4; i++) {
+        for (uint256 i; i < 4; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1241,7 +1241,7 @@ contract OperatorTest is Test {
         price.setLastPrice(99 * 1e18);
 
         /// Trigger the operator function several times with negative checks
-        for (uint256 i = 0; i < 3; i++) {
+        for (uint256 i; i < 3; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1250,7 +1250,7 @@ contract OperatorTest is Test {
         price.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function several times with positive checks
-        for (uint256 i = 0; i < 4; i++) {
+        for (uint256 i; i < 4; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1293,7 +1293,7 @@ contract OperatorTest is Test {
         price.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
-        for (uint256 i = 0; i < 5; i++) {
+        for (uint256 i; i < 5; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1336,7 +1336,7 @@ contract OperatorTest is Test {
         price.setLastPrice(99 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
-        for (uint256 i = 0; i < 5; i++) {
+        for (uint256 i; i < 5; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1380,7 +1380,7 @@ contract OperatorTest is Test {
         price.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function with negative
-        for (uint256 i = 0; i < 8; i++) {
+        for (uint256 i; i < 8; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1392,7 +1392,7 @@ contract OperatorTest is Test {
         price.setLastPrice(98 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
-        for (uint256 i = 0; i < 5; i++) {
+        for (uint256 i; i < 5; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1433,7 +1433,7 @@ contract OperatorTest is Test {
         price.setLastPrice(98 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
-        for (uint256 i = 0; i < 4; i++) {
+        for (uint256 i; i < 4; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1485,7 +1485,7 @@ contract OperatorTest is Test {
         price.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function several times with negative checks
-        for (uint256 i = 0; i < 3; i++) {
+        for (uint256 i; i < 3; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1494,7 +1494,7 @@ contract OperatorTest is Test {
         price.setLastPrice(98 * 1e18);
 
         /// Trigger the operator function several times with positive checks
-        for (uint256 i = 0; i < 4; i++) {
+        for (uint256 i; i < 4; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1537,7 +1537,7 @@ contract OperatorTest is Test {
         price.setLastPrice(99 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
-        for (uint256 i = 0; i < 5; i++) {
+        for (uint256 i; i < 5; ++i) {
             vm.prank(guardian);
             operator.operate();
         }
@@ -1936,7 +1936,7 @@ contract OperatorTest is Test {
         assertEq(status.high.nextObservation, 0);
         assertEq(status.low.count, 0);
         assertEq(status.low.nextObservation, 0);
-        for (uint256 i; i < 15; i++) {
+        for (uint256 i; i < 15; ++i) {
             assertTrue(!status.high.observations[i]);
             assertTrue(!status.low.observations[i]);
         }

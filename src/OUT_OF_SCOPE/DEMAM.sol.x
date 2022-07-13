@@ -192,7 +192,7 @@ contract DepositManagementModule is Module {
             lockedBalanceOf[receiver][token] -= amounts[i];
 
             unchecked {
-                i++;
+                ++i;
             }
         }
 
@@ -288,7 +288,7 @@ contract DepositManagementModule is Module {
             amount += amounts[i];
 
             unchecked {
-                i++;
+                ++i;
             }
         }
 
@@ -317,7 +317,7 @@ contract DepositManagementModule is Module {
             locks[indices[i]].balance = 0; // only empty amount
 
             unchecked {
-                i++;
+                ++i;
             }
         }
 
@@ -433,7 +433,7 @@ contract DepositManagementModule is Module {
                 }
             }
             unchecked {
-                i++;
+                ++i;
             }
         }
 
@@ -468,7 +468,7 @@ contract DepositManagementModule is Module {
             if (lock.end < ts) free += lock.balance;
 
             unchecked {
-                i++;
+                ++i;
             }
         }
 

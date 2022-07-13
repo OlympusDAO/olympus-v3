@@ -174,7 +174,7 @@ contract VOPOMTest is Test {
         int32,
         uint256 bound
     ) internal view {
-        for (uint256 i; i < bound; i++) {
+        for (uint256 i; i < bound; ++i) {
             console2.log(
                 "###########################USER SLOPE: ",
                 vopom.getUserPoint(users[i], 0).slope.ciu()
@@ -194,7 +194,7 @@ contract VOPOMTest is Test {
             time.ciu(),
             "++++++++++++++++++++++"
         );
-        for (uint256 i; i < bound; i++) {
+        for (uint256 i; i < bound; ++i) {
             console2.log("USER:", i);
             console2.log("ubias:", vopom.getOpenVotingPower(users[i]).ciu());
             console2.log("------------------------------------");

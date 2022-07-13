@@ -340,7 +340,7 @@ contract PriceTest is Test {
 
         /// Calculate the expected moving average
         uint256 expMovingAverage;
-        for (uint256 i = 0; i < price.numObservations(); ++i) {
+        for (uint256 i; i < price.numObservations(); ++i) {
             expMovingAverage += price.observations(i);
         }
         expMovingAverage /= price.numObservations();
@@ -416,7 +416,7 @@ contract PriceTest is Test {
         /// Check that the oberservations array is empty (all values initialized to 0)
         uint256 numObservations = uint256(price.numObservations());
         uint256 zero = uint256(0);
-        for (uint256 i = 0; i < numObservations; ++i) {
+        for (uint256 i; i < numObservations; ++i) {
             assertEq(price.observations(i), zero);
         }
     }

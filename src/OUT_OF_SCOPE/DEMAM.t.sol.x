@@ -58,7 +58,7 @@ contract DEMAMTest is Test {
         // setup
         address[] memory usrs = victims.create(nusers);
 
-        for (uint256 i; i < nusers; i++) {
+        for (uint256 i; i < nusers; ++i) {
             ohm.transferFrom.larp(usrs[i], demama, amount, true);
             demam.takeTokens(usrs[i], ohma, amount);
             assertEq(demam.freeBalanceOf(usrs[i], ohma), amount);
