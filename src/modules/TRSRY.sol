@@ -8,11 +8,8 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import {Kernel, Module} from "src/Kernel.sol";
 
-import {console2} from "forge-std/console2.sol";
-
 // ERRORS
 error TRSRY_NotApproved();
-error TRSRY_PolicyStillActive();
 
 /// @title TRSRY - OlympusTreasury
 /// @notice Treasury holds reserves, LP tokens and all other assets under the control
@@ -21,7 +18,6 @@ error TRSRY_PolicyStillActive();
 contract OlympusTreasury is Module, ReentrancyGuard {
     using TransferHelper for ERC20;
 
-    // TODO are these correct tense?
     event ApprovedForWithdrawal(
         address indexed policy_,
         ERC20 indexed token_,
@@ -33,18 +29,12 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         ERC20 indexed token_,
         uint256 amount_
     );
-    event ApprovalRevoked(address indexed policy_, ERC20[] tokens_);
     event DebtIncurred(
         ERC20 indexed token_,
         address indexed policy_,
         uint256 amount_
     );
     event DebtRepaid(
-        ERC20 indexed token_,
-        address indexed policy_,
-        uint256 amount_
-    );
-    event DebtCleared(
         ERC20 indexed token_,
         address indexed policy_,
         uint256 amount_

@@ -5,17 +5,19 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 
-import {Kernel, Policy} from "../Kernel.sol";
-import {OlympusTreasury} from "../modules/TRSRY.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
+import {OlympusTreasury} from "src/modules/TRSRY.sol";
 
+// ERRORS
 error PolicyStillActive();
 
 // Generic contract to allow authorized contracts to interact with treasury
 // Use cases include setting and removing approvals, as well as allocating assets for yield
 contract TreasuryCustodian is Policy, Auth {
     /* ========== STATE VARIABLES ========== */
+    event ApprovalRevoked(address indexed policy_, ERC20[] tokens_);
 
-    /// Modules
+    // Modules
     OlympusTreasury internal TRSRY;
 
     /* ========== CONSTRUCTOR ========== */
@@ -63,6 +65,8 @@ contract TreasuryCustodian is Policy, Auth {
                 ++i;
             }
         }
+
+        emit ApprovalRevoked(policy_, tokens_);
     }
 
     // Debt admin functions for authorized addresses to manipulate debt in special cases
