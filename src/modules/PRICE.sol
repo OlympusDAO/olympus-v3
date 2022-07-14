@@ -61,11 +61,12 @@ contract OlympusPrice is Module {
 
     /// @notice Number of decimals in the price values provided by the contract.
     uint8 public constant decimals = 18;
-    uint8 internal immutable _ohmEthDecimals;
-    uint8 internal immutable _reserveEthDecimals;
 
     /// @notice Whether the price module is initialized (and therefore active).
     bool public initialized;
+
+    // Scale factor for converting prices, calculated from decimal values.
+    uint256 internal immutable _scaleFactor;
 
     /* ========== CONSTRUCTOR ========== */
 
@@ -82,13 +83,18 @@ contract OlympusPrice is Module {
             movingAverageDuration_ % observationFrequency_ != 0
         ) revert Price_InvalidParams();
 
-        /// Set parameters and calculate number of observations
+        // Set price feeds, decimals, and scale factor
         _ohmEthPriceFeed = ohmEthPriceFeed_;
-        _ohmEthDecimals = _ohmEthPriceFeed.decimals();
+        uint8 ohmEthDecimals = _ohmEthPriceFeed.decimals();
 
         _reserveEthPriceFeed = reserveEthPriceFeed_;
-        _reserveEthDecimals = _reserveEthPriceFeed.decimals();
+        uint8 reserveEthDecimals = _reserveEthPriceFeed.decimals();
 
+        uint256 exponent = decimals + reserveEthDecimals - ohmEthDecimals;
+        if (exponent > 38) revert Price_InvalidParams();
+        _scaleFactor = 10**exponent;
+
+        /// Set parameters and calculate number of observations
         observationFrequency = observationFrequency_;
         movingAverageDuration = movingAverageDuration_;
 
@@ -176,10 +182,7 @@ contract OlympusPrice is Module {
         }
 
         /// Convert to OHM/RESERVE price
-        uint256 currentPrice = ohmEthPrice.mulDiv(
-            10**(decimals + _reserveEthDecimals),
-            reserveEthPrice * 10**(_ohmEthDecimals)
-        );
+        uint256 currentPrice = (ohmEthPrice * _scaleFactor) / reserveEthPrice;
 
         return currentPrice;
     }
