@@ -45,7 +45,12 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     error Operator_NotInitialized();
 
     /* ========== EVENTS =========== */
-    event Swap(ERC20 tokenIn_, uint256 amountIn_, uint256 amountOut_);
+    event Swap(
+        ERC20 indexed tokenIn_,
+        ERC20 indexed tokenOut_,
+        uint256 amountIn_,
+        uint256 amountOut_
+    );
 
     /* ========== STATE VARIABLES ========== */
 
@@ -291,6 +296,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
             /// Withdraw and transfer reserve to sender
             TRSRY.withdrawReserves(msg.sender, reserve, amountOut);
+
+            emit Swap(ohm, reserve, amountIn_, amountOut);
         } else if (tokenIn_ == reserve) {
             /// Revert if upper wall is inactive
             if (!RANGE.active(true)) revert Operator_WallDown();
@@ -317,6 +324,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
             /// Mint OHM to sender
             MINTR.mintOhm(msg.sender, amountOut);
+
+            emit Swap(reserve, ohm, amountIn_, amountOut);
         } else {
             revert Operator_InvalidParams();
         }
