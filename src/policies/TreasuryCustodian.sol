@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.13;
+pragma solidity ^0.8.13;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
@@ -10,6 +10,7 @@ import {OlympusTreasury} from "src/modules/TRSRY.sol";
 
 // ERRORS
 error PolicyStillActive();
+error PolicyNotFound();
 
 // Generic contract to allow authorized contracts to interact with treasury
 // Use cases include setting and removing approvals, as well as allocating assets for yield
@@ -52,17 +53,21 @@ contract TreasuryCustodian is Policy, Auth {
         TRSRY.setApprovalFor(for_, token_, amount_);
     }
 
-    // Anyone can call to revoke a terminated policy's approvals
+    // Anyone can call to revoke a terminated policy's approvals.
+    // TODO Currently allows anyone to revoke any approval EXCEPT approved policies.
+    // TODO must reorg policy storage to be able to check for unapproved policies.
     function revokePolicyApprovals(address policy_, ERC20[] memory tokens_)
         external
     {
         if (kernel.approvedPolicies(policy_)) revert PolicyStillActive();
 
+        // TODO Make sure `policy_` is an actual policy and not a random address.
+
         uint256 len = tokens_.length;
-        for (uint256 i; i < len; ) {
-            TRSRY.setApprovalFor(policy_, tokens_[i], 0);
+        for (uint256 j; j < len; ) {
+            TRSRY.setApprovalFor(policy_, tokens_[j], 0);
             unchecked {
-                ++i;
+                ++j;
             }
         }
 
