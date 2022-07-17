@@ -90,7 +90,7 @@ interface IOperator {
     /// @notice                 Set the parameters used to deploy cushion bond markets
     /// @notice                 Access restricted
     /// @param duration_        Duration of cushion bond markets in seconds
-    /// @param debtBuffer_      Percentage over the initial debt to allow the market to accumulate at anyone time. Percent with 3 decimals, e.g. 1_000 = 1 %. See IBondAuctioneer for more info.
+    /// @param debtBuffer_      Percentage over the initial debt to allow the market to accumulate at any one time. Percent with 3 decimals, e.g. 1_000 = 1 %. See IBondAuctioneer for more info.
     /// @param depositInterval_ Target frequency of deposits in seconds. Determines max payout of the bond market. See IBondAuctioneer for more info.
     function setCushionParams(
         uint32 duration_,
