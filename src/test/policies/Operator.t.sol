@@ -1306,6 +1306,34 @@ contract OperatorTest is Test {
         assertEq(endCapacity, startCapacity);
     }
 
+    function testCorrectness_lowCushionClosedOnRegen() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Tests that a manually regenerated wall will close the cushion that is deployed currently
+
+        /// Get capacity of the high wall and verify under threshold
+        uint256 startCapacity = range.capacity(false);
+
+        /// Trigger a cushion
+        price.setLastPrice(89 * 1e18);
+        vm.prank(guardian);
+        operator.operate();
+
+        /// Check that the cushion is deployed
+        assertTrue(auctioneer.isLive(range.market(false)));
+        assertEq(range.market(false), 0);
+
+        /// Regenerate the wall manually, expect market to close
+        vm.prank(guardian);
+        operator.regenerate(false);
+
+        /// Check that the market is closed
+        assertTrue(!auctioneer.isLive(range.market(false)));
+        assertEq(range.market(false), type(uint256).max);
+    }
+
     function testCorrectness_highWallRegenA() public {
         /// Initialize operator
         vm.prank(guardian);
@@ -1548,6 +1576,34 @@ contract OperatorTest is Test {
         /// Check that the capacity hasn't regenerated
         uint256 endCapacity = range.capacity(true);
         assertEq(endCapacity, startCapacity);
+    }
+
+    function testCorrectness_highCushionClosedOnRegen() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Tests that a manually regenerated wall will close the cushion that is deployed currently
+
+        /// Get capacity of the high wall and verify under threshold
+        uint256 startCapacity = range.capacity(true);
+
+        /// Trigger a cushion
+        price.setLastPrice(111 * 1e18);
+        vm.prank(guardian);
+        operator.operate();
+
+        /// Check that the cushion is deployed
+        assertTrue(auctioneer.isLive(range.market(true)));
+        assertEq(range.market(true), 0);
+
+        /// Regenerate the wall manually, expect market to close
+        vm.prank(guardian);
+        operator.regenerate(true);
+
+        /// Check that the market is closed
+        assertTrue(!auctioneer.isLive(range.market(true)));
+        assertEq(range.market(true), type(uint256).max);
     }
 
     /* ========== ACCESS CONTROL TESTS ========== */

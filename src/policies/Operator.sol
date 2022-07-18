@@ -709,6 +709,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     /// @notice      Regenerate the wall for a side
     /// @param high_ Whether to regenerate the high side or low side (true = high, false = low)
     function _regenerate(bool high_) internal {
+        /// Deactivate cushion if active on the side being regenerated
+        _deactivate(high_);
+
         if (high_) {
             /// Reset the regeneration data for the side
             _status.high.count = uint32(0);
