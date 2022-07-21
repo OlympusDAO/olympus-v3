@@ -246,6 +246,4 @@ contract Kernel {
             }
         }
     }
-
-    function iterate(uint256 index_, uint256 condition_) internal pure {}
 }
