@@ -357,9 +357,12 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
         if (high_) {
             /// Calculate scaleAdjustment for bond market
+            /// Price decimals are returned from the perspective of the quote token
+            /// so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
+            /// is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(range.cushion.high.price);
             int8 scaleAdjustment = int8(ohmDecimals) -
-                int8(reserveDecimals) -
+                int8(reserveDecimals) +
                 (priceDecimals / 2);
 
             /// Calculate scale with scale adjustment and format prices for bond market
@@ -369,7 +372,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
                     36 +
                         scaleAdjustment +
                         int8(reserveDecimals) -
-                        int8(ohmDecimals) +
+                        int8(ohmDecimals) -
                         priceDecimals
                 );
 
@@ -426,9 +429,12 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
                 range.wall.low.price;
 
             /// Calculate scaleAdjustment for bond market
+            /// Price decimals are returned from the perspective of the quote token
+            /// so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
+            /// is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(invCushionPrice);
             int8 scaleAdjustment = int8(reserveDecimals) -
-                int8(ohmDecimals) -
+                int8(ohmDecimals) +
                 (priceDecimals / 2);
 
             /// Calculate scale with scale adjustment and format prices for bond market
@@ -437,7 +443,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
                     36 +
                         scaleAdjustment +
                         int8(ohmDecimals) -
-                        int8(reserveDecimals) +
+                        int8(reserveDecimals) -
                         priceDecimals
                 );
 
