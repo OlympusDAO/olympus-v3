@@ -40,8 +40,8 @@ Set up a foundry config in foundry.toml.
 #### Policies
 
 - BondCallback - [0x764E6578738E2606DBF3Be47746562F99380905c](https://goerli.etherscan.io/address/0x764e6578738e2606dbf3be47746562f99380905c)
-- Heart - [0xcBdD34371f0404e96eEB59d8470e507EAbA961Aa](https://goerli.etherscan.io/address/0xcbdd34371f0404e96eeb59d8470e507eaba961aa)
-- Operator - [0x0bFFdE707B76Abe13f77f52f6E359c846AE0680d](https://goerli.etherscan.io/address/0x0bffde707b76abe13f77f52f6e359c846ae0680d)
+- Heart - [0x43226855fF2552a20a6340639DBf08946EFB1C16](https://goerli.etherscan.io/address/0x43226855ff2552a20a6340639dbf08946efb1c16)
+- Operator - [0x1E4732552C9F3127227a468F2E3088219f69cFd5](https://goerli.etherscan.io/address/0x1e4732552c9f3127227a468f2e3088219f69cfd5)
 - PriceConfig - [0xA938A067e5008ec2f76557ad1AB100a4CD7Dfde2](https://goerli.etherscan.io/address/0xa938a067e5008ec2f76557ad1ab100a4cd7dfde2)
 - Governance - [0xFEc5b1b96Ec2dA1494F5ad3D6E141Ce401c6C2D5](https://goerli.etherscan.io/address/0xfec5b1b96ec2da1494f5ad3d6e141ce401c6c2d5)
 - VoterRegistration - [0x5d7221dA0cF85dEC1d5bC26BeE803C53B6B87355](https://goerli.etherscan.io/address/0x5d7221da0cf85dec1d5bc26bee803c53b6b87355)
