@@ -39,7 +39,7 @@ Set up a foundry config in foundry.toml.
 
 #### Policies
 
-- BondCallback - [0x76775f07B0dCd21DB304b6c5b14d57A2954ddAC6](https://goerli.etherscan.io/address/0x76775f07b0dcd21db304b6c5b14d57a2954ddac6)
+- BondCallback - [0x764E6578738E2606DBF3Be47746562F99380905c](https://goerli.etherscan.io/address/0x764e6578738e2606dbf3be47746562f99380905c)
 - Heart - [0xcBdD34371f0404e96eEB59d8470e507EAbA961Aa](https://goerli.etherscan.io/address/0xcbdd34371f0404e96eeb59d8470e507eaba961aa)
 - Operator - [0x0bFFdE707B76Abe13f77f52f6E359c846AE0680d](https://goerli.etherscan.io/address/0x0bffde707b76abe13f77f52f6e359c846ae0680d)
 - PriceConfig - [0xA938A067e5008ec2f76557ad1AB100a4CD7Dfde2](https://goerli.etherscan.io/address/0xa938a067e5008ec2f76557ad1ab100a4cd7dfde2)
