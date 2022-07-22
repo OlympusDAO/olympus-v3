@@ -215,7 +215,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         /// Check if the cushion bond markets are active
         /// if so, determine if it should stay open or close
         /// if not, check if a new one should be opened
-        if (range.low.active)
+        if (range.low.active) {
             if (auctioneer.isLive(range.low.market)) {
                 /// if active, check if the price is back above the cushion
                 /// or if the price is below the wall
@@ -236,6 +236,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
                     _activate(false);
                 }
             }
+        }
         if (range.high.active) {
             if (auctioneer.isLive(range.high.market)) {
                 /// if active, check if the price is back under the cushion
