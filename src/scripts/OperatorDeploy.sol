@@ -59,8 +59,8 @@ contract OperatorDeploy is Script {
         /// Set addresses for dependencies
         kernel = Kernel(0x64665B0429B21274d938Ed345e4520D1f5ABb9e7);
         callback = BondCallback(0x764E6578738E2606DBF3Be47746562F99380905c);
-        address oldOperator = 0x0bFFdE707B76Abe13f77f52f6E359c846AE0680d;
-        address oldHeart = 0xcBdD34371f0404e96eEB59d8470e507EAbA961Aa;
+        address oldOperator = 0x1E4732552C9F3127227a468F2E3088219f69cFd5;
+        address oldHeart = 0x43226855fF2552a20a6340639DBf08946EFB1C16;
         authGiver = MockAuthGiver(0x3714fDFc3b6918923e5b2AbAe0fcD74376Be45fc);
 
         operator = new Operator(
@@ -196,7 +196,7 @@ contract OperatorDeploy is Script {
     /// @dev should be called by address with the guardian role
     function initialize() external {
         // Set addresses from deployment
-        operator = Operator(0x1E4732552C9F3127227a468F2E3088219f69cFd5);
+        operator = Operator(0xD25b0441690BFD7e23Ab8Ee6f636Fce0C638ee32);
         callback = BondCallback(0x764E6578738E2606DBF3Be47746562F99380905c);
 
         /// Start broadcasting
