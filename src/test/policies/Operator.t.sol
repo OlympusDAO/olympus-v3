@@ -604,14 +604,24 @@ contract OperatorTest is Test {
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
-        assertTrue(auctioneer.isLive(range.market(true)));
+        uint256 marketId = range.market(true);
+        assertTrue(auctioneer.isLive(marketId));
 
         Operator.Config memory config = operator.config();
-        uint256 marketCapacity = auctioneer.currentCapacity(range.market(true));
+        uint256 marketCapacity = auctioneer.currentCapacity(marketId);
+        // console2.log("capacity", marketCapacity);
         assertEq(
             marketCapacity,
             range.capacity(true).mulDiv(config.cushionFactor, 1e4)
         );
+
+        /// Check that the price is set correctly
+        // (, , , , , , , , , , , uint256 scale) = auctioneer.markets(marketId);
+        // uint256 price = auctioneer.marketPrice(marketId);
+        // console2.log("price", price);
+        // console2.log("scale", scale);
+        uint256 payout = auctioneer.payoutFor(120 * 1e18, marketId, alice);
+        assertEq(payout, 1e9);
     }
 
     function testCorrectness_highCushionClosedBelowSpread() public {
@@ -755,16 +765,23 @@ contract OperatorTest is Test {
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
-        assertTrue(auctioneer.isLive(range.market(false)));
+        uint256 marketId = range.market(false);
+        assertTrue(auctioneer.isLive(marketId));
 
         Operator.Config memory config = operator.config();
-        uint256 marketCapacity = auctioneer.currentCapacity(
-            range.market(false)
-        );
+        uint256 marketCapacity = auctioneer.currentCapacity(marketId);
         assertEq(
             marketCapacity,
             range.capacity(false).mulDiv(config.cushionFactor, 1e4)
         );
+
+        /// Check that the price is set correctly
+        // (, , , , , , , , , , , uint256 scale) = auctioneer.markets(marketId);
+        // uint256 price = auctioneer.marketPrice(marketId);
+        // console2.log("price", price);
+        // console2.log("scale", scale);
+        uint256 payout = auctioneer.payoutFor(1e9, marketId, alice);
+        assertEq(payout, 80 * 1e18);
     }
 
     function testCorrectness_lowCushionClosedBelowSpread() public {

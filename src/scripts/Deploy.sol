@@ -312,11 +312,19 @@ contract OlympusDeploy is Script {
             callback.whitelist.selector
         );
 
+        /// Role 4 = Callback
+        authGiver.setRoleCapability(
+            uint8(4),
+            address(operator),
+            operator.bondPurchase.selector
+        );
+
         /// Give roles to users
         authGiver.setUserRole(address(heart), uint8(0));
         authGiver.setUserRole(guardian_, uint8(1));
         authGiver.setUserRole(policy_, uint8(2));
         authGiver.setUserRole(address(operator), uint8(3));
+        authGiver.setUserRole(address(callback), uint8(4));
 
         /// Terminate mock auth giver
         kernel.executeAction(Actions.TerminatePolicy, address(authGiver));

@@ -53,6 +53,9 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         setAuthority(Authority(getModuleAddress("AUTHR")));
         TRSRY = OlympusTreasury(getModuleAddress("TRSRY"));
         MINTR = OlympusMinter(getModuleAddress("MINTR"));
+
+        /// Approve MINTR for burning OHM (called here so that it is re-approved on updates)
+        ohm.safeApprove(address(MINTR), type(uint256).max);
     }
 
     function requestRoles()

@@ -9,6 +9,7 @@ import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 
+import {Heart} from "policies/Heart.sol";
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {MockAuthGiver} from "../test/mocks/MockAuthGiver.sol";
@@ -22,6 +23,7 @@ contract OperatorDeploy is Script {
     Kernel public kernel;
 
     /// Policies
+    Heart public heart;
     Operator public operator;
     BondCallback public callback;
     MockAuthGiver public authGiver;
@@ -49,15 +51,17 @@ contract OperatorDeploy is Script {
 
     /// Bond system addresses
     IBondAuctioneer public constant bondAuctioneer =
-        IBondAuctioneer(0x130a364655c5889D665caBa74FbD3bFa1448b99B);
+        IBondAuctioneer(0xaE73A94b94F6E7aca37f4c79C4b865F1AF06A68b);
 
     function deploy() external {
         vm.startBroadcast();
 
         /// Set addresses for dependencies
-        kernel = Kernel(0x3B294580Fcf1F60B94eca4f4CE78A2f52D23cC83);
-        callback = BondCallback(0x308fD958B191fdAEa000a1c0c5A2EB6FceB31DeD);
-        address oldOperator = 0xc67733c29960e2c534949fB1795caEf353aC262F;
+        kernel = Kernel(0x64665B0429B21274d938Ed345e4520D1f5ABb9e7);
+        callback = BondCallback(0x764E6578738E2606DBF3Be47746562F99380905c);
+        address oldOperator = 0x1E4732552C9F3127227a468F2E3088219f69cFd5;
+        address oldHeart = 0x43226855fF2552a20a6340639DBf08946EFB1C16;
+        authGiver = MockAuthGiver(0x3714fDFc3b6918923e5b2AbAe0fcD74376Be45fc);
 
         operator = new Operator(
             kernel,
@@ -68,27 +72,26 @@ contract OperatorDeploy is Script {
                 uint32(20_00), // cushionFactor
                 uint32(5 days), // cushionDuration
                 uint32(100_000), // cushionDebtBuffer
-                uint32(2 hours), // cushionDepositInterval
+                uint32(4 hours), // cushionDepositInterval
                 uint32(10_00), // reserveFactor
                 uint32(1 hours), // regenWait
-                uint32(8), // regenThreshold
-                uint32(11) // regenObserve
+                uint32(18), // regenThreshold
+                uint32(21) // regenObserve
             ] // TODO verify initial parameters
         );
         console2.log("Operator deployed at:", address(operator));
 
-        // Deploy auth giver to set Operator roles
-
-        authGiver = new MockAuthGiver(kernel);
-        console2.log("Auth Giver deployed at:", address(authGiver));
+        heart = new Heart(kernel, operator, rewardToken, 0);
+        console2.log("Heart deployed at:", address(heart));
 
         /// Execute actions on Kernel
         /// Approve policies
         kernel.executeAction(Actions.ApprovePolicy, address(operator));
-        kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
+        kernel.executeAction(Actions.ApprovePolicy, address(heart));
 
         // Terminate old operator
         kernel.executeAction(Actions.TerminatePolicy, address(oldOperator));
+        kernel.executeAction(Actions.TerminatePolicy, address(oldHeart));
 
         /// Set initial access control for policies on the AUTHR module
         /// Set role permissions
@@ -120,6 +123,26 @@ contract OperatorDeploy is Script {
             uint8(1),
             address(operator),
             operator.regenerate.selector
+        );
+        authGiver.setRoleCapability(
+            uint8(1),
+            address(heart),
+            heart.resetBeat.selector
+        );
+        authGiver.setRoleCapability(
+            uint8(1),
+            address(heart),
+            heart.toggleBeat.selector
+        );
+        authGiver.setRoleCapability(
+            uint8(1),
+            address(heart),
+            heart.setRewardTokenAndAmount.selector
+        );
+        authGiver.setRoleCapability(
+            uint8(1),
+            address(heart),
+            heart.withdrawUnspentRewards.selector
         );
 
         /// Role 2 = Policy
@@ -156,12 +179,36 @@ contract OperatorDeploy is Script {
             operator.setRegenParams.selector
         );
 
-        /// Give role to operator
+        /// Role 4 - Callback
+        authGiver.setRoleCapability(
+            uint8(4),
+            address(operator),
+            operator.bondPurchase.selector
+        );
+
+        /// Give role to operator and heart
         authGiver.setUserRole(address(operator), uint8(3));
+        authGiver.setUserRole(address(heart), uint8(0));
 
-        /// Terminate mock auth giver
-        kernel.executeAction(Actions.TerminatePolicy, address(authGiver));
+        vm.stopBroadcast();
+    }
 
+    /// @dev should be called by address with the guardian role
+    function initialize() external {
+        // Set addresses from deployment
+        operator = Operator(0xD25b0441690BFD7e23Ab8Ee6f636Fce0C638ee32);
+        callback = BondCallback(0x764E6578738E2606DBF3Be47746562F99380905c);
+
+        /// Start broadcasting
+        vm.startBroadcast();
+
+        /// Set the operator address on the BondCallback contract
+        callback.setOperator(operator);
+
+        /// Initialize the Operator policy
+        operator.initialize();
+
+        /// Stop broadcasting
         vm.stopBroadcast();
     }
 }

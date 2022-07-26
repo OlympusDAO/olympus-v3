@@ -215,7 +215,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         /// Check if the cushion bond markets are active
         /// if so, determine if it should stay open or close
         /// if not, check if a new one should be opened
-        if (range.low.active)
+        if (range.low.active) {
             if (auctioneer.isLive(range.low.market)) {
                 /// if active, check if the price is back above the cushion
                 /// or if the price is below the wall
@@ -236,6 +236,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
                     _activate(false);
                 }
             }
+        }
         if (range.high.active) {
             if (auctioneer.isLive(range.high.market)) {
                 /// if active, check if the price is back under the cushion
@@ -357,29 +358,33 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
         if (high_) {
             /// Calculate scaleAdjustment for bond market
+            /// Price decimals are returned from the perspective of the quote token
+            /// so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
+            /// is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(range.cushion.high.price);
             int8 scaleAdjustment = int8(ohmDecimals) -
-                int8(reserveDecimals) -
+                int8(reserveDecimals) +
                 (priceDecimals / 2);
 
-            /// Calculate scale with scale adjustment and format prices for bond market
-            uint8 oracleDecimals = PRICE.decimals();
-            uint256 scale = 10 **
+            /// Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
+            uint256 oracleScale = 10 **
+                uint8(int8(PRICE.decimals()) - priceDecimals);
+            uint256 bondScale = 10 **
                 uint8(
                     36 +
                         scaleAdjustment +
                         int8(reserveDecimals) -
-                        int8(ohmDecimals) +
+                        int8(ohmDecimals) -
                         priceDecimals
                 );
 
             uint256 initialPrice = range.wall.high.price.mulDiv(
-                scale,
-                10**oracleDecimals
+                bondScale,
+                oracleScale
             );
             uint256 minimumPrice = range.cushion.high.price.mulDiv(
-                scale,
-                10**oracleDecimals
+                bondScale,
+                oracleScale
             );
 
             /// Cache config struct to avoid multiple SLOADs
@@ -426,28 +431,30 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
                 range.wall.low.price;
 
             /// Calculate scaleAdjustment for bond market
+            /// Price decimals are returned from the perspective of the quote token
+            /// so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
+            /// is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(invCushionPrice);
             int8 scaleAdjustment = int8(reserveDecimals) -
-                int8(ohmDecimals) -
+                int8(ohmDecimals) +
                 (priceDecimals / 2);
 
-            /// Calculate scale with scale adjustment and format prices for bond market
-            uint256 scale = 10 **
+            /// Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
+            uint256 oracleScale = 10 **
+                uint8(int8(oracleDecimals) - priceDecimals);
+            uint256 bondScale = 10 **
                 uint8(
                     36 +
                         scaleAdjustment +
                         int8(ohmDecimals) -
-                        int8(reserveDecimals) +
+                        int8(reserveDecimals) -
                         priceDecimals
                 );
 
-            uint256 initialPrice = invWallPrice.mulDiv(
-                scale,
-                10**oracleDecimals
-            );
+            uint256 initialPrice = invWallPrice.mulDiv(bondScale, oracleScale);
             uint256 minimumPrice = invCushionPrice.mulDiv(
-                scale,
-                10**oracleDecimals
+                bondScale,
+                oracleScale
             );
 
             /// Cache config struct to avoid multiple SLOADs
