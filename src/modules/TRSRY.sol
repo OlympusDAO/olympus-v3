@@ -45,30 +45,27 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         uint256 amount_
     );
 
-    Kernel.Role public constant APPROVER = Kernel.Role.wrap("TRSRY_Approver");
-    Kernel.Role public constant BANKER = Kernel.Role.wrap("TRSRY_Banker");
-    Kernel.Role public constant DEBT_ADMIN =
-        Kernel.Role.wrap("TRSRY_DebtAdmin");
-
     // user -> reserve -> amount
     // infinite approval is max(uint256). Should be reserved monitored subsystems.
     mapping(address => mapping(ERC20 => uint256)) public withdrawApproval;
 
-    // TODO debt for address and token mapping
+    // debt for address and token mapping
     mapping(ERC20 => uint256) public totalDebt; // reserve -> totalDebt
     mapping(ERC20 => mapping(address => uint256)) public reserveDebt; // TODO reserve -> debtor -> debt
 
     constructor(Kernel kernel_) Module(kernel_) {}
 
-    function KEYCODE() public pure override returns (Kernel.Keycode) {
-        return Kernel.Keycode.wrap("TRSRY");
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("TRSRY");
     }
 
-    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
-        roles = new Kernel.Role[](3);
-        roles[0] = APPROVER;
-        roles[1] = BANKER;
-        roles[2] = DEBT_ADMIN;
+    function VERSION()
+        external
+        pure
+        override
+        returns (uint8 major, uint8 minor)
+    {
+        return (1, 0);
     }
 
     function getReserveBalance(ERC20 token_) external view returns (uint256) {
@@ -80,7 +77,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
-    ) external onlyRole(APPROVER) {
+    ) external permissioned {
         withdrawApproval[withdrawer_][token_] = amount_;
 
         emit ApprovedForWithdrawal(withdrawer_, token_, amount_);
@@ -101,10 +98,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
 
     // DEBT FUNCTIONS
 
-    function loanReserves(ERC20 token_, uint256 amount_)
-        external
-        onlyRole(BANKER)
-    {
+    function loanReserves(ERC20 token_, uint256 amount_) external permissioned {
         _checkApproval(msg.sender, token_, amount_);
 
         // Add debt to caller
@@ -119,7 +113,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
     function repayLoan(ERC20 token_, uint256 amount_)
         external
         nonReentrant
-        onlyRole(BANKER)
+        permissioned
     {
         // Deposit from caller first (to handle nonstandard token transfers)
         uint256 prevBalance = token_.balanceOf(address(this));
@@ -139,7 +133,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         ERC20 token_,
         address debtor_,
         uint256 amount_
-    ) external onlyRole(DEBT_ADMIN) {
+    ) external permissioned {
         uint256 oldDebt = reserveDebt[token_][debtor_];
 
         // Set debt for debtor

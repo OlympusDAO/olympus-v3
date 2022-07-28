@@ -43,7 +43,7 @@ contract MockOperator is Policy, IOperator, Auth {
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {}
 
     /* ========== HEART FUNCTIONS ========== */

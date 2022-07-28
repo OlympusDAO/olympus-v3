@@ -47,22 +47,18 @@ contract TRSRYTest is Test {
     function configureReads() external {}
 
     // Needed to allow this contract to be used as a policy with full access to module
-    function requestRoles()
-        external
-        view
-        returns (Kernel.Role[] memory requests)
-    {
+    function requestRoles() external view returns (Role[] memory requests) {
         requests = TRSRY.ROLES();
     }
 
     function test_KEYCODE() public {
-        assertEq32("TRSRY", Kernel.Keycode.unwrap(TRSRY.KEYCODE()));
+        assertEq32("TRSRY", Keycode.unwrap(TRSRY.KEYCODE()));
     }
 
     function test_ROLES() public {
-        assertEq("TRSRY_Approver", Kernel.Role.unwrap(TRSRY.ROLES()[0]));
-        assertEq("TRSRY_Banker", Kernel.Role.unwrap(TRSRY.ROLES()[1]));
-        assertEq("TRSRY_DebtAdmin", Kernel.Role.unwrap(TRSRY.ROLES()[2]));
+        assertEq("TRSRY_Approver", Role.unwrap(TRSRY.ROLES()[0]));
+        assertEq("TRSRY_Banker", Role.unwrap(TRSRY.ROLES()[1]));
+        assertEq("TRSRY_DebtAdmin", Role.unwrap(TRSRY.ROLES()[2]));
     }
 
     function test_WithdrawApproval(uint256 amount_) public {

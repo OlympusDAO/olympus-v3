@@ -46,7 +46,7 @@ contract DEMAMTest is Test {
     }
 
     function testKeycode() public {
-        assertEq32("DEMAM", Kernel.Keycode.unwrap(demam.KEYCODE()));
+        assertEq32("DEMAM", Keycode.unwrap(demam.KEYCODE()));
     }
 
     function testTakeTokens(uint224 amount, uint8 nusers) public {

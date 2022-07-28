@@ -13,9 +13,9 @@ contract LarpPolicy is Policy {
         view
         override
         onlyKernel
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {
-        roles = new Kernel.Role[](1);
+        roles = new Role[](1);
         permissions[0] = "LARPR";
     }
 }

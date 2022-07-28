@@ -8,9 +8,6 @@ import {Kernel, Module} from "src/Kernel.sol";
 contract OlympusMinter is Module {
     // ######################## ~ CONSTANTS ~ ########################
 
-    Kernel.Role public constant MINTER = Kernel.Role.wrap("MINTR_Minter");
-    Kernel.Role public constant BURNER = Kernel.Role.wrap("MINTR_Burner");
-
     OHM public immutable ohm;
 
     // ######################## ~ KERNEL INTERFACE ~ ########################
@@ -19,23 +16,26 @@ contract OlympusMinter is Module {
         ohm = OHM(ohm_);
     }
 
-    function KEYCODE() public pure override returns (Kernel.Keycode) {
-        return Kernel.Keycode.wrap("MINTR");
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("MINTR");
     }
 
-    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
-        roles = new Kernel.Role[](2);
-        roles[0] = MINTER;
-        roles[1] = BURNER;
+    function VERSION()
+        external
+        pure
+        override
+        returns (uint8 major, uint8 minor)
+    {
+        return (1, 0);
     }
 
     // ######################## ~ INTERFACE ~ ########################
 
-    function mintOhm(address to_, uint256 amount_) public onlyRole(MINTER) {
+    function mintOhm(address to_, uint256 amount_) public permissioned {
         ohm.mint(to_, amount_);
     }
 
-    function burnOhm(address from_, uint256 amount_) public onlyRole(BURNER) {
+    function burnOhm(address from_, uint256 amount_) public permissioned {
         ohm.burnFrom(from_, amount_);
     }
 }

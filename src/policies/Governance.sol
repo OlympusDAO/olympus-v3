@@ -66,9 +66,9 @@ contract Governance is Policy {
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {
-        roles = new Kernel.Role[](2);
+        roles = new Role[](2);
         roles[0] = INSTR.GOVERNOR();
         roles[1] = VOTES.GOVERNOR();
     }

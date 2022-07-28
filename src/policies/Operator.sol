@@ -165,9 +165,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {
-        roles = new Kernel.Role[](4);
+        roles = new Role[](4);
         roles[0] = RANGE.OPERATOR();
         roles[1] = TRSRY.APPROVER();
         roles[2] = MINTR.MINTER();

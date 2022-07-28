@@ -20,7 +20,7 @@ contract MockModuleWriter is Policy {
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {
         roles = module.ROLES();
     }

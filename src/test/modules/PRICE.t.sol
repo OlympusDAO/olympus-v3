@@ -262,12 +262,12 @@ contract PriceTest is Test {
     /// [X] cannot get prices before initialization
 
     function testCorrectness_KEYCODE() public {
-        assertEq("PRICE", Kernel.Keycode.unwrap(price.KEYCODE()));
+        assertEq("PRICE", Keycode.unwrap(price.KEYCODE()));
     }
 
     function testCorrectness_ROLES() public {
-        assertEq("PRICE_Keeper", Kernel.Role.unwrap(price.ROLES()[0]));
-        assertEq("PRICE_Guardian", Kernel.Role.unwrap(price.ROLES()[1]));
+        assertEq("PRICE_Keeper", Role.unwrap(price.ROLES()[0]));
+        assertEq("PRICE_Guardian", Role.unwrap(price.ROLES()[1]));
     }
 
     function testCorrectness_getCurrentPrice(uint8 nonce) public {

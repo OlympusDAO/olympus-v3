@@ -59,9 +59,9 @@ contract LockingVault is Auth, Policy {
         view
         virtual
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {
-        roles = new Kernel.Role[](2);
+        roles = new Role[](2);
         roles[0] = demam.EDITOR();
         roles[1] = demam.SENDER();
         roles[2] = demam.GODMODE();

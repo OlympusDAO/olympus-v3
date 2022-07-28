@@ -62,9 +62,9 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {
-        roles = new Kernel.Role[](3);
+        roles = new Role[](3);
         roles[0] = TRSRY.APPROVER();
         roles[1] = MINTR.MINTER();
         roles[2] = MINTR.BURNER();

@@ -28,9 +28,9 @@ contract VoterRegistration is Policy, Auth {
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {
-        roles = new Kernel.Role[](1);
+        roles = new Role[](1);
         roles[0] = VOTES.ISSUER();
     }
 

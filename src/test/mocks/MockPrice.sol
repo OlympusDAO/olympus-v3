@@ -8,8 +8,8 @@ import {Kernel, Module} from "src/Kernel.sol";
  * @notice Mock implementation of Price to use for testing
  */
 contract MockPrice is Module {
-    Kernel.Role public constant KEEPER = Kernel.Role.wrap("PRICE_Keeper");
-    Kernel.Role public constant GUARDIAN = Kernel.Role.wrap("PRICE_Guardian");
+    Role public constant KEEPER = Role.wrap("PRICE_Keeper");
+    Role public constant GUARDIAN = Role.wrap("PRICE_Guardian");
 
     uint256 public movingAverage;
     uint256 public lastPrice;
@@ -26,12 +26,12 @@ contract MockPrice is Module {
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
-    function KEYCODE() public pure override returns (Kernel.Keycode) {
-        return Kernel.Keycode.wrap("PRICE");
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("PRICE");
     }
 
-    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
-        roles = new Kernel.Role[](2);
+    function ROLES() public pure override returns (Role[] memory roles) {
+        roles = new Role[](2);
         roles[0] = KEEPER;
         roles[1] = GUARDIAN;
     }

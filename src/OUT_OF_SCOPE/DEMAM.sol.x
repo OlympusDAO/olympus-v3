@@ -31,11 +31,11 @@ contract DepositManagementModule is Module {
         uint32 end;
     }
 
-    Kernel.Role public constant RECEIVER = Kernel.Role.wrap("DEMAM_Receiver");
-    Kernel.Role public constant SENDER = Kernel.Role.wrap("DEMAM_Sender");
-    Kernel.Role public constant EDITOR = Kernel.Role.wrap("DEMAM_Editor");
-    Kernel.Role public constant GODMODE = Kernel.Role.wrap("DEMAM_Godmode");
-    Kernel.Role public constant OTHER = Kernel.Role.wrap("DEMAM_Other");
+    Role public constant RECEIVER = Role.wrap("DEMAM_Receiver");
+    Role public constant SENDER = Role.wrap("DEMAM_Sender");
+    Role public constant EDITOR = Role.wrap("DEMAM_Editor");
+    Role public constant GODMODE = Role.wrap("DEMAM_Godmode");
+    Role public constant OTHER = Role.wrap("DEMAM_Other");
 
     mapping(address => mapping(address => uint256)) public freeBalanceOf;
     mapping(address => mapping(address => uint256)) public lockedBalanceOf;
@@ -43,12 +43,12 @@ contract DepositManagementModule is Module {
 
     constructor(address kernel_) Module(Kernel(kernel_)) {}
 
-    function KEYCODE() public pure virtual override returns (Kernel.Keycode) {
-        return Kernel.Keycode.wrap("DEMAM");
+    function KEYCODE() public pure virtual override returns (Keycode) {
+        return toKeycode("DEMAM");
     }
 
-    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
-        roles = new Kernel.Role[](5);
+    function ROLES() public pure override returns (Role[] memory roles) {
+        roles = new Role[](5);
         roles[0] = RECEIVER;
         roles[1] = SENDER;
         roles[2] = EDITOR;

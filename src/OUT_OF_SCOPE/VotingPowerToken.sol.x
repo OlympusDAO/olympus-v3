@@ -46,9 +46,9 @@ contract VotingPowerToken is ERC20, Auth, Policy {
         view
         override
         onlyKernel
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {
-        roles = new Kernel.Role[](0);
+        roles = new Role[](0);
     }
 
     // ######################## ~  MODIFIER ~ ########################

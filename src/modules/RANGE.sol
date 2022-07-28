@@ -54,8 +54,6 @@ contract OlympusRange is Module {
 
     /* ========== STATE VARIABLES ========== */
 
-    Kernel.Role public constant OPERATOR = Kernel.Role.wrap("RANGE_Operator");
-
     /// Range data singleton. See range().
     Range internal _range;
 
@@ -114,13 +112,17 @@ contract OlympusRange is Module {
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
     /// @inheritdoc Module
-    function KEYCODE() public pure override returns (Kernel.Keycode) {
-        return Kernel.Keycode.wrap("RANGE");
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("RANGE");
     }
 
-    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
-        roles = new Kernel.Role[](1);
-        roles[0] = OPERATOR;
+    function VERSION()
+        external
+        pure
+        override
+        returns (uint8 major, uint8 minor)
+    {
+        return (1, 0);
     }
 
     /* ========== POLICY FUNCTIONS ========== */
@@ -130,7 +132,7 @@ contract OlympusRange is Module {
     /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
     function updateCapacity(bool high_, uint256 capacity_)
         external
-        onlyRole(OPERATOR)
+        permissioned
     {
         if (high_) {
             /// Update capacity
@@ -170,7 +172,7 @@ contract OlympusRange is Module {
     /// @notice                 Update the prices for the low and high sides.
     /// @notice                 Access restricted to approved policies.
     /// @param movingAverage_   Current moving average price to set range prices from.
-    function updatePrices(uint256 movingAverage_) external onlyRole(OPERATOR) {
+    function updatePrices(uint256 movingAverage_) external permissioned {
         /// Cache the spreads
         uint256 wallSpread = _range.wall.spread;
         uint256 cushionSpread = _range.cushion.spread;
@@ -195,10 +197,7 @@ contract OlympusRange is Module {
     /// @notice                 Access restricted to approved policies.
     /// @param high_            Specifies the side of the range to regenerate (true = high side, false = low side).
     /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
-    function regenerate(bool high_, uint256 capacity_)
-        external
-        onlyRole(OPERATOR)
-    {
+    function regenerate(bool high_, uint256 capacity_) external permissioned {
         uint256 threshold = (capacity_ * thresholdFactor) / FACTOR_SCALE;
 
         if (high_) {
@@ -233,7 +232,7 @@ contract OlympusRange is Module {
         bool high_,
         uint256 market_,
         uint256 marketCapacity_
-    ) public onlyRole(OPERATOR) {
+    ) public permissioned {
         /// If market id is max uint256, then marketCapacity must be 0
         if (market_ == type(uint256).max && marketCapacity_ != 0)
             revert RANGE_InvalidParams();
@@ -260,7 +259,7 @@ contract OlympusRange is Module {
     /// @dev The new spreads will not go into effect until the next time updatePrices() is called.
     function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
         external
-        onlyRole(OPERATOR)
+        permissioned
     {
         /// Confirm spreads are within allowed values
         if (
@@ -282,7 +281,7 @@ contract OlympusRange is Module {
     /// @dev The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
     function setThresholdFactor(uint256 thresholdFactor_)
         external
-        onlyRole(OPERATOR)
+        permissioned
     {
         /// Confirm threshold factor is within allowed values
         if (thresholdFactor_ > 10000 || thresholdFactor_ < 100)

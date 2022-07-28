@@ -5,7 +5,7 @@ import {Kernel, Module} from "src/Kernel.sol";
 import {Authority} from "solmate/auth/Auth.sol";
 
 contract OlympusAuthority is Module, Authority {
-    Kernel.Role public constant ADMIN = Kernel.Role.wrap("AUTHR_Admin");
+    Role public constant ADMIN = Role.wrap("AUTHR_Admin");
 
     mapping(address => bytes32) public getUserRoles;
 
@@ -35,12 +35,12 @@ contract OlympusAuthority is Module, Authority {
 
     constructor(Kernel kernel_) Module(kernel_) {}
 
-    function KEYCODE() public pure virtual override returns (Kernel.Keycode) {
-        return Kernel.Keycode.wrap("AUTHR");
+    function KEYCODE() public pure virtual override returns (Keycode) {
+        return toKeycode("AUTHR");
     }
 
-    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
-        roles = new Kernel.Role[](1);
+    function ROLES() public pure override returns (Role[] memory roles) {
+        roles = new Role[](1);
         roles[0] = ADMIN;
     }
 

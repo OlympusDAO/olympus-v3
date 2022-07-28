@@ -28,9 +28,6 @@ contract OlympusPrice is Module {
 
     /* ========== STATE VARIABLES ========== */
 
-    Kernel.Role public constant KEEPER = Kernel.Role.wrap("PRICE_Keeper");
-    Kernel.Role public constant GUARDIAN = Kernel.Role.wrap("PRICE_Guardian");
-
     /// Chainlink Price Feeds
     /// @dev Chainlink typically provides price feeds for an asset in ETH. Therefore, we use two price feeds against ETH, one for OHM and one for the Reserve asset, to calculate the relative price of OHM in the Reserve asset.
     AggregatorV2V3Interface internal immutable _ohmEthPriceFeed;
@@ -109,14 +106,17 @@ contract OlympusPrice is Module {
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
     /// @inheritdoc Module
-    function KEYCODE() public pure override returns (Kernel.Keycode) {
-        return Kernel.Keycode.wrap("PRICE");
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("PRICE");
     }
 
-    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
-        roles = new Kernel.Role[](2);
-        roles[0] = KEEPER;
-        roles[1] = GUARDIAN;
+    function VERSION()
+        external
+        pure
+        override
+        returns (uint8 major, uint8 minor)
+    {
+        return (1, 0);
     }
 
     /* ========== POLICY FUNCTIONS ========== */
@@ -124,7 +124,7 @@ contract OlympusPrice is Module {
     /// @notice Access restricted to approved policies
     /// @dev This function does not have a time-gating on the observationFrequency on this contract. It is set on the Heart policy contract.
     ///      The Heart beat frequency should be set to the same value as the observationFrequency.
-    function updateMovingAverage() external onlyRole(KEEPER) {
+    function updateMovingAverage() external permissioned {
         /// Revert if not initialized
         if (!initialized) revert Price_NotInitialized();
 
@@ -215,7 +215,7 @@ contract OlympusPrice is Module {
     function initialize(
         uint256[] memory startObservations_,
         uint48 lastObservationTime_
-    ) external onlyRole(GUARDIAN) {
+    ) external permissioned {
         /// Revert if already initialized
         if (initialized) revert Price_AlreadyInitialized();
 
@@ -252,7 +252,7 @@ contract OlympusPrice is Module {
     ///      the existing data and can re-populate before calling this function.
     function changeMovingAverageDuration(uint48 movingAverageDuration_)
         external
-        onlyRole(GUARDIAN)
+        permissioned
     {
         /// Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
         if (
@@ -283,7 +283,7 @@ contract OlympusPrice is Module {
     ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
     function changeObservationFrequency(uint48 observationFrequency_)
         external
-        onlyRole(GUARDIAN)
+        permissioned
     {
         /// Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
         if (

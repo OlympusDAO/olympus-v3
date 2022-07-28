@@ -75,8 +75,6 @@ abstract contract KernelAdapter {
 }
 
 abstract contract Module is KernelAdapter {
-    event PermissionSet(bytes4 funcSelector_, address policy_, bool permission_);
-
     constructor(Kernel kernel_) KernelAdapter(kernel_) {}
 
     modifier permissioned() {

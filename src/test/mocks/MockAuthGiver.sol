@@ -21,9 +21,9 @@ contract MockAuthGiver is Policy {
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {
-        roles = new Kernel.Role[](1);
+        roles = new Role[](1);
         roles[0] = AUTHR.ADMIN();
     }
 

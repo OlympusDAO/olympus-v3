@@ -38,9 +38,9 @@ contract TreasuryCustodian is Policy, Auth {
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {
-        roles = new Kernel.Role[](2);
+        roles = new Role[](2);
         roles[0] = TRSRY.APPROVER();
         roles[1] = TRSRY.DEBT_ADMIN();
     }

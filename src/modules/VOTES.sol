@@ -11,37 +11,34 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 error VOTES_TransferDisabled();
 
 contract OlympusVotes is Module, ERC20 {
-    Kernel.Role public constant ISSUER = Kernel.Role.wrap("VOTES_Issuer");
-    Kernel.Role public constant GOVERNOR = Kernel.Role.wrap("VOTES_Governor");
+    Role public constant ISSUER = Role.wrap("VOTES_Issuer");
+    Role public constant GOVERNOR = Role.wrap("VOTES_Governor");
 
     constructor(Kernel kernel_)
         Module(kernel_)
         ERC20("OlympusDAO Dummy Voting Tokens", "VOTES", 0)
     {}
 
-    function KEYCODE() public pure override returns (Kernel.Keycode) {
-        return Kernel.Keycode.wrap("VOTES");
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("VOTES");
     }
 
-    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
-        roles = new Kernel.Role[](2);
-        roles[0] = ISSUER;
-        roles[1] = GOVERNOR;
+    function VERSION()
+        external
+        pure
+        override
+        returns (uint8 major, uint8 minor)
+    {
+        return (1, 0);
     }
 
     // Policy Interface
 
-    function mintTo(address wallet_, uint256 amount_)
-        external
-        onlyRole(ISSUER)
-    {
+    function mintTo(address wallet_, uint256 amount_) external permissioned {
         _mint(wallet_, amount_);
     }
 
-    function burnFrom(address wallet_, uint256 amount_)
-        external
-        onlyRole(ISSUER)
-    {
+    function burnFrom(address wallet_, uint256 amount_) external permissioned {
         _burn(wallet_, amount_);
     }
 
@@ -58,7 +55,7 @@ contract OlympusVotes is Module, ERC20 {
         address from_,
         address to_,
         uint256 amount_
-    ) public override onlyRole(GOVERNOR) returns (bool) {
+    ) public override permissioned returns (bool) {
         balanceOf[from_] -= amount_;
         unchecked {
             balanceOf[to_] += amount_;

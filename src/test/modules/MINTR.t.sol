@@ -74,21 +74,17 @@ contract MINTRTest is Test {
 
     function configureReads() external pure {}
 
-    function requestRoles()
-        external
-        view
-        returns (Kernel.Role[] memory requests)
-    {
+    function requestRoles() external view returns (Role[] memory requests) {
         requests = MINTR.ROLES();
     }
 
     function test_KEYCODE() public {
-        assertEq("MINTR", Kernel.Keycode.unwrap(MINTR.KEYCODE()));
+        assertEq("MINTR", Keycode.unwrap(MINTR.KEYCODE()));
     }
 
     function test_ROLES() public {
-        assertEq("MINTR_Minter", Kernel.Role.unwrap(MINTR.ROLES()[0]));
-        assertEq("MINTR_Burner", Kernel.Role.unwrap(MINTR.ROLES()[1]));
+        assertEq("MINTR_Minter", Role.unwrap(MINTR.ROLES()[0]));
+        assertEq("MINTR_Burner", Role.unwrap(MINTR.ROLES()[1]));
     }
 
     function test_ApprovedAddressMintsOhm(address to_, uint256 amount_) public {
