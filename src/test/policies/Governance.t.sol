@@ -5,13 +5,13 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 
-import {Kernel, Instruction, Actions} from "../../Kernel.sol";
+import {Kernel, Instruction, Actions} from "src/Kernel.sol";
 
 import {OlympusInstructions} from "modules/INSTR.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
 import {OlympusAuthority} from "modules/AUTHR.sol";
 
-import {MockAuthGiver} from "../mocks/MockAuthGiver.sol";
+import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
 import "policies/Governance.sol";
 import {VoterRegistration} from "policies/VoterRegistration.sol";
 
@@ -138,20 +138,20 @@ contract GovernanceTest is Test {
 
     function _submitProposal() internal {
         // create valid instructions
-        Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(
+        Instruction[] memory instructions_ = new Instruction[](1);
+        instructions_[0] = Instruction(
             Actions.ApprovePolicy,
             address(newProposedPolicy)
         );
 
         // submit proposal as voter1 (1/15 votes)
         vm.prank(voter1);
-        governance.submitProposal(instructions, "proposalName");
+        governance.submitProposal(instructions_, "proposalName");
     }
 
     function testRevert_NotEnoughVotesToPropose() public {
-        Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(
+        Instruction[] memory instructions_ = new Instruction[](1);
+        instructions_[0] = Instruction(
             Actions.ApprovePolicy,
             address(governance)
         );
@@ -160,12 +160,12 @@ contract GovernanceTest is Test {
 
         // submit proposal as invalid voter (0/15 votes)
         vm.prank(voter0);
-        governance.submitProposal(instructions, "proposalName");
+        governance.submitProposal(instructions_, "proposalName");
     }
 
     function testEvent_ProposalSubmitted() public {
-        Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(
+        Instruction[] memory instructions_ = new Instruction[](1);
+        instructions_[0] = Instruction(
             Actions.ApprovePolicy,
             address(governance)
         );
@@ -174,12 +174,12 @@ contract GovernanceTest is Test {
         emit ProposalSubmitted(1);
 
         vm.prank(voter1);
-        governance.submitProposal(instructions, "proposalName");
+        governance.submitProposal(instructions_, "proposalName");
     }
 
     function testCorrectness_SuccessfullySubmitProposal() public {
-        Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(
+        Instruction[] memory instructions_ = new Instruction[](1);
+        instructions_[0] = Instruction(
             Actions.ApprovePolicy,
             address(governance)
         );
@@ -188,7 +188,7 @@ contract GovernanceTest is Test {
         emit InstructionsStored(1);
 
         vm.prank(voter1);
-        governance.submitProposal(instructions, "proposalName");
+        governance.submitProposal(instructions_, "proposalName");
 
         // get the proposal metadata
         ProposalMetadata memory pls = governance.getMetadata(1);
@@ -538,6 +538,14 @@ contract GovernanceTest is Test {
         assertEq(votes.balanceOf(voter5), 0);
     }
 
+    function testRevert_CannotReclaimZeroVotes() public {
+        _executeProposal();
+        vm.expectRevert(CannotReclaimZeroVotes.selector);
+
+        vm.prank(voter4);
+        governance.reclaimVotes(1);
+    }
+
     function testRevert_CannotReclaimTokensForActiveVote() public {
         _createApprovedInstructions();
 
@@ -547,13 +555,13 @@ contract GovernanceTest is Test {
         governance.reclaimVotes(1);
     }
 
-    function testRevert_VotingTokensAlreadyClaimed() public {
+    function testRevert_VotingTokensAlreadyReclaimed() public {
         _executeProposal();
 
         vm.prank(voter5);
         governance.reclaimVotes(1);
 
-        vm.expectRevert(VotingTokensAlreadyClaimed.selector);
+        vm.expectRevert(VotingTokensAlreadyReclaimed.selector);
 
         vm.prank(voter5);
         governance.reclaimVotes(1);

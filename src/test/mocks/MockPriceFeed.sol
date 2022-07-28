@@ -6,6 +6,7 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 contract MockPriceFeed is AggregatorV2V3Interface {
     int256 public s_answer;
     uint8 public s_decimals;
+    uint256 public s_timestamp;
 
     function setLatestAnswer(int256 answer) public {
         s_answer = answer;
@@ -23,9 +24,30 @@ contract MockPriceFeed is AggregatorV2V3Interface {
         return s_decimals;
     }
 
-    /// Not implemented but required by interface
+    function setTimestamp(uint256 timestamp_) public {
+        s_timestamp = timestamp_;
+    }
 
-    function latestTimestamp() external view override returns (uint256) {}
+    function latestTimestamp() external view override returns (uint256) {
+        return s_timestamp;
+    }
+
+    function latestRoundData()
+        external
+        view
+        override
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        )
+    {
+        return (0, s_answer, 0, s_timestamp, 0);
+    }
+
+    /// Not implemented but required by interface
 
     function latestRound() external view override returns (uint256) {}
 
@@ -51,19 +73,6 @@ contract MockPriceFeed is AggregatorV2V3Interface {
     // if they do not have data to report, instead of returning unset values
     // which could be misinterpreted as actual reported values.
     function getRoundData(uint80 _roundId)
-        external
-        view
-        override
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        )
-    {}
-
-    function latestRoundData()
         external
         view
         override

@@ -2,7 +2,7 @@
 
 // [INSTR] The Instructions Module caches and executes batched instructions for protocol upgrades in the Kernel
 
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 import "src/Kernel.sol";
 
@@ -34,23 +34,6 @@ contract OlympusInstructions is Module {
     /////////////////////////////////////////////////////////////////////////////////
 
     event InstructionsStored(uint256 instructionsId);
-    event InstructionsExecuted(uint256 instructionsId);
-
-    /* Imported from Kernel, just here for reference:
-
-    enum Actions {
-        ChangeExecutive,
-        ApprovePolicy,
-        TerminatePolicy,
-        InstallSystem,
-        UpgradeSystem
-    }
-
-    struct Instruction {
-        Actions action;
-        address target;
-    }
-    */
 
     uint256 public totalInstructions;
     mapping(uint256 => Instruction[]) public storedInstructions;
@@ -74,12 +57,10 @@ contract OlympusInstructions is Module {
         returns (uint256)
     {
         uint256 length = instructions_.length;
-        totalInstructions++;
+        uint256 instructionsId = ++totalInstructions;
 
         // initialize an empty list of instructions that will be filled
-        Instruction[] storage instructions = storedInstructions[
-            totalInstructions
-        ];
+        Instruction[] storage instructions = storedInstructions[instructionsId];
 
         // if there are no instructions, throw an error
         if (length == 0) {
@@ -87,7 +68,7 @@ contract OlympusInstructions is Module {
         }
 
         // for each instruction, do the following actions:
-        for (uint256 i = 0; i < length; i++) {
+        for (uint256 i; i < length; ) {
             // get the instruction
             Instruction calldata instruction = instructions_[i];
 
@@ -101,7 +82,6 @@ contract OlympusInstructions is Module {
             ) {
                 Module module = Module(instruction.target);
                 _ensureValidKeycode(module.KEYCODE());
-                revert INSTR_InvalidChangeExecutorAction();
             } else if (
                 instruction.action == Actions.ChangeExecutor && i != length - 1
             ) {
@@ -115,11 +95,14 @@ contract OlympusInstructions is Module {
             }
 
             instructions.push(instructions_[i]);
+            unchecked {
+                ++i;
+            }
         }
 
-        emit InstructionsStored(totalInstructions);
+        emit InstructionsStored(instructionsId);
 
-        return totalInstructions;
+        return instructionsId;
     }
 
     /////////////////////////////// INTERNAL FUNCTIONS ////////////////////////////////
@@ -135,13 +118,13 @@ contract OlympusInstructions is Module {
     function _ensureValidKeycode(Kernel.Keycode keycode_) internal pure {
         bytes5 unwrapped = Kernel.Keycode.unwrap(keycode_);
 
-        for (uint256 i = 0; i < 5; ) {
+        for (uint256 i; i < 5; ) {
             bytes1 char = unwrapped[i];
 
             if (char < 0x41 || char > 0x5A) revert INSTR_InvalidModuleKeycode(); // A-Z only"
 
             unchecked {
-                i++;
+                ++i;
             }
         }
     }

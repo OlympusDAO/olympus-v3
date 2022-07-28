@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 /// DEPS
 import "forge-std/Test.sol";
@@ -58,7 +58,7 @@ contract DEMAMTest is Test {
         // setup
         address[] memory usrs = victims.create(nusers);
 
-        for (uint256 i; i < nusers; i++) {
+        for (uint256 i; i < nusers; ++i) {
             ohm.transferFrom.larp(usrs[i], demama, amount, true);
             demam.takeTokens(usrs[i], ohma, amount);
             assertEq(demam.freeBalanceOf(usrs[i], ohma), amount);

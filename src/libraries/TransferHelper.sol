@@ -57,10 +57,4 @@ library TransferHelper {
             "APPROVE_FAILED"
         );
     }
-
-    function safeTransferETH(address to, uint256 amount) internal {
-        (bool success, ) = to.call{value: amount}(new bytes(0));
-
-        require(success, "ETH_TRANSFER_FAILED");
-    }
 }

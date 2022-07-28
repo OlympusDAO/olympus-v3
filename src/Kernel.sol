@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 // ######################## ~ ERRORS ~ ########################
 
@@ -16,7 +16,7 @@ error Policy_OnlyKernel(address caller_);
 
 error Kernel_OnlyExecutor(address caller_);
 error Kernel_ModuleAlreadyInstalled(Kernel.Keycode module_);
-error Kernel_ModuleAlreadyExists(Kernel.Keycode module_);
+error Kernel_InvalidModuleUpgrade(Kernel.Keycode module_);
 error Kernel_PolicyAlreadyApproved(address policy_);
 error Kernel_PolicyNotApproved(address policy_);
 
@@ -45,9 +45,7 @@ abstract contract Module {
     }
 
     modifier onlyRole(Kernel.Role role_) {
-        if (kernel.hasRole(msg.sender, role_) == false) {
-            revert Module_NotAuthorized();
-        }
+        if (!kernel.hasRole(msg.sender, role_)) revert Module_NotAuthorized();
         _;
     }
 
@@ -169,7 +167,6 @@ contract Kernel {
     function _installModule(address newModule_) internal {
         Keycode keycode = Module(newModule_).KEYCODE();
 
-        // @NOTE check newModule_ != 0
         if (getModuleForKeycode[keycode] != address(0))
             revert Kernel_ModuleAlreadyInstalled(keycode);
 
@@ -182,7 +179,7 @@ contract Kernel {
         address oldModule = getModuleForKeycode[keycode];
 
         if (oldModule == address(0) || oldModule == newModule_)
-            revert Kernel_ModuleAlreadyExists(keycode);
+            revert Kernel_InvalidModuleUpgrade(keycode);
 
         getKeycodeForModule[oldModule] = Keycode.wrap(bytes5(0));
         getKeycodeForModule[newModule_] = keycode;
@@ -192,7 +189,7 @@ contract Kernel {
     }
 
     function _approvePolicy(address policy_) internal {
-        if (approvedPolicies[policy_] == true)
+        if (approvedPolicies[policy_])
             revert Kernel_PolicyAlreadyApproved(policy_);
 
         approvedPolicies[policy_] = true;
@@ -207,7 +204,7 @@ contract Kernel {
     }
 
     function _terminatePolicy(address policy_) internal {
-        if (approvedPolicies[policy_] == false)
+        if (!approvedPolicies[policy_])
             revert Kernel_PolicyNotApproved(policy_);
 
         approvedPolicies[policy_] = false;
@@ -218,11 +215,15 @@ contract Kernel {
     }
 
     function _reconfigurePolicies() internal {
-        for (uint256 i = 0; i < allPolicies.length; i++) {
+        uint256 len = allPolicies.length;
+        for (uint256 i; i < len; ) {
             address policy_ = allPolicies[i];
 
-            if (approvedPolicies[policy_] == true)
-                Policy(policy_).configureReads();
+            if (approvedPolicies[policy_]) Policy(policy_).configureReads();
+
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -231,9 +232,9 @@ contract Kernel {
         Role[] memory requests_,
         bool grant_
     ) internal {
-        uint256 l = requests_.length;
+        uint256 len = requests_.length;
 
-        for (uint256 i = 0; i < l; ) {
+        for (uint256 i; i < len; ) {
             Role request = requests_[i];
 
             hasRole[policy_][request] = grant_;
@@ -241,7 +242,7 @@ contract Kernel {
             emit RolesUpdated(request, policy_, grant_);
 
             unchecked {
-                i++;
+                ++i;
             }
         }
     }

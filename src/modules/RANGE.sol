@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
-import {TransferHelper} from "../libraries/TransferHelper.sol";
-import {FullMath} from "../libraries/FullMath.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
+import {FullMath} from "libraries/FullMath.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {Kernel, Module} from "../Kernel.sol";
+import {Kernel, Module} from "src/Kernel.sol";
 
 error RANGE_InvalidParams();
 
@@ -43,7 +43,6 @@ contract OlympusRange is Module {
         uint256 capacity; // Amount of tokens that can be used to defend the side of the range. Specified in OHM tokens on the high side and Reserve tokens on the low side.
         uint256 threshold; // Amount of tokens under which the side is taken down. Specified in OHM tokens on the high side and Reserve tokens on the low side.
         uint256 market; // Market ID of the cushion bond market for the side. If no market is active, the market ID is set to max uint256 value.
-        uint256 lastMarketCapacity; // Capacity of the side's market at the last update. Used to determine how much capacity the market sold since the last update.
     }
 
     struct Range {
@@ -87,16 +86,14 @@ contract OlympusRange is Module {
                 lastActive: uint48(block.timestamp),
                 capacity: 0,
                 threshold: 0,
-                market: type(uint256).max,
-                lastMarketCapacity: 0
+                market: type(uint256).max
             }),
             high: Side({
                 active: false,
                 lastActive: uint48(block.timestamp),
                 capacity: 0,
                 threshold: 0,
-                market: type(uint256).max,
-                lastMarketCapacity: 0
+                market: type(uint256).max
             }),
             cushion: Band({
                 low: Line({price: 0}),
@@ -131,54 +128,38 @@ contract OlympusRange is Module {
     /// @notice                 Access restricted to approved policies.
     /// @param high_            Specifies the side of the range to update capacity for (true = high side, false = low side).
     /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
-    /// @param marketCapacity_  Amount to set the market capacity to (OHM tokens for high side, Reserve tokens for low side).
-    function updateCapacity(
-        bool high_,
-        uint256 capacity_,
-        uint256 marketCapacity_
-    ) external onlyRole(OPERATOR) {
+    function updateCapacity(bool high_, uint256 capacity_)
+        external
+        onlyRole(OPERATOR)
+    {
         if (high_) {
-            /// Update capacity and market capacity if they changed
-            /// @dev the function is used by different modules which may not update both capacities at once
-            /// checking if the values have changed saves potential SSTOREs
-            if (_range.high.capacity != capacity_) {
-                _range.high.capacity = capacity_;
-            }
-            if (_range.high.lastMarketCapacity != marketCapacity_) {
-                _range.high.lastMarketCapacity = marketCapacity_;
-            }
+            /// Update capacity
+            _range.high.capacity = capacity_;
 
-            /// If the new capacity is below the threshold, deactivate the cushion and wall if they are currently active
+            /// If the new capacity is below the threshold, deactivate the wall if they are currently active
             if (capacity_ < _range.high.threshold && _range.high.active) {
                 /// Set wall to inactive
                 _range.high.active = false;
                 _range.high.lastActive = uint48(block.timestamp);
 
-                /// Set cushion to inactive
-                updateMarket(true, type(uint256).max, 0);
+                // /// Set cushion to inactive
+                // updateMarket(true, type(uint256).max, 0);
 
                 /// Emit event
                 emit WallDown(true, block.timestamp);
             }
         } else {
-            /// Update capacity and market capacity if they changed
-            /// @dev the function is used by different modules which may not update both capacities at once
-            /// checking if the values have changed saves potential SSTOREs
-            if (_range.low.capacity != capacity_) {
-                _range.low.capacity = capacity_;
-            }
-            if (_range.low.lastMarketCapacity != marketCapacity_) {
-                _range.low.lastMarketCapacity = marketCapacity_;
-            }
+            /// Update capacity
+            _range.low.capacity = capacity_;
 
-            /// If the new capacity is below the threshold, deactivate the cushion and wall if they are currently active
+            /// If the new capacity is below the threshold, deactivate the wall if they are currently active
             if (capacity_ < _range.low.threshold && _range.low.active) {
                 /// Set wall to inactive
                 _range.low.active = false;
                 _range.low.lastActive = uint48(block.timestamp);
 
-                /// Set cushion to inactive
-                updateMarket(false, type(uint256).max, 0);
+                // /// Set cushion to inactive
+                // updateMarket(false, type(uint256).max, 0);
 
                 /// Emit event
                 emit WallDown(false, block.timestamp);
@@ -227,8 +208,7 @@ contract OlympusRange is Module {
                 lastActive: uint48(block.timestamp),
                 capacity: capacity_,
                 threshold: threshold,
-                market: type(uint256).max,
-                lastMarketCapacity: 0
+                market: _range.high.market
             });
         } else {
             /// Reinitialize the low side
@@ -237,15 +217,14 @@ contract OlympusRange is Module {
                 lastActive: uint48(block.timestamp),
                 capacity: capacity_,
                 threshold: threshold,
-                market: type(uint256).max,
-                lastMarketCapacity: 0
+                market: _range.low.market
             });
         }
 
         emit WallUp(high_, block.timestamp, capacity_);
     }
 
-    /// @notice                 Update the market ID and market capacity (cushion) for a side of the range.
+    /// @notice                 Update the market ID (cushion) for a side of the range.
     /// @notice                 Access restricted to approved policies.
     /// @param high_            Specifies the side of the range to update market for (true = high side, false = low side).
     /// @param market_          Market ID to set for the side.
@@ -262,10 +241,8 @@ contract OlympusRange is Module {
         /// Store updated state
         if (high_) {
             _range.high.market = market_;
-            _range.high.lastMarketCapacity = marketCapacity_;
         } else {
             _range.low.market = market_;
-            _range.low.lastMarketCapacity = marketCapacity_;
         }
 
         /// Emit events
@@ -381,13 +358,13 @@ contract OlympusRange is Module {
         }
     }
 
-    /// @notice         Get the last market capacity for a side of the range.
-    /// @param high_    Specifies the side of the range to get last market capacity for (true = high side, false = low side).
-    function lastMarketCapacity(bool high_) external view returns (uint256) {
+    /// @notice         Get the timestamp when the range was last active.
+    /// @param high_    Specifies the side of the range to get timestamp for (true = high side, false = low side).
+    function lastActive(bool high_) external view returns (uint256) {
         if (high_) {
-            return _range.high.lastMarketCapacity;
+            return _range.high.lastActive;
         } else {
-            return _range.low.lastMarketCapacity;
+            return _range.low.lastActive;
         }
     }
 }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 import {OlympusAuthority} from "modules/AUTHR.sol";
-import {Kernel, Policy} from "../../Kernel.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 
 /**
  * @notice Mock policy to give authorizations to address for testing
@@ -13,7 +13,7 @@ contract MockAuthGiver is Policy {
     constructor(Kernel kernel_) Policy(kernel_) {}
 
     /* ========== FRAMEWORK CONFIFURATION ========== */
-    function configureReads() external override onlyKernel {
+    function configureReads() external override {
         AUTHR = OlympusAuthority(getModuleAddress("AUTHR"));
     }
 
@@ -21,7 +21,6 @@ contract MockAuthGiver is Policy {
         external
         view
         override
-        onlyKernel
         returns (Kernel.Role[] memory roles)
     {
         roles = new Kernel.Role[](1);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
@@ -107,7 +107,7 @@ contract BondFixedTermTeller is BondBaseTeller, IBondFixedTermTeller, ERC1155 {
     ) external override nonReentrant returns (uint256, uint256) {
         uint256 tokenId = getTokenId(underlying_, expiry_);
 
-        // Revert if no token exists, must call create first
+        // Revert if no token exists, must call deploy first
         if (!tokenMetadata[tokenId].active)
             revert Teller_TokenDoesNotExist(underlying_, expiry_);
 
@@ -119,18 +119,15 @@ contract BondFixedTermTeller is BondBaseTeller, IBondFixedTermTeller, ERC1155 {
         if (underlying_.balanceOf(address(this)) < oldBalance + amount_)
             revert Teller_UnsupportedToken();
 
-        /// Calculate protocol fee based on the fee tier of the sender
-        uint256 partnerFee = feeTiers[partnerFeeTier[msg.sender]];
-
         /// If fee is greater than the create discount, then calculate the fee and store it
         /// Otherwise, fee is zero.
-        if (partnerFee > createFeeDiscount) {
+        if (protocolFee > createFeeDiscount) {
             /// Calculate fee amount
             uint256 feeAmount = amount_.mulDiv(
-                partnerFee - createFeeDiscount,
+                protocolFee - createFeeDiscount,
                 FEE_DECIMALS
             );
-            fees[underlying_] += feeAmount;
+            rewards[_protocol][underlying_] += feeAmount;
 
             // Mint new bond tokens
             _mintToken(msg.sender, tokenId, amount_ - feeAmount);

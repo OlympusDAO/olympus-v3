@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {Kernel, Module} from "../Kernel.sol";
+import {Kernel, Module} from "src/Kernel.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -12,6 +12,7 @@ import {FullMath} from "libraries/FullMath.sol";
 error Price_InvalidParams();
 error Price_NotInitialized();
 error Price_AlreadyInitialized();
+error Price_BadFeed(address priceFeed);
 
 /// @title  Olympus Price Oracle
 /// @notice Olympus Price Oracle (Module) Contract
@@ -32,18 +33,22 @@ contract OlympusPrice is Module {
 
     /// Chainlink Price Feeds
     /// @dev Chainlink typically provides price feeds for an asset in ETH. Therefore, we use two price feeds against ETH, one for OHM and one for the Reserve asset, to calculate the relative price of OHM in the Reserve asset.
-    AggregatorV2V3Interface internal _ohmEthPriceFeed;
-    AggregatorV2V3Interface internal _reserveEthPriceFeed;
-    uint8 internal _ohmEthDecimals;
-    uint8 internal _reserveEthDecimals;
+    AggregatorV2V3Interface internal immutable _ohmEthPriceFeed;
+    AggregatorV2V3Interface internal immutable _reserveEthPriceFeed;
 
     /// Moving average data
     uint256 internal _movingAverage; /// See getMovingAverage()
 
-    /// @notice Array of price observations ordered by when they were observed.
-    /// @dev    Observations are continually stored and the moving average is over the last movingAverageDuration / observationFrequency observations.
-    ///         This allows the contract to maintain historical data. Observations can be cleared by changing the movingAverageDuration or observationFrequency.
+    /// @notice Array of price observations. Check nextObsIndex to determine latest data point.
+    /// @dev    Observations are stored in a ring buffer where the moving average is the sum of all observations divided by the number of observations.
+    ///         Observations can be cleared by changing the movingAverageDuration or observationFrequency and must be re-initialized.
     uint256[] public observations;
+
+    /// @notice Index of the next observation to make. The current value at this index is the oldest observation.
+    uint32 public nextObsIndex;
+
+    /// @notice Number of observations used in the moving average calculation. Computed from movingAverageDuration / observationFrequency.
+    uint32 public numObservations;
 
     /// @notice Frequency (in seconds) that observations should be stored.
     uint48 public observationFrequency;
@@ -51,17 +56,17 @@ contract OlympusPrice is Module {
     /// @notice Duration (in seconds) over which the moving average is calculated.
     uint48 public movingAverageDuration;
 
-    /// @notice Number of observations used in the moving average calculation. Computed from movingAverageDuration / observationFrequency.
-    uint48 public numObservations;
-
     /// @notice Unix timestamp of last observation (in seconds).
     uint48 public lastObservationTime;
 
     /// @notice Number of decimals in the price values provided by the contract.
-    uint8 public decimals;
+    uint8 public constant decimals = 18;
 
     /// @notice Whether the price module is initialized (and therefore active).
     bool public initialized;
+
+    // Scale factor for converting prices, calculated from decimal values.
+    uint256 internal immutable _scaleFactor;
 
     /* ========== CONSTRUCTOR ========== */
 
@@ -72,26 +77,34 @@ contract OlympusPrice is Module {
         uint48 observationFrequency_,
         uint48 movingAverageDuration_
     ) Module(kernel_) {
-        /// @dev Moving Average Duration should be divislble by Observation Frequency to get a whole number of observations
-        if (movingAverageDuration_ % observationFrequency_ != 0)
-            revert Price_InvalidParams();
+        /// @dev Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
+        if (
+            movingAverageDuration_ == 0 ||
+            movingAverageDuration_ % observationFrequency_ != 0
+        ) revert Price_InvalidParams();
 
-        /// Set parameters and calculate number of observations
+        // Set price feeds, decimals, and scale factor
         _ohmEthPriceFeed = ohmEthPriceFeed_;
-        _ohmEthDecimals = _ohmEthPriceFeed.decimals();
+        uint8 ohmEthDecimals = _ohmEthPriceFeed.decimals();
 
         _reserveEthPriceFeed = reserveEthPriceFeed_;
-        _reserveEthDecimals = _reserveEthPriceFeed.decimals();
+        uint8 reserveEthDecimals = _reserveEthPriceFeed.decimals();
 
-        decimals = 18;
+        uint256 exponent = decimals + reserveEthDecimals - ohmEthDecimals;
+        if (exponent > 38) revert Price_InvalidParams();
+        _scaleFactor = 10**exponent;
 
+        /// Set parameters and calculate number of observations
         observationFrequency = observationFrequency_;
         movingAverageDuration = movingAverageDuration_;
 
-        numObservations = movingAverageDuration_ / observationFrequency_;
+        numObservations = uint32(
+            movingAverageDuration_ / observationFrequency_
+        );
 
         /// Store blank observations array
         observations = new uint256[](numObservations);
+        /// nextObsIndex is initialized to 0
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
@@ -112,16 +125,14 @@ contract OlympusPrice is Module {
     /// @dev This function does not have a time-gating on the observationFrequency on this contract. It is set on the Heart policy contract.
     ///      The Heart beat frequency should be set to the same value as the observationFrequency.
     function updateMovingAverage() external onlyRole(KEEPER) {
-        /// TODO determine if this should be opened up (don't want to conflict with heart beat and have that fail)
-
         /// Revert if not initialized
         if (!initialized) revert Price_NotInitialized();
 
-        /// Cache numObservations to save gas.
-        uint48 numObs = numObservations;
+        /// Cache numbe of observations to save gas.
+        uint32 numObs = numObservations;
 
         /// Get earliest observation in window
-        uint256 earliestPrice = observations[(observations.length - numObs)];
+        uint256 earliestPrice = observations[nextObsIndex];
 
         /// Get current price
         uint256 currentPrice = getCurrentPrice();
@@ -133,13 +144,13 @@ contract OlympusPrice is Module {
             _movingAverage -= (earliestPrice - currentPrice) / numObs;
         }
 
-        /// Push new observation into storage
-        observations.push(currentPrice);
+        /// Push new observation into storage and store timestamp taken at
+        observations[nextObsIndex] = currentPrice;
+        lastObservationTime = uint48(block.timestamp);
+        nextObsIndex = (nextObsIndex + 1) % numObs;
 
         /// Emit event
         emit NewObservation(block.timestamp, currentPrice);
-
-        // lastObservationTime = currentTime;
     }
 
     /* ========== VIEW FUNCTIONS ========== */
@@ -153,18 +164,25 @@ contract OlympusPrice is Module {
         uint256 ohmEthPrice;
         uint256 reserveEthPrice;
         {
-            int256 ohmEthPriceInt = _ohmEthPriceFeed.latestAnswer();
+            (, int256 ohmEthPriceInt, , uint256 updatedAt, ) = _ohmEthPriceFeed
+                .latestRoundData();
+            /// Use a multiple of observation frequency to determine what is too old to use.
+            /// Price feeds will not provide an updated answer if the data doesn't change much.
+            /// This would be similar to if the feed just stopped updating; therefore, we need a cutoff.
+            if (updatedAt < block.timestamp - 3 * uint256(observationFrequency))
+                revert Price_BadFeed(address(_ohmEthPriceFeed));
             ohmEthPrice = uint256(ohmEthPriceInt);
 
-            int256 reserveEthPriceInt = _reserveEthPriceFeed.latestAnswer();
+            int256 reserveEthPriceInt;
+            (, reserveEthPriceInt, , updatedAt, ) = _reserveEthPriceFeed
+                .latestRoundData();
+            if (updatedAt < block.timestamp - uint256(observationFrequency))
+                revert Price_BadFeed(address(_reserveEthPriceFeed));
             reserveEthPrice = uint256(reserveEthPriceInt);
         }
 
         /// Convert to OHM/RESERVE price
-        uint256 currentPrice = ohmEthPrice.mulDiv(
-            10**(decimals + _reserveEthDecimals),
-            reserveEthPrice * 10**(_ohmEthDecimals)
-        );
+        uint256 currentPrice = (ohmEthPrice * _scaleFactor) / reserveEthPrice;
 
         return currentPrice;
     }
@@ -173,7 +191,10 @@ contract OlympusPrice is Module {
     function getLastPrice() external view returns (uint256) {
         /// Revert if not initialized
         if (!initialized) revert Price_NotInitialized();
-        return observations[observations.length - 1];
+        uint32 lastIndex = nextObsIndex == 0
+            ? numObservations - 1
+            : nextObsIndex - 1;
+        return observations[lastIndex];
     }
 
     /// @notice Get the moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
@@ -199,33 +220,36 @@ contract OlympusPrice is Module {
         if (initialized) revert Price_AlreadyInitialized();
 
         /// Cache numObservations to save gas.
-        uint48 numObs = numObservations;
+        uint256 numObs = observations.length;
 
         /// Check that the number of start observations matches the number expected
         if (
-            uint48(startObservations_.length) != numObs ||
+            startObservations_.length != numObs ||
             lastObservationTime_ > uint48(block.timestamp)
         ) revert Price_InvalidParams();
 
         /// Push start observations into storage and total up observations
         uint256 total;
-        for (uint48 i; i < numObs; ++i) {
+        for (uint256 i; i < numObs; ) {
+            if (startObservations_[i] == 0) revert Price_InvalidParams();
             total += startObservations_[i];
             observations[i] = startObservations_[i];
+            unchecked {
+                ++i;
+            }
         }
 
         /// Set moving average, last observation time, and initialized flag
-        _movingAverage = total / uint256(numObs);
+        _movingAverage = total / numObs;
         lastObservationTime = lastObservationTime_;
         initialized = true;
     }
 
     /// @notice                         Change the moving average window (duration)
     /// @param movingAverageDuration_   Moving average duration in seconds, must be a multiple of observation frequency
-    /// @dev Setting the window to a larger number of observations than the current window will clear
-    ///      the data in the current window and require the initialize function to be called again.
-    ///      Ensure that you have saved the existing data and can re-populate before calling this
-    ///      function with a number of observations larger than have been recorded.
+    /// @dev Changing the moving average duration will erase the current observations array
+    ///      and require the initialize function to be called again. Ensure that you have saved
+    ///      the existing data and can re-populate before calling this function.
     function changeMovingAverageDuration(uint48 movingAverageDuration_)
         external
         onlyRole(GUARDIAN)
@@ -240,30 +264,17 @@ contract OlympusPrice is Module {
         uint256 newObservations = uint256(
             movingAverageDuration_ / observationFrequency
         );
-        uint256 obsLength = observations.length;
 
-        /// If the number of new observations is greater than the number of observations stored,
-        /// the array will need to be reinitialized.
-        /// Otherwise, keep the existing array and calculate the new moving average.
-        if (newObservations > obsLength) {
-            /// Store blank observations array of new size
-            observations = new uint256[](newObservations);
+        /// Store blank observations array of new size
+        observations = new uint256[](newObservations);
 
-            /// Set initialized to false
-            initialized = false;
-        } else {
-            /// Update moving average
-            uint256 startIdx = obsLength - newObservations;
-            uint256 newMovingAverage;
-            for (uint256 i; i < newObservations; ++i) {
-                newMovingAverage += observations[startIdx + i];
-            }
-            _movingAverage = newMovingAverage / newObservations;
-        }
-
-        /// Set parameters and number of observations
+        /// Set initialized to false and update state variables
+        initialized = false;
+        lastObservationTime = 0;
+        _movingAverage = 0;
+        nextObsIndex = 0;
         movingAverageDuration = movingAverageDuration_;
-        numObservations = uint48(newObservations);
+        numObservations = uint32(newObservations);
     }
 
     /// @notice   Change the observation frequency of the moving average (i.e. how often a new observation is taken)
@@ -294,11 +305,12 @@ contract OlympusPrice is Module {
         /// Store blank observations array of new size
         observations = new uint256[](newObservations);
 
-        /// Set initialized to false
+        /// Set initialized to false and update state variables
         initialized = false;
-
-        /// Set parameters and number of observations
+        lastObservationTime = 0;
+        _movingAverage = 0;
+        nextObsIndex = 0;
         observationFrequency = observationFrequency_;
-        numObservations = uint48(newObservations);
+        numObservations = uint32(newObservations);
     }
 }

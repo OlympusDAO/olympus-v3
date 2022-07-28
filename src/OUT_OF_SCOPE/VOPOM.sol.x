@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 /// DEPS
 
@@ -277,7 +277,7 @@ contract VotingPowerModule is Module {
             votingPower += upoint.bias;
 
             unchecked {
-                i++;
+                ++i;
             }
         }
     }
@@ -307,7 +307,7 @@ contract VotingPowerModule is Module {
             globalVotingPower += glpoint.bias;
 
             unchecked {
-                i++;
+                ++i;
             }
         }
     }
@@ -357,7 +357,7 @@ contract VotingPowerModule is Module {
             ).mul(biasPercentDelegations[delegator][user]);
 
             unchecked {
-                i++;
+                ++i;
             }
         }
     }
@@ -384,7 +384,7 @@ contract VotingPowerModule is Module {
             if (openPoolPointIds[i] == poolId) return true;
 
             unchecked {
-                i++;
+                ++i;
             }
         }
 
@@ -591,7 +591,7 @@ contract VotingPowerModule is Module {
             if (rollingEpochTime == timestamp) break;
 
             unchecked {
-                i++;
+                ++i;
             }
         }
 

@@ -4,16 +4,16 @@ pragma solidity >=0.8.0;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
-import {Vm} from "forge-std/Vm.sol";
+
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockPrice} from "../mocks/MockPrice.sol";
-import {MockAuthGiver} from "../mocks/MockAuthGiver.sol";
+import {MockPrice} from "test/mocks/MockPrice.sol";
+import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {Kernel, Policy, Actions} from "../../Kernel.sol";
+import {Kernel, Policy, Actions} from "src/Kernel.sol";
 import {OlympusAuthority} from "modules/AUTHR.sol";
 
 import {Heart} from "policies/Heart.sol";
@@ -35,7 +35,7 @@ contract MockOperator is Policy, IOperator, Auth {
     }
 
     /* ========== FRAMEWORK CONFIFURATION ========== */
-    function configureReads() external override onlyKernel {
+    function configureReads() external override {
         setAuthority(Authority(getModuleAddress("AUTHR")));
     }
 
@@ -43,7 +43,6 @@ contract MockOperator is Policy, IOperator, Auth {
         external
         view
         override
-        onlyKernel
         returns (Kernel.Role[] memory roles)
     {}
 
@@ -58,11 +57,11 @@ contract MockOperator is Policy, IOperator, Auth {
 
     /* ========== OPEN MARKET OPERATIONS (WALL) ========== */
 
-    function swap(ERC20 tokenIn_, uint256 amountIn_)
-        external
-        pure
-        returns (uint256 amountOut)
-    {
+    function swap(
+        ERC20 tokenIn_,
+        uint256 amountIn_,
+        uint256 minAmountOut_
+    ) external pure returns (uint256 amountOut) {
         amountOut = 0;
     }
 
@@ -101,6 +100,8 @@ contract MockOperator is Policy, IOperator, Auth {
     ) external override {}
 
     function initialize() external override {}
+
+    function regenerate(bool high_) external override {}
 
     /* ========== VIEW FUNCTIONS ========== */
 
@@ -161,7 +162,7 @@ contract HeartTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             /// Deploy modules (some mocks)
-            price = new MockPrice(kernel);
+            price = new MockPrice(kernel, uint48(8 hours));
             authr = new OlympusAuthority(kernel);
 
             /// Configure mocks
@@ -179,7 +180,6 @@ contract HeartTest is Test {
             heart = new Heart(
                 kernel,
                 operator,
-                uint256(8 hours),
                 rewardToken,
                 uint256(1e18) // 1 reward token
             );
@@ -230,22 +230,12 @@ contract HeartTest is Test {
             authGiver.setRoleCapability(
                 uint8(1),
                 address(heart),
-                heart.setReward.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(heart),
-                heart.setRewardToken.selector
+                heart.setRewardTokenAndAmount.selector
             );
             authGiver.setRoleCapability(
                 uint8(1),
                 address(heart),
                 heart.withdrawUnspentRewards.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(heart),
-                heart.setFrequency.selector
             );
 
             /// Give roles to users
@@ -327,14 +317,23 @@ contract HeartTest is Test {
         heart.beat();
     }
 
+    /* ========== VIEW FUNCTIONS ========== */
+    /// [X] frequency
+
+    function testCorrectness_viewFrequency() public {
+        /// Get the beat frequency of the heart
+        uint256 frequency = heart.frequency();
+
+        /// Check that the frequency is correct
+        assertEq(frequency, uint256(8 hours));
+    }
+
     /* ========== ADMIN FUNCTIONS ========== */
     /// DONE
     /// [X] resetBeat
     /// [X] toggleBeat
-    /// [X] setReward
-    /// [X] setRewardToken
+    /// [X] setRewardTokenAndAmount
     /// [X] withdrawUnspentRewards
-    /// [X] setFrequency
     /// [X] cannot call admin functions without permissions
 
     function testCorrectness_resetBeat() public {
@@ -377,36 +376,21 @@ contract HeartTest is Test {
         assertTrue(heart.active());
     }
 
-    function testCorrectness_setReward() public {
-        /// Set the heart's reward to a new value
+    function testCorrectness_setRewardTokenAndAmount() public {
+        /// Set the heart's reward token to a new token and amount to a new amount
+        MockERC20 newToken = new MockERC20("New Token", "NT", 18);
         uint256 newReward = uint256(2e18);
         vm.prank(guardian);
-        heart.setReward(newReward);
+        heart.setRewardTokenAndAmount(newToken, newReward);
 
-        /// Expect the heart's reward to be the new value
-        assertEq(heart.reward(), newReward);
-
-        /// Beat the heart and expect the contract's reward token balance to increase by the new reward amount
-        uint256 startBalance = rewardToken.balanceOf(address(this));
-        uint256 frequency = heart.frequency();
-        vm.warp(block.timestamp + frequency);
-        heart.beat();
-
-        uint256 endBalance = rewardToken.balanceOf(address(this));
-        assertEq(endBalance, startBalance + newReward);
-    }
-
-    function testCorrectness_setRewardToken() public {
-        /// Set the heart's reward token to a new token
-        MockERC20 newToken = new MockERC20("New Token", "NT", 18);
-        vm.prank(guardian);
-        heart.setRewardToken(newToken);
+        /// Expect the heart's reward token and reward to be updated
         assertEq(address(heart.rewardToken()), address(newToken));
+        assertEq(heart.reward(), newReward);
 
         /// Mint some new tokens to the heart to pay rewards
         newToken.mint(address(heart), uint256(1000 * 1e18));
 
-        /// Expect the heart to reward the new token on a beat
+        /// Expect the heart to reward the new token and amount on a beat
         uint256 startBalance = newToken.balanceOf(address(this));
         uint256 frequency = heart.frequency();
         vm.warp(block.timestamp + frequency);
@@ -433,29 +417,6 @@ contract HeartTest is Test {
         assertEq(endBalance, startBalance + heartBalance);
     }
 
-    function testCorrectness_setFrequency() public {
-        /// Try to set frequency to a value less than 1 hour and expect revert
-        uint256 newFrequency = uint256(59);
-        bytes memory err = abi.encodeWithSignature("Heart_InvalidParams()");
-        vm.expectRevert(err);
-        vm.prank(guardian);
-        heart.setFrequency(newFrequency);
-
-        /// Set the heart's frequency to a new value that is valid
-        newFrequency = uint256(4 hours);
-        vm.prank(guardian);
-        heart.setFrequency(newFrequency);
-
-        /// Expect the heart's frequency to be the new value
-        assertEq(heart.frequency(), newFrequency);
-
-        /// Move time forward by the new frequency and expect it to work
-        vm.warp(block.timestamp + newFrequency);
-
-        /// Beat the heart and expect it to work
-        heart.beat();
-    }
-
     function testCorrectness_cannotCallAdminFunctionsWithoutPermissions()
         public
     {
@@ -469,15 +430,9 @@ contract HeartTest is Test {
         heart.toggleBeat();
 
         vm.expectRevert(err);
-        heart.setReward(uint256(2e18));
-
-        vm.expectRevert(err);
-        heart.setRewardToken(rewardToken);
+        heart.setRewardTokenAndAmount(rewardToken, uint256(2e18));
 
         vm.expectRevert(err);
         heart.withdrawUnspentRewards(rewardToken);
-
-        vm.expectRevert(err);
-        heart.setFrequency(uint256(4 hours));
     }
 }

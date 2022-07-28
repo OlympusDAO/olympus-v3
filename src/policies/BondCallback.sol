@@ -1,26 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
+import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusAuthority} from "modules/AUTHR.sol";
-import {Kernel, Policy} from "../Kernel.sol";
+import {Operator} from "policies/Operator.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
 /// @title Olympus Bond Callback
-contract BondCallback is Policy, Auth, IBondCallback {
+contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
     using TransferHelper for ERC20;
 
     /* ========== ERRORS ========== */
 
     error Callback_MarketNotSupported(uint256 id);
     error Callback_TokensNotReceived();
+    error Callback_InvalidParams();
 
     /* ========== STATE VARIABLES ========== */
 
@@ -31,6 +33,7 @@ contract BondCallback is Policy, Auth, IBondCallback {
     IBondAggregator public aggregator;
     OlympusTreasury public TRSRY;
     OlympusMinter public MINTR;
+    Operator public operator;
     ERC20 public ohm;
 
     /* ========== CONSTRUCTOR ========== */
@@ -46,22 +49,25 @@ contract BondCallback is Policy, Auth, IBondCallback {
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
 
-    function configureReads() external override onlyKernel {
+    function configureReads() external override {
         setAuthority(Authority(getModuleAddress("AUTHR")));
         TRSRY = OlympusTreasury(getModuleAddress("TRSRY"));
         MINTR = OlympusMinter(getModuleAddress("MINTR"));
+
+        /// Approve MINTR for burning OHM (called here so that it is re-approved on updates)
+        ohm.safeApprove(address(MINTR), type(uint256).max);
     }
 
     function requestRoles()
         external
         view
         override
-        onlyKernel
         returns (Kernel.Role[] memory roles)
     {
-        roles = new Kernel.Role[](2);
-        roles[0] = TRSRY.BANKER();
+        roles = new Kernel.Role[](3);
+        roles[0] = TRSRY.APPROVER();
         roles[1] = MINTR.MINTER();
+        roles[2] = MINTR.BURNER();
     }
 
     /* ========== WHITELISTING ========== */
@@ -73,6 +79,16 @@ contract BondCallback is Policy, Auth, IBondCallback {
         requiresAuth
     {
         approvedMarkets[teller_][id_] = true;
+
+        // Get payout tokens for market
+        (, , ERC20 payoutToken, , , ) = aggregator
+            .getAuctioneer(id_)
+            .getMarketInfoForPurchase(id_);
+
+        /// If payout token is not OHM, request approval from TRSRY for withdrawals
+        if (address(payoutToken) != address(ohm)) {
+            TRSRY.setApprovalFor(address(this), payoutToken, type(uint256).max);
+        }
     }
 
     /* ========== CALLBACK ========== */
@@ -82,7 +98,7 @@ contract BondCallback is Policy, Auth, IBondCallback {
         uint256 id_,
         uint256 inputAmount_,
         uint256 outputAmount_
-    ) external override {
+    ) external override nonReentrant {
         /// Confirm that the teller and market id are whitelisted
         if (!approvedMarkets[msg.sender][id_])
             revert Callback_MarketNotSupported(id_);
@@ -94,7 +110,7 @@ contract BondCallback is Policy, Auth, IBondCallback {
 
         // Check that quoteTokens were transferred prior to the call
         if (
-            quoteToken.balanceOf(address(this)) !=
+            quoteToken.balanceOf(address(this)) <
             priorBalances[quoteToken] + inputAmount_
         ) revert Callback_TokensNotReceived();
 
@@ -107,11 +123,17 @@ contract BondCallback is Policy, Auth, IBondCallback {
             // Transfer payoutTokens to sender
             payoutToken.safeTransfer(msg.sender, outputAmount_);
         } else if (quoteToken == ohm) {
-            /// If inverse bond (buying ohm), transfer payout tokens to sender
+            // If inverse bond (buying ohm), transfer payout tokens to sender
             TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
-        } else {
+
+            // Burn OHM received from sender
+            MINTR.burnOhm(address(this), inputAmount_);
+        } else if (payoutToken == ohm) {
             // Else (selling ohm), mint OHM to sender
             MINTR.mintOhm(msg.sender, outputAmount_);
+        } else {
+            // Revert since this callback only handles OHM bonds
+            revert Callback_MarketNotSupported(id_);
         }
 
         /// Store amounts in/out
@@ -120,6 +142,9 @@ contract BondCallback is Policy, Auth, IBondCallback {
         priorBalances[payoutToken] = payoutToken.balanceOf(address(this));
         _amountsPerMarket[id_][0] += inputAmount_;
         _amountsPerMarket[id_][1] += outputAmount_;
+
+        /// Check if the market is deployed by range operator and update capacity if so
+        operator.bondPurchase(id_, outputAmount_);
     }
 
     /* ========== WITHDRAW TOKENS ========== */
@@ -130,11 +155,15 @@ contract BondCallback is Policy, Auth, IBondCallback {
         ERC20 token;
         uint256 balance;
         uint256 len = tokens_.length;
-        for (uint256 i; i < len; i++) {
+        for (uint256 i; i < len; ) {
             token = tokens_[i];
             balance = token.balanceOf(address(this));
-            token.transfer(address(TRSRY), balance);
+            token.safeTransfer(address(TRSRY), balance);
             priorBalances[token] = token.balanceOf(address(this));
+
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -149,5 +178,14 @@ contract BondCallback is Policy, Auth, IBondCallback {
     {
         uint256[2] memory marketAmounts = _amountsPerMarket[id_];
         return (marketAmounts[0], marketAmounts[1]);
+    }
+
+    /* ========== ADMIN FUNCTIONS =========== */
+    /// @notice             Sets the operator contract for the callback to use to report bond purchases
+    /// @notice             Must be set before the callback is used
+    /// @param operator_    Address of the Operator contract
+    function setOperator(Operator operator_) external requiresAuth {
+        if (address(operator_) == address(0)) revert Callback_InvalidParams();
+        operator = operator_;
     }
 }

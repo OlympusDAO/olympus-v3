@@ -1,23 +1,20 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import {DSTest} from "ds-test/test.sol";
+import {Test} from "forge-std/Test.sol";
+import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
-import {console2 as console} from "forge-std/console2.sol";
-import {Vm} from "forge-std/Vm.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockModuleWriter} from "../mocks/MockModuleWriter.sol";
+import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 
-import {FullMath} from "../../libraries/FullMath.sol";
+import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
-import {OlympusRange} from "../../modules/RANGE.sol";
+import {OlympusRange} from "modules/RANGE.sol";
 
-contract RangeTest is DSTest {
+contract RangeTest is Test {
     using FullMath for uint256;
-
-    Vm internal immutable vm = Vm(HEVM_ADDRESS);
 
     UserFactory public userCreator;
     address internal alice;
@@ -91,8 +88,8 @@ contract RangeTest is DSTest {
 
     /// DONE
     /// [X] updateCapacity
-    ///     [X] updating capacity and lastMarketCapacity above the threshold
-    ///     [X] updating capacity and lastMarketCapacity below the threshold
+    ///     [X] updating capacity above the threshold
+    ///     [X] updating capacity below the threshold
     /// [X] updatePrices
     /// [X] regenerate
     /// [X] updateMarket
@@ -111,25 +108,13 @@ contract RangeTest is DSTest {
         assertEq(range.capacity(true), 10_000_000 * 1e18);
         assertEq(range.capacity(false), 10_000_000 * 1e18);
 
-        /// Update the capacities without breaking the thresholds or updating market capacity
-        rangeWriter.updateCapacity(true, 9_000_000 * 1e18, 0);
-        rangeWriter.updateCapacity(false, 8_000_000 * 1e18, 0);
+        /// Update the capacities without breaking the thresholds
+        rangeWriter.updateCapacity(true, 9_000_000 * 1e18);
+        rangeWriter.updateCapacity(false, 8_000_000 * 1e18);
 
-        /// Check that the capacities are updated and lastMarketCapacity is not
+        /// Check that the capacities are updated
         assertEq(range.capacity(true), 9_000_000 * 1e18);
         assertEq(range.capacity(false), 8_000_000 * 1e18);
-        assertEq(range.lastMarketCapacity(true), 0);
-        assertEq(range.lastMarketCapacity(false), 0);
-
-        /// Update the last market capacities without updating the capacities
-        rangeWriter.updateCapacity(true, 9_000_000 * 1e18, 1_000_000 * 1e18);
-        rangeWriter.updateCapacity(false, 8_000_000 * 1e18, 500_000 * 1e18);
-
-        /// Check that the capacities are not updated and lastMarketCapacity is updated
-        assertEq(range.capacity(true), 9_000_000 * 1e18);
-        assertEq(range.capacity(false), 8_000_000 * 1e18);
-        assertEq(range.lastMarketCapacity(true), 1_000_000 * 1e18);
-        assertEq(range.lastMarketCapacity(false), 500_000 * 1e18);
 
         /// Confirm the range sides are active
         assertTrue(range.active(true));
@@ -138,19 +123,17 @@ contract RangeTest is DSTest {
         /// Update the capacities to below the threshold, expect events to emit, and the wall to be inactive
         vm.expectEmit(false, false, false, true);
         emit WallDown(true, block.timestamp);
-        rangeWriter.updateCapacity(true, 10_000 * 1e18, 0);
+        rangeWriter.updateCapacity(true, 10_000 * 1e18);
 
         vm.expectEmit(false, false, false, true);
         emit WallDown(false, block.timestamp);
-        rangeWriter.updateCapacity(false, 10_000 * 1e18, 0);
+        rangeWriter.updateCapacity(false, 10_000 * 1e18);
 
-        /// Check that the sides are inactive, capacity and lastMarketCapacity are updated
+        /// Check that the sides are inactive and capacity is updated
         assertTrue(!range.active(true));
         assertTrue(!range.active(false));
         assertEq(range.capacity(true), 10_000 * 1e18);
         assertEq(range.capacity(false), 10_000 * 1e18);
-        assertEq(range.lastMarketCapacity(true), 0);
-        assertEq(range.lastMarketCapacity(false), 0);
     }
 
     function testCorrectness_updatePrices() public {
@@ -177,18 +160,16 @@ contract RangeTest is DSTest {
     }
 
     function testCorrectness_regenerate() public {
-        /// Confirm that the capacities, thresholds, and last market capacities are set to initial values
+        /// Confirm that the capacities and thresholds are set to initial values
         OlympusRange.Range memory startRange = range.range();
         assertEq(startRange.low.capacity, 10_000_000 * 1e18);
         assertEq(startRange.high.capacity, 10_000_000 * 1e18);
         assertEq(startRange.low.threshold, 100_000 * 1e18);
         assertEq(startRange.high.threshold, 100_000 * 1e18);
-        assertEq(startRange.low.lastMarketCapacity, 0);
-        assertEq(startRange.high.lastMarketCapacity, 0);
 
         /// Update capacities on both sides with lower values
-        rangeWriter.updateCapacity(true, 9_000_000 * 1e18, 1_000_000 * 1e18);
-        rangeWriter.updateCapacity(false, 8_000_000 * 1e18, 500_000 * 1e18);
+        rangeWriter.updateCapacity(true, 9_000_000 * 1e18);
+        rangeWriter.updateCapacity(false, 8_000_000 * 1e18);
 
         /// Regenerate each side of the range and confirm values are set to the regenerated values
         vm.expectEmit(false, false, false, true);
@@ -199,25 +180,21 @@ contract RangeTest is DSTest {
         emit WallUp(false, block.timestamp, 20_000_000 * 1e18);
         rangeWriter.regenerate(false, 20_000_000 * 1e18);
 
-        /// Check that the capacities, thresholds, and last market capacities are set to the regenerated values
+        /// Check that the capacities and thresholds are set to the regenerated values
         OlympusRange.Range memory endRange = range.range();
         assertEq(endRange.low.capacity, 20_000_000 * 1e18);
         assertEq(endRange.high.capacity, 20_000_000 * 1e18);
         assertEq(endRange.low.threshold, 200_000 * 1e18);
         assertEq(endRange.high.threshold, 200_000 * 1e18);
-        assertEq(endRange.low.lastMarketCapacity, 0);
-        assertEq(endRange.high.lastMarketCapacity, 0);
     }
 
     event CushionUp(bool high, uint256 timestamp, uint256 capacity);
     event CushionDown(bool high, uint256 timestamp);
 
     function testCorrectness_updateMarket() public {
-        /// Confirm that there is no market set for each side (max value) and last capacity is zero to start
+        /// Confirm that there is no market set for each side (max value) to start
         assertEq(range.market(false), type(uint256).max);
         assertEq(range.market(true), type(uint256).max);
-        assertEq(range.lastMarketCapacity(false), 0);
-        assertEq(range.lastMarketCapacity(true), 0);
 
         /// Update the low side of the range with a new market deployed
         vm.expectEmit(false, false, false, true);
@@ -226,7 +203,6 @@ contract RangeTest is DSTest {
 
         /// Check that the market is updated
         assertEq(range.market(false), 2);
-        assertEq(range.lastMarketCapacity(false), 2_000_000 * 1e18);
 
         /// Take down the market that was deployed
         vm.expectEmit(false, false, false, true);
@@ -235,7 +211,6 @@ contract RangeTest is DSTest {
 
         /// Check that the market is updated
         assertEq(range.market(false), type(uint256).max);
-        assertEq(range.lastMarketCapacity(false), 0);
 
         /// Update the high side of the range with a new market deployed
         vm.expectEmit(false, false, false, true);
@@ -244,7 +219,6 @@ contract RangeTest is DSTest {
 
         /// Check that the market is updated
         assertEq(range.market(true), 1);
-        assertEq(range.lastMarketCapacity(true), 1_000_000 * 1e18);
 
         /// Take down the market that was deployed
         vm.expectEmit(false, false, false, true);
@@ -253,7 +227,6 @@ contract RangeTest is DSTest {
 
         /// Check that the market is updated
         assertEq(range.market(true), type(uint256).max);
-        assertEq(range.lastMarketCapacity(true), 0);
     }
 
     function testCorrectness_cannotUpdateMarketWithInvalidParams() public {
@@ -369,7 +342,7 @@ contract RangeTest is DSTest {
 
         /// updateCapacity
         vm.expectRevert(err);
-        range.updateCapacity(true, 9_000_000 * 1e18, 0);
+        range.updateCapacity(true, 9_000_000 * 1e18);
 
         /// updateMarket
         vm.expectRevert(err);
@@ -397,7 +370,6 @@ contract RangeTest is DSTest {
     /// [X] price
     /// [X] spread
     /// [X] market
-    /// [X] lastMarketCapacity
 
     function testCorrectness_viewRange() public {
         /// Get range data
@@ -409,14 +381,12 @@ contract RangeTest is DSTest {
         assertEq(_range.low.capacity, 10_000_000 * 1e18);
         assertEq(_range.low.threshold, 100_000 * 1e18);
         assertEq(_range.low.market, type(uint256).max);
-        assertEq(_range.low.lastMarketCapacity, 0);
 
         assertTrue(_range.high.active);
         assertEq(_range.high.lastActive, block.timestamp);
         assertEq(_range.high.capacity, 10_000_000 * 1e18);
         assertEq(_range.high.threshold, 100_000 * 1e18);
         assertEq(_range.high.market, type(uint256).max);
-        assertEq(_range.high.lastMarketCapacity, 0);
 
         assertEq(_range.cushion.low.price, (100 * 1e18 * (1e4 - 1000)) / 1e4);
         assertEq(_range.cushion.high.price, (100 * 1e18 * (1e4 + 1000)) / 1e4);
@@ -474,18 +444,12 @@ contract RangeTest is DSTest {
         assertEq(range.market(true), _range.high.market);
     }
 
-    function testCorrectness_viewLastMarketCapacity() public {
+    function testCorrectness_viewLastActive() public {
         /// Load the sides directly from the range
         OlympusRange.Range memory _range = range.range();
 
-        /// Check that wallUp returns the same result as the struct
-        assertEq(
-            range.lastMarketCapacity(false),
-            _range.low.lastMarketCapacity
-        );
-        assertEq(
-            range.lastMarketCapacity(true),
-            _range.high.lastMarketCapacity
-        );
+        /// Check that lastActive returns the same result as the struct
+        assertEq(range.lastActive(false), _range.low.lastActive);
+        assertEq(range.lastActive(true), _range.high.lastActive);
     }
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 /// DEPS
 
@@ -302,13 +302,13 @@ contract LockingVault is Auth, Policy {
         DepositManagementModule.Lock[]
             memory locksBeforeSlash = new DepositManagementModule.Lock[](l);
 
-        for (uint256 i; i < l; i++) {
+        for (uint256 i; i < l; ++i) {
             locksBeforeSlash[i] = demam.getUserLock(owner, token, lockIds[i]);
         }
 
         demam.slashLockedTokens(owner, receiver, token, amounts, lockIds);
 
-        for (uint256 i; i < l; i++) {
+        for (uint256 i; i < l; ++i) {
             DepositManagementModule.Lock memory lockBefore = locksBeforeSlash[
                 i
             ];

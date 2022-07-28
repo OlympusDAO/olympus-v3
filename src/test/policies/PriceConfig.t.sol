@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
+import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 import {console2 as console} from "forge-std/console2.sol";
-import {Vm} from "forge-std/Vm.sol";
-import {Test} from "forge-std/Test.sol";
+
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
-import {MockPriceFeed} from "../mocks/MockPriceFeed.sol";
-import {MockAuthGiver} from "../mocks/MockAuthGiver.sol";
+import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
 
-import {Kernel, Actions} from "../../Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE.sol";
 import {OlympusAuthority} from "modules/AUTHR.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
@@ -125,6 +125,12 @@ contract PriceConfigTest is Test {
             /// Give addresses roles
             authGiver.setUserRole(guardian, uint8(1));
         }
+
+        {
+            /// Initialize timestamps on the mock price feeds
+            ohmEthPriceFeed.setTimestamp(block.timestamp);
+            reserveEthPriceFeed.setTimestamp(block.timestamp);
+        }
     }
 
     /* ========== HELPER FUNCTIONS ========== */
@@ -210,43 +216,12 @@ contract PriceConfigTest is Test {
         /// Check that the oberservations array is empty (all values initialized to 0)
         uint256 numObservations = uint256(price.numObservations());
         uint256 zero = uint256(0);
-        for (uint256 i = 0; i < numObservations; ++i) {
+        for (uint256 i; i < numObservations; ++i) {
             assertEq(price.observations(i), zero);
         }
     }
 
-    function testCorrectness_changeMovingAverageDurationShorter(uint8 nonce)
-        public
-    {
-        /// Initialize price module
-        uint256[] memory obs = getObs(nonce);
-        vm.prank(guardian);
-        priceConfig.initialize(obs, uint48(block.timestamp));
-
-        /// Calculate expected moving average based on existing observations
-        uint256 expMovingAverage;
-        uint256 length = uint256(price.numObservations());
-        for (uint256 i = length - 15; i < length; ++i) {
-            expMovingAverage += price.observations(i);
-        }
-        expMovingAverage /= 15;
-
-        /// Change from a seven day window to a five day window
-        vm.prank(guardian);
-        priceConfig.changeMovingAverageDuration(uint48(5 days));
-
-        /// Check the the module is still initialized
-        assertTrue(price.initialized());
-
-        /// Check that the window variables and moving average are updated correctly
-        assertEq(price.numObservations(), uint48(15));
-        assertEq(price.movingAverageDuration(), uint48(5 days));
-        assertEq(price.getMovingAverage(), expMovingAverage);
-    }
-
-    function testCorrectness_changeMovingAverageDurationLonger(uint8 nonce)
-        public
-    {
+    function testCorrectness_changeMovingAverageDuration(uint8 nonce) public {
         /// Initialize price module
         uint256[] memory obs = getObs(nonce);
         vm.prank(guardian);
@@ -258,6 +233,7 @@ contract PriceConfigTest is Test {
 
         /// Check the the module is not still initialized
         assertTrue(!price.initialized());
+        assertEq(price.lastObservationTime(), uint48(0));
 
         /// Re-initialize price module
         obs = getObs(nonce);

@@ -8,8 +8,8 @@ interface IBondCallback {
     /// @notice                 Market ID on Teller must be whitelisted
     /// @param id_              ID of the market
     /// @param inputAmount_     Amount of quote tokens bonded to the market
-    /// @param outputAmount_    Amount of base tokens to be paid out to the market
-    /// @dev Must transfer the output amount of base tokens back to the Teller
+    /// @param outputAmount_    Amount of payout tokens to be paid out to the market
+    /// @dev Must transfer the output amount of payout tokens back to the Teller
     /// @dev Should check that the quote tokens have been transferred to the contract in the _callback function
     function callback(
         uint256 id_,
@@ -17,10 +17,10 @@ interface IBondCallback {
         uint256 outputAmount_
     ) external;
 
-    /// @notice         Returns the number of quote tokens received and base tokens paid out for a market
+    /// @notice         Returns the number of quote tokens received and payout tokens paid out for a market
     /// @param id_      ID of the market
     /// @return in_     Amount of quote tokens bonded to the market
-    /// @return out_    Amount of base tokens paid out to the market
+    /// @return out_    Amount of payout tokens paid out to the market
     function amountsForMarket(uint256 id_)
         external
         view

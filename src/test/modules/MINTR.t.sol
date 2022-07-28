@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 import {Test} from "forge-std/Test.sol";
 import "forge-std/console2.sol";
@@ -9,8 +9,8 @@ import "test-utils/larping.sol";
 import "test-utils/sorting.sol";
 
 import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusERC20Token, IOlympusAuthority} from "../../external/OlympusERC20.sol";
-import "../../Kernel.sol";
+import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
+import "src/Kernel.sol";
 
 //import "src/Kernel.sol";
 

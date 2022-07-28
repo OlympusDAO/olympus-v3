@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 /// DEPS
 import "forge-std/Test.sol";
@@ -108,7 +108,7 @@ library arrays {
                 array[i] = element;
                 element = 0;
             }
-            i++;
+            ++i;
         }
         return array;
     }
@@ -119,7 +119,7 @@ library arrays {
         returns (int256[] memory)
     {
         uint256 l = arr.length;
-        for (uint256 i; i < l; i++) {
+        for (uint256 i; i < l; ++i) {
             arr[i] += by;
         }
         return arr;
@@ -297,7 +297,7 @@ contract LockingVaultTest is Test {
         // env
         vm.warp(rightnow.ci32u());
 
-        for (uint256 i; i < 4; i++) {
+        for (uint256 i; i < 4; ++i) {
             ohm.transferFrom.larp(
                 users[i],
                 demama,
@@ -352,7 +352,7 @@ contract LockingVaultTest is Test {
             vopom.checkpoint(0);
             vopom.checkpoint(1);
 
-            for (uint64 i; i < 4; i++) {
+            for (uint64 i; i < 4; ++i) {
                 // select token based on parity
                 address token = i % 2 == 0 ? ohma : forka;
 
@@ -659,7 +659,7 @@ contract LockingVaultTest is Test {
             // var to sum all voting power
             uint256 totalVotingPower;
 
-            for (uint256 i; i < 4; i++) {
+            for (uint256 i; i < 4; ++i) {
                 uint256 votingPower = vopom
                     .getVotingPower(
                         users[i],
@@ -744,7 +744,7 @@ contract LockingVaultTest is Test {
         } else {
             heaps(k - 1, arr);
 
-            for (uint256 i; i < k - 1; i++) {
+            for (uint256 i; i < k - 1; ++i) {
                 if (k % 2 == 0) (arr[i], arr[k - 1]) = (arr[k - 1], arr[i]);
                 else (arr[0], arr[k - 1]) = (arr[k - 1], arr[0]);
                 heaps(k - 1, arr);

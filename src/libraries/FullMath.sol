@@ -112,7 +112,7 @@ library FullMath {
     /// @param b The multiplier
     /// @param denominator The divisor
     /// @return result The 256-bit result
-    function mulDivRoundingUp(
+    function mulDivUp(
         uint256 a,
         uint256 b,
         uint256 denominator

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {Kernel, Module} from "../../Kernel.sol";
+import {Kernel, Module} from "src/Kernel.sol";
 
 /**
  * @notice Mock implementation of Price to use for testing
@@ -16,11 +16,13 @@ contract MockPrice is Module {
     uint256 public currentPrice;
     uint8 public decimals;
     bool public result;
+    uint48 public observationFrequency;
 
     error Price_CustomError();
 
-    constructor(Kernel kernel_) Module(kernel_) {
+    constructor(Kernel kernel_, uint48 observationFrequency_) Module(kernel_) {
         result = true;
+        observationFrequency = observationFrequency_;
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
@@ -53,9 +55,9 @@ contract MockPrice is Module {
         external
     {}
 
-    function changeObservationFrequency(uint48 observationFrequency_)
-        external
-    {}
+    function changeObservationFrequency(uint48 observationFrequency_) external {
+        observationFrequency = observationFrequency_;
+    }
 
     /* ========== VIEW FUNCTIONS ========== */
     function getMovingAverage() external view returns (uint256) {

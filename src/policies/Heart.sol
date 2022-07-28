@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.13;
+pragma solidity 0.8.13;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 
-import {IHeart} from "./interfaces/IHeart.sol";
-import {IOperator} from "./interfaces/IOperator.sol";
+import {IHeart} from "policies/interfaces/IHeart.sol";
+import {IOperator} from "policies/interfaces/IOperator.sol";
 
-import {OlympusPrice} from "../modules/PRICE.sol";
+import {OlympusPrice} from "modules/PRICE.sol";
 
-import {Kernel, Policy} from "../Kernel.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -25,7 +25,6 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
     /* ========== ERRORS =========== */
     error Heart_OutOfCycle();
     error Heart_BeatStopped();
-    error Heart_BeatFailed();
     error Heart_InvalidParams();
 
     /* ========== EVENTS =========== */
@@ -40,9 +39,6 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
 
     /// @notice Timestamp of the last beat (UTC, in seconds)
     uint256 public lastBeat;
-
-    /// @notice Heart beat frequency, in seconds
-    uint256 public frequency;
 
     /// @notice Reward for beating the Heart (in reward token decimals)
     uint256 public reward;
@@ -61,7 +57,6 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
     constructor(
         Kernel kernel_,
         IOperator operator_,
-        uint256 frequency_,
         ERC20 rewardToken_,
         uint256 reward_
     ) Policy(kernel_) Auth(address(kernel_), Authority(address(0))) {
@@ -69,7 +64,6 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
 
         active = true;
         lastBeat = block.timestamp;
-        frequency = frequency_;
         rewardToken = rewardToken_;
         reward = reward_;
     }
@@ -84,7 +78,6 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
         external
         view
         override
-        onlyKernel
         returns (Kernel.Role[] memory roles)
     {
         roles = new Kernel.Role[](1);
@@ -96,7 +89,7 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
     /// @inheritdoc IHeart
     function beat() external nonReentrant {
         if (!active) revert Heart_BeatStopped();
-        if (block.timestamp < lastBeat + frequency) revert Heart_OutOfCycle();
+        if (block.timestamp < lastBeat + frequency()) revert Heart_OutOfCycle();
 
         /// Update the moving average on the Price module
         PRICE.updateMovingAverage();
@@ -105,7 +98,7 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
         _operator.operate();
 
         /// Update the last beat timestamp
-        lastBeat = block.timestamp;
+        lastBeat += frequency();
 
         /// Issue reward to sender
         _issueReward(msg.sender);
@@ -119,11 +112,17 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
         rewardToken.safeTransfer(to_, reward);
     }
 
+    /* ========== VIEW FUNCTIONS ========== */
+    /// @inheritdoc IHeart
+    function frequency() public view returns (uint256) {
+        return uint256(PRICE.observationFrequency());
+    }
+
     /* ========== ADMIN FUNCTIONS ========== */
 
     /// @inheritdoc IHeart
     function resetBeat() external requiresAuth {
-        lastBeat = block.timestamp - frequency;
+        lastBeat = block.timestamp - frequency();
     }
 
     /// @inheritdoc IHeart
@@ -132,24 +131,17 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
     }
 
     /// @inheritdoc IHeart
-    function setReward(uint256 reward_) external requiresAuth {
-        reward = reward_;
-    }
-
-    /// @inheritdoc IHeart
-    function setRewardToken(ERC20 token_) external requiresAuth {
+    function setRewardTokenAndAmount(ERC20 token_, uint256 reward_)
+        external
+        requiresAuth
+    {
         rewardToken = token_;
+        reward = reward_;
         emit RewardTokenUpdated(token_);
     }
 
     /// @inheritdoc IHeart
     function withdrawUnspentRewards(ERC20 token_) external requiresAuth {
         token_.safeTransfer(msg.sender, token_.balanceOf(address(this)));
-    }
-
-    /// @inheritdoc IHeart
-    function setFrequency(uint256 frequency_) external requiresAuth {
-        if (frequency_ < 1 hours) revert Heart_InvalidParams();
-        frequency = frequency_;
     }
 }
