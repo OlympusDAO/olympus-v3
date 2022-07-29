@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.13;
 
-import {Kernel, Module, Policy} from "../../Kernel.sol";
+import { Kernel, Module, Policy } from "../../Kernel.sol";
 
 contract MockValidUpgradedModule is Module {
     Role public constant MOCKROLE = Role.wrap("MOCKY_Role");

@@ -1,33 +1,33 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.11;
 
-import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
-import {Script, console2} from "forge-std/Script.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import { AggregatorV2V3Interface } from "interfaces/AggregatorV2V3Interface.sol";
+import { Script, console2 } from "forge-std/Script.sol";
+import { ERC20 } from "solmate/tokens/ERC20.sol";
 
-import {IBondAggregator} from "interfaces/IBondAggregator.sol";
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
-import {IWETH9} from "interfaces/IWETH9.sol";
+import { IBondAggregator } from "interfaces/IBondAggregator.sol";
+import { IBondAuctioneer } from "interfaces/IBondAuctioneer.sol";
+import { IWETH9 } from "interfaces/IWETH9.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusAuthority} from "modules/AUTHR.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusInstructions} from "modules/INSTR.sol";
-import {OlympusVotes} from "modules/VOTES.sol";
+import { Kernel, Actions } from "src/Kernel.sol";
+import { OlympusAuthority } from "modules/AUTHR.sol";
+import { OlympusPrice } from "modules/PRICE.sol";
+import { OlympusRange } from "modules/RANGE.sol";
+import { OlympusTreasury } from "modules/TRSRY.sol";
+import { OlympusMinter } from "modules/MINTR.sol";
+import { OlympusInstructions } from "modules/INSTR.sol";
+import { OlympusVotes } from "modules/VOTES.sol";
 
-import {Operator} from "policies/Operator.sol";
-import {Heart} from "policies/Heart.sol";
-import {BondCallback} from "policies/BondCallback.sol";
-import {OlympusPriceConfig} from "policies/PriceConfig.sol";
-import {VoterRegistration} from "policies/VoterRegistration.sol";
-import {Governance} from "policies/Governance.sol";
-import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
-import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import { Operator } from "policies/Operator.sol";
+import { Heart } from "policies/Heart.sol";
+import { BondCallback } from "policies/BondCallback.sol";
+import { OlympusPriceConfig } from "policies/PriceConfig.sol";
+import { VoterRegistration } from "policies/VoterRegistration.sol";
+import { Governance } from "policies/Governance.sol";
+import { MockAuthGiver } from "test/mocks/MockAuthGiver.sol";
+import { MockPriceFeed } from "test/mocks/MockPriceFeed.sol";
 
-import {TransferHelper} from "libraries/TransferHelper.sol";
+import { TransferHelper } from "libraries/TransferHelper.sol";
 
 /// @notice Script to deploy and initialize the Olympus system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
@@ -74,12 +74,9 @@ contract OlympusDeploy is Script {
     //     AggregatorV2V3Interface(0x773616E4d11A78F511299002da57A0a94577F1f4); // DAI/ETH chainlink address
 
     /// Goerli testnet addresses
-    ERC20 public constant ohm =
-        ERC20(0x0595328847AF962F951a4f8F8eE9A3Bf261e4f6b); // OHM goerli address
-    ERC20 public constant reserve =
-        ERC20(0x41e38e70a36150D08A8c97aEC194321b5eB545A5); // DAI goerli address
-    ERC20 public constant rewardToken =
-        ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
+    ERC20 public constant ohm = ERC20(0x0595328847AF962F951a4f8F8eE9A3Bf261e4f6b); // OHM goerli address
+    ERC20 public constant reserve = ERC20(0x41e38e70a36150D08A8c97aEC194321b5eB545A5); // DAI goerli address
+    ERC20 public constant rewardToken = ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
 
     /// Bond system addresses
     IBondAuctioneer public constant bondAuctioneer =
@@ -193,43 +190,19 @@ contract OlympusDeploy is Script {
         /// Set role permissions
 
         /// Role 0 = Heart
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(operator),
-            operator.operate.selector
-        );
+        authGiver.setRoleCapability(uint8(0), address(operator), operator.operate.selector);
 
         /// Role 1 = Guardian
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(operator),
-            operator.operate.selector
-        );
+        authGiver.setRoleCapability(uint8(1), address(operator), operator.operate.selector);
         authGiver.setRoleCapability(
             uint8(1),
             address(operator),
             operator.setBondContracts.selector
         );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(operator),
-            operator.initialize.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(operator),
-            operator.regenerate.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.resetBeat.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.toggleBeat.selector
-        );
+        authGiver.setRoleCapability(uint8(1), address(operator), operator.initialize.selector);
+        authGiver.setRoleCapability(uint8(1), address(operator), operator.regenerate.selector);
+        authGiver.setRoleCapability(uint8(1), address(heart), heart.resetBeat.selector);
+        authGiver.setRoleCapability(uint8(1), address(heart), heart.toggleBeat.selector);
         authGiver.setRoleCapability(
             uint8(1),
             address(heart),
@@ -255,18 +228,10 @@ contract OlympusDeploy is Script {
             address(priceConfig),
             priceConfig.changeObservationFrequency.selector
         );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(callback),
-            callback.setOperator.selector
-        );
+        authGiver.setRoleCapability(uint8(1), address(callback), callback.setOperator.selector);
 
         /// Role 2 = Policy
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setSpreads.selector
-        );
+        authGiver.setRoleCapability(uint8(2), address(operator), operator.setSpreads.selector);
 
         authGiver.setRoleCapability(
             uint8(2),
@@ -289,35 +254,15 @@ contract OlympusDeploy is Script {
             address(operator),
             operator.setReserveFactor.selector
         );
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setRegenParams.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(callback),
-            callback.batchToTreasury.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(callback),
-            callback.whitelist.selector
-        );
+        authGiver.setRoleCapability(uint8(2), address(operator), operator.setRegenParams.selector);
+        authGiver.setRoleCapability(uint8(2), address(callback), callback.batchToTreasury.selector);
+        authGiver.setRoleCapability(uint8(2), address(callback), callback.whitelist.selector);
 
         /// Role 3 = Operator
-        authGiver.setRoleCapability(
-            uint8(3),
-            address(callback),
-            callback.whitelist.selector
-        );
+        authGiver.setRoleCapability(uint8(3), address(callback), callback.whitelist.selector);
 
         /// Role 4 = Callback
-        authGiver.setRoleCapability(
-            uint8(4),
-            address(operator),
-            operator.bondPurchase.selector
-        );
+        authGiver.setRoleCapability(uint8(4), address(operator), operator.bondPurchase.selector);
 
         /// Give roles to users
         authGiver.setUserRole(address(heart), uint8(0));
@@ -373,15 +318,9 @@ contract DependencyDeploy is Script {
 
         // Deploy the price feeds
         ohmEthPriceFeed = new MockPriceFeed();
-        console2.log(
-            "OHM-ETH Price Feed deployed to:",
-            address(ohmEthPriceFeed)
-        );
+        console2.log("OHM-ETH Price Feed deployed to:", address(ohmEthPriceFeed));
         reserveEthPriceFeed = new MockPriceFeed();
-        console2.log(
-            "RESERVE-ETH Price Feed deployed to:",
-            address(reserveEthPriceFeed)
-        );
+        console2.log("RESERVE-ETH Price Feed deployed to:", address(reserveEthPriceFeed));
 
         // Set the decimals of the price feeds
         ohmEthPriceFeed.setDecimals(18);

@@ -2,13 +2,13 @@
 
 pragma solidity >=0.8.0;
 
-import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "test-utils/UserFactory.sol";
+import { Test } from "forge-std/Test.sol";
+import { console2 } from "forge-std/console2.sol";
+import { UserFactory } from "test-utils/UserFactory.sol";
 
-import {Kernel, Module, Instruction, Actions} from "../../Kernel.sol";
+import { Kernel, Module, Instruction, Actions } from "../../Kernel.sol";
 import "modules/VOTES.sol";
-import {MockModuleWriter} from "../mocks/MockModuleWriter.sol";
+import { MockModuleWriter } from "../mocks/MockModuleWriter.sol";
 
 contract VotesTest is Test {
     Kernel internal kernel;

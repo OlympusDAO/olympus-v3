@@ -96,22 +96,21 @@ abstract contract Module is KernelAdapter {
     function INIT() external virtual onlyKernel {}
 }
 
-abstract contract Policy is KernelAdapter  {
-
+abstract contract Policy is KernelAdapter {
     bool public isActive;
 
     constructor(Kernel kernel_) KernelAdapter(kernel_) {}
 
     modifier onlyRole(bytes32 role_) {
         Role role = toRole(role_);
-        if(!kernel.hasRole(msg.sender, role))
-            revert Policy_OnlyRole(role);
+        if (!kernel.hasRole(msg.sender, role)) revert Policy_OnlyRole(role);
         _;
     }
 
-    function configureDependencies() external virtual returns (Keycode[] memory dependencies) {}
-
-    function requestPermissions() external view virtual returns (Permissions[] memory requests) {}
+    /// @notice Function to let kernel grant or revoke active status
+    function setActiveStatus(bool activate_) external onlyKernel {
+        isActive = activate_;
+    }
 
     function getModuleAddress(Keycode keycode_) internal view returns (address) {
         address moduleForKeycode = address(kernel.getModuleForKeycode(keycode_));
@@ -119,10 +118,9 @@ abstract contract Policy is KernelAdapter  {
         return moduleForKeycode;
     }
 
-    /// @notice Function to let kernel grant or revoke active status
-    function setActiveStatus(bool activate_) external onlyKernel {
-        isActive = activate_;
-    }
+    function configureDependencies() external virtual returns (Keycode[] memory dependencies) {}
+
+    function requestPermissions() external view virtual returns (Permissions[] memory requests) {}
 }
 
 contract Kernel {
@@ -136,7 +134,7 @@ contract Kernel {
     Keycode[] public allKeycodes;
     mapping(Keycode => Module) public getModuleForKeycode; // get contract for module keycode
     mapping(Module => Keycode) public getKeycodeForModule; // get module keycode for contract
-    
+
     // Module dependents data. Manages module dependencies for policies
     mapping(Keycode => Policy[]) public moduleDependents;
     mapping(Keycode => mapping(Policy => uint256)) public getDependentIndex;

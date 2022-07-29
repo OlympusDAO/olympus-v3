@@ -8,26 +8,10 @@ pragma solidity >=0.7.5;
 interface IOlympusAuthority {
     /* ========== EVENTS ========== */
 
-    event GovernorPushed(
-        address indexed from,
-        address indexed to,
-        bool _effectiveImmediately
-    );
-    event GuardianPushed(
-        address indexed from,
-        address indexed to,
-        bool _effectiveImmediately
-    );
-    event PolicyPushed(
-        address indexed from,
-        address indexed to,
-        bool _effectiveImmediately
-    );
-    event VaultPushed(
-        address indexed from,
-        address indexed to,
-        bool _effectiveImmediately
-    );
+    event GovernorPushed(address indexed from, address indexed to, bool _effectiveImmediately);
+    event GuardianPushed(address indexed from, address indexed to, bool _effectiveImmediately);
+    event PolicyPushed(address indexed from, address indexed to, bool _effectiveImmediately);
+    event VaultPushed(address indexed from, address indexed to, bool _effectiveImmediately);
 
     event GovernorPulled(address indexed from, address indexed to);
     event GuardianPulled(address indexed from, address indexed to);
@@ -89,10 +73,7 @@ abstract contract OlympusAccessControlled {
 
     /* ========== GOV ONLY ========== */
 
-    function setAuthority(IOlympusAuthority _newAuthority)
-        external
-        onlyGovernor
-    {
+    function setAuthority(IOlympusAuthority _newAuthority) external onlyGovernor {
         authority = _newAuthority;
         emit AuthorityUpdated(_newAuthority);
     }
@@ -198,11 +179,7 @@ library ECDSA {
      * this is by receiving a hash of the original message (which may otherwise
      * be too long), and then calling {toEthSignedMessageHash} on it.
      */
-    function recover(bytes32 hash, bytes memory signature)
-        internal
-        pure
-        returns (address)
-    {
+    function recover(bytes32 hash, bytes memory signature) internal pure returns (address) {
         (address recovered, RecoverError error) = tryRecover(hash, signature);
         _throwError(error);
         return recovered;
@@ -223,10 +200,7 @@ library ECDSA {
         bytes32 s;
         uint8 v;
         assembly {
-            s := and(
-                vs,
-                0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-            )
+            s := and(vs, 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
             v := add(shr(255, vs), 27)
         }
         return tryRecover(hash, v, r, s);
@@ -268,10 +242,7 @@ library ECDSA {
         // with 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141 - s1 and flip v from 27 to 28 or
         // vice versa. If your library also generates signatures with 0/1 for v instead 27/28, add 27 to v to accept
         // these malleable signatures as well.
-        if (
-            uint256(s) >
-            0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
-        ) {
+        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
             return (address(0), RecoverError.InvalidSignatureS);
         }
         if (v != 27 && v != 28) {
@@ -310,17 +281,10 @@ library ECDSA {
      *
      * See {recover}.
      */
-    function toEthSignedMessageHash(bytes32 hash)
-        internal
-        pure
-        returns (bytes32)
-    {
+    function toEthSignedMessageHash(bytes32 hash) internal pure returns (bytes32) {
         // 32 is the length in bytes of hash,
         // enforced by the type signature above
-        return
-            keccak256(
-                abi.encodePacked("\x19Ethereum Signed Message:\n32", hash)
-            );
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash));
     }
 
     /**
@@ -337,10 +301,7 @@ library ECDSA {
         pure
         returns (bytes32)
     {
-        return
-            keccak256(
-                abi.encodePacked("\x19\x01", domainSeparator, structHash)
-            );
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
     }
 }
 
@@ -404,11 +365,7 @@ abstract contract EIP712 {
         _HASHED_NAME = hashedName;
         _HASHED_VERSION = hashedVersion;
         _CACHED_CHAIN_ID = chainID;
-        _CACHED_DOMAIN_SEPARATOR = _buildDomainSeparator(
-            typeHash,
-            hashedName,
-            hashedVersion
-        );
+        _CACHED_DOMAIN_SEPARATOR = _buildDomainSeparator(typeHash, hashedName, hashedVersion);
         _TYPE_HASH = typeHash;
     }
 
@@ -424,12 +381,7 @@ abstract contract EIP712 {
         if (chainID == _CACHED_CHAIN_ID) {
             return _CACHED_DOMAIN_SEPARATOR;
         } else {
-            return
-                _buildDomainSeparator(
-                    _TYPE_HASH,
-                    _HASHED_NAME,
-                    _HASHED_VERSION
-                );
+            return _buildDomainSeparator(_TYPE_HASH, _HASHED_NAME, _HASHED_VERSION);
         }
     }
 
@@ -443,16 +395,7 @@ abstract contract EIP712 {
             chainID := chainid()
         }
 
-        return
-            keccak256(
-                abi.encode(
-                    typeHash,
-                    nameHash,
-                    versionHash,
-                    chainID,
-                    address(this)
-                )
-            );
+        return keccak256(abi.encode(typeHash, nameHash, versionHash, chainID, address(this)));
     }
 
     /**
@@ -470,12 +413,7 @@ abstract contract EIP712 {
      * address signer = ECDSA.recover(digest, signature);
      * ```
      */
-    function _hashTypedDataV4(bytes32 structHash)
-        internal
-        view
-        virtual
-        returns (bytes32)
-    {
+    function _hashTypedDataV4(bytes32 structHash) internal view virtual returns (bytes32) {
         return ECDSA.toTypedDataHash(_domainSeparatorV4(), structHash);
     }
 }
@@ -558,9 +496,7 @@ interface IERC20 {
      *
      * Emits a {Transfer} event.
      */
-    function transfer(address recipient, uint256 amount)
-        external
-        returns (bool);
+    function transfer(address recipient, uint256 amount) external returns (bool);
 
     /**
      * @dev Returns the remaining number of tokens that `spender` will be
@@ -569,10 +505,7 @@ interface IERC20 {
      *
      * This value changes when {approve} or {transferFrom} are called.
      */
-    function allowance(address owner, address spender)
-        external
-        view
-        returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
 
     /**
      * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
@@ -617,11 +550,7 @@ interface IERC20 {
      * @dev Emitted when the allowance of a `spender` for an `owner` is set by
      * a call to {approve}. `value` is the new allowance.
      */
-    event Approval(
-        address indexed owner,
-        address indexed spender,
-        uint256 value
-    );
+    event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
 // File: interfaces/IOHM.sol
@@ -733,8 +662,7 @@ abstract contract ERC20 is IERC20 {
     using SafeMath for uint256;
 
     // TODO comment actual hash value.
-    bytes32 private constant ERC20TOKEN_ERC1820_INTERFACE_ID =
-        keccak256("ERC20Token");
+    bytes32 private constant ERC20TOKEN_ERC1820_INTERFACE_ID = keccak256("ERC20Token");
 
     mapping(address => uint256) internal _balances;
 
@@ -774,22 +702,11 @@ abstract contract ERC20 is IERC20 {
         return _totalSupply;
     }
 
-    function balanceOf(address account)
-        public
-        view
-        virtual
-        override
-        returns (uint256)
-    {
+    function balanceOf(address account) public view virtual override returns (uint256) {
         return _balances[account];
     }
 
-    function transfer(address recipient, uint256 amount)
-        public
-        virtual
-        override
-        returns (bool)
-    {
+    function transfer(address recipient, uint256 amount) public virtual override returns (bool) {
         _transfer(msg.sender, recipient, amount);
         return true;
     }
@@ -804,12 +721,7 @@ abstract contract ERC20 is IERC20 {
         return _allowances[owner][spender];
     }
 
-    function approve(address spender, uint256 amount)
-        public
-        virtual
-        override
-        returns (bool)
-    {
+    function approve(address spender, uint256 amount) public virtual override returns (bool) {
         _approve(msg.sender, spender, amount);
         return true;
     }
@@ -823,24 +735,13 @@ abstract contract ERC20 is IERC20 {
         _approve(
             sender,
             msg.sender,
-            _allowances[sender][msg.sender].sub(
-                amount,
-                "ERC20: transfer amount exceeds allowance"
-            )
+            _allowances[sender][msg.sender].sub(amount, "ERC20: transfer amount exceeds allowance")
         );
         return true;
     }
 
-    function increaseAllowance(address spender, uint256 addedValue)
-        public
-        virtual
-        returns (bool)
-    {
-        _approve(
-            msg.sender,
-            spender,
-            _allowances[msg.sender][spender].add(addedValue)
-        );
+    function increaseAllowance(address spender, uint256 addedValue) public virtual returns (bool) {
+        _approve(msg.sender, spender, _allowances[msg.sender][spender].add(addedValue));
         return true;
     }
 
@@ -870,10 +771,7 @@ abstract contract ERC20 is IERC20 {
 
         _beforeTokenTransfer(sender, recipient, amount);
 
-        _balances[sender] = _balances[sender].sub(
-            amount,
-            "ERC20: transfer amount exceeds balance"
-        );
+        _balances[sender] = _balances[sender].sub(amount, "ERC20: transfer amount exceeds balance");
         _balances[recipient] = _balances[recipient].add(amount);
         emit Transfer(sender, recipient, amount);
     }
@@ -891,10 +789,7 @@ abstract contract ERC20 is IERC20 {
 
         _beforeTokenTransfer(account, address(0), amount);
 
-        _balances[account] = _balances[account].sub(
-            amount,
-            "ERC20: burn amount exceeds balance"
-        );
+        _balances[account] = _balances[account].sub(amount, "ERC20: burn amount exceeds balance");
         _totalSupply = _totalSupply.sub(amount);
         emit Transfer(account, address(0), amount);
     }
@@ -963,14 +858,7 @@ abstract contract ERC20Permit is ERC20, IERC20Permit, EIP712 {
         require(block.timestamp <= deadline, "ERC20Permit: expired deadline");
 
         bytes32 structHash = keccak256(
-            abi.encode(
-                _PERMIT_TYPEHASH,
-                owner,
-                spender,
-                value,
-                _useNonce(owner),
-                deadline
-            )
+            abi.encode(_PERMIT_TYPEHASH, owner, spender, value, _useNonce(owner), deadline)
         );
 
         bytes32 hash = _hashTypedDataV4(structHash);
@@ -984,13 +872,7 @@ abstract contract ERC20Permit is ERC20, IERC20Permit, EIP712 {
     /**
      * @dev See {IERC20Permit-nonces}.
      */
-    function nonces(address owner)
-        public
-        view
-        virtual
-        override
-        returns (uint256)
-    {
+    function nonces(address owner) public view virtual override returns (uint256) {
         return _nonces[owner].current();
     }
 
@@ -1007,11 +889,7 @@ abstract contract ERC20Permit is ERC20, IERC20Permit, EIP712 {
      *
      * _Available since v4.1._
      */
-    function _useNonce(address owner)
-        internal
-        virtual
-        returns (uint256 current)
-    {
+    function _useNonce(address owner) internal virtual returns (uint256 current) {
         Counters.Counter storage nonce = _nonces[owner];
         current = nonce.current();
         nonce.increment();
@@ -1029,11 +907,7 @@ contract OlympusERC20Token is ERC20Permit, IOHM, OlympusAccessControlled {
         OlympusAccessControlled(IOlympusAuthority(_authority))
     {}
 
-    function mint(address account_, uint256 amount_)
-        external
-        override
-        onlyVault
-    {
+    function mint(address account_, uint256 amount_) external override onlyVault {
         _mint(account_, amount_);
     }
 

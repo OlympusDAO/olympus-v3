@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.11;
 
-import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
-import {Script, console2} from "forge-std/Script.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import { AggregatorV2V3Interface } from "interfaces/AggregatorV2V3Interface.sol";
+import { Script, console2 } from "forge-std/Script.sol";
+import { ERC20 } from "solmate/tokens/ERC20.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
-import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import { Kernel, Actions } from "src/Kernel.sol";
+import { OlympusPrice } from "modules/PRICE.sol";
+import { MockPriceFeed } from "test/mocks/MockPriceFeed.sol";
 
-import {TransferHelper} from "libraries/TransferHelper.sol";
+import { TransferHelper } from "libraries/TransferHelper.sol";
 
 /// @notice Script to deploy an upgraded version of the PRICE module in the Olympus Bophades system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
@@ -48,8 +48,7 @@ contract OlympusPriceDeploy is Script {
         AggregatorV2V3Interface(0xdC8E4eD326cFb730a759312B6b1727C6Ef9ca233); // DAI/ETH chainlink address
 
     /// Kernel
-    Kernel public constant kernel =
-        Kernel(0x64665B0429B21274d938Ed345e4520D1f5ABb9e7);
+    Kernel public constant kernel = Kernel(0x64665B0429B21274d938Ed345e4520D1f5ABb9e7);
 
     function deploy() external {
         vm.startBroadcast();
@@ -81,15 +80,9 @@ contract DependencyDeploy is Script {
 
         // Deploy the price feeds
         ohmEthPriceFeed = new MockPriceFeed();
-        console2.log(
-            "OHM-ETH Price Feed deployed to:",
-            address(ohmEthPriceFeed)
-        );
+        console2.log("OHM-ETH Price Feed deployed to:", address(ohmEthPriceFeed));
         reserveEthPriceFeed = new MockPriceFeed();
-        console2.log(
-            "RESERVE-ETH Price Feed deployed to:",
-            address(reserveEthPriceFeed)
-        );
+        console2.log("RESERVE-ETH Price Feed deployed to:", address(reserveEthPriceFeed));
 
         // Set the decimals of the price feeds
         ohmEthPriceFeed.setDecimals(18);

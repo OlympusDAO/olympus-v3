@@ -4,9 +4,9 @@
 
 pragma solidity 0.8.13;
 
-import {Kernel, Policy} from "src/Kernel.sol";
-import {OlympusInstructions, Actions, Instruction} from "modules/INSTR.sol";
+import {OlympusInstructions} from "modules/INSTR.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
+import "src/Kernel.sol";
 
 // proposing
 error NotEnoughVotesToPropose();
@@ -56,21 +56,44 @@ contract Governance is Policy {
 
     constructor(Kernel kernel_) Policy(kernel_) {}
 
-    function configureReads() external override {
-        INSTR = OlympusInstructions(getModuleAddress("INSTR"));
-        VOTES = OlympusVotes(getModuleAddress("VOTES"));
+    function configureReads() external override {}
+
+    function configureDependencies()
+        external
+        override
+        returns (Keycode[] memory dependencies)
+    {
+        dependencies = new Keycode[](2);
+        dependencies[0] = toKeycode("INSTR");
+        dependencies[1] = toKeycode("VOTES");
+
+        INSTR = OlympusInstructions(getModuleAddress(dependencies[0]));
+        VOTES = OlympusVotes(getModuleAddress(dependencies[1]));
     }
 
     // The Governor Policy is also the Kernel's Executor.
-    function requestRoles()
+
+    //function requestRoles()
+    //    external
+    //    view
+    //    override
+    //    returns (Role[] memory roles)
+    //{
+    //    roles = new Role[](2);
+    //    roles[0] = INSTR.GOVERNOR();
+    //    roles[1] = VOTES.GOVERNOR();
+    //}
+
+    function requestPermissions()
         external
         view
         override
-        returns (Role[] memory roles)
+        onlyKernel
+        returns (Permissions[] memory requests)
     {
-        roles = new Role[](2);
-        roles[0] = INSTR.GOVERNOR();
-        roles[1] = VOTES.GOVERNOR();
+        requests = new Permissions[](4);
+        requests[0] = Permissions(INSTR.KEYCODE(), INSTR.store.selector);
+        requests[1] = Permissions(VOTES.KEYCODE(), VOTES.transferFrom.selector);
     }
 
     /////////////////////////////////////////////////////////////////////////////////

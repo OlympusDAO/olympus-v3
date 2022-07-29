@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import { ERC20 } from "solmate/tokens/ERC20.sol";
 
 interface IBondCallback {
     /// @notice                 Send payout tokens to Teller while allowing market owners to perform custom logic on received or paid out tokens
@@ -21,10 +21,7 @@ interface IBondCallback {
     /// @param id_      ID of the market
     /// @return in_     Amount of quote tokens bonded to the market
     /// @return out_    Amount of payout tokens paid out to the market
-    function amountsForMarket(uint256 id_)
-        external
-        view
-        returns (uint256 in_, uint256 out_);
+    function amountsForMarket(uint256 id_) external view returns (uint256 in_, uint256 out_);
 
     /// @notice         Whitelist a teller and market ID combination
     /// @notice         Must be callback owner

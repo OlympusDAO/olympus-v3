@@ -1,34 +1,34 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "test-utils/UserFactory.sol";
+import { Test } from "forge-std/Test.sol";
+import { console2 } from "forge-std/console2.sol";
+import { UserFactory } from "test-utils/UserFactory.sol";
 
-import {BondFixedTermCDA} from "test/lib/bonds/BondFixedTermCDA.sol";
-import {BondAggregator} from "test/lib/bonds/BondAggregator.sol";
-import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
-import {IBondAuctioneer as LibAuctioneer} from "test/lib/bonds/interfaces/IBondAuctioneer.sol";
-import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
+import { BondFixedTermCDA } from "test/lib/bonds/BondFixedTermCDA.sol";
+import { BondAggregator } from "test/lib/bonds/BondAggregator.sol";
+import { BondFixedTermTeller } from "test/lib/bonds/BondFixedTermTeller.sol";
+import { IBondAuctioneer as LibAuctioneer } from "test/lib/bonds/interfaces/IBondAuctioneer.sol";
+import { RolesAuthority, Authority as SolmateAuthority } from "solmate/auth/authorities/RolesAuthority.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockPrice} from "test/mocks/MockPrice.sol";
-import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
-import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
+import { MockERC20, ERC20 } from "solmate/test/utils/mocks/MockERC20.sol";
+import { MockPrice } from "test/mocks/MockPrice.sol";
+import { MockAuthGiver } from "test/mocks/MockAuthGiver.sol";
+import { MockModuleWriter } from "test/mocks/MockModuleWriter.sol";
 
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
-import {IBondAggregator} from "interfaces/IBondAggregator.sol";
+import { IBondAuctioneer } from "interfaces/IBondAuctioneer.sol";
+import { IBondAggregator } from "interfaces/IBondAggregator.sol";
 
-import {FullMath} from "libraries/FullMath.sol";
+import { FullMath } from "libraries/FullMath.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter, OHM} from "modules/MINTR.sol";
-import {OlympusAuthority} from "modules/AUTHR.sol";
+import { Kernel, Actions } from "src/Kernel.sol";
+import { OlympusRange } from "modules/RANGE.sol";
+import { OlympusTreasury } from "modules/TRSRY.sol";
+import { OlympusMinter, OHM } from "modules/MINTR.sol";
+import { OlympusAuthority } from "modules/AUTHR.sol";
 
-import {Operator} from "policies/Operator.sol";
-import {BondCallback} from "policies/BondCallback.sol";
+import { Operator } from "policies/Operator.sol";
+import { BondCallback } from "policies/BondCallback.sol";
 
 contract MockOhm is ERC20 {
     constructor(
@@ -95,18 +95,8 @@ contract BondCallbackTest is Test {
 
             /// Deploy the bond system
             aggregator = new BondAggregator(guardian, auth);
-            teller = new BondFixedTermTeller(
-                guardian,
-                aggregator,
-                guardian,
-                auth
-            );
-            auctioneer = new BondFixedTermCDA(
-                teller,
-                aggregator,
-                guardian,
-                auth
-            );
+            teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
+            auctioneer = new BondFixedTermCDA(teller, aggregator, guardian, auth);
 
             /// Register auctioneer on the bond system
             vm.prank(guardian);
@@ -143,11 +133,7 @@ contract BondCallbackTest is Test {
 
         {
             /// Deploy bond callback
-            callback = new BondCallback(
-                kernel,
-                IBondAggregator(address(aggregator)),
-                ohm
-            );
+            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
             /// Deploy operator
             operator = new Operator(
@@ -200,38 +186,18 @@ contract BondCallbackTest is Test {
             /// Set role permissions
 
             /// Role 1 = Guardian
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(operator),
-                operator.operate.selector
-            );
+            authGiver.setRoleCapability(uint8(1), address(operator), operator.operate.selector);
             authGiver.setRoleCapability(
                 uint8(1),
                 address(operator),
                 operator.setBondContracts.selector
             );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(operator),
-                operator.initialize.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(operator),
-                operator.regenerate.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(callback),
-                callback.setOperator.selector
-            );
+            authGiver.setRoleCapability(uint8(1), address(operator), operator.initialize.selector);
+            authGiver.setRoleCapability(uint8(1), address(operator), operator.regenerate.selector);
+            authGiver.setRoleCapability(uint8(1), address(callback), callback.setOperator.selector);
 
             /// Role 2 = Policy
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(operator),
-                operator.setSpreads.selector
-            );
+            authGiver.setRoleCapability(uint8(2), address(operator), operator.setSpreads.selector);
 
             authGiver.setRoleCapability(
                 uint8(2),
@@ -264,18 +230,10 @@ contract BondCallbackTest is Test {
                 address(callback),
                 callback.batchToTreasury.selector
             );
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(callback),
-                callback.whitelist.selector
-            );
+            authGiver.setRoleCapability(uint8(2), address(callback), callback.whitelist.selector);
 
             /// Role 3 = Operator
-            authGiver.setRoleCapability(
-                uint8(3),
-                address(callback),
-                callback.whitelist.selector
-            );
+            authGiver.setRoleCapability(uint8(3), address(callback), callback.whitelist.selector);
 
             /// Role 4 = Callback
             authGiver.setRoleCapability(
@@ -352,8 +310,7 @@ contract BondCallbackTest is Test {
         uint8 _payoutDecimals = payoutToken.decimals();
         uint8 _quoteDecimals = quoteToken.decimals();
 
-        uint256 capacity = 100_000 *
-            10**uint8(int8(_payoutDecimals) - _payoutPriceDecimals);
+        uint256 capacity = 100_000 * 10**uint8(int8(_payoutDecimals) - _payoutPriceDecimals);
 
         int8 scaleAdjustment = int8(_payoutDecimals) -
             int8(_quoteDecimals) -
@@ -487,9 +444,7 @@ contract BondCallbackTest is Test {
         /// Ensure that the callback function has received at least the correct number of tokens as being claimed
 
         /// Case 1: Zero tokens sent in
-        bytes memory err = abi.encodeWithSignature(
-            "Callback_TokensNotReceived()"
-        );
+        bytes memory err = abi.encodeWithSignature("Callback_TokensNotReceived()");
         vm.prank(address(teller));
         vm.expectRevert(err);
         callback.callback(regBond, 10, 10);
@@ -664,10 +619,7 @@ contract BondCallbackTest is Test {
         /// Try with both tokens at once now
 
         /// Store updated treasury balances
-        startBalances = [
-            reserve.balanceOf(address(treasury)),
-            other.balanceOf(address(treasury))
-        ];
+        startBalances = [reserve.balanceOf(address(treasury)), other.balanceOf(address(treasury))];
 
         /// Send other tokens and reserve tokens to callback to mimic bond purchase
         reserve.mint(address(callback), 30);
@@ -711,8 +663,7 @@ contract BondCallbackTest is Test {
         reserve.mint(address(callback), 10);
 
         // Check that the amounts for market doesn't reflect tokens transferred in tokens
-        (uint256 oldQuoteAmount, uint256 oldPayoutAmount) = callback
-            .amountsForMarket(regBond);
+        (uint256 oldQuoteAmount, uint256 oldPayoutAmount) = callback.amountsForMarket(regBond);
         assertEq(oldQuoteAmount, 0);
         assertEq(oldPayoutAmount, 0);
 
@@ -721,8 +672,7 @@ contract BondCallbackTest is Test {
         callback.callback(regBond, 10, 10);
 
         // Check amounts are updated after callback
-        (uint256 newQuoteAmount, uint256 newPayoutAmount) = callback
-            .amountsForMarket(regBond);
+        (uint256 newQuoteAmount, uint256 newPayoutAmount) = callback.amountsForMarket(regBond);
         assertEq(newQuoteAmount, 10);
         assertEq(newPayoutAmount, 10);
     }

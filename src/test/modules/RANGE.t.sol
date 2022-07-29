@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "test-utils/UserFactory.sol";
+import { Test } from "forge-std/Test.sol";
+import { console2 } from "forge-std/console2.sol";
+import { UserFactory } from "test-utils/UserFactory.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
+import { MockERC20, ERC20 } from "solmate/test/utils/mocks/MockERC20.sol";
+import { MockModuleWriter } from "test/mocks/MockModuleWriter.sol";
 
-import {FullMath} from "libraries/FullMath.sol";
+import { FullMath } from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
-import {OlympusRange} from "modules/RANGE.sol";
+import { OlympusRange } from "modules/RANGE.sol";
 
 contract RangeTest is Test {
     using FullMath for uint256;
@@ -328,13 +328,9 @@ contract RangeTest is Test {
         rangeWriter.setThresholdFactor(uint256(50));
     }
 
-    function testCorrectness_onlyPermittedPoliciesCanCallGatedFunctions()
-        public
-    {
+    function testCorrectness_onlyPermittedPoliciesCanCallGatedFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodeWithSelector(
-            Module_NotAuthorized.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Module_NotAuthorized.selector);
 
         /// updatePrices
         vm.expectRevert(err);

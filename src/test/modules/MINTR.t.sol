@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.13;
 
-import {Test} from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 import "forge-std/console2.sol";
 import "solmate/tokens/ERC20.sol";
 import "test-utils/UserFactory.sol";
 import "test-utils/larping.sol";
 import "test-utils/sorting.sol";
 
-import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
+import { OlympusMinter } from "modules/MINTR.sol";
+import { OlympusERC20Token, IOlympusAuthority } from "src/external/OlympusERC20.sol";
 import "src/Kernel.sol";
 
 //import "src/Kernel.sol";
@@ -97,25 +97,19 @@ contract MINTRTest is Test {
         assertEq(ohm.balanceOf(to_), amount_);
     }
 
-    function testFail_ApprovedAddressCannotMintToZeroAddress(uint256 amount_)
-        public
-    {
+    function testFail_ApprovedAddressCannotMintToZeroAddress(uint256 amount_) public {
         // This contract is approved
         MINTR.mintOhm(address(0x0), amount_);
     }
 
     // TODO use vm.expectRevert() instead. Did not work for me.
-    function testFail_UnapprovedAddressMintsOhm(address to_, uint256 amount_)
-        public
-    {
+    function testFail_UnapprovedAddressMintsOhm(address to_, uint256 amount_) public {
         // Have user try to mint
         vm.prank(usrs[0]);
         MINTR.mintOhm(to_, amount_);
     }
 
-    function test_ApprovedAddressBurnsOhm(address from_, uint256 amount_)
-        public
-    {
+    function test_ApprovedAddressBurnsOhm(address from_, uint256 amount_) public {
         // Will test burn not working against zero-address separately
         vm.assume(from_ != address(0x0));
 
@@ -129,9 +123,7 @@ contract MINTRTest is Test {
         assertEq(ohm.balanceOf(from_), 0);
     }
 
-    function testFail_ApprovedAddressCannotBurnFromZeroAddress(uint256 amount_)
-        public
-    {
+    function testFail_ApprovedAddressCannotBurnFromZeroAddress(uint256 amount_) public {
         // This contract is approved
         MINTR.burnOhm(address(0x0), amount_);
     }

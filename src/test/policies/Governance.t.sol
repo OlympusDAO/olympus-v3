@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "test-utils/UserFactory.sol";
+import { Test } from "forge-std/Test.sol";
+import { console2 } from "forge-std/console2.sol";
+import { UserFactory } from "test-utils/UserFactory.sol";
 
-import {Kernel, Instruction, Actions} from "src/Kernel.sol";
+import { Kernel, Instruction, Actions } from "src/Kernel.sol";
 
-import {OlympusInstructions} from "modules/INSTR.sol";
-import {OlympusVotes} from "modules/VOTES.sol";
-import {OlympusAuthority} from "modules/AUTHR.sol";
+import { OlympusInstructions } from "modules/INSTR.sol";
+import { OlympusVotes } from "modules/VOTES.sol";
+import { OlympusAuthority } from "modules/AUTHR.sol";
 
-import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
+import { MockAuthGiver } from "test/mocks/MockAuthGiver.sol";
 import "policies/Governance.sol";
-import {VoterRegistration} from "policies/VoterRegistration.sol";
+import { VoterRegistration } from "policies/VoterRegistration.sol";
 
 contract GovernanceTest is Test {
     UserFactory public userCreator;
@@ -39,18 +39,9 @@ contract GovernanceTest is Test {
 
     event InstructionsStored(uint256);
     event ProposalSubmitted(uint256 instructionsId);
-    event ProposalEndorsed(
-        uint256 instructionsId,
-        address voter,
-        uint256 amount
-    );
+    event ProposalEndorsed(uint256 instructionsId, address voter, uint256 amount);
     event ProposalActivated(uint256 instructionsId, uint256 timestamp);
-    event WalletVoted(
-        uint256 instructionsId,
-        address voter,
-        bool for_,
-        uint256 userVotes
-    );
+    event WalletVoted(uint256 instructionsId, address voter, bool for_, uint256 userVotes);
     event ProposalExecuted(uint256 instructionsId);
     event Transfer(address indexed, address indexed, uint256);
 
@@ -139,10 +130,7 @@ contract GovernanceTest is Test {
     function _submitProposal() internal {
         // create valid instructions
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(newProposedPolicy)
-        );
+        instructions_[0] = Instruction(Actions.ApprovePolicy, address(newProposedPolicy));
 
         // submit proposal as voter1 (1/15 votes)
         vm.prank(voter1);
@@ -151,10 +139,7 @@ contract GovernanceTest is Test {
 
     function testRevert_NotEnoughVotesToPropose() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(governance)
-        );
+        instructions_[0] = Instruction(Actions.ApprovePolicy, address(governance));
 
         vm.expectRevert(NotEnoughVotesToPropose.selector);
 
@@ -165,10 +150,7 @@ contract GovernanceTest is Test {
 
     function testEvent_ProposalSubmitted() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(governance)
-        );
+        instructions_[0] = Instruction(Actions.ApprovePolicy, address(governance));
 
         vm.expectEmit(true, true, true, true);
         emit ProposalSubmitted(1);
@@ -179,10 +161,7 @@ contract GovernanceTest is Test {
 
     function testCorrectness_SuccessfullySubmitProposal() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(governance)
-        );
+        instructions_[0] = Instruction(Actions.ApprovePolicy, address(governance));
 
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
@@ -355,8 +334,7 @@ contract GovernanceTest is Test {
         governance.activateProposal(1);
 
         // check that the active proposal data is correct
-        ActivatedProposal memory activeProposal = governance
-            .getActiveProposal();
+        ActivatedProposal memory activeProposal = governance.getActiveProposal();
 
         assertEq(activeProposal.instructionsId, 1);
         assertEq(activeProposal.activationTimestamp, block.timestamp);
@@ -517,8 +495,7 @@ contract GovernanceTest is Test {
         governance.executeProposal();
 
         // check that the proposal is no longer active
-        ActivatedProposal memory activeProposal = governance
-            .getActiveProposal();
+        ActivatedProposal memory activeProposal = governance.getActiveProposal();
 
         assertEq(activeProposal.instructionsId, 0);
         assertEq(activeProposal.activationTimestamp, 0);

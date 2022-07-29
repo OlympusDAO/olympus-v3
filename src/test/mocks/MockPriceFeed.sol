@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+import { AggregatorV2V3Interface } from "interfaces/AggregatorV2V3Interface.sol";
 
 contract MockPriceFeed is AggregatorV2V3Interface {
     int256 public s_answer;
@@ -51,19 +51,9 @@ contract MockPriceFeed is AggregatorV2V3Interface {
 
     function latestRound() external view override returns (uint256) {}
 
-    function getAnswer(uint256 roundId)
-        external
-        view
-        override
-        returns (int256)
-    {}
+    function getAnswer(uint256 roundId) external view override returns (int256) {}
 
-    function getTimestamp(uint256 roundId)
-        external
-        view
-        override
-        returns (uint256)
-    {}
+    function getTimestamp(uint256 roundId) external view override returns (uint256) {}
 
     function description() external view override returns (string memory) {}
 

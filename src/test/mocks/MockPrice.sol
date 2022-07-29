@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.13;
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {Kernel, Module} from "src/Kernel.sol";
+import { MockERC20, ERC20 } from "solmate/test/utils/mocks/MockERC20.sol";
+import { Kernel, Module } from "src/Kernel.sol";
 
 /**
  * @notice Mock implementation of Price to use for testing
@@ -46,14 +46,11 @@ contract MockPrice is Module {
     }
 
     /* ========== POLICY FUNCTIONS ========== */
-    function initialize(
-        uint256[] memory startObservations_,
-        uint48 lastObservationTime_
-    ) external {}
-
-    function changeMovingAverageDuration(uint48 movingAverageDuration_)
+    function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
         external
     {}
+
+    function changeMovingAverageDuration(uint48 movingAverageDuration_) external {}
 
     function changeObservationFrequency(uint48 observationFrequency_) external {
         observationFrequency = observationFrequency_;

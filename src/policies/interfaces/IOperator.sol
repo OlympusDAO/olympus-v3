@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
-import {IBondCallback} from "interfaces/IBondCallback.sol";
+import { ERC20 } from "solmate/tokens/ERC20.sol";
+import { IBondAuctioneer } from "interfaces/IBondAuctioneer.sol";
+import { IBondCallback } from "interfaces/IBondCallback.sol";
 
 interface IOperator {
     /* ========== STRUCTS =========== */
@@ -62,10 +62,7 @@ interface IOperator {
     ///                     If Reserve: swap at the high wall price for OHM
     /// @param amountIn_    Amount of tokenIn to swap
     /// @return             Amount of opposite token received
-    function getAmountOut(ERC20 tokenIn_, uint256 amountIn_)
-        external
-        view
-        returns (uint256);
+    function getAmountOut(ERC20 tokenIn_, uint256 amountIn_) external view returns (uint256);
 
     /* ========== OPERATOR CONFIGURATION ========== */
 
@@ -119,10 +116,7 @@ interface IOperator {
     /// @notice                 Access restricted
     /// @param auctioneer_      Address of the bond auctioneer to use.
     /// @param callback_        Address of the callback to use.
-    function setBondContracts(
-        IBondAuctioneer auctioneer_,
-        IBondCallback callback_
-    ) external;
+    function setBondContracts(IBondAuctioneer auctioneer_, IBondCallback callback_) external;
 
     /// @notice                 Initialize the Operator to begin market operations
     /// @notice                 Access restricted

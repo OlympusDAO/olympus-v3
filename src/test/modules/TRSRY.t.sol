@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.13;
 
-import {Test} from "forge-std/Test.sol";
+import { Test } from "forge-std/Test.sol";
 import "test-utils/UserFactory.sol";
 import "test-utils/larping.sol";
 import "test-utils/sorting.sol";
 import "test-utils/errors.sol";
 import "forge-std/console2.sol";
 
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import { MockERC20 } from "solmate/test/utils/mocks/MockERC20.sol";
 import "src/modules/TRSRY.sol";
 import "src/Kernel.sol";
-import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
-import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
+import { OlympusERC20Token } from "src/external/OlympusERC20.sol";
+import { MockModuleWriter } from "test/mocks/MockModuleWriter.sol";
 
 contract TRSRYTest is Test {
     using larping for *;
@@ -176,10 +176,7 @@ contract TRSRYTest is Test {
 
         TRSRY.setDebt(ngmi, address(this), INITIAL_TOKEN_AMOUNT / 4);
 
-        assertEq(
-            TRSRY.reserveDebt(ngmi, address(this)),
-            INITIAL_TOKEN_AMOUNT / 4
-        );
+        assertEq(TRSRY.reserveDebt(ngmi, address(this)), INITIAL_TOKEN_AMOUNT / 4);
         assertEq(TRSRY.totalDebt(ngmi), INITIAL_TOKEN_AMOUNT / 4);
     }
 

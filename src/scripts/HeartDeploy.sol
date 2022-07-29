@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.11;
 
-import {Script, console2} from "forge-std/Script.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import { Script, console2 } from "forge-std/Script.sol";
+import { ERC20 } from "solmate/tokens/ERC20.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
+import { Kernel, Actions } from "src/Kernel.sol";
 
-import {Operator} from "policies/Operator.sol";
-import {Heart} from "policies/Heart.sol";
-import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
+import { Operator } from "policies/Operator.sol";
+import { Heart } from "policies/Heart.sol";
+import { MockAuthGiver } from "test/mocks/MockAuthGiver.sol";
 
 /// @notice Script to deploy and initialize the Heart contract in the Olympus Bophades system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
@@ -31,12 +31,9 @@ contract HeartDeploy is Script {
     //     ERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // WETH mainnet address
 
     /// Goerli testnet addresses
-    ERC20 public constant ohm =
-        ERC20(0x0595328847AF962F951a4f8F8eE9A3Bf261e4f6b); // OHM goerli address
-    ERC20 public constant reserve =
-        ERC20(0x41e38e70a36150D08A8c97aEC194321b5eB545A5); // DAI goerli address
-    ERC20 public constant rewardToken =
-        ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
+    ERC20 public constant ohm = ERC20(0x0595328847AF962F951a4f8F8eE9A3Bf261e4f6b); // OHM goerli address
+    ERC20 public constant reserve = ERC20(0x41e38e70a36150D08A8c97aEC194321b5eB545A5); // DAI goerli address
+    ERC20 public constant rewardToken = ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
 
     function deploy() external {
         vm.startBroadcast();
@@ -67,16 +64,8 @@ contract HeartDeploy is Script {
         /// Set role permissions
 
         /// Role 1 = Guardian
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.resetBeat.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.toggleBeat.selector
-        );
+        authGiver.setRoleCapability(uint8(1), address(heart), heart.resetBeat.selector);
+        authGiver.setRoleCapability(uint8(1), address(heart), heart.toggleBeat.selector);
         authGiver.setRoleCapability(
             uint8(1),
             address(heart),

@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import {Test} from "forge-std/Test.sol";
-import {UserFactory} from "test-utils/UserFactory.sol";
-import {console2} from "forge-std/console2.sol";
+import { Test } from "forge-std/Test.sol";
+import { UserFactory } from "test-utils/UserFactory.sol";
+import { console2 } from "forge-std/console2.sol";
 
-import {Auth, Authority} from "solmate/auth/Auth.sol";
+import { Auth, Authority } from "solmate/auth/Auth.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockPrice} from "test/mocks/MockPrice.sol";
-import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
+import { MockERC20, ERC20 } from "solmate/test/utils/mocks/MockERC20.sol";
+import { MockPrice } from "test/mocks/MockPrice.sol";
+import { MockAuthGiver } from "test/mocks/MockAuthGiver.sol";
 
-import {FullMath} from "libraries/FullMath.sol";
+import { FullMath } from "libraries/FullMath.sol";
 
-import {Kernel, Policy, Actions} from "src/Kernel.sol";
-import {OlympusAuthority} from "modules/AUTHR.sol";
+import { Kernel, Policy, Actions } from "src/Kernel.sol";
+import { OlympusAuthority } from "modules/AUTHR.sol";
 
-import {Heart} from "policies/Heart.sol";
+import { Heart } from "policies/Heart.sol";
 
-import {IOperator, ERC20, IBondAuctioneer, IBondCallback} from "policies/interfaces/IOperator.sol";
+import { IOperator, ERC20, IBondAuctioneer, IBondCallback } from "policies/interfaces/IOperator.sol";
 
 /**
  * @notice Mock Operator to test Heart
@@ -27,10 +27,7 @@ contract MockOperator is Policy, IOperator, Auth {
     bool public result;
     error Operator_CustomError();
 
-    constructor(Kernel kernel_)
-        Policy(kernel_)
-        Auth(address(kernel_), Authority(address(0)))
-    {
+    constructor(Kernel kernel_) Policy(kernel_) Auth(address(kernel_), Authority(address(0))) {
         result = true;
     }
 
@@ -39,12 +36,7 @@ contract MockOperator is Policy, IOperator, Auth {
         setAuthority(Authority(getModuleAddress("AUTHR")));
     }
 
-    function requestRoles()
-        external
-        view
-        override
-        returns (Role[] memory roles)
-    {}
+    function requestRoles() external view override returns (Role[] memory roles) {}
 
     /* ========== HEART FUNCTIONS ========== */
     function operate() external requiresAuth {
@@ -65,11 +57,7 @@ contract MockOperator is Policy, IOperator, Auth {
         amountOut = 0;
     }
 
-    function getAmountOut(ERC20 tokenIn_, uint256 amountIn_)
-        external
-        pure
-        returns (uint256)
-    {
+    function getAmountOut(ERC20 tokenIn_, uint256 amountIn_) external pure returns (uint256) {
         return 0;
     }
 
@@ -94,10 +82,10 @@ contract MockOperator is Policy, IOperator, Auth {
         uint32 observe_
     ) external override {}
 
-    function setBondContracts(
-        IBondAuctioneer auctioneer_,
-        IBondCallback callback_
-    ) external override {}
+    function setBondContracts(IBondAuctioneer auctioneer_, IBondCallback callback_)
+        external
+        override
+    {}
 
     function initialize() external override {}
 
@@ -110,11 +98,7 @@ contract MockOperator is Policy, IOperator, Auth {
     }
 
     function status() external view override returns (Status memory) {
-        return
-            Status(
-                Regen(0, 0, 0, new bool[](0)),
-                Regen(0, 0, 0, new bool[](0))
-            );
+        return Status(Regen(0, 0, 0, new bool[](0)), Regen(0, 0, 0, new bool[](0)));
     }
 
     function config() external view override returns (Config memory) {
@@ -205,28 +189,12 @@ contract HeartTest is Test {
             /// Set role permissions
 
             /// Role 0 = Heart
-            authGiver.setRoleCapability(
-                uint8(0),
-                address(operator),
-                operator.operate.selector
-            );
+            authGiver.setRoleCapability(uint8(0), address(operator), operator.operate.selector);
 
             /// Role 1 = Guardian
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(operator),
-                operator.operate.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(heart),
-                heart.resetBeat.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(heart),
-                heart.toggleBeat.selector
-            );
+            authGiver.setRoleCapability(uint8(1), address(operator), operator.operate.selector);
+            authGiver.setRoleCapability(uint8(1), address(heart), heart.resetBeat.selector);
+            authGiver.setRoleCapability(uint8(1), address(heart), heart.toggleBeat.selector);
             authGiver.setRoleCapability(
                 uint8(1),
                 address(heart),
@@ -417,9 +385,7 @@ contract HeartTest is Test {
         assertEq(endBalance, startBalance + heartBalance);
     }
 
-    function testCorrectness_cannotCallAdminFunctionsWithoutPermissions()
-        public
-    {
+    function testCorrectness_cannotCallAdminFunctionsWithoutPermissions() public {
         /// Try to call admin functions on the heart as non-guardian and expect revert
         bytes memory err = abi.encodePacked("UNAUTHORIZED");
 

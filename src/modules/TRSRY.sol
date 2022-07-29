@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.13;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
+import { ERC20 } from "solmate/tokens/ERC20.sol";
+import { ReentrancyGuard } from "solmate/utils/ReentrancyGuard.sol";
 
-import {TransferHelper} from "libraries/TransferHelper.sol";
+import { TransferHelper } from "libraries/TransferHelper.sol";
 
-import {Kernel, Module} from "src/Kernel.sol";
+import { Kernel, Module } from "src/Kernel.sol";
 
 // ERRORS
 error TRSRY_NotApproved();
@@ -18,32 +18,16 @@ error TRSRY_NotApproved();
 contract OlympusTreasury is Module, ReentrancyGuard {
     using TransferHelper for ERC20;
 
-    event ApprovedForWithdrawal(
-        address indexed policy_,
-        ERC20 indexed token_,
-        uint256 amount_
-    );
+    event ApprovedForWithdrawal(address indexed policy_, ERC20 indexed token_, uint256 amount_);
     event Withdrawal(
         address indexed policy_,
         address indexed withdrawer_,
         ERC20 indexed token_,
         uint256 amount_
     );
-    event DebtIncurred(
-        ERC20 indexed token_,
-        address indexed policy_,
-        uint256 amount_
-    );
-    event DebtRepaid(
-        ERC20 indexed token_,
-        address indexed policy_,
-        uint256 amount_
-    );
-    event DebtSet(
-        ERC20 indexed token_,
-        address indexed policy_,
-        uint256 amount_
-    );
+    event DebtIncurred(ERC20 indexed token_, address indexed policy_, uint256 amount_);
+    event DebtRepaid(ERC20 indexed token_, address indexed policy_, uint256 amount_);
+    event DebtSet(ERC20 indexed token_, address indexed policy_, uint256 amount_);
 
     // user -> reserve -> amount
     // infinite approval is max(uint256). Should be reserved monitored subsystems.
@@ -59,12 +43,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         return toKeycode("TRSRY");
     }
 
-    function VERSION()
-        external
-        pure
-        override
-        returns (uint8 major, uint8 minor)
-    {
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
 
@@ -110,11 +89,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         emit DebtIncurred(token_, msg.sender, amount_);
     }
 
-    function repayLoan(ERC20 token_, uint256 amount_)
-        external
-        nonReentrant
-        permissioned
-    {
+    function repayLoan(ERC20 token_, uint256 amount_) external nonReentrant permissioned {
         // Deposit from caller first (to handle nonstandard token transfers)
         uint256 prevBalance = token_.balanceOf(address(this));
         token_.safeTransferFrom(msg.sender, address(this), amount_);

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {IBondAuctioneer} from "./IBondAuctioneer.sol";
-import {IBondTeller} from "./IBondTeller.sol";
+import { ERC20 } from "solmate/tokens/ERC20.sol";
+import { IBondAuctioneer } from "./IBondAuctioneer.sol";
+import { IBondTeller } from "./IBondTeller.sol";
 
 interface IBondAggregator {
     /// @notice             Register a auctioneer with the aggregator
@@ -51,10 +51,7 @@ interface IBondAggregator {
     /// @param id_          ID of market
     /// @param referrer_    Address of referrer, used to get fees to calculate accurate payout amount.
     ///                     Inputting the zero address will take into account just the protocol fee.
-    function maxAmountAccepted(uint256 id_, address referrer_)
-        external
-        view
-        returns (uint256);
+    function maxAmountAccepted(uint256 id_, address referrer_) external view returns (uint256);
 
     /// @notice             Does market send payout immediately
     /// @param id_          Market ID to search for
@@ -82,10 +79,7 @@ interface IBondAggregator {
     /// @notice             Returns an array of all active market IDs for a given payout and quote token
     /// @param payout_      Address of payout token
     /// @param quote_       Address of quote token
-    function marketsFor(address payout_, address quote_)
-        external
-        view
-        returns (uint256[] memory);
+    function marketsFor(address payout_, address quote_) external view returns (uint256[] memory);
 
     /// @notice                 Returns the market ID with the highest current payoutToken payout for depositing quoteToken
     /// @param payout_          Address of payout token

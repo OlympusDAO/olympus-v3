@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "test-utils/UserFactory.sol";
+import { Test } from "forge-std/Test.sol";
+import { console2 } from "forge-std/console2.sol";
+import { UserFactory } from "test-utils/UserFactory.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {FullMath} from "libraries/FullMath.sol";
+import { MockERC20, ERC20 } from "solmate/test/utils/mocks/MockERC20.sol";
+import { FullMath } from "libraries/FullMath.sol";
 
-import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
+import { MockPriceFeed } from "test/mocks/MockPriceFeed.sol";
+import { MockModuleWriter } from "test/mocks/MockModuleWriter.sol";
 
-import {OlympusPrice} from "modules/PRICE.sol";
+import { OlympusPrice } from "modules/PRICE.sol";
 import "src/Kernel.sol";
 
 contract PriceTest is Test {
@@ -87,9 +87,7 @@ contract PriceTest is Test {
 
         /// Set scaling value for calculations
         uint256 scale = 10 **
-            (price.decimals() +
-                reserveEthPriceFeed.decimals() -
-                ohmEthPriceFeed.decimals());
+            (price.decimals() + reserveEthPriceFeed.decimals() - ohmEthPriceFeed.decimals());
 
         /// Calculate the number of observations and initialize the observation array
         uint48 observationFrequency = price.observationFrequency();
@@ -101,23 +99,16 @@ contract PriceTest is Test {
         int256 change; // percentage with two decimals
         for (uint256 i; i < numObservations; ++i) {
             /// Calculate a random percentage change from -10% to + 10% using the nonce and observation number
-            change =
-                int256(uint256(keccak256(abi.encodePacked(nonce, i)))) %
-                int256(1000);
+            change = int256(uint256(keccak256(abi.encodePacked(nonce, i)))) % int256(1000);
 
             /// Calculate the new ohmEth price
-            ohmEthPrice =
-                (ohmEthPrice * (CHANGE_DECIMALS + change)) /
-                CHANGE_DECIMALS;
+            ohmEthPrice = (ohmEthPrice * (CHANGE_DECIMALS + change)) / CHANGE_DECIMALS;
 
             /// Update price feed
             ohmEthPriceFeed.setLatestAnswer(ohmEthPrice);
 
             /// Get the current price from the price module and store in the observations array
-            observations[i] = uint256(ohmEthPrice).mulDiv(
-                scale,
-                reserveEthPrice
-            );
+            observations[i] = uint256(ohmEthPrice).mulDiv(scale, reserveEthPrice);
         }
 
         /// Initialize the price module with the observations
@@ -134,14 +125,10 @@ contract PriceTest is Test {
         uint48 observationFrequency = price.observationFrequency();
         for (uint256 i; i < observations; ++i) {
             /// Calculate a random percentage change from -10% to + 10% using the nonce and observation number
-            change =
-                int256(uint256(keccak256(abi.encodePacked(nonce, i)))) %
-                int256(1000);
+            change = int256(uint256(keccak256(abi.encodePacked(nonce, i)))) % int256(1000);
 
             /// Calculate the new ohmEth price
-            ohmEthPrice =
-                (ohmEthPrice * (CHANGE_DECIMALS + change)) /
-                CHANGE_DECIMALS;
+            ohmEthPrice = (ohmEthPrice * (CHANGE_DECIMALS + change)) / CHANGE_DECIMALS;
 
             /// Update price feed
             ohmEthPriceFeed.setLatestAnswer(ohmEthPrice);
@@ -164,21 +151,15 @@ contract PriceTest is Test {
     /// [X] update moving average
     /// [X] update moving average several times and expand observations
 
-    function testCorrectness_cannotUpdateMovingAverageBeforeInitialization()
-        public
-    {
+    function testCorrectness_cannotUpdateMovingAverageBeforeInitialization() public {
         bytes memory err = abi.encodeWithSignature("Price_NotInitialized()");
 
         vm.expectRevert(err);
         priceWriter.updateMovingAverage();
     }
 
-    function testCorrectness_onlyPermittedPoliciesCanCallUpdateMovingAverage(
-        uint8 nonce
-    ) public {
-        bytes memory err = abi.encodeWithSelector(
-            Module_NotAuthorized.selector
-        );
+    function testCorrectness_onlyPermittedPoliciesCanCallUpdateMovingAverage(uint8 nonce) public {
+        bytes memory err = abi.encodeWithSelector(Module_NotAuthorized.selector);
 
         /// Initialize price module
         initializePrice(nonce);
@@ -206,13 +187,9 @@ contract PriceTest is Test {
         /// Calculate the expected moving average
         uint256 expMovingAverage;
         if (currentPrice > earliestPrice) {
-            expMovingAverage =
-                movingAverage +
-                ((currentPrice - earliestPrice) / numObservations);
+            expMovingAverage = movingAverage + ((currentPrice - earliestPrice) / numObservations);
         } else {
-            expMovingAverage =
-                movingAverage -
-                ((earliestPrice - currentPrice) / numObservations);
+            expMovingAverage = movingAverage - ((earliestPrice - currentPrice) / numObservations);
         }
 
         /// Update the moving average on the price module
@@ -224,9 +201,7 @@ contract PriceTest is Test {
         assertEq(expMovingAverage, price.getMovingAverage());
     }
 
-    function testCorrectness_updateMovingAverageMultipleTimes(uint8 nonce)
-        public
-    {
+    function testCorrectness_updateMovingAverageMultipleTimes(uint8 nonce) public {
         /// Initialize price module
         initializePrice(nonce);
 
@@ -307,10 +282,7 @@ contract PriceTest is Test {
             block.timestamp - 3 * uint256(price.observationFrequency()) - 1
         );
 
-        err = abi.encodeWithSignature(
-            "Price_BadFeed(address)",
-            address(reserveEthPriceFeed)
-        );
+        err = abi.encodeWithSignature("Price_BadFeed(address)", address(reserveEthPriceFeed));
         vm.expectRevert(err);
         price.getCurrentPrice();
     }
@@ -325,9 +297,7 @@ contract PriceTest is Test {
         /// Check that it returns the last observation in the observations array
         uint32 numObservations = price.numObservations();
         uint32 nextObsIndex = price.nextObsIndex();
-        uint32 lastIndex = nextObsIndex == 0
-            ? numObservations - 1
-            : nextObsIndex - 1;
+        uint32 lastIndex = nextObsIndex == 0 ? numObservations - 1 : nextObsIndex - 1;
         assertEq(lastPrice, price.observations(lastIndex));
     }
 
@@ -388,10 +358,7 @@ contract PriceTest is Test {
         /// Check that the observations array is filled with the correct number of observations
         /// Do so by ensuring the last observation is at the right index and is the current price
         uint256 numObservations = uint256(price.numObservations());
-        assertEq(
-            price.observations(numObservations - 1),
-            price.getCurrentPrice()
-        );
+        assertEq(price.observations(numObservations - 1), price.getCurrentPrice());
 
         /// Check that the last observation time is set to the current time
         assertEq(price.lastObservationTime(), block.timestamp);
@@ -463,9 +430,7 @@ contract PriceTest is Test {
         assertEq(price.movingAverageDuration(), uint48(10 days));
     }
 
-    function testCorrectness_cannotChangeMovingAverageDurationWithInvalidParams()
-        public
-    {
+    function testCorrectness_cannotChangeMovingAverageDurationWithInvalidParams() public {
         /// Try to change moving average duration with invalid params
         bytes memory err = abi.encodeWithSignature("Price_InvalidParams()");
 
@@ -509,9 +474,7 @@ contract PriceTest is Test {
         assertEq(price.observationFrequency(), uint48(12 hours));
     }
 
-    function testCorrectness_cannotChangeObservationFrequencyWithInvalidParams()
-        public
-    {
+    function testCorrectness_cannotChangeObservationFrequencyWithInvalidParams() public {
         /// Try to change moving average duration with invalid params
         bytes memory err = abi.encodeWithSignature("Price_InvalidParams()");
 
@@ -524,13 +487,9 @@ contract PriceTest is Test {
         priceWriter.changeObservationFrequency(uint48(23 hours));
     }
 
-    function testCorrectness_onlyPermittedPoliciesCanCallAdminFunctions()
-        public
-    {
+    function testCorrectness_onlyPermittedPoliciesCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodeWithSelector(
-            Module_NotAuthorized.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Module_NotAuthorized.selector);
 
         /// initialize
         uint256[] memory obs = new uint256[](21);

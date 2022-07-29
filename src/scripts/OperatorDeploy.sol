@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.11;
 
-import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
-import {Script, console2} from "forge-std/Script.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import { AggregatorV2V3Interface } from "interfaces/AggregatorV2V3Interface.sol";
+import { Script, console2 } from "forge-std/Script.sol";
+import { ERC20 } from "solmate/tokens/ERC20.sol";
 
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import { IBondAuctioneer } from "interfaces/IBondAuctioneer.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
+import { Kernel, Actions } from "src/Kernel.sol";
 
-import {Heart} from "policies/Heart.sol";
-import {Operator} from "policies/Operator.sol";
-import {BondCallback} from "policies/BondCallback.sol";
-import {MockAuthGiver} from "../test/mocks/MockAuthGiver.sol";
+import { Heart } from "policies/Heart.sol";
+import { Operator } from "policies/Operator.sol";
+import { BondCallback } from "policies/BondCallback.sol";
+import { MockAuthGiver } from "../test/mocks/MockAuthGiver.sol";
 
-import {TransferHelper} from "libraries/TransferHelper.sol";
+import { TransferHelper } from "libraries/TransferHelper.sol";
 
 /// @notice Script to deploy the Operator contract in the Olympus Bophades system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
@@ -42,12 +42,9 @@ contract OperatorDeploy is Script {
     //     IBondAuctioneer(address(0));
 
     /// Goerli testnet addresses
-    ERC20 public constant ohm =
-        ERC20(0x0595328847AF962F951a4f8F8eE9A3Bf261e4f6b); // OHM goerli address
-    ERC20 public constant reserve =
-        ERC20(0x41e38e70a36150D08A8c97aEC194321b5eB545A5); // DAI goerli address
-    ERC20 public constant rewardToken =
-        ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
+    ERC20 public constant ohm = ERC20(0x0595328847AF962F951a4f8F8eE9A3Bf261e4f6b); // OHM goerli address
+    ERC20 public constant reserve = ERC20(0x41e38e70a36150D08A8c97aEC194321b5eB545A5); // DAI goerli address
+    ERC20 public constant rewardToken = ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
 
     /// Bond system addresses
     IBondAuctioneer public constant bondAuctioneer =
@@ -97,43 +94,19 @@ contract OperatorDeploy is Script {
         /// Set role permissions
 
         /// Role 0 = Heart
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(operator),
-            operator.operate.selector
-        );
+        authGiver.setRoleCapability(uint8(0), address(operator), operator.operate.selector);
 
         /// Role 1 = Guardian
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(operator),
-            operator.operate.selector
-        );
+        authGiver.setRoleCapability(uint8(1), address(operator), operator.operate.selector);
         authGiver.setRoleCapability(
             uint8(1),
             address(operator),
             operator.setBondContracts.selector
         );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(operator),
-            operator.initialize.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(operator),
-            operator.regenerate.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.resetBeat.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.toggleBeat.selector
-        );
+        authGiver.setRoleCapability(uint8(1), address(operator), operator.initialize.selector);
+        authGiver.setRoleCapability(uint8(1), address(operator), operator.regenerate.selector);
+        authGiver.setRoleCapability(uint8(1), address(heart), heart.resetBeat.selector);
+        authGiver.setRoleCapability(uint8(1), address(heart), heart.toggleBeat.selector);
         authGiver.setRoleCapability(
             uint8(1),
             address(heart),
@@ -146,11 +119,7 @@ contract OperatorDeploy is Script {
         );
 
         /// Role 2 = Policy
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setSpreads.selector
-        );
+        authGiver.setRoleCapability(uint8(2), address(operator), operator.setSpreads.selector);
 
         authGiver.setRoleCapability(
             uint8(2),
@@ -173,18 +142,10 @@ contract OperatorDeploy is Script {
             address(operator),
             operator.setReserveFactor.selector
         );
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setRegenParams.selector
-        );
+        authGiver.setRoleCapability(uint8(2), address(operator), operator.setRegenParams.selector);
 
         /// Role 4 - Callback
-        authGiver.setRoleCapability(
-            uint8(4),
-            address(operator),
-            operator.bondPurchase.selector
-        );
+        authGiver.setRoleCapability(uint8(4), address(operator), operator.bondPurchase.selector);
 
         /// Give role to operator and heart
         authGiver.setUserRole(address(operator), uint8(3));

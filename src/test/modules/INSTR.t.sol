@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "test-utils/UserFactory.sol";
+import { Test } from "forge-std/Test.sol";
+import { console2 } from "forge-std/console2.sol";
+import { UserFactory } from "test-utils/UserFactory.sol";
 
-import {Kernel, Module, Instruction, Actions} from "src/Kernel.sol";
+import { Kernel, Module, Instruction, Actions } from "src/Kernel.sol";
 import "modules/INSTR.sol";
-import {Governance} from "policies/Governance.sol";
-import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
-import {MockInvalidModule} from "test/mocks/MockInvalidModule.sol";
-import {MockValidModule} from "test/mocks/MockValidModule.sol";
-import {MockValidUpgradedModule} from "test/mocks/MockValidUpgradedModule.sol";
+import { Governance } from "policies/Governance.sol";
+import { MockModuleWriter } from "test/mocks/MockModuleWriter.sol";
+import { MockInvalidModule } from "test/mocks/MockInvalidModule.sol";
+import { MockValidModule } from "test/mocks/MockValidModule.sol";
+import { MockValidUpgradedModule } from "test/mocks/MockValidUpgradedModule.sol";
 
 contract InstructionsTest is Test {
     Kernel internal kernel;
@@ -32,9 +32,7 @@ contract InstructionsTest is Test {
         invalidModule = new MockInvalidModule(kernel);
 
         /// Deploy policies
-        instrWriter = OlympusInstructions(
-            address(new MockModuleWriter(kernel, instr))
-        );
+        instrWriter = OlympusInstructions(address(new MockModuleWriter(kernel, instr)));
         governance = new Governance(kernel);
 
         /// Install modules
@@ -55,14 +53,8 @@ contract InstructionsTest is Test {
     function testRevert_InvalidChangeExecutorAction() public {
         // create invalid instructions
         Instruction[] memory instructions = new Instruction[](2);
-        instructions[0] = Instruction(
-            Actions.ChangeExecutor,
-            address(governance)
-        );
-        instructions[1] = Instruction(
-            Actions.ApprovePolicy,
-            address(governance)
-        );
+        instructions[0] = Instruction(Actions.ChangeExecutor, address(governance));
+        instructions[1] = Instruction(Actions.ApprovePolicy, address(governance));
 
         vm.expectRevert(INSTR_InvalidChangeExecutorAction.selector);
         instrWriter.store(instructions);
@@ -80,10 +72,7 @@ contract InstructionsTest is Test {
     function testRevert_InvalidModuleKeycode() public {
         // create invalid instructions
         Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(
-            Actions.InstallModule,
-            address(invalidModule)
-        );
+        instructions[0] = Instruction(Actions.InstallModule, address(invalidModule));
 
         vm.expectRevert(INSTR_InvalidModuleKeycode.selector);
         instrWriter.store(instructions);
@@ -104,22 +93,15 @@ contract InstructionsTest is Test {
 
         instructions = instr.getInstructions(1);
 
-        assertEq(
-            uint256(instructions[0].action),
-            uint256(Actions.InstallModule)
-        );
+        assertEq(uint256(instructions[0].action), uint256(Actions.InstallModule));
         assertEq(instructions[0].target, address(mockModuleAddress));
     }
 
     function testCorrectness_UpgradeModule() public {
         // deploy new sample module and upgrade
         Module mockModuleAddress = Module(new MockValidModule(kernel));
-        Policy mockModuleWriter = Policy(
-            new MockModuleWriter(kernel, mockModuleAddress)
-        );
-        Module mockUpgradedModuleAddress = Module(
-            new MockValidUpgradedModule(kernel)
-        );
+        Policy mockModuleWriter = Policy(new MockModuleWriter(kernel, mockModuleAddress));
+        Module mockUpgradedModuleAddress = Module(new MockValidUpgradedModule(kernel));
 
         // install a pre-existing module and policy
         kernel.executeAction(Actions.InstallModule, address(mockModuleAddress));
@@ -127,10 +109,7 @@ contract InstructionsTest is Test {
 
         // create the upgrade instruction
         Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(
-            Actions.UpgradeModule,
-            address(mockUpgradedModuleAddress)
-        );
+        instructions[0] = Instruction(Actions.UpgradeModule, address(mockUpgradedModuleAddress));
 
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
@@ -138,10 +117,7 @@ contract InstructionsTest is Test {
         // store it
         instrWriter.store(instructions);
 
-        assertEq(
-            uint256(instructions[0].action),
-            uint256(Actions.UpgradeModule)
-        );
+        assertEq(uint256(instructions[0].action), uint256(Actions.UpgradeModule));
         assertEq(instructions[0].target, address(mockUpgradedModuleAddress));
         assertEq(instr.totalInstructions(), 1);
 
@@ -164,10 +140,7 @@ contract InstructionsTest is Test {
 
         // create valid instructions
         Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(mockModuleWriter)
-        );
+        instructions[0] = Instruction(Actions.ApprovePolicy, address(mockModuleWriter));
 
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
@@ -177,10 +150,7 @@ contract InstructionsTest is Test {
 
         kernel.executeAction(instructions[0].action, instructions[0].target);
 
-        assertEq(
-            uint256(instructions[0].action),
-            uint256(Actions.ApprovePolicy)
-        );
+        assertEq(uint256(instructions[0].action), uint256(Actions.ApprovePolicy));
         assertEq(instructions[0].target, address(mockModuleWriter));
         assertEq(instr.totalInstructions(), 1);
 
@@ -199,10 +169,7 @@ contract InstructionsTest is Test {
 
         // create valid instructions
         Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(
-            Actions.TerminatePolicy,
-            address(mockModuleWriter)
-        );
+        instructions[0] = Instruction(Actions.TerminatePolicy, address(mockModuleWriter));
 
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
@@ -211,10 +178,7 @@ contract InstructionsTest is Test {
         instructions = instr.getInstructions(1);
         kernel.executeAction(instructions[0].action, instructions[0].target);
 
-        assertEq(
-            uint256(instructions[0].action),
-            uint256(Actions.TerminatePolicy)
-        );
+        assertEq(uint256(instructions[0].action), uint256(Actions.TerminatePolicy));
         assertEq(instructions[0].target, address(mockModuleWriter));
 
         vm.expectRevert(Module_NotAuthorized.selector);
@@ -224,14 +188,8 @@ contract InstructionsTest is Test {
     function testCorrectness_ChangeExecutor() public {
         // create valid instructions
         Instruction[] memory instructions = new Instruction[](2);
-        instructions[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(governance)
-        );
-        instructions[1] = Instruction(
-            Actions.ChangeExecutor,
-            address(governance)
-        );
+        instructions[0] = Instruction(Actions.ApprovePolicy, address(governance));
+        instructions[1] = Instruction(Actions.ChangeExecutor, address(governance));
 
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
@@ -240,15 +198,9 @@ contract InstructionsTest is Test {
 
         instructions = instr.getInstructions(1);
 
-        assertEq(
-            uint256(instructions[0].action),
-            uint256(Actions.ApprovePolicy)
-        );
+        assertEq(uint256(instructions[0].action), uint256(Actions.ApprovePolicy));
         assertEq(instructions[0].target, address(governance));
-        assertEq(
-            uint256(instructions[1].action),
-            uint256(Actions.ChangeExecutor)
-        );
+        assertEq(uint256(instructions[1].action), uint256(Actions.ChangeExecutor));
         assertEq(instructions[1].target, address(governance));
         assertEq(instr.totalInstructions(), 1);
     }

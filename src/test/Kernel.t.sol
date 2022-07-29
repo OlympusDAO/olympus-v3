@@ -114,7 +114,7 @@ contract KernelTest is Test {
 
         err = abi.encodeWithSignature("Kernel_OnlyAdmin(address)", address(this));
         vm.expectRevert(err);
-        kernel.revokeRole(testerRole ,deployer);
+        kernel.revokeRole(testerRole, deployer);
 
         // TODO test role not existing
 
@@ -125,11 +125,7 @@ contract KernelTest is Test {
         kernel.revokeRole(testerRole, multisig);
         assertFalse(kernel.hasRole(multisig, testerRole));
 
-        err = abi.encodeWithSelector(
-            Kernel_AddressDoesNotHaveRole.selector,
-            multisig,
-            testerRole
-        );
+        err = abi.encodeWithSelector(Kernel_AddressDoesNotHaveRole.selector, multisig, testerRole);
         vm.expectRevert(err);
         kernel.revokeRole(testerRole, multisig);
     }
@@ -169,7 +165,6 @@ contract KernelTest is Test {
 
         vm.stopPrank();
     }
-
 
     function testCorrectness_ApprovePolicy() public {
         Keycode testKeycode = Keycode.wrap("MOCKY");
@@ -280,10 +275,7 @@ contract KernelTest is Test {
 
         vm.startPrank(deployer);
 
-        err = abi.encodeWithSignature(
-            "Kernel_InvalidModuleUpgrade(bytes5)",
-            Keycode.wrap("MOCKY")
-        );
+        err = abi.encodeWithSignature("Kernel_InvalidModuleUpgrade(bytes5)", Keycode.wrap("MOCKY"));
         vm.expectRevert(err);
         kernel.executeAction(Actions.UpgradeModule, address(upgradedModule));
 
