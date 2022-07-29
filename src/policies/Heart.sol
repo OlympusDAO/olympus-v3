@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
-import { ReentrancyGuard } from "solmate/utils/ReentrancyGuard.sol";
-import { Auth, Authority } from "solmate/auth/Auth.sol";
+import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
+import {Auth, Authority} from "solmate/auth/Auth.sol";
 
-import { IHeart } from "policies/interfaces/IHeart.sol";
-import { IOperator } from "policies/interfaces/IOperator.sol";
+import {IHeart} from "policies/interfaces/IHeart.sol";
+import {IOperator} from "policies/interfaces/IOperator.sol";
 
-import { OlympusPrice } from "modules/PRICE.sol";
+import {OlympusPrice} from "modules/PRICE.sol";
 
-import { Kernel, Policy } from "src/Kernel.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 
-import { TransferHelper } from "libraries/TransferHelper.sol";
-import { ERC20 } from "solmate/tokens/ERC20.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @title  Olympus Heart
 /// @notice Olympus Heart (Policy) Contract
 /// @dev    The Olympus Heart contract provides keeper rewards to call the heart beat function which fuels
 ///         Olympus market operations. The Heart orchestrates state updates in the correct order to ensure
 ///         market operations use up to date information.
-contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
+contract OlympusHeart is IHeart, Policy, ReentrancyGuard, Auth {
     using TransferHelper for ERC20;
 
     /* ========== ERRORS =========== */
@@ -74,7 +74,12 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
         setAuthority(Authority(getModuleAddress("AUTHR")));
     }
 
-    function requestRoles() external view override returns (Role[] memory roles) {
+    function requestRoles()
+        external
+        view
+        override
+        returns (Role[] memory roles)
+    {
         roles = new Role[](1);
         roles[0] = PRICE.KEEPER();
     }
@@ -126,7 +131,10 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
     }
 
     /// @inheritdoc IHeart
-    function setRewardTokenAndAmount(ERC20 token_, uint256 reward_) external requiresAuth {
+    function setRewardTokenAndAmount(ERC20 token_, uint256 reward_)
+        external
+        requiresAuth
+    {
         rewardToken = token_;
         reward = reward_;
         emit RewardTokenUpdated(token_);

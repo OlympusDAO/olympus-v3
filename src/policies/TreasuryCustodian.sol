@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.15;
 
-import { ERC20 } from "solmate/tokens/ERC20.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import { Auth, Authority } from "solmate/auth/Auth.sol";
+import {Auth, Authority} from "solmate/auth/Auth.sol";
 
-import { Kernel, Policy } from "src/Kernel.sol";
-import { OlympusTreasury } from "src/modules/TRSRY.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
+import {OlympusTreasury} from "src/modules/TRSRY.sol";
 
 // ERRORS
 error PolicyStillActive();
@@ -23,7 +23,10 @@ contract TreasuryCustodian is Policy, Auth {
 
     /* ========== CONSTRUCTOR ========== */
 
-    constructor(Kernel kernel_) Policy(kernel_) Auth(address(kernel_), Authority(address(0))) {}
+    constructor(Kernel kernel_)
+        Policy(kernel_)
+        Auth(address(kernel_), Authority(address(0)))
+    {}
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
     function configureReads() external override {
@@ -31,7 +34,12 @@ contract TreasuryCustodian is Policy, Auth {
         setAuthority(Authority(getModuleAddress("AUTHR")));
     }
 
-    function requestRoles() external view override returns (Role[] memory roles) {
+    function requestRoles()
+        external
+        view
+        override
+        returns (Role[] memory roles)
+    {
         roles = new Role[](2);
         roles[0] = TRSRY.APPROVER();
         roles[1] = TRSRY.DEBT_ADMIN();
@@ -48,7 +56,9 @@ contract TreasuryCustodian is Policy, Auth {
     // Anyone can call to revoke a terminated policy's approvals.
     // TODO Currently allows anyone to revoke any approval EXCEPT approved policies.
     // TODO must reorg policy storage to be able to check for unapproved policies.
-    function revokePolicyApprovals(address policy_, ERC20[] memory tokens_) external {
+    function revokePolicyApprovals(address policy_, ERC20[] memory tokens_)
+        external
+    {
         if (kernel.approvedPolicies(policy_)) revert PolicyStillActive();
 
         // TODO Make sure `policy_` is an actual policy and not a random address.

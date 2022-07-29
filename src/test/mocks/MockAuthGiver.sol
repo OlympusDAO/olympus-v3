@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
-import { OlympusAuthority } from "modules/AUTHR.sol";
-import { Kernel, Policy } from "src/Kernel.sol";
+import {OlympusAuthority} from "modules/AUTHR.sol";
+import {Kernel, Policy} from "src/Kernel.sol";
 
 /**
  * @notice Mock policy to give authorizations to address for testing
@@ -17,7 +17,12 @@ contract MockAuthGiver is Policy {
         AUTHR = OlympusAuthority(getModuleAddress("AUTHR"));
     }
 
-    function requestRoles() external view override returns (Role[] memory roles) {
+    function requestRoles()
+        external
+        view
+        override
+        returns (Role[] memory roles)
+    {
         roles = new Role[](1);
         roles[0] = AUTHR.ADMIN();
     }

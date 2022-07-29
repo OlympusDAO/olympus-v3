@@ -3,10 +3,10 @@
 // [VOTES] The Votes Module is the ERC20 token that represents voting power in the network.
 // This is currently a subtitute module that stubs gOHM.
 
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
-import { Kernel, Module } from "src/Kernel.sol";
-import { ERC20 } from "solmate/tokens/ERC20.sol";
+import {Kernel, Module} from "src/Kernel.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 error VOTES_TransferDisabled();
 
@@ -23,7 +23,12 @@ contract OlympusVotes is Module, ERC20 {
         return toKeycode("VOTES");
     }
 
-    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+    function VERSION()
+        external
+        pure
+        override
+        returns (uint8 major, uint8 minor)
+    {
         return (1, 0);
     }
 
@@ -37,7 +42,11 @@ contract OlympusVotes is Module, ERC20 {
         _burn(wallet_, amount_);
     }
 
-    function transfer(address to_, uint256 amount_) public override returns (bool) {
+    function transfer(address to_, uint256 amount_)
+        public
+        override
+        returns (bool)
+    {
         revert VOTES_TransferDisabled();
         return true;
     }

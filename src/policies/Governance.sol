@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+pragma solidity 0.8.15;
 
 // The Governance Policy submits & activates instructions in a INSTR module
-
-pragma solidity 0.8.13;
 
 import {OlympusInstructions} from "modules/INSTR.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
@@ -46,7 +45,9 @@ struct ActivatedProposal {
     uint256 activationTimestamp;
 }
 
-contract Governance is Policy {
+/// @notice OlympusGovernance
+/// @dev The Governor Policy is also the Kernel's Executor.
+contract OlympusGovernance is Policy {
     /////////////////////////////////////////////////////////////////////////////////
     //                         Kernel Policy Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
@@ -55,8 +56,6 @@ contract Governance is Policy {
     OlympusVotes public VOTES;
 
     constructor(Kernel kernel_) Policy(kernel_) {}
-
-    function configureReads() external override {}
 
     function configureDependencies()
         external
@@ -70,19 +69,6 @@ contract Governance is Policy {
         INSTR = OlympusInstructions(getModuleAddress(dependencies[0]));
         VOTES = OlympusVotes(getModuleAddress(dependencies[1]));
     }
-
-    // The Governor Policy is also the Kernel's Executor.
-
-    //function requestRoles()
-    //    external
-    //    view
-    //    override
-    //    returns (Role[] memory roles)
-    //{
-    //    roles = new Role[](2);
-    //    roles[0] = INSTR.GOVERNOR();
-    //    roles[1] = VOTES.GOVERNOR();
-    //}
 
     function requestPermissions()
         external
