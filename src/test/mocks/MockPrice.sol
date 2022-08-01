@@ -2,15 +2,12 @@
 pragma solidity 0.8.15;
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {Kernel, Module} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 /**
  * @notice Mock implementation of Price to use for testing
  */
 contract MockPrice is Module {
-    Role public constant KEEPER = Role.wrap("PRICE_Keeper");
-    Role public constant GUARDIAN = Role.wrap("PRICE_Guardian");
-
     uint256 public movingAverage;
     uint256 public lastPrice;
     uint256 public currentPrice;
@@ -30,10 +27,8 @@ contract MockPrice is Module {
         return toKeycode("PRICE");
     }
 
-    function ROLES() public pure override returns (Role[] memory roles) {
-        roles = new Role[](2);
-        roles[0] = KEEPER;
-        roles[1] = GUARDIAN;
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+        return (1, 0);
     }
 
     /* ========== HEART FUNCTIONS ========== */
@@ -46,14 +41,11 @@ contract MockPrice is Module {
     }
 
     /* ========== POLICY FUNCTIONS ========== */
-    function initialize(
-        uint256[] memory startObservations_,
-        uint48 lastObservationTime_
-    ) external {}
-
-    function changeMovingAverageDuration(uint48 movingAverageDuration_)
+    function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
         external
     {}
+
+    function changeMovingAverageDuration(uint48 movingAverageDuration_) external {}
 
     function changeObservationFrequency(uint48 observationFrequency_) external {
         observationFrequency = observationFrequency_;

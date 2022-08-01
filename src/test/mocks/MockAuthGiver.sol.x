@@ -17,12 +17,7 @@ contract MockAuthGiver is Policy {
         AUTHR = OlympusAuthority(getModuleAddress("AUTHR"));
     }
 
-    function requestRoles()
-        external
-        view
-        override
-        returns (Role[] memory roles)
-    {
+    function requestRoles() external view override returns (Role[] memory roles) {
         roles = new Role[](1);
         roles[0] = AUTHR.ADMIN();
     }
