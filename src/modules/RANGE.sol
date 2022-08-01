@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {Kernel, Module} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 error RANGE_InvalidParams();
 
@@ -93,16 +93,8 @@ contract OlympusRange is Module {
                 threshold: 0,
                 market: type(uint256).max
             }),
-            cushion: Band({
-                low: Line({price: 0}),
-                high: Line({price: 0}),
-                spread: rangeParams_[1]
-            }),
-            wall: Band({
-                low: Line({price: 0}),
-                high: Line({price: 0}),
-                spread: rangeParams_[2]
-            })
+            cushion: Band({low: Line({price: 0}), high: Line({price: 0}), spread: rangeParams_[1]}),
+            wall: Band({low: Line({price: 0}), high: Line({price: 0}), spread: rangeParams_[2]})
         });
 
         thresholdFactor = rangeParams_[0];
@@ -116,12 +108,7 @@ contract OlympusRange is Module {
         return toKeycode("RANGE");
     }
 
-    function VERSION()
-        external
-        pure
-        override
-        returns (uint8 major, uint8 minor)
-    {
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
 
@@ -130,10 +117,7 @@ contract OlympusRange is Module {
     /// @notice                 Access restricted to approved policies.
     /// @param high_            Specifies the side of the range to update capacity for (true = high side, false = low side).
     /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
-    function updateCapacity(bool high_, uint256 capacity_)
-        external
-        permissioned
-    {
+    function updateCapacity(bool high_, uint256 capacity_) external permissioned {
         if (high_) {
             /// Update capacity
             _range.high.capacity = capacity_;
@@ -178,16 +162,10 @@ contract OlympusRange is Module {
         uint256 cushionSpread = _range.cushion.spread;
 
         /// Calculate new wall and cushion values from moving average and spread
-        _range.wall.low.price =
-            (movingAverage_ * (FACTOR_SCALE - wallSpread)) /
-            FACTOR_SCALE;
-        _range.wall.high.price =
-            (movingAverage_ * (FACTOR_SCALE + wallSpread)) /
-            FACTOR_SCALE;
+        _range.wall.low.price = (movingAverage_ * (FACTOR_SCALE - wallSpread)) / FACTOR_SCALE;
+        _range.wall.high.price = (movingAverage_ * (FACTOR_SCALE + wallSpread)) / FACTOR_SCALE;
 
-        _range.cushion.low.price =
-            (movingAverage_ * (FACTOR_SCALE - cushionSpread)) /
-            FACTOR_SCALE;
+        _range.cushion.low.price = (movingAverage_ * (FACTOR_SCALE - cushionSpread)) / FACTOR_SCALE;
         _range.cushion.high.price =
             (movingAverage_ * (FACTOR_SCALE + cushionSpread)) /
             FACTOR_SCALE;
@@ -234,8 +212,7 @@ contract OlympusRange is Module {
         uint256 marketCapacity_
     ) public permissioned {
         /// If market id is max uint256, then marketCapacity must be 0
-        if (market_ == type(uint256).max && marketCapacity_ != 0)
-            revert RANGE_InvalidParams();
+        if (market_ == type(uint256).max && marketCapacity_ != 0) revert RANGE_InvalidParams();
 
         /// Store updated state
         if (high_) {
@@ -257,10 +234,7 @@ contract OlympusRange is Module {
     /// @param cushionSpread_   Percent spread to set the cushions at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
     /// @param wallSpread_      Percent spread to set the walls at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev The new spreads will not go into effect until the next time updatePrices() is called.
-    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
-        external
-        permissioned
-    {
+    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external permissioned {
         /// Confirm spreads are within allowed values
         if (
             wallSpread_ > 10000 ||
@@ -279,13 +253,9 @@ contract OlympusRange is Module {
     /// @notice                 Access restricted to approved policies.
     /// @param thresholdFactor_ Percent of capacity that the wall should close below, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
-    function setThresholdFactor(uint256 thresholdFactor_)
-        external
-        permissioned
-    {
+    function setThresholdFactor(uint256 thresholdFactor_) external permissioned {
         /// Confirm threshold factor is within allowed values
-        if (thresholdFactor_ > 10000 || thresholdFactor_ < 100)
-            revert RANGE_InvalidParams();
+        if (thresholdFactor_ > 10000 || thresholdFactor_ < 100) revert RANGE_InvalidParams();
 
         /// Set threshold factor
         thresholdFactor = thresholdFactor_;

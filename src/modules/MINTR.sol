@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {OlympusERC20Token as OHM} from "src/external/OlympusERC20.sol";
-import {Kernel, Module} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 // Wrapper for minting and burning functions of OHM token
 contract OlympusMinter is Module {
@@ -20,12 +20,7 @@ contract OlympusMinter is Module {
         return toKeycode("MINTR");
     }
 
-    function VERSION()
-        external
-        pure
-        override
-        returns (uint8 major, uint8 minor)
-    {
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
 

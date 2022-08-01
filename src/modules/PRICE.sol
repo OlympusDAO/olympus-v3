@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {Kernel, Module} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -75,10 +75,8 @@ contract OlympusPrice is Module {
         uint48 movingAverageDuration_
     ) Module(kernel_) {
         /// @dev Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
-        if (
-            movingAverageDuration_ == 0 ||
-            movingAverageDuration_ % observationFrequency_ != 0
-        ) revert Price_InvalidParams();
+        if (movingAverageDuration_ == 0 || movingAverageDuration_ % observationFrequency_ != 0)
+            revert Price_InvalidParams();
 
         // Set price feeds, decimals, and scale factor
         _ohmEthPriceFeed = ohmEthPriceFeed_;
@@ -95,9 +93,7 @@ contract OlympusPrice is Module {
         observationFrequency = observationFrequency_;
         movingAverageDuration = movingAverageDuration_;
 
-        numObservations = uint32(
-            movingAverageDuration_ / observationFrequency_
-        );
+        numObservations = uint32(movingAverageDuration_ / observationFrequency_);
 
         /// Store blank observations array
         observations = new uint256[](numObservations);
@@ -110,12 +106,7 @@ contract OlympusPrice is Module {
         return toKeycode("PRICE");
     }
 
-    function VERSION()
-        external
-        pure
-        override
-        returns (uint8 major, uint8 minor)
-    {
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
 
@@ -164,8 +155,7 @@ contract OlympusPrice is Module {
         uint256 ohmEthPrice;
         uint256 reserveEthPrice;
         {
-            (, int256 ohmEthPriceInt, , uint256 updatedAt, ) = _ohmEthPriceFeed
-                .latestRoundData();
+            (, int256 ohmEthPriceInt, , uint256 updatedAt, ) = _ohmEthPriceFeed.latestRoundData();
             /// Use a multiple of observation frequency to determine what is too old to use.
             /// Price feeds will not provide an updated answer if the data doesn't change much.
             /// This would be similar to if the feed just stopped updating; therefore, we need a cutoff.
@@ -174,8 +164,7 @@ contract OlympusPrice is Module {
             ohmEthPrice = uint256(ohmEthPriceInt);
 
             int256 reserveEthPriceInt;
-            (, reserveEthPriceInt, , updatedAt, ) = _reserveEthPriceFeed
-                .latestRoundData();
+            (, reserveEthPriceInt, , updatedAt, ) = _reserveEthPriceFeed.latestRoundData();
             if (updatedAt < block.timestamp - uint256(observationFrequency))
                 revert Price_BadFeed(address(_reserveEthPriceFeed));
             reserveEthPrice = uint256(reserveEthPriceInt);
@@ -191,9 +180,7 @@ contract OlympusPrice is Module {
     function getLastPrice() external view returns (uint256) {
         /// Revert if not initialized
         if (!initialized) revert Price_NotInitialized();
-        uint32 lastIndex = nextObsIndex == 0
-            ? numObservations - 1
-            : nextObsIndex - 1;
+        uint32 lastIndex = nextObsIndex == 0 ? numObservations - 1 : nextObsIndex - 1;
         return observations[lastIndex];
     }
 
@@ -212,10 +199,10 @@ contract OlympusPrice is Module {
     /// @param lastObservationTime_ Unix timestamp of last observation being provided (in seconds).
     /// @dev This function must be called after the Price module is deployed to activate it and after updating the observationFrequency
     ///      or movingAverageDuration (in certain cases) in order for the Price module to function properly.
-    function initialize(
-        uint256[] memory startObservations_,
-        uint48 lastObservationTime_
-    ) external permissioned {
+    function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
+        external
+        permissioned
+    {
         /// Revert if already initialized
         if (initialized) revert Price_AlreadyInitialized();
 
@@ -223,10 +210,8 @@ contract OlympusPrice is Module {
         uint256 numObs = observations.length;
 
         /// Check that the number of start observations matches the number expected
-        if (
-            startObservations_.length != numObs ||
-            lastObservationTime_ > uint48(block.timestamp)
-        ) revert Price_InvalidParams();
+        if (startObservations_.length != numObs || lastObservationTime_ > uint48(block.timestamp))
+            revert Price_InvalidParams();
 
         /// Push start observations into storage and total up observations
         uint256 total;
@@ -250,20 +235,13 @@ contract OlympusPrice is Module {
     /// @dev Changing the moving average duration will erase the current observations array
     ///      and require the initialize function to be called again. Ensure that you have saved
     ///      the existing data and can re-populate before calling this function.
-    function changeMovingAverageDuration(uint48 movingAverageDuration_)
-        external
-        permissioned
-    {
+    function changeMovingAverageDuration(uint48 movingAverageDuration_) external permissioned {
         /// Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
-        if (
-            movingAverageDuration_ == 0 ||
-            movingAverageDuration_ % observationFrequency != 0
-        ) revert Price_InvalidParams();
+        if (movingAverageDuration_ == 0 || movingAverageDuration_ % observationFrequency != 0)
+            revert Price_InvalidParams();
 
         /// Calculate the new number of observations
-        uint256 newObservations = uint256(
-            movingAverageDuration_ / observationFrequency
-        );
+        uint256 newObservations = uint256(movingAverageDuration_ / observationFrequency);
 
         /// Store blank observations array of new size
         observations = new uint256[](newObservations);
@@ -281,20 +259,13 @@ contract OlympusPrice is Module {
     /// @param    observationFrequency_   Observation frequency in seconds, must be a divisor of the moving average duration
     /// @dev      Changing the observation frequency clears existing observation data since it will not be taken at the right time intervals.
     ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
-    function changeObservationFrequency(uint48 observationFrequency_)
-        external
-        permissioned
-    {
+    function changeObservationFrequency(uint48 observationFrequency_) external permissioned {
         /// Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
-        if (
-            observationFrequency_ == 0 ||
-            movingAverageDuration % observationFrequency_ != 0
-        ) revert Price_InvalidParams();
+        if (observationFrequency_ == 0 || movingAverageDuration % observationFrequency_ != 0)
+            revert Price_InvalidParams();
 
         /// Calculate the new number of observations
-        uint256 newObservations = uint256(
-            movingAverageDuration / observationFrequency_
-        );
+        uint256 newObservations = uint256(movingAverageDuration / observationFrequency_);
 
         /// Since the old observations will not be taken at the right intervals,
         /// the observations array will need to be reinitialized.
