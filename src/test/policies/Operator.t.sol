@@ -12,7 +12,6 @@ import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/author
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
-import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
 import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 
 import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
@@ -20,11 +19,10 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
+import {Kernel, Actions, toRole} from "src/Kernel.sol";
 import {OlympusRange} from "modules/RANGE.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter, OHM} from "modules/MINTR.sol";
-import {OlympusAuthority} from "modules/AUTHR.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
@@ -67,11 +65,9 @@ contract OperatorTest is Test {
     OlympusRange internal range;
     OlympusTreasury internal treasury;
     OlympusMinter internal minter;
-    OlympusAuthority internal authr;
 
     Operator internal operator;
     BondCallback internal callback;
-    MockAuthGiver internal authGiver;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -88,18 +84,8 @@ contract OperatorTest is Test {
 
             /// Deploy the bond system
             aggregator = new BondAggregator(guardian, auth);
-            teller = new BondFixedTermTeller(
-                guardian,
-                aggregator,
-                guardian,
-                auth
-            );
-            auctioneer = new BondFixedTermCDA(
-                teller,
-                aggregator,
-                guardian,
-                auth
-            );
+            teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
+            auctioneer = new BondFixedTermCDA(teller, aggregator, guardian, auth);
 
             /// Register auctioneer on the bond system
             vm.prank(guardian);
@@ -135,11 +121,7 @@ contract OperatorTest is Test {
 
         {
             /// Deploy bond callback
-            callback = new BondCallback(
-                kernel,
-                IBondAggregator(address(aggregator)),
-                ohm
-            );
+            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
             /// Deploy operator
             operator = new Operator(
@@ -162,16 +144,12 @@ contract OperatorTest is Test {
             /// Registor operator to create bond markets with a callback
             vm.prank(guardian);
             auctioneer.setCallbackAuthStatus(address(operator), true);
-
-            /// Deploy mock auth giver
-            authGiver = new MockAuthGiver(kernel);
         }
 
         {
             /// Initialize system and kernel
 
             /// Install modules
-            kernel.executeAction(Actions.InstallModule, address(authr));
             kernel.executeAction(Actions.InstallModule, address(price));
             kernel.executeAction(Actions.InstallModule, address(range));
             kernel.executeAction(Actions.InstallModule, address(treasury));
@@ -185,101 +163,17 @@ contract OperatorTest is Test {
         {
             /// Configure access control
 
-            /// Set role permissions
+            /// Operator roles
+            kernel.grantRole(toRole("operator_operate"), address(heart));
+            kernel.grantRole(toRole("operator_operate"), guardian);
+            kernel.grantRole(toRole("operator_reporter"), address(callback));
+            kernel.grantRole(toRole("operator_policy"), policy);
+            kernel.grantRole(toRole("operator_admin"), guardian);
 
-            /// Role 0 = Heart
-            authGiver.setRoleCapability(
-                uint8(0),
-                address(operator),
-                operator.operate.selector
-            );
-
-            /// Role 1 = Guardian
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(operator),
-                operator.operate.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(operator),
-                operator.setBondContracts.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(operator),
-                operator.initialize.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(operator),
-                operator.regenerate.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(callback),
-                callback.setOperator.selector
-            );
-
-            /// Role 2 = Policy
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(operator),
-                operator.setSpreads.selector
-            );
-
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(operator),
-                operator.setThresholdFactor.selector
-            );
-
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(operator),
-                operator.setCushionFactor.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(operator),
-                operator.setCushionParams.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(operator),
-                operator.setReserveFactor.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(operator),
-                operator.setRegenParams.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(callback),
-                callback.batchToTreasury.selector
-            );
-
-            /// Role 3 = Operator
-            authGiver.setRoleCapability(
-                uint8(3),
-                address(callback),
-                callback.whitelist.selector
-            );
-
-            /// Role 4 = Callback
-            authGiver.setRoleCapability(
-                uint8(4),
-                address(operator),
-                operator.bondPurchase.selector
-            );
-
-            /// Give roles to users
-            authGiver.setUserRole(heart, uint8(0));
-            authGiver.setUserRole(guardian, uint8(1));
-            authGiver.setUserRole(policy, uint8(2));
-            authGiver.setUserRole(address(operator), uint8(3));
-            authGiver.setUserRole(address(callback), uint8(4));
+            /// Bond callback roles
+            kernel.grantRole(toRole("callback_whitelist"), address(operator));
+            kernel.grantRole(toRole("callback_whitelist"), guardian);
+            kernel.grantRole(toRole("callback_admin"), guardian);
         }
 
         /// Set operator on the callback
@@ -308,18 +202,13 @@ contract OperatorTest is Test {
     }
 
     /* ========== HELPER FUNCTIONS ========== */
-    function knockDownWall(bool high_)
-        internal
-        returns (uint256 amountIn, uint256 amountOut)
-    {
+    function knockDownWall(bool high_) internal returns (uint256 amountIn, uint256 amountOut) {
         if (high_) {
             /// Get current capacity of the high wall
             /// Set amount in to put capacity 1 below the threshold for shutting down the wall
             uint256 startCapacity = range.capacity(true);
             uint256 highWallPrice = range.price(true, true);
-            amountIn =
-                startCapacity.mulDiv(highWallPrice, 1e9).mulDiv(9999, 10000) +
-                1;
+            amountIn = startCapacity.mulDiv(highWallPrice, 1e9).mulDiv(9999, 10000) + 1;
 
             uint256 expAmountOut = operator.getAmountOut(reserve, amountIn);
 
@@ -331,9 +220,7 @@ contract OperatorTest is Test {
             /// Set amount in to put capacity 1 below the threshold for shutting down the wall
             uint256 startCapacity = range.capacity(false);
             uint256 lowWallPrice = range.price(true, false);
-            amountIn =
-                startCapacity.mulDiv(1e9, lowWallPrice).mulDiv(9999, 10000) +
-                1;
+            amountIn = startCapacity.mulDiv(1e9, lowWallPrice).mulDiv(9999, 10000) + 1;
 
             uint256 expAmountOut = operator.getAmountOut(ohm, amountIn);
 
@@ -364,10 +251,7 @@ contract OperatorTest is Test {
 
         /// Calculate expected difference
         uint256 highWallPrice = range.price(true, true);
-        uint256 expAmountOut = amountIn.mulDiv(
-            1e9 * 1e18,
-            1e18 * highWallPrice
-        );
+        uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * highWallPrice);
 
         /// Swap at the high wall
         vm.prank(alice);
@@ -479,10 +363,7 @@ contract OperatorTest is Test {
 
         /// Try to swap, expect to fail
         uint256 amountIn = 100 * 1e18;
-        uint256 expAmountOut = amountIn.mulDiv(
-            1e9 * 1e18,
-            1e18 * range.price(true, true)
-        );
+        uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * range.price(true, true));
 
         bytes memory err = abi.encodeWithSignature("Operator_WallDown()");
         vm.expectRevert(err);
@@ -503,10 +384,7 @@ contract OperatorTest is Test {
 
         /// Try to swap, expect to fail
         uint256 amountIn = 100 * 1e9;
-        uint256 expAmountOut = amountIn.mulDiv(
-            1e18 * range.price(true, false),
-            1e9 * 1e18
-        );
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
 
         bytes memory err = abi.encodeWithSignature("Operator_WallDown()");
         vm.expectRevert(err);
@@ -525,10 +403,7 @@ contract OperatorTest is Test {
 
         /// Set amounts for high wall swap with minAmountOut greater than expAmountOut
         uint256 amountIn = 100 * 1e18;
-        uint256 expAmountOut = amountIn.mulDiv(
-            1e9 * 1e18,
-            1e18 * range.price(true, true)
-        );
+        uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * range.price(true, true));
         uint256 minAmountOut = expAmountOut + 1;
 
         /// Try to swap at low wall, expect to fail
@@ -543,10 +418,7 @@ contract OperatorTest is Test {
 
         /// Set amounts for low wall swap with minAmountOut greater than expAmountOut
         amountIn = 100 * 1e9;
-        expAmountOut = amountIn.mulDiv(
-            1e18 * range.price(true, false),
-            1e9 * 1e18
-        );
+        expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
         minAmountOut = expAmountOut + 1;
 
         /// Try to swap at low wall, expect to fail
@@ -610,10 +482,7 @@ contract OperatorTest is Test {
         Operator.Config memory config = operator.config();
         uint256 marketCapacity = auctioneer.currentCapacity(marketId);
         // console2.log("capacity", marketCapacity);
-        assertEq(
-            marketCapacity,
-            range.capacity(true).mulDiv(config.cushionFactor, 1e4)
-        );
+        assertEq(marketCapacity, range.capacity(true).mulDiv(config.cushionFactor, 1e4));
 
         /// Check that the price is set correctly
         // (, , , , , , , , , , , uint256 scale) = auctioneer.markets(marketId);
@@ -644,10 +513,7 @@ contract OperatorTest is Test {
 
         Operator.Config memory config = operator.config();
         uint256 marketCapacity = auctioneer.currentCapacity(range.market(true));
-        assertEq(
-            marketCapacity,
-            range.capacity(true).mulDiv(config.cushionFactor, 1e4)
-        );
+        assertEq(marketCapacity, range.capacity(true).mulDiv(config.cushionFactor, 1e4));
 
         /// Set price on mock oracle below the high cushion
         price.setLastPrice(105 * 1e18);
@@ -683,10 +549,7 @@ contract OperatorTest is Test {
 
         Operator.Config memory config = operator.config();
         uint256 marketCapacity = auctioneer.currentCapacity(range.market(true));
-        assertEq(
-            marketCapacity,
-            range.capacity(true).mulDiv(config.cushionFactor, 1e4)
-        );
+        assertEq(marketCapacity, range.capacity(true).mulDiv(config.cushionFactor, 1e4));
 
         /// Set price on mock oracle below the high cushion
         price.setLastPrice(130 * 1e18);
@@ -770,10 +633,7 @@ contract OperatorTest is Test {
 
         Operator.Config memory config = operator.config();
         uint256 marketCapacity = auctioneer.currentCapacity(marketId);
-        assertEq(
-            marketCapacity,
-            range.capacity(false).mulDiv(config.cushionFactor, 1e4)
-        );
+        assertEq(marketCapacity, range.capacity(false).mulDiv(config.cushionFactor, 1e4));
 
         /// Check that the price is set correctly
         // (, , , , , , , , , , , uint256 scale) = auctioneer.markets(marketId);
@@ -803,13 +663,8 @@ contract OperatorTest is Test {
         assertTrue(auctioneer.isLive(range.market(false)));
 
         Operator.Config memory config = operator.config();
-        uint256 marketCapacity = auctioneer.currentCapacity(
-            range.market(false)
-        );
-        assertEq(
-            marketCapacity,
-            range.capacity(false).mulDiv(config.cushionFactor, 1e4)
-        );
+        uint256 marketCapacity = auctioneer.currentCapacity(range.market(false));
+        assertEq(marketCapacity, range.capacity(false).mulDiv(config.cushionFactor, 1e4));
 
         /// Set price on mock oracle below the high cushion
         price.setLastPrice(79 * 1e18);
@@ -844,13 +699,8 @@ contract OperatorTest is Test {
         assertTrue(auctioneer.isLive(range.market(false)));
 
         Operator.Config memory config = operator.config();
-        uint256 marketCapacity = auctioneer.currentCapacity(
-            range.market(false)
-        );
-        assertEq(
-            marketCapacity,
-            range.capacity(false).mulDiv(config.cushionFactor, 1e4)
-        );
+        uint256 marketCapacity = auctioneer.currentCapacity(range.market(false));
+        assertEq(marketCapacity, range.capacity(false).mulDiv(config.cushionFactor, 1e4));
 
         /// Set price on mock oracle below the high cushion
         price.setLastPrice(91 * 1e18);
@@ -1023,13 +873,7 @@ contract OperatorTest is Test {
 
         /// Purchase from cushion
         vm.prank(alice);
-        (uint256 payout, ) = teller.purchase(
-            alice,
-            guardian,
-            id,
-            amountIn,
-            minAmountOut
-        );
+        (uint256 payout, ) = teller.purchase(alice, guardian, id, amountIn, minAmountOut);
 
         /// Check that the side capacity has been reduced by the amount of the payout
         assertEq(range.capacity(true), startCapacity - payout);
@@ -1060,13 +904,7 @@ contract OperatorTest is Test {
 
         /// Purchase from cushion
         vm.prank(alice);
-        (uint256 payout, ) = teller.purchase(
-            alice,
-            guardian,
-            id,
-            amountIn,
-            minAmountOut
-        );
+        (uint256 payout, ) = teller.purchase(alice, guardian, id, amountIn, minAmountOut);
 
         /// Check that the side capacity has been reduced by the amount of the payout
         assertEq(range.capacity(false), startCapacity - payout);
@@ -1676,11 +1514,7 @@ contract OperatorTest is Test {
         /// Try to set cushionDuration as random user, expect revert
         vm.expectRevert(err);
         vm.prank(alice);
-        operator.setCushionParams(
-            uint32(6 hours),
-            uint32(50_000),
-            uint32(4 hours)
-        );
+        operator.setCushionParams(uint32(6 hours), uint32(50_000), uint32(4 hours));
 
         /// Try to set cushionFactor as random user, expect revert
         vm.expectRevert(err);
@@ -1866,11 +1700,7 @@ contract OperatorTest is Test {
 
         /// Set cushion params as admin
         vm.prank(policy);
-        operator.setCushionParams(
-            uint32(24 hours),
-            uint32(50_000),
-            uint32(4 hours)
-        );
+        operator.setCushionParams(uint32(24 hours), uint32(50_000), uint32(4 hours));
 
         /// Get new cushion params
         Operator.Config memory newConfig = operator.config();
@@ -1881,10 +1711,7 @@ contract OperatorTest is Test {
         assertEq(newConfig.cushionDebtBuffer, uint32(50_000));
         assertLt(newConfig.cushionDebtBuffer, startConfig.cushionDebtBuffer);
         assertEq(newConfig.cushionDepositInterval, uint32(4 hours));
-        assertGt(
-            newConfig.cushionDepositInterval,
-            startConfig.cushionDepositInterval
-        );
+        assertGt(newConfig.cushionDepositInterval, startConfig.cushionDepositInterval);
     }
 
     function testCorrectness_cannotSetCushionParamsWithInvalidParams() public {
@@ -1896,29 +1723,17 @@ contract OperatorTest is Test {
         bytes memory err = abi.encodeWithSignature("Operator_InvalidParams()");
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setCushionParams(
-            uint32(1 days) - 1,
-            uint32(100_000),
-            uint32(1 hours)
-        );
+        operator.setCushionParams(uint32(1 days) - 1, uint32(100_000), uint32(1 hours));
 
         /// Set cushion params with invalid duration as admin (too high)
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setCushionParams(
-            uint32(7 days) + 1,
-            uint32(100_000),
-            uint32(1 hours)
-        );
+        operator.setCushionParams(uint32(7 days) + 1, uint32(100_000), uint32(1 hours));
 
         /// Set cushion params with deposit interval greater than duration as admin
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setCushionParams(
-            uint32(1 days),
-            uint32(100_000),
-            uint32(2 days)
-        );
+        operator.setCushionParams(uint32(1 days), uint32(100_000), uint32(2 days));
 
         /// Set cushion params with invalid debt buffer as admin (too low)
         vm.expectRevert(err);
@@ -2024,23 +1839,11 @@ contract OperatorTest is Test {
         bytes memory err = abi.encodeWithSignature("Operator_InvalidParams()");
         vm.expectRevert(err);
         vm.prank(guardian);
-        operator.setBondContracts(
-            IBondAuctioneer(address(0)),
-            BondCallback(address(0))
-        );
+        operator.setBondContracts(IBondAuctioneer(address(0)), BondCallback(address(0)));
 
         /// Create new bond contracts
-        BondFixedTermCDA newCDA = new BondFixedTermCDA(
-            teller,
-            aggregator,
-            guardian,
-            auth
-        );
-        BondCallback newCb = new BondCallback(
-            kernel,
-            IBondAggregator(address(aggregator)),
-            ohm
-        );
+        BondFixedTermCDA newCDA = new BondFixedTermCDA(teller, aggregator, guardian, auth);
+        BondCallback newCb = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
         /// Update the bond contracts as guardian
         vm.prank(guardian);
@@ -2072,10 +1875,7 @@ contract OperatorTest is Test {
         assertTrue(operator.initialized());
         assertTrue(range.active(true));
         assertTrue(range.active(false));
-        assertEq(
-            treasury.withdrawApproval(address(operator), reserve),
-            type(uint256).max
-        );
+        assertEq(treasury.withdrawApproval(address(operator), reserve), type(uint256).max);
         assertGt(range.price(false, false), 0);
         assertGt(range.price(true, false), 0);
         assertGt(range.price(false, true), 0);
@@ -2090,9 +1890,7 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Try to initialize the operator again as guardian
-        bytes memory err = abi.encodeWithSignature(
-            "Operator_AlreadyInitialized()"
-        );
+        bytes memory err = abi.encodeWithSignature("Operator_AlreadyInitialized()");
         vm.expectRevert(err);
         vm.prank(guardian);
         operator.initialize();
@@ -2219,43 +2017,25 @@ contract OperatorTest is Test {
         /// Check that getAmountOut returns the amount of token to receive for different combinations of inputs
         /// Case 1: OHM In, less than capacity
         uint256 amountIn = 100 * 1e9;
-        uint256 expAmountOut = amountIn.mulDiv(
-            1e18 * range.price(true, false),
-            1e9 * 1e18
-        );
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
 
         assertEq(expAmountOut, operator.getAmountOut(ohm, amountIn));
 
         /// Case 2: OHM In, more than capacity
-        amountIn =
-            range.capacity(false).mulDiv(
-                1e9 * 1e18,
-                1e18 * range.price(true, false)
-            ) +
-            1e9;
+        amountIn = range.capacity(false).mulDiv(1e9 * 1e18, 1e18 * range.price(true, false)) + 1e9;
 
-        bytes memory err = abi.encodeWithSignature(
-            "Operator_InsufficientCapacity()"
-        );
+        bytes memory err = abi.encodeWithSignature("Operator_InsufficientCapacity()");
         vm.expectRevert(err);
         operator.getAmountOut(ohm, amountIn);
 
         /// Case 3: Reserve In, less than capacity
         amountIn = 10000 * 1e18;
-        expAmountOut = amountIn.mulDiv(
-            1e9 * 1e18,
-            1e18 * range.price(true, true)
-        );
+        expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * range.price(true, true));
 
         assertEq(expAmountOut, operator.getAmountOut(reserve, amountIn));
 
         /// Case 4: Reserve In, more than capacity
-        amountIn =
-            range.capacity(true).mulDiv(
-                1e18 * range.price(true, true),
-                1e9 * 1e18
-            ) +
-            1e18;
+        amountIn = range.capacity(true).mulDiv(1e18 * range.price(true, true), 1e9 * 1e18) + 1e18;
 
         vm.expectRevert(err);
         operator.getAmountOut(reserve, amountIn);
