@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {Kernel, Policy} from "src/Kernel.sol";
+import "src/Kernel.sol";
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
 
 // ERRORS
