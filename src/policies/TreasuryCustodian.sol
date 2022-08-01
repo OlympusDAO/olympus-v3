@@ -29,20 +29,28 @@ contract TreasuryCustodian is Policy, Auth {
     {}
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
-    function configureReads() external override {
-        TRSRY = OlympusTreasury(getModuleAddress("TRSRY"));
-        setAuthority(Authority(getModuleAddress("AUTHR")));
+    function configureDependencies()
+        external
+        override
+        returns (Keycode[] memory dependencies)
+    {
+        dependencies = new Keycode[](1);
+        dependencies[0] = toKeycode("TRSRY");
+
+        TRSRY = OlympusTreasury(getModuleAddress(dependencies[0]));
     }
 
-    function requestRoles()
+    function requestPermissions()
         external
         view
         override
-        returns (Role[] memory roles)
+        returns (Permissions[] memory requests)
     {
-        roles = new Role[](2);
-        roles[0] = TRSRY.APPROVER();
-        roles[1] = TRSRY.DEBT_ADMIN();
+        Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
+
+        requests = new Permissions[](2);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
     }
 
     function grantApproval(
