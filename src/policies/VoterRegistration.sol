@@ -13,7 +13,7 @@ contract VoterRegistration is Policy {
 
     OlympusVotes public VOTES;
 
-    constructor(Kernel kernel_) Policy(kernel_) Auth(address(kernel_), Authority(address(0))) {}
+    constructor(Kernel kernel_) Policy(kernel_) {}
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);
@@ -22,8 +22,13 @@ contract VoterRegistration is Policy {
         VOTES = OlympusVotes(getModuleAddress(dependencies[0]));
     }
 
-    function requestPermissions() external view override returns (Permission[] memory permissions) {
-        permissions = new Permission[](2);
+    function requestPermissions()
+        external
+        view
+        override
+        returns (Permissions[] memory permissions)
+    {
+        permissions = new Permissions[](2);
         permissions[0] = Permissions(VOTES.KEYCODE(), VOTES.mintTo.selector);
         permissions[0] = Permissions(VOTES.KEYCODE(), VOTES.burnFrom.selector);
     }
