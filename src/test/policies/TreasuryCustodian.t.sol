@@ -7,13 +7,10 @@ import {UserFactory} from "test-utils/UserFactory.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
-import {OlympusAuthority} from "src/modules/AUTHR.sol";
 import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
-
-import {MockAuthGiver} from "../mocks/MockAuthGiver.sol";
 
 contract TreasuryCustodianTest is Test {
     UserFactory public userCreator;
@@ -22,8 +19,6 @@ contract TreasuryCustodianTest is Test {
     Kernel internal kernel;
 
     OlympusTreasury internal TRSRY;
-    OlympusAuthority internal AUTHR;
-    MockAuthGiver internal authGiver;
     TreasuryCustodian internal custodian;
 
     MockERC20 public ngmi;
@@ -42,46 +37,18 @@ contract TreasuryCustodianTest is Test {
 
         /// Deploy modules (some mocks)
         TRSRY = new OlympusTreasury(kernel);
-        AUTHR = new OlympusAuthority(kernel);
 
         /// Deploy policies
-        authGiver = new MockAuthGiver(kernel);
         custodian = new TreasuryCustodian(kernel);
 
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
-        kernel.executeAction(Actions.InstallModule, address(AUTHR));
 
         /// Approve policies`
         kernel.executeAction(Actions.ApprovePolicy, address(custodian));
-        kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
 
-        /// Role 0 = Issuer
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(custodian),
-            custodian.increaseDebt.selector
-        );
-
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(custodian),
-            custodian.decreaseDebt.selector
-        );
-
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(custodian),
-            custodian.grantApproval.selector
-        );
-
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(custodian),
-            custodian.revokePolicyApprovals.selector
-        );
-        /// Give issuer role to this test suite
-        authGiver.setUserRole(address(this), uint8(0));
+        /// Configure access control
+        kernel.grantRole(toRole("custodian_admin"), address(this));
     }
 
     function test_UnauthorizedChangeDebt(uint256 amount_) public {
