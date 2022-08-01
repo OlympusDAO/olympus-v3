@@ -8,9 +8,7 @@ import {UserFactory} from "test-utils/UserFactory.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 
 import {OlympusVotes} from "modules/VOTES.sol";
-import {OlympusAuthority} from "modules/AUTHR.sol";
 
-import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
 import {VoterRegistration} from "policies/VoterRegistration.sol";
 
 contract VoterRegistrationTest is Test {
@@ -21,8 +19,6 @@ contract VoterRegistrationTest is Test {
     Kernel internal kernel;
 
     OlympusVotes internal votes;
-    OlympusAuthority internal authr;
-    MockAuthGiver internal authGiver;
     VoterRegistration internal voterRegistration;
 
     function setUp() public {
@@ -36,37 +32,20 @@ contract VoterRegistrationTest is Test {
         /// Deploy kernel
         kernel = new Kernel(); // this contract will be the executor
 
-        /// Deploy modules (some mocks)
+        /// Deploy modules
         votes = new OlympusVotes(kernel);
-        authr = new OlympusAuthority(kernel);
 
         /// Deploy policies
-        authGiver = new MockAuthGiver(kernel);
         voterRegistration = new VoterRegistration(kernel);
 
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(votes));
-        kernel.executeAction(Actions.InstallModule, address(authr));
 
         /// Approve policies`
         kernel.executeAction(Actions.ApprovePolicy, address(voterRegistration));
-        kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
 
-        /// Role 0 = Issuer
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(voterRegistration),
-            voterRegistration.issueVotesTo.selector
-        );
-
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(voterRegistration),
-            voterRegistration.revokeVotesFrom.selector
-        );
-
-        /// Give issuer role to govMultisig
-        authGiver.setUserRole(govMultisig, uint8(0));
+        /// Configure access control
+        kernel.grantRole(toRole("voterReg_admin"), govMultisig);
     }
 
     ////////////////////////////////
