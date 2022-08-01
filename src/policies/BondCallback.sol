@@ -2,7 +2,6 @@
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {Auth, Authority} from "solmate/auth/Auth.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 import {IBondCallback} from "interfaces/IBondCallback.sol";
@@ -15,7 +14,7 @@ import "src/Kernel.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
 /// @title Olympus Bond Callback
-contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
+contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     using TransferHelper for ERC20;
 
     /* ========== ERRORS ========== */
@@ -42,7 +41,7 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         Kernel kernel_,
         IBondAggregator aggregator_,
         ERC20 ohm_
-    ) Policy(kernel_) Auth(address(kernel_), Authority(address(0))) {
+    ) Policy(kernel_) {
         aggregator = aggregator_;
         ohm = ohm_;
     }

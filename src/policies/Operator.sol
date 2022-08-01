@@ -27,7 +27,7 @@ import {FullMath} from "libraries/FullMath.sol";
 ///         the cushion spread, the Operator deploys bond markets to support the price. The Operator also offers
 ///         zero slippage swaps at prices dictated by the wall spread from the moving average. These market operations
 ///         are performed up to a specific capacity before the market must stabilize to regenerate the capacity.
-contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
+contract Operator is IOperator, Policy, ReentrancyGuard {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
