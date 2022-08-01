@@ -27,7 +27,7 @@
   "prettier": {
     "tabWidth": 4,
     "singleQuote": false,
-    "bracketSpacing": true,
+    "bracketSpacing": false,
     "printWidth": 100
   }
 }
