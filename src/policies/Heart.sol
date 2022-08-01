@@ -2,14 +2,13 @@
 pragma solidity 0.8.15;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {Auth, Authority} from "solmate/auth/Auth.sol";
 
 import {IHeart} from "policies/interfaces/IHeart.sol";
 import {IOperator} from "policies/interfaces/IOperator.sol";
 
 import {OlympusPrice} from "modules/PRICE.sol";
 
-import {Kernel, Policy} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -19,7 +18,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 /// @dev    The Olympus Heart contract provides keeper rewards to call the heart beat function which fuels
 ///         Olympus market operations. The Heart orchestrates state updates in the correct order to ensure
 ///         market operations use up to date information.
-contract OlympusHeart is IHeart, Policy, ReentrancyGuard, Auth {
+contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     using TransferHelper for ERC20;
 
     /* ========== ERRORS =========== */
@@ -59,7 +58,7 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard, Auth {
         IOperator operator_,
         ERC20 rewardToken_,
         uint256 reward_
-    ) Policy(kernel_) Auth(address(kernel_), Authority(address(0))) {
+    ) Policy(kernel_) {
         _operator = operator_;
 
         active = true;
@@ -69,19 +68,21 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard, Auth {
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
-    function configureReads() external override {
-        PRICE = OlympusPrice(getModuleAddress("PRICE"));
-        setAuthority(Authority(getModuleAddress("AUTHR")));
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](1);
+        dependencies[0] = toKeycode("PRICE");
+
+        PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
     }
 
-    function requestRoles()
+    function requestPermissions()
         external
         view
         override
-        returns (Role[] memory roles)
+        returns (Permissions[] memory permissions)
     {
-        roles = new Role[](1);
-        roles[0] = PRICE.KEEPER();
+        permissions = new Permissions[](1);
+        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
     }
 
     /* ========== KEEPER FUNCTIONS ========== */
@@ -121,19 +122,19 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard, Auth {
     /* ========== ADMIN FUNCTIONS ========== */
 
     /// @inheritdoc IHeart
-    function resetBeat() external requiresAuth {
+    function resetBeat() external onlyRole("heart_admin") {
         lastBeat = block.timestamp - frequency();
     }
 
     /// @inheritdoc IHeart
-    function toggleBeat() external requiresAuth {
+    function toggleBeat() external onlyRole("heart_admin") {
         active = !active;
     }
 
     /// @inheritdoc IHeart
     function setRewardTokenAndAmount(ERC20 token_, uint256 reward_)
         external
-        requiresAuth
+        onlyRole("heart_admin")
     {
         rewardToken = token_;
         reward = reward_;
@@ -141,7 +142,7 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard, Auth {
     }
 
     /// @inheritdoc IHeart
-    function withdrawUnspentRewards(ERC20 token_) external requiresAuth {
+    function withdrawUnspentRewards(ERC20 token_) external onlyRole("heart_admin") {
         token_.safeTransfer(msg.sender, token_.balanceOf(address(this)));
     }
 }
