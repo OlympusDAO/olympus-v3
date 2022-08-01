@@ -10,7 +10,7 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
 import {Operator} from "policies/Operator.sol";
-import {Kernel, Policy} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
@@ -81,7 +81,11 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
     /* ========== WHITELISTING ========== */
 
     /// @inheritdoc IBondCallback
-    function whitelist(address teller_, uint256 id_) external override onlyRole("callback_admin") {
+    function whitelist(address teller_, uint256 id_)
+        external
+        override
+        onlyRole("callback_whitelist")
+    {
         approvedMarkets[teller_][id_] = true;
 
         // Get payout tokens for market
