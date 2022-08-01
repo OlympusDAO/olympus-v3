@@ -1,34 +1,31 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
-import { Test } from "forge-std/Test.sol";
-import { console2 } from "forge-std/console2.sol";
-import { UserFactory } from "test-utils/UserFactory.sol";
+import {Test} from "forge-std/Test.sol";
+import {console2} from "forge-std/console2.sol";
+import {UserFactory} from "test-utils/UserFactory.sol";
 
-import { BondFixedTermCDA } from "test/lib/bonds/BondFixedTermCDA.sol";
-import { BondAggregator } from "test/lib/bonds/BondAggregator.sol";
-import { BondFixedTermTeller } from "test/lib/bonds/BondFixedTermTeller.sol";
-import { IBondAuctioneer as LibAuctioneer } from "test/lib/bonds/interfaces/IBondAuctioneer.sol";
-import { RolesAuthority, Authority as SolmateAuthority } from "solmate/auth/authorities/RolesAuthority.sol";
+import {BondFixedTermCDA} from "test/lib/bonds/BondFixedTermCDA.sol";
+import {BondAggregator} from "test/lib/bonds/BondAggregator.sol";
+import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
+import {IBondAuctioneer as LibAuctioneer} from "test/lib/bonds/interfaces/IBondAuctioneer.sol";
+import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
-import { MockERC20, ERC20 } from "solmate/test/utils/mocks/MockERC20.sol";
-import { MockPrice } from "test/mocks/MockPrice.sol";
-import { MockAuthGiver } from "test/mocks/MockAuthGiver.sol";
-import { MockModuleWriter } from "test/mocks/MockModuleWriter.sol";
+import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockPrice} from "test/mocks/MockPrice.sol";
 
-import { IBondAuctioneer } from "interfaces/IBondAuctioneer.sol";
-import { IBondAggregator } from "interfaces/IBondAggregator.sol";
+import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
-import { FullMath } from "libraries/FullMath.sol";
+import {FullMath} from "libraries/FullMath.sol";
 
-import { Kernel, Actions } from "src/Kernel.sol";
-import { OlympusRange } from "modules/RANGE.sol";
-import { OlympusTreasury } from "modules/TRSRY.sol";
-import { OlympusMinter, OHM } from "modules/MINTR.sol";
-import { OlympusAuthority } from "modules/AUTHR.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
+import {OlympusRange} from "modules/RANGE.sol";
+import {OlympusTreasury} from "modules/TRSRY.sol";
+import {OlympusMinter, OHM} from "modules/MINTR.sol";
 
-import { Operator } from "policies/Operator.sol";
-import { BondCallback } from "policies/BondCallback.sol";
+import {Operator} from "policies/Operator.sol";
+import {BondCallback} from "policies/BondCallback.sol";
 
 contract MockOhm is ERC20 {
     constructor(
@@ -68,11 +65,9 @@ contract BondCallbackTest is Test {
     OlympusRange internal range;
     OlympusTreasury internal treasury;
     OlympusMinter internal minter;
-    OlympusAuthority internal authr;
 
     Operator internal operator;
     BondCallback internal callback;
-    MockAuthGiver internal authGiver;
 
     // Bond market ids to reference
     uint256 internal regBond;
@@ -123,7 +118,6 @@ contract BondCallbackTest is Test {
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
-            authr = new OlympusAuthority(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -160,16 +154,12 @@ contract BondCallbackTest is Test {
             /// Register this contract to create bond markets with a callback
             vm.prank(guardian);
             auctioneer.setCallbackAuthStatus(address(this), true);
-
-            /// Deploy mock auth giver
-            authGiver = new MockAuthGiver(kernel);
         }
 
         {
             /// Initialize system and kernel
 
             /// Install modules
-            kernel.executeAction(Actions.InstallModule, address(authr));
             kernel.executeAction(Actions.InstallModule, address(price));
             kernel.executeAction(Actions.InstallModule, address(range));
             kernel.executeAction(Actions.InstallModule, address(treasury));
@@ -178,75 +168,20 @@ contract BondCallbackTest is Test {
             /// Approve policies
             kernel.executeAction(Actions.ApprovePolicy, address(operator));
             kernel.executeAction(Actions.ApprovePolicy, address(callback));
-            kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
         }
         {
             /// Configure access control
 
-            /// Set role permissions
+            /// Operator roles
+            kernel.grantRole(toRole("operator_operate"), guardian);
+            kernel.grantRole(toRole("operator_reporter"), address(callback));
+            kernel.grantRole(toRole("operator_policy"), policy);
+            kernel.grantRole(toRole("operator_admin"), guardian);
 
-            /// Role 1 = Guardian
-            authGiver.setRoleCapability(uint8(1), address(operator), operator.operate.selector);
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(operator),
-                operator.setBondContracts.selector
-            );
-            authGiver.setRoleCapability(uint8(1), address(operator), operator.initialize.selector);
-            authGiver.setRoleCapability(uint8(1), address(operator), operator.regenerate.selector);
-            authGiver.setRoleCapability(uint8(1), address(callback), callback.setOperator.selector);
-
-            /// Role 2 = Policy
-            authGiver.setRoleCapability(uint8(2), address(operator), operator.setSpreads.selector);
-
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(operator),
-                operator.setThresholdFactor.selector
-            );
-
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(operator),
-                operator.setCushionFactor.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(operator),
-                operator.setCushionParams.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(operator),
-                operator.setReserveFactor.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(operator),
-                operator.setRegenParams.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(2),
-                address(callback),
-                callback.batchToTreasury.selector
-            );
-            authGiver.setRoleCapability(uint8(2), address(callback), callback.whitelist.selector);
-
-            /// Role 3 = Operator
-            authGiver.setRoleCapability(uint8(3), address(callback), callback.whitelist.selector);
-
-            /// Role 4 = Callback
-            authGiver.setRoleCapability(
-                uint8(4),
-                address(operator),
-                operator.bondPurchase.selector
-            );
-
-            /// Give roles to users
-            authGiver.setUserRole(guardian, uint8(1));
-            authGiver.setUserRole(policy, uint8(2));
-            authGiver.setUserRole(address(operator), uint8(3));
-            authGiver.setUserRole(address(callback), uint8(4));
+            /// Bond callback roles
+            kernel.grantRole(toRole("callback_whitelist"), address(operator));
+            kernel.grantRole(toRole("callback_whitelist"), guardian);
+            kernel.grantRole(toRole("callback_admin"), guardian);
         }
 
         /// Set operator on the callback
@@ -359,8 +294,8 @@ contract BondCallbackTest is Test {
 
     /* ========== CALLBACK TESTS ========== */
 
-    /// TODO
-    /// [ ] Callback correctly handles payouts for the 4 market cases
+    /// DONE
+    /// [X] Callback correctly handles payouts for the 4 market cases
     /// [X] Only whitelisted markets can callback
 
     function testCorrectness_callback() public {
