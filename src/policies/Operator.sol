@@ -14,7 +14,7 @@ import {OlympusMinter} from "modules/MINTR.sol";
 import {OlympusPrice} from "modules/PRICE.sol";
 import {OlympusRange} from "modules/RANGE.sol";
 
-import {Kernel, Policy} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -36,10 +36,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
     error Operator_InvalidParams();
     error Operator_InsufficientCapacity();
-    error Operator_AmountLessThanMinimum(
-        uint256 amountOut,
-        uint256 minAmountOut
-    );
+    error Operator_AmountLessThanMinimum(uint256 amountOut, uint256 minAmountOut);
     error Operator_WallDown();
     error Operator_AlreadyInitialized();
     error Operator_NotInitialized();
@@ -93,25 +90,18 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve]
     ) Policy(kernel_) Auth(address(kernel_), Authority(address(0))) {
         /// Check params are valid
-        if (
-            address(auctioneer_) == address(0) ||
-            address(callback_) == address(0)
-        ) revert Operator_InvalidParams();
+        if (address(auctioneer_) == address(0) || address(callback_) == address(0))
+            revert Operator_InvalidParams();
 
-        if (
-            configParams[1] > uint256(7 days) ||
-            configParams[1] < uint256(1 days)
-        ) revert Operator_InvalidParams();
+        if (configParams[1] > uint256(7 days) || configParams[1] < uint256(1 days))
+            revert Operator_InvalidParams();
 
         if (configParams[2] < uint32(10_000)) revert Operator_InvalidParams();
 
-        if (
-            configParams[3] < uint32(1 hours) ||
-            configParams[3] > configParams[1]
-        ) revert Operator_InvalidParams();
-
-        if (configParams[4] > 10000 || configParams[4] < 100)
+        if (configParams[3] < uint32(1 hours) || configParams[3] > configParams[1])
             revert Operator_InvalidParams();
+
+        if (configParams[4] > 10000 || configParams[4] < 100) revert Operator_InvalidParams();
 
         if (
             configParams[5] < 1 hours ||
@@ -149,34 +139,43 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
     /// @inheritdoc Policy
-    function configureReads() public override {
-        PRICE = OlympusPrice(getModuleAddress("PRICE"));
-        RANGE = OlympusRange(getModuleAddress("RANGE"));
-        TRSRY = OlympusTreasury(getModuleAddress("TRSRY"));
-        MINTR = OlympusMinter(getModuleAddress("MINTR"));
-        setAuthority(Authority(getModuleAddress("AUTHR")));
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](4);
+        dependencies[0] = toKeycode("PRICE");
+        dependencies[1] = toKeycode("RANGE");
+        dependencies[2] = toKeycode("TRSRY");
+        dependencies[3] = toKeycode("MINTR");
+
+        PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
+        RANGE = OlympusRange(getModuleAddress(dependencies[1]));
+        TRSRY = OlympusTreasury(getModuleAddress(dependencies[2]));
+        MINTR = OlympusMinter(getModuleAddress(dependencies[3]));
 
         /// Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
     }
 
     /// @inheritdoc Policy
-    function requestRoles()
-        external
-        view
-        override
-        returns (Role[] memory roles)
-    {
-        roles = new Role[](4);
-        roles[0] = RANGE.OPERATOR();
-        roles[1] = TRSRY.APPROVER();
-        roles[2] = MINTR.MINTER();
-        roles[3] = MINTR.BURNER();
+    function requestPermissions() external view override returns (Permissions[] memory requests) {
+        Keycode RANGE_KEYCODE = RANGE.KEYCODE();
+        Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
+        Keycode MINTR_KEYCODE = MINTR.KEYCODE();
+
+        requests = new Permissions[](9);
+        requests[0] = Permissions(RANGE_KEYCODE, RANGE.updateCapacity.selector);
+        requests[1] = Permissions(RANGE_KEYCODE, RANGE.updateMarket.selector);
+        requests[2] = Permissions(RANGE_KEYCODE, RANGE.updatePrices.selector);
+        requests[3] = Permissions(RANGE_KEYCODE, RANGE.regenerate.selector);
+        requests[4] = Permissions(RANGE_KEYCODE, RANGE.setSpreads.selector);
+        requests[5] = Permissions(RANGE_KEYCODE, RANGE.setThresholdFactor.selector);
+        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
+        requests[7] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[8] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
     /* ========== HEART FUNCTIONS ========== */
     /// @inheritdoc IOperator
-    function operate() external override requiresAuth {
+    function operate() external override onlyRole("operator_operate") {
         /// Revert if not initialized
         if (!initialized) revert Operator_NotInitialized();
 
@@ -191,15 +190,13 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
         /// Check if walls can regenerate capacity
         if (
-            uint48(block.timestamp) >=
-            RANGE.lastActive(true) + uint48(config_.regenWait) &&
+            uint48(block.timestamp) >= RANGE.lastActive(true) + uint48(config_.regenWait) &&
             _status.high.count >= config_.regenThreshold
         ) {
             _regenerate(true);
         }
         if (
-            uint48(block.timestamp) >=
-            RANGE.lastActive(false) + uint48(config_.regenWait) &&
+            uint48(block.timestamp) >= RANGE.lastActive(false) + uint48(config_.regenWait) &&
             _status.low.count >= config_.regenThreshold
         ) {
             _regenerate(false);
@@ -220,19 +217,13 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
                 /// if active, check if the price is back above the cushion
                 /// or if the price is below the wall
                 /// if so, close the market
-                if (
-                    currentPrice > range.cushion.low.price ||
-                    currentPrice < range.wall.low.price
-                ) {
+                if (currentPrice > range.cushion.low.price || currentPrice < range.wall.low.price) {
                     _deactivate(false);
                 }
             } else {
                 /// if not active, check if the price is below the cushion
                 /// if so, open a new bond market
-                if (
-                    currentPrice < range.cushion.low.price &&
-                    currentPrice > range.wall.low.price
-                ) {
+                if (currentPrice < range.cushion.low.price && currentPrice > range.wall.low.price) {
                     _activate(false);
                 }
             }
@@ -243,8 +234,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
                 /// or if the price is above the wall
                 /// if so, close the market
                 if (
-                    currentPrice < range.cushion.high.price ||
-                    currentPrice > range.wall.high.price
+                    currentPrice < range.cushion.high.price || currentPrice > range.wall.high.price
                 ) {
                     _deactivate(true);
                 }
@@ -252,8 +242,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
                 /// if not active, check if the price is above the cushion
                 /// if so, open a new bond market
                 if (
-                    currentPrice > range.cushion.high.price &&
-                    currentPrice < range.wall.high.price
+                    currentPrice > range.cushion.high.price && currentPrice < range.wall.high.price
                 ) {
                     _activate(true);
                 }
@@ -337,10 +326,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     /// @notice             Access restricted (BondCallback)
     /// @param id_          ID of the bond market
     /// @param amountOut_   Amount of capacity expended
-    function bondPurchase(uint256 id_, uint256 amountOut_)
-        external
-        requiresAuth
-    {
+    function bondPurchase(uint256 id_, uint256 amountOut_) external onlyRole("operator_reporter") {
         if (id_ == RANGE.market(true)) {
             _updateCapacity(true, amountOut_);
             _checkCushion(true);
@@ -362,30 +348,17 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
             /// so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             /// is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(range.cushion.high.price);
-            int8 scaleAdjustment = int8(ohmDecimals) -
-                int8(reserveDecimals) +
-                (priceDecimals / 2);
+            int8 scaleAdjustment = int8(ohmDecimals) - int8(reserveDecimals) + (priceDecimals / 2);
 
             /// Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            uint256 oracleScale = 10 **
-                uint8(int8(PRICE.decimals()) - priceDecimals);
+            uint256 oracleScale = 10**uint8(int8(PRICE.decimals()) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
-                    36 +
-                        scaleAdjustment +
-                        int8(reserveDecimals) -
-                        int8(ohmDecimals) -
-                        priceDecimals
+                    36 + scaleAdjustment + int8(reserveDecimals) - int8(ohmDecimals) - priceDecimals
                 );
 
-            uint256 initialPrice = range.wall.high.price.mulDiv(
-                bondScale,
-                oracleScale
-            );
-            uint256 minimumPrice = range.cushion.high.price.mulDiv(
-                bondScale,
-                oracleScale
-            );
+            uint256 initialPrice = range.wall.high.price.mulDiv(bondScale, oracleScale);
+            uint256 minimumPrice = range.cushion.high.price.mulDiv(bondScale, oracleScale);
 
             /// Cache config struct to avoid multiple SLOADs
             Config memory config_ = _config;
@@ -397,23 +370,20 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
             );
 
             /// Create new bond market to buy the reserve with OHM
-            IBondAuctioneer.MarketParams memory params = IBondAuctioneer
-                .MarketParams({
-                    payoutToken: ohm,
-                    quoteToken: reserve,
-                    callbackAddr: address(callback),
-                    capacityInQuote: false,
-                    capacity: marketCapacity,
-                    formattedInitialPrice: initialPrice,
-                    formattedMinimumPrice: minimumPrice,
-                    debtBuffer: config_.cushionDebtBuffer,
-                    vesting: uint48(0), // Instant swaps
-                    conclusion: uint48(
-                        block.timestamp + config_.cushionDuration
-                    ),
-                    depositInterval: config_.cushionDepositInterval,
-                    scaleAdjustment: scaleAdjustment
-                });
+            IBondAuctioneer.MarketParams memory params = IBondAuctioneer.MarketParams({
+                payoutToken: ohm,
+                quoteToken: reserve,
+                callbackAddr: address(callback),
+                capacityInQuote: false,
+                capacity: marketCapacity,
+                formattedInitialPrice: initialPrice,
+                formattedMinimumPrice: minimumPrice,
+                debtBuffer: config_.cushionDebtBuffer,
+                vesting: uint48(0), // Instant swaps
+                conclusion: uint48(block.timestamp + config_.cushionDuration),
+                depositInterval: config_.cushionDepositInterval,
+                scaleAdjustment: scaleAdjustment
+            });
 
             uint256 market = auctioneer.createMarket(params);
 
@@ -425,65 +395,47 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         } else {
             /// Calculate inverse prices from the oracle feed for the low side
             uint8 oracleDecimals = PRICE.decimals();
-            uint256 invCushionPrice = 10**(oracleDecimals * 2) /
-                range.cushion.low.price;
-            uint256 invWallPrice = 10**(oracleDecimals * 2) /
-                range.wall.low.price;
+            uint256 invCushionPrice = 10**(oracleDecimals * 2) / range.cushion.low.price;
+            uint256 invWallPrice = 10**(oracleDecimals * 2) / range.wall.low.price;
 
             /// Calculate scaleAdjustment for bond market
             /// Price decimals are returned from the perspective of the quote token
             /// so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             /// is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(invCushionPrice);
-            int8 scaleAdjustment = int8(reserveDecimals) -
-                int8(ohmDecimals) +
-                (priceDecimals / 2);
+            int8 scaleAdjustment = int8(reserveDecimals) - int8(ohmDecimals) + (priceDecimals / 2);
 
             /// Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            uint256 oracleScale = 10 **
-                uint8(int8(oracleDecimals) - priceDecimals);
+            uint256 oracleScale = 10**uint8(int8(oracleDecimals) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
-                    36 +
-                        scaleAdjustment +
-                        int8(ohmDecimals) -
-                        int8(reserveDecimals) -
-                        priceDecimals
+                    36 + scaleAdjustment + int8(ohmDecimals) - int8(reserveDecimals) - priceDecimals
                 );
 
             uint256 initialPrice = invWallPrice.mulDiv(bondScale, oracleScale);
-            uint256 minimumPrice = invCushionPrice.mulDiv(
-                bondScale,
-                oracleScale
-            );
+            uint256 minimumPrice = invCushionPrice.mulDiv(bondScale, oracleScale);
 
             /// Cache config struct to avoid multiple SLOADs
             Config memory config_ = _config;
 
             /// Calculate market capacity from the cushion factor
-            uint256 marketCapacity = range.low.capacity.mulDiv(
-                config_.cushionFactor,
-                FACTOR_SCALE
-            );
+            uint256 marketCapacity = range.low.capacity.mulDiv(config_.cushionFactor, FACTOR_SCALE);
 
             /// Create new bond market to buy OHM with the reserve
-            IBondAuctioneer.MarketParams memory params = IBondAuctioneer
-                .MarketParams({
-                    payoutToken: reserve,
-                    quoteToken: ohm,
-                    callbackAddr: address(callback),
-                    capacityInQuote: false,
-                    capacity: marketCapacity,
-                    formattedInitialPrice: initialPrice,
-                    formattedMinimumPrice: minimumPrice,
-                    debtBuffer: config_.cushionDebtBuffer,
-                    vesting: uint48(0), // Instant swaps
-                    conclusion: uint48(
-                        block.timestamp + config_.cushionDuration
-                    ),
-                    depositInterval: config_.cushionDepositInterval,
-                    scaleAdjustment: scaleAdjustment
-                });
+            IBondAuctioneer.MarketParams memory params = IBondAuctioneer.MarketParams({
+                payoutToken: reserve,
+                quoteToken: ohm,
+                callbackAddr: address(callback),
+                capacityInQuote: false,
+                capacity: marketCapacity,
+                formattedInitialPrice: initialPrice,
+                formattedMinimumPrice: minimumPrice,
+                debtBuffer: config_.cushionDebtBuffer,
+                vesting: uint48(0), // Instant swaps
+                conclusion: uint48(block.timestamp + config_.cushionDuration),
+                depositInterval: config_.cushionDepositInterval,
+                scaleAdjustment: scaleAdjustment
+            });
 
             uint256 market = auctioneer.createMarket(params);
 
@@ -524,7 +476,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     /// @inheritdoc IOperator
     function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
         external
-        requiresAuth
+        onlyRole("operator_policy")
     {
         /// Set spreads on the range module
         RANGE.setSpreads(cushionSpread_, wallSpread_);
@@ -534,19 +486,15 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     }
 
     /// @inheritdoc IOperator
-    function setThresholdFactor(uint256 thresholdFactor_)
-        external
-        requiresAuth
-    {
+    function setThresholdFactor(uint256 thresholdFactor_) external onlyRole("operator_policy") {
         /// Set threshold factor on the range module
         RANGE.setThresholdFactor(thresholdFactor_);
     }
 
     /// @inheritdoc IOperator
-    function setCushionFactor(uint32 cushionFactor_) external requiresAuth {
+    function setCushionFactor(uint32 cushionFactor_) external onlyRole("operator_policy") {
         /// Confirm factor is within allowed values
-        if (cushionFactor_ > 10000 || cushionFactor_ < 100)
-            revert Operator_InvalidParams();
+        if (cushionFactor_ > 10000 || cushionFactor_ < 100) revert Operator_InvalidParams();
 
         /// Set factor
         _config.cushionFactor = cushionFactor_;
@@ -557,7 +505,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         uint32 duration_,
         uint32 debtBuffer_,
         uint32 depositInterval_
-    ) external requiresAuth {
+    ) external onlyRole("operator_policy") {
         /// Confirm values are valid
         if (duration_ > uint256(7 days) || duration_ < uint256(1 days))
             revert Operator_InvalidParams();
@@ -572,10 +520,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     }
 
     /// @inheritdoc IOperator
-    function setReserveFactor(uint32 reserveFactor_) external requiresAuth {
+    function setReserveFactor(uint32 reserveFactor_) external onlyRole("operator_policy") {
         /// Confirm factor is within allowed values
-        if (reserveFactor_ > 10000 || reserveFactor_ < 100)
-            revert Operator_InvalidParams();
+        if (reserveFactor_ > 10000 || reserveFactor_ < 100) revert Operator_InvalidParams();
 
         /// Set factor
         _config.reserveFactor = reserveFactor_;
@@ -586,7 +533,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         uint32 wait_,
         uint32 threshold_,
         uint32 observe_
-    ) external requiresAuth {
+    ) external onlyRole("operator_policy") {
         /// Confirm regen parameters are within allowed values
         if (wait_ < 1 hours || threshold_ > observe_ || observe_ == 0)
             revert Operator_InvalidParams();
@@ -607,21 +554,19 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     }
 
     /// @inheritdoc IOperator
-    function setBondContracts(
-        IBondAuctioneer auctioneer_,
-        IBondCallback callback_
-    ) external requiresAuth {
-        if (
-            address(auctioneer_) == address(0) ||
-            address(callback_) == address(0)
-        ) revert Operator_InvalidParams();
+    function setBondContracts(IBondAuctioneer auctioneer_, IBondCallback callback_)
+        external
+        onlyRole("operator_admin")
+    {
+        if (address(auctioneer_) == address(0) || address(callback_) == address(0))
+            revert Operator_InvalidParams();
         /// Set contracts
         auctioneer = auctioneer_;
         callback = callback_;
     }
 
     /// @inheritdoc IOperator
-    function initialize() external requiresAuth {
+    function initialize() external onlyRole("operator_admin") {
         /// Can only call once
         if (initialized) revert Operator_AlreadyInitialized();
 
@@ -640,7 +585,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     }
 
     /// @inheritdoc IOperator
-    function regenerate(bool high_) external requiresAuth {
+    function regenerate(bool high_) external onlyRole("operator_admin") {
         /// Regenerate side
         _regenerate(high_);
     }
@@ -765,11 +710,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
 
     /* ========== VIEW FUNCTIONS ========== */
     /// @inheritdoc IOperator
-    function getAmountOut(ERC20 tokenIn_, uint256 amountIn_)
-        public
-        view
-        returns (uint256)
-    {
+    function getAmountOut(ERC20 tokenIn_, uint256 amountIn_) public view returns (uint256) {
         if (tokenIn_ == ohm) {
             /// Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
@@ -778,8 +719,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
             );
 
             /// Revert if amount out exceeds capacity
-            if (amountOut > RANGE.capacity(false))
-                revert Operator_InsufficientCapacity();
+            if (amountOut > RANGE.capacity(false)) revert Operator_InsufficientCapacity();
 
             return amountOut;
         } else if (tokenIn_ == reserve) {
@@ -790,8 +730,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
             );
 
             /// Revert if amount out exceeds capacity
-            if (amountOut > RANGE.capacity(true))
-                revert Operator_InsufficientCapacity();
+            if (amountOut > RANGE.capacity(true)) revert Operator_InsufficientCapacity();
 
             return amountOut;
         } else {
@@ -802,8 +741,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
     /// @inheritdoc IOperator
     function fullCapacity(bool high_) public view override returns (uint256) {
         uint256 reservesInTreasury = TRSRY.getReserveBalance(reserve);
-        uint256 capacity = (reservesInTreasury * _config.reserveFactor) /
-            FACTOR_SCALE;
+        uint256 capacity = (reservesInTreasury * _config.reserveFactor) / FACTOR_SCALE;
         if (high_) {
             capacity =
                 (capacity.mulDiv(
