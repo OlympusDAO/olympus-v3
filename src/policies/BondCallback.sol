@@ -49,11 +49,7 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
 
-    function configureDependencies()
-        external
-        override
-        returns (Keycode[] memory dependencies)
-    {
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("MINTR");
@@ -73,14 +69,11 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         returns (Permissions[] memory requests)
     {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
-        Keycode TRSRY_KEYCODE = MINTR.KEYCODE();
+        Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
         requests = new Permissions[](4);
         requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
-        requests[1] = Permissions(
-            TRSRY_KEYCODE,
-            TRSRY.withdrawReserves.selector
-        );
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[3] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         requests[4] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
@@ -88,17 +81,11 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
     /* ========== WHITELISTING ========== */
 
     /// @inheritdoc IBondCallback
-    function whitelist(address teller_, uint256 id_)
-        external
-        override
-        onlyRole("callback_admin")
-    {
+    function whitelist(address teller_, uint256 id_) external override onlyRole("callback_admin") {
         approvedMarkets[teller_][id_] = true;
 
         // Get payout tokens for market
-        (, , ERC20 payoutToken, , , ) = aggregator
-            .getAuctioneer(id_)
-            .getMarketInfoForPurchase(id_);
+        (, , ERC20 payoutToken, , , ) = aggregator.getAuctioneer(id_).getMarketInfoForPurchase(id_);
 
         /// If payout token is not OHM, request approval from TRSRY for withdrawals
         if (address(payoutToken) != address(ohm)) {
@@ -115,8 +102,7 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         uint256 outputAmount_
     ) external override nonReentrant {
         /// Confirm that the teller and market id are whitelisted
-        if (!approvedMarkets[msg.sender][id_])
-            revert Callback_MarketNotSupported(id_);
+        if (!approvedMarkets[msg.sender][id_]) revert Callback_MarketNotSupported(id_);
 
         // Get tokens for market
         (, , ERC20 payoutToken, ERC20 quoteToken, , ) = aggregator
@@ -124,10 +110,8 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
             .getMarketInfoForPurchase(id_);
 
         // Check that quoteTokens were transferred prior to the call
-        if (
-            quoteToken.balanceOf(address(this)) <
-            priorBalances[quoteToken] + inputAmount_
-        ) revert Callback_TokensNotReceived();
+        if (quoteToken.balanceOf(address(this)) < priorBalances[quoteToken] + inputAmount_)
+            revert Callback_TokensNotReceived();
 
         // Handle payout
         if (quoteToken == payoutToken && quoteToken == ohm) {
@@ -166,10 +150,7 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
 
     /// @notice         Send tokens to the TRSRY in a batch
     /// @param tokens_  Array of tokens to send
-    function batchToTreasury(ERC20[] memory tokens_)
-        external
-        onlyRole("callback_admin")
-    {
+    function batchToTreasury(ERC20[] memory tokens_) external onlyRole("callback_admin") {
         ERC20 token;
         uint256 balance;
         uint256 len = tokens_.length;
@@ -202,10 +183,7 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
     /// @notice             Sets the operator contract for the callback to use to report bond purchases
     /// @notice             Must be set before the callback is used
     /// @param operator_    Address of the Operator contract
-    function setOperator(Operator operator_)
-        external
-        onlyRole("callback_admin")
-    {
+    function setOperator(Operator operator_) external onlyRole("callback_admin") {
         if (address(operator_) == address(0)) revert Callback_InvalidParams();
         operator = operator_;
     }
