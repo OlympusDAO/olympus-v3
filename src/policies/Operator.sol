@@ -3,7 +3,6 @@ pragma solidity 0.8.15;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {Auth, Authority} from "solmate/auth/Auth.sol";
 
 import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
@@ -88,7 +87,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard, Auth {
         IBondCallback callback_,
         ERC20[2] memory tokens_, // [ohm, reserve]
         uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve]
-    ) Policy(kernel_) Auth(address(kernel_), Authority(address(0))) {
+    ) Policy(kernel_) {
         /// Check params are valid
         if (address(auctioneer_) == address(0) || address(callback_) == address(0))
             revert Operator_InvalidParams();
