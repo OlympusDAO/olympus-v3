@@ -50,7 +50,7 @@ function ensureValidRole(Role role_) pure {
 
     for (uint256 i = 0; i < 32; ) {
         bytes1 char = unwrapped[i];
-        if ((char < 0x61 || char > 0x7A) && char != 0x00) {
+        if ((char < 0x61 || char > 0x7A) && char != 0x5f && char != 0x00) {
             revert InvalidRole(role_); // a-z only
         }
         unchecked {
