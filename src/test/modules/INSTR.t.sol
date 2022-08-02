@@ -68,7 +68,7 @@ contract InstructionsTest is Test {
         Instruction[] memory instructions = new Instruction[](1);
         instructions[0] = Instruction(Actions.InstallModule, address(0));
 
-        vm.expectRevert(INSTR_InvalidTargetNotAContract.selector);
+        vm.expectRevert(abi.encodeWithSelector(TargetNotAContract.selector, address(0)));
         instrWriter.store(instructions);
     }
 
@@ -77,7 +77,7 @@ contract InstructionsTest is Test {
         Instruction[] memory instructions = new Instruction[](1);
         instructions[0] = Instruction(Actions.InstallModule, address(invalidModule));
 
-        vm.expectRevert(INSTR_InvalidModuleKeycode.selector);
+        vm.expectRevert(abi.encodeWithSelector(InvalidKeycode.selector, invalidModule.KEYCODE()));
         instrWriter.store(instructions);
     }
 

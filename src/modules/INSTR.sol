@@ -8,8 +8,8 @@ import "src/Kernel.sol";
 
 error INSTR_InstructionsCannotBeEmpty();
 error INSTR_InvalidChangeExecutorAction();
-error INSTR_InvalidTargetNotAContract();
-error INSTR_InvalidModuleKeycode();
+error INSTR_InvalidTargetNotAContract(); // TODO not used, remove?
+error INSTR_InvalidModuleKeycode(); // TODO not used, remove?
 
 contract OlympusInstructions is Module {
     /////////////////////////////////////////////////////////////////////////////////
@@ -40,19 +40,11 @@ contract OlympusInstructions is Module {
     /////////////////////////////////////////////////////////////////////////////////
 
     // view function for retrieving a list of instructions in an outside contract
-    function getInstructions(uint256 instructionsId_)
-        public
-        view
-        returns (Instruction[] memory)
-    {
+    function getInstructions(uint256 instructionsId_) public view returns (Instruction[] memory) {
         return storedInstructions[instructionsId_];
     }
 
-    function store(Instruction[] calldata instructions_)
-        external
-        permissioned
-        returns (uint256)
-    {
+    function store(Instruction[] calldata instructions_) external permissioned returns (uint256) {
         uint256 length = instructions_.length;
         uint256 instructionsId = ++totalInstructions;
 
@@ -77,9 +69,7 @@ contract OlympusInstructions is Module {
             ) {
                 Module module = Module(instruction.target);
                 ensureValidKeycode(module.KEYCODE());
-            } else if (
-                instruction.action == Actions.ChangeExecutor && i != length - 1
-            ) {
+            } else if (instruction.action == Actions.ChangeExecutor && i != length - 1) {
                 // throw an error if ChangeExecutor exists and is not the last Action in the instruction llist
                 // this exists because if ChangeExecutor is not the last item in the list of instructions
                 // the Kernel will not recognize any of the following instructions as valid, since the policy
