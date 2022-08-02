@@ -44,21 +44,18 @@ contract TRSRYTest is Test {
         dn.mint(address(TRSRY), INITIAL_TOKEN_AMOUNT);
     }
 
-    function configureReads() external {}
+    function requestPermissions() external view returns (Permissions[] memory requests) {
+        Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
 
-    // Needed to allow this contract to be used as a policy with full access to module
-    function requestRoles() external view returns (Role[] memory requests) {
-        requests = TRSRY.ROLES();
+        requests = new Permissions[](4);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.loanReserves.selector);
+        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.repayLoan.selector);
+        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
     }
 
     function test_KEYCODE() public {
         assertEq32("TRSRY", Keycode.unwrap(TRSRY.KEYCODE()));
-    }
-
-    function test_ROLES() public {
-        assertEq("TRSRY_Approver", Role.unwrap(TRSRY.ROLES()[0]));
-        assertEq("TRSRY_Banker", Role.unwrap(TRSRY.ROLES()[1]));
-        assertEq("TRSRY_DebtAdmin", Role.unwrap(TRSRY.ROLES()[2]));
     }
 
     function test_WithdrawApproval(uint256 amount_) public {
@@ -144,7 +141,7 @@ contract TRSRYTest is Test {
         TRSRY.setApprovalFor(testUser, ngmi, amount_);
 
         // Fail when withdrawal using policy without write access
-        vm.expectRevert(Module_NotAuthorized.selector);
+        vm.expectRevert(Module_PolicyNotAuthorized.selector);
         vm.prank(testUser);
         TRSRY.loanReserves(ngmi, amount_);
     }
@@ -188,7 +185,7 @@ contract TRSRYTest is Test {
         TRSRY.loanReserves(ngmi, INITIAL_TOKEN_AMOUNT / 2);
 
         // Fail when setDebt using policy without write access
-        vm.expectRevert(Module_NotAuthorized.selector);
+        vm.expectRevert(Module_PolicyNotAuthorized.selector);
         vm.prank(testUser);
         TRSRY.setDebt(ngmi, address(this), INITIAL_TOKEN_AMOUNT / 4);
     }

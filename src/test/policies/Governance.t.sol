@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 
-import {Kernel, Instruction, Actions} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 import {OlympusInstructions} from "modules/INSTR.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
@@ -30,7 +30,7 @@ contract GovernanceTest is Test {
     OlympusInstructions internal instructions;
     OlympusVotes internal votes;
 
-    Governance internal governance;
+    OlympusGovernance internal governance;
     VoterRegistration internal voterRegistration;
 
     event InstructionsStored(uint256);
@@ -63,9 +63,9 @@ contract GovernanceTest is Test {
         votes = new OlympusVotes(kernel);
 
         /// Deploy policies
-        governance = new Governance(kernel);
+        governance = new OlympusGovernance(kernel);
         voterRegistration = new VoterRegistration(kernel);
-        newProposedPolicy = address(new Governance(kernel));
+        newProposedPolicy = address(new OlympusGovernance(kernel));
 
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(instructions));
@@ -480,30 +480,7 @@ contract GovernanceTest is Test {
         assertEq(activeProposal.activationTimestamp, 0);
 
         // check that the proposed contracts are approved in the kernel
-        assertTrue(kernel.approvedPolicies(address(newProposedPolicy)));
-    }
-
-    ////////////////////////////////
-    //   RECLAIMING VOTE TOKENS   //
-    ////////////////////////////////
-
-    function _executeProposal() public {
-        _createApprovedInstructions();
-        vm.warp(block.timestamp + 3 days + 1);
-        governance.executeProposal();
-        assertEq(votes.balanceOf(voter5), 0);
-    }
-
-    function testRevert_CannotReclaimZeroVotes() public {
-        _executeProposal();
-        vm.expectRevert(CannotReclaimZeroVotes.selector);
-
-        vm.prank(voter4);
-        governance.reclaimVotes(1);
-    }
-
-    function testRevert_CannotReclaimTokensForActiveVote() public {
-        _createApprovedInstructions();
+        assertTrue(Policy(newProposedPolicy).isActive());
 
         vm.expectRevert(CannotReclaimTokensForActiveVote.selector);
 
@@ -517,6 +494,29 @@ contract GovernanceTest is Test {
         vm.prank(voter5);
         governance.reclaimVotes(1);
 
+        vm.expectRevert(VotingTokensAlreadyReclaimed.selector);
+
+        vm.prank(voter5);
+        governance.reclaimVotes(1);
+    }
+
+    function testCorrectness_SuccessfullyReclaimVotes() public {
+        _executeProposal();
+
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(address(governance), voter5, 5);
+
+        vm.prank(voter5);
+        governance.reclaimVotes(1);
+
+        // check that the claim has been recorded
+        assertTrue(governance.tokenClaimsForProposal(1, voter5));
+
+        // check that the voting tokens are successfully returned to the user from the contract
+        assertEq(votes.balanceOf(voter5), 5);
+        assertEq(votes.balanceOf(address(governance)), 0);
+    }
+}
         vm.expectRevert(VotingTokensAlreadyReclaimed.selector);
 
         vm.prank(voter5);

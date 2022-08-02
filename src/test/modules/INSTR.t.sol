@@ -154,8 +154,8 @@ contract InstructionsTest is Test {
         assertEq(instructions[0].target, address(mockModuleWriter));
         assertEq(instr.totalInstructions(), 1);
 
-        mockModuleWriter.roleCall();
-        assertEq(mockModuleAddress.counter(), 1);
+        //mockModuleWriter.roleCall();
+        //assertEq(mockModuleAddress.counter(), 1);
     }
 
     function testCorrectness_TerminatePolicy() public {
@@ -182,7 +182,7 @@ contract InstructionsTest is Test {
         assertEq(instructions[0].target, address(mockModuleWriter));
 
         // TODO update with correct error message
-        // vm.expectRevert(Module_NotAuthorized.selector);
+        // vm.expectRevert(Module_PolicyNotAuthorized.selector);
         // mockModuleWriter.roleCall();
     }
 

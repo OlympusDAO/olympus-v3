@@ -118,6 +118,8 @@ abstract contract Policy is KernelAdapter {
         return moduleForKeycode;
     }
 
+    /// @notice Define module dependencies for this policy.
+    /// @dev    When testing this module with a test policy, this is the only function that needs to be overridden.
     function configureDependencies() external virtual returns (Keycode[] memory dependencies) {}
 
     function requestPermissions() external view virtual returns (Permissions[] memory requests) {}

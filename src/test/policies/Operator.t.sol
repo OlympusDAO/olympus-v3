@@ -111,7 +111,6 @@ contract OperatorTest is Test {
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
-            authr = new OlympusAuthority(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -158,7 +157,6 @@ contract OperatorTest is Test {
             /// Approve policies
             kernel.executeAction(Actions.ApprovePolicy, address(operator));
             kernel.executeAction(Actions.ApprovePolicy, address(callback));
-            kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
         }
         {
             /// Configure access control

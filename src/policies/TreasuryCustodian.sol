@@ -3,8 +3,8 @@ pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import "src/Kernel.sol";
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
+import "src/Kernel.sol";
 
 // ERRORS
 error PolicyStillActive();
@@ -43,7 +43,7 @@ contract TreasuryCustodian is Policy {
         address for_,
         ERC20 token_,
         uint256 amount_
-    ) external onlyRole("custodian_admin") {
+    ) external onlyRole("custodian") {
         TRSRY.setApprovalFor(for_, token_, amount_);
     }
 
@@ -51,7 +51,7 @@ contract TreasuryCustodian is Policy {
     // TODO Currently allows anyone to revoke any approval EXCEPT approved policies.
     // TODO must reorg policy storage to be able to check for unapproved policies.
     function revokePolicyApprovals(address policy_, ERC20[] memory tokens_) external {
-        if (kernel.approvedPolicies(policy_)) revert PolicyStillActive();
+        if (Policy(policy_).isActive()) revert PolicyStillActive();
 
         // TODO Make sure `policy_` is an actual policy and not a random address.
 
@@ -72,7 +72,7 @@ contract TreasuryCustodian is Policy {
         ERC20 token_,
         address debtor_,
         uint256 amount_
-    ) external onlyRole("custodian_admin") {
+    ) external onlyRole("custodian") {
         uint256 debt = TRSRY.reserveDebt(token_, debtor_);
         TRSRY.setDebt(token_, debtor_, debt + amount_);
     }
@@ -81,7 +81,7 @@ contract TreasuryCustodian is Policy {
         ERC20 token_,
         address debtor_,
         uint256 amount_
-    ) external onlyRole("custodian_admin") {
+    ) external onlyRole("custodian") {
         uint256 debt = TRSRY.reserveDebt(token_, debtor_);
         TRSRY.setDebt(token_, debtor_, debt - amount_);
     }

@@ -27,7 +27,7 @@ contract MockPolicy is Policy {
     {
         requests = new Permissions[](1);
         requests[0] = Permissions(
-            toKeycode("MOCKY"),
+            MOCKY.KEYCODE(),
             MOCKY.permissionedCall.selector
         );
     }

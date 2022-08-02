@@ -48,7 +48,7 @@ contract TreasuryCustodianTest is Test {
         kernel.executeAction(Actions.ApprovePolicy, address(custodian));
 
         /// Configure access control
-        kernel.grantRole(toRole("custodian_admin"), address(this));
+        kernel.grantRole(toRole("custodian"), address(this));
     }
 
     function test_UnauthorizedChangeDebt(uint256 amount_) public {

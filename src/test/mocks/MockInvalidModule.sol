@@ -9,8 +9,4 @@ contract MockInvalidModule is Module {
     function KEYCODE() public pure override returns (Keycode) {
         return toKeycode("inval");
     }
-
-    function ROLES() public pure override returns (Role[] memory roles) {
-        roles = new Role[](0);
-    }
 }

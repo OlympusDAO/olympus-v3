@@ -10,9 +10,8 @@ contract MockModuleWriter is Policy {
     Module internal _module;
     Permissions[] internal _requests;
 
-    constructor(Kernel kernel_, Module module_, Permissions[] memory requests_) Policy(kernel_) {
+    constructor(Kernel kernel_, Module module_) Policy(kernel_) {
         _module = module_;
-        _requests = requests_;
     }
 
     /* ========== FRAMEWORK CONFIFURATION ========== */
@@ -25,6 +24,12 @@ contract MockModuleWriter is Policy {
         returns (Permissions[] memory requests)
     {
         requests = _requests;
+    }
+
+    function setPermissionRequests(Permissions[] memory requests_)
+        external
+    {
+        _requests = requests_;
     }
 
     /* ========== DELEGATE TO MODULE ========== */

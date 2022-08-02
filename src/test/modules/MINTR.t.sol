@@ -17,26 +17,26 @@ import "src/Kernel.sol";
 //import {OlympusAuthority} from "../../external/OlympusAuthority.sol";
 
 contract MockLegacyAuthority is IOlympusAuthority {
-    address authr;
+    address kernel;
 
-    constructor(address authr_) {
-        authr = authr_;
+    constructor(address kernel_) {
+        kernel = kernel_;
     }
 
     function governor() external view returns (address) {
-        return authr;
+        return kernel;
     }
 
     function guardian() external view returns (address) {
-        return authr;
+        return kernel;
     }
 
     function policy() external view returns (address) {
-        return authr;
+        return kernel;
     }
 
     function vault() external view returns (address) {
-        return authr;
+        return kernel;
     }
 }
 
@@ -72,19 +72,16 @@ contract MINTRTest is Test {
         kernel.executeAction(Actions.ApprovePolicy, address(this));
     }
 
-    function configureReads() external pure {}
+    function requestPermissions() external view returns (Permissions[] memory requests) {
+        Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-    function requestRoles() external view returns (Role[] memory requests) {
-        requests = MINTR.ROLES();
+        requests = new Permissions[](2);
+        requests[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
     function test_KEYCODE() public {
         assertEq("MINTR", Keycode.unwrap(MINTR.KEYCODE()));
-    }
-
-    function test_ROLES() public {
-        assertEq("MINTR_Minter", Role.unwrap(MINTR.ROLES()[0]));
-        assertEq("MINTR_Burner", Role.unwrap(MINTR.ROLES()[1]));
     }
 
     function test_ApprovedAddressMintsOhm(address to_, uint256 amount_) public {
@@ -97,25 +94,19 @@ contract MINTRTest is Test {
         assertEq(ohm.balanceOf(to_), amount_);
     }
 
-    function testFail_ApprovedAddressCannotMintToZeroAddress(uint256 amount_)
-        public
-    {
+    function testFail_ApprovedAddressCannotMintToZeroAddress(uint256 amount_) public {
         // This contract is approved
         MINTR.mintOhm(address(0x0), amount_);
     }
 
     // TODO use vm.expectRevert() instead. Did not work for me.
-    function testFail_UnapprovedAddressMintsOhm(address to_, uint256 amount_)
-        public
-    {
+    function testFail_UnapprovedAddressMintsOhm(address to_, uint256 amount_) public {
         // Have user try to mint
         vm.prank(usrs[0]);
         MINTR.mintOhm(to_, amount_);
     }
 
-    function test_ApprovedAddressBurnsOhm(address from_, uint256 amount_)
-        public
-    {
+    function test_ApprovedAddressBurnsOhm(address from_, uint256 amount_) public {
         // Will test burn not working against zero-address separately
         vm.assume(from_ != address(0x0));
 
@@ -129,9 +120,7 @@ contract MINTRTest is Test {
         assertEq(ohm.balanceOf(from_), 0);
     }
 
-    function testFail_ApprovedAddressCannotBurnFromZeroAddress(uint256 amount_)
-        public
-    {
+    function testFail_ApprovedAddressCannotBurnFromZeroAddress(uint256 amount_) public {
         // This contract is approved
         MINTR.burnOhm(address(0x0), amount_);
     }
