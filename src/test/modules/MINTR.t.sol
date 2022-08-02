@@ -11,10 +11,7 @@ import "test-utils/sorting.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import "src/Kernel.sol";
-
-//import "src/Kernel.sol";
-
-//import {OlympusAuthority} from "../../external/OlympusAuthority.sol";
+import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 
 contract MockLegacyAuthority is IOlympusAuthority {
     address kernel;
@@ -51,6 +48,8 @@ contract MINTRTest is Test {
     OlympusERC20Token internal ohm;
     UserFactory userCreator;
     address[] usrs;
+    MockModuleWriter writer;
+    OlympusMinter MINTRWriter;
 
     uint256 internal constant INITIAL_INDEX = 10 * RATE_UNITS;
     uint256 internal constant RATE_UNITS = 1e6;
@@ -69,10 +68,14 @@ contract MINTRTest is Test {
         usrs = userCreator.create(3);
 
         kernel.executeAction(Actions.InstallModule, address(MINTR));
-        kernel.executeAction(Actions.ApprovePolicy, address(this));
+        Permissions[] memory requests = requestPermissions();
+        writer = new MockModuleWriter(kernel, MINTR, requests);
+        kernel.executeAction(Actions.ApprovePolicy, address(writer));
+
+        MINTRWriter = OlympusMinter(address(writer));
     }
 
-    function requestPermissions() external view returns (Permissions[] memory requests) {
+    function requestPermissions() public view returns (Permissions[] memory requests) {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
         requests = new Permissions[](2);
@@ -89,19 +92,19 @@ contract MINTRTest is Test {
         vm.assume(to_ != address(0x0));
 
         // This contract is approved
-        MINTR.mintOhm(to_, amount_);
+        MINTRWriter.mintOhm(to_, amount_);
 
         assertEq(ohm.balanceOf(to_), amount_);
     }
 
     function testFail_ApprovedAddressCannotMintToZeroAddress(uint256 amount_) public {
-        // This contract is approved
-        MINTR.mintOhm(address(0x0), amount_);
+        MINTRWriter.mintOhm(address(0x0), amount_);
     }
 
-    // TODO use vm.expectRevert() instead. Did not work for me.
-    function testFail_UnapprovedAddressMintsOhm(address to_, uint256 amount_) public {
+    function testCorrectness_UnapprovedAddressCannotMintOhm(address to_, uint256 amount_) public {
         // Have user try to mint
+        bytes memory err = abi.encodeWithSelector(Module_PolicyNotAuthorized.selector, usrs[0]);
+        vm.expectRevert(err);
         vm.prank(usrs[0]);
         MINTR.mintOhm(to_, amount_);
     }
@@ -111,7 +114,7 @@ contract MINTRTest is Test {
         vm.assume(from_ != address(0x0));
 
         // Setup: mint ohm into user0
-        MINTR.mintOhm(from_, amount_);
+        MINTRWriter.mintOhm(from_, amount_);
         assertEq(ohm.balanceOf(from_), amount_);
 
         vm.prank(from_);
@@ -121,8 +124,7 @@ contract MINTRTest is Test {
     }
 
     function testFail_ApprovedAddressCannotBurnFromZeroAddress(uint256 amount_) public {
-        // This contract is approved
-        MINTR.burnOhm(address(0x0), amount_);
+        MINTRWriter.burnOhm(address(0x0), amount_);
     }
 
     // TODO use vm.expectRevert() instead. Did not work for me.

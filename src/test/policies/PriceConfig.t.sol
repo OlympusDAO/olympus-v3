@@ -88,7 +88,7 @@ contract PriceConfigTest is Test {
             /// Configure access control
 
             /// PriceConfig roles
-            kernel.grantRole(toRole("priceConfig_admin"), guardian);
+            kernel.grantRole(toRole("price_admin"), guardian);
         }
 
         {
@@ -109,9 +109,7 @@ contract PriceConfigTest is Test {
 
         /// Set scaling value for calculations
         uint256 scale = 10 **
-            (price.decimals() +
-                reserveEthPriceFeed.decimals() -
-                ohmEthPriceFeed.decimals());
+            (price.decimals() + reserveEthPriceFeed.decimals() - ohmEthPriceFeed.decimals());
 
         /// Calculate the number of observations and initialize the observation array
         uint48 observationFrequency = price.observationFrequency();
@@ -123,23 +121,16 @@ contract PriceConfigTest is Test {
         int256 change; // percentage with two decimals
         for (uint256 i; i < numObservations; ++i) {
             /// Calculate a random percentage change from -10% to + 10% using the nonce and observation number
-            change =
-                int256(uint256(keccak256(abi.encodePacked(nonce, i)))) %
-                int256(1000);
+            change = int256(uint256(keccak256(abi.encodePacked(nonce, i)))) % int256(1000);
 
             /// Calculate the new ohmEth price
-            ohmEthPrice =
-                (ohmEthPrice * (CHANGE_DECIMALS + change)) /
-                CHANGE_DECIMALS;
+            ohmEthPrice = (ohmEthPrice * (CHANGE_DECIMALS + change)) / CHANGE_DECIMALS;
 
             /// Update price feed
             ohmEthPriceFeed.setLatestAnswer(ohmEthPrice);
 
             /// Get the current price from the price module and store in the observations array
-            observations[i] = uint256(ohmEthPrice).mulDiv(
-                scale,
-                reserveEthPrice
-            );
+            observations[i] = uint256(ohmEthPrice).mulDiv(scale, reserveEthPrice);
         }
 
         return observations;
@@ -168,10 +159,7 @@ contract PriceConfigTest is Test {
         /// Check that the observations array is filled with the correct number of observations
         /// Do so by ensuring the last observation is at the right index and is the current price
         uint256 numObservations = uint256(price.numObservations());
-        assertEq(
-            price.observations(numObservations - 1),
-            price.getCurrentPrice()
-        );
+        assertEq(price.observations(numObservations - 1), price.getCurrentPrice());
 
         /// Check that the last observation time is set to the current time
         assertEq(price.lastObservationTime(), block.timestamp);
@@ -251,7 +239,7 @@ contract PriceConfigTest is Test {
 
     function testCorrectness_onlyAuthorizedCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodePacked("UNAUTHORIZED");
+        bytes memory err = abi.encodeWithSelector(Policy_OnlyRole.selector, toRole("price_admin"));
 
         /// initialize
         uint256[] memory obs = new uint256[](21);

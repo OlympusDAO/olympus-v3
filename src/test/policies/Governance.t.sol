@@ -35,18 +35,9 @@ contract GovernanceTest is Test {
 
     event InstructionsStored(uint256);
     event ProposalSubmitted(uint256 instructionsId);
-    event ProposalEndorsed(
-        uint256 instructionsId,
-        address voter,
-        uint256 amount
-    );
+    event ProposalEndorsed(uint256 instructionsId, address voter, uint256 amount);
     event ProposalActivated(uint256 instructionsId, uint256 timestamp);
-    event WalletVoted(
-        uint256 instructionsId,
-        address voter,
-        bool for_,
-        uint256 userVotes
-    );
+    event WalletVoted(uint256 instructionsId, address voter, bool for_, uint256 userVotes);
     event ProposalExecuted(uint256 instructionsId);
     event Transfer(address indexed, address indexed, uint256);
 
@@ -88,7 +79,7 @@ contract GovernanceTest is Test {
         kernel.executeAction(Actions.ChangeExecutor, address(governance));
 
         /// Configure access control
-        kernel.grantRole(toRole("voterReg_admin"), govMultisig);
+        kernel.grantRole(toRole("voter_admin"), govMultisig);
 
         // Mint tokens to users and treasury for testing
         vm.startPrank(govMultisig);
@@ -118,10 +109,7 @@ contract GovernanceTest is Test {
     function _submitProposal() internal {
         // create valid instructions
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(newProposedPolicy)
-        );
+        instructions_[0] = Instruction(Actions.ApprovePolicy, address(newProposedPolicy));
 
         // submit proposal as voter1 (1/15 votes)
         vm.prank(voter1);
@@ -130,10 +118,7 @@ contract GovernanceTest is Test {
 
     function testRevert_NotEnoughVotesToPropose() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(governance)
-        );
+        instructions_[0] = Instruction(Actions.ApprovePolicy, address(governance));
 
         vm.expectRevert(NotEnoughVotesToPropose.selector);
 
@@ -144,10 +129,7 @@ contract GovernanceTest is Test {
 
     function testEvent_ProposalSubmitted() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(governance)
-        );
+        instructions_[0] = Instruction(Actions.ApprovePolicy, address(governance));
 
         vm.expectEmit(true, true, true, true);
         emit ProposalSubmitted(1);
@@ -158,10 +140,7 @@ contract GovernanceTest is Test {
 
     function testCorrectness_SuccessfullySubmitProposal() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(governance)
-        );
+        instructions_[0] = Instruction(Actions.ApprovePolicy, address(governance));
 
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
@@ -334,8 +313,7 @@ contract GovernanceTest is Test {
         governance.activateProposal(1);
 
         // check that the active proposal data is correct
-        ActivatedProposal memory activeProposal = governance
-            .getActiveProposal();
+        ActivatedProposal memory activeProposal = governance.getActiveProposal();
 
         assertEq(activeProposal.instructionsId, 1);
         assertEq(activeProposal.activationTimestamp, block.timestamp);
@@ -496,8 +474,7 @@ contract GovernanceTest is Test {
         governance.executeProposal();
 
         // check that the proposal is no longer active
-        ActivatedProposal memory activeProposal = governance
-            .getActiveProposal();
+        ActivatedProposal memory activeProposal = governance.getActiveProposal();
 
         assertEq(activeProposal.instructionsId, 0);
         assertEq(activeProposal.activationTimestamp, 0);

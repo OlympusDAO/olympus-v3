@@ -180,7 +180,7 @@ contract BondCallbackTest is Test {
 
             /// Bond callback roles
             kernel.grantRole(toRole("callback_whitelist"), address(operator));
-            kernel.grantRole(toRole("callback_whitelist"), guardian);
+            kernel.grantRole(toRole("callback_whitelist"), policy);
             kernel.grantRole(toRole("callback_admin"), guardian);
         }
 
@@ -456,7 +456,10 @@ contract BondCallbackTest is Test {
         uint256 wlTwo = createMarket(reserve, ohm, 0, 1, 3);
 
         // Attempt to whitelist a market as a non-approved address, expect revert
-        bytes memory err = abi.encodePacked("UNAUTHORIZED");
+        bytes memory err = abi.encodeWithSelector(
+            Policy_OnlyRole.selector,
+            toRole("callback_whitelist")
+        );
         vm.prank(alice);
         vm.expectRevert(err);
         callback.whitelist(address(teller), wlOne);
@@ -526,14 +529,17 @@ contract BondCallbackTest is Test {
 
         /// Try to call batch to treasury as non-policy, expect revert
         {
-            bytes memory err = abi.encodePacked("UNAUTHORIZED");
+            bytes memory err = abi.encodeWithSelector(
+                Policy_OnlyRole.selector,
+                toRole("callback_admin")
+            );
             vm.prank(alice);
             vm.expectRevert(err);
             callback.batchToTreasury(tokens);
         }
 
-        /// Call batch to treasury as policy
-        vm.prank(policy);
+        /// Call batch to treasury as guardian
+        vm.prank(guardian);
         callback.batchToTreasury(tokens);
 
         /// Expect the reserve balance of the callback and treasury to be updated
@@ -543,8 +549,8 @@ contract BondCallbackTest is Test {
         /// Test batch to treasury with the other token
         tokens[0] = other;
 
-        /// Call batch to treasury as policy
-        vm.prank(policy);
+        /// Call batch to treasury as guardian
+        vm.prank(guardian);
         callback.batchToTreasury(tokens);
 
         /// Expect the other balance of the callback and treasury to be updated
@@ -576,7 +582,7 @@ contract BondCallbackTest is Test {
         tokens[0] = reserve;
         tokens[1] = other;
 
-        vm.prank(policy);
+        vm.prank(guardian);
         callback.batchToTreasury(tokens);
 
         /// Expect the reserve balance of the callback and treasury to be updated

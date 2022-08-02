@@ -73,8 +73,8 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         requests = new Permissions[](4);
         requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        requests[3] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        requests[4] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[2] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
     /* ========== WHITELISTING ========== */

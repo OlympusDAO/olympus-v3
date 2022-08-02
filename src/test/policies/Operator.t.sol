@@ -19,7 +19,7 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {Kernel, Actions, toRole} from "src/Kernel.sol";
+import "src/Kernel.sol";
 import {OlympusRange} from "modules/RANGE.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter, OHM} from "modules/MINTR.sol";
@@ -1479,7 +1479,10 @@ contract OperatorTest is Test {
         operator.operate();
 
         /// Try to call operate as anyone else
-        bytes memory err = abi.encodePacked("UNAUTHORIZED");
+        bytes memory err = abi.encodeWithSelector(
+            Policy_OnlyRole.selector,
+            toRole("operator_operate")
+        );
         vm.expectRevert(err);
         vm.prank(alice);
         operator.operate();
@@ -1499,7 +1502,10 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Try to set spreads as random user, expect revert
-        bytes memory err = abi.encodePacked("UNAUTHORIZED");
+        bytes memory err = abi.encodeWithSelector(
+            Policy_OnlyRole.selector,
+            toRole("operator_policy")
+        );
         vm.expectRevert(err);
         vm.prank(alice);
         operator.setSpreads(1500, 3000);
@@ -1531,7 +1537,10 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Try to set spreads as random user, expect revert
-        bytes memory err = abi.encodePacked("UNAUTHORIZED");
+        bytes memory err = abi.encodeWithSelector(
+            Policy_OnlyRole.selector,
+            toRole("operator_admin")
+        );
         vm.expectRevert(err);
         vm.prank(alice);
         operator.setBondContracts(IBondAuctioneer(alice), BondCallback(alice));
@@ -1943,7 +1952,10 @@ contract OperatorTest is Test {
         assertTrue(!range.active(false));
 
         /// Try to call regenerate without being guardian and expect revert
-        bytes memory err = abi.encodePacked("UNAUTHORIZED");
+        bytes memory err = abi.encodeWithSelector(
+            Policy_OnlyRole.selector,
+            toRole("operator_admin")
+        );
 
         vm.expectRevert(err);
         vm.prank(alice);

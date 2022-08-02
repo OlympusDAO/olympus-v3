@@ -52,11 +52,12 @@ contract TreasuryCustodianTest is Test {
     }
 
     function test_UnauthorizedChangeDebt(uint256 amount_) public {
-        vm.expectRevert("UNAUTHORIZED");
+        bytes memory err = abi.encodeWithSelector(Policy_OnlyRole.selector, toRole("custodian"));
+        vm.expectRevert(err);
         vm.prank(randomWallet);
         custodian.increaseDebt(ngmi, randomWallet, amount_);
 
-        vm.expectRevert("UNAUTHORIZED");
+        vm.expectRevert(err);
         vm.prank(randomWallet);
         custodian.decreaseDebt(ngmi, randomWallet, amount_);
     }

@@ -45,7 +45,7 @@ contract VoterRegistrationTest is Test {
         kernel.executeAction(Actions.ApprovePolicy, address(voterRegistration));
 
         /// Configure access control
-        kernel.grantRole(toRole("voterReg_admin"), govMultisig);
+        kernel.grantRole(toRole("voter_admin"), govMultisig);
     }
 
     ////////////////////////////////
@@ -53,7 +53,11 @@ contract VoterRegistrationTest is Test {
     ////////////////////////////////
 
     function testRevert_WhenCalledByRandomWallet() public {
-        vm.expectRevert("UNAUTHORIZED");
+        bytes memory err = abi.encodeWithSelector(
+            Policy_OnlyRole.selector,
+            toRole("voter_admin")
+        );
+        vm.expectRevert(err);
         vm.prank(randomWallet);
         voterRegistration.issueVotesTo(randomWallet, 1000);
     }

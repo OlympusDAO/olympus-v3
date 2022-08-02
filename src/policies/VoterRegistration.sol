@@ -30,19 +30,19 @@ contract VoterRegistration is Policy {
     {
         permissions = new Permissions[](2);
         permissions[0] = Permissions(VOTES.KEYCODE(), VOTES.mintTo.selector);
-        permissions[0] = Permissions(VOTES.KEYCODE(), VOTES.burnFrom.selector);
+        permissions[1] = Permissions(VOTES.KEYCODE(), VOTES.burnFrom.selector);
     }
 
     /////////////////////////////////////////////////////////////////////////////////
     //                               User Actions                                  //
     /////////////////////////////////////////////////////////////////////////////////
 
-    function issueVotesTo(address wallet_, uint256 amount_) external onlyRole("voterReg_admin") {
+    function issueVotesTo(address wallet_, uint256 amount_) external onlyRole("voter_admin") {
         // issue the votes in the VOTES module
         VOTES.mintTo(wallet_, amount_);
     }
 
-    function revokeVotesFrom(address wallet_, uint256 amount_) external onlyRole("voterReg_admin") {
+    function revokeVotesFrom(address wallet_, uint256 amount_) external onlyRole("voter_admin") {
         // revoke the votes in the VOTES module
         VOTES.burnFrom(wallet_, amount_);
     }
