@@ -26,11 +26,11 @@ contract MockModuleWriter is Policy {
         requests = _requests;
     }
 
-    function setPermissionRequests(Permissions[] memory requests_)
-        external
-    {
-        _requests = requests_;
-    }
+    //function setPermissionRequests(Permissions[] memory requests_)
+    //    external
+    //{
+    //    _requests = requests_;
+    //}
 
     /* ========== DELEGATE TO MODULE ========== */
     fallback(bytes calldata input) external returns (bytes memory) {

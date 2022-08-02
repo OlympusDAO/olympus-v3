@@ -35,9 +35,18 @@ contract GovernanceTest is Test {
 
     event InstructionsStored(uint256);
     event ProposalSubmitted(uint256 instructionsId);
-    event ProposalEndorsed(uint256 instructionsId, address voter, uint256 amount);
+    event ProposalEndorsed(
+        uint256 instructionsId,
+        address voter,
+        uint256 amount
+    );
     event ProposalActivated(uint256 instructionsId, uint256 timestamp);
-    event WalletVoted(uint256 instructionsId, address voter, bool for_, uint256 userVotes);
+    event WalletVoted(
+        uint256 instructionsId,
+        address voter,
+        bool for_,
+        uint256 userVotes
+    );
     event ProposalExecuted(uint256 instructionsId);
     event Transfer(address indexed, address indexed, uint256);
 
@@ -109,7 +118,10 @@ contract GovernanceTest is Test {
     function _submitProposal() internal {
         // create valid instructions
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(Actions.ApprovePolicy, address(newProposedPolicy));
+        instructions_[0] = Instruction(
+            Actions.ApprovePolicy,
+            address(newProposedPolicy)
+        );
 
         // submit proposal as voter1 (1/15 votes)
         vm.prank(voter1);
@@ -118,7 +130,10 @@ contract GovernanceTest is Test {
 
     function testRevert_NotEnoughVotesToPropose() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(Actions.ApprovePolicy, address(governance));
+        instructions_[0] = Instruction(
+            Actions.ApprovePolicy,
+            address(governance)
+        );
 
         vm.expectRevert(NotEnoughVotesToPropose.selector);
 
@@ -129,7 +144,10 @@ contract GovernanceTest is Test {
 
     function testEvent_ProposalSubmitted() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(Actions.ApprovePolicy, address(governance));
+        instructions_[0] = Instruction(
+            Actions.ApprovePolicy,
+            address(governance)
+        );
 
         vm.expectEmit(true, true, true, true);
         emit ProposalSubmitted(1);
@@ -140,7 +158,10 @@ contract GovernanceTest is Test {
 
     function testCorrectness_SuccessfullySubmitProposal() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(Actions.ApprovePolicy, address(governance));
+        instructions_[0] = Instruction(
+            Actions.ApprovePolicy,
+            address(governance)
+        );
 
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
@@ -313,7 +334,8 @@ contract GovernanceTest is Test {
         governance.activateProposal(1);
 
         // check that the active proposal data is correct
-        ActivatedProposal memory activeProposal = governance.getActiveProposal();
+        ActivatedProposal memory activeProposal = governance
+            .getActiveProposal();
 
         assertEq(activeProposal.instructionsId, 1);
         assertEq(activeProposal.activationTimestamp, block.timestamp);
@@ -474,13 +496,37 @@ contract GovernanceTest is Test {
         governance.executeProposal();
 
         // check that the proposal is no longer active
-        ActivatedProposal memory activeProposal = governance.getActiveProposal();
+        ActivatedProposal memory activeProposal = governance
+            .getActiveProposal();
 
         assertEq(activeProposal.instructionsId, 0);
         assertEq(activeProposal.activationTimestamp, 0);
 
         // check that the proposed contracts are approved in the kernel
         assertTrue(Policy(newProposedPolicy).isActive());
+    }
+
+    ////////////////////////////////
+    //   RECLAIMING VOTE TOKENS   //
+    ////////////////////////////////
+
+    function _executeProposal() public {
+        _createApprovedInstructions();
+        vm.warp(block.timestamp + 3 days + 1);
+        governance.executeProposal();
+        assertEq(votes.balanceOf(voter5), 0);
+    }
+
+    function testRevert_CannotReclaimZeroVotes() public {
+        _executeProposal();
+        vm.expectRevert(CannotReclaimZeroVotes.selector);
+
+        vm.prank(voter4);
+        governance.reclaimVotes(1);
+    }
+
+    function testRevert_CannotReclaimTokensForActiveVote() public {
+        _createApprovedInstructions();
 
         vm.expectRevert(CannotReclaimTokensForActiveVote.selector);
 
@@ -494,29 +540,6 @@ contract GovernanceTest is Test {
         vm.prank(voter5);
         governance.reclaimVotes(1);
 
-        vm.expectRevert(VotingTokensAlreadyReclaimed.selector);
-
-        vm.prank(voter5);
-        governance.reclaimVotes(1);
-    }
-
-    function testCorrectness_SuccessfullyReclaimVotes() public {
-        _executeProposal();
-
-        vm.expectEmit(true, true, true, true);
-        emit Transfer(address(governance), voter5, 5);
-
-        vm.prank(voter5);
-        governance.reclaimVotes(1);
-
-        // check that the claim has been recorded
-        assertTrue(governance.tokenClaimsForProposal(1, voter5));
-
-        // check that the voting tokens are successfully returned to the user from the contract
-        assertEq(votes.balanceOf(voter5), 5);
-        assertEq(votes.balanceOf(address(governance)), 0);
-    }
-}
         vm.expectRevert(VotingTokensAlreadyReclaimed.selector);
 
         vm.prank(voter5);
