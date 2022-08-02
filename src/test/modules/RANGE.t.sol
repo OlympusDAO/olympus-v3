@@ -62,7 +62,16 @@ contract RangeTest is Test {
             );
 
             // Deploy mock module writer
-            writer = new MockModuleWriter(kernel, range);
+            Permissions[] memory requests = new Permissions[](6);
+            Keycode RANGE_KEYCODE = range.KEYCODE();
+            requests[0] = Permissions(RANGE_KEYCODE, range.updateCapacity.selector);
+            requests[1] = Permissions(RANGE_KEYCODE, range.updateMarket.selector);
+            requests[2] = Permissions(RANGE_KEYCODE, range.updatePrices.selector);
+            requests[3] = Permissions(RANGE_KEYCODE, range.regenerate.selector);
+            requests[4] = Permissions(RANGE_KEYCODE, range.setSpreads.selector);
+            requests[5] = Permissions(RANGE_KEYCODE, range.setThresholdFactor.selector);
+
+            writer = new MockModuleWriter(kernel, range, requests);
             rangeWriter = OlympusRange(address(writer));
         }
 
@@ -328,13 +337,9 @@ contract RangeTest is Test {
         rangeWriter.setThresholdFactor(uint256(50));
     }
 
-    function testCorrectness_onlyPermittedPoliciesCanCallGatedFunctions()
-        public
-    {
+    function testCorrectness_onlyPermittedPoliciesCanCallGatedFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodeWithSelector(
-            Module_PolicyNotAuthorized.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Module_PolicyNotAuthorized.selector);
 
         /// updatePrices
         vm.expectRevert(err);

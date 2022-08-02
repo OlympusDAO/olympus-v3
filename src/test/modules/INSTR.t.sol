@@ -32,7 +32,10 @@ contract InstructionsTest is Test {
         invalidModule = new MockInvalidModule(kernel);
 
         /// Deploy policies
-        instrWriter = OlympusInstructions(address(new MockModuleWriter(kernel, instr)));
+        Permissions[] memory requests = new Permissions[](1);
+        requests[0] = Permissions(instr.KEYCODE(), instr.store.selector);
+
+        instrWriter = OlympusInstructions(address(new MockModuleWriter(kernel, instr, requests)));
         governance = new OlympusGovernance(kernel);
 
         /// Install modules
@@ -100,7 +103,9 @@ contract InstructionsTest is Test {
     function testCorrectness_UpgradeModule() public {
         // deploy new sample module and upgrade
         Module mockModuleAddress = Module(new MockValidModule(kernel));
-        Policy mockModuleWriter = Policy(new MockModuleWriter(kernel, mockModuleAddress));
+        Policy mockModuleWriter = Policy(
+            new MockModuleWriter(kernel, mockModuleAddress, new Permissions[](0))
+        );
         Module mockUpgradedModuleAddress = Module(new MockValidUpgradedModule(kernel));
 
         // install a pre-existing module and policy
@@ -133,7 +138,7 @@ contract InstructionsTest is Test {
     function testCorrectness_ApprovePolicy() public {
         MockValidModule mockModuleAddress = new MockValidModule(kernel);
         MockValidModule mockModuleWriter = MockValidModule(
-            address(new MockModuleWriter(kernel, mockModuleAddress))
+            address(new MockModuleWriter(kernel, mockModuleAddress, new Permissions[](0)))
         );
 
         kernel.executeAction(Actions.InstallModule, address(mockModuleAddress));
@@ -161,7 +166,7 @@ contract InstructionsTest is Test {
     function testCorrectness_TerminatePolicy() public {
         MockValidModule mockModuleAddress = new MockValidModule(kernel);
         MockValidModule mockModuleWriter = MockValidModule(
-            address(new MockModuleWriter(kernel, mockModuleAddress))
+            address(new MockModuleWriter(kernel, mockModuleAddress, new Permissions[](0)))
         );
 
         kernel.executeAction(Actions.InstallModule, address(mockModuleAddress));

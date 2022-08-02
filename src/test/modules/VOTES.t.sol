@@ -2,13 +2,13 @@
 
 pragma solidity >=0.8.0;
 
-import { Test } from "forge-std/Test.sol";
-import { console2 } from "forge-std/console2.sol";
-import { UserFactory } from "test-utils/UserFactory.sol";
+import {Test} from "forge-std/Test.sol";
+import {console2} from "forge-std/console2.sol";
+import {UserFactory} from "test-utils/UserFactory.sol";
 
-import { Kernel, Module, Instruction, Actions } from "../../Kernel.sol";
+import {Kernel, Module, Instruction, Actions} from "../../Kernel.sol";
 import "modules/VOTES.sol";
-import { MockModuleWriter } from "../mocks/MockModuleWriter.sol";
+import {MockModuleWriter} from "../mocks/MockModuleWriter.sol";
 
 contract VotesTest is Test {
     Kernel internal kernel;
@@ -27,7 +27,12 @@ contract VotesTest is Test {
         VOTES = new OlympusVotes(kernel);
 
         /// Deploy policies
-        votes = new MockModuleWriter(kernel, VOTES);
+        Permissions[] memory requests = new Permissions[](2);
+        Keycode VOTES_KEYCODE = VOTES.KEYCODE();
+        requests[0] = Permissions(VOTES_KEYCODE, VOTES.mintTo.selector);
+        requests[1] = Permissions(VOTES_KEYCODE, VOTES.burnFrom.selector);
+
+        votes = new MockModuleWriter(kernel, VOTES, requests);
 
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(VOTES));
