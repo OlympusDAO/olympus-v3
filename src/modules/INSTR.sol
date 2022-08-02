@@ -8,8 +8,6 @@ import "src/Kernel.sol";
 
 error INSTR_InstructionsCannotBeEmpty();
 error INSTR_InvalidChangeExecutorAction();
-error INSTR_InvalidTargetNotAContract(); // TODO not used, remove?
-error INSTR_InvalidModuleKeycode(); // TODO not used, remove?
 
 contract OlympusInstructions is Module {
     /////////////////////////////////////////////////////////////////////////////////
