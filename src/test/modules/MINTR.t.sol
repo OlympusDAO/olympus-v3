@@ -117,10 +117,11 @@ contract MINTRTest is Test {
         MINTRWriter.mintOhm(from_, amount_);
         assertEq(ohm.balanceOf(from_), amount_);
 
-        vm.prank(from_);
+        vm.startPrank(from_);
         ohm.approve(address(MINTR), amount_);
-        MINTR.burnOhm(from_, amount_);
+        MINTRWriter.burnOhm(from_, amount_);
         assertEq(ohm.balanceOf(from_), 0);
+        vm.stopPrank();
     }
 
     function testFail_ApprovedAddressCannotBurnFromZeroAddress(uint256 amount_) public {
