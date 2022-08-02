@@ -248,10 +248,6 @@ contract Kernel {
     function _approvePolicy(Policy policy_) internal {
         if (policy_.isActive()) revert Kernel_PolicyAlreadyApproved(address(policy_));
 
-        // Grant permissions for policy to access restricted module functions
-        Permissions[] memory requests = policy_.requestPermissions();
-        _setPolicyPermissions(policy_, requests, true);
-
         // Add policy to list of active policies
         activePolicies.push(policy_);
         getPolicyIndex[policy_] = activePolicies.length - 1;
@@ -270,6 +266,10 @@ contract Kernel {
                 ++i;
             }
         }
+
+        // Grant permissions for policy to access restricted module functions
+        Permissions[] memory requests = policy_.requestPermissions();
+        _setPolicyPermissions(policy_, requests, true);
 
         // Set policy status to active
         policy_.setActiveStatus(true);
