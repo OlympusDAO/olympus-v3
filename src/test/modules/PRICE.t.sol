@@ -166,14 +166,16 @@ contract PriceTest is Test {
     }
 
     function testCorrectness_onlyPermittedPoliciesCanCallUpdateMovingAverage(uint8 nonce) public {
-        bytes memory err = abi.encodeWithSelector(Module_PolicyNotAuthorized.selector);
+        bytes memory err = abi.encodeWithSelector(
+            Module_PolicyNotAuthorized.selector,
+            address(this)
+        );
 
         /// Initialize price module
         initializePrice(nonce);
 
         /// Call updateMovingAverage with a non-approved address
         vm.expectRevert(err);
-        vm.prank(address(0x0));
         price.updateMovingAverage();
     }
 
@@ -491,7 +493,10 @@ contract PriceTest is Test {
 
     function testCorrectness_onlyPermittedPoliciesCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodeWithSelector(Module_PolicyNotAuthorized.selector);
+        bytes memory err = abi.encodeWithSelector(
+            Module_PolicyNotAuthorized.selector,
+            address(this)
+        );
 
         /// initialize
         uint256[] memory obs = new uint256[](21);

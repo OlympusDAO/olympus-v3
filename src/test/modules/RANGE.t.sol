@@ -339,7 +339,10 @@ contract RangeTest is Test {
 
     function testCorrectness_onlyPermittedPoliciesCanCallGatedFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodeWithSelector(Module_PolicyNotAuthorized.selector);
+        bytes memory err = abi.encodeWithSelector(
+            Module_PolicyNotAuthorized.selector,
+            address(this)
+        );
 
         /// updatePrices
         vm.expectRevert(err);

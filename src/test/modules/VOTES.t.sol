@@ -27,10 +27,11 @@ contract VotesTest is Test {
         VOTES = new OlympusVotes(kernel);
 
         /// Deploy policies
-        Permissions[] memory requests = new Permissions[](2);
+        Permissions[] memory requests = new Permissions[](3);
         Keycode VOTES_KEYCODE = VOTES.KEYCODE();
         requests[0] = Permissions(VOTES_KEYCODE, VOTES.mintTo.selector);
         requests[1] = Permissions(VOTES_KEYCODE, VOTES.burnFrom.selector);
+        requests[2] = Permissions(VOTES_KEYCODE, VOTES.transferFrom.selector);
 
         votes = new MockModuleWriter(kernel, VOTES, requests);
 
