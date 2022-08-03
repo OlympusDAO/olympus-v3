@@ -41,7 +41,7 @@ contract ModuleTestFixture is Policy {
 }
 
 // Generate an UNACTIVATED test fixture policy for a module. Must be activated separately.
-library TestFixtureGenerator {
+library ModuleTestFixtureGenerator {
     // Generate a test fixture policy for a module with all permissions passed in
     function generateFixture(Module module_, Permissions[] memory requests_)
         public

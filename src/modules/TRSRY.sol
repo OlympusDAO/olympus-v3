@@ -79,7 +79,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
     // Debt functions. Intended for use by policies (allocators).
 
     // Policy loaning function
-    function loanReserves(ERC20 token_, uint256 amount_) external permissioned {
+    function getLoan(ERC20 token_, uint256 amount_) external permissioned {
         _checkApproval(msg.sender, token_, amount_);
 
         // Add debt to caller

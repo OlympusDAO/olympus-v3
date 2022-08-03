@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 import {console2 as console} from "forge-std/console2.sol";
-import {TestFixtureGenerator} from "test/lib/TestFixtureGenerator.sol";
+import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
@@ -14,7 +14,7 @@ import "src/modules/TRSRY.sol";
 import "src/Kernel.sol";
 
 contract TRSRYTest is Test {
-    using TestFixtureGenerator for OlympusTreasury;
+    using ModuleTestFixtureGenerator for OlympusTreasury;
 
     Kernel internal kernel;
     OlympusTreasury public TRSRY;
@@ -34,34 +34,30 @@ contract TRSRYTest is Test {
         testUser = users[0];
 
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
-        Permissions[] memory requests = requestPermissions();
+
+        Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
+        Permissions[] memory requests = new Permissions[](4);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.getLoan.selector);
+        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.repayLoan.selector);
+        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
 
         // Generate test fixture policy addresses with different authorizations
         godmode = TRSRY.generateFixture(requests);
         kernel.executeAction(Actions.ApprovePolicy, godmode);
 
-        debtor = TRSRY.generateFunctionFixture(TRSRY.loanReserves.selector);
+        debtor = TRSRY.generateFunctionFixture(TRSRY.getLoan.selector);
         kernel.executeAction(Actions.ApprovePolicy, debtor);
 
         // Give TRSRY some tokens
         ngmi.mint(address(TRSRY), INITIAL_TOKEN_AMOUNT);
     }
 
-    function requestPermissions() public view returns (Permissions[] memory requests) {
-        Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
-
-        requests = new Permissions[](4);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
-        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.loanReserves.selector);
-        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.repayLoan.selector);
-        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
-    }
-
-    function test_KEYCODE() public {
+    function testCorrectness_KEYCODE() public {
         assertEq32("TRSRY", Keycode.unwrap(TRSRY.KEYCODE()));
     }
 
-    function test_WithdrawApproval(uint256 amount_) public {
+    function testCorrectness_WithdrawApproval(uint256 amount_) public {
         vm.prank(godmode);
         TRSRY.setApprovalFor(testUser, ngmi, amount_);
 
@@ -69,7 +65,7 @@ contract TRSRYTest is Test {
     }
 
     /*
-    function test_RevokeApprovals() public {
+    function testCorrectness_RevokeApprovals() public {
         TRSRY.setApprovalFor(testUser, ngmi, INITIAL_TOKEN_AMOUNT);
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), INITIAL_TOKEN_AMOUNT);
 
@@ -83,11 +79,11 @@ contract TRSRYTest is Test {
     }
     */
 
-    function test_GetReserveBalance() public {
+    function testCorrectness_GetReserveBalance() public {
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
     }
 
-    function test_ApprovedCanWithdrawToken(uint256 amount_) public {
+    function testCorrectness_ApprovedCanWithdrawToken(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
 
         vm.prank(godmode);
@@ -102,8 +98,9 @@ contract TRSRYTest is Test {
     }
 
     // TODO test if can withdraw more than allowed amount
+    //function testRevert_WithdrawMoreThanApproved(uint256 amount_) public {}
 
-    function test_UnauthorizedCannotWithdrawToken(uint256 amount_) public {
+    function testRevert_UnauthorizedCannotWithdrawToken(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
         vm.assume(amount_ > 0);
 
@@ -113,7 +110,7 @@ contract TRSRYTest is Test {
         TRSRY.withdrawReserves(address(this), ngmi, amount_);
     }
 
-    function test_LoanReserves(uint256 amount_) public {
+    function testCorrectness_GetLoan(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
         vm.assume(amount_ > 0);
 
@@ -121,7 +118,7 @@ contract TRSRYTest is Test {
         TRSRY.setApprovalFor(debtor, ngmi, amount_);
 
         vm.prank(debtor);
-        TRSRY.loanReserves(ngmi, amount_);
+        TRSRY.getLoan(ngmi, amount_);
 
         assertEq(ngmi.balanceOf(debtor), amount_);
         assertEq(TRSRY.reserveDebt(ngmi, debtor), amount_);
@@ -131,7 +128,7 @@ contract TRSRYTest is Test {
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
     }
 
-    function test_UnauthorizedCannotLoanReserves(uint256 amount_) public {
+    function testRevert_UnauthorizedCannotGetLoan(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
         vm.assume(amount_ > 0);
 
@@ -146,10 +143,10 @@ contract TRSRYTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(unapprovedPolicy);
-        TRSRY.loanReserves(ngmi, amount_);
+        TRSRY.getLoan(ngmi, amount_);
     }
 
-    function test_RepayLoan(uint256 amount_) public {
+    function testCorrectness_RepayLoan(uint256 amount_) public {
         vm.assume(amount_ > 0);
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
 
@@ -157,7 +154,7 @@ contract TRSRYTest is Test {
         TRSRY.setApprovalFor(debtor, ngmi, amount_);
 
         vm.startPrank(debtor);
-        TRSRY.loanReserves(ngmi, amount_);
+        TRSRY.getLoan(ngmi, amount_);
 
         assertEq(ngmi.balanceOf(debtor), amount_);
         assertEq(TRSRY.reserveDebt(ngmi, debtor), amount_);
@@ -170,14 +167,14 @@ contract TRSRYTest is Test {
         assertEq(ngmi.balanceOf(debtor), 0);
     }
 
-    // TODO test RepayLoan with no loan outstanding
+    // TODO test RepayLoan with no loan outstanding. should revert
 
-    function test_SetDebt() public {
+    function testCorrectness_SetDebt() public {
         vm.prank(godmode);
         TRSRY.setApprovalFor(debtor, ngmi, INITIAL_TOKEN_AMOUNT);
 
         vm.prank(debtor);
-        TRSRY.loanReserves(ngmi, INITIAL_TOKEN_AMOUNT);
+        TRSRY.getLoan(ngmi, INITIAL_TOKEN_AMOUNT);
 
         // Change the debt amount of the debtor to half
         vm.prank(godmode);
@@ -187,12 +184,12 @@ contract TRSRYTest is Test {
         assertEq(TRSRY.totalDebt(ngmi), INITIAL_TOKEN_AMOUNT / 2);
     }
 
-    function test_UnauthorizedPolicyCannotSetDebt() public {
+    function testRevert_UnauthorizedPolicyCannotSetDebt() public {
         vm.prank(godmode);
         TRSRY.setApprovalFor(debtor, ngmi, INITIAL_TOKEN_AMOUNT);
 
         vm.prank(debtor);
-        TRSRY.loanReserves(ngmi, INITIAL_TOKEN_AMOUNT);
+        TRSRY.getLoan(ngmi, INITIAL_TOKEN_AMOUNT);
 
         // Fail when calling setDebt from debtor (policy without setDebt permissions)
         bytes memory err = abi.encodeWithSelector(Module_PolicyNotAuthorized.selector, debtor);
@@ -201,12 +198,12 @@ contract TRSRYTest is Test {
         TRSRY.setDebt(ngmi, debtor, INITIAL_TOKEN_AMOUNT / 2);
     }
 
-    function test_ClearDebt() public {
+    function testCorrectness_ClearDebt() public {
         vm.prank(godmode);
         TRSRY.setApprovalFor(debtor, ngmi, INITIAL_TOKEN_AMOUNT);
 
         vm.prank(debtor);
-        TRSRY.loanReserves(ngmi, INITIAL_TOKEN_AMOUNT);
+        TRSRY.getLoan(ngmi, INITIAL_TOKEN_AMOUNT);
 
         assertEq(TRSRY.reserveDebt(ngmi, debtor), INITIAL_TOKEN_AMOUNT);
         assertEq(TRSRY.totalDebt(ngmi), INITIAL_TOKEN_AMOUNT);
