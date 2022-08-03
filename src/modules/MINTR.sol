@@ -20,12 +20,7 @@ contract OlympusMinter is Module {
         return toKeycode("MINTR");
     }
 
-    function VERSION()
-        external
-        pure
-        override
-        returns (uint8 major, uint8 minor)
-    {
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
 

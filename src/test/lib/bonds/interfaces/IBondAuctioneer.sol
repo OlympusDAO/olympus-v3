@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0;
 
-import { ERC20 } from "solmate/tokens/ERC20.sol";
-import { IBondTeller } from "./IBondTeller.sol";
-import { IBondAggregator } from "./IBondAggregator.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
+import {IBondTeller} from "./IBondTeller.sol";
+import {IBondAggregator} from "./IBondAggregator.sol";
 
 interface IBondAuctioneer {
     /// @notice             Creates a new bond market

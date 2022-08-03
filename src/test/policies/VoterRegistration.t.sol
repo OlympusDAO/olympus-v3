@@ -53,10 +53,7 @@ contract VoterRegistrationTest is Test {
     ////////////////////////////////
 
     function testRevert_WhenCalledByRandomWallet() public {
-        bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
-            toRole("voter_admin")
-        );
+        bytes memory err = abi.encodeWithSelector(Policy_OnlyRole.selector, toRole("voter_admin"));
         vm.expectRevert(err);
         vm.prank(randomWallet);
         voterRegistration.issueVotesTo(randomWallet, 1000);

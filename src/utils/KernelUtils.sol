@@ -25,7 +25,7 @@ function fromRole(Role role_) pure returns (bytes32) {
 
 function ensureContract(address target_) view {
     uint256 size;
-    assembly("memory-safe") {
+    assembly {
         size := extcodesize(target_)
     }
     if (size == 0) revert TargetNotAContract(target_);

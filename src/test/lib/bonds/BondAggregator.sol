@@ -54,15 +54,10 @@ contract BondAggregator is IBondAggregator, Auth {
     // A 'vesting' param longer than 50 years is considered a timestamp for fixed expiry.
     uint48 private constant MAX_FIXED_TERM = 52 weeks * 50;
 
-    constructor(address guardian_, Authority authority_)
-        Auth(guardian_, authority_)
-    {}
+    constructor(address guardian_, Authority authority_) Auth(guardian_, authority_) {}
 
     /// @inheritdoc IBondAggregator
-    function registerAuctioneer(IBondAuctioneer auctioneer_)
-        external
-        requiresAuth
-    {
+    function registerAuctioneer(IBondAuctioneer auctioneer_) external requiresAuth {
         /// Restricted to authorized addresses, initially restricted to guardian
         auctioneers.push(auctioneer_);
         _whitelist[address(auctioneer_)] = true;
@@ -85,11 +80,7 @@ contract BondAggregator is IBondAggregator, Auth {
     /* ========== VIEW FUNCTIONS ========== */
 
     /// @inheritdoc IBondAggregator
-    function getAuctioneer(uint256 id_)
-        external
-        view
-        returns (IBondAuctioneer)
-    {
+    function getAuctioneer(uint256 id_) external view returns (IBondAuctioneer) {
         return marketsToAuctioneers[id_];
     }
 
@@ -110,11 +101,7 @@ contract BondAggregator is IBondAggregator, Auth {
     }
 
     /// @inheritdoc IBondAggregator
-    function maxAmountAccepted(uint256 id_, address referrer_)
-        external
-        view
-        returns (uint256)
-    {
+    function maxAmountAccepted(uint256 id_, address referrer_) external view returns (uint256) {
         IBondAuctioneer auctioneer = marketsToAuctioneers[id_];
         return auctioneer.maxAmountAccepted(id_, referrer_);
     }
@@ -186,11 +173,7 @@ contract BondAggregator is IBondAggregator, Auth {
     }
 
     /// @inheritdoc IBondAggregator
-    function marketsFor(address payout_, address quote_)
-        public
-        view
-        returns (uint256[] memory)
-    {
+    function marketsFor(address payout_, address quote_) public view returns (uint256[] memory) {
         uint256[] memory forPayout = liveMarketsFor(payout_, true);
         uint256 count;
 
@@ -199,9 +182,7 @@ contract BondAggregator is IBondAggregator, Auth {
         uint256 len = forPayout.length;
         for (uint256 i; i < len; ++i) {
             auctioneer = marketsToAuctioneers[forPayout[i]];
-            (, , , quoteToken, , ) = auctioneer.getMarketInfoForPurchase(
-                forPayout[i]
-            );
+            (, , , quoteToken, , ) = auctioneer.getMarketInfoForPurchase(forPayout[i]);
             if (isLive(forPayout[i]) && address(quoteToken) == quote_) ++count;
         }
 
@@ -210,9 +191,7 @@ contract BondAggregator is IBondAggregator, Auth {
 
         for (uint256 i; i < len; ++i) {
             auctioneer = marketsToAuctioneers[forPayout[i]];
-            (, , , quoteToken, , ) = auctioneer.getMarketInfoForPurchase(
-                forPayout[i]
-            );
+            (, , , quoteToken, , ) = auctioneer.getMarketInfoForPurchase(forPayout[i]);
             if (isLive(forPayout[i]) && address(quoteToken) == quote_) {
                 ids[count] = forPayout[i];
                 ++count;
@@ -241,13 +220,9 @@ contract BondAggregator is IBondAggregator, Auth {
         IBondAuctioneer auctioneer;
         for (uint256 i; i < len; ++i) {
             auctioneer = marketsToAuctioneers[ids[i]];
-            (, , , , vesting, maxPayout) = auctioneer.getMarketInfoForPurchase(
-                ids[i]
-            );
+            (, , , , vesting, maxPayout) = auctioneer.getMarketInfoForPurchase(ids[i]);
 
-            uint256 expiry = (vesting <= MAX_FIXED_TERM)
-                ? block.timestamp + vesting
-                : vesting;
+            uint256 expiry = (vesting <= MAX_FIXED_TERM) ? block.timestamp + vesting : vesting;
 
             if (expiry <= maxExpiry_) {
                 payouts[i] = minAmountOut_ <= maxPayout
@@ -264,11 +239,7 @@ contract BondAggregator is IBondAggregator, Auth {
         return id;
     }
 
-    function liveMarketsBy(address owner_)
-        external
-        view
-        returns (uint256[] memory)
-    {
+    function liveMarketsBy(address owner_) external view returns (uint256[] memory) {
         uint256 count;
         IBondAuctioneer auctioneer;
         for (uint256 i; i < marketCounter; ++i) {
