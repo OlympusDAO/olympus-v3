@@ -10,6 +10,7 @@ import "src/Kernel.sol";
 
 // ERRORS
 error TRSRY_NotApproved();
+error TRSRY_NoDebtOutstanding();
 
 /// @title TRSRY - OlympusTreasury
 /// @notice Treasury holds reserves, LP tokens and all other assets under the control
@@ -75,9 +76,10 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         emit Withdrawal(msg.sender, to_, token_, amount_);
     }
 
-    // DEBT FUNCTIONS
+    // Debt functions. Intended for use by policies (allocators).
 
-    function loanReserves(ERC20 token_, uint256 amount_) external permissioned {
+    // Policy loaning function
+    function getLoan(ERC20 token_, uint256 amount_) external permissioned {
         _checkApproval(msg.sender, token_, amount_);
 
         // Add debt to caller
@@ -89,7 +91,9 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         emit DebtIncurred(token_, msg.sender, amount_);
     }
 
-    function repayLoan(ERC20 token_, uint256 amount_) external nonReentrant permissioned {
+    function repayLoan(ERC20 token_, uint256 amount_) external nonReentrant {
+        if (reserveDebt[token_][msg.sender] == 0) revert TRSRY_NoDebtOutstanding();
+
         // Deposit from caller first (to handle nonstandard token transfers)
         uint256 prevBalance = token_.balanceOf(address(this));
         token_.safeTransferFrom(msg.sender, address(this), amount_);

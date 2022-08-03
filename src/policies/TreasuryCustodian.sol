@@ -47,9 +47,9 @@ contract TreasuryCustodian is Policy {
         TRSRY.setApprovalFor(for_, token_, amount_);
     }
 
-    // Anyone can call to revoke a terminated policy's approvals.
-    // TODO Currently allows anyone to revoke any approval EXCEPT approved policies.
-    // TODO must reorg policy storage to be able to check for unapproved policies.
+    // Anyone can call to revoke a deactivated policy's approvals.
+    // TODO Currently allows anyone to revoke any approval EXCEPT activated policies.
+    // TODO must reorg policy storage to be able to check for deactivated policies.
     function revokePolicyApprovals(address policy_, ERC20[] memory tokens_) external {
         if (Policy(policy_).isActive()) revert PolicyStillActive();
 

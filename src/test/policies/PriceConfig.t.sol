@@ -81,7 +81,7 @@ contract PriceConfigTest is Test {
             kernel.executeAction(Actions.InstallModule, address(price));
 
             /// Approve policies
-            kernel.executeAction(Actions.ApprovePolicy, address(priceConfig));
+            kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
         }
 
         {

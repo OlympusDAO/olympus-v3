@@ -177,14 +177,14 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.InstallModule, address(MINTR));
 
         /// Approve policies
-        kernel.executeAction(Actions.ApprovePolicy, address(callback));
-        kernel.executeAction(Actions.ApprovePolicy, address(operator));
-        kernel.executeAction(Actions.ApprovePolicy, address(heart));
-        kernel.executeAction(Actions.ApprovePolicy, address(priceConfig));
-        kernel.executeAction(Actions.ApprovePolicy, address(voterReg));
-        kernel.executeAction(Actions.ApprovePolicy, address(governance));
+        kernel.executeAction(Actions.ActivatePolicy, address(callback));
+        kernel.executeAction(Actions.ActivatePolicy, address(operator));
+        kernel.executeAction(Actions.ActivatePolicy, address(heart));
+        kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
+        kernel.executeAction(Actions.ActivatePolicy, address(voterReg));
+        kernel.executeAction(Actions.ActivatePolicy, address(governance));
         /// TODO likely to change with the auth system upgrades, using as a placeholder to enable auth setting on deployment
-        kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
+        kernel.executeAction(Actions.ActivatePolicy, address(authGiver));
 
         /// Set initial access control for policies on the AUTHR module
         /// Set role permissions
@@ -271,8 +271,8 @@ contract OlympusDeploy is Script {
         authGiver.setUserRole(address(operator), uint8(3));
         authGiver.setUserRole(address(callback), uint8(4));
 
-        /// Terminate mock auth giver
-        kernel.executeAction(Actions.TerminatePolicy, address(authGiver));
+        /// deactivate mock auth giver
+        kernel.executeAction(Actions.DeactivatePolicy, address(authGiver));
 
         // /// Transfer executor powers to INSTR
         // kernel.executeAction(Actions.ChangeExecutor, address(INSTR));

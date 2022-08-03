@@ -54,11 +54,11 @@ contract HeartDeploy is Script {
         /// Execute actions on Kernel
 
         /// Approve policies
-        kernel.executeAction(Actions.ApprovePolicy, address(heart));
-        kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
+        kernel.executeAction(Actions.ActivatePolicy, address(heart));
+        kernel.executeAction(Actions.ActivatePolicy, address(authGiver));
 
-        /// Terminate old policies
-        kernel.executeAction(Actions.TerminatePolicy, address(oldHeart));
+        /// deactivate old policies
+        kernel.executeAction(Actions.DeactivatePolicy, address(oldHeart));
 
         /// Set initial access control for policies on the AUTHR module
         /// Set role permissions
@@ -80,8 +80,8 @@ contract HeartDeploy is Script {
         /// Give roles to users
         authGiver.setUserRole(address(heart), uint8(0));
 
-        /// Terminate mock auth giver
-        kernel.executeAction(Actions.TerminatePolicy, address(authGiver));
+        /// deactivate mock auth giver
+        kernel.executeAction(Actions.DeactivatePolicy, address(authGiver));
 
         vm.stopBroadcast();
     }

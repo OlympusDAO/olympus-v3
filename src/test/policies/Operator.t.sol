@@ -155,8 +155,8 @@ contract OperatorTest is Test {
             kernel.executeAction(Actions.InstallModule, address(minter));
 
             /// Approve policies
-            kernel.executeAction(Actions.ApprovePolicy, address(operator));
-            kernel.executeAction(Actions.ApprovePolicy, address(callback));
+            kernel.executeAction(Actions.ActivatePolicy, address(operator));
+            kernel.executeAction(Actions.ActivatePolicy, address(callback));
         }
         {
             /// Configure access control

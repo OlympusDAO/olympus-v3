@@ -30,11 +30,7 @@ contract BondFixedTermCDA is BondBaseCDA {
 
     /* ========== MARKET FUNCTIONS ========== */
     /// @inheritdoc BondBaseCDA
-    function createMarket(MarketParams memory params_)
-        external
-        override
-        returns (uint256)
-    {
+    function createMarket(MarketParams memory params_) external override returns (uint256) {
         return _createMarket(params_);
     }
 }

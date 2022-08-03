@@ -45,7 +45,7 @@ contract TreasuryCustodianTest is Test {
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
 
         /// Approve policies`
-        kernel.executeAction(Actions.ApprovePolicy, address(custodian));
+        kernel.executeAction(Actions.ActivatePolicy, address(custodian));
 
         /// Configure access control
         kernel.grantRole(toRole("custodian"), address(this));
@@ -84,13 +84,13 @@ contract TreasuryCustodianTest is Test {
         TreasuryCustodian dummyPolicy = new TreasuryCustodian(kernel);
         address dummy = address(dummyPolicy);
 
-        kernel.executeAction(Actions.ApprovePolicy, dummy);
+        kernel.executeAction(Actions.ActivatePolicy, dummy);
 
         custodian.grantApproval(dummy, ngmi, amount);
         assertEq(TRSRY.withdrawApproval(dummy, ngmi), amount);
 
-        // Terminate second custodian to test approval revocation
-        kernel.executeAction(Actions.TerminatePolicy, dummy);
+        // deactivate second custodian to test approval revocation
+        kernel.executeAction(Actions.DeactivatePolicy, dummy);
         ERC20[] memory tokens = new ERC20[](1);
         tokens[0] = ngmi;
 

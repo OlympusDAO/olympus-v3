@@ -167,8 +167,8 @@ contract HeartTest is Test {
             kernel.executeAction(Actions.InstallModule, address(price));
 
             /// Approve policies
-            kernel.executeAction(Actions.ApprovePolicy, address(operator));
-            kernel.executeAction(Actions.ApprovePolicy, address(heart));
+            kernel.executeAction(Actions.ActivatePolicy, address(operator));
+            kernel.executeAction(Actions.ActivatePolicy, address(heart));
 
             /// Configure access control
 

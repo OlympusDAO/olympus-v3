@@ -39,7 +39,7 @@ contract VotesTest is Test {
         kernel.executeAction(Actions.InstallModule, address(VOTES));
 
         /// Approve policies
-        kernel.executeAction(Actions.ApprovePolicy, address(votes));
+        kernel.executeAction(Actions.ActivatePolicy, address(votes));
     }
 
     function testRevert_TransfersDisabled() public {

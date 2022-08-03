@@ -162,13 +162,13 @@ contract KernelTest is Test {
         vm.stopPrank();
     }
 
-    function testCorrectness_ApprovePolicy() public {
+    function testCorrectness_ActivatePolicy() public {
         Keycode testKeycode = Keycode.wrap("MOCKY");
 
         vm.prank(deployer);
         err = abi.encodeWithSignature("Policy_ModuleDoesNotExist(bytes5)", testKeycode);
         vm.expectRevert(err);
-        kernel.executeAction(Actions.ApprovePolicy, address(policy));
+        kernel.executeAction(Actions.ActivatePolicy, address(policy));
 
         _initModuleAndPolicy();
 
@@ -184,9 +184,9 @@ contract KernelTest is Test {
         assertEq(address(kernel.moduleDependents(testKeycode, depIndex)), address(dependencies[0]));
 
         vm.prank(deployer);
-        err = abi.encodeWithSignature("Kernel_PolicyAlreadyApproved(address)", address(policy));
+        err = abi.encodeWithSignature("Kernel_PolicyAlreadyActivated(address)", address(policy));
         vm.expectRevert(err);
-        kernel.executeAction(Actions.ApprovePolicy, address(policy));
+        kernel.executeAction(Actions.ActivatePolicy, address(policy));
     }
 
     function testCorrectness_PolicyPermissions() public {
@@ -235,23 +235,23 @@ contract KernelTest is Test {
         policy.callPermissionedFunction();
     }
 
-    function testCorrectness_TerminatePolicy() public {
+    function testCorrectness_DeactivatePolicy() public {
         vm.startPrank(deployer);
 
         kernel.executeAction(Actions.InstallModule, address(MOCKY));
-        kernel.executeAction(Actions.ApprovePolicy, address(policy));
+        kernel.executeAction(Actions.ActivatePolicy, address(policy));
 
         kernel.grantRole(Role.wrap("tester"), multisig);
 
-        err = abi.encodeWithSignature("Kernel_PolicyAlreadyApproved(address)", address(policy));
+        err = abi.encodeWithSignature("Kernel_PolicyAlreadyActivated(address)", address(policy));
         vm.expectRevert(err);
-        kernel.executeAction(Actions.ApprovePolicy, address(policy));
+        kernel.executeAction(Actions.ActivatePolicy, address(policy));
 
-        kernel.executeAction(Actions.TerminatePolicy, address(policy));
+        kernel.executeAction(Actions.DeactivatePolicy, address(policy));
         vm.stopPrank();
 
         vm.prank(multisig);
-        err = abi.encodeWithSignature("Module_PolicyNotAuthorized(address)", address(policy));
+        err = abi.encodeWithSignature("Module_PolicyNotPermitted(address)", address(policy));
         vm.expectRevert(err);
         policy.callPermissionedFunction();
 
@@ -282,7 +282,7 @@ contract KernelTest is Test {
         vm.expectRevert(err);
         kernel.executeAction(Actions.UpgradeModule, address(MOCKY));
 
-        kernel.executeAction(Actions.ApprovePolicy, address(policy));
+        kernel.executeAction(Actions.ActivatePolicy, address(policy));
         kernel.grantRole(Role.wrap("tester"), multisig);
 
         vm.stopPrank();
@@ -334,7 +334,7 @@ contract KernelTest is Test {
 
         {
             kernel.executeAction(Actions.InstallModule, address(MOCKY));
-            kernel.executeAction(Actions.ApprovePolicy, address(policy));
+            kernel.executeAction(Actions.ActivatePolicy, address(policy));
             kernel.executeAction(Actions.ChangeAdmin, address(multisig));
             vm.stopPrank();
         }
@@ -382,7 +382,7 @@ contract KernelTest is Test {
 
         // Install module and approve policy
         newKernel.executeAction(Actions.InstallModule, address(MOCKY));
-        newKernel.executeAction(Actions.ApprovePolicy, address(policy));
+        newKernel.executeAction(Actions.ActivatePolicy, address(policy));
 
         assertEq(address(newKernel.getModuleForKeycode(newKernel.allKeycodes(0))), address(MOCKY));
         assertEq(address(newKernel.activePolicies(0)), address(policy));
@@ -391,7 +391,7 @@ contract KernelTest is Test {
     function _initModuleAndPolicy() internal {
         vm.startPrank(deployer);
         kernel.executeAction(Actions.InstallModule, address(MOCKY));
-        kernel.executeAction(Actions.ApprovePolicy, address(policy));
+        kernel.executeAction(Actions.ActivatePolicy, address(policy));
         vm.stopPrank();
     }
 }

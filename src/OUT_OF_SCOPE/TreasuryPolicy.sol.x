@@ -80,7 +80,7 @@ contract TreasuryPolicy is Auth, Policy {
         verifier = EndStateVerifier(address(0));
     }
 
-    function loanReserves(
+    function getLoan(
         address borrower,
         address token,
         uint256 amount
@@ -90,7 +90,7 @@ contract TreasuryPolicy is Auth, Policy {
             revert TreasuryPolicy_BorrowerNotAllowed(borrower);
 
         // interactions
-        treasury.loanReserves(borrower, token, amount);
+        treasury.getLoan(borrower, token, amount);
     }
 
     function repayReserves(
