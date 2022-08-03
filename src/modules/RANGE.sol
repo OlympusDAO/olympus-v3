@@ -114,7 +114,7 @@ contract OlympusRange is Module {
 
     /* ========== POLICY FUNCTIONS ========== */
     /// @notice                 Update the capacity for a side of the range.
-    /// @notice                 Access restricted to approved policies.
+    /// @notice                 Access restricted to activated policies.
     /// @param high_            Specifies the side of the range to update capacity for (true = high side, false = low side).
     /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
     function updateCapacity(bool high_, uint256 capacity_) external permissioned {
@@ -154,7 +154,7 @@ contract OlympusRange is Module {
     }
 
     /// @notice                 Update the prices for the low and high sides.
-    /// @notice                 Access restricted to approved policies.
+    /// @notice                 Access restricted to activated policies.
     /// @param movingAverage_   Current moving average price to set range prices from.
     function updatePrices(uint256 movingAverage_) external permissioned {
         /// Cache the spreads
@@ -172,7 +172,7 @@ contract OlympusRange is Module {
     }
 
     /// @notice                 Regenerate a side of the range to a specific capacity.
-    /// @notice                 Access restricted to approved policies.
+    /// @notice                 Access restricted to activated policies.
     /// @param high_            Specifies the side of the range to regenerate (true = high side, false = low side).
     /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
     function regenerate(bool high_, uint256 capacity_) external permissioned {
@@ -202,7 +202,7 @@ contract OlympusRange is Module {
     }
 
     /// @notice                 Update the market ID (cushion) for a side of the range.
-    /// @notice                 Access restricted to approved policies.
+    /// @notice                 Access restricted to activated policies.
     /// @param high_            Specifies the side of the range to update market for (true = high side, false = low side).
     /// @param market_          Market ID to set for the side.
     /// @param marketCapacity_  Amount to set the last market capacity to (OHM tokens for high side, Reserve tokens for low side).
@@ -230,7 +230,7 @@ contract OlympusRange is Module {
     }
 
     /// @notice                 Set the wall and cushion spreads.
-    /// @notice                 Access restricted to approved policies.
+    /// @notice                 Access restricted to activated policies.
     /// @param cushionSpread_   Percent spread to set the cushions at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
     /// @param wallSpread_      Percent spread to set the walls at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev The new spreads will not go into effect until the next time updatePrices() is called.
@@ -250,7 +250,7 @@ contract OlympusRange is Module {
     }
 
     /// @notice                 Set the threshold factor for when a wall is considered "down".
-    /// @notice                 Access restricted to approved policies.
+    /// @notice                 Access restricted to activated policies.
     /// @param thresholdFactor_ Percent of capacity that the wall should close below, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
     function setThresholdFactor(uint256 thresholdFactor_) external permissioned {

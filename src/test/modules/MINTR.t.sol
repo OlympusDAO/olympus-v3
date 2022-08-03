@@ -2,13 +2,14 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import "test-utils/UserFactory.sol";
-import "test-utils/larping.sol";
 
-import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
+import {UserFactory} from "test-utils/UserFactory.sol";
+import {larping} from "test-utils/larping.sol";
 
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+
+import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
+import "modules/MINTR.sol";
 import "src/Kernel.sol";
 
 contract MINTRTest is Test {
@@ -43,10 +44,10 @@ contract MINTRTest is Test {
         requests[1] = Permissions(MINTR.KEYCODE(), MINTR.burnOhm.selector);
 
         godmode = MINTR.generateFixture(requests);
-        kernel.executeAction(Actions.ApprovePolicy, godmode);
+        kernel.executeAction(Actions.ActivatePolicy, godmode);
 
         dummy = MINTR.generateDummyFixture();
-        kernel.executeAction(Actions.ApprovePolicy, dummy);
+        kernel.executeAction(Actions.ActivatePolicy, dummy);
     }
 
     function test_KEYCODE() public {
@@ -71,7 +72,7 @@ contract MINTRTest is Test {
 
     function testRevert_UnapprovedAddressCannotMintOhm(address to_, uint256 amount_) public {
         // Have user try to mint
-        bytes memory err = abi.encodeWithSelector(Module_PolicyNotAuthorized.selector, users[0]);
+        bytes memory err = abi.encodeWithSelector(Module_PolicyNotPermitted.selector, users[0]);
         vm.expectRevert(err);
         vm.prank(users[0]);
         MINTR.mintOhm(to_, amount_);

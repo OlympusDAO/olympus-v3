@@ -64,10 +64,10 @@ contract CallbackDeploy is Script {
 
         /// Execute actions on Kernel
         /// Approve policies
-        kernel.executeAction(Actions.ApprovePolicy, address(callback));
+        kernel.executeAction(Actions.ActivatePolicy, address(callback));
 
-        // Terminate old callback
-        kernel.executeAction(Actions.TerminatePolicy, address(oldCallback));
+        // deactivate old callback
+        kernel.executeAction(Actions.DeactivatePolicy, address(oldCallback));
 
         /// Set initial access control for policies on the AUTHR module
         /// Set role permissions

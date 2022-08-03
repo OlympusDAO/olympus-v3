@@ -82,7 +82,7 @@ contract RangeTest is Test {
             kernel.executeAction(Actions.InstallModule, address(range));
 
             /// Approve policies
-            kernel.executeAction(Actions.ApprovePolicy, address(writer));
+            kernel.executeAction(Actions.ActivatePolicy, address(writer));
         }
 
         {
@@ -340,7 +340,7 @@ contract RangeTest is Test {
     function testCorrectness_onlyPermittedPoliciesCanCallGatedFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
         bytes memory err = abi.encodeWithSelector(
-            Module_PolicyNotAuthorized.selector,
+            Module_PolicyNotPermitted.selector,
             address(this)
         );
 

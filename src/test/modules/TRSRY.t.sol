@@ -44,10 +44,10 @@ contract TRSRYTest is Test {
 
         // Generate test fixture policy addresses with different authorizations
         godmode = TRSRY.generateFixture(requests);
-        kernel.executeAction(Actions.ApprovePolicy, godmode);
+        kernel.executeAction(Actions.ActivatePolicy, godmode);
 
         debtor = TRSRY.generateFunctionFixture(TRSRY.getLoan.selector);
-        kernel.executeAction(Actions.ApprovePolicy, debtor);
+        kernel.executeAction(Actions.ActivatePolicy, debtor);
 
         // Give TRSRY some tokens
         ngmi.mint(address(TRSRY), INITIAL_TOKEN_AMOUNT);
@@ -72,7 +72,7 @@ contract TRSRYTest is Test {
         ERC20[] memory revokeTokens = new ERC20[](2);
         revokeTokens[0] = ERC20(ngmi);
 
-        kernel.executeAction(Actions.TerminatePolicy, address(this));
+        kernel.executeAction(Actions.DeactivatePolicy, address(this));
 
         TRSRY.revokeApprovals(testUser, revokeTokens);
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), 0);
@@ -138,7 +138,7 @@ contract TRSRYTest is Test {
         TRSRY.setApprovalFor(unapprovedPolicy, ngmi, amount_);
 
         bytes memory err = abi.encodeWithSelector(
-            Module_PolicyNotAuthorized.selector,
+            Module_PolicyNotPermitted.selector,
             unapprovedPolicy
         );
         vm.expectRevert(err);
@@ -192,7 +192,7 @@ contract TRSRYTest is Test {
         TRSRY.getLoan(ngmi, INITIAL_TOKEN_AMOUNT);
 
         // Fail when calling setDebt from debtor (policy without setDebt permissions)
-        bytes memory err = abi.encodeWithSelector(Module_PolicyNotAuthorized.selector, debtor);
+        bytes memory err = abi.encodeWithSelector(Module_PolicyNotPermitted.selector, debtor);
         vm.expectRevert(err);
         vm.prank(debtor);
         TRSRY.setDebt(ngmi, debtor, INITIAL_TOKEN_AMOUNT / 2);

@@ -83,12 +83,12 @@ contract OperatorDeploy is Script {
 
         /// Execute actions on Kernel
         /// Approve policies
-        kernel.executeAction(Actions.ApprovePolicy, address(operator));
-        kernel.executeAction(Actions.ApprovePolicy, address(heart));
+        kernel.executeAction(Actions.ActivatePolicy, address(operator));
+        kernel.executeAction(Actions.ActivatePolicy, address(heart));
 
-        // Terminate old operator
-        kernel.executeAction(Actions.TerminatePolicy, address(oldOperator));
-        kernel.executeAction(Actions.TerminatePolicy, address(oldHeart));
+        // deactivate old operator
+        kernel.executeAction(Actions.DeactivatePolicy, address(oldOperator));
+        kernel.executeAction(Actions.DeactivatePolicy, address(oldHeart));
 
         /// Set initial access control for policies on the AUTHR module
         /// Set role permissions

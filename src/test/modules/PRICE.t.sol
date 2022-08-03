@@ -73,7 +73,7 @@ contract PriceTest is Test {
         {
             /// Initialize system and kernel
             kernel.executeAction(Actions.InstallModule, address(price));
-            kernel.executeAction(Actions.ApprovePolicy, address(writer));
+            kernel.executeAction(Actions.ActivatePolicy, address(writer));
         }
 
         {
@@ -167,7 +167,7 @@ contract PriceTest is Test {
 
     function testCorrectness_onlyPermittedPoliciesCanCallUpdateMovingAverage(uint8 nonce) public {
         bytes memory err = abi.encodeWithSelector(
-            Module_PolicyNotAuthorized.selector,
+            Module_PolicyNotPermitted.selector,
             address(this)
         );
 
@@ -494,7 +494,7 @@ contract PriceTest is Test {
     function testCorrectness_onlyPermittedPoliciesCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
         bytes memory err = abi.encodeWithSelector(
-            Module_PolicyNotAuthorized.selector,
+            Module_PolicyNotPermitted.selector,
             address(this)
         );
 

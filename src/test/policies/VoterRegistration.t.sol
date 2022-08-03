@@ -42,7 +42,7 @@ contract VoterRegistrationTest is Test {
         kernel.executeAction(Actions.InstallModule, address(votes));
 
         /// Approve policies`
-        kernel.executeAction(Actions.ApprovePolicy, address(voterRegistration));
+        kernel.executeAction(Actions.ActivatePolicy, address(voterRegistration));
 
         /// Configure access control
         kernel.grantRole(toRole("voter_admin"), govMultisig);

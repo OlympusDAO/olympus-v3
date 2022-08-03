@@ -42,7 +42,7 @@ contract InstructionsTest is Test {
         kernel.executeAction(Actions.InstallModule, address(instr));
 
         /// Approve policies
-        kernel.executeAction(Actions.ApprovePolicy, address(instrWriter));
+        kernel.executeAction(Actions.ActivatePolicy, address(instrWriter));
     }
 
     function testRevert_InstructionsCannotBeEmpty() public {
@@ -57,7 +57,7 @@ contract InstructionsTest is Test {
         // create invalid instructions
         Instruction[] memory instructions = new Instruction[](2);
         instructions[0] = Instruction(Actions.ChangeExecutor, address(governance));
-        instructions[1] = Instruction(Actions.ApprovePolicy, address(governance));
+        instructions[1] = Instruction(Actions.ActivatePolicy, address(governance));
 
         vm.expectRevert(INSTR_InvalidChangeExecutorAction.selector);
         instrWriter.store(instructions);
@@ -110,7 +110,7 @@ contract InstructionsTest is Test {
 
         // install a pre-existing module and policy
         kernel.executeAction(Actions.InstallModule, address(mockModuleAddress));
-        kernel.executeAction(Actions.ApprovePolicy, address(mockModuleWriter));
+        kernel.executeAction(Actions.ActivatePolicy, address(mockModuleWriter));
 
         // create the upgrade instruction
         Instruction[] memory instructions = new Instruction[](1);
@@ -135,7 +135,7 @@ contract InstructionsTest is Test {
         // assertEq(mockUpgradedModuleAddress.counter, 1);
     }
 
-    function testCorrectness_ApprovePolicy() public {
+    function testCorrectness_ActivatePolicy() public {
         MockValidModule mockModuleAddress = new MockValidModule(kernel);
         MockValidModule mockModuleWriter = MockValidModule(
             address(new MockModuleWriter(kernel, mockModuleAddress, new Permissions[](0)))
@@ -145,7 +145,7 @@ contract InstructionsTest is Test {
 
         // create valid instructions
         Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(Actions.ApprovePolicy, address(mockModuleWriter));
+        instructions[0] = Instruction(Actions.ActivatePolicy, address(mockModuleWriter));
 
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
@@ -155,7 +155,7 @@ contract InstructionsTest is Test {
 
         kernel.executeAction(instructions[0].action, instructions[0].target);
 
-        assertEq(uint256(instructions[0].action), uint256(Actions.ApprovePolicy));
+        assertEq(uint256(instructions[0].action), uint256(Actions.ActivatePolicy));
         assertEq(instructions[0].target, address(mockModuleWriter));
         assertEq(instr.totalInstructions(), 1);
 
@@ -163,18 +163,18 @@ contract InstructionsTest is Test {
         //assertEq(mockModuleAddress.counter(), 1);
     }
 
-    function testCorrectness_TerminatePolicy() public {
+    function testCorrectness_DeactivatePolicy() public {
         MockValidModule mockModuleAddress = new MockValidModule(kernel);
         MockValidModule mockModuleWriter = MockValidModule(
             address(new MockModuleWriter(kernel, mockModuleAddress, new Permissions[](0)))
         );
 
         kernel.executeAction(Actions.InstallModule, address(mockModuleAddress));
-        kernel.executeAction(Actions.ApprovePolicy, address(mockModuleWriter));
+        kernel.executeAction(Actions.ActivatePolicy, address(mockModuleWriter));
 
         // create valid instructions
         Instruction[] memory instructions = new Instruction[](1);
-        instructions[0] = Instruction(Actions.TerminatePolicy, address(mockModuleWriter));
+        instructions[0] = Instruction(Actions.DeactivatePolicy, address(mockModuleWriter));
 
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
@@ -183,18 +183,18 @@ contract InstructionsTest is Test {
         instructions = instr.getInstructions(1);
         kernel.executeAction(instructions[0].action, instructions[0].target);
 
-        assertEq(uint256(instructions[0].action), uint256(Actions.TerminatePolicy));
+        assertEq(uint256(instructions[0].action), uint256(Actions.DeactivatePolicy));
         assertEq(instructions[0].target, address(mockModuleWriter));
 
         // TODO update with correct error message
-        // vm.expectRevert(Module_PolicyNotAuthorized.selector);
+        // vm.expectRevert(Module_PolicyNotPermitted.selector);
         // mockModuleWriter.roleCall();
     }
 
     function testCorrectness_ChangeExecutor() public {
         // create valid instructions
         Instruction[] memory instructions = new Instruction[](2);
-        instructions[0] = Instruction(Actions.ApprovePolicy, address(governance));
+        instructions[0] = Instruction(Actions.ActivatePolicy, address(governance));
         instructions[1] = Instruction(Actions.ChangeExecutor, address(governance));
 
         vm.expectEmit(true, true, true, true);
@@ -204,7 +204,7 @@ contract InstructionsTest is Test {
 
         instructions = instr.getInstructions(1);
 
-        assertEq(uint256(instructions[0].action), uint256(Actions.ApprovePolicy));
+        assertEq(uint256(instructions[0].action), uint256(Actions.ActivatePolicy));
         assertEq(instructions[0].target, address(governance));
         assertEq(uint256(instructions[1].action), uint256(Actions.ChangeExecutor));
         assertEq(instructions[1].target, address(governance));

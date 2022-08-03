@@ -112,7 +112,7 @@ contract OlympusPrice is Module {
 
     /* ========== POLICY FUNCTIONS ========== */
     /// @notice Trigger an update of the moving average
-    /// @notice Access restricted to approved policies
+    /// @notice Access restricted to activated policies
     /// @dev This function does not have a time-gating on the observationFrequency on this contract. It is set on the Heart policy contract.
     ///      The Heart beat frequency should be set to the same value as the observationFrequency.
     function updateMovingAverage() external permissioned {
@@ -194,7 +194,7 @@ contract OlympusPrice is Module {
     /* ========== ADMIN FUNCTIONS ========== */
 
     /// @notice                     Initialize the price module
-    /// @notice                     Access restricted to approved policies
+    /// @notice                     Access restricted to activated policies
     /// @param startObservations_   Array of observations to initialize the moving average with. Must be of length numObservations.
     /// @param lastObservationTime_ Unix timestamp of last observation being provided (in seconds).
     /// @dev This function must be called after the Price module is deployed to activate it and after updating the observationFrequency

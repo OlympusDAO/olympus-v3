@@ -11,7 +11,7 @@ error KernelAdapter_OnlyKernel(address caller_);
 
 // MODULE
 
-error Module_PolicyNotAuthorized(address policy_);
+error Module_PolicyNotPermitted(address policy_);
 
 // POLICY
 
@@ -24,8 +24,8 @@ error Kernel_OnlyExecutor(address caller_);
 error Kernel_OnlyAdmin(address caller_);
 error Kernel_ModuleAlreadyInstalled(Keycode module_);
 error Kernel_InvalidModuleUpgrade(Keycode module_);
-error Kernel_PolicyAlreadyApproved(address policy_);
-error Kernel_PolicyNotApproved(address policy_);
+error Kernel_PolicyAlreadyActivated(address policy_);
+error Kernel_PolicyNotActivated(address policy_);
 error Kernel_AddressAlreadyHasRole(address addr_, Role role_);
 error Kernel_AddressDoesNotHaveRole(address addr_, Role role_);
 error Kernel_RoleDoesNotExist(Role role_);
@@ -35,8 +35,8 @@ error Kernel_RoleDoesNotExist(Role role_);
 enum Actions {
     InstallModule,
     UpgradeModule,
-    ApprovePolicy,
-    TerminatePolicy,
+    ActivatePolicy,
+    DeactivatePolicy,
     MigrateKernel,
     ChangeExecutor,
     ChangeAdmin
@@ -79,7 +79,7 @@ abstract contract Module is KernelAdapter {
 
     modifier permissioned() {
         if (!kernel.modulePermissions(KEYCODE(), Policy(msg.sender), msg.sig))
-            revert Module_PolicyNotAuthorized(msg.sender);
+            revert Module_PolicyNotPermitted(msg.sender);
         _;
     }
 
@@ -196,12 +196,12 @@ contract Kernel {
             ensureContract(target_);
             ensureValidKeycode(Module(target_).KEYCODE());
             _upgradeModule(Module(target_));
-        } else if (action_ == Actions.ApprovePolicy) {
+        } else if (action_ == Actions.ActivatePolicy) {
             ensureContract(target_);
-            _approvePolicy(Policy(target_));
-        } else if (action_ == Actions.TerminatePolicy) {
+            _activatePolicy(Policy(target_));
+        } else if (action_ == Actions.DeactivatePolicy) {
             ensureContract(target_);
-            _terminatePolicy(Policy(target_));
+            _deactivatePolicy(Policy(target_));
         } else if (action_ == Actions.MigrateKernel) {
             ensureContract(target_);
             _migrateKernel(Kernel(target_));
@@ -245,8 +245,8 @@ contract Kernel {
         _reconfigurePolicies(keycode);
     }
 
-    function _approvePolicy(Policy policy_) internal {
-        if (policy_.isActive()) revert Kernel_PolicyAlreadyApproved(address(policy_));
+    function _activatePolicy(Policy policy_) internal {
+        if (policy_.isActive()) revert Kernel_PolicyAlreadyActivated(address(policy_));
 
         // Add policy to list of active policies
         activePolicies.push(policy_);
@@ -275,8 +275,8 @@ contract Kernel {
         policy_.setActiveStatus(true);
     }
 
-    function _terminatePolicy(Policy policy_) internal {
-        if (!policy_.isActive()) revert Kernel_PolicyNotApproved(address(policy_));
+    function _deactivatePolicy(Policy policy_) internal {
+        if (!policy_.isActive()) revert Kernel_PolicyNotActivated(address(policy_));
 
         // Revoke permissions
         Permissions[] memory requests = policy_.requestPermissions();
@@ -370,7 +370,7 @@ contract Kernel {
             dependents[origIndex] = lastPolicy;
             dependents.pop();
 
-            // Record new index and delete terminated policy index
+            // Record new index and delete deactivated policy index
             getDependentIndex[keycode][lastPolicy] = origIndex;
             delete getDependentIndex[keycode][policy_];
 

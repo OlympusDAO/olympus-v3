@@ -72,8 +72,8 @@ contract GovernanceTest is Test {
         kernel.executeAction(Actions.InstallModule, address(votes));
 
         /// Approve policies`
-        kernel.executeAction(Actions.ApprovePolicy, address(governance));
-        kernel.executeAction(Actions.ApprovePolicy, address(voterRegistration));
+        kernel.executeAction(Actions.ActivatePolicy, address(governance));
+        kernel.executeAction(Actions.ActivatePolicy, address(voterRegistration));
 
         // Change executor
         kernel.executeAction(Actions.ChangeExecutor, address(governance));
@@ -109,7 +109,7 @@ contract GovernanceTest is Test {
     function _submitProposal() internal {
         // create valid instructions
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(Actions.ApprovePolicy, address(newProposedPolicy));
+        instructions_[0] = Instruction(Actions.ActivatePolicy, address(newProposedPolicy));
 
         // submit proposal as voter1 (1/15 votes)
         vm.prank(voter1);
@@ -118,7 +118,7 @@ contract GovernanceTest is Test {
 
     function testRevert_NotEnoughVotesToPropose() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(Actions.ApprovePolicy, address(governance));
+        instructions_[0] = Instruction(Actions.ActivatePolicy, address(governance));
 
         vm.expectRevert(NotEnoughVotesToPropose.selector);
 
@@ -129,7 +129,7 @@ contract GovernanceTest is Test {
 
     function testEvent_ProposalSubmitted() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(Actions.ApprovePolicy, address(governance));
+        instructions_[0] = Instruction(Actions.ActivatePolicy, address(governance));
 
         vm.expectEmit(true, true, true, true);
         emit ProposalSubmitted(1);
@@ -140,7 +140,7 @@ contract GovernanceTest is Test {
 
     function testCorrectness_SuccessfullySubmitProposal() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(Actions.ApprovePolicy, address(governance));
+        instructions_[0] = Instruction(Actions.ActivatePolicy, address(governance));
 
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
