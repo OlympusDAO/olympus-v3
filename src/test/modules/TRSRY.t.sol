@@ -5,27 +5,23 @@ import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 import {console2 as console} from "forge-std/console2.sol";
 import {TestFixtureGenerator} from "test/lib/TestFixtureGenerator.sol";
-import {RevertHelper} from "test/lib/RevertHelper.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
+import {MockPolicy} from "test/mocks/KernelTestMocks.sol";
+
 import "src/modules/TRSRY.sol";
 import "src/Kernel.sol";
-import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
-import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
-import {MockPolicy} from "test/mocks/KernelTestMocks.sol";
 
 contract TRSRYTest is Test {
     using TestFixtureGenerator for OlympusTreasury;
-    using RevertHelper for bytes4;
 
     Kernel internal kernel;
     OlympusTreasury public TRSRY;
     MockERC20 public ngmi;
     address public testUser;
-    MockModuleWriter public writer;
     address public godmode;
     address public debtor;
-    OlympusTreasury public TRSRYWriter;
 
     uint256 internal constant INITIAL_TOKEN_AMOUNT = 100e18;
 
@@ -40,18 +36,12 @@ contract TRSRYTest is Test {
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
         Permissions[] memory requests = requestPermissions();
 
-        // TODO REMOVE THESE
-        writer = new MockModuleWriter(kernel, TRSRY, requests);
-        kernel.executeAction(Actions.ApprovePolicy, address(writer));
-
         // Generate test fixture policy addresses with different authorizations
         godmode = TRSRY.generateFixture(requests);
         kernel.executeAction(Actions.ApprovePolicy, godmode);
 
         debtor = TRSRY.generateFunctionFixture(TRSRY.loanReserves.selector);
         kernel.executeAction(Actions.ApprovePolicy, debtor);
-
-        TRSRYWriter = OlympusTreasury(address(writer)); // TODO DELET
 
         // Give TRSRY some tokens
         ngmi.mint(address(TRSRY), INITIAL_TOKEN_AMOUNT);
@@ -199,7 +189,7 @@ contract TRSRYTest is Test {
 
     function test_UnauthorizedPolicyCannotSetDebt() public {
         vm.prank(godmode);
-        TRSRYWriter.setApprovalFor(debtor, ngmi, INITIAL_TOKEN_AMOUNT);
+        TRSRY.setApprovalFor(debtor, ngmi, INITIAL_TOKEN_AMOUNT);
 
         vm.prank(debtor);
         TRSRY.loanReserves(ngmi, INITIAL_TOKEN_AMOUNT);
