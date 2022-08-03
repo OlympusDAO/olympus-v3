@@ -4,6 +4,7 @@ pragma solidity >=0.8.0;
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
+import {Quabi} from "test/lib/quabi/Quabi.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
@@ -15,6 +16,7 @@ import {OlympusRange} from "modules/RANGE.sol";
 
 contract RangeTest is Test {
     using FullMath for uint256;
+    using Quabi for *;
 
     UserFactory public userCreator;
     address internal alice;
@@ -62,14 +64,15 @@ contract RangeTest is Test {
             );
 
             // Deploy mock module writer
-            Permissions[] memory requests = new Permissions[](6);
             Keycode RANGE_KEYCODE = range.KEYCODE();
-            requests[0] = Permissions(RANGE_KEYCODE, range.updateCapacity.selector);
-            requests[1] = Permissions(RANGE_KEYCODE, range.updateMarket.selector);
-            requests[2] = Permissions(RANGE_KEYCODE, range.updatePrices.selector);
-            requests[3] = Permissions(RANGE_KEYCODE, range.regenerate.selector);
-            requests[4] = Permissions(RANGE_KEYCODE, range.setSpreads.selector);
-            requests[5] = Permissions(RANGE_KEYCODE, range.setThresholdFactor.selector);
+            Permissions[] memory requests = getPermissions(type(OlympusRange).name, RANGE_KEYCODE);
+
+            // requests[0] = Permissions(RANGE_KEYCODE, range.updateCapacity.selector);
+            // requests[1] = Permissions(RANGE_KEYCODE, range.updateMarket.selector);
+            // requests[2] = Permissions(RANGE_KEYCODE, range.updatePrices.selector);
+            // requests[3] = Permissions(RANGE_KEYCODE, range.regenerate.selector);
+            // requests[4] = Permissions(RANGE_KEYCODE, range.setSpreads.selector);
+            // requests[5] = Permissions(RANGE_KEYCODE, range.setThresholdFactor.selector);
 
             writer = new MockModuleWriter(kernel, range, requests);
             rangeWriter = OlympusRange(address(writer));
@@ -91,6 +94,19 @@ contract RangeTest is Test {
             rangeWriter.regenerate(true, 10_000_000 * 1e18);
             rangeWriter.regenerate(false, 10_000_000 * 1e18);
         }
+    }
+
+    function getPermissions(string memory contractName, Keycode keycode)
+        public
+        returns (Permissions[] memory)
+    {
+        bytes4[] memory selectors = contractName.getFunctionsWithModifier("permissioned");
+        uint256 num = selectors.length;
+        Permissions[] memory requests = new Permissions[](num);
+        for (uint256 i; i < num; ++i) {
+            requests[i] = Permissions(keycode, selectors[i]);
+        }
+        return requests;
     }
 
     /* ========== POLICY FUNCTION TESTS ========== */
