@@ -324,8 +324,6 @@ contract KernelTest is Test {
     }
 
     function testCorrectness_ChangeAdmin() public {
-        Role testerRole = Role.wrap("tester");
-
         err = abi.encodeWithSignature("Kernel_OnlyExecutor(address)", address(this));
         vm.expectRevert(err);
         kernel.executeAction(Actions.ChangeAdmin, address(multisig));

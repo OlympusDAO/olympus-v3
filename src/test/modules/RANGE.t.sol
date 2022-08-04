@@ -65,10 +65,7 @@ contract RangeTest is Test {
             );
 
             // Deploy mock module writer
-            Keycode RANGE_KEYCODE = range.KEYCODE();
-            Permissions[] memory requests = getPermissions(type(OlympusRange).name, RANGE_KEYCODE);
-
-            writer = range.generateFixture(requests);
+            writer = range.generateGodmodeFixture(type(OlympusRange).name);
         }
 
         {
@@ -89,19 +86,6 @@ contract RangeTest is Test {
             range.regenerate(false, 10_000_000 * 1e18);
             vm.stopPrank();
         }
-    }
-
-    function getPermissions(string memory contractName, Keycode keycode)
-        public
-        returns (Permissions[] memory)
-    {
-        bytes4[] memory selectors = contractName.getFunctionsWithModifier("permissioned");
-        uint256 num = selectors.length;
-        Permissions[] memory requests = new Permissions[](num);
-        for (uint256 i; i < num; ++i) {
-            requests[i] = Permissions(keycode, selectors[i]);
-        }
-        return requests;
     }
 
     /* ========== POLICY FUNCTION TESTS ========== */

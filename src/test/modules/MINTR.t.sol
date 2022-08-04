@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 
 import {UserFactory} from "test-utils/UserFactory.sol";
 import {larping} from "test-utils/larping.sol";
+import {Quabi} from "test/lib/quabi/Quabi.sol";
 
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
@@ -39,11 +40,7 @@ contract MINTRTest is Test {
 
         kernel.executeAction(Actions.InstallModule, address(MINTR));
 
-        Permissions[] memory requests = new Permissions[](2);
-        requests[0] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
-        requests[1] = Permissions(MINTR.KEYCODE(), MINTR.burnOhm.selector);
-
-        godmode = MINTR.generateFixture(requests);
+        godmode = MINTR.generateGodmodeFixture(type(OlympusMinter).name);
         kernel.executeAction(Actions.ActivatePolicy, godmode);
 
         dummy = MINTR.generateDummyFixture();

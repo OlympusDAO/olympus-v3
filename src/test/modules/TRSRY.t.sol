@@ -35,15 +35,8 @@ contract TRSRYTest is Test {
 
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
 
-        Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
-        Permissions[] memory requests = new Permissions[](4);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
-        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.getLoan.selector);
-        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.repayLoan.selector);
-        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
-
         // Generate test fixture policy addresses with different authorizations
-        godmode = TRSRY.generateFixture(requests);
+        godmode = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
         kernel.executeAction(Actions.ActivatePolicy, godmode);
 
         debtor = TRSRY.generateFunctionFixture(TRSRY.getLoan.selector);

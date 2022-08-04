@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0;
 
+import {Quabi} from "./quabi/Quabi.sol";
 import "src/Kernel.sol";
 
 /// @notice Mock policy to allow testing gated module functions
@@ -48,6 +49,25 @@ library ModuleTestFixtureGenerator {
         returns (address)
     {
         return address(new ModuleTestFixture(module_.kernel(), module_, requests_));
+    }
+
+    // Generate a test fixture policy with permissions for all module functions
+    function generateGodmodeFixture(Module module_, string memory contractName_)
+        public
+        returns (address)
+    {
+        //string memory contractName = type(Module).name;
+        Keycode keycode = module_.KEYCODE();
+
+        bytes4[] memory selectors = Quabi.getFunctionsWithModifier(contractName_, "permissioned");
+        uint256 num = selectors.length;
+
+        Permissions[] memory requests = new Permissions[](num);
+        for (uint256 i; i < num; ++i) {
+            requests[i] = Permissions(keycode, selectors[i]);
+        }
+
+        return generateFixture(module_, requests);
     }
 
     // Generate a test fixture policy authorized for a single module function
