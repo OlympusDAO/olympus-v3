@@ -4,6 +4,7 @@ pragma solidity >=0.8.0;
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
+import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import "src/Kernel.sol";
 import "modules/INSTR.sol";
@@ -15,10 +16,11 @@ import {MockValidUpgradedModule} from "test/mocks/MockValidUpgradedModule.sol";
 
 contract InstructionsTest is Test {
     Kernel internal kernel;
+    using ModuleTestFixtureGenerator for OlympusInstructions;
 
     OlympusInstructions internal instr;
     OlympusGovernance internal governance;
-    OlympusInstructions internal instrWriter;
+    address internal writer;
     Module internal invalidModule;
 
     event InstructionsStored(uint256);
@@ -32,17 +34,14 @@ contract InstructionsTest is Test {
         invalidModule = new MockInvalidModule(kernel);
 
         /// Deploy policies
-        Permissions[] memory requests = new Permissions[](1);
-        requests[0] = Permissions(instr.KEYCODE(), instr.store.selector);
-
-        instrWriter = OlympusInstructions(address(new MockModuleWriter(kernel, instr, requests)));
+        writer = instr.generateGodmodeFixture(type(OlympusInstructions).name);
         governance = new OlympusGovernance(kernel);
 
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(instr));
 
         /// Approve policies
-        kernel.executeAction(Actions.ActivatePolicy, address(instrWriter));
+        kernel.executeAction(Actions.ActivatePolicy, writer);
     }
 
     function testRevert_InstructionsCannotBeEmpty() public {
@@ -50,7 +49,8 @@ contract InstructionsTest is Test {
 
         // create valid instructions
         Instruction[] memory instructions = new Instruction[](0);
-        instrWriter.store(instructions);
+        vm.prank(writer);
+        instr.store(instructions);
     }
 
     function testRevert_InvalidChangeExecutorAction() public {
@@ -60,7 +60,8 @@ contract InstructionsTest is Test {
         instructions[1] = Instruction(Actions.ActivatePolicy, address(governance));
 
         vm.expectRevert(INSTR_InvalidChangeExecutorAction.selector);
-        instrWriter.store(instructions);
+        vm.prank(writer);
+        instr.store(instructions);
     }
 
     function testRevert_InvalidTargetNotAContract() public {
@@ -69,7 +70,8 @@ contract InstructionsTest is Test {
         instructions[0] = Instruction(Actions.InstallModule, address(0));
 
         vm.expectRevert(abi.encodeWithSelector(TargetNotAContract.selector, address(0)));
-        instrWriter.store(instructions);
+        vm.prank(writer);
+        instr.store(instructions);
     }
 
     function testRevert_InvalidModuleKeycode() public {
@@ -78,7 +80,8 @@ contract InstructionsTest is Test {
         instructions[0] = Instruction(Actions.InstallModule, address(invalidModule));
 
         vm.expectRevert(abi.encodeWithSelector(InvalidKeycode.selector, invalidModule.KEYCODE()));
-        instrWriter.store(instructions);
+        vm.prank(writer);
+        instr.store(instructions);
     }
 
     function testCorrectness_InstallModule() public {
@@ -92,7 +95,8 @@ contract InstructionsTest is Test {
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
 
-        instrWriter.store(instructions);
+        vm.prank(writer);
+        instr.store(instructions);
 
         instructions = instr.getInstructions(1);
 
@@ -120,7 +124,8 @@ contract InstructionsTest is Test {
         emit InstructionsStored(1);
 
         // store it
-        instrWriter.store(instructions);
+        vm.prank(writer);
+        instr.store(instructions);
 
         assertEq(uint256(instructions[0].action), uint256(Actions.UpgradeModule));
         assertEq(instructions[0].target, address(mockUpgradedModuleAddress));
@@ -150,7 +155,8 @@ contract InstructionsTest is Test {
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
 
-        instrWriter.store(instructions);
+        vm.prank(writer);
+        instr.store(instructions);
         instructions = instr.getInstructions(1);
 
         kernel.executeAction(instructions[0].action, instructions[0].target);
@@ -179,7 +185,8 @@ contract InstructionsTest is Test {
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
 
-        instrWriter.store(instructions);
+        vm.prank(writer);
+        instr.store(instructions);
         instructions = instr.getInstructions(1);
         kernel.executeAction(instructions[0].action, instructions[0].target);
 
@@ -200,7 +207,8 @@ contract InstructionsTest is Test {
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
 
-        instrWriter.store(instructions);
+        vm.prank(writer);
+        instr.store(instructions);
 
         instructions = instr.getInstructions(1);
 
