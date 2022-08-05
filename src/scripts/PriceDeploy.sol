@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.11;
 
-import { AggregatorV2V3Interface } from "interfaces/AggregatorV2V3Interface.sol";
-import { Script, console2 } from "forge-std/Script.sol";
-import { ERC20 } from "solmate/tokens/ERC20.sol";
+import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+import {Script, console2} from "forge-std/Script.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import { Kernel, Actions } from "src/Kernel.sol";
-import { OlympusPrice } from "modules/PRICE.sol";
-import { MockPriceFeed } from "test/mocks/MockPriceFeed.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
+import {OlympusPrice} from "modules/PRICE.sol";
+import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
-import { TransferHelper } from "libraries/TransferHelper.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
 
 /// @notice Script to deploy an upgraded version of the PRICE module in the Olympus Bophades system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
