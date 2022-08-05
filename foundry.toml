@@ -12,6 +12,7 @@ remappings = [
     'policies/=src/policies',
     'libraries/=src/libraries',
 ]
+ffi = true
 
 [fried]
 fuzz_runs = 1024
