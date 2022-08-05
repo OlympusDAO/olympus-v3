@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.11;
 
-import { AggregatorV2V3Interface } from "interfaces/AggregatorV2V3Interface.sol";
-import { Script, console2 } from "forge-std/Script.sol";
-import { ERC20 } from "solmate/tokens/ERC20.sol";
+import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+import {Script, console2} from "forge-std/Script.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import { IBondAuctioneer } from "interfaces/IBondAuctioneer.sol";
+import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
 
-import { Kernel, Actions } from "src/Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 
-import { Heart } from "policies/Heart.sol";
-import { Operator } from "policies/Operator.sol";
-import { BondCallback } from "policies/BondCallback.sol";
-import { MockAuthGiver } from "../test/mocks/MockAuthGiver.sol";
+import {OlympusHeart} from "policies/Heart.sol";
+import {Operator} from "policies/Operator.sol";
+import {BondCallback} from "policies/BondCallback.sol";
 
-import { TransferHelper } from "libraries/TransferHelper.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
 
 /// @notice Script to deploy the Operator contract in the Olympus Bophades system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
@@ -23,10 +22,9 @@ contract OperatorDeploy is Script {
     Kernel public kernel;
 
     /// Policies
-    Heart public heart;
+    OlympusHeart public heart;
     Operator public operator;
     BondCallback public callback;
-    MockAuthGiver public authGiver;
 
     /// Construction variables
 
@@ -56,9 +54,8 @@ contract OperatorDeploy is Script {
         /// Set addresses for dependencies
         kernel = Kernel(0x64665B0429B21274d938Ed345e4520D1f5ABb9e7);
         callback = BondCallback(0x764E6578738E2606DBF3Be47746562F99380905c);
-        address oldOperator = 0x1E4732552C9F3127227a468F2E3088219f69cFd5;
-        address oldHeart = 0x43226855fF2552a20a6340639DBf08946EFB1C16;
-        authGiver = MockAuthGiver(0x3714fDFc3b6918923e5b2AbAe0fcD74376Be45fc);
+        address oldOperator = 0xD25b0441690BFD7e23Ab8Ee6f636Fce0C638ee32;
+        address oldHeart = 0x5B7aF1a298FaC101445a7fE55f2738c071D70e9B;
 
         operator = new Operator(
             kernel,
@@ -78,7 +75,7 @@ contract OperatorDeploy is Script {
         );
         console2.log("Operator deployed at:", address(operator));
 
-        heart = new Heart(kernel, operator, rewardToken, 0);
+        heart = new OlympusHeart(kernel, operator, rewardToken, 0);
         console2.log("Heart deployed at:", address(heart));
 
         /// Execute actions on Kernel
@@ -89,67 +86,6 @@ contract OperatorDeploy is Script {
         // deactivate old operator
         kernel.executeAction(Actions.DeactivatePolicy, address(oldOperator));
         kernel.executeAction(Actions.DeactivatePolicy, address(oldHeart));
-
-        /// Set initial access control for policies on the AUTHR module
-        /// Set role permissions
-
-        /// Role 0 = Heart
-        authGiver.setRoleCapability(uint8(0), address(operator), operator.operate.selector);
-
-        /// Role 1 = Guardian
-        authGiver.setRoleCapability(uint8(1), address(operator), operator.operate.selector);
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(operator),
-            operator.setBondContracts.selector
-        );
-        authGiver.setRoleCapability(uint8(1), address(operator), operator.initialize.selector);
-        authGiver.setRoleCapability(uint8(1), address(operator), operator.regenerate.selector);
-        authGiver.setRoleCapability(uint8(1), address(heart), heart.resetBeat.selector);
-        authGiver.setRoleCapability(uint8(1), address(heart), heart.toggleBeat.selector);
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.setRewardTokenAndAmount.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.withdrawUnspentRewards.selector
-        );
-
-        /// Role 2 = Policy
-        authGiver.setRoleCapability(uint8(2), address(operator), operator.setSpreads.selector);
-
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setThresholdFactor.selector
-        );
-
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setCushionFactor.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setCushionParams.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setReserveFactor.selector
-        );
-        authGiver.setRoleCapability(uint8(2), address(operator), operator.setRegenParams.selector);
-
-        /// Role 4 - Callback
-        authGiver.setRoleCapability(uint8(4), address(operator), operator.bondPurchase.selector);
-
-        /// Give role to operator and heart
-        authGiver.setUserRole(address(operator), uint8(3));
-        authGiver.setUserRole(address(heart), uint8(0));
 
         vm.stopBroadcast();
     }

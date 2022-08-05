@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.11;
 
-import { Script, console2 } from "forge-std/Script.sol";
-import { ERC20 } from "solmate/tokens/ERC20.sol";
+import {Script, console2} from "forge-std/Script.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import { Kernel, Actions } from "src/Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 
-import { Operator } from "policies/Operator.sol";
-import { Heart } from "policies/Heart.sol";
-import { MockAuthGiver } from "test/mocks/MockAuthGiver.sol";
+import {Operator} from "policies/Operator.sol";
+import {OlympusHeart} from "policies/Heart.sol";
 
 /// @notice Script to deploy and initialize the Heart contract in the Olympus Bophades system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
@@ -17,8 +16,7 @@ contract HeartDeploy is Script {
 
     /// Policies
     Operator public operator;
-    Heart public heart;
-    MockAuthGiver public authGiver;
+    OlympusHeart public heart;
 
     /// Construction variables
 
@@ -40,48 +38,21 @@ contract HeartDeploy is Script {
 
         /// Set dependency addresses
         kernel = Kernel(0x3B294580Fcf1F60B94eca4f4CE78A2f52D23cC83);
-        operator = Operator(0xcC57b829CC36D8FD121C85a19541883ccaA256b6);
-        address oldHeart = 0xCAD96eBb5E2b20Cbe64680Da80bC9AFcAe0317Df;
+        operator = Operator(0xD25b0441690BFD7e23Ab8Ee6f636Fce0C638ee32);
+        address oldHeart = 0x5B7aF1a298FaC101445a7fE55f2738c071D70e9B;
 
         // Deploy heart and authGiver
 
-        heart = new Heart(kernel, operator, rewardToken, 0);
+        heart = new OlympusHeart(kernel, operator, rewardToken, 0);
         console2.log("Heart deployed at:", address(heart));
-
-        authGiver = new MockAuthGiver(kernel);
-        console2.log("Auth Giver deployed at:", address(authGiver));
 
         /// Execute actions on Kernel
 
         /// Approve policies
         kernel.executeAction(Actions.ActivatePolicy, address(heart));
-        kernel.executeAction(Actions.ActivatePolicy, address(authGiver));
 
         /// deactivate old policies
         kernel.executeAction(Actions.DeactivatePolicy, address(oldHeart));
-
-        /// Set initial access control for policies on the AUTHR module
-        /// Set role permissions
-
-        /// Role 1 = Guardian
-        authGiver.setRoleCapability(uint8(1), address(heart), heart.resetBeat.selector);
-        authGiver.setRoleCapability(uint8(1), address(heart), heart.toggleBeat.selector);
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.setRewardTokenAndAmount.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.withdrawUnspentRewards.selector
-        );
-
-        /// Give roles to users
-        authGiver.setUserRole(address(heart), uint8(0));
-
-        /// deactivate mock auth giver
-        kernel.executeAction(Actions.DeactivatePolicy, address(authGiver));
 
         vm.stopBroadcast();
     }

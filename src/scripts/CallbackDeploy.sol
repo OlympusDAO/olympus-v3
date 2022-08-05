@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.11;
 
-import { AggregatorV2V3Interface } from "interfaces/AggregatorV2V3Interface.sol";
-import { Script, console2 } from "forge-std/Script.sol";
-import { ERC20 } from "solmate/tokens/ERC20.sol";
+import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+import {Script, console2} from "forge-std/Script.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import { IBondAuctioneer } from "interfaces/IBondAuctioneer.sol";
-import { IBondAggregator } from "interfaces/IBondAggregator.sol";
+import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
-import { Kernel, Actions } from "src/Kernel.sol";
+import {Kernel, Actions} from "src/Kernel.sol";
 
-import { Operator } from "policies/Operator.sol";
-import { BondCallback } from "policies/BondCallback.sol";
-import { MockAuthGiver } from "../test/mocks/MockAuthGiver.sol";
+import {Operator} from "policies/Operator.sol";
+import {BondCallback} from "policies/BondCallback.sol";
 
-import { TransferHelper } from "libraries/TransferHelper.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
 
 /// @notice Script to deploy the BondCallback contract in the Olympus Bophades system
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
@@ -25,7 +24,6 @@ contract CallbackDeploy is Script {
     /// Policies
     Operator public operator;
     BondCallback public callback;
-    MockAuthGiver public authGiver;
 
     /// Construction variables
 
@@ -56,9 +54,8 @@ contract CallbackDeploy is Script {
 
         /// Set addresses for dependencies
         kernel = Kernel(0x64665B0429B21274d938Ed345e4520D1f5ABb9e7);
-        address oldCallback = 0x86F5abAE1F72d34C4D475C72483a38699770ED2a;
-        operator = Operator(0x0bFFdE707B76Abe13f77f52f6E359c846AE0680d);
-        authGiver = MockAuthGiver(0x3714fDFc3b6918923e5b2AbAe0fcD74376Be45fc);
+        address oldCallback = 0x764E6578738E2606DBF3Be47746562F99380905c;
+        operator = Operator(0xD25b0441690BFD7e23Ab8Ee6f636Fce0C638ee32);
 
         callback = new BondCallback(kernel, bondAggregator, ohm);
 
@@ -69,29 +66,13 @@ contract CallbackDeploy is Script {
         // deactivate old callback
         kernel.executeAction(Actions.DeactivatePolicy, address(oldCallback));
 
-        /// Set initial access control for policies on the AUTHR module
-        /// Set role permissions
-
-        /// Role 1 = Guardian
-        authGiver.setRoleCapability(uint8(1), address(callback), callback.setOperator.selector);
-
-        /// Role 2 = Policy
-        authGiver.setRoleCapability(uint8(2), address(callback), callback.batchToTreasury.selector);
-        authGiver.setRoleCapability(uint8(2), address(callback), callback.whitelist.selector);
-
-        /// Role 3 = Operator
-        authGiver.setRoleCapability(uint8(3), address(callback), callback.whitelist.selector);
-
-        /// Give roles to users
-        authGiver.setUserRole(address(callback), uint8(4));
-
         vm.stopBroadcast();
     }
 
     /// @dev should be called by address with the guardian role
     function initialize() external {
         // Set addresses from deployment
-        operator = Operator(0x0bFFdE707B76Abe13f77f52f6E359c846AE0680d);
+        operator = Operator(0xD25b0441690BFD7e23Ab8Ee6f636Fce0C638ee32);
         callback = BondCallback(0x764E6578738E2606DBF3Be47746562F99380905c);
 
         /// Start broadcasting
