@@ -24,6 +24,7 @@ import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {VoterRegistration} from "policies/VoterRegistration.sol";
 import {OlympusGovernance} from "policies/Governance.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {Faucet} from "test/mocks/Faucet.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
@@ -48,6 +49,7 @@ contract OlympusDeploy is Script {
     OlympusPriceConfig public priceConfig;
     VoterRegistration public voterReg;
     OlympusGovernance public governance;
+    Faucet public faucet;
 
     /// Construction variables
 
@@ -156,6 +158,9 @@ contract OlympusDeploy is Script {
         governance = new OlympusGovernance(kernel);
         console2.log("Governance deployed at:", address(governance));
 
+        faucet = new Faucet(kernel, ohm, reserve, 1 ether, 1000 * 10e9, 10000 * 10e18, 1 hours);
+        console2.log("Faucet deployed at:", address(governance));
+
         /// Execute actions on Kernel
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(INSTR));
@@ -172,6 +177,7 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
         kernel.executeAction(Actions.ActivatePolicy, address(voterReg));
         kernel.executeAction(Actions.ActivatePolicy, address(governance));
+        kernel.executeAction(Actions.ActivatePolicy, address(faucet));
 
         /// Configure access control for policies
 
@@ -198,6 +204,9 @@ contract OlympusDeploy is Script {
 
         /// TreasuryCustodian roles
         kernel.grantRole(toRole("custodian"), guardian_);
+
+        /// Faucet roles
+        kernel.grantRole(toRole("faucet_admin"), guardian_);
 
         // /// Transfer executor powers to INSTR
         // kernel.executeAction(Actions.ChangeExecutor, address(INSTR));
