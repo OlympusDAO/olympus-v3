@@ -5,49 +5,35 @@ import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
 
-import {Auth, Authority} from "solmate/auth/Auth.sol";
-
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
-import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {Kernel, Policy, Actions} from "src/Kernel.sol";
-import {OlympusAuthority} from "modules/AUTHR.sol";
+import "src/Kernel.sol";
 
-import {Heart} from "policies/Heart.sol";
+import {OlympusHeart} from "policies/Heart.sol";
 
 import {IOperator, ERC20, IBondAuctioneer, IBondCallback} from "policies/interfaces/IOperator.sol";
 
 /**
  * @notice Mock Operator to test Heart
  */
-contract MockOperator is Policy, IOperator, Auth {
+contract MockOperator is Policy, IOperator {
     bool public result;
     error Operator_CustomError();
 
-    constructor(Kernel kernel_)
-        Policy(kernel_)
-        Auth(address(kernel_), Authority(address(0)))
-    {
+    constructor(Kernel kernel_) Policy(kernel_) {
         result = true;
     }
 
     /* ========== FRAMEWORK CONFIFURATION ========== */
-    function configureReads() external override {
-        setAuthority(Authority(getModuleAddress("AUTHR")));
-    }
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {}
 
-    function requestRoles()
-        external
-        view
-        override
-        returns (Kernel.Role[] memory roles)
-    {}
+    function requestPermissions() external view override returns (Permissions[] memory requests) {}
 
     /* ========== HEART FUNCTIONS ========== */
-    function operate() external requiresAuth {
+    function operate() external onlyRole("operator_operate") {
         if (!result) revert Operator_CustomError();
     }
 
@@ -65,11 +51,7 @@ contract MockOperator is Policy, IOperator, Auth {
         amountOut = 0;
     }
 
-    function getAmountOut(ERC20 tokenIn_, uint256 amountIn_)
-        external
-        pure
-        returns (uint256)
-    {
+    function getAmountOut(ERC20 tokenIn_, uint256 amountIn_) external pure returns (uint256) {
         return 0;
     }
 
@@ -94,10 +76,10 @@ contract MockOperator is Policy, IOperator, Auth {
         uint32 observe_
     ) external override {}
 
-    function setBondContracts(
-        IBondAuctioneer auctioneer_,
-        IBondCallback callback_
-    ) external override {}
+    function setBondContracts(IBondAuctioneer auctioneer_, IBondCallback callback_)
+        external
+        override
+    {}
 
     function initialize() external override {}
 
@@ -110,11 +92,7 @@ contract MockOperator is Policy, IOperator, Auth {
     }
 
     function status() external view override returns (Status memory) {
-        return
-            Status(
-                Regen(0, 0, 0, new bool[](0)),
-                Regen(0, 0, 0, new bool[](0))
-            );
+        return Status(Regen(0, 0, 0, new bool[](0)), Regen(0, 0, 0, new bool[](0)));
     }
 
     function config() external view override returns (Config memory) {
@@ -135,12 +113,10 @@ contract HeartTest is Test {
 
     Kernel internal kernel;
     MockPrice internal price;
-    OlympusAuthority internal authr;
 
     MockOperator internal operator;
-    MockAuthGiver internal authGiver;
 
-    Heart internal heart;
+    OlympusHeart internal heart;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -163,7 +139,6 @@ contract HeartTest is Test {
 
             /// Deploy modules (some mocks)
             price = new MockPrice(kernel, uint48(8 hours));
-            authr = new OlympusAuthority(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -177,70 +152,32 @@ contract HeartTest is Test {
             operator = new MockOperator(kernel);
 
             /// Deploy heart
-            heart = new Heart(
+            heart = new OlympusHeart(
                 kernel,
                 operator,
                 rewardToken,
                 uint256(1e18) // 1 reward token
             );
-
-            // Deploy mock auth giver
-            authGiver = new MockAuthGiver(kernel);
         }
 
         {
             /// Initialize system and kernel
 
             /// Install modules
-            kernel.executeAction(Actions.InstallModule, address(authr));
             kernel.executeAction(Actions.InstallModule, address(price));
 
             /// Approve policies
-            kernel.executeAction(Actions.ApprovePolicy, address(operator));
-            kernel.executeAction(Actions.ApprovePolicy, address(heart));
-            kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
+            kernel.executeAction(Actions.ActivatePolicy, address(operator));
+            kernel.executeAction(Actions.ActivatePolicy, address(heart));
 
             /// Configure access control
 
-            /// Set role permissions
+            /// Heart roles
+            kernel.grantRole(toRole("heart_admin"), guardian);
 
-            /// Role 0 = Heart
-            authGiver.setRoleCapability(
-                uint8(0),
-                address(operator),
-                operator.operate.selector
-            );
-
-            /// Role 1 = Guardian
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(operator),
-                operator.operate.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(heart),
-                heart.resetBeat.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(heart),
-                heart.toggleBeat.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(heart),
-                heart.setRewardTokenAndAmount.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(heart),
-                heart.withdrawUnspentRewards.selector
-            );
-
-            /// Give roles to users
-            authGiver.setUserRole(address(heart), uint8(0));
-            authGiver.setUserRole(guardian, uint8(1));
+            /// Operator roles
+            kernel.grantRole(toRole("operator_operate"), address(heart));
+            kernel.grantRole(toRole("operator_operate"), guardian);
         }
 
         {
@@ -417,11 +354,9 @@ contract HeartTest is Test {
         assertEq(endBalance, startBalance + heartBalance);
     }
 
-    function testCorrectness_cannotCallAdminFunctionsWithoutPermissions()
-        public
-    {
+    function testCorrectness_cannotCallAdminFunctionsWithoutPermissions() public {
         /// Try to call admin functions on the heart as non-guardian and expect revert
-        bytes memory err = abi.encodePacked("UNAUTHORIZED");
+        bytes memory err = abi.encodeWithSelector(Policy_OnlyRole.selector, toRole("heart_admin"));
 
         vm.expectRevert(err);
         heart.resetBeat();

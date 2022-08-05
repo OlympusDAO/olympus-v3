@@ -9,11 +9,9 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
+import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusAuthority} from "modules/AUTHR.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 
 contract PriceConfigTest is Test {
@@ -32,9 +30,7 @@ contract PriceConfigTest is Test {
 
     Kernel internal kernel;
     OlympusPrice internal price;
-    OlympusAuthority internal authr;
     OlympusPriceConfig internal priceConfig;
-    MockAuthGiver internal authGiver;
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
 
@@ -65,9 +61,6 @@ contract PriceConfigTest is Test {
             /// Deploy kernel
             kernel = new Kernel(); // this contract will be the executor
 
-            /// Deploy AUTHR module
-            authr = new OlympusAuthority(kernel);
-
             /// Deploy price module
             price = new OlympusPrice(
                 kernel,
@@ -79,51 +72,23 @@ contract PriceConfigTest is Test {
 
             /// Deploy price config policy
             priceConfig = new OlympusPriceConfig(kernel);
-
-            /// Deploy mock auth giver
-            authGiver = new MockAuthGiver(kernel);
         }
 
         {
             /// Initialize system and kernel
 
             /// Install modules
-            kernel.executeAction(Actions.InstallModule, address(authr));
             kernel.executeAction(Actions.InstallModule, address(price));
 
             /// Approve policies
-            kernel.executeAction(Actions.ApprovePolicy, address(priceConfig));
-            kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
+            kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
         }
 
         {
             /// Configure access control
 
-            /// Role 0 = Heart
-
-            /// Role 1 = Guardian
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(priceConfig),
-                priceConfig.initialize.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(priceConfig),
-                priceConfig.changeMovingAverageDuration.selector
-            );
-            authGiver.setRoleCapability(
-                uint8(1),
-                address(priceConfig),
-                priceConfig.changeObservationFrequency.selector
-            );
-
-            /// Role 2 = Policy
-
-            /// Role 3 = Operator
-
-            /// Give addresses roles
-            authGiver.setUserRole(guardian, uint8(1));
+            /// PriceConfig roles
+            kernel.grantRole(toRole("price_admin"), guardian);
         }
 
         {
@@ -144,9 +109,7 @@ contract PriceConfigTest is Test {
 
         /// Set scaling value for calculations
         uint256 scale = 10 **
-            (price.decimals() +
-                reserveEthPriceFeed.decimals() -
-                ohmEthPriceFeed.decimals());
+            (price.decimals() + reserveEthPriceFeed.decimals() - ohmEthPriceFeed.decimals());
 
         /// Calculate the number of observations and initialize the observation array
         uint48 observationFrequency = price.observationFrequency();
@@ -158,23 +121,16 @@ contract PriceConfigTest is Test {
         int256 change; // percentage with two decimals
         for (uint256 i; i < numObservations; ++i) {
             /// Calculate a random percentage change from -10% to + 10% using the nonce and observation number
-            change =
-                int256(uint256(keccak256(abi.encodePacked(nonce, i)))) %
-                int256(1000);
+            change = int256(uint256(keccak256(abi.encodePacked(nonce, i)))) % int256(1000);
 
             /// Calculate the new ohmEth price
-            ohmEthPrice =
-                (ohmEthPrice * (CHANGE_DECIMALS + change)) /
-                CHANGE_DECIMALS;
+            ohmEthPrice = (ohmEthPrice * (CHANGE_DECIMALS + change)) / CHANGE_DECIMALS;
 
             /// Update price feed
             ohmEthPriceFeed.setLatestAnswer(ohmEthPrice);
 
             /// Get the current price from the price module and store in the observations array
-            observations[i] = uint256(ohmEthPrice).mulDiv(
-                scale,
-                reserveEthPrice
-            );
+            observations[i] = uint256(ohmEthPrice).mulDiv(scale, reserveEthPrice);
         }
 
         return observations;
@@ -203,10 +159,7 @@ contract PriceConfigTest is Test {
         /// Check that the observations array is filled with the correct number of observations
         /// Do so by ensuring the last observation is at the right index and is the current price
         uint256 numObservations = uint256(price.numObservations());
-        assertEq(
-            price.observations(numObservations - 1),
-            price.getCurrentPrice()
-        );
+        assertEq(price.observations(numObservations - 1), price.getCurrentPrice());
 
         /// Check that the last observation time is set to the current time
         assertEq(price.lastObservationTime(), block.timestamp);
@@ -286,7 +239,7 @@ contract PriceConfigTest is Test {
 
     function testCorrectness_onlyAuthorizedCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodePacked("UNAUTHORIZED");
+        bytes memory err = abi.encodeWithSelector(Policy_OnlyRole.selector, toRole("price_admin"));
 
         /// initialize
         uint256[] memory obs = new uint256[](21);

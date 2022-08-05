@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {Auth, Authority} from "solmate/auth/Auth.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 import {IBondCallback} from "interfaces/IBondCallback.sol";
@@ -10,12 +9,12 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
 import {Operator} from "policies/Operator.sol";
-import {Kernel, Policy} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
 /// @title Olympus Bond Callback
-contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
+contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     using TransferHelper for ERC20;
 
     /* ========== ERRORS ========== */
@@ -42,32 +41,40 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         Kernel kernel_,
         IBondAggregator aggregator_,
         ERC20 ohm_
-    ) Policy(kernel_) Auth(address(kernel_), Authority(address(0))) {
+    ) Policy(kernel_) {
         aggregator = aggregator_;
         ohm = ohm_;
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
 
-    function configureReads() external override {
-        setAuthority(Authority(getModuleAddress("AUTHR")));
-        TRSRY = OlympusTreasury(getModuleAddress("TRSRY"));
-        MINTR = OlympusMinter(getModuleAddress("MINTR"));
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](2);
+        dependencies[0] = toKeycode("TRSRY");
+        dependencies[1] = toKeycode("MINTR");
 
-        /// Approve MINTR for burning OHM (called here so that it is re-approved on updates)
+        TRSRY = OlympusTreasury(getModuleAddress(dependencies[0]));
+        MINTR = OlympusMinter(getModuleAddress(dependencies[1]));
+
+        // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
     }
 
-    function requestRoles()
+    function requestPermissions()
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        onlyKernel
+        returns (Permissions[] memory requests)
     {
-        roles = new Kernel.Role[](3);
-        roles[0] = TRSRY.APPROVER();
-        roles[1] = MINTR.MINTER();
-        roles[2] = MINTR.BURNER();
+        Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
+        Keycode MINTR_KEYCODE = MINTR.KEYCODE();
+
+        requests = new Permissions[](4);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        requests[2] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
     /* ========== WHITELISTING ========== */
@@ -76,14 +83,12 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
     function whitelist(address teller_, uint256 id_)
         external
         override
-        requiresAuth
+        onlyRole("callback_whitelist")
     {
         approvedMarkets[teller_][id_] = true;
 
         // Get payout tokens for market
-        (, , ERC20 payoutToken, , , ) = aggregator
-            .getAuctioneer(id_)
-            .getMarketInfoForPurchase(id_);
+        (, , ERC20 payoutToken, , , ) = aggregator.getAuctioneer(id_).getMarketInfoForPurchase(id_);
 
         /// If payout token is not OHM, request approval from TRSRY for withdrawals
         if (address(payoutToken) != address(ohm)) {
@@ -100,8 +105,7 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
         uint256 outputAmount_
     ) external override nonReentrant {
         /// Confirm that the teller and market id are whitelisted
-        if (!approvedMarkets[msg.sender][id_])
-            revert Callback_MarketNotSupported(id_);
+        if (!approvedMarkets[msg.sender][id_]) revert Callback_MarketNotSupported(id_);
 
         // Get tokens for market
         (, , ERC20 payoutToken, ERC20 quoteToken, , ) = aggregator
@@ -109,10 +113,8 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
             .getMarketInfoForPurchase(id_);
 
         // Check that quoteTokens were transferred prior to the call
-        if (
-            quoteToken.balanceOf(address(this)) <
-            priorBalances[quoteToken] + inputAmount_
-        ) revert Callback_TokensNotReceived();
+        if (quoteToken.balanceOf(address(this)) < priorBalances[quoteToken] + inputAmount_)
+            revert Callback_TokensNotReceived();
 
         // Handle payout
         if (quoteToken == payoutToken && quoteToken == ohm) {
@@ -151,7 +153,7 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
 
     /// @notice         Send tokens to the TRSRY in a batch
     /// @param tokens_  Array of tokens to send
-    function batchToTreasury(ERC20[] memory tokens_) external requiresAuth {
+    function batchToTreasury(ERC20[] memory tokens_) external onlyRole("callback_admin") {
         ERC20 token;
         uint256 balance;
         uint256 len = tokens_.length;
@@ -184,7 +186,7 @@ contract BondCallback is Policy, Auth, ReentrancyGuard, IBondCallback {
     /// @notice             Sets the operator contract for the callback to use to report bond purchases
     /// @notice             Must be set before the callback is used
     /// @param operator_    Address of the Operator contract
-    function setOperator(Operator operator_) external requiresAuth {
+    function setOperator(Operator operator_) external onlyRole("callback_admin") {
         if (address(operator_) == address(0)) revert Callback_InvalidParams();
         operator = operator_;
     }

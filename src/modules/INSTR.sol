@@ -2,31 +2,26 @@
 
 // [INSTR] The Instructions Module caches and executes batched instructions for protocol upgrades in the Kernel
 
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
 import "src/Kernel.sol";
 
 error INSTR_InstructionsCannotBeEmpty();
 error INSTR_InvalidChangeExecutorAction();
-error INSTR_InvalidTargetNotAContract();
-error INSTR_InvalidModuleKeycode();
 
 contract OlympusInstructions is Module {
     /////////////////////////////////////////////////////////////////////////////////
     //                         Kernel Module Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
 
-    Kernel.Role public constant GOVERNOR = Kernel.Role.wrap("INSTR_Governor");
-
     constructor(Kernel kernel_) Module(kernel_) {}
 
-    function KEYCODE() public pure override returns (Kernel.Keycode) {
-        return Kernel.Keycode.wrap("INSTR");
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("INSTR");
     }
 
-    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
-        roles = new Kernel.Role[](1);
-        roles[0] = GOVERNOR;
+    function VERSION() public pure override returns (uint8 major, uint8 minor) {
+        return (1, 0);
     }
 
     /////////////////////////////////////////////////////////////////////////////////
@@ -43,19 +38,11 @@ contract OlympusInstructions is Module {
     /////////////////////////////////////////////////////////////////////////////////
 
     // view function for retrieving a list of instructions in an outside contract
-    function getInstructions(uint256 instructionsId_)
-        public
-        view
-        returns (Instruction[] memory)
-    {
+    function getInstructions(uint256 instructionsId_) public view returns (Instruction[] memory) {
         return storedInstructions[instructionsId_];
     }
 
-    function store(Instruction[] calldata instructions_)
-        external
-        onlyRole(GOVERNOR)
-        returns (uint256)
-    {
+    function store(Instruction[] calldata instructions_) external permissioned returns (uint256) {
         uint256 length = instructions_.length;
         uint256 instructionsId = ++totalInstructions;
 
@@ -63,9 +50,7 @@ contract OlympusInstructions is Module {
         Instruction[] storage instructions = storedInstructions[instructionsId];
 
         // if there are no instructions, throw an error
-        if (length == 0) {
-            revert INSTR_InstructionsCannotBeEmpty();
-        }
+        if (length == 0) revert INSTR_InstructionsCannotBeEmpty();
 
         // for each instruction, do the following actions:
         for (uint256 i; i < length; ) {
@@ -73,7 +58,7 @@ contract OlympusInstructions is Module {
             Instruction calldata instruction = instructions_[i];
 
             // check the address that the instruction is being performed on is a contract (bytecode size > 0)
-            _ensureContract(instruction.target);
+            ensureContract(instruction.target);
 
             // if the instruction deals with a module, make sure the module has a valid keycode (UPPERCASE A-Z ONLY)
             if (
@@ -81,10 +66,8 @@ contract OlympusInstructions is Module {
                 instruction.action == Actions.UpgradeModule
             ) {
                 Module module = Module(instruction.target);
-                _ensureValidKeycode(module.KEYCODE());
-            } else if (
-                instruction.action == Actions.ChangeExecutor && i != length - 1
-            ) {
+                ensureValidKeycode(module.KEYCODE());
+            } else if (instruction.action == Actions.ChangeExecutor && i != length - 1) {
                 // throw an error if ChangeExecutor exists and is not the last Action in the instruction llist
                 // this exists because if ChangeExecutor is not the last item in the list of instructions
                 // the Kernel will not recognize any of the following instructions as valid, since the policy
@@ -103,29 +86,5 @@ contract OlympusInstructions is Module {
         emit InstructionsStored(instructionsId);
 
         return instructionsId;
-    }
-
-    /////////////////////////////// INTERNAL FUNCTIONS ////////////////////////////////
-
-    function _ensureContract(address target_) internal view {
-        uint256 size;
-        assembly {
-            size := extcodesize(target_)
-        }
-        if (size == 0) revert INSTR_InvalidTargetNotAContract();
-    }
-
-    function _ensureValidKeycode(Kernel.Keycode keycode_) internal pure {
-        bytes5 unwrapped = Kernel.Keycode.unwrap(keycode_);
-
-        for (uint256 i; i < 5; ) {
-            bytes1 char = unwrapped[i];
-
-            if (char < 0x41 || char > 0x5A) revert INSTR_InvalidModuleKeycode(); // A-Z only"
-
-            unchecked {
-                ++i;
-            }
-        }
     }
 }

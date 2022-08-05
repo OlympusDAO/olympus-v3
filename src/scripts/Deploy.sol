@@ -9,8 +9,7 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
 import {IWETH9} from "interfaces/IWETH9.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusAuthority} from "modules/AUTHR.sol";
+import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE.sol";
 import {OlympusRange} from "modules/RANGE.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
@@ -19,13 +18,13 @@ import {OlympusInstructions} from "modules/INSTR.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
 
 import {Operator} from "policies/Operator.sol";
-import {Heart} from "policies/Heart.sol";
+import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {VoterRegistration} from "policies/VoterRegistration.sol";
-import {Governance} from "policies/Governance.sol";
-import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
+import {OlympusGovernance} from "policies/Governance.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {Faucet} from "test/mocks/Faucet.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
@@ -36,7 +35,6 @@ contract OlympusDeploy is Script {
     Kernel public kernel;
 
     /// Modules
-    OlympusAuthority public AUTHR;
     OlympusPrice public PRICE;
     OlympusRange public RANGE;
     OlympusTreasury public TRSRY;
@@ -46,12 +44,12 @@ contract OlympusDeploy is Script {
 
     /// Policies
     Operator public operator;
-    Heart public heart;
+    OlympusHeart public heart;
     BondCallback public callback;
     OlympusPriceConfig public priceConfig;
     VoterRegistration public voterReg;
-    Governance public governance;
-    MockAuthGiver public authGiver;
+    OlympusGovernance public governance;
+    Faucet public faucet;
 
     /// Construction variables
 
@@ -74,24 +72,21 @@ contract OlympusDeploy is Script {
     //     AggregatorV2V3Interface(0x773616E4d11A78F511299002da57A0a94577F1f4); // DAI/ETH chainlink address
 
     /// Goerli testnet addresses
-    ERC20 public constant ohm =
-        ERC20(0x0595328847AF962F951a4f8F8eE9A3Bf261e4f6b); // OHM goerli address
-    ERC20 public constant reserve =
-        ERC20(0x41e38e70a36150D08A8c97aEC194321b5eB545A5); // DAI goerli address
-    ERC20 public constant rewardToken =
-        ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
+    ERC20 public constant ohm = ERC20(0x0595328847AF962F951a4f8F8eE9A3Bf261e4f6b); // OHM goerli address
+    ERC20 public constant reserve = ERC20(0x41e38e70a36150D08A8c97aEC194321b5eB545A5); // DAI goerli address
+    ERC20 public constant rewardToken = ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
 
     /// Bond system addresses
     IBondAuctioneer public constant bondAuctioneer =
-        IBondAuctioneer(0x85A41eCdefAA441C71C94a47FDD04e4509a2944a);
+        IBondAuctioneer(0xaE73A94b94F6E7aca37f4c79C4b865F1AF06A68b);
     IBondAggregator public constant bondAggregator =
-        IBondAggregator(0x2B33ABcb816AeE1BB38fa84537329955f79d900e);
+        IBondAggregator(0xB4860B2c12C6B894B64471dFb5a631ff569e220e);
 
     /// Mock Price Feed addresses
     AggregatorV2V3Interface public constant ohmEthPriceFeed =
-        AggregatorV2V3Interface(0x022710a589C9796dce59A0C52cA4E36f0a5e991A); // OHM/ETH chainlink address
+        AggregatorV2V3Interface(0x022710a589C9796dce59A0C52cA4E36f0a5e991A); // OHM/ETH
     AggregatorV2V3Interface public constant reserveEthPriceFeed =
-        AggregatorV2V3Interface(0xdC8E4eD326cFb730a759312B6b1727C6Ef9ca233); // DAI/ETH chainlink address
+        AggregatorV2V3Interface(0xdC8E4eD326cFb730a759312B6b1727C6Ef9ca233); // DAI/ETH
 
     function deploy(address guardian_, address policy_) external {
         vm.startBroadcast();
@@ -106,9 +101,6 @@ contract OlympusDeploy is Script {
 
         VOTES = new OlympusVotes(kernel);
         console2.log("Votes module deployed at:", address(INSTR));
-
-        AUTHR = new OlympusAuthority(kernel);
-        console2.log("Authority module deployed at:", address(AUTHR));
 
         TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury module deployed at:", address(TRSRY));
@@ -154,7 +146,7 @@ contract OlympusDeploy is Script {
         );
         console2.log("Operator deployed at:", address(operator));
 
-        heart = new Heart(kernel, operator, rewardToken, 0);
+        heart = new OlympusHeart(kernel, operator, rewardToken, 0);
         console2.log("Heart deployed at:", address(heart));
 
         priceConfig = new OlympusPriceConfig(kernel);
@@ -163,171 +155,58 @@ contract OlympusDeploy is Script {
         voterReg = new VoterRegistration(kernel);
         console2.log("VoterRegistration deployed at:", address(voterReg));
 
-        governance = new Governance(kernel);
+        governance = new OlympusGovernance(kernel);
         console2.log("Governance deployed at:", address(governance));
 
-        authGiver = new MockAuthGiver(kernel);
-        console2.log("Auth Giver deployed at:", address(authGiver));
+        faucet = new Faucet(kernel, ohm, reserve, 1 ether, 1000 * 10e9, 10000 * 10e18, 1 hours);
+        console2.log("Faucet deployed at:", address(governance));
 
         /// Execute actions on Kernel
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(INSTR));
         kernel.executeAction(Actions.InstallModule, address(VOTES));
-        kernel.executeAction(Actions.InstallModule, address(AUTHR));
         kernel.executeAction(Actions.InstallModule, address(PRICE));
         kernel.executeAction(Actions.InstallModule, address(RANGE));
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
         kernel.executeAction(Actions.InstallModule, address(MINTR));
 
         /// Approve policies
-        kernel.executeAction(Actions.ApprovePolicy, address(callback));
-        kernel.executeAction(Actions.ApprovePolicy, address(operator));
-        kernel.executeAction(Actions.ApprovePolicy, address(heart));
-        kernel.executeAction(Actions.ApprovePolicy, address(priceConfig));
-        kernel.executeAction(Actions.ApprovePolicy, address(voterReg));
-        kernel.executeAction(Actions.ApprovePolicy, address(governance));
-        /// TODO likely to change with the auth system upgrades, using as a placeholder to enable auth setting on deployment
-        kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
+        kernel.executeAction(Actions.ActivatePolicy, address(callback));
+        kernel.executeAction(Actions.ActivatePolicy, address(operator));
+        kernel.executeAction(Actions.ActivatePolicy, address(heart));
+        kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
+        kernel.executeAction(Actions.ActivatePolicy, address(voterReg));
+        kernel.executeAction(Actions.ActivatePolicy, address(governance));
+        kernel.executeAction(Actions.ActivatePolicy, address(faucet));
 
-        /// Set initial access control for policies on the AUTHR module
-        /// Set role permissions
+        /// Configure access control for policies
 
-        /// Role 0 = Heart
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(operator),
-            operator.operate.selector
-        );
+        /// Operator roles
+        kernel.grantRole(toRole("operator_operate"), address(heart));
+        kernel.grantRole(toRole("operator_operate"), guardian_);
+        kernel.grantRole(toRole("operator_reporter"), address(callback));
+        kernel.grantRole(toRole("operator_policy"), policy_);
+        kernel.grantRole(toRole("operator_admin"), guardian_);
 
-        /// Role 1 = Guardian
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(operator),
-            operator.operate.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(operator),
-            operator.setBondContracts.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(operator),
-            operator.initialize.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(operator),
-            operator.regenerate.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.resetBeat.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.toggleBeat.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.setRewardTokenAndAmount.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(heart),
-            heart.withdrawUnspentRewards.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(priceConfig),
-            priceConfig.initialize.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(priceConfig),
-            priceConfig.changeMovingAverageDuration.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(priceConfig),
-            priceConfig.changeObservationFrequency.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(1),
-            address(callback),
-            callback.setOperator.selector
-        );
+        /// Bond callback roles
+        kernel.grantRole(toRole("callback_whitelist"), address(operator));
+        kernel.grantRole(toRole("callback_whitelist"), guardian_);
+        kernel.grantRole(toRole("callback_admin"), guardian_);
 
-        /// Role 2 = Policy
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setSpreads.selector
-        );
+        /// Heart roles
+        kernel.grantRole(toRole("heart_admin"), guardian_);
 
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setThresholdFactor.selector
-        );
+        /// VoterRegistration roles
+        kernel.grantRole(toRole("voter_admin"), guardian_);
 
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setCushionFactor.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setCushionParams.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setReserveFactor.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(operator),
-            operator.setRegenParams.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(callback),
-            callback.batchToTreasury.selector
-        );
-        authGiver.setRoleCapability(
-            uint8(2),
-            address(callback),
-            callback.whitelist.selector
-        );
+        /// PriceConfig roles
+        kernel.grantRole(toRole("price_admin"), guardian_);
 
-        /// Role 3 = Operator
-        authGiver.setRoleCapability(
-            uint8(3),
-            address(callback),
-            callback.whitelist.selector
-        );
+        /// TreasuryCustodian roles
+        kernel.grantRole(toRole("custodian"), guardian_);
 
-        /// Role 4 = Callback
-        authGiver.setRoleCapability(
-            uint8(4),
-            address(operator),
-            operator.bondPurchase.selector
-        );
-
-        /// Give roles to users
-        authGiver.setUserRole(address(heart), uint8(0));
-        authGiver.setUserRole(guardian_, uint8(1));
-        authGiver.setUserRole(policy_, uint8(2));
-        authGiver.setUserRole(address(operator), uint8(3));
-        authGiver.setUserRole(address(callback), uint8(4));
-
-        /// Terminate mock auth giver
-        kernel.executeAction(Actions.TerminatePolicy, address(authGiver));
+        /// Faucet roles
+        kernel.grantRole(toRole("faucet_admin"), guardian_);
 
         // /// Transfer executor powers to INSTR
         // kernel.executeAction(Actions.ChangeExecutor, address(INSTR));
@@ -339,7 +218,7 @@ contract OlympusDeploy is Script {
     function initialize() external {
         // Set addresses from deployment
         // priceConfig = OlympusPriceConfig();
-        operator = Operator(0x84F334bf268821C5A8DB931105088f0369288B4c);
+        operator = Operator(0xD25b0441690BFD7e23Ab8Ee6f636Fce0C638ee32);
         callback = BondCallback(0x76775f07B0dCd21DB304b6c5b14d57A2954ddAC6);
 
         /// Start broadcasting
@@ -373,15 +252,9 @@ contract DependencyDeploy is Script {
 
         // Deploy the price feeds
         ohmEthPriceFeed = new MockPriceFeed();
-        console2.log(
-            "OHM-ETH Price Feed deployed to:",
-            address(ohmEthPriceFeed)
-        );
+        console2.log("OHM-ETH Price Feed deployed to:", address(ohmEthPriceFeed));
         reserveEthPriceFeed = new MockPriceFeed();
-        console2.log(
-            "RESERVE-ETH Price Feed deployed to:",
-            address(reserveEthPriceFeed)
-        );
+        console2.log("RESERVE-ETH Price Feed deployed to:", address(reserveEthPriceFeed));
 
         // Set the decimals of the price feeds
         ohmEthPriceFeed.setDecimals(18);

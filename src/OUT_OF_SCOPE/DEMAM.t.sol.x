@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
 /// DEPS
 import "forge-std/Test.sol";
@@ -46,7 +46,7 @@ contract DEMAMTest is Test {
     }
 
     function testKeycode() public {
-        assertEq32("DEMAM", Kernel.Keycode.unwrap(demam.KEYCODE()));
+        assertEq32("DEMAM", Keycode.unwrap(demam.KEYCODE()));
     }
 
     function testTakeTokens(uint224 amount, uint8 nusers) public {

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {Kernel, Module} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 error RANGE_InvalidParams();
 
@@ -54,8 +54,6 @@ contract OlympusRange is Module {
 
     /* ========== STATE VARIABLES ========== */
 
-    Kernel.Role public constant OPERATOR = Kernel.Role.wrap("RANGE_Operator");
-
     /// Range data singleton. See range().
     Range internal _range;
 
@@ -95,16 +93,8 @@ contract OlympusRange is Module {
                 threshold: 0,
                 market: type(uint256).max
             }),
-            cushion: Band({
-                low: Line({price: 0}),
-                high: Line({price: 0}),
-                spread: rangeParams_[1]
-            }),
-            wall: Band({
-                low: Line({price: 0}),
-                high: Line({price: 0}),
-                spread: rangeParams_[2]
-            })
+            cushion: Band({low: Line({price: 0}), high: Line({price: 0}), spread: rangeParams_[1]}),
+            wall: Band({low: Line({price: 0}), high: Line({price: 0}), spread: rangeParams_[2]})
         });
 
         thresholdFactor = rangeParams_[0];
@@ -114,24 +104,20 @@ contract OlympusRange is Module {
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
     /// @inheritdoc Module
-    function KEYCODE() public pure override returns (Kernel.Keycode) {
-        return Kernel.Keycode.wrap("RANGE");
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("RANGE");
     }
 
-    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
-        roles = new Kernel.Role[](1);
-        roles[0] = OPERATOR;
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+        return (1, 0);
     }
 
     /* ========== POLICY FUNCTIONS ========== */
     /// @notice                 Update the capacity for a side of the range.
-    /// @notice                 Access restricted to approved policies.
+    /// @notice                 Access restricted to activated policies.
     /// @param high_            Specifies the side of the range to update capacity for (true = high side, false = low side).
     /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
-    function updateCapacity(bool high_, uint256 capacity_)
-        external
-        onlyRole(OPERATOR)
-    {
+    function updateCapacity(bool high_, uint256 capacity_) external permissioned {
         if (high_) {
             /// Update capacity
             _range.high.capacity = capacity_;
@@ -168,37 +154,28 @@ contract OlympusRange is Module {
     }
 
     /// @notice                 Update the prices for the low and high sides.
-    /// @notice                 Access restricted to approved policies.
+    /// @notice                 Access restricted to activated policies.
     /// @param movingAverage_   Current moving average price to set range prices from.
-    function updatePrices(uint256 movingAverage_) external onlyRole(OPERATOR) {
+    function updatePrices(uint256 movingAverage_) external permissioned {
         /// Cache the spreads
         uint256 wallSpread = _range.wall.spread;
         uint256 cushionSpread = _range.cushion.spread;
 
         /// Calculate new wall and cushion values from moving average and spread
-        _range.wall.low.price =
-            (movingAverage_ * (FACTOR_SCALE - wallSpread)) /
-            FACTOR_SCALE;
-        _range.wall.high.price =
-            (movingAverage_ * (FACTOR_SCALE + wallSpread)) /
-            FACTOR_SCALE;
+        _range.wall.low.price = (movingAverage_ * (FACTOR_SCALE - wallSpread)) / FACTOR_SCALE;
+        _range.wall.high.price = (movingAverage_ * (FACTOR_SCALE + wallSpread)) / FACTOR_SCALE;
 
-        _range.cushion.low.price =
-            (movingAverage_ * (FACTOR_SCALE - cushionSpread)) /
-            FACTOR_SCALE;
+        _range.cushion.low.price = (movingAverage_ * (FACTOR_SCALE - cushionSpread)) / FACTOR_SCALE;
         _range.cushion.high.price =
             (movingAverage_ * (FACTOR_SCALE + cushionSpread)) /
             FACTOR_SCALE;
     }
 
     /// @notice                 Regenerate a side of the range to a specific capacity.
-    /// @notice                 Access restricted to approved policies.
+    /// @notice                 Access restricted to activated policies.
     /// @param high_            Specifies the side of the range to regenerate (true = high side, false = low side).
     /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
-    function regenerate(bool high_, uint256 capacity_)
-        external
-        onlyRole(OPERATOR)
-    {
+    function regenerate(bool high_, uint256 capacity_) external permissioned {
         uint256 threshold = (capacity_ * thresholdFactor) / FACTOR_SCALE;
 
         if (high_) {
@@ -225,7 +202,7 @@ contract OlympusRange is Module {
     }
 
     /// @notice                 Update the market ID (cushion) for a side of the range.
-    /// @notice                 Access restricted to approved policies.
+    /// @notice                 Access restricted to activated policies.
     /// @param high_            Specifies the side of the range to update market for (true = high side, false = low side).
     /// @param market_          Market ID to set for the side.
     /// @param marketCapacity_  Amount to set the last market capacity to (OHM tokens for high side, Reserve tokens for low side).
@@ -233,10 +210,9 @@ contract OlympusRange is Module {
         bool high_,
         uint256 market_,
         uint256 marketCapacity_
-    ) public onlyRole(OPERATOR) {
+    ) public permissioned {
         /// If market id is max uint256, then marketCapacity must be 0
-        if (market_ == type(uint256).max && marketCapacity_ != 0)
-            revert RANGE_InvalidParams();
+        if (market_ == type(uint256).max && marketCapacity_ != 0) revert RANGE_InvalidParams();
 
         /// Store updated state
         if (high_) {
@@ -254,14 +230,11 @@ contract OlympusRange is Module {
     }
 
     /// @notice                 Set the wall and cushion spreads.
-    /// @notice                 Access restricted to approved policies.
+    /// @notice                 Access restricted to activated policies.
     /// @param cushionSpread_   Percent spread to set the cushions at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
     /// @param wallSpread_      Percent spread to set the walls at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev The new spreads will not go into effect until the next time updatePrices() is called.
-    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
-        external
-        onlyRole(OPERATOR)
-    {
+    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external permissioned {
         /// Confirm spreads are within allowed values
         if (
             wallSpread_ > 10000 ||
@@ -277,16 +250,12 @@ contract OlympusRange is Module {
     }
 
     /// @notice                 Set the threshold factor for when a wall is considered "down".
-    /// @notice                 Access restricted to approved policies.
+    /// @notice                 Access restricted to activated policies.
     /// @param thresholdFactor_ Percent of capacity that the wall should close below, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
-    function setThresholdFactor(uint256 thresholdFactor_)
-        external
-        onlyRole(OPERATOR)
-    {
+    function setThresholdFactor(uint256 thresholdFactor_) external permissioned {
         /// Confirm threshold factor is within allowed values
-        if (thresholdFactor_ > 10000 || thresholdFactor_ < 100)
-            revert RANGE_InvalidParams();
+        if (thresholdFactor_ > 10000 || thresholdFactor_ < 100) revert RANGE_InvalidParams();
 
         /// Set threshold factor
         thresholdFactor = thresholdFactor_;

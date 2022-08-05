@@ -88,8 +88,5 @@ interface IBondCDA is IBondAuctioneer {
     /// @dev                Accounts for control variable adjustment
     /// @param id_          ID of market
     /// @return             Control variable for market in payout token decimals
-    function currentControlVariable(uint256 id_)
-        external
-        view
-        returns (uint256);
+    function currentControlVariable(uint256 id_) external view returns (uint256);
 }

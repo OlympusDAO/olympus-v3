@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
-import {Auth, Authority} from "solmate/auth/Auth.sol";
-
-import {Kernel, Policy} from "src/Kernel.sol";
+import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE.sol";
 
-contract OlympusPriceConfig is Policy, Auth {
+contract OlympusPriceConfig is Policy {
     /* ========== STATE VARIABLES ========== */
 
     /// Modules
@@ -14,25 +12,26 @@ contract OlympusPriceConfig is Policy, Auth {
 
     /* ========== CONSTRUCTOR ========== */
 
-    constructor(Kernel kernel_)
-        Policy(kernel_)
-        Auth(address(kernel_), Authority(address(0)))
-    {}
+    constructor(Kernel kernel_) Policy(kernel_) {}
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
-    function configureReads() external override {
-        PRICE = OlympusPrice(getModuleAddress("PRICE"));
-        setAuthority(Authority(getModuleAddress("AUTHR")));
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](1);
+        dependencies[0] = toKeycode("PRICE");
+
+        PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
     }
 
-    function requestRoles()
+    function requestPermissions()
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Permissions[] memory permissions)
     {
-        roles = new Kernel.Role[](1);
-        roles[0] = PRICE.GUARDIAN();
+        permissions = new Permissions[](3);
+        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.initialize.selector);
+        permissions[1] = Permissions(PRICE.KEYCODE(), PRICE.changeMovingAverageDuration.selector);
+        permissions[2] = Permissions(PRICE.KEYCODE(), PRICE.changeObservationFrequency.selector);
     }
 
     /* ========== ADMIN FUNCTIONS ========== */
@@ -43,10 +42,10 @@ contract OlympusPriceConfig is Policy, Auth {
     /// @param lastObservationTime_ Unix timestamp of last observation being provided (in seconds).
     /// @dev This function must be called after the Price module is deployed to activate it and after updating the observationFrequency
     ///      or movingAverageDuration (in certain cases) in order for the Price module to function properly.
-    function initialize(
-        uint256[] memory startObservations_,
-        uint48 lastObservationTime_
-    ) external requiresAuth {
+    function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
+        external
+        onlyRole("price_admin")
+    {
         PRICE.initialize(startObservations_, lastObservationTime_);
     }
 
@@ -58,7 +57,7 @@ contract OlympusPriceConfig is Policy, Auth {
     ///      function with a number of observations larger than have been recorded.
     function changeMovingAverageDuration(uint48 movingAverageDuration_)
         external
-        requiresAuth
+        onlyRole("price_admin")
     {
         PRICE.changeMovingAverageDuration(movingAverageDuration_);
     }
@@ -69,7 +68,7 @@ contract OlympusPriceConfig is Policy, Auth {
     ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
     function changeObservationFrequency(uint48 observationFrequency_)
         external
-        requiresAuth
+        onlyRole("price_admin")
     {
         PRICE.changeObservationFrequency(observationFrequency_);
     }

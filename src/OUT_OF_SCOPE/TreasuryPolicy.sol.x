@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
 /// DEPS
 
@@ -47,9 +47,9 @@ contract TreasuryPolicy is Auth, Policy {
         view
         override
         onlyKernel
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {
-        roles = new Kernel.Role[](1);
+        roles = new Role[](1);
         permissions[0] = "TRSRY";
     }
 
@@ -80,7 +80,7 @@ contract TreasuryPolicy is Auth, Policy {
         verifier = EndStateVerifier(address(0));
     }
 
-    function loanReserves(
+    function getLoan(
         address borrower,
         address token,
         uint256 amount
@@ -90,7 +90,7 @@ contract TreasuryPolicy is Auth, Policy {
             revert TreasuryPolicy_BorrowerNotAllowed(borrower);
 
         // interactions
-        treasury.loanReserves(borrower, token, amount);
+        treasury.getLoan(borrower, token, amount);
     }
 
     function repayReserves(

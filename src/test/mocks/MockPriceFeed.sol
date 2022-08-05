@@ -51,19 +51,9 @@ contract MockPriceFeed is AggregatorV2V3Interface {
 
     function latestRound() external view override returns (uint256) {}
 
-    function getAnswer(uint256 roundId)
-        external
-        view
-        override
-        returns (int256)
-    {}
+    function getAnswer(uint256 roundId) external view override returns (int256) {}
 
-    function getTimestamp(uint256 roundId)
-        external
-        view
-        override
-        returns (uint256)
-    {}
+    function getTimestamp(uint256 roundId) external view override returns (uint256) {}
 
     function description() external view override returns (string memory) {}
 

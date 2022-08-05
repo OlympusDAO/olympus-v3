@@ -1,5 +1,5 @@
 [default]
-solc_version = "0.8.13"
+solc_version = "0.8.15"
 remappings = [
     'ds-test/=lib/ds-test/src/',
     'solmate/=lib/solmate/src/',
@@ -12,6 +12,7 @@ remappings = [
     'policies/=src/policies',
     'libraries/=src/libraries',
 ]
+ffi = true
 
 [fried]
 fuzz_runs = 1024

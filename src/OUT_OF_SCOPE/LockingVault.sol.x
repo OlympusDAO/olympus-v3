@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
 /// DEPS
 
@@ -59,9 +59,9 @@ contract LockingVault is Auth, Policy {
         view
         virtual
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Role[] memory roles)
     {
-        roles = new Kernel.Role[](2);
+        roles = new Role[](2);
         roles[0] = demam.EDITOR();
         roles[1] = demam.SENDER();
         roles[2] = demam.GODMODE();

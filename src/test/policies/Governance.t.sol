@@ -5,13 +5,11 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test-utils/UserFactory.sol";
 
-import {Kernel, Instruction, Actions} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 import {OlympusInstructions} from "modules/INSTR.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
-import {OlympusAuthority} from "modules/AUTHR.sol";
 
-import {MockAuthGiver} from "test/mocks/MockAuthGiver.sol";
 import "policies/Governance.sol";
 import {VoterRegistration} from "policies/VoterRegistration.sol";
 
@@ -31,26 +29,15 @@ contract GovernanceTest is Test {
 
     OlympusInstructions internal instructions;
     OlympusVotes internal votes;
-    OlympusAuthority internal authr;
 
-    MockAuthGiver internal authGiver;
-    Governance internal governance;
+    OlympusGovernance internal governance;
     VoterRegistration internal voterRegistration;
 
     event InstructionsStored(uint256);
     event ProposalSubmitted(uint256 instructionsId);
-    event ProposalEndorsed(
-        uint256 instructionsId,
-        address voter,
-        uint256 amount
-    );
+    event ProposalEndorsed(uint256 instructionsId, address voter, uint256 amount);
     event ProposalActivated(uint256 instructionsId, uint256 timestamp);
-    event WalletVoted(
-        uint256 instructionsId,
-        address voter,
-        bool for_,
-        uint256 userVotes
-    );
+    event WalletVoted(uint256 instructionsId, address voter, bool for_, uint256 userVotes);
     event ProposalExecuted(uint256 instructionsId);
     event Transfer(address indexed, address indexed, uint256);
 
@@ -71,45 +58,28 @@ contract GovernanceTest is Test {
         /// Deploy kernel
         kernel = new Kernel(); // this contract will be the executor
 
-        /// Deploy modules (some mocks)
+        /// Deploy modules
         instructions = new OlympusInstructions(kernel);
         votes = new OlympusVotes(kernel);
-        authr = new OlympusAuthority(kernel);
 
         /// Deploy policies
-        authGiver = new MockAuthGiver(kernel);
-        governance = new Governance(kernel);
+        governance = new OlympusGovernance(kernel);
         voterRegistration = new VoterRegistration(kernel);
-        newProposedPolicy = address(new Governance(kernel));
+        newProposedPolicy = address(new OlympusGovernance(kernel));
 
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(instructions));
         kernel.executeAction(Actions.InstallModule, address(votes));
-        kernel.executeAction(Actions.InstallModule, address(authr));
 
         /// Approve policies`
-        kernel.executeAction(Actions.ApprovePolicy, address(governance));
-        kernel.executeAction(Actions.ApprovePolicy, address(voterRegistration));
-        kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
+        kernel.executeAction(Actions.ActivatePolicy, address(governance));
+        kernel.executeAction(Actions.ActivatePolicy, address(voterRegistration));
 
         // Change executor
         kernel.executeAction(Actions.ChangeExecutor, address(governance));
 
-        /// Role 0 = Issuer
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(voterRegistration),
-            voterRegistration.issueVotesTo.selector
-        );
-
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(voterRegistration),
-            voterRegistration.revokeVotesFrom.selector
-        );
-
-        /// Give issuer role to govMultisig
-        authGiver.setUserRole(govMultisig, uint8(0));
+        /// Configure access control
+        kernel.grantRole(toRole("voter_admin"), govMultisig);
 
         // Mint tokens to users and treasury for testing
         vm.startPrank(govMultisig);
@@ -139,10 +109,7 @@ contract GovernanceTest is Test {
     function _submitProposal() internal {
         // create valid instructions
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(newProposedPolicy)
-        );
+        instructions_[0] = Instruction(Actions.ActivatePolicy, address(newProposedPolicy));
 
         // submit proposal as voter1 (1/15 votes)
         vm.prank(voter1);
@@ -151,10 +118,7 @@ contract GovernanceTest is Test {
 
     function testRevert_NotEnoughVotesToPropose() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(governance)
-        );
+        instructions_[0] = Instruction(Actions.ActivatePolicy, address(governance));
 
         vm.expectRevert(NotEnoughVotesToPropose.selector);
 
@@ -165,10 +129,7 @@ contract GovernanceTest is Test {
 
     function testEvent_ProposalSubmitted() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(governance)
-        );
+        instructions_[0] = Instruction(Actions.ActivatePolicy, address(governance));
 
         vm.expectEmit(true, true, true, true);
         emit ProposalSubmitted(1);
@@ -179,10 +140,7 @@ contract GovernanceTest is Test {
 
     function testCorrectness_SuccessfullySubmitProposal() public {
         Instruction[] memory instructions_ = new Instruction[](1);
-        instructions_[0] = Instruction(
-            Actions.ApprovePolicy,
-            address(governance)
-        );
+        instructions_[0] = Instruction(Actions.ActivatePolicy, address(governance));
 
         vm.expectEmit(true, true, true, true);
         emit InstructionsStored(1);
@@ -355,8 +313,7 @@ contract GovernanceTest is Test {
         governance.activateProposal(1);
 
         // check that the active proposal data is correct
-        ActivatedProposal memory activeProposal = governance
-            .getActiveProposal();
+        ActivatedProposal memory activeProposal = governance.getActiveProposal();
 
         assertEq(activeProposal.instructionsId, 1);
         assertEq(activeProposal.activationTimestamp, block.timestamp);
@@ -517,14 +474,13 @@ contract GovernanceTest is Test {
         governance.executeProposal();
 
         // check that the proposal is no longer active
-        ActivatedProposal memory activeProposal = governance
-            .getActiveProposal();
+        ActivatedProposal memory activeProposal = governance.getActiveProposal();
 
         assertEq(activeProposal.instructionsId, 0);
         assertEq(activeProposal.activationTimestamp, 0);
 
         // check that the proposed contracts are approved in the kernel
-        assertTrue(kernel.approvedPolicies(address(newProposedPolicy)));
+        assertTrue(Policy(newProposedPolicy).isActive());
     }
 
     ////////////////////////////////

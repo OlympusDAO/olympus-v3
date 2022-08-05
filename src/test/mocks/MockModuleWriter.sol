@@ -1,33 +1,42 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
-import {Kernel, Module, Policy} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 /**
  * @notice Mock policy to allow testing gated module functions
  */
 contract MockModuleWriter is Policy {
-    Module internal module;
+    Module internal _module;
+    Permissions[] internal _requests;
 
-    constructor(Kernel kernel_, Module module_) Policy(kernel_) {
-        module = module_;
+    constructor(Kernel kernel_, Module module_, Permissions[] memory requests_) Policy(kernel_) {
+        _module = module_;
+        uint256 len = requests_.length;
+        for (uint256 i; i < len; i++) {
+            _requests.push(requests_[i]);
+        }
     }
 
     /* ========== FRAMEWORK CONFIFURATION ========== */
-    function configureReads() external override {}
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {}
 
-    function requestRoles()
+    function requestPermissions()
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Permissions[] memory requests)
     {
-        roles = module.ROLES();
+        uint256 len = _requests.length;
+        requests = new Permissions[](len);
+        for (uint256 i; i < len; i++) {
+            requests[i] = _requests[i];
+        }
     }
 
     /* ========== DELEGATE TO MODULE ========== */
     fallback(bytes calldata input) external returns (bytes memory) {
-        (bool success, bytes memory output) = address(module).call(input);
+        (bool success, bytes memory output) = address(_module).call(input);
         if (!success) {
             if (output.length == 0) revert();
             assembly {

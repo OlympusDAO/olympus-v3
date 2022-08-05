@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
 /// DEPS
 
@@ -66,10 +66,10 @@ contract VotingPowerModule is Module {
         int128 end;
     }
 
-    Kernel.Role public constant REPORTER = Kernel.Role.wrap("VOPOM_Reporter");
-    Kernel.Role public constant MODIFIER = Kernel.Role.wrap("VOPOM_Modifier");
-    Kernel.Role public constant CONFIGURATOR =
-        Kernel.Role.wrap("VOPOM_Configurator");
+    Role public constant REPORTER = Role.wrap("VOPOM_Reporter");
+    Role public constant MODIFIER = Role.wrap("VOPOM_Modifier");
+    Role public constant CONFIGURATOR =
+        Role.wrap("VOPOM_Configurator");
 
     // ######################## ~ MATH ~ ########################
 
@@ -98,12 +98,12 @@ contract VotingPowerModule is Module {
 
     constructor(address kernel_) Module(Kernel(kernel_)) {}
 
-    function KEYCODE() public pure virtual override returns (Kernel.Keycode) {
-        return Kernel.Keycode.wrap("VOPOM");
+    function KEYCODE() public pure virtual override returns (Keycode) {
+        return toKeycode("VOPOM");
     }
 
-    function ROLES() public pure override returns (Kernel.Role[] memory roles) {
-        roles = new Kernel.Role[](3);
+    function ROLES() public pure override returns (Role[] memory roles) {
+        roles = new Role[](3);
         roles[0] = REPORTER;
         roles[1] = MODIFIER;
         roles[2] = CONFIGURATOR;

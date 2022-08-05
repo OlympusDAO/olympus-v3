@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+pragma solidity 0.8.15;
 
 // The Governance Policy submits & activates instructions in a INSTR module
 
-pragma solidity 0.8.13;
-
-import {Kernel, Policy} from "src/Kernel.sol";
-import {OlympusInstructions, Actions, Instruction} from "modules/INSTR.sol";
+import {OlympusInstructions} from "modules/INSTR.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
+import "src/Kernel.sol";
 
 // proposing
 error NotEnoughVotesToPropose();
@@ -46,7 +45,9 @@ struct ActivatedProposal {
     uint256 activationTimestamp;
 }
 
-contract Governance is Policy {
+/// @notice OlympusGovernance
+/// @dev The Governor Policy is also the Kernel's Executor.
+contract OlympusGovernance is Policy {
     /////////////////////////////////////////////////////////////////////////////////
     //                         Kernel Policy Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
@@ -56,21 +57,25 @@ contract Governance is Policy {
 
     constructor(Kernel kernel_) Policy(kernel_) {}
 
-    function configureReads() external override {
-        INSTR = OlympusInstructions(getModuleAddress("INSTR"));
-        VOTES = OlympusVotes(getModuleAddress("VOTES"));
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](2);
+        dependencies[0] = toKeycode("INSTR");
+        dependencies[1] = toKeycode("VOTES");
+
+        INSTR = OlympusInstructions(getModuleAddress(dependencies[0]));
+        VOTES = OlympusVotes(getModuleAddress(dependencies[1]));
     }
 
-    // The Governor Policy is also the Kernel's Executor.
-    function requestRoles()
+    function requestPermissions()
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        onlyKernel
+        returns (Permissions[] memory requests)
     {
-        roles = new Kernel.Role[](2);
-        roles[0] = INSTR.GOVERNOR();
-        roles[1] = VOTES.GOVERNOR();
+        requests = new Permissions[](4);
+        requests[0] = Permissions(INSTR.KEYCODE(), INSTR.store.selector);
+        requests[1] = Permissions(VOTES.KEYCODE(), VOTES.transferFrom.selector);
     }
 
     /////////////////////////////////////////////////////////////////////////////////
@@ -78,18 +83,9 @@ contract Governance is Policy {
     /////////////////////////////////////////////////////////////////////////////////
 
     event ProposalSubmitted(uint256 instructionsId);
-    event ProposalEndorsed(
-        uint256 instructionsId,
-        address voter,
-        uint256 amount
-    );
+    event ProposalEndorsed(uint256 instructionsId, address voter, uint256 amount);
     event ProposalActivated(uint256 instructionsId, uint256 timestamp);
-    event WalletVoted(
-        uint256 instructionsId,
-        address voter,
-        bool for_,
-        uint256 userVotes
-    );
+    event WalletVoted(uint256 instructionsId, address voter, bool for_, uint256 userVotes);
     event ProposalExecuted(uint256 instructionsId);
 
     // currently active proposal
@@ -98,8 +94,7 @@ contract Governance is Policy {
     mapping(uint256 => ProposalMetadata) public getProposalMetadata;
 
     mapping(uint256 => uint256) public totalEndorsementsForProposal;
-    mapping(uint256 => mapping(address => uint256))
-        public userEndorsementsForProposal;
+    mapping(uint256 => mapping(address => uint256)) public userEndorsementsForProposal;
     mapping(uint256 => bool) public proposalHasBeenActivated;
 
     mapping(uint256 => uint256) public yesVotesForProposal;
@@ -112,26 +107,15 @@ contract Governance is Policy {
     //                               User Actions                                  //
     /////////////////////////////////////////////////////////////////////////////////
 
-    function getMetadata(uint256 instructionsId_)
-        public
-        view
-        returns (ProposalMetadata memory)
-    {
+    function getMetadata(uint256 instructionsId_) public view returns (ProposalMetadata memory) {
         return getProposalMetadata[instructionsId_];
     }
 
-    function getActiveProposal()
-        public
-        view
-        returns (ActivatedProposal memory)
-    {
+    function getActiveProposal() public view returns (ActivatedProposal memory) {
         return activeProposal;
     }
 
-    function submitProposal(
-        Instruction[] calldata instructions_,
-        bytes32 proposalName_
-    ) external {
+    function submitProposal(Instruction[] calldata instructions_, bytes32 proposalName_) external {
         // require the proposing wallet to own at least 1% of the outstanding governance power
         if (VOTES.balanceOf(msg.sender) * 100 < VOTES.totalSupply()) {
             revert NotEnoughVotesToPropose();
@@ -159,17 +143,13 @@ contract Governance is Policy {
         }
 
         // revert if endorsed instructions are empty
-        Instruction[] memory instructions = INSTR.getInstructions(
-            instructionsId_
-        );
+        Instruction[] memory instructions = INSTR.getInstructions(instructionsId_);
         if (instructions.length == 0) {
             revert CannotEndorseInvalidProposal();
         }
 
         // undo any previous endorsement the user made on these instructions
-        uint256 previousEndorsement = userEndorsementsForProposal[
-            instructionsId_
-        ][msg.sender];
+        uint256 previousEndorsement = userEndorsementsForProposal[instructionsId_][msg.sender];
         totalEndorsementsForProposal[instructionsId_] -= previousEndorsement;
 
         // reapply user endorsements with most up-to-date votes
@@ -195,10 +175,7 @@ contract Governance is Policy {
         }
 
         // require endorsements from at least 20% of the total outstanding governance power
-        if (
-            (totalEndorsementsForProposal[instructionsId_] * 5) <
-            VOTES.totalSupply()
-        ) {
+        if ((totalEndorsementsForProposal[instructionsId_] * 5) < VOTES.totalSupply()) {
             revert NotEnoughEndorsementsToActivateProposal();
         }
 
@@ -232,9 +209,7 @@ contract Governance is Policy {
         }
 
         // ensure the user has no pre-existing votes on the proposal
-        if (
-            userVotesForProposal[activeProposal.instructionsId][msg.sender] > 0
-        ) {
+        if (userVotesForProposal[activeProposal.instructionsId][msg.sender] > 0) {
             revert UserAlreadyVoted();
         }
 
@@ -246,20 +221,13 @@ contract Governance is Policy {
         }
 
         // record that the user has casted votes
-        userVotesForProposal[activeProposal.instructionsId][
-            msg.sender
-        ] = userVotes;
+        userVotesForProposal[activeProposal.instructionsId][msg.sender] = userVotes;
 
         // transfer voting tokens to contract
         VOTES.transferFrom(msg.sender, address(this), userVotes);
 
         // emit the corresponding event
-        emit WalletVoted(
-            activeProposal.instructionsId,
-            msg.sender,
-            for_,
-            userVotes
-        );
+        emit WalletVoted(activeProposal.instructionsId, msg.sender, for_, userVotes);
     }
 
     function executeProposal() external {
@@ -279,15 +247,10 @@ contract Governance is Policy {
         }
 
         // execute the active proposal
-        Instruction[] memory instructions = INSTR.getInstructions(
-            activeProposal.instructionsId
-        );
+        Instruction[] memory instructions = INSTR.getInstructions(activeProposal.instructionsId);
 
         for (uint256 step; step < instructions.length; ) {
-            kernel.executeAction(
-                instructions[step].action,
-                instructions[step].target
-            );
+            kernel.executeAction(instructions[step].action, instructions[step].target);
             unchecked {
                 ++step;
             }

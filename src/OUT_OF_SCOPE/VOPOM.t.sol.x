@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
 /// DEPS
 import "forge-std/Test.sol";
@@ -60,7 +60,7 @@ contract VOPOMTest is Test {
     function testConfig() public {
         assertEq(vopom.getMultiplier(0), (25 * VOPOM_SCALE) / 10);
         assertEq(vopom.getMaximumLockTime(0), 4 * 365 * 24 * 3600);
-        assertEq(Kernel.Keycode.unwrap(vopom.KEYCODE()), "VOPOM");
+        assertEq(Keycode.unwrap(vopom.KEYCODE()), "VOPOM");
     }
 
     function testLockCreation(int128 amount, int32 period) public {

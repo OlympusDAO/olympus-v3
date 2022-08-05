@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {Auth, Authority} from "solmate/auth/Auth.sol";
-
-import {Kernel, Policy} from "src/Kernel.sol";
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
+import "src/Kernel.sol";
 
 // ERRORS
 error PolicyStillActive();
@@ -14,7 +12,7 @@ error PolicyNotFound();
 
 // Generic contract to allow authorized contracts to interact with treasury
 // Use cases include setting and removing approvals, as well as allocating assets for yield
-contract TreasuryCustodian is Policy, Auth {
+contract TreasuryCustodian is Policy {
     /* ========== STATE VARIABLES ========== */
     event ApprovalRevoked(address indexed policy_, ERC20[] tokens_);
 
@@ -23,43 +21,37 @@ contract TreasuryCustodian is Policy, Auth {
 
     /* ========== CONSTRUCTOR ========== */
 
-    constructor(Kernel kernel_)
-        Policy(kernel_)
-        Auth(address(kernel_), Authority(address(0)))
-    {}
+    constructor(Kernel kernel_) Policy(kernel_) {}
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
-    function configureReads() external override {
-        TRSRY = OlympusTreasury(getModuleAddress("TRSRY"));
-        setAuthority(Authority(getModuleAddress("AUTHR")));
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](1);
+        dependencies[0] = toKeycode("TRSRY");
+
+        TRSRY = OlympusTreasury(getModuleAddress(dependencies[0]));
     }
 
-    function requestRoles()
-        external
-        view
-        override
-        returns (Kernel.Role[] memory roles)
-    {
-        roles = new Kernel.Role[](2);
-        roles[0] = TRSRY.APPROVER();
-        roles[1] = TRSRY.DEBT_ADMIN();
+    function requestPermissions() external view override returns (Permissions[] memory requests) {
+        Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
+
+        requests = new Permissions[](2);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
     }
 
     function grantApproval(
         address for_,
         ERC20 token_,
         uint256 amount_
-    ) external requiresAuth {
+    ) external onlyRole("custodian") {
         TRSRY.setApprovalFor(for_, token_, amount_);
     }
 
-    // Anyone can call to revoke a terminated policy's approvals.
-    // TODO Currently allows anyone to revoke any approval EXCEPT approved policies.
-    // TODO must reorg policy storage to be able to check for unapproved policies.
-    function revokePolicyApprovals(address policy_, ERC20[] memory tokens_)
-        external
-    {
-        if (kernel.approvedPolicies(policy_)) revert PolicyStillActive();
+    // Anyone can call to revoke a deactivated policy's approvals.
+    // TODO Currently allows anyone to revoke any approval EXCEPT activated policies.
+    // TODO must reorg policy storage to be able to check for deactivated policies.
+    function revokePolicyApprovals(address policy_, ERC20[] memory tokens_) external {
+        if (Policy(policy_).isActive()) revert PolicyStillActive();
 
         // TODO Make sure `policy_` is an actual policy and not a random address.
 
@@ -80,7 +72,7 @@ contract TreasuryCustodian is Policy, Auth {
         ERC20 token_,
         address debtor_,
         uint256 amount_
-    ) external requiresAuth {
+    ) external onlyRole("custodian") {
         uint256 debt = TRSRY.reserveDebt(token_, debtor_);
         TRSRY.setDebt(token_, debtor_, debt + amount_);
     }
@@ -89,7 +81,7 @@ contract TreasuryCustodian is Policy, Auth {
         ERC20 token_,
         address debtor_,
         uint256 amount_
-    ) external requiresAuth {
+    ) external onlyRole("custodian") {
         uint256 debt = TRSRY.reserveDebt(token_, debtor_);
         TRSRY.setDebt(token_, debtor_, debt - amount_);
     }
