@@ -52,7 +52,7 @@ contract Faucet is Policy, ReentrancyGuard {
     }
 
     /* ========== PUBLIC FUNCTIONS ========== */
-    function drip(Asset asset_) external nonReentrant {
+    function drip(Asset asset_) public nonReentrant {
         if (block.timestamp < lastDrip[msg.sender][asset_] + dripInterval)
             revert Faucet_DripOnCooldown(asset_);
 
@@ -65,6 +65,12 @@ contract Faucet is Policy, ReentrancyGuard {
                 revert Faucet_InsufficientFunds(asset_);
             token[asset_].safeTransfer(msg.sender, dripAmount[asset_]);
         }
+    }
+
+    function dripTestAmounts() external {
+        drip(Asset.ETH);
+        drip(Asset.OHM);
+        drip(Asset.RESERVE);
     }
 
     /* ========== ADMIN FUNCTIONS ========== */
