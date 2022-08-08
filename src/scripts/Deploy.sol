@@ -135,9 +135,9 @@ contract OlympusDeploy is Script {
             [ohm, reserve],
             [
                 uint32(3000), // cushionFactor
-                uint32(5 days), // cushionDuration
+                uint32(3 days), // cushionDuration
                 uint32(100_000), // cushionDebtBuffer
-                uint32(4 hours), // cushionDepositInterval
+                uint32(1 hours), // cushionDepositInterval
                 uint32(800), // reserveFactor
                 uint32(1 hours), // regenWait
                 uint32(5), // regenThreshold // 18
