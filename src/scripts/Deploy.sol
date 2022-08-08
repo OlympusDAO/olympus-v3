@@ -120,7 +120,7 @@ contract OlympusDeploy is Script {
         RANGE = new OlympusRange(
             kernel,
             [ohm, reserve],
-            [uint256(100), uint256(1000), uint256(2000)]
+            [uint256(100), uint256(1200), uint256(3000)]
         );
         console2.log("Range module deployed at:", address(RANGE));
 
@@ -134,14 +134,14 @@ contract OlympusDeploy is Script {
             callback,
             [ohm, reserve],
             [
-                uint32(2000), // cushionFactor
+                uint32(3000), // cushionFactor
                 uint32(5 days), // cushionDuration
                 uint32(100_000), // cushionDebtBuffer
                 uint32(4 hours), // cushionDepositInterval
-                uint32(1000), // reserveFactor
+                uint32(800), // reserveFactor
                 uint32(1 hours), // regenWait
-                uint32(18), // regenThreshold
-                uint32(21) // regenObserve
+                uint32(5), // regenThreshold // 18
+                uint32(7) // regenObserve    // 21
             ] // TODO verify initial parameters
         );
         console2.log("Operator deployed at:", address(operator));
@@ -158,7 +158,15 @@ contract OlympusDeploy is Script {
         governance = new OlympusGovernance(kernel);
         console2.log("Governance deployed at:", address(governance));
 
-        faucet = new Faucet(kernel, ohm, reserve, 1 ether, 1000 * 10e9, 10000 * 10e18, 1 hours);
+        faucet = new Faucet(
+            kernel,
+            ohm,
+            reserve,
+            1 ether,
+            1_000_000 * 1e9,
+            10_000_000 * 1e18,
+            1 hours
+        );
         console2.log("Faucet deployed at:", address(governance));
 
         /// Execute actions on Kernel
