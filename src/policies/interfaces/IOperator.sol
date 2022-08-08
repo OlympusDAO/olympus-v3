@@ -130,6 +130,11 @@ interface IOperator {
     /// @dev         This function is an escape hatch to trigger out of cycle regenerations and may be useful when doing migrations of Treasury funds
     function regenerate(bool high_) external;
 
+    /// @notice      Toggle the Operator status between active and inactive
+    /// @notice      Access restricted
+    /// @dev         Emergency shutdown function for the Operator. Set to inactive to prevent any market operations from occurring.
+    function toggleActive() external;
+
     /* ========== VIEW FUNCTIONS ========== */
 
     /// @notice         Returns the full capacity of the specified wall (if it was regenerated now)

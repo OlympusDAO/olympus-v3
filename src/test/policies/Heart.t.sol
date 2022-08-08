@@ -85,6 +85,8 @@ contract MockOperator is Policy, IOperator {
 
     function regenerate(bool high_) external override {}
 
+    function toggleActive() external override {}
+
     /* ========== VIEW FUNCTIONS ========== */
 
     function fullCapacity(bool high_) external view override returns (uint256) {

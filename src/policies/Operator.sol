@@ -39,6 +39,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     error Operator_WallDown();
     error Operator_AlreadyInitialized();
     error Operator_NotInitialized();
+    error Operator_Inactive();
 
     /* ========== EVENTS =========== */
     event Swap(
@@ -56,6 +57,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
 
     /// @notice    Whether the Operator has been initialized
     bool public initialized;
+
+    /// @notice    Whether the Operator is active
+    bool public active;
 
     /// Modules
     OlympusPrice internal PRICE;
@@ -172,9 +176,14 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         requests[8] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
+    modifier onlyWhileActive() {
+        if (!active) revert Operator_Inactive();
+        _;
+    }
+
     /* ========== HEART FUNCTIONS ========== */
     /// @inheritdoc IOperator
-    function operate() external override onlyRole("operator_operate") {
+    function operate() external override onlyWhileActive onlyRole("operator_operate") {
         /// Revert if not initialized
         if (!initialized) revert Operator_NotInitialized();
 
@@ -255,7 +264,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         ERC20 tokenIn_,
         uint256 amountIn_,
         uint256 minAmountOut_
-    ) external override nonReentrant returns (uint256 amountOut) {
+    ) external override onlyWhileActive nonReentrant returns (uint256 amountOut) {
         if (tokenIn_ == ohm) {
             /// Revert if lower wall is inactive
             if (!RANGE.active(false)) revert Operator_WallDown();
@@ -325,7 +334,11 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     /// @notice             Access restricted (BondCallback)
     /// @param id_          ID of the bond market
     /// @param amountOut_   Amount of capacity expended
-    function bondPurchase(uint256 id_, uint256 amountOut_) external onlyRole("operator_reporter") {
+    function bondPurchase(uint256 id_, uint256 amountOut_)
+        external
+        onlyWhileActive
+        onlyRole("operator_reporter")
+    {
         if (id_ == RANGE.market(true)) {
             _updateCapacity(true, amountOut_);
             _checkCushion(true);
@@ -579,14 +592,21 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         _regenerate(true);
         _regenerate(false);
 
-        /// Set initialized flag
+        /// Set initialized and active flags
         initialized = true;
+        active = true;
     }
 
     /// @inheritdoc IOperator
     function regenerate(bool high_) external onlyRole("operator_admin") {
         /// Regenerate side
         _regenerate(high_);
+    }
+
+    /// @inheritdoc IOperator
+    function toggleActive() external onlyRole("operator_admin") {
+        /// Toggle active state
+        active = !active;
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */

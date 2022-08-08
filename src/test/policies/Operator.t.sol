@@ -1489,6 +1489,10 @@ contract OperatorTest is Test {
     }
 
     function testCorrectness_cannotOperatorIfNotInitialized() public {
+        /// Toggle operator to active manually erroneously (so it will not revert with inactive)
+        vm.prank(guardian);
+        operator.toggleActive();
+
         /// Call operate as heart contract and expect to revert
         bytes memory err = abi.encodeWithSignature("Operator_NotInitialized()");
         vm.expectRevert(err);
@@ -1864,6 +1868,7 @@ contract OperatorTest is Test {
     function testCorrectness_initialize() public {
         /// Confirm that the operator is not initialized yet and walls are down
         assertTrue(!operator.initialized());
+        assertTrue(!operator.active());
         assertTrue(!range.active(true));
         assertTrue(!range.active(false));
         assertEq(treasury.withdrawApproval(address(operator), reserve), 0);
@@ -1880,6 +1885,7 @@ contract OperatorTest is Test {
 
         /// Confirm that the operator is initialized and walls are up
         assertTrue(operator.initialized());
+        assertTrue(operator.active());
         assertTrue(range.active(true));
         assertTrue(range.active(false));
         assertEq(treasury.withdrawApproval(address(operator), reserve), type(uint256).max);
@@ -1991,6 +1997,34 @@ contract OperatorTest is Test {
         assertEq(status.low.lastRegen, newTime);
         assertTrue(range.active(true));
         assertTrue(range.active(false));
+    }
+
+    function testCorrectness_cannotPerformMarketOpsWhileInactive() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Toggle the operator to inactive
+        vm.prank(guardian);
+        operator.toggleActive();
+
+        /// Try to call operator, swap, and bondPurchase, expect reverts
+        bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        operator.operate();
+
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.swap(ohm, 1e9, 1);
+
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.swap(reserve, 1e18, 1);
+
+        vm.expectRevert(err);
+        vm.prank(address(callback));
+        operator.bondPurchase(0, 1e18);
     }
 
     /* ========== VIEW TESTS ========== */

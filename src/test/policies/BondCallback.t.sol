@@ -188,6 +188,10 @@ contract BondCallbackTest is Test {
         vm.prank(guardian);
         callback.setOperator(operator);
 
+        /// Initialize the operator
+        vm.prank(guardian);
+        operator.initialize();
+
         // Mint tokens to users and treasury for testing
         uint256 testOhm = 1_000_000 * 1e9;
         uint256 testReserve = 1_000_000 * 1e18;
