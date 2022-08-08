@@ -100,7 +100,7 @@ contract OlympusDeploy is Script {
         console2.log("Instructions module deployed at:", address(INSTR));
 
         VOTES = new OlympusVotes(kernel);
-        console2.log("Votes module deployed at:", address(INSTR));
+        console2.log("Votes module deployed at:", address(VOTES));
 
         TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury module deployed at:", address(TRSRY));
@@ -167,7 +167,7 @@ contract OlympusDeploy is Script {
             10_000_000 * 1e18,
             1 hours
         );
-        console2.log("Faucet deployed at:", address(governance));
+        console2.log("Faucet deployed at:", address(faucet));
 
         /// Execute actions on Kernel
         /// Install modules
@@ -226,8 +226,8 @@ contract OlympusDeploy is Script {
     function initialize() external {
         // Set addresses from deployment
         // priceConfig = OlympusPriceConfig();
-        operator = Operator(0xD25b0441690BFD7e23Ab8Ee6f636Fce0C638ee32);
-        callback = BondCallback(0x76775f07B0dCd21DB304b6c5b14d57A2954ddAC6);
+        operator = Operator(0x532AC8804b233846645C1Cd53D3005604F5eC1c3);
+        callback = BondCallback(0xdff3e45D4BE6B354384D770Fd63DDF90eA788d13);
 
         /// Start broadcasting
         vm.startBroadcast();
