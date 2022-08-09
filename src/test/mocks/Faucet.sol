@@ -73,6 +73,8 @@ contract Faucet is Policy, ReentrancyGuard {
         drip(Asset.RESERVE);
     }
 
+    receive() external payable {}
+
     /* ========== ADMIN FUNCTIONS ========== */
 
     function withdrawAll(address to_, Asset asset_) external onlyRole("faucet_admin") {
