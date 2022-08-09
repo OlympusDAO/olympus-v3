@@ -4,19 +4,20 @@ pragma solidity ^0.8.15;
 import {Script, console2} from "forge-std/Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
+import "src/Kernel.sol";
+import {Faucet} from "test/mocks/Faucet.sol";
 
-import {Operator} from "policies/Operator.sol";
-import {OlympusHeart} from "policies/Heart.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
 
-/// @notice Script to deploy and initialize the Heart contract in the Olympus Bophades system
+/// @notice Script to deploy a faucet for testing the Bophades Range system on testnet
 /// @dev    The address that this script is broadcast from must have write access to the contracts being configured
-contract HeartDeploy is Script {
+contract FaucetDeploy is Script {
+    using TransferHelper for ERC20;
     Kernel public kernel;
 
     /// Policies
-    Operator public operator;
-    OlympusHeart public heart;
+    Faucet public faucet;
+    address public oldFaucet;
 
     /// Construction variables
 
@@ -36,23 +37,26 @@ contract HeartDeploy is Script {
     function deploy() external {
         vm.startBroadcast();
 
-        /// Set dependency addresses
-        kernel = Kernel(0x3B294580Fcf1F60B94eca4f4CE78A2f52D23cC83);
-        operator = Operator(0xD25b0441690BFD7e23Ab8Ee6f636Fce0C638ee32);
-        address oldHeart = 0x5B7aF1a298FaC101445a7fE55f2738c071D70e9B;
+        kernel = Kernel(0x773fa2A1399A413a878ff8f0266B9b5E9d0068d6);
+        oldFaucet = 0xf670b97C2B040e10E203b99a75fE71198B00c773;
 
-        // Deploy heart and authGiver
-
-        heart = new OlympusHeart(kernel, operator, rewardToken, 0);
-        console2.log("Heart deployed at:", address(heart));
+        /// Deploy new faucet
+        faucet = new Faucet(
+            kernel,
+            ohm,
+            reserve,
+            1 ether,
+            1_000_000 * 1e9,
+            10_000_000 * 1e18,
+            1 hours
+        );
+        console2.log("Faucet deployed at:", address(faucet));
 
         /// Execute actions on Kernel
 
         /// Approve policies
-        kernel.executeAction(Actions.ActivatePolicy, address(heart));
-
-        /// deactivate old policies
-        kernel.executeAction(Actions.DeactivatePolicy, address(oldHeart));
+        kernel.executeAction(Actions.DeactivatePolicy, oldFaucet);
+        kernel.executeAction(Actions.ActivatePolicy, address(faucet));
 
         vm.stopBroadcast();
     }
