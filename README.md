@@ -44,7 +44,7 @@ Set up a foundry config in foundry.toml.
 -   PriceConfig - [0x76FBaD8323f47e87c1646B70f2F53857aAF11D24](https://goerli.etherscan.io/address/0x76fbad8323f47e87c1646b70f2f53857aaf11d24)
 -   Governance - [0x22cf79623513F39c8FA08C3ccC9B68c45a9E8623](https://goerli.etherscan.io/address/0x22cf79623513f39c8fa08c3ccc9b68c45a9e8623)
 -   VoterRegistration - [0xbfE57606e7fc2d900CEDAaAeae1922E4293e64E1](https://goerli.etherscan.io/address/0xbfE57606e7fc2d900CEDAaAeae1922E4293e64E1)
--   Faucet (Testnet only) - [0xf670b97C2B040e10E203b99a75fE71198B00c773](https://goerli.etherscan.io/address/0xf670b97c2b040e10e203b99a75fe71198b00c773)
+-   Faucet (Testnet only) - [0xA247156a39169c0FAFf979F57361CC734e82e3d0](https://goerli.etherscan.io/address/0xA247156a39169c0FAFf979F57361CC734e82e3d0)
 
 #### Dependencies
 
