@@ -24,7 +24,7 @@ contract OlympusPrice is Module {
     using FullMath for uint256;
 
     /* ========== EVENTS =========== */
-    event NewObservation(uint256 timestamp, uint256 price);
+    event NewObservation(uint256 timestamp, uint256 price, uint256 movingAverage);
 
     /* ========== STATE VARIABLES ========== */
 
@@ -141,7 +141,7 @@ contract OlympusPrice is Module {
         nextObsIndex = (nextObsIndex + 1) % numObs;
 
         /// Emit event
-        emit NewObservation(block.timestamp, currentPrice);
+        emit NewObservation(block.timestamp, currentPrice, _movingAverage);
     }
 
     /* ========== VIEW FUNCTIONS ========== */
