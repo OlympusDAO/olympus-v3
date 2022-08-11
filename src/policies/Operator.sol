@@ -48,6 +48,10 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         uint256 amountIn_,
         uint256 amountOut_
     );
+    event CushionFactorChanged(uint32 cushionFactor);
+    event CushionParamsChanged(uint32 duration, uint32 debtBuffer, uint32 depositInterval);
+    event ReserveFactorChanged(uint32 reserveFactor);
+    event RegenParamsChanged(uint32 wait, uint32 threshold, uint32 observe);
 
     /* ========== STATE VARIABLES ========== */
 
@@ -138,6 +142,11 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         });
 
         _status = Status({low: regen, high: regen});
+
+        emit CushionFactorChanged(configParams[0]);
+        emit CushionParamsChanged(configParams[1], configParams[2], configParams[3]);
+        emit ReserveFactorChanged(configParams[4]);
+        emit RegenParamsChanged(configParams[5], configParams[6], configParams[7]);
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
@@ -510,6 +519,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
 
         /// Set factor
         _config.cushionFactor = cushionFactor_;
+
+        emit CushionFactorChanged(cushionFactor_);
     }
 
     /// @inheritdoc IOperator
@@ -529,6 +540,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         _config.cushionDuration = duration_;
         _config.cushionDebtBuffer = debtBuffer_;
         _config.cushionDepositInterval = depositInterval_;
+
+        emit CushionParamsChanged(duration_, debtBuffer_, depositInterval_);
     }
 
     /// @inheritdoc IOperator
@@ -538,6 +551,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
 
         /// Set factor
         _config.reserveFactor = reserveFactor_;
+
+        emit ReserveFactorChanged(reserveFactor_);
     }
 
     /// @inheritdoc IOperator
@@ -563,6 +578,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         _status.low.count = 0;
         _status.low.nextObservation = 0;
         _status.low.observations = new bool[](observe_);
+
+        emit RegenParamsChanged(wait_, threshold_, observe_);
     }
 
     /// @inheritdoc IOperator
