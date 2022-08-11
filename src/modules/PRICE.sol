@@ -25,7 +25,8 @@ contract OlympusPrice is Module {
 
     /* ========== EVENTS =========== */
     event NewObservation(uint256 timestamp, uint256 price, uint256 movingAverage);
-
+    event MovingAverageDurationChanged(uint48 movingAverageDuration);
+    event ObservationFrequencyChanged(uint48 observationFrequency);
     /* ========== STATE VARIABLES ========== */
 
     /// Chainlink Price Feeds
@@ -98,6 +99,9 @@ contract OlympusPrice is Module {
         /// Store blank observations array
         observations = new uint256[](numObservations);
         /// nextObsIndex is initialized to 0
+
+        emit MovingAverageDurationChanged(movingAverageDuration_);
+        emit ObservationFrequencyChanged(observationFrequency_);
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
@@ -253,6 +257,8 @@ contract OlympusPrice is Module {
         nextObsIndex = 0;
         movingAverageDuration = movingAverageDuration_;
         numObservations = uint32(newObservations);
+
+        emit MovingAverageDurationChanged(movingAverageDuration_);
     }
 
     /// @notice   Change the observation frequency of the moving average (i.e. how often a new observation is taken)
@@ -283,5 +289,7 @@ contract OlympusPrice is Module {
         nextObsIndex = 0;
         observationFrequency = observationFrequency_;
         numObservations = uint32(newObservations);
+
+        emit ObservationFrequencyChanged(observationFrequency_);
     }
 }
