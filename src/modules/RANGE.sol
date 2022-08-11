@@ -24,6 +24,14 @@ contract OlympusRange is Module {
     event WallDown(bool high, uint256 timestamp);
     event CushionUp(bool high, uint256 timestamp, uint256 capacity);
     event CushionDown(bool high, uint256 timestamp);
+    event PricesChanged(
+        uint256 wallLowPrice,
+        uint256 wallHighPrice,
+        uint256 cushionLowPrice,
+        uint256 cushionHighPrice
+    );
+    event SpreadsChanged(uint256 cushionSpread, uint256 wallSpread);
+    event ThresholdFactorChanged(uint256 thresholdFactor);
 
     /* ========== STRUCTS =========== */
 
@@ -100,6 +108,9 @@ contract OlympusRange is Module {
         thresholdFactor = rangeParams_[0];
         ohm = tokens_[0];
         reserve = tokens_[1];
+
+        emit SpreadsChanged(rangeParams_[1], rangeParams_[2]);
+        emit ThresholdFactorChanged(rangeParams_[0]);
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
@@ -169,6 +180,13 @@ contract OlympusRange is Module {
         _range.cushion.high.price =
             (movingAverage_ * (FACTOR_SCALE + cushionSpread)) /
             FACTOR_SCALE;
+
+        emit PricesChanged(
+            _range.wall.low.price,
+            _range.wall.high.price,
+            _range.cushion.low.price,
+            _range.cushion.high.price
+        );
     }
 
     /// @notice                 Regenerate a side of the range to a specific capacity.
@@ -247,6 +265,8 @@ contract OlympusRange is Module {
         /// Set spreads
         _range.wall.spread = wallSpread_;
         _range.cushion.spread = cushionSpread_;
+
+        emit SpreadsChanged(wallSpread_, cushionSpread_);
     }
 
     /// @notice                 Set the threshold factor for when a wall is considered "down".
@@ -259,6 +279,8 @@ contract OlympusRange is Module {
 
         /// Set threshold factor
         thresholdFactor = thresholdFactor_;
+
+        emit ThresholdFactorChanged(thresholdFactor_);
     }
 
     /* ========== VIEW FUNCTIONS ========== */
