@@ -17,25 +17,25 @@ TIMESTAMP=$(date +%s)
 
 # Set price feed values
 echo "Updating the OHM price feed...";
-cast send --private-key=$PRIVATE_KEY --rpc-url=$RPC_URL --from=$ETH_FROM --chain=$CHAIN $OHM_ETH_FEED "setLatestAnswer(int256)()" $OHM_ETH_PRICE > /dev/null;
-cast send --private-key=$PRIVATE_KEY --rpc-url=$RPC_URL --from=$ETH_FROM --chain=$CHAIN $OHM_ETH_FEED "setTimestamp(uint256)()" $TIMESTAMP > /dev/null;
+cast send --private-key=$GUARDIAN_PRIVATE_KEY --rpc-url=$RPC_URL --from=$GUARDIAN_ADDRESS --chain=$CHAIN $OHM_ETH_FEED "setLatestAnswer(int256)()" $OHM_ETH_PRICE > /dev/null;
+cast send --private-key=$GUARDIAN_PRIVATE_KEY --rpc-url=$RPC_URL --from=$GUARDIAN_ADDRESS --chain=$CHAIN $OHM_ETH_FEED "setTimestamp(uint256)()" $TIMESTAMP > /dev/null;
 echo "Complete.";
 echo "";
 
 echo "Updating the DAI price feed...";
-cast send --private-key=$PRIVATE_KEY --from=$ETH_FROM --rpc-url=$RPC_URL --chain=$CHAIN $DAI_ETH_FEED "setLatestAnswer(int256)" $DAI_ETH_PRICE > /dev/null;
-cast send --private-key=$PRIVATE_KEY --from=$ETH_FROM --rpc-url=$RPC_URL --chain=$CHAIN $DAI_ETH_FEED "setTimestamp(uint256)" $TIMESTAMP > /dev/null;
+cast send --private-key=$GUARDIAN_PRIVATE_KEY --from=$GUARDIAN_ADDRESS --rpc-url=$RPC_URL --chain=$CHAIN $DAI_ETH_FEED "setLatestAnswer(int256)" $DAI_ETH_PRICE > /dev/null;
+cast send --private-key=$GUARDIAN_PRIVATE_KEY --from=$GUARDIAN_ADDRESS --rpc-url=$RPC_URL --chain=$CHAIN $DAI_ETH_FEED "setTimestamp(uint256)" $TIMESTAMP > /dev/null;
 echo "Complete.";
 echo "";
 
 # Reset heart and call heart.beat()
 echo "Resetting the heart...";
-cast send --private-key=$PRIVATE_KEY --from=$ETH_FROM --rpc-url=$RPC_URL --chain=$CHAIN $HEART "resetBeat()" > /dev/null;
+cast send --private-key=$GUARDIAN_PRIVATE_KEY --from=$GUARDIAN_ADDRESS --rpc-url=$RPC_URL --chain=$CHAIN $HEART "resetBeat()" > /dev/null;
 echo "Complete.";
 echo "";
 
 echo "Calling heart.beat()...";
-cast send --private-key=$PRIVATE_KEY --from=$ETH_FROM --rpc-url=$RPC_URL --chain=$CHAIN $HEART "beat()" > /dev/null;
+cast send --private-key=$GUARDIAN_PRIVATE_KEY --from=$GUARDIAN_ADDRESS --rpc-url=$RPC_URL --chain=$CHAIN $HEART "beat()" > /dev/null;
 echo "Complete.";
 echo "";
 

@@ -59,13 +59,6 @@ contract PriceTest is Test {
             );
 
             /// Deploy mock module writer
-            Permissions[] memory requests = new Permissions[](4);
-            Keycode PRICE_KEYCODE = price.KEYCODE();
-            requests[0] = Permissions(PRICE_KEYCODE, price.updateMovingAverage.selector);
-            requests[1] = Permissions(PRICE_KEYCODE, price.initialize.selector);
-            requests[2] = Permissions(PRICE_KEYCODE, price.changeMovingAverageDuration.selector);
-            requests[3] = Permissions(PRICE_KEYCODE, price.changeObservationFrequency.selector);
-
             writer = price.generateGodmodeFixture(type(OlympusPrice).name);
         }
 
