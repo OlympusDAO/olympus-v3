@@ -24,9 +24,7 @@ contract OlympusMinter is Module {
         return (1, 0);
     }
 
-    function INIT() external override {
-        // TODO call pullVault from olympus authority
-    }
+    function INIT() external override {}
 
     // ######################## ~ INTERFACE ~ ########################
 
