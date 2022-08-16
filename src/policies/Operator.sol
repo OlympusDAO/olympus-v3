@@ -48,10 +48,10 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         uint256 amountIn_,
         uint256 amountOut_
     );
-    event CushionFactorChanged(uint32 cushionFactor);
-    event CushionParamsChanged(uint32 duration, uint32 debtBuffer, uint32 depositInterval);
-    event ReserveFactorChanged(uint32 reserveFactor);
-    event RegenParamsChanged(uint32 wait, uint32 threshold, uint32 observe);
+    event CushionFactorChanged(uint32 cushionFactor_);
+    event CushionParamsChanged(uint32 duration_, uint32 debtBuffer_, uint32 depositInterval_);
+    event ReserveFactorChanged(uint32 reserveFactor_);
+    event RegenParamsChanged(uint32 wait_, uint32 threshold_, uint32 observe_);
 
     /* ========== STATE VARIABLES ========== */
 

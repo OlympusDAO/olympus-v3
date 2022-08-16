@@ -24,9 +24,9 @@ contract OlympusPrice is Module {
     using FullMath for uint256;
 
     /* ========== EVENTS =========== */
-    event NewObservation(uint256 timestamp, uint256 price, uint256 movingAverage);
-    event MovingAverageDurationChanged(uint48 movingAverageDuration);
-    event ObservationFrequencyChanged(uint48 observationFrequency);
+    event NewObservation(uint256 timestamp_, uint256 price_, uint256 movingAverage_);
+    event MovingAverageDurationChanged(uint48 movingAverageDuration_);
+    event ObservationFrequencyChanged(uint48 observationFrequency_);
     /* ========== STATE VARIABLES ========== */
 
     /// Chainlink Price Feeds

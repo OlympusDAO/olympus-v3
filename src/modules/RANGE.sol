@@ -20,18 +20,18 @@ contract OlympusRange is Module {
 
     /* ========== EVENTS =========== */
 
-    event WallUp(bool high, uint256 timestamp, uint256 capacity);
-    event WallDown(bool high, uint256 timestamp);
-    event CushionUp(bool high, uint256 timestamp, uint256 capacity);
-    event CushionDown(bool high, uint256 timestamp);
+    event WallUp(bool high_, uint256 timestamp_, uint256 capacity_);
+    event WallDown(bool high_, uint256 timestamp_, uint256 capacity_);
+    event CushionUp(bool high_, uint256 timestamp_, uint256 capacity_);
+    event CushionDown(bool high_, uint256 timestamp_);
     event PricesChanged(
-        uint256 wallLowPrice,
-        uint256 wallHighPrice,
-        uint256 cushionLowPrice,
-        uint256 cushionHighPrice
+        uint256 wallLowPrice_,
+        uint256 cushionLowPrice_,
+        uint256 cushionHighPrice_,
+        uint256 wallHighPrice_
     );
-    event SpreadsChanged(uint256 cushionSpread, uint256 wallSpread);
-    event ThresholdFactorChanged(uint256 thresholdFactor);
+    event SpreadsChanged(uint256 cushionSpread_, uint256 wallSpread_);
+    event ThresholdFactorChanged(uint256 thresholdFactor_);
 
     /* ========== STRUCTS =========== */
 
@@ -143,7 +143,7 @@ contract OlympusRange is Module {
                 // updateMarket(true, type(uint256).max, 0);
 
                 /// Emit event
-                emit WallDown(true, block.timestamp);
+                emit WallDown(true, block.timestamp, capacity_);
             }
         } else {
             /// Update capacity
@@ -159,7 +159,7 @@ contract OlympusRange is Module {
                 // updateMarket(false, type(uint256).max, 0);
 
                 /// Emit event
-                emit WallDown(false, block.timestamp);
+                emit WallDown(false, block.timestamp, capacity_);
             }
         }
     }
@@ -183,9 +183,9 @@ contract OlympusRange is Module {
 
         emit PricesChanged(
             _range.wall.low.price,
-            _range.wall.high.price,
             _range.cushion.low.price,
-            _range.cushion.high.price
+            _range.cushion.high.price,
+            _range.wall.high.price
         );
     }
 
