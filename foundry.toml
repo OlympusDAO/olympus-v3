@@ -1,11 +1,11 @@
-[default]
-solc_version = "0.8.15"
+[profile.default]
 remappings = [
     'ds-test/=lib/ds-test/src/',
     'solmate/=lib/solmate/src/',
     'forge-std/=lib/forge-std/src/',
     'test-utils/=lib/test-utils/src/',
     'prb-math/=lib/prb-math/contracts/',
+    'balancer/=lib/balancer-v2-monorepo/pkg/',
 
     'interfaces/=src/interfaces',
     'modules/=src/modules',
@@ -14,6 +14,6 @@ remappings = [
 ]
 ffi = true
 
-[fried]
+[profile.fried]
 fuzz_runs = 1024
 fuzz_max_global_rejects = 40000
