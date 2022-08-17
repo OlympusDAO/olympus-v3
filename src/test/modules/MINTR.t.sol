@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 
-import {UserFactory} from "test-utils/UserFactory.sol";
+import {UserFactory} from "test/lib/UserFactory.sol";
 import {larping} from "test-utils/larping.sol";
 import {Quabi} from "test/lib/quabi/Quabi.sol";
 
