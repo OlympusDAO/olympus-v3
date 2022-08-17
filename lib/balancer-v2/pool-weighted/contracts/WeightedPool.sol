@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity 0.7.6
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "./BaseWeightedPool.sol";
@@ -336,7 +336,11 @@ contract WeightedPool is BaseWeightedPool, InvariantGrowthProtocolFees {
         uint256[] memory normalizedWeights,
         uint256 protocolSwapFeePercentage
     ) internal virtual override(BaseWeightedPool, InvariantGrowthProtocolFees) {
-        InvariantGrowthProtocolFees._beforeJoinExit(preBalances, normalizedWeights, protocolSwapFeePercentage);
+        InvariantGrowthProtocolFees._beforeJoinExit(
+            preBalances,
+            normalizedWeights,
+            protocolSwapFeePercentage
+        );
     }
 
     function _afterJoinExit(
@@ -345,6 +349,11 @@ contract WeightedPool is BaseWeightedPool, InvariantGrowthProtocolFees {
         uint256[] memory balanceDeltas,
         uint256[] memory normalizedWeights
     ) internal virtual override(BaseWeightedPool, InvariantGrowthProtocolFees) {
-        InvariantGrowthProtocolFees._afterJoinExit(isJoin, preBalances, balanceDeltas, normalizedWeights);
+        InvariantGrowthProtocolFees._afterJoinExit(
+            isJoin,
+            preBalances,
+            balanceDeltas,
+            normalizedWeights
+        );
     }
 }

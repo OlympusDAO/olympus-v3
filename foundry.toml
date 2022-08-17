@@ -5,7 +5,7 @@ remappings = [
     'forge-std/=lib/forge-std/src/',
     'test-utils/=lib/test-utils/src/',
     'prb-math/=lib/prb-math/contracts/',
-    'balancer/=lib/balancer-v2/',
+    'balancer-v2/=lib/balancer-v2/',
 
     'interfaces/=src/interfaces',
     'modules/=src/modules',

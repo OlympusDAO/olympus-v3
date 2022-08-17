@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.7.6;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {ERC20} from "balancer-v2/solidity-utils/contracts/openzeppelin/ERC20.sol";
-
-import {WeightedPoolNoAMFactory, IVault, IERC20, IAsset, WeightedPool} from "balancer/pool-weighted/contracts/WeightedPoolNoAMFactory.sol";
+import {WeightedPoolNoAMFactory, IVault, IERC20, IAsset, WeightedPool} from "balancer-v2/pool-weighted/contracts/WeightedPoolNoAMFactory.sol";
 
 contract ERC20Mintable is ERC20 {
     constructor(string memory name_, string memory symbol) ERC20(name_, symbol) {

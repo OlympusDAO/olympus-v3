@@ -3,7 +3,7 @@
 // Based on the Address library from OpenZeppelin Contracts, altered by removing the `isContract` checks on
 // `functionCall` and `functionDelegateCall` in order to save gas, as the recipients are known to be contracts.
 
-pragma solidity 0.7.6;
+pragma solidity ^0.7.0;
 
 import "balancer-v2/interfaces/contracts/solidity-utils/helpers/BalancerErrors.sol";
 

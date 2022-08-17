@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity 0.7.6;
+pragma solidity ^0.7.0;
 
 import "balancer-v2/solidity-utils/contracts/helpers/InputHelpers.sol";
 import "balancer-v2/solidity-utils/contracts/math/FixedPoint.sol";
