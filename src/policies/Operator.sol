@@ -732,11 +732,11 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     function _checkCushion(bool high_) internal {
         /// Check if the wall is down, if so ensure the cushion is also down
         /// Additionally, if wall is not down, but the wall capacity has dropped below the cushion capacity, take the cushion down
-        bool active = RANGE.active(high_);
+        bool sideActive = RANGE.active(high_);
         uint256 market = RANGE.market(high_);
         if (
-            !active ||
-            (active &&
+            !sideActive ||
+            (sideActive &&
                 auctioneer.isLive(market) &&
                 RANGE.capacity(high_) < auctioneer.currentCapacity(market))
         ) {
