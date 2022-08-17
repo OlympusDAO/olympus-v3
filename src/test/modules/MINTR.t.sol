@@ -4,7 +4,6 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 
 import {UserFactory} from "test/lib/UserFactory.sol";
-import {larping} from "test-utils/larping.sol";
 import {Quabi} from "test/lib/quabi/Quabi.sol";
 
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
@@ -15,7 +14,6 @@ import "src/Kernel.sol";
 
 contract MINTRTest is Test {
     using ModuleTestFixtureGenerator for OlympusMinter;
-    using larping for *;
 
     Kernel internal kernel;
     OlympusMinter internal MINTR;
