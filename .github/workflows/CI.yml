@@ -11,18 +11,18 @@ jobs:
         steps:
             - uses: actions/checkout@v2
 
+            - uses: actions/setup-node@v2
+
+            - name: Install Node dependencies
+              run: npm install
+
             - name: Install Foundry
               uses: foundry-rs/foundry-toolchain@v1
               with:
                   version: nightly
 
-            - name: Install deps
+            - name: Install Foundry dependencies
               run: forge install
-
-            - name: Install Foundry
-              uses: onbjerg/foundry-toolchain@v1
-              with:
-                  version: nightly
 
             - name: Run lint check
               run: npm run lint:check
