@@ -27,6 +27,7 @@ contract MockOperator is Policy, IOperator {
         result = true;
     }
 
+    /* solhint-disable no-unused-vars */
     /* ========== FRAMEWORK CONFIFURATION ========== */
     function configureDependencies() external override returns (Keycode[] memory dependencies) {}
 
@@ -88,7 +89,6 @@ contract MockOperator is Policy, IOperator {
     function toggleActive() external override {}
 
     /* ========== VIEW FUNCTIONS ========== */
-
     function fullCapacity(bool high_) external view override returns (uint256) {
         return 0;
     }
@@ -100,6 +100,7 @@ contract MockOperator is Policy, IOperator {
     function config() external view override returns (Config memory) {
         return Config(0, 0, 0, 0, 0, 0, 0, 0);
     }
+    /* solhint-enable no-unused-vars */
 }
 
 contract HeartTest is Test {

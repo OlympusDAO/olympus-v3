@@ -49,7 +49,7 @@ contract MockModule is Module {
 }
 
 contract UpgradedMockModule is Module {
-    MockModule _oldModule;
+    MockModule internal _oldModule;
     uint256 public publicState;
     uint256 public permissionedState;
 

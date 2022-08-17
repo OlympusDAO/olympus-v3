@@ -7,7 +7,6 @@ import {UserFactory} from "test-utils/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 

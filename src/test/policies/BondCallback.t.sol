@@ -43,6 +43,7 @@ contract MockOhm is ERC20 {
     }
 }
 
+// solhint-disable-next-line max-states-count
 contract BondCallbackTest is Test {
     using FullMath for uint256;
 

@@ -112,7 +112,7 @@ contract MINTRTest is Test {
 }
 
 contract MockLegacyAuthority is IOlympusAuthority {
-    address kernel;
+    address internal kernel;
 
     constructor(address kernel_) {
         kernel = kernel_;

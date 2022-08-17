@@ -37,6 +37,7 @@ contract OlympusVotes is Module, ERC20 {
         _burn(wallet_, amount_);
     }
 
+    // solhint-disable-next-line no-unused-vars
     function transfer(address to_, uint256 amount_) public override returns (bool) {
         revert VOTES_TransferDisabled();
         return true;

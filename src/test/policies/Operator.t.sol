@@ -12,7 +12,6 @@ import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/author
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
-import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 
 import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
@@ -43,6 +42,7 @@ contract MockOhm is ERC20 {
     }
 }
 
+// solhint-disable-next-line max-states-count
 contract OperatorTest is Test {
     using FullMath for uint256;
 
@@ -939,7 +939,7 @@ contract OperatorTest is Test {
         /// Get capacity of the low wall and verify under threshold
         uint256 startCapacity = range.capacity(false);
         uint256 fullCapacity = operator.fullCapacity(false);
-        assertLe(startCapacity, fullCapacity.mulDiv(10, 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price above the moving average to regenerate low wall
         price.setLastPrice(101 * 1e18);
@@ -983,7 +983,7 @@ contract OperatorTest is Test {
         /// Get capacity of the low wall and verify under threshold
         uint256 startCapacity = range.capacity(false);
         uint256 fullCapacity = operator.fullCapacity(false);
-        assertLe(startCapacity, fullCapacity.mulDiv(10, 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price below the moving average so regeneration doesn't start
         price.setLastPrice(98 * 1e18);
@@ -1036,7 +1036,7 @@ contract OperatorTest is Test {
         /// Get capacity of the low wall and verify under threshold
         uint256 startCapacity = range.capacity(false);
         uint256 fullCapacity = operator.fullCapacity(false);
-        assertLe(startCapacity, fullCapacity.mulDiv(10, 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price above the moving average to regenerate low wall
         price.setLastPrice(101 * 1e18);
@@ -1081,7 +1081,7 @@ contract OperatorTest is Test {
         /// Get capacity of the low wall and verify under threshold
         uint256 startCapacity = range.capacity(false);
         uint256 fullCapacity = operator.fullCapacity(false);
-        assertLe(startCapacity, fullCapacity.mulDiv(10, 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price above the moving average to regenerate low wall
         price.setLastPrice(101 * 1e18);
@@ -1140,7 +1140,7 @@ contract OperatorTest is Test {
         /// Get capacity of the low wall and verify under threshold
         uint256 startCapacity = range.capacity(false);
         uint256 fullCapacity = operator.fullCapacity(false);
-        assertLe(startCapacity, fullCapacity.mulDiv(10, 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price above the moving average to regenerate low wall
         price.setLastPrice(101 * 1e18);
@@ -1165,9 +1165,6 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Tests that a manually regenerated wall will close the cushion that is deployed currently
-
-        /// Get capacity of the high wall and verify under threshold
-        uint256 startCapacity = range.capacity(false);
 
         /// Trigger a cushion
         price.setLastPrice(89 * 1e18);
@@ -1211,7 +1208,7 @@ contract OperatorTest is Test {
         /// Get capacity of the high wall and verify under threshold
         uint256 startCapacity = range.capacity(true);
         uint256 fullCapacity = operator.fullCapacity(true);
-        assertLe(startCapacity, fullCapacity.mulDiv(10, 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price below the moving average to regenerate high wall
         price.setLastPrice(99 * 1e18);
@@ -1255,7 +1252,7 @@ contract OperatorTest is Test {
         /// Get capacity of the high wall and verify under threshold
         uint256 startCapacity = range.capacity(true);
         uint256 fullCapacity = operator.fullCapacity(true);
-        assertLe(startCapacity, fullCapacity.mulDiv(10, 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price above the moving average so regeneration doesn't start
         price.setLastPrice(101 * 1e18);
@@ -1308,7 +1305,7 @@ contract OperatorTest is Test {
         /// Get capacity of the high wall and verify under threshold
         uint256 startCapacity = range.capacity(true);
         uint256 fullCapacity = operator.fullCapacity(true);
-        assertLe(startCapacity, fullCapacity.mulDiv(10, 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price below the moving average to regenerate high wall
         price.setLastPrice(98 * 1e18);
@@ -1353,7 +1350,7 @@ contract OperatorTest is Test {
         /// Get capacity of the high wall and verify under threshold
         uint256 startCapacity = range.capacity(true);
         uint256 fullCapacity = operator.fullCapacity(true);
-        assertLe(startCapacity, fullCapacity.mulDiv(10, 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price below the moving average to regenerate low wall
         price.setLastPrice(98 * 1e18);
@@ -1412,7 +1409,7 @@ contract OperatorTest is Test {
         /// Get capacity of the high wall and verify under threshold
         uint256 startCapacity = range.capacity(true);
         uint256 fullCapacity = operator.fullCapacity(true);
-        assertLe(startCapacity, fullCapacity.mulDiv(10, 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price below the moving average to regenerate high wall
         price.setLastPrice(99 * 1e18);
@@ -1437,9 +1434,6 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Tests that a manually regenerated wall will close the cushion that is deployed currently
-
-        /// Get capacity of the high wall and verify under threshold
-        uint256 startCapacity = range.capacity(true);
 
         /// Trigger a cushion
         price.setLastPrice(111 * 1e18);

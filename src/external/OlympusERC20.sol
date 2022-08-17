@@ -36,7 +36,7 @@ abstract contract OlympusAccessControlled {
 
     event AuthorityUpdated(IOlympusAuthority indexed authority);
 
-    string UNAUTHORIZED = "UNAUTHORIZED"; // save gas
+    string internal UNAUTHORIZED = "UNAUTHORIZED"; // save gas
 
     /* ========== STATE VARIABLES ========== */
 

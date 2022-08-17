@@ -29,7 +29,7 @@ contract Faucet is Policy, ReentrancyGuard {
     mapping(Asset => uint256) public dripAmount;
     mapping(Asset => ERC20) public token;
     mapping(address => mapping(Asset => uint256)) public lastDrip;
-    uint256 dripInterval;
+    uint256 public dripInterval;
 
     /* ========== CONSTRUCTOR ========== */
     constructor(
