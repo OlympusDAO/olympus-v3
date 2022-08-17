@@ -13,6 +13,3 @@
 [submodule "lib/prb-math"]
 	path = lib/prb-math
 	url = https://github.com/paulrberg/prb-math
-[submodule "lib/balancer-v2-monorepo"]
-	path = lib/balancer-v2-monorepo
-	url = https://github.com/balancer-labs/balancer-v2-monorepo
