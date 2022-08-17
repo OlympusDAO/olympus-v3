@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 pragma experimental ABIEncoderV2;
 
 import "../solidity-utils/openzeppelin/IERC20.sol";
@@ -47,7 +47,10 @@ interface IAssetManager {
      * @return poolCash - The up-to-date cash balance of the pool
      * @return poolManaged - The up-to-date managed balance of the pool
      */
-    function getPoolBalances(bytes32 poolId) external view returns (uint256 poolCash, uint256 poolManaged);
+    function getPoolBalances(bytes32 poolId)
+        external
+        view
+        returns (uint256 poolCash, uint256 poolManaged);
 
     /**
      * @return The difference in tokens between the target investment

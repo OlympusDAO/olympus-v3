@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 
 import "./ERC20.sol";
 
@@ -33,7 +33,10 @@ abstract contract ERC20Burnable is ERC20 {
      * `amount`.
      */
     function burnFrom(address account, uint256 amount) public virtual {
-        uint256 decreasedAllowance = allowance(account, msg.sender).sub(amount, Errors.ERC20_BURN_EXCEEDS_ALLOWANCE);
+        uint256 decreasedAllowance = allowance(account, msg.sender).sub(
+            amount,
+            Errors.ERC20_BURN_EXCEEDS_ALLOWANCE
+        );
 
         _approve(account, msg.sender, decreasedAllowance);
         _burn(account, amount);

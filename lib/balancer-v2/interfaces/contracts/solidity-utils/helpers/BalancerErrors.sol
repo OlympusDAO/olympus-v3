@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 
 // solhint-disable
 
@@ -29,7 +29,11 @@ function _require(bool condition, uint256 errorCode) pure {
  * @dev Reverts if `condition` is false, with a revert reason containing `errorCode`. Only codes up to 999 are
  * supported.
  */
-function _require(bool condition, uint256 errorCode, bytes3 prefix) pure {
+function _require(
+    bool condition,
+    uint256 errorCode,
+    bytes3 prefix
+) pure {
     if (!condition) _revert(errorCode, prefix);
 }
 
@@ -78,7 +82,10 @@ function _revert(uint256 errorCode, bytes3 prefix) pure {
         // array).
         let formattedPrefix := shl(24, add(0x23, shl(8, prefixUint)))
 
-        let revertReason := shl(200, add(formattedPrefix, add(add(units, shl(8, tenths)), shl(16, hundreds))))
+        let revertReason := shl(
+            200,
+            add(formattedPrefix, add(add(units, shl(8, tenths)), shl(16, hundreds)))
+        )
 
         // We can now encode the reason in memory, which can be safely overwritten as we're about to revert. The encoded
         // message will have the following layout:

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 
 /**
  * @dev https://eips.ethereum.org/EIPS/eip-712[EIP 712] is a standard for hashing and signing of typed structured data.
@@ -44,14 +44,19 @@ abstract contract EIP712 {
     constructor(string memory name, string memory version) {
         _HASHED_NAME = keccak256(bytes(name));
         _HASHED_VERSION = keccak256(bytes(version));
-        _TYPE_HASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+        _TYPE_HASH = keccak256(
+            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+        );
     }
 
     /**
      * @dev Returns the domain separator for the current chain.
      */
     function _domainSeparatorV4() internal view virtual returns (bytes32) {
-        return keccak256(abi.encode(_TYPE_HASH, _HASHED_NAME, _HASHED_VERSION, _getChainId(), address(this)));
+        return
+            keccak256(
+                abi.encode(_TYPE_HASH, _HASHED_NAME, _HASHED_VERSION, _getChainId(), address(this))
+            );
     }
 
     /**

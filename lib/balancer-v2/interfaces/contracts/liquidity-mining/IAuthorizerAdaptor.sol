@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 
 import "../solidity-utils/helpers/IAuthentication.sol";
 import "../vault/IVault.sol";
@@ -34,5 +34,8 @@ interface IAuthorizerAdaptor is IAuthentication {
      * @param data - Calldata to be sent to the target contract
      * @return The bytes encoded return value from the performed function call
      */
-    function performAction(address target, bytes calldata data) external payable returns (bytes memory);
+    function performAction(address target, bytes calldata data)
+        external
+        payable
+        returns (bytes memory);
 }

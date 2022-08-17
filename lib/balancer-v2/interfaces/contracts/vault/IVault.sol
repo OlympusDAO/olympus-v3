@@ -25,7 +25,7 @@ import "./IAuthorizer.sol";
 import "./IFlashLoanRecipient.sol";
 import "./IProtocolFeesCollector.sol";
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 
 /**
  * @dev Full external interface for the Vault core contract - no external or public methods exist in the contract that
@@ -118,7 +118,10 @@ interface IVault is ISignaturesValidator, ITemporarilyPausable, IAuthentication 
     /**
      * @dev Returns `user`'s Internal Balance for a set of tokens.
      */
-    function getInternalBalance(address user, IERC20[] memory tokens) external view returns (uint256[] memory);
+    function getInternalBalance(address user, IERC20[] memory tokens)
+        external
+        view
+        returns (uint256[] memory);
 
     /**
      * @dev Performs a set of user balance operations, which involve Internal Balance (deposit, withdraw or transfer)
@@ -179,7 +182,12 @@ interface IVault is ISignaturesValidator, ITemporarilyPausable, IAuthentication 
     //
     // Emits an `ExternalBalanceTransfer` event.
 
-    enum UserBalanceOpKind { DEPOSIT_INTERNAL, WITHDRAW_INTERNAL, TRANSFER_INTERNAL, TRANSFER_EXTERNAL }
+    enum UserBalanceOpKind {
+        DEPOSIT_INTERNAL,
+        WITHDRAW_INTERNAL,
+        TRANSFER_INTERNAL,
+        TRANSFER_EXTERNAL
+    }
 
     /**
      * @dev Emitted when a user's Internal Balance changes, either from calls to `manageUserBalance`, or through
@@ -193,7 +201,12 @@ interface IVault is ISignaturesValidator, ITemporarilyPausable, IAuthentication 
     /**
      * @dev Emitted when a user's Vault ERC20 allowance is used by the Vault to transfer tokens to an external account.
      */
-    event ExternalBalanceTransfer(IERC20 indexed token, address indexed sender, address recipient, uint256 amount);
+    event ExternalBalanceTransfer(
+        IERC20 indexed token,
+        address indexed sender,
+        address recipient,
+        uint256 amount
+    );
 
     // Pools
     //
@@ -212,7 +225,11 @@ interface IVault is ISignaturesValidator, ITemporarilyPausable, IAuthentication 
     //  - Two Token: only allows two tokens to be registered. This achieves the lowest possible swap gas cost. Like
     // minimal swap info Pools, these are called via IMinimalSwapInfoPool.
 
-    enum PoolSpecialization { GENERAL, MINIMAL_SWAP_INFO, TWO_TOKEN }
+    enum PoolSpecialization {
+        GENERAL,
+        MINIMAL_SWAP_INFO,
+        TWO_TOKEN
+    }
 
     /**
      * @dev Registers the caller account as a Pool with a given specialization setting. Returns the Pool's ID, which
@@ -232,7 +249,11 @@ interface IVault is ISignaturesValidator, ITemporarilyPausable, IAuthentication 
     /**
      * @dev Emitted when a Pool is registered by calling `registerPool`.
      */
-    event PoolRegistered(bytes32 indexed poolId, address indexed poolAddress, PoolSpecialization specialization);
+    event PoolRegistered(
+        bytes32 indexed poolId,
+        address indexed poolAddress,
+        PoolSpecialization specialization
+    );
 
     /**
      * @dev Returns a Pool's contract address and specialization setting.
@@ -446,7 +467,10 @@ interface IVault is ISignaturesValidator, ITemporarilyPausable, IAuthentication 
         uint256[] protocolFeeAmounts
     );
 
-    enum PoolBalanceChangeKind { JOIN, EXIT }
+    enum PoolBalanceChangeKind {
+        JOIN,
+        EXIT
+    }
 
     // Swaps
     //
@@ -495,7 +519,10 @@ interface IVault is ISignaturesValidator, ITemporarilyPausable, IAuthentication 
     //
     // Finally, Internal Balance can be used when either sending or receiving tokens.
 
-    enum SwapKind { GIVEN_IN, GIVEN_OUT }
+    enum SwapKind {
+        GIVEN_IN,
+        GIVEN_OUT
+    }
 
     /**
      * @dev Performs a swap with a single Pool.
@@ -673,7 +700,12 @@ interface IVault is ISignaturesValidator, ITemporarilyPausable, IAuthentication 
     /**
      * @dev Emitted for each individual flash loan performed by `flashLoan`.
      */
-    event FlashLoan(IFlashLoanRecipient indexed recipient, IERC20 indexed token, uint256 amount, uint256 feeAmount);
+    event FlashLoan(
+        IFlashLoanRecipient indexed recipient,
+        IERC20 indexed token,
+        uint256 amount,
+        uint256 feeAmount
+    );
 
     // Asset Management
     //
@@ -714,7 +746,11 @@ interface IVault is ISignaturesValidator, ITemporarilyPausable, IAuthentication 
      * Updates don't affect the Pool's cash balance, but because the managed balance changes, it does alter the total.
      * The external amount can be either increased or decreased by this call (i.e., reporting a gain or a loss).
      */
-    enum PoolBalanceOpKind { WITHDRAW, DEPOSIT, UPDATE }
+    enum PoolBalanceOpKind {
+        WITHDRAW,
+        DEPOSIT,
+        UPDATE
+    }
 
     /**
      * @dev Emitted when a Pool's token Asset Manager alters its balance via `managePoolBalance`.

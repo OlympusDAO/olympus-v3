@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 
 import "../solidity-utils/openzeppelin/IERC20.sol";
 
@@ -42,7 +42,11 @@ library WeightedPoolUserData {
 
     // Joins
 
-    function initialAmountsIn(bytes memory self) internal pure returns (uint256[] memory amountsIn) {
+    function initialAmountsIn(bytes memory self)
+        internal
+        pure
+        returns (uint256[] memory amountsIn)
+    {
         (, amountsIn) = abi.decode(self, (JoinKind, uint256[]));
     }
 
@@ -54,11 +58,19 @@ library WeightedPoolUserData {
         (, amountsIn, minBPTAmountOut) = abi.decode(self, (JoinKind, uint256[], uint256));
     }
 
-    function tokenInForExactBptOut(bytes memory self) internal pure returns (uint256 bptAmountOut, uint256 tokenIndex) {
+    function tokenInForExactBptOut(bytes memory self)
+        internal
+        pure
+        returns (uint256 bptAmountOut, uint256 tokenIndex)
+    {
         (, bptAmountOut, tokenIndex) = abi.decode(self, (JoinKind, uint256, uint256));
     }
 
-    function allTokensInForExactBptOut(bytes memory self) internal pure returns (uint256 bptAmountOut) {
+    function allTokensInForExactBptOut(bytes memory self)
+        internal
+        pure
+        returns (uint256 bptAmountOut)
+    {
         (, bptAmountOut) = abi.decode(self, (JoinKind, uint256));
     }
 
@@ -68,7 +80,11 @@ library WeightedPoolUserData {
 
     // Exits
 
-    function exactBptInForTokenOut(bytes memory self) internal pure returns (uint256 bptAmountIn, uint256 tokenIndex) {
+    function exactBptInForTokenOut(bytes memory self)
+        internal
+        pure
+        returns (uint256 bptAmountIn, uint256 tokenIndex)
+    {
         (, bptAmountIn, tokenIndex) = abi.decode(self, (ExitKind, uint256, uint256));
     }
 

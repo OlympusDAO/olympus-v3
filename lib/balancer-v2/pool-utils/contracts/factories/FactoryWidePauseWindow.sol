@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 pragma experimental ABIEncoderV2;
 
 /**
@@ -43,7 +43,11 @@ contract FactoryWidePauseWindow {
      * `pauseWindowDuration` will decrease over time until it reaches zero, at which point both it and
      * `bufferPeriodDuration` will be zero forever, meaning deployed Pools will not be pausable.
      */
-    function getPauseConfiguration() public view returns (uint256 pauseWindowDuration, uint256 bufferPeriodDuration) {
+    function getPauseConfiguration()
+        public
+        view
+        returns (uint256 pauseWindowDuration, uint256 bufferPeriodDuration)
+    {
         uint256 currentTime = block.timestamp;
         if (currentTime < _poolsPauseWindowEndTime) {
             // The buffer period is always the same since its duration is related to how much time is needed to respond

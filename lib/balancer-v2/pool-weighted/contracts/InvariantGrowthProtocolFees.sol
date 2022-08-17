@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 pragma experimental ABIEncoderV2;
 
 import "./BaseWeightedPool.sol";
@@ -49,7 +49,10 @@ abstract contract InvariantGrowthProtocolFees is BaseWeightedPool {
             return;
         }
 
-        uint256 preJoinExitInvariant = WeightedMath._calculateInvariant(normalizedWeights, preBalances);
+        uint256 preJoinExitInvariant = WeightedMath._calculateInvariant(
+            normalizedWeights,
+            preBalances
+        );
 
         uint256 toMint = WeightedMath._calcDueProtocolSwapFeeBptAmount(
             totalSupply(),
@@ -77,7 +80,10 @@ abstract contract InvariantGrowthProtocolFees is BaseWeightedPool {
                 : SafeMath.sub(preBalances[i], balanceDeltas[i]);
         }
 
-        uint256 postJoinExitInvariant = WeightedMath._calculateInvariant(normalizedWeights, preBalances);
+        uint256 postJoinExitInvariant = WeightedMath._calculateInvariant(
+            normalizedWeights,
+            preBalances
+        );
         _lastPostJoinExitInvariant = postJoinExitInvariant;
     }
 }

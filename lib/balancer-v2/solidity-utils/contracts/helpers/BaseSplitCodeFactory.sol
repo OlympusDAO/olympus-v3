@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 pragma experimental ABIEncoderV2;
 
 import "./CodeDeployer.sol";
@@ -117,7 +117,11 @@ abstract contract BaseSplitCodeFactory {
     /**
      * @dev Returns the creation code that will result in a contract being deployed with `constructorArgs`.
      */
-    function _getCreationCodeWithArgs(bytes memory constructorArgs) private view returns (bytes memory code) {
+    function _getCreationCodeWithArgs(bytes memory constructorArgs)
+        private
+        view
+        returns (bytes memory code)
+    {
         // This function exists because `abi.encode()` cannot be instructed to place its result at a specific address.
         // We need for the ABI-encoded constructor arguments to be located immediately after the creation code, but
         // cannot rely on `abi.encodePacked()` to perform concatenation as that would involve copying the creation code,
@@ -149,7 +153,12 @@ abstract contract BaseSplitCodeFactory {
             // Next, we concatenate the creation code stored in A and B.
             let dataStart := add(code, 32)
             extcodecopy(creationCodeContractA, dataStart, 0, creationCodeSizeA)
-            extcodecopy(creationCodeContractB, add(dataStart, creationCodeSizeA), 0, creationCodeSizeB)
+            extcodecopy(
+                creationCodeContractB,
+                add(dataStart, creationCodeSizeA),
+                0,
+                creationCodeSizeB
+            )
         }
 
         // Finally, we copy the constructorArgs to the end of the array. Unfortunately there is no way to avoid this

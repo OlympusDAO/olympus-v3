@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 pragma experimental ABIEncoderV2;
 
 import "./IAuthorizerAdaptor.sol";
@@ -37,7 +37,10 @@ interface IVotingEscrow {
 
     function point_history(uint256 timestamp) external view returns (Point memory);
 
-    function user_point_history(address user, uint256 timestamp) external view returns (Point memory);
+    function user_point_history(address user, uint256 timestamp)
+        external
+        view
+        returns (Point memory);
 
     function checkpoint() external;
 

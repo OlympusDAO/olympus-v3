@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 
 library ArrayHelpers {
     function arrayFill(uint256 a, uint256 b) internal pure returns (uint256[] memory result) {

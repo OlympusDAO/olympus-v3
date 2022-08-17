@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 
 import "./IAuthorizerAdaptor.sol";
 import "./IGaugeController.sol";
@@ -21,7 +21,16 @@ import "./ILiquidityGaugeFactory.sol";
 import "./IStakingLiquidityGauge.sol";
 
 interface IGaugeAdder is IAuthentication {
-    enum GaugeType { LiquidityMiningCommittee, veBAL, Ethereum, Polygon, Arbitrum, Optimism, Gnosis, ZKSync }
+    enum GaugeType {
+        LiquidityMiningCommittee,
+        veBAL,
+        Ethereum,
+        Polygon,
+        Arbitrum,
+        Optimism,
+        Gnosis,
+        ZKSync
+    }
 
     event GaugeFactoryAdded(GaugeType indexed gaugeType, ILiquidityGaugeFactory gaugeFactory);
 
@@ -42,7 +51,10 @@ interface IGaugeAdder is IAuthentication {
     /**
      * @notice Returns the `index`'th factory for gauge type `gaugeType`
      */
-    function getFactoryForGaugeType(GaugeType gaugeType, uint256 index) external view returns (address);
+    function getFactoryForGaugeType(GaugeType gaugeType, uint256 index)
+        external
+        view
+        returns (address);
 
     /**
      * @notice Returns the number of factories for gauge type `gaugeType`
@@ -52,7 +64,10 @@ interface IGaugeAdder is IAuthentication {
     /**
      * @notice Returns whether `gauge` has been deployed by one of the listed factories for the gauge type `gaugeType`
      */
-    function isGaugeFromValidFactory(address gauge, GaugeType gaugeType) external view returns (bool);
+    function isGaugeFromValidFactory(address gauge, GaugeType gaugeType)
+        external
+        view
+        returns (bool);
 
     /**
      * @notice Adds a new gauge to the GaugeController for the "Ethereum" type.

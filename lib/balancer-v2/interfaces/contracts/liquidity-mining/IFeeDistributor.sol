@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 pragma experimental ABIEncoderV2;
 
 import "../solidity-utils/openzeppelin/IERC20.sol";
@@ -66,7 +66,10 @@ interface IFeeDistributor {
      * @param user - The address of the user of which to read the cached balance of.
      * @param timestamp - The timestamp at which to read the `user`'s cached balance at.
      */
-    function getUserBalanceAtTimestamp(address user, uint256 timestamp) external view returns (uint256);
+    function getUserBalanceAtTimestamp(address user, uint256 timestamp)
+        external
+        view
+        returns (uint256);
 
     /**
      * @notice Returns the cached total supply of veBAL as of the provided timestamp.
@@ -86,7 +89,10 @@ interface IFeeDistributor {
      * @param token - The ERC20 token address to query.
      * @param timestamp - The timestamp corresponding to the beginning of the week of interest.
      */
-    function getTokensDistributedInWeek(IERC20 token, uint256 timestamp) external view returns (uint256);
+    function getTokensDistributedInWeek(IERC20 token, uint256 timestamp)
+        external
+        view
+        returns (uint256);
 
     // Depositing
 
@@ -164,5 +170,7 @@ interface IFeeDistributor {
      * @param tokens - An array of ERC20 token addresses to be claimed.
      * @return An array of the amounts of each token in `tokens` sent to `user` as a result of claiming.
      */
-    function claimTokens(address user, IERC20[] calldata tokens) external returns (uint256[] memory);
+    function claimTokens(address user, IERC20[] calldata tokens)
+        external
+        returns (uint256[] memory);
 }

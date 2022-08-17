@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // OpenZeppelin Contracts v4.4.1 (proxy/Clones.sol)
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 
 /**
  * @dev https://eips.ethereum.org/EIPS/eip-1167[EIP 1167] is a standard for
@@ -29,7 +29,10 @@ library Clones {
             let ptr := mload(0x40)
             mstore(ptr, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
             mstore(add(ptr, 0x14), shl(0x60, implementation))
-            mstore(add(ptr, 0x28), 0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000)
+            mstore(
+                add(ptr, 0x28),
+                0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000
+            )
             instance := create(0, ptr, 0x37)
         }
         require(instance != address(0), "ERC1167: create failed");
@@ -42,12 +45,18 @@ library Clones {
      * the clone. Using the same `implementation` and `salt` multiple time will revert, since
      * the clones cannot be deployed twice at the same address.
      */
-    function cloneDeterministic(address implementation, bytes32 salt) internal returns (address instance) {
+    function cloneDeterministic(address implementation, bytes32 salt)
+        internal
+        returns (address instance)
+    {
         assembly {
             let ptr := mload(0x40)
             mstore(ptr, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
             mstore(add(ptr, 0x14), shl(0x60, implementation))
-            mstore(add(ptr, 0x28), 0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000)
+            mstore(
+                add(ptr, 0x28),
+                0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000
+            )
             instance := create2(0, ptr, 0x37, salt)
         }
         require(instance != address(0), "ERC1167: create2 failed");
@@ -65,7 +74,10 @@ library Clones {
             let ptr := mload(0x40)
             mstore(ptr, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
             mstore(add(ptr, 0x14), shl(0x60, implementation))
-            mstore(add(ptr, 0x28), 0x5af43d82803e903d91602b57fd5bf3ff00000000000000000000000000000000)
+            mstore(
+                add(ptr, 0x28),
+                0x5af43d82803e903d91602b57fd5bf3ff00000000000000000000000000000000
+            )
             mstore(add(ptr, 0x38), shl(0x60, deployer))
             mstore(add(ptr, 0x4c), salt)
             mstore(add(ptr, 0x6c), keccak256(ptr, 0x37))

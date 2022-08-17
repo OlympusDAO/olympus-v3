@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 pragma experimental ABIEncoderV2;
 
 import "../solidity-utils/openzeppelin/IERC20.sol";
@@ -38,7 +38,10 @@ interface IProtocolFeesCollector {
 
     function getFlashLoanFeePercentage() external view returns (uint256);
 
-    function getCollectedFeeAmounts(IERC20[] memory tokens) external view returns (uint256[] memory feeAmounts);
+    function getCollectedFeeAmounts(IERC20[] memory tokens)
+        external
+        view
+        returns (uint256[] memory feeAmounts);
 
     function getAuthorizer() external view returns (IAuthorizer);
 

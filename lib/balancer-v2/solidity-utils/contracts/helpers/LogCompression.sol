@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.0;
+pragma solidity 0.7.6;
 
 import "../math/LogExpMath.sol";
 
@@ -42,7 +42,9 @@ library LogCompression {
         int256 ln = LogExpMath.ln(int256(value));
 
         // Rounding division for signed numerator
-        int256 lnWithError = (ln > 0 ? ln + _HALF_LOG_COMPRESSION_FACTOR : ln - _HALF_LOG_COMPRESSION_FACTOR);
+        int256 lnWithError = (
+            ln > 0 ? ln + _HALF_LOG_COMPRESSION_FACTOR : ln - _HALF_LOG_COMPRESSION_FACTOR
+        );
         return lnWithError / _LOG_COMPRESSION_FACTOR;
     }
 
