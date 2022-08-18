@@ -282,8 +282,6 @@ contract OlympusGovernance is Policy {
             }
         }
 
-        address proposer = getProposalMetadata[activeProposal.proposalId].submitter;
-
         emit ProposalExecuted(activeProposal.proposalId);
 
         // deactivate the active proposal
