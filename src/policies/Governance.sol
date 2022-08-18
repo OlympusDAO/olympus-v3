@@ -35,13 +35,14 @@ error CannotReclaimTokensForActiveVote();
 error CannotReclaimZeroVotes();
 
 struct ProposalMetadata {
-    bytes32 proposalName;
-    address proposer;
+    bytes32 title;
+    address submitter;
     uint256 submissionTimestamp;
+    string proposalURI;
 }
 
 struct ActivatedProposal {
-    uint256 instructionsId;
+    uint256 proposalId;
     uint256 activationTimestamp;
 }
 
@@ -82,172 +83,197 @@ contract OlympusGovernance is Policy {
     //                             Policy Variables                                //
     /////////////////////////////////////////////////////////////////////////////////
 
-    event ProposalSubmitted(uint256 instructionsId);
-    event ProposalEndorsed(uint256 instructionsId, address voter, uint256 amount);
-    event ProposalActivated(uint256 instructionsId, uint256 timestamp);
-    event WalletVoted(uint256 instructionsId, address voter, bool for_, uint256 userVotes);
-    event ProposalExecuted(uint256 instructionsId);
+    event ProposalSubmitted(uint256 proposalId);
+    event ProposalEndorsed(uint256 proposalId, address voter, uint256 amount);
+    event ProposalActivated(uint256 proposalId, uint256 timestamp);
+    event WalletVoted(uint256 proposalId, address voter, bool for_, uint256 userVotes);
+    event ProposalExecuted(uint256 proposalId);
 
-    // currently active proposal
+    /// @notice The currently activated proposal in the governance system.
     ActivatedProposal public activeProposal;
 
+    /// @notice Return a proposal metadata object for a given proposal id.
     mapping(uint256 => ProposalMetadata) public getProposalMetadata;
 
+    /// @notice Return the total endorsements for a proposal id.
     mapping(uint256 => uint256) public totalEndorsementsForProposal;
+
+    /// @notice Return the number of endorsements a user has given a proposal id.
     mapping(uint256 => mapping(address => uint256)) public userEndorsementsForProposal;
+
+    /// @notice Return whether a proposal id has been activated. Once this is true, it should never be flipped false.
     mapping(uint256 => bool) public proposalHasBeenActivated;
 
+    /// @notice Return the total yes votes for a proposal id used in calculating net votes.
     mapping(uint256 => uint256) public yesVotesForProposal;
+
+    /// @notice Return the total no votes for a proposal id used in calculating net votes.
     mapping(uint256 => uint256) public noVotesForProposal;
+
+    /// @notice Return the amount of votes a user has applied to a proposal id. This does not record how the user voted.
     mapping(uint256 => mapping(address => uint256)) public userVotesForProposal;
 
+    /// @notice Return the amount of tokens reclaimed by a user after voting on a proposal id.
     mapping(uint256 => mapping(address => bool)) public tokenClaimsForProposal;
+
+    /// @notice The amount of votes a proposer needs in order to submit a proposal as a percentage of total supply (in basis points).
+    /// @dev    This is set to 1% of the total supply.
+    uint256 public constant SUBMISSION_REQUIREMENT = 100;
+
+    /// @notice Amount of time a submitted proposal has to activate before it expires.
+    uint256 public constant ACTIVATION_DEADLINE = 2 weeks;
+
+    /// @notice Amount of time an activated proposal must stay up before it can be replaced by a new activated proposal.
+    uint256 public constant GRACE_PERIOD = 1 weeks;
+
+    /// @notice Endorsements required to activate a proposal as percentage of total supply.
+    uint256 public constant ENDORSEMENT_THRESHOLD = 20;
+
+    /// @notice Net votes required to execute a proposal on chain as a percentage of total supply.
+    uint256 public constant EXECUTION_THRESHOLD = 33;
+
+    /// @notice Required time for a proposal to be active before it can be executed.
+    /// @dev    This amount should be greater than 0 to prevent flash loan attacks.
+    uint256 public constant EXECUTION_TIMELOCK = 3 days;
 
     /////////////////////////////////////////////////////////////////////////////////
     //                               User Actions                                  //
     /////////////////////////////////////////////////////////////////////////////////
 
-    function getMetadata(uint256 instructionsId_) public view returns (ProposalMetadata memory) {
-        return getProposalMetadata[instructionsId_];
+    /// @notice Return the metadata for a proposal.
+    /// @dev    Used to return & access the entire metadata struct in solidity
+    function getMetadata(uint256 proposalId_) public view returns (ProposalMetadata memory) {
+        return getProposalMetadata[proposalId_];
     }
 
+    /// @notice Return the currently active proposal in governance.
+    /// @dev    Used to return & access the entire struct active proposal struct in solidity.
     function getActiveProposal() public view returns (ActivatedProposal memory) {
         return activeProposal;
     }
 
-    function submitProposal(Instruction[] calldata instructions_, bytes32 proposalName_) external {
-        // require the proposing wallet to own at least 1% of the outstanding governance power
-        if (VOTES.balanceOf(msg.sender) * 100 < VOTES.totalSupply()) {
+    /// @notice Submit an on chain governance proposal.
+    /// @param  instructions_ - an array of Instruction objects each containing a Kernel Action and a target Contract address.
+    /// @param  title_ - a human-readable title of the proposal — i.e. "OIP XX - My Proposal Title".
+    /// @param  proposalURI_ - an arbitrary url linking to a human-readable description of the proposal - i.e. Snapshot, Discourse, Google Doc.
+    function submitProposal(
+        Instruction[] calldata instructions_,
+        bytes32 title_,
+        string memory proposalURI_
+    ) external {
+        if (VOTES.balanceOf(msg.sender) < ((VOTES.totalSupply() * SUBMISSION_REQUIREMENT) / 10000))
             revert NotEnoughVotesToPropose();
-        }
 
-        // store the proposed instructions in the INSTR module and save the proposal metadata to the proposal mapping
-        uint256 instructionsId = INSTR.store(instructions_);
-        getProposalMetadata[instructionsId] = ProposalMetadata(
-            proposalName_,
+        uint256 proposalId = INSTR.store(instructions_);
+        getProposalMetadata[proposalId] = ProposalMetadata(
+            title_,
             msg.sender,
-            block.timestamp
+            block.timestamp,
+            proposalURI_
         );
 
-        // emit the corresponding event
-        emit ProposalSubmitted(instructionsId);
+        emit ProposalSubmitted(proposalId);
     }
 
-    function endorseProposal(uint256 instructionsId_) external {
-        // get the current votes of the user
+    /// @notice Endorse a proposal.
+    /// @param  proposalId_ - The ID of the proposal being endorsed.
+    function endorseProposal(uint256 proposalId_) external {
         uint256 userVotes = VOTES.balanceOf(msg.sender);
 
-        // revert if endorsing null instructionsId
-        if (instructionsId_ == 0) {
+        if (proposalId_ == 0) {
             revert CannotEndorseNullProposal();
         }
 
-        // revert if endorsed instructions are empty
-        Instruction[] memory instructions = INSTR.getInstructions(instructionsId_);
+        Instruction[] memory instructions = INSTR.getInstructions(proposalId_);
         if (instructions.length == 0) {
             revert CannotEndorseInvalidProposal();
         }
 
         // undo any previous endorsement the user made on these instructions
-        uint256 previousEndorsement = userEndorsementsForProposal[instructionsId_][msg.sender];
-        totalEndorsementsForProposal[instructionsId_] -= previousEndorsement;
+        uint256 previousEndorsement = userEndorsementsForProposal[proposalId_][msg.sender];
+        totalEndorsementsForProposal[proposalId_] -= previousEndorsement;
 
         // reapply user endorsements with most up-to-date votes
-        userEndorsementsForProposal[instructionsId_][msg.sender] = userVotes;
-        totalEndorsementsForProposal[instructionsId_] += userVotes;
+        userEndorsementsForProposal[proposalId_][msg.sender] = userVotes;
+        totalEndorsementsForProposal[proposalId_] += userVotes;
 
-        // emit the corresponding event
-        emit ProposalEndorsed(instructionsId_, msg.sender, userVotes);
+        emit ProposalEndorsed(proposalId_, msg.sender, userVotes);
     }
 
-    function activateProposal(uint256 instructionsId_) external {
-        // get the proposal to be activated
-        ProposalMetadata memory proposal = getProposalMetadata[instructionsId_];
+    /// @notice Activate a proposal.
+    /// @param  proposalId_ - The ID of the proposal being activated.
+    function activateProposal(uint256 proposalId_) external {
+        ProposalMetadata memory proposal = getProposalMetadata[proposalId_];
 
-        // only allow the proposer to activate their proposal
-        if (msg.sender != proposal.proposer) {
+        if (msg.sender != proposal.submitter) {
             revert NotAuthorizedToActivateProposal();
         }
 
-        // proposals must be activated within 2 weeks of submission or they expire
-        if (block.timestamp > proposal.submissionTimestamp + 2 weeks) {
+        if (block.timestamp > proposal.submissionTimestamp + ACTIVATION_DEADLINE) {
             revert SubmittedProposalHasExpired();
         }
 
-        // require endorsements from at least 20% of the total outstanding governance power
-        if ((totalEndorsementsForProposal[instructionsId_] * 5) < VOTES.totalSupply()) {
+        if (
+            (totalEndorsementsForProposal[proposalId_] * 100) <
+            VOTES.totalSupply() * ENDORSEMENT_THRESHOLD
+        ) {
             revert NotEnoughEndorsementsToActivateProposal();
         }
 
-        // ensure the proposal is being activated for the first time
-        if (proposalHasBeenActivated[instructionsId_]) {
+        if (proposalHasBeenActivated[proposalId_] == true) {
             revert ProposalAlreadyActivated();
         }
 
-        // ensure the currently active proposal has had at least a week of voting for execution
-        if (block.timestamp < activeProposal.activationTimestamp + 1 weeks) {
+        if (block.timestamp < activeProposal.activationTimestamp + GRACE_PERIOD) {
             revert ActiveProposalNotExpired();
         }
 
-        // activate the proposal
-        activeProposal = ActivatedProposal(instructionsId_, block.timestamp);
+        activeProposal = ActivatedProposal(proposalId_, block.timestamp);
 
-        // record that the proposal has been activated
-        proposalHasBeenActivated[instructionsId_] = true;
+        proposalHasBeenActivated[proposalId_] = true;
 
-        // emit the corresponding event
-        emit ProposalActivated(instructionsId_, block.timestamp);
+        emit ProposalActivated(proposalId_, block.timestamp);
     }
 
+    /// @notice Cast a vote for the currently active proposal.
+    /// @param  for_ - A boolean representing the vote: true for yes, false for no.
     function vote(bool for_) external {
-        // get the amount of user votes
         uint256 userVotes = VOTES.balanceOf(msg.sender);
 
-        // ensure an active proposal exists
-        if (activeProposal.instructionsId == 0) {
+        if (activeProposal.proposalId == 0) {
             revert NoActiveProposalDetected();
         }
 
-        // ensure the user has no pre-existing votes on the proposal
-        if (userVotesForProposal[activeProposal.instructionsId][msg.sender] > 0) {
+        if (userVotesForProposal[activeProposal.proposalId][msg.sender] > 0) {
             revert UserAlreadyVoted();
         }
 
-        // record the votes
         if (for_) {
-            yesVotesForProposal[activeProposal.instructionsId] += userVotes;
+            yesVotesForProposal[activeProposal.proposalId] += userVotes;
         } else {
-            noVotesForProposal[activeProposal.instructionsId] += userVotes;
+            noVotesForProposal[activeProposal.proposalId] += userVotes;
         }
 
-        // record that the user has casted votes
-        userVotesForProposal[activeProposal.instructionsId][msg.sender] = userVotes;
+        userVotesForProposal[activeProposal.proposalId][msg.sender] = userVotes;
 
-        // transfer voting tokens to contract
         VOTES.transferFrom(msg.sender, address(this), userVotes);
 
-        // emit the corresponding event
-        emit WalletVoted(activeProposal.instructionsId, msg.sender, for_, userVotes);
+        emit WalletVoted(activeProposal.proposalId, msg.sender, for_, userVotes);
     }
 
+    /// @notice Execute the currently active proposal.
     function executeProposal() external {
-        // require the net votes (yes - no) to be greater than 33% of the total voting supply
-        if (
-            (yesVotesForProposal[activeProposal.instructionsId] -
-                noVotesForProposal[activeProposal.instructionsId]) *
-                3 <
-            VOTES.totalSupply()
-        ) {
+        uint256 netVotes = yesVotesForProposal[activeProposal.proposalId] -
+            noVotesForProposal[activeProposal.proposalId];
+        if (netVotes * 100 < VOTES.totalSupply() * EXECUTION_THRESHOLD) {
             revert NotEnoughVotesToExecute();
         }
 
-        // ensure three days have passed before the proposal can be executed
-        if (block.timestamp < activeProposal.activationTimestamp + 3 days) {
+        if (block.timestamp < activeProposal.activationTimestamp + EXECUTION_TIMELOCK) {
             revert ExecutionTimelockStillActive();
         }
 
-        // execute the active proposal
-        Instruction[] memory instructions = INSTR.getInstructions(activeProposal.instructionsId);
+        Instruction[] memory instructions = INSTR.getInstructions(activeProposal.proposalId);
 
         for (uint256 step; step < instructions.length; ) {
             kernel.executeAction(instructions[step].action, instructions[step].target);
@@ -256,36 +282,35 @@ contract OlympusGovernance is Policy {
             }
         }
 
-        // emit the corresponding event
-        emit ProposalExecuted(activeProposal.instructionsId);
+        address proposer = getProposalMetadata[activeProposal.proposalId].submitter;
+
+        emit ProposalExecuted(activeProposal.proposalId);
 
         // deactivate the active proposal
         activeProposal = ActivatedProposal(0, 0);
     }
 
-    function reclaimVotes(uint256 instructionsId_) external {
-        // get the amount of tokens the user voted with
-        uint256 userVotes = userVotesForProposal[instructionsId_][msg.sender];
+    /// @notice Reclaim locked votes from the contract after the proposal is no longer active.
+    /// @dev    The governance contract locks casted votes into the contract until the proposal
+    ///         is no longer active to prevent repeated voting with the same tokens.
+    /// @param  proposalId_ - The proposal that the user is reclaiming tokens for.
+    function reclaimVotes(uint256 proposalId_) external {
+        uint256 userVotes = userVotesForProposal[proposalId_][msg.sender];
 
-        // ensure the user is not claiming empty votes
         if (userVotes == 0) {
             revert CannotReclaimZeroVotes();
         }
 
-        // ensure the user is not claiming for the active propsal
-        if (instructionsId_ == activeProposal.instructionsId) {
+        if (proposalId_ == activeProposal.proposalId) {
             revert CannotReclaimTokensForActiveVote();
         }
 
-        // ensure the user has not already claimed before for this proposal
-        if (tokenClaimsForProposal[instructionsId_][msg.sender]) {
+        if (tokenClaimsForProposal[proposalId_][msg.sender] == true) {
             revert VotingTokensAlreadyReclaimed();
         }
 
-        // record the voting tokens being claimed from the contract
-        tokenClaimsForProposal[instructionsId_][msg.sender] = true;
+        tokenClaimsForProposal[proposalId_][msg.sender] = true;
 
-        // return the tokens back to the user
         VOTES.transferFrom(address(this), msg.sender, userVotes);
     }
 }
