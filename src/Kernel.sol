@@ -3,21 +3,17 @@ pragma solidity ^0.8.15;
 
 import "src/utils/KernelUtils.sol";
 
-/*//////////////////////////////////////////////////////////////
-                             ERRORS
-//////////////////////////////////////////////////////////////*/
-
-// KERNEL ADAPTER
+// Kernel Adapter errors
 error KernelAdapter_OnlyKernel(address caller_);
 
-// MODULE
+// Module errors
 error Module_PolicyNotPermitted(address policy_);
 
-// POLICY
+// Policy errors
 error Policy_OnlyRole(Role role_);
 error Policy_ModuleDoesNotExist(Keycode keycode_);
 
-// KERNEL
+// Kernel errors
 error Kernel_OnlyExecutor(address caller_);
 error Kernel_OnlyAdmin(address caller_);
 error Kernel_ModuleAlreadyInstalled(Keycode module_);
@@ -32,7 +28,7 @@ error Kernel_RoleDoesNotExist(Role role_);
                           GLOBAL TYPES
 //////////////////////////////////////////////////////////////*/
 
-/// @notice     Actions to trigger state changes in the kernel. Passed by the executor
+/// @notice Actions to trigger state changes in the kernel. Passed by the executor
 enum Actions {
     InstallModule,
     UpgradeModule,
@@ -43,13 +39,13 @@ enum Actions {
     ChangeAdmin
 }
 
-/// @notice     Used by executor to select an action and a target contract for a kernel action
+/// @notice Used by executor to select an action and a target contract for a kernel action
 struct Instruction {
     Actions action;
     address target;
 }
 
-/// @notice     Used to define which module functions a policy needs access to
+/// @notice Used to define which module functions a policy needs access to
 struct Permissions {
     Keycode keycode;
     bytes4 funcSelector;
@@ -62,7 +58,7 @@ type Role is bytes32;
                       COMPONENT ABSTRACTS
 //////////////////////////////////////////////////////////////*/
 
-/// @notice     Generic adapter interface for kernel access in modules and policies.
+/// @notice Generic adapter interface for kernel access in modules and policies.
 abstract contract KernelAdapter {
     Kernel public kernel;
 
@@ -70,136 +66,136 @@ abstract contract KernelAdapter {
         kernel = kernel_;
     }
 
-    /// @notice     Modifier to restrict functions to be called only by kernel.
+    /// @notice Modifier to restrict functions to be called only by kernel.
     modifier onlyKernel() {
         if (msg.sender != address(kernel)) revert KernelAdapter_OnlyKernel(msg.sender);
         _;
     }
 
-    /// @notice     Function used by kernel when migrating to a new kernel.
+    /// @notice Function used by kernel when migrating to a new kernel.
     function changeKernel(Kernel newKernel_) external onlyKernel {
         kernel = newKernel_;
     }
 }
 
-/// @notice     Base level extension of the kernel. Modules act as independent state components to be
-/// @dev        interacted with and mutated through policies.
-/// @dev        Modules are installed and uninstalled via the executor.
+/// @notice Base level extension of the kernel. Modules act as independent state components to be
+///         interacted with and mutated through policies.
+/// @dev    Modules are installed and uninstalled via the executor.
 abstract contract Module is KernelAdapter {
     constructor(Kernel kernel_) KernelAdapter(kernel_) {}
 
-    /// @notice     Modifier to restrict which policies have access to module functions.
+    /// @notice Modifier to restrict which policies have access to module functions.
     modifier permissioned() {
         if (!kernel.modulePermissions(KEYCODE(), Policy(msg.sender), msg.sig))
             revert Module_PolicyNotPermitted(msg.sender);
         _;
     }
 
-    /// @notice     5 byte identifier for a module.
+    /// @notice 5 byte identifier for a module.
     function KEYCODE() public pure virtual returns (Keycode) {}
 
-    /// @notice     Returns which version of a module is being implemented. Uses semantic versioning.
-    /// @return     major - Major version upgrade indicates breaking change to the interface.
-    /// @return     minor - Minor version change retains backward-compatible interface. 
-    /// @return     bugfix - Bugfix that retains backward-compatible interface.
+    /// @notice Returns which semantic version of a module is being implemented.
+    /// @return major - Major version upgrade indicates breaking change to the interface.
+    /// @return minor - Minor version change retains backward-compatible interface. 
+    /// @return bugfix - Bugfix that retains backward-compatible interface.
     function VERSION() external pure virtual returns (uint8 major, uint8 minor, uint8 patch) {}
 
-    /// @notice     Initialization function for the module
-    /// @dev        This function is called when the module is installed or upgraded by the kernel.
-    /// @dev        MUST BE GATED BY onlyKernel. Used to encompass any initialization or upgrade logic.
+    /// @notice Initialization function for the module
+    /// @dev    This function is called when the module is installed or upgraded by the kernel.
+    /// @dev    MUST BE GATED BY onlyKernel. Used to encompass any initialization or upgrade logic.
     function INIT() external virtual onlyKernel {}
 }
 
-/// @notice     Policies are application logic and external interface for the kernel and installed modules.
-/// @dev        Policies are activated and deactivated in the kernel by the executor.
-/// @dev        Module dependencies and function permissions must be defined in appropriate functions.
+/// @notice Policies are application logic and external interface for the kernel and installed modules.
+/// @dev    Policies are activated and deactivated in the kernel by the executor.
+/// @dev    Module dependencies and function permissions must be defined in appropriate functions.
 abstract contract Policy is KernelAdapter {
-    /// @notice     Denote if a policy is activated or not.
+    /// @notice Denote if a policy is activated or not.
     bool public isActive;
 
     constructor(Kernel kernel_) KernelAdapter(kernel_) {}
 
-    /// @notice     Modifier to restrict policy function access to certain addresses with a role.
-    /// @dev        Roles are defined in the policy and set by the kernel admin.
+    /// @notice Modifier to restrict policy function access to certain addresses with a role.
+    /// @dev    Roles are defined in the policy and set by the kernel admin.
     modifier onlyRole(bytes32 role_) {
         Role role = toRole(role_);
         if (!kernel.hasRole(msg.sender, role)) revert Policy_OnlyRole(role);
         _;
     }
 
-    /// @notice     Function to let kernel grant or revoke active status.
+    /// @notice Function to let kernel grant or revoke active status.
     function setActiveStatus(bool activate_) external onlyKernel {
         isActive = activate_;
     }
 
-    /// @notice     Function to grab module address from a given keycode.
+    /// @notice Function to grab module address from a given keycode.
     function getModuleAddress(Keycode keycode_) internal view returns (address) {
         address moduleForKeycode = address(kernel.getModuleForKeycode(keycode_));
         if (moduleForKeycode == address(0)) revert Policy_ModuleDoesNotExist(keycode_);
         return moduleForKeycode;
     }
 
-    /// @notice     Define module dependencies for this policy.
-    /// @return     dependencies - Keycode array of module dependencies.
+    /// @notice Define module dependencies for this policy.
+    /// @return dependencies - Keycode array of module dependencies.
     function configureDependencies() external virtual returns (Keycode[] memory dependencies) {}
 
-    /// @notice     Function called by kernel to set module function permissions.
-    /// @return     requests - Array of keycodes and function selectors for requested permissions.
+    /// @notice Function called by kernel to set module function permissions.
+    /// @return requests - Array of keycodes and function selectors for requested permissions.
     function requestPermissions() external view virtual returns (Permissions[] memory requests) {}
 }
 
-/// @notice     Main contract that acts as a central component registry for the protocol.
-/// @dev        The kernel manages modules, policies and defined roles. The kernel is mutated via predefined Actions,
-/// @dev        which are input from any address assigned as the executor. The executor can be changed as needed.
+/// @notice Main contract that acts as a central component registry for the protocol.
+/// @dev    The kernel manages modules, policies and defined roles. The kernel is mutated via predefined Actions,
+/// @dev    which are input from any address assigned as the executor. The executor can be changed as needed.
 contract Kernel {
 
     /*//////////////////////////////////////////////////////////////
                           PRIVILEGED ADDRESSES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice     Address that is able to initiate Actions in the kernel. Can be assigned to a multisig or governance contract.
+    /// @notice Address that is able to initiate Actions in the kernel. Can be assigned to a multisig or governance contract.
     address public executor;
 
-    /// @notice     Address that is responsible for assigning policy-defined roles to addresses.
+    /// @notice Address that is responsible for assigning policy-defined roles to addresses.
     address public admin;
 
     /*//////////////////////////////////////////////////////////////
                            MODULE MANAGEMENT
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice     Array of all modules currently installed.
+    /// @notice Array of all modules currently installed.
     Keycode[] public allKeycodes;
 
-    /// @notice     Mapping of module address to keycode.
+    /// @notice Mapping of module address to keycode.
     mapping(Keycode => Module) public getModuleForKeycode;
     
-    /// @notice     Mapping of keycode to module address.
+    /// @notice Mapping of keycode to module address.
     mapping(Module => Keycode) public getKeycodeForModule;
 
-    /// @notice     Mapping of a keycode to all of its policy dependents. Used to efficiently reconfigure policy dependencies.
+    /// @notice Mapping of a keycode to all of its policy dependents. Used to efficiently reconfigure policy dependencies.
     mapping(Keycode => Policy[]) public moduleDependents;
 
-    /// @notice     Helper for module dependent arrays. Prevents the need to loop through array.
+    /// @notice Helper for module dependent arrays. Prevents the need to loop through array.
     mapping(Keycode => mapping(Policy => uint256)) public getDependentIndex;
 
-    /// @notice     Module <> Policy Permissions.
-    /// @dev        Policy -> Keycode -> Function Selector -> bool for permission
+    /// @notice Module <> Policy Permissions.
+    /// @dev    Policy -> Keycode -> Function Selector -> bool for permission
     mapping(Keycode => mapping(Policy => mapping(bytes4 => bool))) public modulePermissions;
 
     /*//////////////////////////////////////////////////////////////
                            POLICY MANAGEMENT
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice     List of all active policies
+    /// @notice List of all active policies
     Policy[] public activePolicies;
 
-    /// @notice     Helper to get active policy quickly. Prevents need to loop through array.
+    /// @notice Helper to get active policy quickly. Prevents need to loop through array.
     mapping(Policy => uint256) public getPolicyIndex;
 
-    /// @notice     Mapping for if an address has a policy-defined role.
+    /// @notice Mapping for if an address has a policy-defined role.
     mapping(address => mapping(Role => bool)) public hasRole;
 
-    /// @notice     Mapping for if role exists.
+    /// @notice Mapping for if role exists.
     mapping(Role => bool) public isRole;
 
     /*//////////////////////////////////////////////////////////////
@@ -225,19 +221,19 @@ contract Kernel {
         admin = msg.sender;
     }
 
-    /// @notice     Modifier to check if caller is the executor.
+    /// @notice Modifier to check if caller is the executor.
     modifier onlyExecutor() {
         if (msg.sender != executor) revert Kernel_OnlyExecutor(msg.sender);
         _;
     }
 
-    /// @notice     Modifier to check if caller is the roles admin.
+    /// @notice Modifier to check if caller is the roles admin.
     modifier onlyAdmin() {
         if (msg.sender != admin) revert Kernel_OnlyAdmin(msg.sender);
         _;
     }
 
-    /// @notice     Main kernel function. Initiates state changes to kernel depending on Action passed in.
+    /// @notice Main kernel function. Initiates state changes to kernel depending on Action passed in.
     function executeAction(Actions action_, address target_) external onlyExecutor {
         if (action_ == Actions.InstallModule) {
             ensureContract(target_);
@@ -351,9 +347,9 @@ contract Kernel {
         policy_.setActiveStatus(false);
     }
 
-    /// @notice     WARNING: ACTION WILL BRICK THIS KERNEL. All functionality will move to the new kernel.
-    /// @dev        New kernel must add in all of the modules and policies via executeAction.
-    /// @dev        NOTE: Data does not get cleared from this kernel.
+    /// @notice All functionality will move to the new kernel. WARNING: ACTION WILL BRICK THIS KERNEL.
+    /// @dev    New kernel must add in all of the modules and policies via executeAction.
+    /// @dev    NOTE: Data does not get cleared from this kernel.
     function _migrateKernel(Kernel newKernel_) internal {
         uint256 keycodeLen = allKeycodes.length;
         for (uint256 i; i < keycodeLen; ) {
@@ -441,7 +437,7 @@ contract Kernel {
                           ROLES ADMIN FUNCTION
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice     Function to grant policy-defined roles to some address. Can only be called by admin.
+    /// @notice Function to grant policy-defined roles to some address. Can only be called by admin.
     function grantRole(Role role_, address addr_) public onlyAdmin {
         if (hasRole[addr_][role_]) revert Kernel_AddressAlreadyHasRole(addr_, role_);
 
@@ -453,7 +449,7 @@ contract Kernel {
         emit RoleGranted(role_, addr_);
     }
 
-    /// @notice     Function to revoke policy-defined roles from some address. Can only be called by admin.
+    /// @notice Function to revoke policy-defined roles from some address. Can only be called by admin.
     function revokeRole(Role role_, address addr_) public onlyAdmin {
         if (!isRole[role_]) revert Kernel_RoleDoesNotExist(role_);
         if (!hasRole[addr_][role_]) revert Kernel_AddressDoesNotHaveRole(addr_, role_);

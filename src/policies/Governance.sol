@@ -73,7 +73,7 @@ contract OlympusGovernance is Policy {
         onlyKernel
         returns (Permissions[] memory requests)
     {
-        requests = new Permissions[](4);
+        requests = new Permissions[](2);
         requests[0] = Permissions(INSTR.KEYCODE(), INSTR.store.selector);
         requests[1] = Permissions(VOTES.KEYCODE(), VOTES.transferFrom.selector);
     }
