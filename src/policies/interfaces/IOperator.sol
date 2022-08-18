@@ -36,32 +36,32 @@ interface IOperator {
 
     /* ========== HEART FUNCTIONS ========== */
 
-    /// @notice     Executes market operations logic.
-    /// @notice     Access restricted
-    /// @dev        This function is triggered by a keeper on the Heart contract.
+    /// @notice Executes market operations logic.
+    /// @notice Access restricted
+    /// @dev    This function is triggered by a keeper on the Heart contract.
     function operate() external;
 
     /* ========== OPEN MARKET OPERATIONS (WALL) ========== */
 
-    /// @notice              Swap at the current wall prices
-    /// @param tokenIn_      Token to swap into the wall
-    ///                      If OHM: swap at the low wall price for Reserve
-    ///                      If Reserve: swap at the high wall price for OHM
-    /// @param amountIn_     Amount of tokenIn to swap
-    /// @param minAmountOut_ Minimum amount of opposite token to receive
-    /// @return amountOut    Amount of opposite token received
+    /// @notice Swap at the current wall prices
+    /// @param  tokenIn_ - Token to swap into the wall
+    ///         - OHM: swap at the low wall price for Reserve
+    ///         - Reserve: swap at the high wall price for OHM
+    /// @param  amountIn_ - Amount of tokenIn to swap
+    /// @param  minAmountOut_ - Minimum amount of opposite token to receive
+    /// @return amountOut - Amount of opposite token received
     function swap(
         ERC20 tokenIn_,
         uint256 amountIn_,
         uint256 minAmountOut_
     ) external returns (uint256 amountOut);
 
-    /// @notice             Returns the amount to be received from a swap
-    /// @param tokenIn_     Token to swap into the wall
-    ///                     If OHM: swap at the low wall price for Reserve
-    ///                     If Reserve: swap at the high wall price for OHM
-    /// @param amountIn_    Amount of tokenIn to swap
-    /// @return             Amount of opposite token received
+    /// @notice Returns the amount to be received from a swap
+    /// @param  tokenIn_ - Token to swap into the wall
+    ///         - If OHM: swap at the low wall price for Reserve
+    ///         - If Reserve: swap at the high wall price for OHM
+    /// @param  amountIn_ - Amount of tokenIn to swap
+    /// @return Amount of opposite token received
     function getAmountOut(ERC20 tokenIn_, uint256 amountIn_) external view returns (uint256);
 
     /* ========== OPERATOR CONFIGURATION ========== */

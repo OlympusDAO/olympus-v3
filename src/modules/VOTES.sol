@@ -18,10 +18,12 @@ contract OlympusVotes is Module, ERC20 {
         ERC20("OlympusDAO Dummy Voting Tokens", "VOTES", 0)
     {}
 
+    /// @inheritdoc Module
     function KEYCODE() public pure override returns (Keycode) {
         return toKeycode("VOTES");
     }
 
+    /// @inheritdoc Module
     function VERSION()
         external
         pure
