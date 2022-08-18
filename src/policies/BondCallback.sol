@@ -44,6 +44,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         ohm = ohm_;
     }
 
+    /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("TRSRY");
@@ -56,6 +57,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         ohm.safeApprove(address(MINTR), type(uint256).max);
     }
 
+    /// @inheritdoc Policy
     function requestPermissions()
         external
         view
@@ -134,21 +136,19 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
             revert Callback_MarketNotSupported(id_);
         }
 
-        /// Store amounts in/out
-        /// @dev updated after internal call so previous balances are available to check against
+        // Store amounts in/out.
+        // Updated after internal call so previous balances are available to check against
         priorBalances[quoteToken] = quoteToken.balanceOf(address(this));
         priorBalances[payoutToken] = payoutToken.balanceOf(address(this));
         _amountsPerMarket[id_][0] += inputAmount_;
         _amountsPerMarket[id_][1] += outputAmount_;
 
-        /// Check if the market is deployed by range operator and update capacity if so
+        // Check if the market is deployed by range operator and update capacity if so
         operator.bondPurchase(id_, outputAmount_);
     }
 
-    /* ========== WITHDRAW TOKENS ========== */
-
-    /// @notice         Send tokens to the TRSRY in a batch
-    /// @param tokens_  Array of tokens to send
+    /// @notice Send tokens to the TRSRY in a batch
+    /// @param  tokens_ - Array of tokens to send
     function batchToTreasury(ERC20[] memory tokens_) external onlyRole("callback_admin") {
         ERC20 token;
         uint256 balance;
@@ -180,10 +180,13 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         return (marketAmounts[0], marketAmounts[1]);
     }
 
-    /* ========== ADMIN FUNCTIONS =========== */
-    /// @notice             Sets the operator contract for the callback to use to report bond purchases
-    /// @notice             Must be set before the callback is used
-    /// @param operator_    Address of the Operator contract
+    /*//////////////////////////////////////////////////////////////
+                            ADMIN FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Sets the operator contract for the callback to use to report bond purchases
+    /// @notice Must be set before the callback is used
+    /// @param  operator_ - Address of the Operator contract
     function setOperator(Operator operator_) external onlyRole("callback_admin") {
         if (address(operator_) == address(0)) revert Callback_InvalidParams();
         operator = operator_;

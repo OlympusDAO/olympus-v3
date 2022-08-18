@@ -21,17 +21,12 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     using TransferHelper for ERC20;
 
-    /* ========== ERRORS =========== */
     error Heart_OutOfCycle();
     error Heart_BeatStopped();
     error Heart_InvalidParams();
 
-    /* ========== EVENTS =========== */
-
     event Beat(uint256 timestamp);
     event RewardTokenUpdated(ERC20 token);
-
-    /* ========== STATE VARIABLES ========== */
 
     /// @notice Status of the Heart, false = stopped, true = beating
     bool public active;
@@ -45,13 +40,15 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     /// @notice Reward token address that users are sent for beating the Heart
     ERC20 public rewardToken;
 
-    /// Modules
+    // Modules
     OlympusPrice internal PRICE;
 
-    /// Policies
+    // Policies
     IOperator internal _operator;
 
-    /* ========== CONSTRUCTOR ========== */
+    /*//////////////////////////////////////////////////////////////
+                            POLICY INTERFACE
+    //////////////////////////////////////////////////////////////*/
 
     constructor(
         Kernel kernel_,
@@ -67,7 +64,7 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         reward = reward_;
     }
 
-    /* ========== FRAMEWORK CONFIGURATION ========== */
+    /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);
         dependencies[0] = toKeycode("PRICE");
@@ -75,6 +72,7 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
     }
 
+    /// @inheritdoc Policy
     function requestPermissions()
         external
         view
@@ -85,41 +83,46 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
     }
 
-    /* ========== KEEPER FUNCTIONS ========== */
+    /*//////////////////////////////////////////////////////////////
+                               CORE LOGIC
+    //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IHeart
     function beat() external nonReentrant {
         if (!active) revert Heart_BeatStopped();
         if (block.timestamp < lastBeat + frequency()) revert Heart_OutOfCycle();
 
-        /// Update the moving average on the Price module
+        // Update the moving average on the Price module
         PRICE.updateMovingAverage();
 
-        /// Trigger price range update and market operations
+        // Trigger price range update and market operations
         _operator.operate();
 
-        /// Update the last beat timestamp
+        // Update the last beat timestamp
         lastBeat += frequency();
 
-        /// Issue reward to sender
+        // Issue reward to sender
         _issueReward(msg.sender);
 
-        /// Emit event
         emit Beat(block.timestamp);
     }
 
-    /* ========== INTERNAL FUNCTIONS ========== */
     function _issueReward(address to_) internal {
         rewardToken.safeTransfer(to_, reward);
     }
 
-    /* ========== VIEW FUNCTIONS ========== */
+    /*//////////////////////////////////////////////////////////////
+                             VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
     /// @inheritdoc IHeart
     function frequency() public view returns (uint256) {
         return uint256(PRICE.observationFrequency());
     }
 
-    /* ========== ADMIN FUNCTIONS ========== */
+    /*//////////////////////////////////////////////////////////////
+                            ADMIN FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IHeart
     function resetBeat() external onlyRole("heart_admin") {
