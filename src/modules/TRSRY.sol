@@ -12,10 +12,8 @@ import "src/Kernel.sol";
 error TRSRY_NotApproved();
 error TRSRY_NoDebtOutstanding();
 
-/// @title TRSRY - OlympusTreasury
 /// @notice Treasury holds reserves, LP tokens and all other assets under the control
-/// of the protocol. Any contracts that need access to treasury assets should
-/// be whitelisted by governance and given proper role.
+///         of the protocol.
 contract OlympusTreasury is Module, ReentrancyGuard {
     using TransferHelper for ERC20;
 
@@ -30,13 +28,19 @@ contract OlympusTreasury is Module, ReentrancyGuard {
     event DebtRepaid(ERC20 indexed token_, address indexed policy_, uint256 amount_);
     event DebtSet(ERC20 indexed token_, address indexed policy_, uint256 amount_);
 
-    // user -> reserve -> amount
-    // infinite approval is max(uint256). Should be reserved monitored subsystems.
+    /// @notice Mapping of who is approved for withdrawal.
+    /// @dev    withdrawer -> token -> amount. Infinite approval is max(uint256).
     mapping(address => mapping(ERC20 => uint256)) public withdrawApproval;
 
-    // debt for address and token mapping
-    mapping(ERC20 => uint256) public totalDebt; // reserve -> totalDebt
-    mapping(ERC20 => mapping(address => uint256)) public reserveDebt; // TODO reserve -> debtor -> debt
+    /// @notice Total debt for token across all withdrawals.
+    mapping(ERC20 => uint256) public totalDebt;
+
+    /// @notice Debt for particular token and debtor address
+    mapping(ERC20 => mapping(address => uint256)) public reserveDebt;
+
+    /*//////////////////////////////////////////////////////////////
+                            MODULE INTERFACE
+    //////////////////////////////////////////////////////////////*/
 
     constructor(Kernel kernel_) Module(kernel_) {}
 
@@ -44,15 +48,28 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         return toKeycode("TRSRY");
     }
 
-    function VERSION() external pure override returns (uint8 major, uint8 minor) {
-        return (1, 0);
+    function VERSION()
+        external
+        pure
+        override
+        returns (
+            uint8 major,
+            uint8 minor,
+            uint8 bugfix
+        )
+    {
+        return (1, 0, 0);
     }
+
+    /*//////////////////////////////////////////////////////////////
+                               CORE LOGIC
+    //////////////////////////////////////////////////////////////*/
 
     function getReserveBalance(ERC20 token_) external view returns (uint256) {
         return token_.balanceOf(address(this)) + totalDebt[token_];
     }
 
-    // Set approval for specific addresses
+    /// @notice Sets approval for specific withdrawer addresses
     function setApprovalFor(
         address withdrawer_,
         ERC20 token_,
@@ -63,7 +80,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         emit ApprovedForWithdrawal(withdrawer_, token_, amount_);
     }
 
-    // Allow withdrawal of reserve funds from pre-approved addresses
+    /// @notice Allow withdrawal of reserve funds from pre-approved addresses.
     function withdrawReserves(
         address to_,
         ERC20 token_,
@@ -76,9 +93,11 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         emit Withdrawal(msg.sender, to_, token_, amount_);
     }
 
-    // Debt functions. Intended for use by policies (allocators).
+    /*//////////////////////////////////////////////////////////////
+                             DEBT FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
-    // Policy loaning function
+    /// @notice Pre-approved policies can get a loan to perform operations on treasury assets.
     function getLoan(ERC20 token_, uint256 amount_) external permissioned {
         _checkApproval(msg.sender, token_, amount_);
 
@@ -91,6 +110,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         emit DebtIncurred(token_, msg.sender, amount_);
     }
 
+    /// @notice Lets an address with debt repay their loan.
     function repayLoan(ERC20 token_, uint256 amount_) external nonReentrant {
         if (reserveDebt[token_][msg.sender] == 0) revert TRSRY_NoDebtOutstanding();
 
@@ -100,14 +120,14 @@ contract OlympusTreasury is Module, ReentrancyGuard {
 
         uint256 received = token_.balanceOf(address(this)) - prevBalance;
 
-        // Subtract debt to caller
+        // Subtract debt from caller
         reserveDebt[token_][msg.sender] -= received;
         totalDebt[token_] -= received;
 
         emit DebtRepaid(token_, msg.sender, received);
     }
 
-    // To be used as escape hatch for setting debt in special cases, like swapping reserves to another token
+    /// @notice An escape hatch for setting debt in special cases, like swapping reserves to another token.
     function setDebt(
         ERC20 token_,
         address debtor_,
@@ -115,7 +135,6 @@ contract OlympusTreasury is Module, ReentrancyGuard {
     ) external permissioned {
         uint256 oldDebt = reserveDebt[token_][debtor_];
 
-        // Set debt for debtor
         reserveDebt[token_][debtor_] = amount_;
 
         if (oldDebt < amount_) totalDebt[token_] += amount_ - oldDebt;
