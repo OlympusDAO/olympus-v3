@@ -48,6 +48,10 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         uint256 amountIn_,
         uint256 amountOut_
     );
+    event CushionFactorChanged(uint32 cushionFactor_);
+    event CushionParamsChanged(uint32 duration_, uint32 debtBuffer_, uint32 depositInterval_);
+    event ReserveFactorChanged(uint32 reserveFactor_);
+    event RegenParamsChanged(uint32 wait_, uint32 threshold_, uint32 observe_);
 
     /* ========== STATE VARIABLES ========== */
 
@@ -138,6 +142,11 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         });
 
         _status = Status({low: regen, high: regen});
+
+        emit CushionFactorChanged(configParams[0]);
+        emit CushionParamsChanged(configParams[1], configParams[2], configParams[3]);
+        emit ReserveFactorChanged(configParams[4]);
+        emit RegenParamsChanged(configParams[5], configParams[6], configParams[7]);
     }
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
@@ -510,6 +519,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
 
         /// Set factor
         _config.cushionFactor = cushionFactor_;
+
+        emit CushionFactorChanged(cushionFactor_);
     }
 
     /// @inheritdoc IOperator
@@ -529,6 +540,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         _config.cushionDuration = duration_;
         _config.cushionDebtBuffer = debtBuffer_;
         _config.cushionDepositInterval = depositInterval_;
+
+        emit CushionParamsChanged(duration_, debtBuffer_, depositInterval_);
     }
 
     /// @inheritdoc IOperator
@@ -538,6 +551,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
 
         /// Set factor
         _config.reserveFactor = reserveFactor_;
+
+        emit ReserveFactorChanged(reserveFactor_);
     }
 
     /// @inheritdoc IOperator
@@ -563,6 +578,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         _status.low.count = 0;
         _status.low.nextObservation = 0;
         _status.low.observations = new bool[](observe_);
+
+        emit RegenParamsChanged(wait_, threshold_, observe_);
     }
 
     /// @inheritdoc IOperator
@@ -715,11 +732,11 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     function _checkCushion(bool high_) internal {
         /// Check if the wall is down, if so ensure the cushion is also down
         /// Additionally, if wall is not down, but the wall capacity has dropped below the cushion capacity, take the cushion down
-        bool active = RANGE.active(high_);
+        bool sideActive = RANGE.active(high_);
         uint256 market = RANGE.market(high_);
         if (
-            !active ||
-            (active &&
+            !sideActive ||
+            (sideActive &&
                 auctioneer.isLive(market) &&
                 RANGE.capacity(high_) < auctioneer.currentCapacity(market))
         ) {

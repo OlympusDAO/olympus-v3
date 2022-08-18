@@ -103,7 +103,7 @@ contract RangeTest is Test {
     /// [X] only permitted policies can call these functions
 
     event WallUp(bool high, uint256 timestamp, uint256 capacity);
-    event WallDown(bool high, uint256 timestamp);
+    event WallDown(bool high, uint256 timestamp, uint256 capacity);
 
     function testCorrectness_updateCapacity() public {
         /// Confirm that the capacities are initialiized
@@ -126,12 +126,12 @@ contract RangeTest is Test {
 
         /// Update the capacities to below the threshold, expect events to emit, and the wall to be inactive
         vm.expectEmit(false, false, false, true);
-        emit WallDown(true, block.timestamp);
+        emit WallDown(true, block.timestamp, 10_000 * 1e18);
         vm.prank(writer);
         range.updateCapacity(true, 10_000 * 1e18);
 
         vm.expectEmit(false, false, false, true);
-        emit WallDown(false, block.timestamp);
+        emit WallDown(false, block.timestamp, 10_000 * 1e18);
         vm.prank(writer);
         range.updateCapacity(false, 10_000 * 1e18);
 

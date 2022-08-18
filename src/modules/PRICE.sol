@@ -23,8 +23,9 @@ contract OlympusPrice is Module {
     using FullMath for uint256;
 
     /* ========== EVENTS =========== */
-    event NewObservation(uint256 timestamp, uint256 price);
-
+    event NewObservation(uint256 timestamp_, uint256 price_, uint256 movingAverage_);
+    event MovingAverageDurationChanged(uint48 movingAverageDuration_);
+    event ObservationFrequencyChanged(uint48 observationFrequency_);
     /* ========== STATE VARIABLES ========== */
 
     /// @dev    Price feeds. Chainlink typically provides price feeds for an asset in ETH. Therefore, we use two price feeds against ETH, one for OHM and one for the Reserve asset, to calculate the relative price of OHM in the Reserve asset.
@@ -97,7 +98,10 @@ contract OlympusPrice is Module {
 
         // Store blank observations array
         observations = new uint256[](numObservations);
-        // nextObsIndex is initialized to 0
+        /// nextObsIndex is initialized to 0
+
+        emit MovingAverageDurationChanged(movingAverageDuration_);
+        emit ObservationFrequencyChanged(observationFrequency_);
     }
 
     /// @inheritdoc Module
@@ -148,7 +152,7 @@ contract OlympusPrice is Module {
         lastObservationTime = uint48(block.timestamp);
         nextObsIndex = (nextObsIndex + 1) % numObs;
 
-        emit NewObservation(block.timestamp, currentPrice);
+        emit NewObservation(block.timestamp, currentPrice, _movingAverage);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -260,6 +264,8 @@ contract OlympusPrice is Module {
         nextObsIndex = 0;
         movingAverageDuration = movingAverageDuration_;
         numObservations = uint32(newObservations);
+
+        emit MovingAverageDurationChanged(movingAverageDuration_);
     }
 
     /// @notice   Change the observation frequency of the moving average (i.e. how often a new observation is taken)
@@ -290,5 +296,7 @@ contract OlympusPrice is Module {
         nextObsIndex = 0;
         observationFrequency = observationFrequency_;
         numObservations = uint32(newObservations);
+
+        emit ObservationFrequencyChanged(observationFrequency_);
     }
 }

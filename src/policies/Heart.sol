@@ -25,8 +25,9 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     error Heart_BeatStopped();
     error Heart_InvalidParams();
 
-    event Beat(uint256 timestamp);
-    event RewardTokenUpdated(ERC20 token);
+    event Beat(uint256 timestamp_);
+    event RewardIssued(address to_, uint256 rewardAmount_);
+    event RewardUpdated(ERC20 token_, uint256 rewardAmount_);
 
     /// @notice Status of the Heart, false = stopped, true = beating
     bool public active;
@@ -109,6 +110,7 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
 
     function _issueReward(address to_) internal {
         rewardToken.safeTransfer(to_, reward);
+        emit RewardIssued(to_, reward);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -141,7 +143,7 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     {
         rewardToken = token_;
         reward = reward_;
-        emit RewardTokenUpdated(token_);
+        emit RewardUpdated(token_, reward_);
     }
 
     /// @inheritdoc IHeart

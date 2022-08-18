@@ -17,10 +17,18 @@ contract OlympusRange is Module {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
-    event WallUp(bool high, uint256 timestamp, uint256 capacity);
-    event WallDown(bool high, uint256 timestamp);
-    event CushionUp(bool high, uint256 timestamp, uint256 capacity);
-    event CushionDown(bool high, uint256 timestamp);
+    event WallUp(bool high_, uint256 timestamp_, uint256 capacity_);
+    event WallDown(bool high_, uint256 timestamp_, uint256 capacity_);
+    event CushionUp(bool high_, uint256 timestamp_, uint256 capacity_);
+    event CushionDown(bool high_, uint256 timestamp_);
+    event PricesChanged(
+        uint256 wallLowPrice_,
+        uint256 cushionLowPrice_,
+        uint256 cushionHighPrice_,
+        uint256 wallHighPrice_
+    );
+    event SpreadsChanged(uint256 cushionSpread_, uint256 wallSpread_);
+    event ThresholdFactorChanged(uint256 thresholdFactor_);
 
     struct Line {
         uint256 price; // Price for the specified level
@@ -93,6 +101,9 @@ contract OlympusRange is Module {
         thresholdFactor = rangeParams_[0];
         ohm = tokens_[0];
         reserve = tokens_[1];
+
+        emit SpreadsChanged(rangeParams_[1], rangeParams_[2]);
+        emit ThresholdFactorChanged(rangeParams_[0]);
     }
 
     /// @inheritdoc Module
@@ -133,10 +144,7 @@ contract OlympusRange is Module {
                 _range.high.active = false;
                 _range.high.lastActive = uint48(block.timestamp);
 
-                // // Set cushion to inactive
-                // updateMarket(true, type(uint256).max, 0);
-
-                emit WallDown(true, block.timestamp);
+                emit WallDown(true, block.timestamp, capacity_);
             }
         } else {
             // Update capacity
@@ -148,10 +156,7 @@ contract OlympusRange is Module {
                 _range.low.active = false;
                 _range.low.lastActive = uint48(block.timestamp);
 
-                // // Set cushion to inactive
-                // updateMarket(false, type(uint256).max, 0);
-
-                emit WallDown(false, block.timestamp);
+                emit WallDown(false, block.timestamp, capacity_);
             }
         }
     }
@@ -172,6 +177,13 @@ contract OlympusRange is Module {
         _range.cushion.high.price =
             (movingAverage_ * (FACTOR_SCALE + cushionSpread)) /
             FACTOR_SCALE;
+
+        emit PricesChanged(
+            _range.wall.low.price,
+            _range.cushion.low.price,
+            _range.cushion.high.price,
+            _range.wall.high.price
+        );
     }
 
     /// @notice Regenerate a side of the range to a specific capacity.
@@ -249,6 +261,8 @@ contract OlympusRange is Module {
         // Set spreads
         _range.wall.spread = wallSpread_;
         _range.cushion.spread = cushionSpread_;
+
+        emit SpreadsChanged(wallSpread_, cushionSpread_);
     }
 
     /// @notice Set the threshold factor for when a wall is considered "down".
@@ -258,6 +272,8 @@ contract OlympusRange is Module {
     function setThresholdFactor(uint256 thresholdFactor_) external permissioned {
         if (thresholdFactor_ > 10000 || thresholdFactor_ < 100) revert RANGE_InvalidParams();
         thresholdFactor = thresholdFactor_;
+
+        emit ThresholdFactorChanged(thresholdFactor_);
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -19,11 +19,22 @@ contract OlympusInstructions is Module {
 
     constructor(Kernel kernel_) Module(kernel_) {}
 
+    /// @inheritdoc Module
     function KEYCODE() public pure override returns (Keycode) {
         return toKeycode("INSTR");
     }
 
-    function VERSION() public pure override returns (uint8 major, uint8 minor) {
+    /// @inheritdoc Module
+    function VERSION()
+        public
+        pure
+        override
+        returns (
+            uint8 major,
+            uint8 minor,
+            uint8 bugfix
+        )
+    {
         return (1, 0, 0);
     }
 

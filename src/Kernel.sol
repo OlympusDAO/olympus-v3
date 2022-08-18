@@ -98,7 +98,7 @@ abstract contract Module is KernelAdapter {
     /// @return major - Major version upgrade indicates breaking change to the interface.
     /// @return minor - Minor version change retains backward-compatible interface. 
     /// @return bugfix - Bugfix that retains backward-compatible interface.
-    function VERSION() external pure virtual returns (uint8 major, uint8 minor, uint8 patch) {}
+    function VERSION() external pure virtual returns (uint8 major, uint8 minor, uint8 bugfix) {}
 
     /// @notice Initialization function for the module
     /// @dev    This function is called when the module is installed or upgraded by the kernel.
