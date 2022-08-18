@@ -3,8 +3,8 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 
-import {UserFactory} from "test-utils/UserFactory.sol";
-import {larping} from "test-utils/larping.sol";
+import {UserFactory} from "test/lib/UserFactory.sol";
+import {larping} from "test/lib/larping.sol";
 import {Quabi} from "test/lib/quabi/Quabi.sol";
 
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
@@ -112,7 +112,7 @@ contract MINTRTest is Test {
 }
 
 contract MockLegacyAuthority is IOlympusAuthority {
-    address kernel;
+    address internal kernel;
 
     constructor(address kernel_) {
         kernel = kernel_;

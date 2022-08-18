@@ -50,8 +50,8 @@ contract OlympusVotes is Module, ERC20 {
     }
 
     /// @notice Transfers are locked for this token.
-    // solhint-disable
-    function transfer(address to_, uint256 amount_) public override returns (bool) {
+    // solhint-disable-next-line no-unused-vars
+    function transfer(address to_, uint256 amount_) public pure override returns (bool) {
         revert VOTES_TransferDisabled();
         return true;
     }

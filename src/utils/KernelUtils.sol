@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.15;
+pragma solidity 0.8.15;
 
 import {Keycode, Role} from "../Kernel.sol";
 
@@ -7,22 +7,27 @@ error TargetNotAContract(address target_);
 error InvalidKeycode(Keycode keycode_);
 error InvalidRole(Role role_);
 
+// solhint-disable-next-line func-visibility
 function toKeycode(bytes5 keycode_) pure returns (Keycode) {
     return Keycode.wrap(keycode_);
 }
 
+// solhint-disable-next-line func-visibility
 function fromKeycode(Keycode keycode_) pure returns (bytes5) {
     return Keycode.unwrap(keycode_);
 }
 
+// solhint-disable-next-line func-visibility
 function toRole(bytes32 role_) pure returns (Role) {
     return Role.wrap(role_);
 }
 
+// solhint-disable-next-line func-visibility
 function fromRole(Role role_) pure returns (bytes32) {
     return Role.unwrap(role_);
 }
 
+// solhint-disable-next-line func-visibility
 function ensureContract(address target_) view {
     uint256 size;
     assembly {
@@ -31,6 +36,7 @@ function ensureContract(address target_) view {
     if (size == 0) revert TargetNotAContract(target_);
 }
 
+// solhint-disable-next-line func-visibility
 function ensureValidKeycode(Keycode keycode_) pure {
     bytes5 unwrapped = Keycode.unwrap(keycode_);
 
@@ -45,6 +51,7 @@ function ensureValidKeycode(Keycode keycode_) pure {
     }
 }
 
+// solhint-disable-next-line func-visibility
 function ensureValidRole(Role role_) pure {
     bytes32 unwrapped = Role.unwrap(role_);
 

@@ -35,6 +35,7 @@ contract MockModuleWriter is Policy {
     }
 
     /* ========== DELEGATE TO MODULE ========== */
+    // solhint-disable-next-line no-complex-fallback, payable-fallback
     fallback(bytes calldata input) external returns (bytes memory) {
         (bool success, bytes memory output) = address(_module).call(input);
         if (!success) {

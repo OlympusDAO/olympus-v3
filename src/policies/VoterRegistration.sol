@@ -49,7 +49,7 @@ contract VoterRegistration is Policy {
 
     /// @notice Burn votes from a wallet
     /// @param  wallet_ - The address losing the votes.
-    /// @param  amount_ - The amount of votes to burng to the wallet.
+    /// @param  amount_ - The amount of votes to burn from the wallet.
     function revokeVotesFrom(address wallet_, uint256 amount_) external onlyRole("voter_admin") {
         // Revoke the votes in the VOTES module
         VOTES.burnFrom(wallet_, amount_);

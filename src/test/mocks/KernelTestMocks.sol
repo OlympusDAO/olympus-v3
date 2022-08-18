@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.15;
+pragma solidity 0.8.15;
 
 import "src/Kernel.sol";
 
@@ -49,7 +49,7 @@ contract MockModule is Module {
 }
 
 contract UpgradedMockModule is Module {
-    MockModule _oldModule;
+    MockModule internal _oldModule;
     uint256 public publicState;
     uint256 public permissionedState;
 

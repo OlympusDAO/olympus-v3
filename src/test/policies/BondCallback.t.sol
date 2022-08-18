@@ -3,7 +3,7 @@ pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "test-utils/UserFactory.sol";
+import {UserFactory} from "test/lib/UserFactory.sol";
 
 import {BondFixedTermCDA} from "test/lib/bonds/BondFixedTermCDA.sol";
 import {BondAggregator} from "test/lib/bonds/BondAggregator.sol";
@@ -43,6 +43,7 @@ contract MockOhm is ERC20 {
     }
 }
 
+// solhint-disable-next-line max-states-count
 contract BondCallbackTest is Test {
     using FullMath for uint256;
 
