@@ -17,13 +17,9 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     using TransferHelper for ERC20;
 
-    /* ========== ERRORS ========== */
-
     error Callback_MarketNotSupported(uint256 id);
     error Callback_TokensNotReceived();
     error Callback_InvalidParams();
-
-    /* ========== STATE VARIABLES ========== */
 
     mapping(address => mapping(uint256 => bool)) public approvedMarkets;
     mapping(uint256 => uint256[2]) internal _amountsPerMarket;
@@ -35,7 +31,9 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     Operator public operator;
     ERC20 public ohm;
 
-    /* ========== CONSTRUCTOR ========== */
+    /*//////////////////////////////////////////////////////////////
+                            POLICY INTERFACE
+    //////////////////////////////////////////////////////////////*/
 
     constructor(
         Kernel kernel_,
@@ -45,8 +43,6 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         aggregator = aggregator_;
         ohm = ohm_;
     }
-
-    /* ========== FRAMEWORK CONFIGURATION ========== */
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
@@ -77,7 +73,9 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         requests[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
-    /* ========== WHITELISTING ========== */
+    /*//////////////////////////////////////////////////////////////
+                               CORE LOGIC
+    //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IBondCallback
     function whitelist(address teller_, uint256 id_)
@@ -95,8 +93,6 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
             TRSRY.setApprovalFor(address(this), payoutToken, type(uint256).max);
         }
     }
-
-    /* ========== CALLBACK ========== */
 
     /// @inheritdoc IBondCallback
     function callback(
@@ -169,7 +165,9 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         }
     }
 
-    /* ========== VIEW FUNCTIONS ========== */
+    /*//////////////////////////////////////////////////////////////
+                             VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IBondCallback
     function amountsForMarket(uint256 id_)
