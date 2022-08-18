@@ -96,9 +96,18 @@ abstract contract Module is KernelAdapter {
 
     /// @notice Returns which semantic version of a module is being implemented.
     /// @return major - Major version upgrade indicates breaking change to the interface.
-    /// @return minor - Minor version change retains backward-compatible interface. 
+    /// @return minor - Minor version change retains backward-compatible interface.
     /// @return bugfix - Bugfix that retains backward-compatible interface.
-    function VERSION() external pure virtual returns (uint8 major, uint8 minor, uint8 bugfix) {}
+    function VERSION()
+        external
+        pure
+        virtual
+        returns (
+            uint8 major,
+            uint8 minor,
+            uint8 bugfix
+        )
+    {}
 
     /// @notice Initialization function for the module
     /// @dev    This function is called when the module is installed or upgraded by the kernel.
@@ -148,7 +157,6 @@ abstract contract Policy is KernelAdapter {
 /// @dev    The kernel manages modules, policies and defined roles. The kernel is mutated via predefined Actions,
 /// @dev    which are input from any address assigned as the executor. The executor can be changed as needed.
 contract Kernel {
-
     /*//////////////////////////////////////////////////////////////
                           PRIVILEGED ADDRESSES
     //////////////////////////////////////////////////////////////*/
@@ -168,7 +176,7 @@ contract Kernel {
 
     /// @notice Mapping of module address to keycode.
     mapping(Keycode => Module) public getModuleForKeycode;
-    
+
     /// @notice Mapping of keycode to module address.
     mapping(Module => Keycode) public getKeycodeForModule;
 
