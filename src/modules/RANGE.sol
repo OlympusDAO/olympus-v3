@@ -8,9 +8,8 @@ import "src/Kernel.sol";
 
 error RANGE_InvalidParams();
 
-/// @title  Olympus Range Data
-/// @notice Olympus Range Data (Module) Contract
-/// @dev    The Olympus Range Data contract stores information about the Olympus Range market operations status.
+/// @notice Olympus Range data storage module
+/// @dev    The Olympus Range contract stores information about the Olympus Range market operations status.
 ///         It provides a standard interface for Range data, including range prices and capacities of each range side.
 ///         The data provided by this contract is used by the Olympus Range Operator to perform market operations.
 ///         The Olympus Range Data is updated each epoch by the Olympus Range Operator contract.
@@ -18,14 +17,10 @@ contract OlympusRange is Module {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
-    /* ========== EVENTS =========== */
-
     event WallUp(bool high, uint256 timestamp, uint256 capacity);
     event WallDown(bool high, uint256 timestamp);
     event CushionUp(bool high, uint256 timestamp, uint256 capacity);
     event CushionDown(bool high, uint256 timestamp);
-
-    /* ========== STRUCTS =========== */
 
     struct Line {
         uint256 price; // Price for the specified level
@@ -52,26 +47,24 @@ contract OlympusRange is Module {
         Band wall; // Data relevant to walls on both sides of the range
     }
 
-    /* ========== STATE VARIABLES ========== */
-
-    /// Range data singleton. See range().
+    // Range data singleton. See range().
     Range internal _range;
 
     /// @notice Threshold factor for the change, a percent in 2 decimals (i.e. 1000 = 10%). Determines how much of the capacity must be spent before the side is taken down.
     /// @dev    A threshold is required so that a wall is not "active" with a capacity near zero, but unable to be depleted practically (dust).
     uint256 public thresholdFactor;
 
-    /// Constants
     uint256 public constant FACTOR_SCALE = 1e4;
 
-    /// Tokens
     /// @notice OHM token contract address
     ERC20 public immutable ohm;
 
     /// @notice Reserve token contract address
     ERC20 public immutable reserve;
 
-    /* ========== CONSTRUCTOR ========== */
+    /*//////////////////////////////////////////////////////////////
+                            MODULE INTERFACE
+    //////////////////////////////////////////////////////////////*/
 
     constructor(
         Kernel kernel_,
@@ -102,66 +95,76 @@ contract OlympusRange is Module {
         reserve = tokens_[1];
     }
 
-    /* ========== FRAMEWORK CONFIGURATION ========== */
     /// @inheritdoc Module
     function KEYCODE() public pure override returns (Keycode) {
         return toKeycode("RANGE");
     }
 
-    function VERSION() external pure override returns (uint8 major, uint8 minor) {
-        return (1, 0);
+    /// @inheritdoc Module
+    function VERSION()
+        external
+        pure
+        override
+        returns (
+            uint8 major,
+            uint8 minor,
+            uint8 bugfix
+        )
+    {
+        return (1, 0, 0);
     }
 
-    /* ========== POLICY FUNCTIONS ========== */
-    /// @notice                 Update the capacity for a side of the range.
-    /// @notice                 Access restricted to activated policies.
-    /// @param high_            Specifies the side of the range to update capacity for (true = high side, false = low side).
-    /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
+    /*//////////////////////////////////////////////////////////////
+                               CORE LOGIC
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Update the capacity for a side of the range.
+    /// @notice Access restricted to activated policies.
+    /// @param  high_ - Specifies the side of the range to update capacity for (true = high side, false = low side).
+    /// @param  capacity_ - Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
     function updateCapacity(bool high_, uint256 capacity_) external permissioned {
         if (high_) {
-            /// Update capacity
+            // Update capacity
             _range.high.capacity = capacity_;
 
-            /// If the new capacity is below the threshold, deactivate the wall if they are currently active
+            // If the new capacity is below the threshold, deactivate the wall if they are currently active
             if (capacity_ < _range.high.threshold && _range.high.active) {
-                /// Set wall to inactive
+                // Set wall to inactive
                 _range.high.active = false;
                 _range.high.lastActive = uint48(block.timestamp);
 
-                // /// Set cushion to inactive
+                // // Set cushion to inactive
                 // updateMarket(true, type(uint256).max, 0);
 
-                /// Emit event
                 emit WallDown(true, block.timestamp);
             }
         } else {
-            /// Update capacity
+            // Update capacity
             _range.low.capacity = capacity_;
 
-            /// If the new capacity is below the threshold, deactivate the wall if they are currently active
+            // If the new capacity is below the threshold, deactivate the wall if they are currently active
             if (capacity_ < _range.low.threshold && _range.low.active) {
-                /// Set wall to inactive
+                // Set wall to inactive
                 _range.low.active = false;
                 _range.low.lastActive = uint48(block.timestamp);
 
-                // /// Set cushion to inactive
+                // // Set cushion to inactive
                 // updateMarket(false, type(uint256).max, 0);
 
-                /// Emit event
                 emit WallDown(false, block.timestamp);
             }
         }
     }
 
-    /// @notice                 Update the prices for the low and high sides.
-    /// @notice                 Access restricted to activated policies.
-    /// @param movingAverage_   Current moving average price to set range prices from.
+    /// @notice Update the prices for the low and high sides.
+    /// @notice Access restricted to activated policies.
+    /// @param  movingAverage_ - Current moving average price to set range prices from.
     function updatePrices(uint256 movingAverage_) external permissioned {
-        /// Cache the spreads
+        // Cache the spreads
         uint256 wallSpread = _range.wall.spread;
         uint256 cushionSpread = _range.cushion.spread;
 
-        /// Calculate new wall and cushion values from moving average and spread
+        // Calculate new wall and cushion values from moving average and spread
         _range.wall.low.price = (movingAverage_ * (FACTOR_SCALE - wallSpread)) / FACTOR_SCALE;
         _range.wall.high.price = (movingAverage_ * (FACTOR_SCALE + wallSpread)) / FACTOR_SCALE;
 
@@ -171,15 +174,15 @@ contract OlympusRange is Module {
             FACTOR_SCALE;
     }
 
-    /// @notice                 Regenerate a side of the range to a specific capacity.
-    /// @notice                 Access restricted to activated policies.
-    /// @param high_            Specifies the side of the range to regenerate (true = high side, false = low side).
-    /// @param capacity_        Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
+    /// @notice Regenerate a side of the range to a specific capacity.
+    /// @notice Access restricted to activated policies.
+    /// @param  high_ - Specifies the side of the range to regenerate (true = high side, false = low side).
+    /// @param  capacity_ - Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
     function regenerate(bool high_, uint256 capacity_) external permissioned {
         uint256 threshold = (capacity_ * thresholdFactor) / FACTOR_SCALE;
 
         if (high_) {
-            /// Re-initialize the high side
+            // Re-initialize the high side
             _range.high = Side({
                 active: true,
                 lastActive: uint48(block.timestamp),
@@ -188,7 +191,7 @@ contract OlympusRange is Module {
                 market: _range.high.market
             });
         } else {
-            /// Reinitialize the low side
+            // Reinitialize the low side
             _range.low = Side({
                 active: true,
                 lastActive: uint48(block.timestamp),
@@ -201,27 +204,26 @@ contract OlympusRange is Module {
         emit WallUp(high_, block.timestamp, capacity_);
     }
 
-    /// @notice                 Update the market ID (cushion) for a side of the range.
-    /// @notice                 Access restricted to activated policies.
-    /// @param high_            Specifies the side of the range to update market for (true = high side, false = low side).
-    /// @param market_          Market ID to set for the side.
-    /// @param marketCapacity_  Amount to set the last market capacity to (OHM tokens for high side, Reserve tokens for low side).
+    /// @notice Update the market ID (cushion) for a side of the range.
+    /// @notice Access restricted to activated policies.
+    /// @param  high_ - Specifies the side of the range to update market for (true = high side, false = low side).
+    /// @param  market_ - Market ID to set for the side.
+    /// @param  marketCapacity_ - Amount to set the last market capacity to (OHM tokens for high side, Reserve tokens for low side).
     function updateMarket(
         bool high_,
         uint256 market_,
         uint256 marketCapacity_
     ) public permissioned {
-        /// If market id is max uint256, then marketCapacity must be 0
+        // If market id is max uint256, then marketCapacity must be 0
         if (market_ == type(uint256).max && marketCapacity_ != 0) revert RANGE_InvalidParams();
 
-        /// Store updated state
+        // Store updated state
         if (high_) {
             _range.high.market = market_;
         } else {
             _range.low.market = market_;
         }
 
-        /// Emit events
         if (market_ == type(uint256).max) {
             emit CushionDown(high_, block.timestamp);
         } else {
@@ -229,13 +231,13 @@ contract OlympusRange is Module {
         }
     }
 
-    /// @notice                 Set the wall and cushion spreads.
-    /// @notice                 Access restricted to activated policies.
-    /// @param cushionSpread_   Percent spread to set the cushions at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
-    /// @param wallSpread_      Percent spread to set the walls at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
-    /// @dev The new spreads will not go into effect until the next time updatePrices() is called.
+    /// @notice Set the wall and cushion spreads.
+    /// @notice Access restricted to activated policies.
+    /// @param  cushionSpread_ - Percent spread to set the cushions at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
+    /// @param  wallSpread_ - Percent spread to set the walls at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
+    /// @dev    The new spreads will not go into effect until the next time updatePrices() is called.
     function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external permissioned {
-        /// Confirm spreads are within allowed values
+        // Confirm spreads are within allowed values
         if (
             wallSpread_ > 10000 ||
             wallSpread_ < 100 ||
@@ -244,32 +246,31 @@ contract OlympusRange is Module {
             cushionSpread_ > wallSpread_
         ) revert RANGE_InvalidParams();
 
-        /// Set spreads
+        // Set spreads
         _range.wall.spread = wallSpread_;
         _range.cushion.spread = cushionSpread_;
     }
 
-    /// @notice                 Set the threshold factor for when a wall is considered "down".
-    /// @notice                 Access restricted to activated policies.
-    /// @param thresholdFactor_ Percent of capacity that the wall should close below, assumes 2 decimals (i.e. 1000 = 10%).
-    /// @dev The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
+    /// @notice Set the threshold factor for when a wall is considered "down".
+    /// @notice Access restricted to activated policies.
+    /// @param  thresholdFactor_ - Percent of capacity that the wall should close below, assumes 2 decimals (i.e. 1000 = 10%).
+    /// @dev    The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
     function setThresholdFactor(uint256 thresholdFactor_) external permissioned {
-        /// Confirm threshold factor is within allowed values
         if (thresholdFactor_ > 10000 || thresholdFactor_ < 100) revert RANGE_InvalidParams();
-
-        /// Set threshold factor
         thresholdFactor = thresholdFactor_;
     }
 
-    /* ========== VIEW FUNCTIONS ========== */
+    /*//////////////////////////////////////////////////////////////
+                             VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Get the full Range data in a struct.
     function range() external view returns (Range memory) {
         return _range;
     }
 
-    /// @notice         Get the capacity for a side of the range.
-    /// @param high_    Specifies the side of the range to get capacity for (true = high side, false = low side).
+    /// @notice Get the capacity for a side of the range.
+    /// @param  high_ - Specifies the side of the range to get capacity for (true = high side, false = low side).
     function capacity(bool high_) external view returns (uint256) {
         if (high_) {
             return _range.high.capacity;
@@ -278,8 +279,8 @@ contract OlympusRange is Module {
         }
     }
 
-    /// @notice         Get the status of a side of the range (whether it is active or not).
-    /// @param high_    Specifies the side of the range to get status for (true = high side, false = low side).
+    /// @notice Get the status of a side of the range (whether it is active or not).
+    /// @param  high_ - Specifies the side of the range to get status for (true = high side, false = low side).
     function active(bool high_) external view returns (bool) {
         if (high_) {
             return _range.high.active;
@@ -288,9 +289,9 @@ contract OlympusRange is Module {
         }
     }
 
-    /// @notice         Get the price for the wall or cushion for a side of the range.
-    /// @param wall_    Specifies the band to get the price for (true = wall, false = cushion).
-    /// @param high_    Specifies the side of the range to get the price for (true = high side, false = low side).
+    /// @notice Get the price for the wall or cushion for a side of the range.
+    /// @param  wall_ - Specifies the band to get the price for (true = wall, false = cushion).
+    /// @param  high_ - Specifies the side of the range to get the price for (true = high side, false = low side).
     function price(bool wall_, bool high_) external view returns (uint256) {
         if (wall_) {
             if (high_) {
@@ -307,8 +308,8 @@ contract OlympusRange is Module {
         }
     }
 
-    /// @notice        Get the spread for the wall or cushion band.
-    /// @param wall_   Specifies the band to get the spread for (true = wall, false = cushion).
+    /// @notice Get the spread for the wall or cushion band.
+    /// @param  wall_ - Specifies the band to get the spread for (true = wall, false = cushion).
     function spread(bool wall_) external view returns (uint256) {
         if (wall_) {
             return _range.wall.spread;
@@ -317,8 +318,8 @@ contract OlympusRange is Module {
         }
     }
 
-    /// @notice         Get the market ID for a side of the range.
-    /// @param high_    Specifies the side of the range to get market for (true = high side, false = low side).
+    /// @notice Get the market ID for a side of the range.
+    /// @param  high_ - Specifies the side of the range to get market for (true = high side, false = low side).
     function market(bool high_) external view returns (uint256) {
         if (high_) {
             return _range.high.market;
@@ -327,8 +328,8 @@ contract OlympusRange is Module {
         }
     }
 
-    /// @notice         Get the timestamp when the range was last active.
-    /// @param high_    Specifies the side of the range to get timestamp for (true = high side, false = low side).
+    /// @notice Get the timestamp when the range was last active.
+    /// @param  high_ - Specifies the side of the range to get timestamp for (true = high side, false = low side).
     function lastActive(bool high_) external view returns (uint256) {
         if (high_) {
             return _range.high.lastActive;

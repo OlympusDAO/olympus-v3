@@ -193,12 +193,13 @@ contract OlympusPrice is Module {
 
     /// @notice Get the moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
     function getMovingAverage() external view returns (uint256) {
-        /// Revert if not initialized
         if (!initialized) revert Price_NotInitialized();
         return _movingAverage;
     }
 
-    /* ========== ADMIN FUNCTIONS ========== */
+    /*//////////////////////////////////////////////////////////////
+                            ADMIN FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /// @notice Initialize the price module
     /// @notice Access restricted to activated policies
