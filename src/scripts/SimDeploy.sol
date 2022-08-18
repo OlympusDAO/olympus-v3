@@ -33,9 +33,6 @@ contract SimDeploy {
     using TransferHelper for ERC20;
     Kernel public kernel;
 
-    MockPriceFeed public ohmEthPriceFeed;
-    MockPriceFeed public reserveEthPriceFeed;
-
     /// Modules
     OlympusPrice public PRICE;
     OlympusRange public RANGE;
@@ -60,12 +57,6 @@ contract SimDeploy {
     ERC20 public constant reserve = ERC20(0x41e38e70a36150D08A8c97aEC194321b5eB545A5); // DAI goerli address
     ERC20 public constant rewardToken = ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
 
-    /// Bond system addresses
-    IBondAuctioneer public constant bondAuctioneer =
-        IBondAuctioneer(0xaE73A94b94F6E7aca37f4c79C4b865F1AF06A68b);
-    IBondAggregator public constant bondAggregator =
-        IBondAggregator(0xB4860B2c12C6B894B64471dFb5a631ff569e220e);
-
     /// Constructor
     constructor(
         address guardian_,
@@ -73,11 +64,18 @@ contract SimDeploy {
         DependencyDeploy dependencies_
     ) {
         // Load dependencies
-        ohmEthPriceFeed = dependencies_.ohmEthPriceFeed();
-        reserveEthPriceFeed = dependencies_.reserveEthPriceFeed();
-        /// TODO add bond contracts here
+        AggregatorV2V3Interface ohmEthPriceFeed = AggregatorV2V3Interface(
+            dependencies_.ohmEthPriceFeed()
+        );
+        AggregatorV2V3Interface reserveEthPriceFeed = AggregatorV2V3Interface(
+            dependencies_.reserveEthPriceFeed()
+        );
+
+        IBondAggregator bondAggregator = IBondAggregator(dependencies_.bondAggregator());
+        IBondAuctioneer bondAuctioneer = IBondAuctioneer(dependencies_.bondAuctioneer());
 
         /// Deploy tokens TODO
+        // ERC20 ohm = ERC20(address(new OlympusERC20Token(authority)));
 
         /// Deploy kernel first
         kernel = new Kernel(); // sender will be executor initially
@@ -99,6 +97,7 @@ contract SimDeploy {
             uint48(720) // 30 days sim time, 1 second = 1 hour
         );
 
+        /// TODO need to take inputs for configuring for each sim run
         RANGE = new OlympusRange(
             kernel,
             [ohm, reserve],
@@ -108,6 +107,7 @@ contract SimDeploy {
         /// Deploy policies
         callback = new BondCallback(kernel, bondAggregator, ohm);
 
+        /// TODO need to take inputs for configuring for each sim run
         operator = new Operator(
             kernel,
             bondAuctioneer,
@@ -214,6 +214,10 @@ contract DependencyDeploy {
     MockPriceFeed public reserveEthPriceFeed;
 
     // TODO add bond system in here, both can be deployed once and used for a number of sims
+    IBondAggregator public bondAggregator;
+    IBondAuctioneer public bondAuctioneer;
+
+    // TODO add OlympusAuthority for OHM token
 
     constructor() {
         // Deploy the price feeds
