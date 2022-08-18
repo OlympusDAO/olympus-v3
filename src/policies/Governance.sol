@@ -161,7 +161,7 @@ contract OlympusGovernance is Policy {
         bytes32 title_,
         string memory proposalURI_
     ) external {
-        if (VOTES.balanceOf(msg.sender) < ((VOTES.totalSupply() * SUBMISSION_REQUIREMENT) / 10000))
+        if (VOTES.balanceOf(msg.sender) * 10000 < VOTES.totalSupply() * SUBMISSION_REQUIREMENT)
             revert NotEnoughVotesToPropose();
 
         uint256 proposalId = INSTR.store(instructions_);
