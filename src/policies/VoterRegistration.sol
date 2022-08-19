@@ -1,56 +1,57 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+pragma solidity 0.8.15;
 
-// The Voter Registration Policy is a permissioned policy to mint and burn votes to arbitrary addresses
-pragma solidity 0.8.13;
-
-import {Kernel, Policy} from "src/Kernel.sol";
-import {Auth, Authority} from "solmate/auth/Auth.sol";
+import "src/Kernel.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
 
-contract VoterRegistration is Policy, Auth {
-    /////////////////////////////////////////////////////////////////////////////////
-    //                         Kernel Policy Configuration                         //
-    /////////////////////////////////////////////////////////////////////////////////
-
+/// @notice Policy to mint and burn votes to arbitrary addresses
+/// @dev A policy to distribute votes for OlympusGovernance during the test run.
+contract VoterRegistration is Policy {
     OlympusVotes public VOTES;
 
-    constructor(Kernel kernel_)
-        Policy(kernel_)
-        Auth(address(kernel_), Authority(address(0)))
-    {}
+    /*//////////////////////////////////////////////////////////////
+                            POLICY INTERFACE
+    //////////////////////////////////////////////////////////////*/
 
-    function configureReads() external override {
-        VOTES = OlympusVotes(getModuleAddress("VOTES"));
-        setAuthority(Authority(getModuleAddress("AUTHR")));
+    constructor(Kernel kernel_) Policy(kernel_) {}
+
+    /// @inheritdoc Policy
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](1);
+        dependencies[0] = toKeycode("VOTES");
+
+        VOTES = OlympusVotes(getModuleAddress(dependencies[0]));
     }
 
-    function requestRoles()
+    /// @inheritdoc Policy
+    function requestPermissions()
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Permissions[] memory permissions)
     {
-        roles = new Kernel.Role[](1);
-        roles[0] = VOTES.ISSUER();
+        permissions = new Permissions[](2);
+        permissions[0] = Permissions(VOTES.KEYCODE(), VOTES.mintTo.selector);
+        permissions[1] = Permissions(VOTES.KEYCODE(), VOTES.burnFrom.selector);
     }
 
-    /////////////////////////////////////////////////////////////////////////////////
-    //                               User Actions                                  //
-    /////////////////////////////////////////////////////////////////////////////////
+    /*//////////////////////////////////////////////////////////////
+                               CORE LOGIC
+    //////////////////////////////////////////////////////////////*/
 
-    function issueVotesTo(address wallet_, uint256 amount_)
-        external
-        requiresAuth
-    {
-        // issue the votes in the VOTES module
+    /// @notice Issue votes to a wallet
+    /// @param  wallet_ - The address receiving the votes.
+    /// @param  amount_ - The amount of votes to mint to the wallet.
+    function issueVotesTo(address wallet_, uint256 amount_) external onlyRole("voter_admin") {
+        // Issue the votes in the VOTES module
         VOTES.mintTo(wallet_, amount_);
     }
 
-    function revokeVotesFrom(address wallet_, uint256 amount_)
-        external
-        requiresAuth
-    {
-        // revoke the votes in the VOTES module
+    /// @notice Burn votes from a wallet
+    /// @param  wallet_ - The address losing the votes.
+    /// @param  amount_ - The amount of votes to burn from the wallet.
+    function revokeVotesFrom(address wallet_, uint256 amount_) external onlyRole("voter_admin") {
+        // Revoke the votes in the VOTES module
         VOTES.burnFrom(wallet_, amount_);
     }
 }

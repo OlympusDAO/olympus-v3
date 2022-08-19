@@ -59,9 +59,7 @@ interface IBondAuctioneer {
     /// @notice                 Creates a new bond market
     /// @param params_          Configuration data needed for market creation
     /// @return id              ID of new bond market
-    function createMarket(MarketParams memory params_)
-        external
-        returns (uint256);
+    function createMarket(MarketParams memory params_) external returns (uint256);
 
     /// @notice                 Disable existing bond market
     /// @notice                 Must be market owner
@@ -176,10 +174,7 @@ interface IBondAuctioneer {
     /// @param id_          ID of market
     /// @param referrer_    Address of referrer, used to get fees to calculate accurate payout amount.
     ///                     Inputting the zero address will take into account just the protocol fee.
-    function maxAmountAccepted(uint256 id_, address referrer_)
-        external
-        view
-        returns (uint256);
+    function maxAmountAccepted(uint256 id_, address referrer_) external view returns (uint256);
 
     /// @notice             Does market send payout immediately
     /// @param id_          Market ID to search for

@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-import {Auth, Authority} from "solmate/auth/Auth.sol";
 
 import {IHeart} from "policies/interfaces/IHeart.sol";
 import {IOperator} from "policies/interfaces/IOperator.sol";
 
 import {OlympusPrice} from "modules/PRICE.sol";
 
-import {Kernel, Policy} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -19,20 +18,16 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 /// @dev    The Olympus Heart contract provides keeper rewards to call the heart beat function which fuels
 ///         Olympus market operations. The Heart orchestrates state updates in the correct order to ensure
 ///         market operations use up to date information.
-contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
+contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     using TransferHelper for ERC20;
 
-    /* ========== ERRORS =========== */
     error Heart_OutOfCycle();
     error Heart_BeatStopped();
     error Heart_InvalidParams();
 
-    /* ========== EVENTS =========== */
-
-    event Beat(uint256 timestamp);
-    event RewardTokenUpdated(ERC20 token);
-
-    /* ========== STATE VARIABLES ========== */
+    event Beat(uint256 timestamp_);
+    event RewardIssued(address to_, uint256 rewardAmount_);
+    event RewardUpdated(ERC20 token_, uint256 rewardAmount_);
 
     /// @notice Status of the Heart, false = stopped, true = beating
     bool public active;
@@ -46,20 +41,22 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
     /// @notice Reward token address that users are sent for beating the Heart
     ERC20 public rewardToken;
 
-    /// Modules
+    // Modules
     OlympusPrice internal PRICE;
 
-    /// Policies
+    // Policies
     IOperator internal _operator;
 
-    /* ========== CONSTRUCTOR ========== */
+    /*//////////////////////////////////////////////////////////////
+                            POLICY INTERFACE
+    //////////////////////////////////////////////////////////////*/
 
     constructor(
         Kernel kernel_,
         IOperator operator_,
         ERC20 rewardToken_,
         uint256 reward_
-    ) Policy(kernel_) Auth(address(kernel_), Authority(address(0))) {
+    ) Policy(kernel_) {
         _operator = operator_;
 
         active = true;
@@ -68,80 +65,89 @@ contract Heart is IHeart, Policy, ReentrancyGuard, Auth {
         reward = reward_;
     }
 
-    /* ========== FRAMEWORK CONFIGURATION ========== */
-    function configureReads() external override {
-        PRICE = OlympusPrice(getModuleAddress("PRICE"));
-        setAuthority(Authority(getModuleAddress("AUTHR")));
+    /// @inheritdoc Policy
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](1);
+        dependencies[0] = toKeycode("PRICE");
+
+        PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
     }
 
-    function requestRoles()
+    /// @inheritdoc Policy
+    function requestPermissions()
         external
         view
         override
-        returns (Kernel.Role[] memory roles)
+        returns (Permissions[] memory permissions)
     {
-        roles = new Kernel.Role[](1);
-        roles[0] = PRICE.KEEPER();
+        permissions = new Permissions[](1);
+        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
     }
 
-    /* ========== KEEPER FUNCTIONS ========== */
+    /*//////////////////////////////////////////////////////////////
+                               CORE LOGIC
+    //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IHeart
     function beat() external nonReentrant {
         if (!active) revert Heart_BeatStopped();
         if (block.timestamp < lastBeat + frequency()) revert Heart_OutOfCycle();
 
-        /// Update the moving average on the Price module
+        // Update the moving average on the Price module
         PRICE.updateMovingAverage();
 
-        /// Trigger price range update and market operations
+        // Trigger price range update and market operations
         _operator.operate();
 
-        /// Update the last beat timestamp
+        // Update the last beat timestamp
         lastBeat += frequency();
 
-        /// Issue reward to sender
+        // Issue reward to sender
         _issueReward(msg.sender);
 
-        /// Emit event
         emit Beat(block.timestamp);
     }
 
-    /* ========== INTERNAL FUNCTIONS ========== */
     function _issueReward(address to_) internal {
         rewardToken.safeTransfer(to_, reward);
+        emit RewardIssued(to_, reward);
     }
 
-    /* ========== VIEW FUNCTIONS ========== */
+    /*//////////////////////////////////////////////////////////////
+                             VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
     /// @inheritdoc IHeart
     function frequency() public view returns (uint256) {
         return uint256(PRICE.observationFrequency());
     }
 
-    /* ========== ADMIN FUNCTIONS ========== */
+    /*//////////////////////////////////////////////////////////////
+                            ADMIN FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IHeart
-    function resetBeat() external requiresAuth {
+    function resetBeat() external onlyRole("heart_admin") {
         lastBeat = block.timestamp - frequency();
     }
 
     /// @inheritdoc IHeart
-    function toggleBeat() external requiresAuth {
+    function toggleBeat() external onlyRole("heart_admin") {
         active = !active;
     }
 
     /// @inheritdoc IHeart
     function setRewardTokenAndAmount(ERC20 token_, uint256 reward_)
         external
-        requiresAuth
+        onlyRole("heart_admin")
     {
         rewardToken = token_;
         reward = reward_;
-        emit RewardTokenUpdated(token_);
+        emit RewardUpdated(token_, reward_);
     }
 
     /// @inheritdoc IHeart
-    function withdrawUnspentRewards(ERC20 token_) external requiresAuth {
+    function withdrawUnspentRewards(ERC20 token_) external onlyRole("heart_admin") {
         token_.safeTransfer(msg.sender, token_.balanceOf(address(this)));
     }
 }

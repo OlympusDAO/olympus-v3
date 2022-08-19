@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
 import {BondBaseCDA, IBondAggregator, Authority} from "./bases/BondBaseCDA.sol";
 import {IBondTeller} from "./interfaces/IBondTeller.sol";
@@ -30,11 +30,7 @@ contract BondFixedTermCDA is BondBaseCDA {
 
     /* ========== MARKET FUNCTIONS ========== */
     /// @inheritdoc BondBaseCDA
-    function createMarket(MarketParams memory params_)
-        external
-        override
-        returns (uint256)
-    {
+    function createMarket(MarketParams memory params_) external override returns (uint256) {
         return _createMarket(params_);
     }
 }

@@ -8,4 +8,5 @@ prb-math/=lib/prb-math/contracts/
 solmate/=lib/solmate/src/
 test-utils/=lib/test-utils/src/
 bonds/=lib/bonds/src/
+balancer-v2/=lib/balancer-v2/
 test/=src/test/

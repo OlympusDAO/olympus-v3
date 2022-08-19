@@ -3,17 +3,14 @@ pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "test-utils/UserFactory.sol";
+import {UserFactory} from "test/lib/UserFactory.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
+import "src/Kernel.sol";
 
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
-import {OlympusAuthority} from "src/modules/AUTHR.sol";
 import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
-
-import {MockAuthGiver} from "../mocks/MockAuthGiver.sol";
 
 contract TreasuryCustodianTest is Test {
     UserFactory public userCreator;
@@ -22,8 +19,6 @@ contract TreasuryCustodianTest is Test {
     Kernel internal kernel;
 
     OlympusTreasury internal TRSRY;
-    OlympusAuthority internal AUTHR;
-    MockAuthGiver internal authGiver;
     TreasuryCustodian internal custodian;
 
     MockERC20 public ngmi;
@@ -42,54 +37,27 @@ contract TreasuryCustodianTest is Test {
 
         /// Deploy modules (some mocks)
         TRSRY = new OlympusTreasury(kernel);
-        AUTHR = new OlympusAuthority(kernel);
 
         /// Deploy policies
-        authGiver = new MockAuthGiver(kernel);
         custodian = new TreasuryCustodian(kernel);
 
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
-        kernel.executeAction(Actions.InstallModule, address(AUTHR));
 
         /// Approve policies`
-        kernel.executeAction(Actions.ApprovePolicy, address(custodian));
-        kernel.executeAction(Actions.ApprovePolicy, address(authGiver));
+        kernel.executeAction(Actions.ActivatePolicy, address(custodian));
 
-        /// Role 0 = Issuer
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(custodian),
-            custodian.increaseDebt.selector
-        );
-
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(custodian),
-            custodian.decreaseDebt.selector
-        );
-
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(custodian),
-            custodian.grantApproval.selector
-        );
-
-        authGiver.setRoleCapability(
-            uint8(0),
-            address(custodian),
-            custodian.revokePolicyApprovals.selector
-        );
-        /// Give issuer role to this test suite
-        authGiver.setUserRole(address(this), uint8(0));
+        /// Configure access control
+        kernel.grantRole(toRole("custodian"), address(this));
     }
 
     function test_UnauthorizedChangeDebt(uint256 amount_) public {
-        vm.expectRevert("UNAUTHORIZED");
+        bytes memory err = abi.encodeWithSelector(Policy_OnlyRole.selector, toRole("custodian"));
+        vm.expectRevert(err);
         vm.prank(randomWallet);
         custodian.increaseDebt(ngmi, randomWallet, amount_);
 
-        vm.expectRevert("UNAUTHORIZED");
+        vm.expectRevert(err);
         vm.prank(randomWallet);
         custodian.decreaseDebt(ngmi, randomWallet, amount_);
     }
@@ -116,13 +84,13 @@ contract TreasuryCustodianTest is Test {
         TreasuryCustodian dummyPolicy = new TreasuryCustodian(kernel);
         address dummy = address(dummyPolicy);
 
-        kernel.executeAction(Actions.ApprovePolicy, dummy);
+        kernel.executeAction(Actions.ActivatePolicy, dummy);
 
         custodian.grantApproval(dummy, ngmi, amount);
         assertEq(TRSRY.withdrawApproval(dummy, ngmi), amount);
 
-        // Terminate second custodian to test approval revocation
-        kernel.executeAction(Actions.TerminatePolicy, dummy);
+        // deactivate second custodian to test approval revocation
+        kernel.executeAction(Actions.DeactivatePolicy, dummy);
         ERC20[] memory tokens = new ERC20[](1);
         tokens[0] = ngmi;
 

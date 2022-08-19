@@ -1,2 +1,3 @@
-src/test/larps/LarpModuleWriter.sol
+src/test/lib/larping.sol
 src/test/mocks/MockModuleWriter.sol
+src/test/lib/quabi/Quabi.sol

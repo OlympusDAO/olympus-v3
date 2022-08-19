@@ -1,225 +1,396 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.13;
+pragma solidity 0.8.15;
 
-// ######################## ~ ERRORS ~ ########################
+import "src/utils/KernelUtils.sol";
 
-// MODULE
+// Kernel Adapter errors
+error KernelAdapter_OnlyKernel(address caller_);
 
-error Module_NotAuthorized();
+// Module errors
+error Module_PolicyNotPermitted(address policy_);
 
-// POLICY
+// Policy errors
+error Policy_OnlyRole(Role role_);
+error Policy_ModuleDoesNotExist(Keycode keycode_);
 
-error Policy_ModuleDoesNotExist(Kernel.Keycode keycode_);
-error Policy_OnlyKernel(address caller_);
-
-// KERNEL
-
+// Kernel errors
 error Kernel_OnlyExecutor(address caller_);
-error Kernel_ModuleAlreadyInstalled(Kernel.Keycode module_);
-error Kernel_InvalidModuleUpgrade(Kernel.Keycode module_);
-error Kernel_PolicyAlreadyApproved(address policy_);
-error Kernel_PolicyNotApproved(address policy_);
+error Kernel_OnlyAdmin(address caller_);
+error Kernel_ModuleAlreadyInstalled(Keycode module_);
+error Kernel_InvalidModuleUpgrade(Keycode module_);
+error Kernel_PolicyAlreadyActivated(address policy_);
+error Kernel_PolicyNotActivated(address policy_);
+error Kernel_AddressAlreadyHasRole(address addr_, Role role_);
+error Kernel_AddressDoesNotHaveRole(address addr_, Role role_);
+error Kernel_RoleDoesNotExist(Role role_);
 
-// ######################## ~ GLOBAL TYPES ~ ########################
+/*//////////////////////////////////////////////////////////////
+                          GLOBAL TYPES
+//////////////////////////////////////////////////////////////*/
 
+/// @notice Actions to trigger state changes in the kernel. Passed by the executor
 enum Actions {
     InstallModule,
     UpgradeModule,
-    ApprovePolicy,
-    TerminatePolicy,
-    ChangeExecutor
+    ActivatePolicy,
+    DeactivatePolicy,
+    MigrateKernel,
+    ChangeExecutor,
+    ChangeAdmin
 }
 
+/// @notice Used by executor to select an action and a target contract for a kernel action
 struct Instruction {
     Actions action;
     address target;
 }
 
-// ######################## ~ CONTRACT TYPES ~ ########################
+/// @notice Used to define which module functions a policy needs access to
+struct Permissions {
+    Keycode keycode;
+    bytes4 funcSelector;
+}
 
-abstract contract Module {
+type Keycode is bytes5;
+type Role is bytes32;
+
+/*//////////////////////////////////////////////////////////////
+                      COMPONENT ABSTRACTS
+//////////////////////////////////////////////////////////////*/
+
+/// @notice Generic adapter interface for kernel access in modules and policies.
+abstract contract KernelAdapter {
     Kernel public kernel;
 
     constructor(Kernel kernel_) {
         kernel = kernel_;
     }
 
-    modifier onlyRole(Kernel.Role role_) {
-        if (!kernel.hasRole(msg.sender, role_)) revert Module_NotAuthorized();
+    /// @notice Modifier to restrict functions to be called only by kernel.
+    modifier onlyKernel() {
+        if (msg.sender != address(kernel)) revert KernelAdapter_OnlyKernel(msg.sender);
         _;
     }
 
-    function KEYCODE() public pure virtual returns (Kernel.Keycode);
+    /// @notice Function used by kernel when migrating to a new kernel.
+    function changeKernel(Kernel newKernel_) external onlyKernel {
+        kernel = newKernel_;
+    }
+}
 
-    function ROLES() public pure virtual returns (Kernel.Role[] memory roles);
+/// @notice Base level extension of the kernel. Modules act as independent state components to be
+///         interacted with and mutated through policies.
+/// @dev    Modules are installed and uninstalled via the executor.
+abstract contract Module is KernelAdapter {
+    constructor(Kernel kernel_) KernelAdapter(kernel_) {}
 
-    /// @notice Specify which version of a module is being implemented.
-    /// @dev Minor version change retains interface. Major version upgrade indicates
-    ///      breaking change to the interface.
+    /// @notice Modifier to restrict which policies have access to module functions.
+    modifier permissioned() {
+        if (!kernel.modulePermissions(KEYCODE(), Policy(msg.sender), msg.sig))
+            revert Module_PolicyNotPermitted(msg.sender);
+        _;
+    }
+
+    /// @notice 5 byte identifier for a module.
+    function KEYCODE() public pure virtual returns (Keycode) {}
+
+    /// @notice Returns which semantic version of a module is being implemented.
+    /// @return major - Major version upgrade indicates breaking change to the interface.
+    /// @return minor - Minor version change retains backward-compatible interface.
+    /// @return bugfix - Bugfix that retains backward-compatible interface.
     function VERSION()
         external
         pure
         virtual
-        returns (uint8 major, uint8 minor)
+        returns (
+            uint8 major,
+            uint8 minor,
+            uint8 bugfix
+        )
     {}
+
+    /// @notice Initialization function for the module
+    /// @dev    This function is called when the module is installed or upgraded by the kernel.
+    /// @dev    MUST BE GATED BY onlyKernel. Used to encompass any initialization or upgrade logic.
+    function INIT() external virtual onlyKernel {}
 }
 
-abstract contract Policy {
-    Kernel public kernel;
+/// @notice Policies are application logic and external interface for the kernel and installed modules.
+/// @dev    Policies are activated and deactivated in the kernel by the executor.
+/// @dev    Module dependencies and function permissions must be defined in appropriate functions.
+abstract contract Policy is KernelAdapter {
+    /// @notice Denote if a policy is activated or not.
+    bool public isActive;
 
-    constructor(Kernel kernel_) {
-        kernel = kernel_;
-    }
+    constructor(Kernel kernel_) KernelAdapter(kernel_) {}
 
-    modifier onlyKernel() {
-        if (msg.sender != address(kernel)) revert Policy_OnlyKernel(msg.sender);
+    /// @notice Modifier to restrict policy function access to certain addresses with a role.
+    /// @dev    Roles are defined in the policy and set by the kernel admin.
+    modifier onlyRole(bytes32 role_) {
+        Role role = toRole(role_);
+        if (!kernel.hasRole(msg.sender, role)) revert Policy_OnlyRole(role);
         _;
     }
 
-    function configureReads() external virtual onlyKernel {}
+    /// @notice Function to let kernel grant or revoke active status.
+    function setActiveStatus(bool activate_) external onlyKernel {
+        isActive = activate_;
+    }
 
-    function requestRoles()
-        external
-        view
-        virtual
-        returns (Kernel.Role[] memory roles)
-    {}
-
-    function getModuleAddress(bytes5 keycode_) internal view returns (address) {
-        Kernel.Keycode keycode = Kernel.Keycode.wrap(keycode_);
-        address moduleForKeycode = kernel.getModuleForKeycode(keycode);
-
-        if (moduleForKeycode == address(0))
-            revert Policy_ModuleDoesNotExist(keycode);
-
+    /// @notice Function to grab module address from a given keycode.
+    function getModuleAddress(Keycode keycode_) internal view returns (address) {
+        address moduleForKeycode = address(kernel.getModuleForKeycode(keycode_));
+        if (moduleForKeycode == address(0)) revert Policy_ModuleDoesNotExist(keycode_);
         return moduleForKeycode;
     }
+
+    /// @notice Define module dependencies for this policy.
+    /// @return dependencies - Keycode array of module dependencies.
+    function configureDependencies() external virtual returns (Keycode[] memory dependencies) {}
+
+    /// @notice Function called by kernel to set module function permissions.
+    /// @return requests - Array of keycodes and function selectors for requested permissions.
+    function requestPermissions() external view virtual returns (Permissions[] memory requests) {}
 }
 
+/// @notice Main contract that acts as a central component registry for the protocol.
+/// @dev    The kernel manages modules, policies and defined roles. The kernel is mutated via predefined Actions,
+/// @dev    which are input from any address assigned as the executor. The executor can be changed as needed.
 contract Kernel {
-    // ######################## ~ TYPES ~ ########################
+    /*//////////////////////////////////////////////////////////////
+                          PRIVILEGED ADDRESSES
+    //////////////////////////////////////////////////////////////*/
 
-    type Role is bytes32;
-    type Keycode is bytes5;
-
-    // ######################## ~ VARS ~ ########################
-
+    /// @notice Address that is able to initiate Actions in the kernel. Can be assigned to a multisig or governance contract.
     address public executor;
 
-    // ######################## ~ DEPENDENCY MANAGEMENT ~ ########################
+    /// @notice Address that is responsible for assigning policy-defined roles to addresses.
+    address public admin;
 
-    address[] public allPolicies;
+    /*//////////////////////////////////////////////////////////////
+                           MODULE MANAGEMENT
+    //////////////////////////////////////////////////////////////*/
 
-    mapping(Keycode => address) public getModuleForKeycode; // get contract for module keycode
+    /// @notice Array of all modules currently installed.
+    Keycode[] public allKeycodes;
 
-    mapping(address => Keycode) public getKeycodeForModule; // get module keycode for contract
+    /// @notice Mapping of module address to keycode.
+    mapping(Keycode => Module) public getModuleForKeycode;
 
-    mapping(address => bool) public approvedPolicies; // whitelisted apps
+    /// @notice Mapping of keycode to module address.
+    mapping(Module => Keycode) public getKeycodeForModule;
 
+    /// @notice Mapping of a keycode to all of its policy dependents. Used to efficiently reconfigure policy dependencies.
+    mapping(Keycode => Policy[]) public moduleDependents;
+
+    /// @notice Helper for module dependent arrays. Prevents the need to loop through array.
+    mapping(Keycode => mapping(Policy => uint256)) public getDependentIndex;
+
+    /// @notice Module <> Policy Permissions.
+    /// @dev    Policy -> Keycode -> Function Selector -> bool for permission
+    mapping(Keycode => mapping(Policy => mapping(bytes4 => bool))) public modulePermissions;
+
+    /*//////////////////////////////////////////////////////////////
+                           POLICY MANAGEMENT
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice List of all active policies
+    Policy[] public activePolicies;
+
+    /// @notice Helper to get active policy quickly. Prevents need to loop through array.
+    mapping(Policy => uint256) public getPolicyIndex;
+
+    /// @notice Mapping for if an address has a policy-defined role.
     mapping(address => mapping(Role => bool)) public hasRole;
 
-    // ######################## ~ EVENTS ~ ########################
+    /// @notice Mapping for if role exists.
+    mapping(Role => bool) public isRole;
 
-    event RolesUpdated(
-        Role indexed role_,
-        address indexed policy_,
-        bool indexed granted_
+    /*//////////////////////////////////////////////////////////////
+                                 EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    event PermissionsUpdated(
+        Keycode indexed keycode_,
+        Policy indexed policy_,
+        bytes4 funcSelector_,
+        bool granted_
     );
-
+    event RoleGranted(Role indexed role_, address indexed addr_);
+    event RoleRevoked(Role indexed role_, address indexed addr_);
     event ActionExecuted(Actions indexed action_, address indexed target_);
 
-    // ######################## ~ BODY ~ ########################
+    /*//////////////////////////////////////////////////////////////
+                              KERNEL LOGIC
+    //////////////////////////////////////////////////////////////*/
 
     constructor() {
         executor = msg.sender;
+        admin = msg.sender;
     }
 
-    // ######################## ~ MODIFIERS ~ ########################
-
+    /// @notice Modifier to check if caller is the executor.
     modifier onlyExecutor() {
         if (msg.sender != executor) revert Kernel_OnlyExecutor(msg.sender);
         _;
     }
 
-    // ######################## ~ KERNEL INTERFACE ~ ########################
+    /// @notice Modifier to check if caller is the roles admin.
+    modifier onlyAdmin() {
+        if (msg.sender != admin) revert Kernel_OnlyAdmin(msg.sender);
+        _;
+    }
 
-    function executeAction(Actions action_, address target_)
-        external
-        onlyExecutor
-    {
+    /// @notice Main kernel function. Initiates state changes to kernel depending on Action passed in.
+    function executeAction(Actions action_, address target_) external onlyExecutor {
         if (action_ == Actions.InstallModule) {
-            _installModule(target_);
+            ensureContract(target_);
+            ensureValidKeycode(Module(target_).KEYCODE());
+            _installModule(Module(target_));
         } else if (action_ == Actions.UpgradeModule) {
-            _upgradeModule(target_);
-        } else if (action_ == Actions.ApprovePolicy) {
-            _approvePolicy(target_);
-        } else if (action_ == Actions.TerminatePolicy) {
-            _terminatePolicy(target_);
+            ensureContract(target_);
+            ensureValidKeycode(Module(target_).KEYCODE());
+            _upgradeModule(Module(target_));
+        } else if (action_ == Actions.ActivatePolicy) {
+            ensureContract(target_);
+            _activatePolicy(Policy(target_));
+        } else if (action_ == Actions.DeactivatePolicy) {
+            ensureContract(target_);
+            _deactivatePolicy(Policy(target_));
+        } else if (action_ == Actions.MigrateKernel) {
+            ensureContract(target_);
+            _migrateKernel(Kernel(target_));
         } else if (action_ == Actions.ChangeExecutor) {
             executor = target_;
+        } else if (action_ == Actions.ChangeAdmin) {
+            admin = target_;
         }
 
         emit ActionExecuted(action_, target_);
     }
 
-    // ######################## ~ KERNEL INTERNAL ~ ########################
+    /*//////////////////////////////////////////////////////////////
+                             ACTIONS LOGIC
+    //////////////////////////////////////////////////////////////*/
 
-    function _installModule(address newModule_) internal {
-        Keycode keycode = Module(newModule_).KEYCODE();
+    function _installModule(Module newModule_) internal {
+        Keycode keycode = newModule_.KEYCODE();
 
-        if (getModuleForKeycode[keycode] != address(0))
+        if (address(getModuleForKeycode[keycode]) != address(0))
             revert Kernel_ModuleAlreadyInstalled(keycode);
 
         getModuleForKeycode[keycode] = newModule_;
         getKeycodeForModule[newModule_] = keycode;
+        allKeycodes.push(keycode);
+
+        newModule_.INIT();
     }
 
-    function _upgradeModule(address newModule_) internal {
-        Keycode keycode = Module(newModule_).KEYCODE();
-        address oldModule = getModuleForKeycode[keycode];
+    function _upgradeModule(Module newModule_) internal {
+        Keycode keycode = newModule_.KEYCODE();
+        Module oldModule = getModuleForKeycode[keycode];
 
-        if (oldModule == address(0) || oldModule == newModule_)
+        if (address(oldModule) == address(0) || oldModule == newModule_)
             revert Kernel_InvalidModuleUpgrade(keycode);
 
         getKeycodeForModule[oldModule] = Keycode.wrap(bytes5(0));
         getKeycodeForModule[newModule_] = keycode;
         getModuleForKeycode[keycode] = newModule_;
 
-        _reconfigurePolicies();
+        newModule_.INIT();
+
+        _reconfigurePolicies(keycode);
     }
 
-    function _approvePolicy(address policy_) internal {
-        if (approvedPolicies[policy_])
-            revert Kernel_PolicyAlreadyApproved(policy_);
+    function _activatePolicy(Policy policy_) internal {
+        if (policy_.isActive()) revert Kernel_PolicyAlreadyActivated(address(policy_));
 
-        approvedPolicies[policy_] = true;
+        // Add policy to list of active policies
+        activePolicies.push(policy_);
+        getPolicyIndex[policy_] = activePolicies.length - 1;
 
-        Policy(policy_).configureReads();
+        // Record module dependencies
+        Keycode[] memory dependencies = policy_.configureDependencies();
+        uint256 depLength = dependencies.length;
 
-        Role[] memory requests = Policy(policy_).requestRoles();
+        for (uint256 i; i < depLength; ) {
+            Keycode keycode = dependencies[i];
 
-        _setPolicyRoles(policy_, requests, true);
+            moduleDependents[keycode].push(policy_);
+            getDependentIndex[keycode][policy_] = moduleDependents[keycode].length - 1;
 
-        allPolicies.push(policy_);
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Grant permissions for policy to access restricted module functions
+        Permissions[] memory requests = policy_.requestPermissions();
+        _setPolicyPermissions(policy_, requests, true);
+
+        // Set policy status to active
+        policy_.setActiveStatus(true);
     }
 
-    function _terminatePolicy(address policy_) internal {
-        if (!approvedPolicies[policy_])
-            revert Kernel_PolicyNotApproved(policy_);
+    function _deactivatePolicy(Policy policy_) internal {
+        if (!policy_.isActive()) revert Kernel_PolicyNotActivated(address(policy_));
 
-        approvedPolicies[policy_] = false;
+        // Revoke permissions
+        Permissions[] memory requests = policy_.requestPermissions();
+        _setPolicyPermissions(policy_, requests, false);
 
-        Role[] memory requests = Policy(policy_).requestRoles();
+        // Remove policy from all policy data structures
+        uint256 idx = getPolicyIndex[policy_];
+        Policy lastPolicy = activePolicies[activePolicies.length - 1];
 
-        _setPolicyRoles(policy_, requests, false);
+        activePolicies[idx] = lastPolicy;
+        activePolicies.pop();
+        getPolicyIndex[lastPolicy] = idx;
+        delete getPolicyIndex[policy_];
+
+        // Remove policy from module dependents
+        _pruneFromDependents(policy_);
+
+        // Set policy status to inactive
+        policy_.setActiveStatus(false);
     }
 
-    function _reconfigurePolicies() internal {
-        uint256 len = allPolicies.length;
-        for (uint256 i; i < len; ) {
-            address policy_ = allPolicies[i];
+    /// @notice All functionality will move to the new kernel. WARNING: ACTION WILL BRICK THIS KERNEL.
+    /// @dev    New kernel must add in all of the modules and policies via executeAction.
+    /// @dev    NOTE: Data does not get cleared from this kernel.
+    function _migrateKernel(Kernel newKernel_) internal {
+        uint256 keycodeLen = allKeycodes.length;
+        for (uint256 i; i < keycodeLen; ) {
+            Module module = Module(getModuleForKeycode[allKeycodes[i]]);
+            module.changeKernel(newKernel_);
+            unchecked {
+                ++i;
+            }
+        }
 
-            if (approvedPolicies[policy_]) Policy(policy_).configureReads();
+        uint256 policiesLen = activePolicies.length;
+        for (uint256 j; j < policiesLen; ) {
+            Policy policy = activePolicies[j];
+
+            // Deactivate before changing kernel
+            policy.setActiveStatus(false);
+            policy.changeKernel(newKernel_);
+            unchecked {
+                ++j;
+            }
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            INTERNAL HELPERS
+    //////////////////////////////////////////////////////////////*/
+
+    function _reconfigurePolicies(Keycode keycode_) internal {
+        Policy[] memory dependents = moduleDependents[keycode_];
+        uint256 depLength = dependents.length;
+
+        for (uint256 i; i < depLength; ) {
+            dependents[i].configureDependencies();
 
             unchecked {
                 ++i;
@@ -227,23 +398,72 @@ contract Kernel {
         }
     }
 
-    function _setPolicyRoles(
-        address policy_,
-        Role[] memory requests_,
+    function _setPolicyPermissions(
+        Policy policy_,
+        Permissions[] memory requests_,
         bool grant_
     ) internal {
-        uint256 len = requests_.length;
+        uint256 reqLength = requests_.length;
+        for (uint256 i = 0; i < reqLength; ) {
+            Permissions memory request = requests_[i];
+            modulePermissions[request.keycode][policy_][request.funcSelector] = grant_;
 
-        for (uint256 i; i < len; ) {
-            Role request = requests_[i];
-
-            hasRole[policy_][request] = grant_;
-
-            emit RolesUpdated(request, policy_, grant_);
+            emit PermissionsUpdated(request.keycode, policy_, request.funcSelector, grant_);
 
             unchecked {
                 ++i;
             }
         }
+    }
+
+    function _pruneFromDependents(Policy policy_) internal {
+        Keycode[] memory dependencies = policy_.configureDependencies();
+        uint256 depcLength = dependencies.length;
+
+        for (uint256 i; i < depcLength; ) {
+            Keycode keycode = dependencies[i];
+            Policy[] storage dependents = moduleDependents[keycode];
+
+            uint256 origIndex = getDependentIndex[keycode][policy_];
+            Policy lastPolicy = dependents[dependents.length - 1];
+
+            // Swap with last and pop
+            dependents[origIndex] = lastPolicy;
+            dependents.pop();
+
+            // Record new index and delete deactivated policy index
+            getDependentIndex[keycode][lastPolicy] = origIndex;
+            delete getDependentIndex[keycode][policy_];
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          ROLES ADMIN FUNCTION
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Function to grant policy-defined roles to some address. Can only be called by admin.
+    function grantRole(Role role_, address addr_) public onlyAdmin {
+        if (hasRole[addr_][role_]) revert Kernel_AddressAlreadyHasRole(addr_, role_);
+
+        ensureValidRole(role_);
+        if (!isRole[role_]) isRole[role_] = true;
+
+        hasRole[addr_][role_] = true;
+
+        emit RoleGranted(role_, addr_);
+    }
+
+    /// @notice Function to revoke policy-defined roles from some address. Can only be called by admin.
+    function revokeRole(Role role_, address addr_) public onlyAdmin {
+        if (!isRole[role_]) revert Kernel_RoleDoesNotExist(role_);
+        if (!hasRole[addr_][role_]) revert Kernel_AddressDoesNotHaveRole(addr_, role_);
+
+        hasRole[addr_][role_] = false;
+
+        emit RoleRevoked(role_, addr_);
     }
 }
