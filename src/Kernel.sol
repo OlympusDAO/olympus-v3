@@ -34,9 +34,9 @@ enum Actions {
     UpgradeModule,
     ActivatePolicy,
     DeactivatePolicy,
-    MigrateKernel,
     ChangeExecutor,
-    ChangeAdmin
+    ChangeAdmin,
+    MigrateKernel
 }
 
 /// @notice Used by executor to select an action and a target contract for a kernel action
@@ -97,16 +97,11 @@ abstract contract Module is KernelAdapter {
     /// @notice Returns which semantic version of a module is being implemented.
     /// @return major - Major version upgrade indicates breaking change to the interface.
     /// @return minor - Minor version change retains backward-compatible interface.
-    /// @return bugfix - Bugfix that retains backward-compatible interface.
     function VERSION()
         external
         pure
         virtual
-        returns (
-            uint8 major,
-            uint8 minor,
-            uint8 bugfix
-        )
+        returns (uint8 major, uint8 minor)
     {}
 
     /// @notice Initialization function for the module
@@ -257,13 +252,13 @@ contract Kernel {
         } else if (action_ == Actions.DeactivatePolicy) {
             ensureContract(target_);
             _deactivatePolicy(Policy(target_));
-        } else if (action_ == Actions.MigrateKernel) {
-            ensureContract(target_);
-            _migrateKernel(Kernel(target_));
         } else if (action_ == Actions.ChangeExecutor) {
             executor = target_;
         } else if (action_ == Actions.ChangeAdmin) {
             admin = target_;
+        } else if (action_ == Actions.MigrateKernel) {
+            ensureContract(target_);
+            _migrateKernel(Kernel(target_));
         }
 
         emit ActionExecuted(action_, target_);
