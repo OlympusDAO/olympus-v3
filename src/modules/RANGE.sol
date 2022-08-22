@@ -112,17 +112,8 @@ contract OlympusRange is Module {
     }
 
     /// @inheritdoc Module
-    function VERSION()
-        external
-        pure
-        override
-        returns (
-            uint8 major,
-            uint8 minor,
-            uint8 bugfix
-        )
-    {
-        return (1, 0, 0);
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+        return (1, 0);
     }
 
     /*//////////////////////////////////////////////////////////////
