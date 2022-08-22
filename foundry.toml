@@ -3,7 +3,6 @@ remappings = [
     'ds-test/=lib/ds-test/src/',
     'solmate/=lib/solmate/src/',
     'forge-std/=lib/forge-std/src/',
-    'test-utils/=lib/test-utils/src/',
     'balancer-v2/=lib/balancer-v2/',
 
     'interfaces/=src/interfaces',
