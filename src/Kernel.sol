@@ -97,12 +97,7 @@ abstract contract Module is KernelAdapter {
     /// @notice Returns which semantic version of a module is being implemented.
     /// @return major - Major version upgrade indicates breaking change to the interface.
     /// @return minor - Minor version change retains backward-compatible interface.
-    function VERSION()
-        external
-        pure
-        virtual
-        returns (uint8 major, uint8 minor)
-    {}
+    function VERSION() external pure virtual returns (uint8 major, uint8 minor) {}
 
     /// @notice Initialization function for the module
     /// @dev    This function is called when the module is installed or upgraded by the kernel.
