@@ -9,6 +9,11 @@ import {BondAggregator} from "test/lib/bonds/BondAggregator.sol";
 import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority} from "solmate/auth/authorities/RolesAuthority.sol";
 
+import {ZuniswapV2Factory} from "test/lib/zuniswapv2/ZuniswapV2Factory.sol";
+import {ZuniswapV2Pair} from "test/lib/zuniswapv2/ZuniswapV2Pair.sol";
+import {ZuniswapV2Library} from "test/lib/zuniswapv2/ZuniswapV2Library.sol";
+import {ZuniswapV2Router} from "test/lib/zuniswapv2/ZuniswapV2Router.sol";
+
 import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE.sol";
 import {OlympusRange} from "modules/RANGE.sol";
@@ -173,6 +178,8 @@ library SimIO {
 }
 
 abstract contract RangeSim is Test {
+    using ZuniswapV2Library for ZuniswapV2Pair;
+
     /* ========== RANGE SYSTEM CONTRACTS ========== */
 
     Kernel public kernel;
@@ -204,6 +211,9 @@ abstract contract RangeSim is Test {
     BondFixedTermCDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
+    ZuniswapV2Factory internal lpFactory;
+    ZuniswapV2Pair internal pool;
+    ZuniswapV2Router internal router;
 
     /* ========== SETUP ========== */
 
@@ -254,8 +264,14 @@ abstract contract RangeSim is Test {
         }
 
         {
-            // Deploy liquidity pool
-            // TODO
+            // Deploy ZuniswapV2 and Liquidity Pool
+            lpFactory = new ZuniswapV2Factory();
+            router = new ZuniswapV2Router(address(lpFactory));
+
+            address poolAddress = lpFactory.createPair(address(reserve), address(ohm));
+            pool = ZuniswapV2Pair(poolAddress);
+
+            // TODO add liquidity to the pool based on the initialization variables
         }
 
         {
@@ -396,6 +412,7 @@ abstract contract RangeSim is Test {
         callback.setOperator(operator);
 
         // Mint tokens to users and treasury for testing
+        // TODO move to setup function and mint only to treasury and market account
         uint256 testOhm = 1_000_000 * 1e9;
         uint256 testReserve = 1_000_000 * 1e18;
 
@@ -450,13 +467,13 @@ abstract contract RangeSim is Test {
         ohm.mint(market, (((ohm.balanceOf(market) * 8) / 10) * perc) / 1e6);
 
         // Mint OHM to the liquidity pool and sync the balances
-        (, uint256[] memory balances, ) = vault.getPoolTokens(pool.getPoolId());
+        uint256 poolBalance = ohm.balanceOf(address(pool));
 
-        ohm.mint(pool, (balances[0] * perc) / 1e6); // TODO this doesn't work directly on balancer
+        ohm.mint(pool, (poolBalance * perc) / 1e6);
         vm.stopPrank();
 
-        // Sync the pool balances
-        pool.sync(); // TODO Need to use the proper balancer method for syncing a pool
+        // Sync the pool balance
+        pool.sync();
     }
 
     /// Putting these structs here as placeholders until I create 0.8.0 versions of the balancer pool and vault interface
@@ -487,6 +504,7 @@ abstract contract RangeSim is Test {
         INVARIANT
     }
 
+    /// TODO replace with swaps on UniswapV2 interface
     /// @notice Creates a convenient abstraction on the balancer interface for single swaps between OHM and Reserve
     /// @param sender Account to send the swap from and receive the amount out
     /// @param reserveIn Whether the reserve token is being sent in (true) or received from (false) the swap
@@ -572,7 +590,7 @@ abstract contract RangeSim is Test {
     function rebalanceLiquidity(uint32 key) internal {
         // Get current liquidity ratio
         uint256 reservesInTreasury = reserve.balanceOf(address(treasury));
-        uint256 reservesInLiquidity = reserve.balanceOf(liquidityPool); // TODO - need to change. won't work with balancer since all tokens in vault
+        uint256 reservesInLiquidity = reserve.balanceOf(pool);
         uint256 reservesInTotal = reservesInTreasury + reservesInLiquidity;
 
         uint32 liquidityRatio = uint32((reservesInLiquidity * 1e4) / reservesInTotal);
