@@ -86,7 +86,7 @@ library SimIO {
         uint32 cushionSpread;
     }
 
-    function getSimParams(uint32 seed) external returns (Params[] memory params) {
+    function loadParams(uint32 seed) external returns (Params[] memory params) {
         string memory script = "loadParams.sh";
         string memory query = string(
             bytes.concat(
@@ -106,7 +106,7 @@ library SimIO {
         int256 netflow;
     }
 
-    function getNetflows(uint32 seed) external returns (Netflow[] memory netflows) {
+    function loadNetflows(uint32 seed) external returns (Netflow[] memory netflows) {
         string memory script = "loadNetflows.sh";
         string memory query = string(
             bytes.concat(
@@ -123,8 +123,8 @@ library SimIO {
 
     // TODO work with R&D to get all the data they need out
     struct Result {
-        uint32 key;
         uint32 epoch;
+        bool rebalanced;
         uint256 marketCap;
         uint256 price;
         uint256 reserves;
@@ -132,7 +132,7 @@ library SimIO {
         uint256 supply;
     }
 
-    function writeSimResults(uint32 seed, Result[] memory results) external {
+    function writeResults(uint32 seed, uint32 key, Result[] memory results) external {
         bytes memory data = "[";
         uint256 len = results.length;
         for (uint256 i; i < len; ) {
@@ -144,7 +144,7 @@ library SimIO {
                 "{seed: ",
                 _uint2bstr(uint256(seed)),
                 ", key: ",
-                _uint2bstr(uint256(results[i].key)),
+                _uint2bstr(uint256(key)),
                 ", epoch: ",
                 _uint2bstr(uint256(results[i].epoch)),
                 ", marketCap: ",
@@ -182,7 +182,6 @@ abstract contract RangeSim is Test {
 
     mapping(uint32 => SimIO.Params) internal params; // map of sim keys to sim params
     mapping(uint32 => mapping(uint32 => int256)) internal netflows; // map of sim keys to epochs to netflows
-    mapping(uint32 => mapping(uint32 => SimIO.Result)) internal results; // map of sim keys to epochs to results
 
     /* ========== EXTERNAL CONTRACTS  ========== */
 
@@ -213,7 +212,11 @@ abstract contract RangeSim is Test {
     /// @dev Number of epochs to run each simulation for.
     function EPOCHS() internal pure virtual returns (uint32);
 
+    /// @dev Duration of an epoch in seconds (real-time)
     function EPOCH_DURATION() internal pure virtual returns (uint32);
+
+    /// @dev Number of epochs between rebalancing the liquidity pool
+    function REBALANCE_FREQUENCY() internal pure virtual returns (uint32);
 
     function setUp() public {
         // Deploy dependencies and setup users for simulation
@@ -253,7 +256,7 @@ abstract contract RangeSim is Test {
 
         {
             // Load sim data
-            SimIO.Params[] memory paramArray = SimIO.getSimParams(SEED());
+            SimIO.Params[] memory paramArray = SimIO.loadParams(SEED());
             uint256 paramLen = paramArray.length;
             for (uint256 i; i < paramLen; ) {
                 params[paramArray[i].key] = paramArray[i];
@@ -263,7 +266,7 @@ abstract contract RangeSim is Test {
             }
 
             // Load netflows data
-            SimIO.Netflow[] memory netflowArray = SimIO.getNetflows(SEED());
+            SimIO.Netflow[] memory netflowArray = SimIO.loadNetflows(SEED());
             uint256 netflowLen = netflowArray.length;
             for (uint256 j; j < netflowLen; ) {
                 netflows[netflowArray[j].key][netflowArray[j].epoch] = netflowArray[j].netflow;
@@ -604,6 +607,31 @@ abstract contract RangeSim is Test {
         // Handle branching scenarios
     }
 
+    function getResult(
+        uint32 epoch,
+        bool rebalanced
+    ) internal view returns (SimIO.Result memory result) {
+        // Retrieve data from the contracts on current status
+        uint256 supply = ohm.totalSupply();
+        uint256 lastPrice = price.getLastPrice();
+        uint256 marketCap = (supply * lastPrice) / 1e9;
+        uint256 reservesInTreasury = reserve.balanceOf(address(treasury));
+        uint256 reservesInLiquidity = reserve.balanceOf(address(pool));
+        uint256 reservesInTotal = reservesInTreasury + reservesInLiquidity;
+        uint256 liquidityRatio = uint256((reservesInLiquidity * 1e4) / reservesInTotal);
+
+        // Create result struct
+        SimIO.Result result = SimIO.Result(
+            epoch,
+            rebalanced,
+            marketCap,
+            lastPrice,
+            reservesInTotal,
+            liquidityRatio,
+            supply
+        );
+    }
+
     /* ========== SIMULATION LOGIC ========== */
     function simulate(uint32 key) internal {
         // Deploy a RBS clone for the key
@@ -613,7 +641,8 @@ abstract contract RangeSim is Test {
         uint32 lastRebalance;
         uint32 epochs = EPOCHS();
         uint32 duration = EPOCH_DURATION();
-        SimIO.Result memory result;
+        SimIO.Result result;
+        SimIO.Result[] memory results = new SimIO.Result[](epochs);
 
         // Run simulation
         for (uint32 e; e < epochs; ) {
@@ -623,20 +652,30 @@ abstract contract RangeSim is Test {
             // 1. Perform rebase
             rebase();
 
-            // 2. Update price feed
+            // 2. Update price and moving average data from LP pool
+            updatePrice();
 
             // 3. RBS Operations triggered
             heart.beat();
 
-            // 4. Implement net flows
+            // 4. Implement market actions for net flows
+            marketAction(key, e);
 
             // 5. Rebalance liquidity if enough epochs have passed
-            if (e > lastRebalance + REBALANCE_INTERVAL) {
+            // 6. Get results for output
+            if (e > lastRebalance + REBALANCE_FREQUENCY()) {
                 rebalanceLiquidity(key);
                 lastRebalance = e;
+                result = getResult(e, true);
+            } else {
+                result = getResult(e, false);
             }
 
-            // 6. Store results
+            // 7. Store results for output
+            results[e] = result;
         }
+       
+        // Write results to output file
+        SimIO.writeResults(SEED(), key, results)
     }
 }

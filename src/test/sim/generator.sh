@@ -30,7 +30,7 @@ for SEED in $SEEDS; do
 
     # Append a test to the file for each key
     for (( k=0; k < $KEYS; k++)); do
-        echo "\n    function test_Seed_${SEED}_Key_${k}() public {\n        uint32 key = $k; rangeSetup(key); simulate(key); SimIO.writeResults(SEED(), key);\n    }" >> ./src/test/sim/sims/seed-$SEED.sol
+        echo "\n    function test_Seed_${SEED}_Key_${k}() public {\n        uint32 key = $k; simulate(key); SimIO.writeResults(SEED(), key);\n    }" >> ./src/test/sim/sims/seed-$SEED.sol
     done
     # Append a closing bracket to the file
     echo "\n}" >> ./src/test/sim/sims/seed-$SEED.sol

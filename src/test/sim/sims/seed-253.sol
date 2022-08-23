@@ -10,7 +10,7 @@ contract Seed253Test is RangeSim {
     }
 
     function KEYS() internal pure override returns (uint32) {
-        return 1000
+        return 1000;
     }
 
     function EPOCHS() internal pure override returns (uint32) {
