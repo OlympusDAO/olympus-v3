@@ -487,7 +487,7 @@ contract OperatorTest is Test {
         // uint256 price = auctioneer.marketPrice(marketId);
         // console2.log("price", price);
         // console2.log("scale", scale);
-        uint256 payout = auctioneer.payoutFor(120 * 1e18, marketId, alice);
+        uint256 payout = auctioneer.payoutFor(111 * 1e18, marketId, alice);
         assertEq(payout, 1e9);
     }
 
@@ -639,7 +639,8 @@ contract OperatorTest is Test {
         // console2.log("price", price);
         // console2.log("scale", scale);
         uint256 payout = auctioneer.payoutFor(1e9, marketId, alice);
-        assertEq(payout, 80 * 1e18);
+        assertGe(payout, (89 * 1e18 * 99999) / 100000); // Compare to a range due to slight precision differences
+        assertLe(payout, (89 * 1e18 * 100001) / 100000);
     }
 
     function testCorrectness_lowCushionClosedBelowSpread() public {

@@ -378,7 +378,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
                     36 + scaleAdjustment + int8(reserveDecimals) - int8(ohmDecimals) - priceDecimals
                 );
 
-            uint256 initialPrice = range.wall.high.price.mulDiv(bondScale, oracleScale);
+            uint256 initialPrice = PRICE.getLastPrice().mulDiv(bondScale, oracleScale);
             uint256 minimumPrice = range.cushion.high.price.mulDiv(bondScale, oracleScale);
 
             /// Cache config struct to avoid multiple SLOADs
@@ -417,7 +417,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
             /// Calculate inverse prices from the oracle feed for the low side
             uint8 oracleDecimals = PRICE.decimals();
             uint256 invCushionPrice = 10**(oracleDecimals * 2) / range.cushion.low.price;
-            uint256 invWallPrice = 10**(oracleDecimals * 2) / range.wall.low.price;
+            uint256 invCurrentPrice = 10**(oracleDecimals * 2) / PRICE.getLastPrice();
 
             /// Calculate scaleAdjustment for bond market
             /// Price decimals are returned from the perspective of the quote token
@@ -433,7 +433,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
                     36 + scaleAdjustment + int8(ohmDecimals) - int8(reserveDecimals) - priceDecimals
                 );
 
-            uint256 initialPrice = invWallPrice.mulDiv(bondScale, oracleScale);
+            uint256 initialPrice = invCurrentPrice.mulDiv(bondScale, oracleScale);
             uint256 minimumPrice = invCushionPrice.mulDiv(bondScale, oracleScale);
 
             /// Cache config struct to avoid multiple SLOADs
