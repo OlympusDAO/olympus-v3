@@ -132,7 +132,11 @@ library SimIO {
         uint256 supply;
     }
 
-    function writeResults(uint32 seed, uint32 key, Result[] memory results) external {
+    function writeResults(
+        uint32 seed,
+        uint32 key,
+        Result[] memory results
+    ) external {
         bytes memory data = "[";
         uint256 len = results.length;
         for (uint256 i; i < len; ) {
@@ -607,10 +611,11 @@ abstract contract RangeSim is Test {
         // Handle branching scenarios
     }
 
-    function getResult(
-        uint32 epoch,
-        bool rebalanced
-    ) internal view returns (SimIO.Result memory result) {
+    function getResult(uint32 epoch, bool rebalanced)
+        internal
+        view
+        returns (SimIO.Result memory result)
+    {
         // Retrieve data from the contracts on current status
         uint256 supply = ohm.totalSupply();
         uint256 lastPrice = price.getLastPrice();
@@ -673,9 +678,13 @@ abstract contract RangeSim is Test {
 
             // 7. Store results for output
             results[e] = result;
+
+            unchecked {
+                e++;
+            }
         }
-       
+
         // Write results to output file
-        SimIO.writeResults(SEED(), key, results)
+        SimIO.writeResults(SEED(), key, results);
     }
 }
