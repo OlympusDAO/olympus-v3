@@ -3,8 +3,6 @@ remappings = [
     'ds-test/=lib/ds-test/src/',
     'solmate/=lib/solmate/src/',
     'forge-std/=lib/forge-std/src/',
-    'test-utils/=lib/test-utils/src/',
-    'prb-math/=lib/prb-math/contracts/',
     'balancer-v2/=lib/balancer-v2/',
 
     'interfaces/=src/interfaces',
@@ -13,7 +11,3 @@ remappings = [
     'libraries/=src/libraries',
 ]
 ffi = true
-
-[profile.fried]
-fuzz_runs = 1024
-fuzz_max_global_rejects = 40000
