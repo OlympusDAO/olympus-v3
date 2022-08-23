@@ -213,7 +213,7 @@ abstract contract RangeSim is Test {
     /// @dev Number of epochs to run each simulation for.
     function EPOCHS() internal pure virtual returns (uint32);
 
-    function EPOCH_FREQUENCY() internal pure virtual returns (uint32);
+    function EPOCH_DURATION() internal pure virtual returns (uint32);
 
     function setUp() public {
         // Deploy dependencies and setup users for simulation
@@ -612,13 +612,13 @@ abstract contract RangeSim is Test {
         // Initialize variables for tracking status
         uint32 lastRebalance;
         uint32 epochs = EPOCHS();
-        uint32 frequency = EPOCH_FREQUENCY();
+        uint32 duration = EPOCH_DURATION();
         SimIO.Result memory result;
 
         // Run simulation
         for (uint32 e; e < epochs; ) {
             // 0. Warp time forward
-            vm.warp(block.timestamp + frequency);
+            vm.warp(block.timestamp + duration);
 
             // 1. Perform rebase
             rebase();
