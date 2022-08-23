@@ -29,6 +29,7 @@ import {FullMath} from "libraries/FullMath.sol";
 library SimIO {
     Vm internal constant vm = Vm(address(bytes20(uint160(uint256(keccak256("hevm cheat code"))))));
 
+    // TODO replace with vm.toString()
     // Some fancy math to convert a uint into a string, courtesy of Provable Things.
     // Updated to work with solc 0.8.0.
     // https://github.com/provable-things/ethereum-api/blob/master/provableAPI_0.6.sol
@@ -211,6 +212,8 @@ abstract contract RangeSim is Test {
 
     /// @dev Number of epochs to run each simulation for.
     function EPOCHS() internal pure virtual returns (uint32);
+
+    function EPOCH_FREQUENCY() internal pure virtual returns (uint32);
 
     function setUp() public {
         // Deploy dependencies and setup users for simulation
@@ -407,22 +410,42 @@ abstract contract RangeSim is Test {
     }
 
     /* ========== SIMULATION HELPER FUNCTIONS ========== */
-    function getRebasePercent(uint32 key) internal view returns (uint256) {
+    /// @notice Returns the rebase percent per epoch based on supply as a percentage with 4 decimals. i.e. 10000 = 1%.
+    /// @dev Values are based on the minimum value for each tier as defined in OIP-18.
+    function getRebasePercent() internal view returns (uint256) {
         // Implement the current reward rate framework based on supply
+        uint256 supply = ohm.totalSupply();
+        if (supply < 1_000_000 * 1e9) {
+            return 3058;
+        } else if (supply < 10_000_000 * 1e9) {
+            return 1587;
+        } else if (supply < 100_000_000 * 1e9) {
+            return 1183;
+        } else if (supply < 1_000_000_000 * 1e9) {
+            return 458;
+        } else if (supply < 10_000_000_000 * 1e9) {
+            return 148;
+        } else if (supply < 100_000_000_000 * 1e9) {
+            return 39;
+        } else if (supply < 1_000_000_000_000 * 1e9) {
+            return 19;
+        } else {
+            return 9;
+        }
     }
 
     /// @dev Simulating rebases by minting OHM to the market account (at 80% rate) and the liquidity pool
-    function rebase(uint32 key) internal {
-        perc = getRebasePercent(key);
+    function rebase() internal {
+        perc = getRebasePercent();
 
         // Mint OHM to the market account
         vm.startPrank(address(minter));
-        ohm.mint(market, (((ohm.balanceOf(market) * 8) / 10) * perc) / 10000);
+        ohm.mint(market, (((ohm.balanceOf(market) * 8) / 10) * perc) / 1e6);
 
         // Mint OHM to the liquidity pool and sync the balances
         (, uint256[] memory balances, ) = vault.getPoolTokens(pool.getPoolId());
 
-        ohm.mint(pool, (balances[0] * perc) / 10000); // TODO Need to use the proper balancer method for getting a pool balance
+        ohm.mint(pool, (balances[0] * perc) / 1e6); // TODO this doesn't work directly on balancer
         vm.stopPrank();
 
         // Sync the pool balances
@@ -541,9 +564,7 @@ abstract contract RangeSim is Test {
 
     function rebalanceLiquidity(uint32 key) internal {
         // Get current liquidity ratio
-        address treasury = address(clones[key].treasury);
-
-        uint256 reservesInTreasury = reserve.balanceOf(treasury);
+        uint256 reservesInTreasury = reserve.balanceOf(address(treasury));
         uint256 reservesInLiquidity = reserve.balanceOf(liquidityPool); // TODO - need to change. won't work with balancer since all tokens in vault
         uint256 reservesInTotal = reservesInTreasury + reservesInLiquidity;
 
@@ -560,12 +581,27 @@ abstract contract RangeSim is Test {
         if (liquidityRatio < targetRatio) {
             // Sell reserves into the liquidity pool
             uint256 amountIn = (reservesInTotal * targetRatio) / 1e4 - reservesInLiquidity;
-            swap(treasury, true, amountIn);
+            swap(address(treasury), true, amountIn);
         } else if (liquidityRatio > targetRatio) {
             // Buy reserves from the liquidity pool
             uint256 amountOut = reservesInLiquidity - (reservesInTotal * targetRatio) / 1e4;
-            swap(treasury, false, amountOut);
+            swap(address(treasury), false, amountOut);
         }
+    }
+
+    function marketAction(uint32 key, uint32 epoch) {
+        // Get the net flow for the key and epoch combination
+        int256 netflow = netflows[key][epoch];
+
+        if (netflow == 0) return; // If netflow is 0, no action is needed
+
+        // Positive flows mean reserves are flowing in, negative flows mean reserves are flowing out
+        bool reserveIn = netflow > 0;
+
+        // If reserves are flowing in, determine where to send the flow
+        // Check the price and compare to walls and cushions
+
+        // Handle branching scenarios
     }
 
     /* ========== SIMULATION LOGIC ========== */
@@ -576,16 +612,21 @@ abstract contract RangeSim is Test {
         // Initialize variables for tracking status
         uint32 lastRebalance;
         uint32 epochs = EPOCHS();
+        uint32 frequency = EPOCH_FREQUENCY();
         SimIO.Result memory result;
 
         // Run simulation
         for (uint32 e; e < epochs; ) {
+            // 0. Warp time forward
+            vm.warp(block.timestamp + frequency);
+
             // 1. Perform rebase
-            rebase(key);
+            rebase();
 
             // 2. Update price feed
 
             // 3. RBS Operations triggered
+            heart.beat();
 
             // 4. Implement net flows
 
