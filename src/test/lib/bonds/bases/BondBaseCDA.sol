@@ -10,8 +10,8 @@ import {IBondTeller} from "../interfaces/IBondTeller.sol";
 import {IBondCallback} from "../interfaces/IBondCallback.sol";
 import {IBondAggregator} from "../interfaces/IBondAggregator.sol";
 
-import {TransferHelper} from "../lib/TransferHelper.sol";
-import {FullMath} from "../lib/FullMath.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
+import {FullMath} from "libraries/FullMath.sol";
 
 /// @title Bond Continuous Dutch Auctioneer (CDA)
 /// @notice Bond Continuous Dutch Auctioneer Base Contract

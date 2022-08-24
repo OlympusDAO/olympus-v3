@@ -28,21 +28,4 @@ interface IBondCallback {
     /// @param teller_  Address of the Teller contract which serves the market
     /// @param id_      ID of the market
     function whitelist(address teller_, uint256 id_) external;
-
-    /// @notice         Withdraw tokens from the callback and update balances
-    /// @notice         Only callback owner
-    /// @param to_      Address of the recipient
-    /// @param token_   Address of the token to withdraw
-    /// @param amount_  Amount of tokens to withdraw
-    function withdraw(
-        address to_,
-        ERC20 token_,
-        uint256 amount_
-    ) external;
-
-    /// @notice         Deposit tokens to the callback and update balances
-    /// @notice         Only callback owner
-    /// @param token_   Address of the token to deposit
-    /// @param amount_  Amount of tokens to deposit
-    function deposit(ERC20 token_, uint256 amount_) external;
 }

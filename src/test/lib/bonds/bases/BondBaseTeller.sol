@@ -10,8 +10,8 @@ import {IBondCallback} from "../interfaces/IBondCallback.sol";
 import {IBondAggregator} from "../interfaces/IBondAggregator.sol";
 import {IBondAuctioneer} from "../interfaces/IBondAuctioneer.sol";
 
-import {TransferHelper} from "../lib/TransferHelper.sol";
-import {FullMath} from "../lib/FullMath.sol";
+import {TransferHelper} from "libraries/TransferHelper.sol";
+import {FullMath} from "libraries/FullMath.sol";
 
 /// @title Bond Teller
 /// @notice Bond Teller Base Contract

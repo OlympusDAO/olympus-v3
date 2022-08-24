@@ -8,7 +8,7 @@ import {IBondAggregator} from "./interfaces/IBondAggregator.sol";
 import {IBondTeller} from "./interfaces/IBondTeller.sol";
 import {IBondAuctioneer} from "./interfaces/IBondAuctioneer.sol";
 
-import {FullMath} from "./lib/FullMath.sol";
+import {FullMath} from "libraries/FullMath.sol";
 
 /// @title Bond Aggregator
 /// @notice Bond Aggregator Contract
