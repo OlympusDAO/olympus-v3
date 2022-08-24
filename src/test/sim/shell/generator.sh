@@ -2,10 +2,7 @@
 # Simulation test file generator script
 
 # Load environment variables
-# source .env
-KEYS=1000
-EPOCHS=1095
-EPOCH_DURATION=28800
+source .env
 
 # Load the test file template into a variable
 BASELINE=$(cat ./src/test/sim/test_template.sol.x)
@@ -24,9 +21,6 @@ for SEED in $SEEDS; do
     
     # Edit the baseline with the data for this seed
     sed -i '' -e "s/{SEED}/$SEED/g" ./src/test/sim/sims/seed-$SEED.sol
-    sed -i '' -e "s/{KEYS}/$KEYS/g" ./src/test/sim/sims/seed-$SEED.sol
-    sed -i '' -e "s/{EPOCHS}/$EPOCHS/g" ./src/test/sim/sims/seed-$SEED.sol
-    sed -i '' -e "s/{EPOCH_DURATION}/$EPOCH_DURATION/g" ./src/test/sim/sims/seed-$SEED.sol
 
     # Append a test to the file for each key
     for (( k=0; k < $KEYS; k++)); do
