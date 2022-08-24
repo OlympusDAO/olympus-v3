@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
@@ -8,7 +8,7 @@ import {IBondAggregator} from "./interfaces/IBondAggregator.sol";
 import {IBondTeller} from "./interfaces/IBondTeller.sol";
 import {IBondAuctioneer} from "./interfaces/IBondAuctioneer.sol";
 
-import {FullMath} from "libraries/FullMath.sol";
+import {FullMath} from "./lib/FullMath.sol";
 
 /// @title Bond Aggregator
 /// @notice Bond Aggregator Contract
@@ -51,7 +51,7 @@ contract BondAggregator is IBondAggregator, Auth {
     /// @notice Market IDs for quote token
     mapping(address => uint256[]) public marketsForQuote;
 
-    // A 'vesting' param longer than 50 years is considered a timestamp for fixed expiry.
+    // A 'vesting' param longer than 50 years is considered a timestamp for fixed expiration.
     uint48 private constant MAX_FIXED_TERM = 52 weeks * 50;
 
     constructor(address guardian_, Authority authority_) Auth(guardian_, authority_) {}
@@ -88,6 +88,12 @@ contract BondAggregator is IBondAggregator, Auth {
     function marketPrice(uint256 id_) public view override returns (uint256) {
         IBondAuctioneer auctioneer = marketsToAuctioneers[id_];
         return auctioneer.marketPrice(id_);
+    }
+
+    /// @inheritdoc IBondAggregator
+    function marketScale(uint256 id_) external view override returns (uint256) {
+        IBondAuctioneer auctioneer = marketsToAuctioneers[id_];
+        return auctioneer.marketScale(id_);
     }
 
     /// @inheritdoc IBondAggregator

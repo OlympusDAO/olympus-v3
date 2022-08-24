@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
@@ -10,8 +10,8 @@ import {IBondCallback} from "../interfaces/IBondCallback.sol";
 import {IBondAggregator} from "../interfaces/IBondAggregator.sol";
 import {IBondAuctioneer} from "../interfaces/IBondAuctioneer.sol";
 
-import {TransferHelper} from "libraries/TransferHelper.sol";
-import {FullMath} from "libraries/FullMath.sol";
+import {TransferHelper} from "../lib/TransferHelper.sol";
+import {FullMath} from "../lib/FullMath.sol";
 
 /// @title Bond Teller
 /// @notice Bond Teller Base Contract

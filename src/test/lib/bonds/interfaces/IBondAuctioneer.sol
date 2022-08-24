@@ -2,8 +2,8 @@
 pragma solidity >=0.8.0;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {IBondTeller} from "./IBondTeller.sol";
-import {IBondAggregator} from "./IBondAggregator.sol";
+import {IBondTeller} from "../interfaces/IBondTeller.sol";
+import {IBondAggregator} from "../interfaces/IBondAggregator.sol";
 
 interface IBondAuctioneer {
     /// @notice             Creates a new bond market
@@ -34,7 +34,7 @@ interface IBondAuctioneer {
     /// @dev                       If the value is too small, the market will not be able function normally and close prematurely.
     /// @dev                       If the value is too large, the market will not circuit break when intended. The value must be > 10% but can exceed 100% if desired.
     /// @dev                    8. Is fixed term ? Vesting length (seconds) : Vesting expiration (timestamp).
-    /// @dev                        A 'vesting' param longer than 50 years is considered a timestamp for fixed expiry.
+    /// @dev                        A 'vesting' param longer than 50 years is considered a timestamp for fixed expiration.
     /// @dev                    9. Conclusion (timestamp)
     /// @dev                    10. Deposit interval (seconds)
     /// @dev                    11. Market scaling factor adjustment, ranges from -24 to +24 within the configured market bounds.
@@ -156,6 +156,11 @@ interface IBondAuctioneer {
     // if price is below minimum price, minimum price is returned
     // this is enforced on deposits by manipulating total debt (see _decay())
     function marketPrice(uint256 id_) external view returns (uint256);
+
+    /// @notice             Scale value to use when converting between quote token and payout token amounts with marketPrice()
+    /// @param id_          ID of market
+    /// @return             Scaling factor for market in configured decimals
+    function marketScale(uint256 id_) external view returns (uint256);
 
     /// @notice             Payout due for amount of quote tokens
     /// @dev                Accounts for debt and control variable decay so it is up to date

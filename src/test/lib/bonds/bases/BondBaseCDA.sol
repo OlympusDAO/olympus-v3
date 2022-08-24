@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
@@ -10,8 +10,8 @@ import {IBondTeller} from "../interfaces/IBondTeller.sol";
 import {IBondCallback} from "../interfaces/IBondCallback.sol";
 import {IBondAggregator} from "../interfaces/IBondAggregator.sol";
 
-import {TransferHelper} from "libraries/TransferHelper.sol";
-import {FullMath} from "libraries/FullMath.sol";
+import {TransferHelper} from "../lib/TransferHelper.sol";
+import {FullMath} from "../lib/FullMath.sol";
 
 /// @title Bond Continuous Dutch Auctioneer (CDA)
 /// @notice Bond Continuous Dutch Auctioneer Base Contract
@@ -44,7 +44,7 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
     error Auctioneer_AmountLessThanMinimum();
     error Auctioneer_NotEnoughCapacity();
     error Auctioneer_InvalidCallback();
-    error Auctioneer_BadExpiry();
+    error Auctioneer_BadExpiration();
     error Auctioneer_InvalidParams();
     error Auctioneer_NotAuthorized();
     error Auctioneer_NewMarketsNotAllowed();
@@ -495,12 +495,14 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
         payout_ = amount_.mulDiv(market.scale, marketPrice_);
 
         // Set last decay timestamp based on size of purchase to linearize decay
+        // 1e9 is used a scaling constant since the decay interval is unlikely to exceed 1e9 seconds (> 30 years)
+        // It is also low enough to avoid overflows from high debt values
         uint256 debtPerSecond = metadata[id_].lastTuneDebt.mulDiv(
-            market.scale,
+            1e9,
             uint256(metadata[id_].debtDecayInterval)
         );
 
-        metadata[id_].lastDecay += uint48(payout_.mulDivUp(market.scale, debtPerSecond));
+        metadata[id_].lastDecay += uint48(payout_.mulDivUp(1e9, debtPerSecond));
     }
 
     /// @notice             Auto-adjust control variable to hit capacity/spend target
@@ -677,6 +679,11 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
         uint256 price = currentControlVariable(id_).mulDiv(currentDebt(id_), markets[id_].scale);
 
         return (price > markets[id_].minPrice) ? price : markets[id_].minPrice;
+    }
+
+    /// @inheritdoc IBondAuctioneer
+    function marketScale(uint256 id_) external view override returns (uint256) {
+        return markets[id_].scale;
     }
 
     /// @inheritdoc IBondAuctioneer

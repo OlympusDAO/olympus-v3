@@ -25,7 +25,7 @@ interface IBondCDA is IBondAuctioneer {
     struct BondTerms {
         uint256 controlVariable; // scaling variable for price
         uint256 maxDebt; // max payout token debt accrued
-        uint48 vesting; // length of time from deposit to maturity if fixed-term, vesting timestamp if fixed-expiry
+        uint48 vesting; // length of time from deposit to expiry if fixed-term, vesting timestamp if fixed-expiry
         uint48 conclusion; // timestamp when market no longer offered
     }
 
