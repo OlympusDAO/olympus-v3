@@ -179,6 +179,7 @@ library SimIO {
 
 abstract contract RangeSim is Test {
     using ZuniswapV2Library for ZuniswapV2Pair;
+    using FullMath for uint256;
 
     /* ========== RANGE SYSTEM CONTRACTS ========== */
 
@@ -196,14 +197,10 @@ abstract contract RangeSim is Test {
 
     /* ========== EXTERNAL CONTRACTS  ========== */
 
-    using FullMath for uint256;
-
     UserFactory public userCreator;
-    address internal alice;
-    address internal bob;
+    address internal market;
     address internal guardian;
     address internal policy;
-    address internal heart;
 
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
@@ -220,6 +217,7 @@ abstract contract RangeSim is Test {
     /// @dev Determines which data is pulled from the input files and allows writing results to compare against the same seed.
     function SEED() internal pure virtual returns (uint32);
 
+    // TODO change these to immutable variables configurd in a constructor from the vm.env variables
     /// @dev Number of sims to perform with the seed. It should match the number of keys.
     function KEYS() internal pure virtual returns (uint32);
 
@@ -476,115 +474,81 @@ abstract contract RangeSim is Test {
         pool.sync();
     }
 
-    /// Putting these structs here as placeholders until I create 0.8.0 versions of the balancer pool and vault interface
-    /// Idea is to deploy a pool on testnet with minimal liquidity and then fork testnet for the local sims since balancer is deployed there
-    enum SwapKind {
-        GIVEN_IN,
-        GIVEN_OUT
-    }
-
-    struct BatchSwapStep {
-        bytes32 poolId;
-        uint256 assetInIndex;
-        uint256 assetOutIndex;
-        uint256 amount;
-        bytes userData;
-    }
-
-    struct FundManagement {
-        address sender;
-        bool fromInternalBalance;
-        address payable recipient;
-        bool toInternalBalance;
-    }
-
-    enum Variable {
-        PAIR_PRICE,
-        BPT_PRICE,
-        INVARIANT
-    }
-
-    /// TODO replace with swaps on UniswapV2 interface
     /// @notice Creates a convenient abstraction on the balancer interface for single swaps between OHM and Reserve
     /// @param sender Account to send the swap from and receive the amount out
     /// @param reserveIn Whether the reserve token is being sent in (true) or received from (false) the swap
-    /// @param amount Amount of reserves to get in or out
+    /// @param amount Amount of reserves to get in or out (based on reserveIn)
     /// @dev Ensure tokens are approved on the balancer vault already to avoid allowance errors
     function swap(
         address sender,
         bool reserveIn,
         uint256 amount
     ) internal {
-        // Create structs for balancer swap
-        FundsManagement memory funds = FundsManagement(sender, false, sender, false);
-
         if (reserveIn) {
-            int256 amountIn = int256(amount);
+            // Swap exact amount of reserves in for amount of OHM we can receive
+            // Create path to swap
+            address[] calldata path = new address[](2);
+            path[0] = address(reserve);
+            path[1] = address(ohm);
 
-            BatchSwapStep memory swapStep = BatchSwapStep(pool.getPoolId(), 1, 0, amount, bytes(0));
+            /// Get amount out for the reserves to swap
+            uint256 minAmountOut = pool.getAmountsOut(address(factory), amount, path);
 
-            BatchSwapStep[] memory steps = new BatchSwapStep[](1);
-            steps[0] = swapStep;
-
-            IAssets[] memory assets = new IAssets[](2);
-            assets[0] = IAsset(ohm);
-            assets[1] = IAsset(reserve);
-
-            // Get amount need to be sent in to get amount of reserves out
-            vm.prank(sender);
-            (int256 ohmDelta, ) = vault.queryBatchSwap(SwapKind.GIVEN_IN, steps, assets, funds);
-            int256 amountOut = (ohmDelta * -9) / 10; // reduce by 10% for slippage
-
-            // Set limits: amount going in must be positive and amount going out should be negative
-            int256[] memory limits = new int256[](2);
-            limits[0] = amountOut;
-            limits[1] = amountIn;
-
-            vm.prank(sender);
-            vault.batchSwap(
-                SwapKind.GIVEN_IN,
-                steps,
-                assets,
-                funds,
-                limits,
-                block.timestamp + 1 days
-            );
+            // Execute swap
+            vm.prank(market);
+            router.swapExactTokensForTokens(amount, minAmountOut, path, sender);
         } else {
-            int256 amountOut = int256(amount) * int256(-1);
+            // Swap amount of ohm for exact amount of reserves out
+            // Create path to swap
+            address[] calldata path = new address[](2);
+            path[0] = address(ohm);
+            path[1] = address(reserve);
 
-            BatchSwapStep memory swapStep = BatchSwapStep(pool.getPoolId(), 0, 1, amount, bytes(0));
+            uint256 maxAmountIn = pool.getAmountsIn(address(factory), amount, path);
 
-            BatchSwapStep[] memory steps = new BatchSwapStep[](1);
-            steps[0] = swapStep;
-
-            IAssets[] memory assets = new IAssets[](2);
-            assets[0] = IAsset(ohm);
-            assets[1] = IAsset(reserve);
-
-            // Get amount need to be sent in to get amount of reserves out
-            vm.prank(sender);
-            (int256 ohmDelta, ) = vault.queryBatchSwap(SwapKind.GIVEN_OUT, steps, assets, funds);
-            int256 amountIn = (ohmDelta * 11) / 10; // add 10% for slippage
-
-            // In the case where we are selling OHM, it will need to minted before swapping
-            address minter = address(clones[key].minter);
-            vm.prank(minter);
-            ohm.mint(sender, amountIn);
-
-            int256[] memory limits = new int256[](2);
-            limits[0] = amountIn;
-            limits[1] = amountOut;
-
-            vm.prank(sender);
-            vault.batchSwap(
-                SwapKind.GIVEN_OUT,
-                steps,
-                assets,
-                funds,
-                limits,
-                block.timestamp + 1 days
-            );
+            // Execute swap
+            vm.prank(market);
+            router.swapTokensForExactTokens(amount, maxAmountIn, path, sender);
         }
+    }
+
+    /// @notice Returns the price of the token implied by the liquidity pool
+    function poolPrice() public view returns (uint256) {
+        (uint256 reserve0, uint256 reserve1) = pool.getReserves(
+            factory,
+            address(reserve),
+            address(ohm)
+        );
+        return reserve0.mulDiv(1e18 * 1e9, reserve1 * 1e18);
+    }
+
+    /// @notice Returns the amount of token in to swap on the liquidity pool to move the price to a target value
+    /// @dev based on the UniswapV2LiquidityMathLibrary.computeProfitMaximizingTrade() function: https://github.com/Uniswap/v2-periphery/blob/0335e8f7e1bd1e8d8329fd300aea2ef2f36dd19f/contracts/libraries/UniswapV2LiquidityMathLibrary.sol#L17
+    function amountToTargetPrice(ERC20 tokenIn, uint256 targetPrice)
+        internal
+        view
+        returns (uint256 amountIn)
+    {
+        (uint256 reserve0, uint256 reserve1) = pool.getReserves(
+            factory,
+            address(reserve),
+            address(ohm)
+        );
+        uint256 currentPrice = reserve0.mulDiv(1e18 * 1e9, reserve1 * 1e18);
+        uint256 invariant = reserve0 * reserve1;
+
+        uint256 rightSide;
+        if (tokenIn == reserve) {
+            rightSide = (reserve0 * 1000) / 997;
+        } else {
+            rightSide = (reserve1 * 1000) / 997;
+            currentPrice = 1e36 / currentPrice;
+            targetPrice = 1e36 / targetPrice;
+        }
+
+        uint256 leftSide = Math.sqrt((invariant * 1000).mulDiv(currentPrice, targetPrice * 997));
+
+        amountIn = leftSide - rightSide;
     }
 
     function rebalanceLiquidity(uint32 key) internal {
@@ -622,11 +586,218 @@ abstract contract RangeSim is Test {
 
         // Positive flows mean reserves are flowing in, negative flows mean reserves are flowing out
         bool reserveIn = netflow > 0;
-
-        // If reserves are flowing in, determine where to send the flow
-        // Check the price and compare to walls and cushions
+        uint256 flow = reserveIn ? uint256(netflow) : uint256(-1 * netflow);
 
         // Handle branching scenarios
+
+        // If reserves are flowing in (market is buying OHM)
+        if (reserveIn) {
+            uint256 wallPrice = range.wall(true);
+            uint256 cushionPrice = range.cushion(true);
+
+            while (flow > 0) {
+                // Check if the RBS side is active, if not, swap all flow into the liquidity pool
+                if (range.active(true)) {
+                    // Check price against the upper wall and cushion
+                    uint256 currentPrice = price.getCurrentPrice();
+                    uint256 oracleScale = 10**(price.decimals());
+
+                    // If the market price is above the wall price, swap at the wall up to its capacity
+                    if (currentPrice >= wallPrice) {
+                        uint256 capacity = range.capacity(true); // Capacity is in OHM units
+                        uint256 capacityInReserve = capacity.mulDiv(
+                            wallPrice * 1e18,
+                            oracleScale * 1e9
+                        ); // Convert capacity to reserves to compare with flow
+                        if (flow > capacityInReserve) {
+                            // If flow is greater than capacity, swap the capacity at the wall
+                            uint256 minAmountOut = operator.getAmountOut(
+                                reserve,
+                                capacityInReserve
+                            );
+                            vm.prank(market);
+                            operator.swap(reserve, capacityInReserve, minAmountOut);
+                            flow -= capacity;
+                        } else {
+                            // If flow is less than capacity, swap the flow at the wall
+                            uint256 minAmountOut = operator.getAmountOut(reserve, flow);
+                            vm.prank(market);
+                            operator.swap(reserve, flow, minAmountOut);
+                            flow = 0;
+                        }
+                    } else if (currentPrice >= cushionPrice) {
+                        // Bond against the cushion until it's not a good deal
+                        // We assume there is a cushion here since these actions are taking place right after an epoch update
+                        uint256 id = range.market(true);
+                        uint256 bondScale = aggregator.marketScale(id);
+                        uint256 oracleScale = 10**(price.decimals());
+                        while (
+                            currentPrice >=
+                            aggregator.marketPrice(id).mulDiv(oracleScale, bondScale)
+                        ) {
+                            uint256 maxBond = aggregator.maxAmountAccepted(id, address(treasury));
+                            if (maxBond > flow) {
+                                uint256 minAmountOut = aggregator.payoutFor(
+                                    id,
+                                    flow,
+                                    address(treasury)
+                                );
+                                vm.prank(market);
+                                teller.purchase(market, address(treasury), id, flow, minAmountOut);
+                                flow = 0;
+                                break;
+                            } else {
+                                uint256 minAmountOut = aggregator.payoutFor(
+                                    id,
+                                    maxBond,
+                                    address(treasury)
+                                );
+                                vm.prank(market);
+                                aggregator.bond(id, address(treasury), maxBond);
+                                flow -= maxBond;
+                            }
+                        }
+
+                        // If there is some flow remaining, swap it in the liquidity pool up to the wall price
+                        if (flow > 0) {
+                            // Get amount that can swapped in the liquidity pool to push price to wall price
+                            uint256 maxSwap = amountToTargetPrice(reserve, wallPrice);
+                            if (flow > maxSwap) {
+                                // Swap the max amount in the liquidity pool
+                                swap(market, true, maxSwap);
+                                flow -= maxSwap;
+                            } else {
+                                // Swap the flow in the liquidity pool
+                                swap(market, true, flow);
+                                flow = 0;
+                            }
+                        }
+                    } else {
+                        // If the market price is below the cushion price, swap into the liquidity pool up to the cushion price
+                        // Get amount that can swapped in the liquidity pool to push price to wall price
+                        uint256 maxSwap = amountToTargetPrice(reserve, cushionPrice);
+                        if (flow > maxSwap) {
+                            // Swap the max amount in the liquidity pool
+                            swap(market, true, maxSwap);
+                            flow -= maxSwap;
+                        } else {
+                            // Swap the flow in the liquidity pool
+                            swap(market, true, flow);
+                            flow = 0;
+                        }
+                    }
+                } else {
+                    // If the RBS side is not active, swap all flow into the liquidity pool
+                    swap(market, true, flow);
+                    flow = 0;
+                }
+            }
+        } else {
+            // If reserves are flowing out (market is selling OHM)
+            uint256 wallPrice = range.wall(false);
+            uint256 cushionPrice = range.cushion(false);
+
+            while (flow > 0) {
+                // Check if the RBS side is active, if not, swap all flow into the liquidity pool
+                if (range.active(false)) {
+                    // Check price against the upper wall and cushion
+                    uint256 currentPrice = price.getCurrentPrice();
+                    uint256 oracleScale = 10**(price.decimals());
+
+                    // If the market price is below the wall price, swap at the wall up to its capacity
+                    if (currentPrice <= wallPrice) {
+                        uint256 capacity = range.capacity(false); // Lower side capacity is in reserves
+                        if (flow > capacity) {
+                            // If flow is greater than capacity, swap the capacity at the wall
+                            uint256 amountIn = capacity.mulDiv(oracleScale * 1e9, wallPrice * 1e18); // Convert to OHM units
+                            uint256 minAmountOut = operator.getAmountOut(ohm, amountIn);
+                            vm.prank(market);
+                            operator.swap(ohm, amountIn, minAmountOut);
+                            flow -= capacity;
+                        } else {
+                            // If flow is less than capacity, swap the flow at the wall
+                            uint256 amountIn = flow.mulDiv(oracleScale * 1e9, wallPrice * 1e18); // Convert to OHM units
+                            uint256 minAmountOut = operator.getAmountOut(ohm, amountIn);
+                            vm.prank(market);
+                            operator.swap(ohm, amountIn, minAmountOut);
+                            flow = 0;
+                        }
+                    } else if (currentPrice <= cushionPrice) {
+                        // Bond against the cushion until it's not a good deal
+                        // We assume there is a cushion here since these actions are taking place right after an epoch update
+                        uint256 id = range.market(false);
+                        uint256 bondScale = aggregator.marketScale(id);
+                        while (
+                            currentPrice >=
+                            10**(price.decimals() * 2) /
+                                aggregator.marketPrice(id).mulDiv(oracleScale, bondScale)
+                        ) {
+                            (, , , , , uint256 maxPayout) = auctioneer.getMarketInfoForPurchase(id); // in reserve units
+                            if (maxPayout > flow) {
+                                uint256 amountIn = flow.mulDiv(bondPrice, bondScale); // convert to OHM units
+                                uint256 minAmountOut = aggregator.payoutFor(
+                                    id,
+                                    flow,
+                                    address(treasury)
+                                );
+                                vm.prank(market);
+                                teller.purchase(
+                                    market,
+                                    address(treasury),
+                                    id,
+                                    amountIn,
+                                    minAmountOut
+                                );
+                                flow = 0;
+                                break;
+                            } else {
+                                uint256 amountIn = maxPayout.mulDiv(bondPrice, bondScale); // convert to OHM units
+                                uint256 minAmountOut = aggregator.payoutFor(
+                                    id,
+                                    amountIn,
+                                    address(treasury)
+                                );
+                                vm.prank(market);
+                                aggregator.bond(id, address(treasury), amountIn);
+                                flow -= maxPayout;
+                            }
+                        }
+
+                        // If there is some flow remaining, swap it in the liquidity pool up to the wall price
+                        if (flow > 0) {
+                            // Get amount that can swapped in the liquidity pool to push price to wall price
+                            uint256 maxSwap = amountToTargetPrice(ohm, wallPrice);
+                            if (flow > maxSwap) {
+                                // Swap the max amount in the liquidity pool
+                                swap(market, false, maxSwap);
+                                flow -= maxSwap;
+                            } else {
+                                // Swap the flow in the liquidity pool
+                                swap(market, false, flow);
+                                flow = 0;
+                            }
+                        }
+                    } else {
+                        // If the market price is below the cushion price, swap into the liquidity pool up to the cushion price
+                        // Get amount that can swapped in the liquidity pool to push price to wall price
+                        uint256 maxSwap = amountToTargetPrice(ohm, cushionPrice);
+                        if (flow > maxSwap) {
+                            // Swap the max amount in the liquidity pool
+                            swap(market, false, maxSwap);
+                            flow -= maxSwap;
+                        } else {
+                            // Swap the flow in the liquidity pool
+                            swap(market, false, flow);
+                            flow = 0;
+                        }
+                    }
+                } else {
+                    // If the RBS side is not active, swap all flow into the liquidity pool
+                    swap(market, false, flow);
+                    flow = 0;
+                }
+            }
+        }
     }
 
     function getResult(uint32 epoch, bool rebalanced)
