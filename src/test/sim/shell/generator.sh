@@ -17,15 +17,15 @@ SEEDS=(`echo $SEEDS | tr -d '"[]' | tr ',' ' ' `)
 
 for SEED in $SEEDS; do
     # Create a new test file for each seed
-    echo "$BASELINE" > ./src/test/sim/sims/seed-$SEED.sol
+    echo "$BASELINE" > ./src/test/sim/sims/seed-$SEED.t.sol
     
     # Edit the baseline with the data for this seed
-    sed -i '' -e "s/{SEED}/$SEED/g" ./src/test/sim/sims/seed-$SEED.sol
+    sed -i '' -e "s/{SEED}/$SEED/g" ./src/test/sim/sims/seed-$SEED.t.sol
 
     # Append a test to the file for each key
     for (( k=0; k < $KEYS; k++)); do
-        echo "\n    function test_Seed_${SEED}_Key_${k}() public {\n        uint32 key = $k; simulate(key); SimIO.writeResults(SEED(), key);\n    }" >> ./src/test/sim/sims/seed-$SEED.sol
+        echo "\n    function test_Seed_${SEED}_Key_${k}() public {\n        simulate($k);\n    }" >> ./src/test/sim/sims/seed-$SEED.t.sol
     done
     # Append a closing bracket to the file
-    echo "\n}" >> ./src/test/sim/sims/seed-$SEED.sol
+    echo "\n}" >> ./src/test/sim/sims/seed-$SEED.t.sol
 done
