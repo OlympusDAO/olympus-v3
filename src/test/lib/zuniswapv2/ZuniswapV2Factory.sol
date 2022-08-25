@@ -9,25 +9,15 @@ contract ZuniswapV2Factory {
     error PairExists();
     error ZeroAddress();
 
-    event PairCreated(
-        address indexed token0,
-        address indexed token1,
-        address pair,
-        uint256
-    );
+    event PairCreated(address indexed token0, address indexed token1, address pair, uint256);
 
     mapping(address => mapping(address => address)) public pairs;
     address[] public allPairs;
 
-    function createPair(address tokenA, address tokenB)
-        public
-        returns (address pair)
-    {
+    function createPair(address tokenA, address tokenB) public returns (address pair) {
         if (tokenA == tokenB) revert IdenticalAddresses();
 
-        (address token0, address token1) = tokenA < tokenB
-            ? (tokenA, tokenB)
-            : (tokenB, tokenA);
+        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
 
         if (token0 == address(0)) revert ZeroAddress();
 

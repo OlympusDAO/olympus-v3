@@ -19,9 +19,7 @@ library ZuniswapV2Library {
         (uint256 reserve0, uint256 reserve1, ) = IZuniswapV2Pair(
             pairFor(factoryAddress, token0, token1)
         ).getReserves();
-        (reserveA, reserveB) = tokenA == token0
-            ? (reserve0, reserve1)
-            : (reserve1, reserve0);
+        (reserveA, reserveB) = tokenA == token0 ? (reserve0, reserve1) : (reserve1, reserve0);
     }
 
     function quote(
@@ -90,11 +88,7 @@ library ZuniswapV2Library {
         amounts[0] = amountIn;
 
         for (uint256 i; i < path.length - 1; i++) {
-            (uint256 reserve0, uint256 reserve1) = getReserves(
-                factory,
-                path[i],
-                path[i + 1]
-            );
+            (uint256 reserve0, uint256 reserve1) = getReserves(factory, path[i], path[i + 1]);
             amounts[i + 1] = getAmountOut(amounts[i], reserve0, reserve1);
         }
 
@@ -125,11 +119,7 @@ library ZuniswapV2Library {
         amounts[amounts.length - 1] = amountOut;
 
         for (uint256 i = path.length - 1; i > 0; i--) {
-            (uint256 reserve0, uint256 reserve1) = getReserves(
-                factory,
-                path[i - 1],
-                path[i]
-            );
+            (uint256 reserve0, uint256 reserve1) = getReserves(factory, path[i - 1], path[i]);
             amounts[i - 1] = getAmountIn(amounts[i], reserve0, reserve1);
         }
 

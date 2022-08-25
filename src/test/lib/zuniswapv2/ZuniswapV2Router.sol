@@ -46,11 +46,7 @@ contract ZuniswapV2Router {
             amountAMin,
             amountBMin
         );
-        address pairAddress = ZuniswapV2Library.pairFor(
-            address(factory),
-            tokenA,
-            tokenB
-        );
+        address pairAddress = ZuniswapV2Library.pairFor(address(factory), tokenA, tokenB);
         _safeTransferFrom(tokenA, msg.sender, pairAddress, amountA);
         _safeTransferFrom(tokenB, msg.sender, pairAddress, amountB);
         liquidity = IZuniswapV2Pair(pairAddress).mint(to);
@@ -64,11 +60,7 @@ contract ZuniswapV2Router {
         uint256 amountBMin,
         address to
     ) public returns (uint256 amountA, uint256 amountB) {
-        address pair = ZuniswapV2Library.pairFor(
-            address(factory),
-            tokenA,
-            tokenB
-        );
+        address pair = ZuniswapV2Library.pairFor(address(factory), tokenA, tokenB);
         IZuniswapV2Pair(pair).transferFrom(msg.sender, pair, liquidity);
         (amountA, amountB) = IZuniswapV2Pair(pair).burn(to);
         if (amountA < amountAMin) revert InsufficientAAmount();
@@ -81,13 +73,8 @@ contract ZuniswapV2Router {
         address[] calldata path,
         address to
     ) public returns (uint256[] memory amounts) {
-        amounts = ZuniswapV2Library.getAmountsOut(
-            address(factory),
-            amountIn,
-            path
-        );
-        if (amounts[amounts.length - 1] < amountOutMin)
-            revert InsufficientOutputAmount();
+        amounts = ZuniswapV2Library.getAmountsOut(address(factory), amountIn, path);
+        if (amounts[amounts.length - 1] < amountOutMin) revert InsufficientOutputAmount();
         _safeTransferFrom(
             path[0],
             msg.sender,
@@ -103,13 +90,8 @@ contract ZuniswapV2Router {
         address[] calldata path,
         address to
     ) public returns (uint256[] memory amounts) {
-        amounts = ZuniswapV2Library.getAmountsIn(
-            address(factory),
-            amountOut,
-            path
-        );
-        if (amounts[amounts.length - 1] > amountInMax)
-            revert ExcessiveInputAmount();
+        amounts = ZuniswapV2Library.getAmountsIn(address(factory), amountOut, path);
+        if (amounts[amounts.length - 1] > amountInMax) revert ExcessiveInputAmount();
         _safeTransferFrom(
             path[0],
             msg.sender,
@@ -139,15 +121,14 @@ contract ZuniswapV2Router {
                 ? (uint256(0), amountOut)
                 : (amountOut, uint256(0));
             address to = i < path.length - 2
-                ? ZuniswapV2Library.pairFor(
-                    address(factory),
-                    output,
-                    path[i + 2]
-                )
+                ? ZuniswapV2Library.pairFor(address(factory), output, path[i + 2])
                 : to_;
-            IZuniswapV2Pair(
-                ZuniswapV2Library.pairFor(address(factory), input, output)
-            ).swap(amount0Out, amount1Out, to, "");
+            IZuniswapV2Pair(ZuniswapV2Library.pairFor(address(factory), input, output)).swap(
+                amount0Out,
+                amount1Out,
+                to,
+                ""
+            );
         }
     }
 
@@ -168,11 +149,7 @@ contract ZuniswapV2Router {
         if (reserveA == 0 && reserveB == 0) {
             (amountA, amountB) = (amountADesired, amountBDesired);
         } else {
-            uint256 amountBOptimal = ZuniswapV2Library.quote(
-                amountADesired,
-                reserveA,
-                reserveB
-            );
+            uint256 amountBOptimal = ZuniswapV2Library.quote(amountADesired, reserveA, reserveB);
             if (amountBOptimal <= amountBDesired) {
                 if (amountBOptimal <= amountBMin) revert InsufficientBAmount();
                 (amountA, amountB) = (amountADesired, amountBOptimal);
@@ -197,12 +174,7 @@ contract ZuniswapV2Router {
         uint256 value
     ) private {
         (bool success, bytes memory data) = token.call(
-            abi.encodeWithSignature(
-                "transferFrom(address,address,uint256)",
-                from,
-                to,
-                value
-            )
+            abi.encodeWithSignature("transferFrom(address,address,uint256)", from, to, value)
         );
         if (!success || (data.length != 0 && !abi.decode(data, (bool))))
             revert SafeTransferFailed();

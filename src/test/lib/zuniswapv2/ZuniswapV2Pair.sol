@@ -39,20 +39,10 @@ contract ZuniswapV2Pair is ERC20, Math {
 
     bool private isEntered;
 
-    event Burn(
-        address indexed sender,
-        uint256 amount0,
-        uint256 amount1,
-        address to
-    );
+    event Burn(address indexed sender, uint256 amount0, uint256 amount1, address to);
     event Mint(address indexed sender, uint256 amount0, uint256 amount1);
     event Sync(uint256 reserve0, uint256 reserve1);
-    event Swap(
-        address indexed sender,
-        uint256 amount0Out,
-        uint256 amount1Out,
-        address indexed to
-    );
+    event Swap(address indexed sender, uint256 amount0Out, uint256 amount1Out, address indexed to);
 
     modifier nonReentrant() {
         require(!isEntered);
@@ -66,8 +56,7 @@ contract ZuniswapV2Pair is ERC20, Math {
     constructor() ERC20("ZuniswapV2 Pair", "ZUNIV2", 18) {}
 
     function initialize(address token0_, address token1_) public {
-        if (token0 != address(0) || token1 != address(0))
-            revert AlreadyInitialized();
+        if (token0 != address(0) || token1 != address(0)) revert AlreadyInitialized();
 
         token0 = token0_;
         token1 = token1_;
@@ -99,10 +88,7 @@ contract ZuniswapV2Pair is ERC20, Math {
         emit Mint(to, amount0, amount1);
     }
 
-    function burn(address to)
-        public
-        returns (uint256 amount0, uint256 amount1)
-    {
+    function burn(address to) public returns (uint256 amount0, uint256 amount1) {
         uint256 balance0 = IERC20(token0).balanceOf(address(this));
         uint256 balance1 = IERC20(token1).balanceOf(address(this));
         uint256 liquidity = balanceOf[address(this)];
@@ -132,23 +118,16 @@ contract ZuniswapV2Pair is ERC20, Math {
         address to,
         bytes calldata data
     ) public nonReentrant {
-        if (amount0Out == 0 && amount1Out == 0)
-            revert InsufficientOutputAmount();
+        if (amount0Out == 0 && amount1Out == 0) revert InsufficientOutputAmount();
 
         (uint112 reserve0_, uint112 reserve1_, ) = getReserves();
 
-        if (amount0Out > reserve0_ || amount1Out > reserve1_)
-            revert InsufficientLiquidity();
+        if (amount0Out > reserve0_ || amount1Out > reserve1_) revert InsufficientLiquidity();
 
         if (amount0Out > 0) _safeTransfer(token0, to, amount0Out);
         if (amount1Out > 0) _safeTransfer(token1, to, amount1Out);
         if (data.length > 0)
-            IZuniswapV2Callee(to).zuniswapV2Call(
-                msg.sender,
-                amount0Out,
-                amount1Out,
-                data
-            );
+            IZuniswapV2Callee(to).zuniswapV2Call(msg.sender, amount0Out, amount1Out, data);
 
         uint256 balance0 = IERC20(token0).balanceOf(address(this));
         uint256 balance1 = IERC20(token1).balanceOf(address(this));
@@ -211,8 +190,7 @@ contract ZuniswapV2Pair is ERC20, Math {
         uint112 reserve0_,
         uint112 reserve1_
     ) private {
-        if (balance0 > type(uint112).max || balance1 > type(uint112).max)
-            revert BalanceOverflow();
+        if (balance0 > type(uint112).max || balance1 > type(uint112).max) revert BalanceOverflow();
 
         unchecked {
             uint32 timeElapsed = uint32(block.timestamp) - blockTimestampLast;
@@ -242,7 +220,6 @@ contract ZuniswapV2Pair is ERC20, Math {
         (bool success, bytes memory data) = token.call(
             abi.encodeWithSignature("transfer(address,uint256)", to, value)
         );
-        if (!success || (data.length != 0 && !abi.decode(data, (bool))))
-            revert TransferFailed();
+        if (!success || (data.length != 0 && !abi.decode(data, (bool)))) revert TransferFailed();
     }
 }
