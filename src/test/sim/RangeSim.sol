@@ -117,21 +117,21 @@ library SimIO {
             }
             data = bytes.concat(
                 data,
-                "{seed: ",
+                '{"seed": ',
                 bytes(vm.toString(uint256(seed))),
-                ", key: ",
+                ', "key": ',
                 bytes(vm.toString(uint256(key))),
-                ", epoch: ",
+                ', "epoch": ',
                 bytes(vm.toString(uint256(results[i].epoch))),
-                ", marketCap: ",
+                ', "marketCap": ',
                 bytes(vm.toString(results[i].marketCap)),
-                ", price: ",
+                ', "price": ',
                 bytes(vm.toString(results[i].price)),
-                ", reserves: ",
+                ', "reserves": ',
                 bytes(vm.toString(results[i].reserves)),
-                ", liqRatio: ",
+                ', "liqRatio": ',
                 bytes(vm.toString(results[i].liqRatio)),
-                ", supply: ",
+                ', "supply": ',
                 bytes(vm.toString(results[i].supply)),
                 "}"
             );
@@ -285,7 +285,6 @@ abstract contract RangeSim is Test {
             // Load params
             SimIO.Params[] memory paramArray = SimIO.loadParams(SEED());
             uint256 paramLen = paramArray.length;
-            console2.log(paramLen);
             for (uint256 i; i < paramLen; ) {
                 params[paramArray[i].key] = paramArray[i];
                 unchecked {
@@ -552,7 +551,7 @@ abstract contract RangeSim is Test {
             path[1] = address(ohm);
 
             /// Get amount out for the reserves to swap
-            uint256[] memory minAmountsOut = ZuniswapV2Library.getAmountsOut(
+            uint256[] memory amounts = ZuniswapV2Library.getAmountsOut(
                 address(lpFactory),
                 amount,
                 path
@@ -560,7 +559,7 @@ abstract contract RangeSim is Test {
 
             // Execute swap
             vm.prank(market);
-            router.swapExactTokensForTokens(amount, minAmountsOut[0], path, sender);
+            router.swapExactTokensForTokens(amount, amounts[1], path, sender);
         } else {
             // Swap amount of ohm for exact amount of reserves out
             // Create path to swap
@@ -568,7 +567,7 @@ abstract contract RangeSim is Test {
             path[0] = address(ohm);
             path[1] = address(reserve);
 
-            uint256[] memory maxAmountsIn = ZuniswapV2Library.getAmountsIn(
+            uint256[] memory amounts = ZuniswapV2Library.getAmountsIn(
                 address(lpFactory),
                 amount,
                 path
@@ -576,7 +575,7 @@ abstract contract RangeSim is Test {
 
             // Execute swap
             vm.prank(market);
-            router.swapTokensForExactTokens(amount, maxAmountsIn[0], path, sender);
+            router.swapTokensForExactTokens(amount, amounts[1], path, sender);
         }
 
         /// Update price feeds after each swap
@@ -585,35 +584,37 @@ abstract contract RangeSim is Test {
 
     /// @notice Returns the price of the token implied by the liquidity pool
     function poolPrice() public view returns (uint256) {
-        (uint256 reserve0, uint256 reserve1, ) = pool.getReserves();
-        return reserve0.mulDiv(1e18 * 1e9, reserve1 * 1e18);
+        (uint256 reserveBal, uint256 ohmBal, ) = pool.getReserves();
+        return reserveBal.mulDiv(1e18 * 1e9, ohmBal * 1e18);
     }
 
     /// @notice Returns the amount of token in to swap on the liquidity pool to move the price to a target value
-    /// @dev based on the UniswapV2LiquidityMathLibrary.computeProfitMaximizingTrade() function: https://github.com/Uniswap/v2-periphery/blob/0335e8f7e1bd1e8d8329fd300aea2ef2f36dd19f/contracts/libraries/UniswapV2LiquidityMathLibrary.sol#L17
+    /// @dev Assumes that the price is in the correct direction for the token being provided. This is to ensure that the units you get back match the token you provide in.
     function amountToTargetPrice(ERC20 tokenIn, uint256 targetPrice)
         internal
         view
         returns (uint256 amountIn)
     {
-        (uint256 reserve0, uint256 reserve1, ) = pool.getReserves();
-        uint256 currentPrice = reserve0.mulDiv(1e18 * 1e9, reserve1 * 1e18);
-        uint256 invariant = reserve0 * reserve1;
+        // Get existing data from pool
+        (uint256 reserveBal, uint256 ohmBal, ) = pool.getReserves();
+        uint256 currentPrice = reserveBal.mulDiv(1e18 * 1e9, ohmBal * 1e18);
+        uint256 invariant = reserveBal * ohmBal * 1e9; // Multiplying by 1e9 to correct for OHM decimals
 
-        uint256 rightSide;
+        // Compute new pool balance for token in at target price
+        uint256 currentBal;
+        uint256 newBal;
         if (tokenIn == reserve) {
-            rightSide = (reserve0 * 1000) / 997;
+            require(currentPrice <= targetPrice);
+            currentBal = reserveBal;
+            newBal = MathLibrary.sqrt(invariant * targetPrice) / 1e9; // Dividing by 1e9 to correct for OHM decimals
         } else {
-            rightSide = (reserve1 * 1000) / 997;
-            currentPrice = 1e36 / currentPrice;
-            targetPrice = 1e36 / targetPrice;
+            require(currentPrice >= targetPrice);
+            currentBal = ohmBal;
+            newBal = MathLibrary.sqrt(invariant / targetPrice);
         }
 
-        uint256 leftSide = MathLibrary.sqrt(
-            (invariant * 1000).mulDiv(currentPrice, targetPrice * 997)
-        );
-
-        amountIn = leftSide - rightSide;
+        // Compute amount to swap in to reach target price
+        amountIn = newBal - currentBal;
     }
 
     function rebalanceLiquidity(uint32 key) internal {
@@ -647,11 +648,11 @@ abstract contract RangeSim is Test {
         // Get the net flow for the key and epoch combination
         int256 netflow = netflows[key][epoch];
 
-        if (netflow == 0) return; // If netflow is 0, no action is needed
+        if (netflow == int256(0)) return; // If netflow is 0, no action is needed
 
         // Positive flows mean reserves are flowing in, negative flows mean reserves are flowing out
-        bool reserveIn = netflow > 0;
-        uint256 flow = reserveIn ? uint256(netflow) : uint256(-1 * netflow);
+        bool reserveIn = netflow > int256(0);
+        uint256 flow = reserveIn ? uint256(netflow) : uint256(-netflow);
 
         // Handle branching scenarios
 
@@ -682,7 +683,7 @@ abstract contract RangeSim is Test {
                             );
                             vm.prank(market);
                             operator.swap(reserve, capacityInReserve, minAmountOut);
-                            flow -= capacity;
+                            flow -= capacityInReserve;
                         } else {
                             // If flow is less than capacity, swap the flow at the wall
                             uint256 minAmountOut = operator.getAmountOut(reserve, flow);
@@ -695,7 +696,6 @@ abstract contract RangeSim is Test {
                         // We assume there is a cushion here since these actions are taking place right after an epoch update
                         uint256 id = range.market(true);
                         uint256 bondScale = aggregator.marketScale(id);
-                        uint256 oracleScale = 10**(price.decimals());
                         while (
                             currentPrice >=
                             aggregator.marketPrice(id).mulDiv(oracleScale, bondScale)
@@ -732,11 +732,11 @@ abstract contract RangeSim is Test {
                         // If there is some flow remaining, swap it in the liquidity pool up to the wall price
                         if (flow > 0) {
                             // Get amount that can swapped in the liquidity pool to push price to wall price
-                            uint256 maxSwap = amountToTargetPrice(reserve, wallPrice);
-                            if (flow > maxSwap) {
+                            uint256 maxReserveIn = amountToTargetPrice(reserve, wallPrice);
+                            if (flow > maxReserveIn) {
                                 // Swap the max amount in the liquidity pool
-                                swap(market, true, maxSwap);
-                                flow -= maxSwap;
+                                swap(market, true, maxReserveIn);
+                                flow -= maxReserveIn;
                             } else {
                                 // Swap the flow in the liquidity pool
                                 swap(market, true, flow);
@@ -746,11 +746,11 @@ abstract contract RangeSim is Test {
                     } else {
                         // If the market price is below the cushion price, swap into the liquidity pool up to the cushion price
                         // Get amount that can swapped in the liquidity pool to push price to wall price
-                        uint256 maxSwap = amountToTargetPrice(reserve, cushionPrice);
-                        if (flow > maxSwap) {
+                        uint256 maxReserveIn = amountToTargetPrice(reserve, cushionPrice);
+                        if (flow > maxReserveIn) {
                             // Swap the max amount in the liquidity pool
-                            swap(market, true, maxSwap);
-                            flow -= maxSwap;
+                            swap(market, true, maxReserveIn);
+                            flow -= maxReserveIn;
                         } else {
                             // Swap the flow in the liquidity pool
                             swap(market, true, flow);
@@ -844,11 +844,12 @@ abstract contract RangeSim is Test {
                         // If there is some flow remaining, swap it in the liquidity pool up to the wall price
                         if (flow > 0) {
                             // Get amount that can swapped in the liquidity pool to push price to wall price
-                            uint256 maxSwap = amountToTargetPrice(ohm, wallPrice);
-                            if (flow > maxSwap) {
+                            uint256 maxOhmIn = amountToTargetPrice(ohm, wallPrice);
+                            uint256 maxReserveOut = maxOhmIn.mulDiv(wallPrice, oracleScale); // convert to reserve units
+                            if (flow > maxReserveOut) {
                                 // Swap the max amount in the liquidity pool
-                                swap(market, false, maxSwap);
-                                flow -= maxSwap;
+                                swap(market, false, maxReserveOut);
+                                flow -= maxReserveOut;
                             } else {
                                 // Swap the flow in the liquidity pool
                                 swap(market, false, flow);
@@ -858,11 +859,12 @@ abstract contract RangeSim is Test {
                     } else {
                         // If the market price is below the cushion price, swap into the liquidity pool up to the cushion price
                         // Get amount that can swapped in the liquidity pool to push price to wall price
-                        uint256 maxSwap = amountToTargetPrice(ohm, cushionPrice);
-                        if (flow > maxSwap) {
+                        uint256 maxOhmIn = amountToTargetPrice(ohm, cushionPrice);
+                        uint256 maxReserveOut = maxOhmIn.mulDiv(cushionPrice, oracleScale); // convert to reserve units
+                        if (flow > maxReserveOut) {
                             // Swap the max amount in the liquidity pool
-                            swap(market, false, maxSwap);
-                            flow -= maxSwap;
+                            swap(market, false, maxReserveOut);
+                            flow -= maxReserveOut;
                         } else {
                             // Swap the flow in the liquidity pool
                             swap(market, false, flow);
@@ -920,6 +922,7 @@ abstract contract RangeSim is Test {
         for (uint32 e; e < epochs; ) {
             // 0. Warp time forward
             vm.warp(block.timestamp + duration);
+            vm.roll(block.number + 1);
 
             // 1. Perform rebase
             rebase();
