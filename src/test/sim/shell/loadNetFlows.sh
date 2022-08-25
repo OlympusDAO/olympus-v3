@@ -1,23 +1,30 @@
 #!/bin/sh
 # Script to load netflows from a json file into solidity, using a filter defined in the arguments passed here.
 
-# Create filter from first arg, removing quote escapes
-filter=$(echo "$1" | tr -d '\')
+# Create filter from passed in seed
+# filter=$(echo "$1" | tr -d '\')
+filter=".[] | { key: (.key | ltrimstr(\"${1}_\") | tonumber), day: (.day | tonumber), netflow: (.netflow | tonumber)}"
 
-# Get query result from jq
+# Get query result from provided json file
 netflows=$(jq -c "$filter" $2)
 
 # Initialize empty array
 results=()
-key=0 # params must be supported by key in ascending order to match the data correctly
-for row in $params; do
-    key=$(echo $row | jq -r '.key' | )
-    epoch=$(echo $row | jq -r '.epoch' | )
-    netflow=$(echo $row | jq -r '.netflow' | )
-    
-    result=($key $epoch $netflow)
-    results+=result
+for count in {0..2}; do
+    for row in $netflows; do
+        key=$(echo $row | jq -r '.key')
+        epoch=$(echo "$(echo $row | jq -r '.day') * 3 + $count" | bc)
+        netflow=$(echo "$(echo $row | jq -r '.netflow') * 10^18 / 3" | bc)
+        
+        result=($key $epoch $netflow)
+        # Concatenate array elements into a single string with parentheses for encoding as tuple (struct)
+        result="("$(echo ${result[@]} | tr ' ' ', ')")"
+        results+=($result)
+    done
 done
+
+# Concatenate array elements into a single string with square brackets for encoding as an array
+results="["$(echo ${results[@]} | tr ' ' ', ')"]"
 
 # ABI encode results to pass back into Solidity
 cast abi-encode "result((uint32, uint32, int256)[])" $results

@@ -44,7 +44,7 @@ library SimIO {
 
     function _loadData(
         string memory script,
-        string memory query,
+        uint32 seed,
         string memory path
     ) internal returns (bytes memory response) {
         string[] memory inputs = new string[](3);
@@ -55,7 +55,7 @@ library SimIO {
                 "./src/test/sim/shell/",
                 bytes(script),
                 " ",
-                bytes(query),
+                bytes(vm.toString(uint256(seed))),
                 " ",
                 bytes(path),
                 ""
@@ -75,17 +75,8 @@ library SimIO {
 
     function loadParams(uint32 seed) external returns (Params[] memory params) {
         string memory script = "loadParams.sh";
-        string memory query = string(
-            bytes.concat(
-                "'.[] | { key: (.key | ltrimstr(\"",
-                bytes(vm.toString(uint256(seed))),
-                "_\") | tonumber), maxLiqRatio: ((.maxLiqRatio | tonumber) * 10000), reserveFactor: ((.askFactor | tonumber) * 10000), cushionFactor: ((.cushionFactor | tonumber) * 10000), wallSpread: ((.wall | tonumber) * 10000), cushionSpread: ((.cushion | tonumber) * 10000) }'",
-                ""
-            )
-        );
-        console2.log(query);
         string memory path = "./src/test/sim/in/params.json";
-        bytes memory res = _loadData(script, query, path);
+        bytes memory res = _loadData(script, seed, path);
         params = abi.decode(res, (Params[]));
     }
 
@@ -97,16 +88,8 @@ library SimIO {
 
     function loadNetflows(uint32 seed) external returns (Netflow[] memory netflows) {
         string memory script = "loadNetflows.sh";
-        string memory query = string(
-            bytes.concat(
-                "'.[] | { key: (.key | ltrimstr(\"",
-                bytes(vm.toString(uint256(seed))),
-                "_\") | tonumber), netflow: (.netflow | tonumber) }'",
-                ""
-            )
-        );
         string memory path = "./src/test/sim/in/netflows.json";
-        bytes memory res = _loadData(script, query, path);
+        bytes memory res = _loadData(script, seed, path);
         netflows = abi.decode(res, (Netflow[]));
     }
 
@@ -266,8 +249,9 @@ abstract contract RangeSim is Test {
 
         {
             // Deploy mock tokens and price feeds
+            reserve = new MockERC20("Reserve", "RSV", 18); // deploying reserve before ohm in the broader context of this file means it will have a smaller address and therefore will be token0 in the LP pool
             ohm = new MockOhm("Olympus", "OHM", 9);
-            reserve = new MockERC20("Reserve", "RSV", 18);
+            require(address(reserve) < address(ohm)); // ensure reserve is token0 in the LP pool
 
             ohmEthPriceFeed = new MockPriceFeed();
             ohmEthPriceFeed.setDecimals(18);
@@ -297,6 +281,8 @@ abstract contract RangeSim is Test {
 
         {
             // Load sim data
+
+            // Load params
             SimIO.Params[] memory paramArray = SimIO.loadParams(SEED());
             uint256 paramLen = paramArray.length;
             console2.log(paramLen);
@@ -307,15 +293,15 @@ abstract contract RangeSim is Test {
                 }
             }
 
-            // // Load netflows data
-            // SimIO.Netflow[] memory netflowArray = SimIO.loadNetflows(SEED());
-            // uint256 netflowLen = netflowArray.length;
-            // for (uint256 j; j < netflowLen; ) {
-            //     netflows[netflowArray[j].key][netflowArray[j].epoch] = netflowArray[j].netflow;
-            //     unchecked {
-            //         j++;
-            //     }
-            // }
+            // Load netflows data
+            SimIO.Netflow[] memory netflowArray = SimIO.loadNetflows(SEED());
+            uint256 netflowLen = netflowArray.length;
+            for (uint256 j; j < netflowLen; ) {
+                netflows[netflowArray[j].key][netflowArray[j].epoch] = netflowArray[j].netflow;
+                unchecked {
+                    j++;
+                }
+            }
         }
     }
 
@@ -458,7 +444,7 @@ abstract contract RangeSim is Test {
             reserve.mint(address(treasury), treasuryReserves + liquidityReserves);
 
             // Mint equivalent OHM to treasury for to provide as liquidity
-            uint256 liquidityOhm = liquidityReserves.mulDiv(initialPrice * 1e9, 1e18 * 1e18);
+            uint256 liquidityOhm = liquidityReserves.mulDiv(1e18 * 1e9, initialPrice * 1e18);
             ohm.mint(address(treasury), liquidityOhm);
 
             // Approve the liquidity pool for both tokens and deposit

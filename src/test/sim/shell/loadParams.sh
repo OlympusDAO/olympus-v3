@@ -1,15 +1,14 @@
 #!/bin/sh
 # Script to load params from a json file into solidity, using a filter defined in the arguments passed here.
 
-# Create filter from first arg, removing quote escapes
-filter=$(echo "$1" | tr -d '\')
+# Create filter with passed in seed
+filter=".[] | { key: (.key | ltrimstr(\"${1}_\") | tonumber), maxLiqRatio: ((.maxLiqRatio | tonumber) * 10000), reserveFactor: ((.askFactor | tonumber) * 10000), cushionFactor: ((.cushionFactor | tonumber) * 10000), wallSpread: ((.wall | tonumber) * 10000), cushionSpread: ((.cushion | tonumber) * 10000) }"
 
-# Get query result from jq
+# Get query result from provided json file
 params=$(jq -c "$filter" $2)
 
 # Initialize empty array
 results=()
-key=0 # params must be supported by key in ascending order to match the data correctly
 for row in $params; do
     key=$(echo $row | jq -r '.key')
     maxLiqRatio=$(echo "$(echo $row | jq -r '.maxLiqRatio')/1" | bc)
