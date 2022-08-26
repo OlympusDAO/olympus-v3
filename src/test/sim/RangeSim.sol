@@ -679,12 +679,10 @@ abstract contract RangeSim is Test {
         if (liquidityRatio < targetRatio) {
             // Sell reserves into the liquidity pool
             uint256 amountIn = (reservesInTotal * targetRatio) / 1e4 - reservesInLiquidity;
-            console2.log(11);
             if (amountIn > price.getCurrentPrice() / 1e9) swap(address(treasury), true, amountIn);
         } else if (liquidityRatio > targetRatio) {
             // Buy reserves from the liquidity pool
             uint256 amountOut = reservesInLiquidity - (reservesInTotal * targetRatio) / 1e4;
-            console2.log(12);
             if (amountOut > price.getCurrentPrice() / 1e9) swap(address(treasury), false, amountOut);
         }
     }
@@ -707,7 +705,6 @@ abstract contract RangeSim is Test {
             uint256 currentPrice = price.getCurrentPrice();
             while (flow > currentPrice / 1e9) { // If below this amount, swaps will yield 0 OHM, which errors on the liquidity pool
                 // Check if the RBS side is active, if not, swap all flow into the liquidity pool
-                // console2.log(flow);
                 if (range.active(true)) {
                     // Check price against the upper wall and cushion
                     currentPrice = price.getCurrentPrice();
@@ -782,12 +779,10 @@ abstract contract RangeSim is Test {
                             uint256 maxReserveIn = amountToTargetPrice(reserve, wallPrice);
                             if (flow > maxReserveIn) {
                                 // Swap the max amount in the liquidity pool
-                                console2.log(1);
                                 swap(market, true, maxReserveIn);
                                 flow -= maxReserveIn;
                             } else {
                                 // Swap the flow in the liquidity pool
-                                console2.log(2);
                                 swap(market, true, flow);
                                 flow = 0;
                             }
@@ -798,19 +793,16 @@ abstract contract RangeSim is Test {
                         uint256 maxReserveIn = amountToTargetPrice(reserve, wallPrice);
                         if (flow > maxReserveIn) {
                             // Swap the max amount in the liquidity pool
-                            console2.log(3);
                             swap(market, true, maxReserveIn);
                             flow -= maxReserveIn;
                         } else {
                             // Swap the flow in the liquidity pool
-                            console2.log(4);
                             swap(market, true, flow);
                             flow = 0;
                         }
                     }
                 } else {
                     // If the RBS side is not active, swap all flow into the liquidity pool
-                    console2.log(5);
                     swap(market, true, flow);
                     flow = 0;
                 }
@@ -902,12 +894,10 @@ abstract contract RangeSim is Test {
                             uint256 maxReserveOut = maxOhmIn.mulDiv(wallPrice * 1e18, oracleScale * 1e9); // convert to reserve units
                             if (flow > maxReserveOut) {
                                 // Swap the max amount in the liquidity pool
-                                console2.log(6);
                                 swap(market, false, maxReserveOut);
                                 flow -= maxReserveOut;
                             } else {
                                 // Swap the flow in the liquidity pool
-                                console2.log(7);
                                 swap(market, false, flow);
                                 flow = 0;
                             }
@@ -919,19 +909,16 @@ abstract contract RangeSim is Test {
                         uint256 maxReserveOut = maxOhmIn.mulDiv(wallPrice * 1e18, oracleScale * 1e9); // convert to reserve units
                         if (flow > maxReserveOut) {
                             // Swap the max amount in the liquidity pool
-                            console2.log(8);
                             swap(market, false, maxReserveOut);
                             flow -= maxReserveOut;
                         } else {
                             // Swap the flow in the liquidity pool
-                            console2.log(9);
                             swap(market, false, flow);
                             flow = 0;
                         }
                     }
                 } else {
                     // If the RBS side is not active, swap all flow into the liquidity pool
-                    console2.log(10);
                     swap(market, false, flow);
                     flow = 0;
                 }
