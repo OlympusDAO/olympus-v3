@@ -6,3 +6,4 @@ remappings.txt
 broadcast/
 src/test/sim/in/*.json
 src/test/sim/out/*.json
+src/test/sim/sims/*.t.sol
