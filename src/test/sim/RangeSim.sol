@@ -71,6 +71,7 @@ library SimIO {
         uint32 cushionFactor;
         uint32 wallSpread;
         uint32 cushionSpread;
+        bool dynamicRR;
     }
 
     function loadParams(uint32 seed) external returns (Params[] memory params) {
@@ -511,9 +512,45 @@ abstract contract RangeSim is Test {
         }
     }
 
+    /// @notice Returns an adjustment percentage for the rebase based on the current price as a percentage with 4 decimals. i.e. 10000 = 1%.
+    /// @dev Rebase adjustments based on v1 reward rate controller design
+    function getRebaseAdjustment() internal view returns (uint256) {
+        // Get current price and price levels
+        uint256 currentPrice = price.getCurrentPrice();
+        uint256 highWallPrice = range.price(true, true);
+        uint256 highCushionPrice = range.price(false, true);
+        uint256 lowWallPrice = range.price(true, false);
+        uint256 lowCushionPrice = range.price(false, false);
+        uint256 backingPrice = reserve.balanceOf(address(treasury)) * 1e9 / ohm.totalSupply();
+        uint256 threeXPremiumPrice = backingPrice * 3;
+
+        // Determine rebase adjustment based on price
+        if (currentPrice > threeXPremiumPrice) {
+            return 1250000;
+        } else if (currentPrice > highWallPrice) {
+            return 1125000;
+        } else if (currentPrice > highCushionPrice) {
+            return 1000000;
+        } else if (currentPrice > lowCushionPrice) {
+            return 1000000;
+        } else if (currentPrice > lowWallPrice) {
+            return 750000;
+        } else if (currentPrice > backingPrice) {
+            return 500000;
+        } else {
+            return 0;
+        }
+    }
+
     /// @dev Simulating rebases by minting OHM to the market account (at 80% rate) and the liquidity pool
-    function rebase() internal {
+    function rebase(bool dynamicRR) internal {
         uint256 perc = getRebasePercent();
+
+        // Adjust rebase percent if dynamic reward rate is used
+        if (dynamicRR) perc = perc * getRebaseAdjustment() / 1e6;
+
+        // If percent is zero, do nothing
+        if (perc == 0) return;
 
         // Mint OHM to the market account
         vm.startPrank(address(minter));
@@ -938,6 +975,7 @@ abstract contract RangeSim is Test {
         uint32 epochs = EPOCHS; // cache
         uint32 duration = EPOCH_DURATION; // cache
         uint32 rebalance_frequency = REBALANCE_FREQUENCY; // cache
+        bool dynamicRR = params[key].dynamicRR; // cache
         SimIO.Result[] memory results = new SimIO.Result[](epochs);
 
         // Run simulation
@@ -946,7 +984,7 @@ abstract contract RangeSim is Test {
             vm.warp(block.timestamp + duration);
 
             // 1. Perform rebase
-            rebase();
+            rebase(dynamicRR);
 
             // 2. Update price and moving average data from LP pool
             updatePrice();
