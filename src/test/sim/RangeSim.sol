@@ -109,12 +109,21 @@ library SimIO {
         uint32 key,
         Result[] memory results
     ) external {
-        bytes memory data = "[";
+        string memory path = string(
+            bytes.concat(
+                "./src/test/sim/out/results-",
+                bytes(vm.toString(uint256(seed))),
+                "-",
+                bytes(vm.toString(uint256(key))),
+                ".json",
+                ""
+            )
+        );
+        vm.writeLine(path, "[");
+        bytes memory data;
         uint256 len = results.length;
         for (uint256 i; i < len; ) {
-            if (i > 0) {
-                data = bytes.concat(data, ",");
-            }
+            data = "";
             data = bytes.concat(
                 data,
                 '{"seed": ',
@@ -135,22 +144,16 @@ library SimIO {
                 bytes(vm.toString(results[i].supply)),
                 "}"
             );
+            if (i < len - 1) {
+                data = bytes.concat(data, ",");
+            }
+            vm.writeLine(path, string(data));
             unchecked {
                 i++;
             }
         }
-        data = bytes.concat(data, "]");
-        string memory path = string(
-            bytes.concat(
-                "./src/test/sim/out/results-",
-                bytes(vm.toString(uint256(seed))),
-                "-",
-                bytes(vm.toString(uint256(key))),
-                ".json",
-                ""
-            )
-        );
-        vm.writeFile(path, string(data));
+
+        vm.writeLine(path, "]");
     }
 }
 
@@ -931,7 +934,7 @@ abstract contract RangeSim is Test {
         rangeSetup(key);
 
         // Initialize variables for tracking status
-        uint32 lastRebalance;
+        uint32 lastRebalance = uint32(block.timestamp);
         uint32 epochs = EPOCHS; // cache
         uint32 duration = EPOCH_DURATION; // cache
         uint32 rebalance_frequency = REBALANCE_FREQUENCY; // cache
