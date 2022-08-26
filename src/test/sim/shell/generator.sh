@@ -5,7 +5,7 @@
 source .env
 
 # Load the test file template into a variable
-BASELINE=$(cat ./src/test/sim/test_template.sol.x)
+BASELINE=$(cat ./src/test/sim/SimTemplate.sol.x)
 # Set IFS to empty so that we can use line breaks in the test file template
 IFS=
 
