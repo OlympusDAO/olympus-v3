@@ -116,12 +116,10 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
 
         // Handle payout
         if (quoteToken == payoutToken && quoteToken == ohm) {
-            // If OHM-OHM bond, only mint the difference and transfer back to teller
-            uint256 toMint = outputAmount_ - inputAmount_;
-            MINTR.mintOhm(address(this), toMint);
-
-            // Transfer payoutTokens to sender
-            payoutToken.safeTransfer(msg.sender, outputAmount_);
+            // If OHM-OHM bond, burn OHM received and then mint OHM to the Teller
+            // We don't mint the difference because there could be rare cases where input is greater than output
+            MINTR.burnOhm(address(this), inputAmount_);
+            MINTR.mintOhm(msg.sender, outputAmount_);
         } else if (quoteToken == ohm) {
             // If inverse bond (buying ohm), transfer payout tokens to sender
             TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
