@@ -129,14 +129,19 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
                             ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
+    function _resetBeat() internal {
+        lastBeat = block.timestamp - frequency();
+    }
+
     /// @inheritdoc IHeart
     function resetBeat() external onlyRole("heart_admin") {
-        lastBeat = block.timestamp - frequency();
+        _resetBeat();
     }
 
     /// @inheritdoc IHeart
     function toggleBeat() external onlyRole("heart_admin") {
         active = !active;
+        if (active) _resetBeat();
     }
 
     /// @inheritdoc IHeart

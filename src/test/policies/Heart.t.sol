@@ -240,19 +240,23 @@ contract HeartTest is Test {
         /// Expect the heart to be active to begin with
         assertTrue(heart.active());
 
+        uint256 lastBeat = heart.lastBeat();
+
         /// Toggle the heart to make it inactive
         vm.prank(guardian);
         heart.toggleBeat();
 
-        /// Expect the heart to be inactive
+        /// Expect the heart to be inactive and lastBeat to remain the same
         assertTrue(!heart.active());
+        assertEq(heart.lastBeat(), lastBeat);
 
         /// Toggle the heart to make it active again
         vm.prank(guardian);
         heart.toggleBeat();
 
-        /// Expect the heart to be active again
+        /// Expect the heart to be active again and lastBeat to be reset
         assertTrue(heart.active());
+        assertEq(heart.lastBeat(), block.timestamp - heart.frequency());
     }
 
     function testCorrectness_setRewardTokenAndAmount() public {
