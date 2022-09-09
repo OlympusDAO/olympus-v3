@@ -2,7 +2,6 @@
 pragma solidity 0.8.15;
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
-import {FullMath} from "libraries/FullMath.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import "src/Kernel.sol";
 
@@ -15,7 +14,6 @@ error RANGE_InvalidParams();
 ///         The Olympus Range Data is updated each epoch by the Olympus Range Operator contract.
 contract OlympusRange is Module {
     using TransferHelper for ERC20;
-    using FullMath for uint256;
 
     event WallUp(bool high_, uint256 timestamp_, uint256 capacity_);
     event WallDown(bool high_, uint256 timestamp_, uint256 capacity_);

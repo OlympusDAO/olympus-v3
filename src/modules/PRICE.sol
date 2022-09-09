@@ -6,8 +6,6 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import "src/Kernel.sol";
 
-import {FullMath} from "libraries/FullMath.sol";
-
 // ERRORS
 error Price_InvalidParams();
 error Price_NotInitialized();
@@ -20,8 +18,6 @@ error Price_BadFeed(address priceFeed);
 ///         duration and observation frequency. The data provided by this contract is used by the Olympus Range Operator to
 ///         perform market operations. The Olympus Price Oracle is updated each epoch by the Olympus Heart contract.
 contract OlympusPrice is Module {
-    using FullMath for uint256;
-
     /* ========== EVENTS =========== */
     event NewObservation(uint256 timestamp_, uint256 price_, uint256 movingAverage_);
     event MovingAverageDurationChanged(uint48 movingAverageDuration_);
