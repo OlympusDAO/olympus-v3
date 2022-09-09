@@ -62,7 +62,8 @@ contract OlympusRange is Module {
     /// @dev    A threshold is required so that a wall is not "active" with a capacity near zero, but unable to be depleted practically (dust).
     uint256 public thresholdFactor;
 
-    uint256 public constant FACTOR_SCALE = 1e4;
+    uint256 public constant ONE_HUNDRED_PERCENT = 100e2;
+    uint256 public constant ONE_PERCENT = 1e2;
 
     /// @notice OHM token contract address
     ERC20 public immutable ohm;
@@ -84,13 +85,13 @@ contract OlympusRange is Module {
     ) Module(kernel_) {
         // Validate parameters
         if (
-            wallSpread_ >= 10000 ||
-            wallSpread_ < 100 ||
-            cushionSpread_ >= 10000 ||
-            cushionSpread_ < 100 ||
+            wallSpread_ >= ONE_HUNDRED_PERCENT ||
+            wallSpread_ < ONE_PERCENT ||
+            cushionSpread_ >= ONE_HUNDRED_PERCENT ||
+            cushionSpread_ < ONE_PERCENT ||
             cushionSpread_ > wallSpread_ ||
-            thresholdFactor_ >= 10000 ||
-            thresholdFactor_ < 100
+            thresholdFactor_ >= ONE_HUNDRED_PERCENT ||
+            thresholdFactor_ < ONE_PERCENT
         ) revert RANGE_InvalidParams();
 
         _range = Range({
@@ -175,13 +176,19 @@ contract OlympusRange is Module {
         uint256 cushionSpread = _range.cushion.spread;
 
         // Calculate new wall and cushion values from moving average and spread
-        _range.wall.low.price = (movingAverage_ * (FACTOR_SCALE - wallSpread)) / FACTOR_SCALE;
-        _range.wall.high.price = (movingAverage_ * (FACTOR_SCALE + wallSpread)) / FACTOR_SCALE;
+        _range.wall.low.price =
+            (movingAverage_ * (ONE_HUNDRED_PERCENT - wallSpread)) /
+            ONE_HUNDRED_PERCENT;
+        _range.wall.high.price =
+            (movingAverage_ * (ONE_HUNDRED_PERCENT + wallSpread)) /
+            ONE_HUNDRED_PERCENT;
 
-        _range.cushion.low.price = (movingAverage_ * (FACTOR_SCALE - cushionSpread)) / FACTOR_SCALE;
+        _range.cushion.low.price =
+            (movingAverage_ * (ONE_HUNDRED_PERCENT - cushionSpread)) /
+            ONE_HUNDRED_PERCENT;
         _range.cushion.high.price =
-            (movingAverage_ * (FACTOR_SCALE + cushionSpread)) /
-            FACTOR_SCALE;
+            (movingAverage_ * (ONE_HUNDRED_PERCENT + cushionSpread)) /
+            ONE_HUNDRED_PERCENT;
 
         emit PricesChanged(
             _range.wall.low.price,
@@ -196,7 +203,7 @@ contract OlympusRange is Module {
     /// @param  high_ - Specifies the side of the range to regenerate (true = high side, false = low side).
     /// @param  capacity_ - Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
     function regenerate(bool high_, uint256 capacity_) external permissioned {
-        uint256 threshold = (capacity_ * thresholdFactor) / FACTOR_SCALE;
+        uint256 threshold = (capacity_ * thresholdFactor) / ONE_HUNDRED_PERCENT;
 
         if (high_) {
             // Re-initialize the high side
@@ -256,10 +263,10 @@ contract OlympusRange is Module {
     function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external permissioned {
         // Confirm spreads are within allowed values
         if (
-            wallSpread_ >= 10000 ||
-            wallSpread_ < 100 ||
-            cushionSpread_ >= 10000 ||
-            cushionSpread_ < 100 ||
+            wallSpread_ >= ONE_HUNDRED_PERCENT ||
+            wallSpread_ < ONE_PERCENT ||
+            cushionSpread_ >= ONE_HUNDRED_PERCENT ||
+            cushionSpread_ < ONE_PERCENT ||
             cushionSpread_ > wallSpread_
         ) revert RANGE_InvalidParams();
 
@@ -275,7 +282,8 @@ contract OlympusRange is Module {
     /// @param  thresholdFactor_ - Percent of capacity that the wall should close below, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev    The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
     function setThresholdFactor(uint256 thresholdFactor_) external permissioned {
-        if (thresholdFactor_ >= 10000 || thresholdFactor_ < 100) revert RANGE_InvalidParams();
+        if (thresholdFactor_ >= ONE_HUNDRED_PERCENT || thresholdFactor_ < ONE_PERCENT)
+            revert RANGE_InvalidParams();
         thresholdFactor = thresholdFactor_;
 
         emit ThresholdFactorChanged(thresholdFactor_);

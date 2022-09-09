@@ -86,7 +86,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     uint8 public immutable reserveDecimals;
 
     // Constants
-    uint32 public constant FACTOR_SCALE = 1e4;
+    uint32 public constant ONE_HUNDRED_PERCENT = 100e2;
+    uint32 public constant ONE_PERCENT = 1e2;
 
     /* ========== CONSTRUCTOR ========== */
     constructor(
@@ -103,12 +104,16 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         if (configParams[1] > uint256(7 days) || configParams[1] < uint256(1 days))
             revert Operator_InvalidParams();
 
-        if (configParams[2] < uint32(10_000)) revert Operator_InvalidParams();
+        if (configParams[2] < uint32(10e3)) revert Operator_InvalidParams();
 
         if (configParams[3] < uint32(1 hours) || configParams[3] > configParams[1])
             revert Operator_InvalidParams();
 
-        if (configParams[4] > 10000 || configParams[4] < 100) revert Operator_InvalidParams();
+        if (configParams[0] > ONE_HUNDRED_PERCENT || configParams[0] < ONE_PERCENT)
+            revert Operator_InvalidParams();
+
+        if (configParams[4] > ONE_HUNDRED_PERCENT || configParams[4] < ONE_PERCENT)
+            revert Operator_InvalidParams();
 
         if (
             configParams[5] < 1 hours ||
@@ -390,7 +395,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
             // Calculate market capacity from the cushion factor
             uint256 marketCapacity = range.high.capacity.mulDiv(
                 config_.cushionFactor,
-                FACTOR_SCALE
+                ONE_HUNDRED_PERCENT
             );
 
             // Create new bond market to buy the reserve with OHM
@@ -443,7 +448,10 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
             Config memory config_ = _config;
 
             // Calculate market capacity from the cushion factor
-            uint256 marketCapacity = range.low.capacity.mulDiv(config_.cushionFactor, FACTOR_SCALE);
+            uint256 marketCapacity = range.low.capacity.mulDiv(
+                config_.cushionFactor,
+                ONE_HUNDRED_PERCENT
+            );
 
             // Create new bond market to buy OHM with the reserve
             IBondAuctioneer.MarketParams memory params = IBondAuctioneer.MarketParams({
@@ -518,7 +526,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     /// @inheritdoc IOperator
     function setCushionFactor(uint32 cushionFactor_) external onlyRole("operator_policy") {
         // Confirm factor is within allowed values
-        if (cushionFactor_ > 10000 || cushionFactor_ < 100) revert Operator_InvalidParams();
+        if (cushionFactor_ > ONE_HUNDRED_PERCENT || cushionFactor_ < ONE_PERCENT)
+            revert Operator_InvalidParams();
 
         // Set factor
         _config.cushionFactor = cushionFactor_;
@@ -550,7 +559,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     /// @inheritdoc IOperator
     function setReserveFactor(uint32 reserveFactor_) external onlyRole("operator_policy") {
         // Confirm factor is within allowed values
-        if (reserveFactor_ > 10000 || reserveFactor_ < 100) revert Operator_InvalidParams();
+        if (reserveFactor_ > ONE_HUNDRED_PERCENT || reserveFactor_ < ONE_PERCENT)
+            revert Operator_InvalidParams();
 
         // Set factor
         _config.reserveFactor = reserveFactor_;
@@ -565,7 +575,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         uint32 observe_
     ) external onlyRole("operator_policy") {
         // Confirm regen parameters are within allowed values
-        if (wait_ < 1 hours || threshold_ > observe_ || observe_ == 0)
+        if (wait_ < 1 hours || threshold_ > observe_ || observe_ == 0 || threshold_ == 0)
             revert Operator_InvalidParams();
 
         // Set regen params
@@ -788,14 +798,14 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     /// @inheritdoc IOperator
     function fullCapacity(bool high_) public view override returns (uint256) {
         uint256 reservesInTreasury = TRSRY.getReserveBalance(reserve);
-        uint256 capacity = (reservesInTreasury * _config.reserveFactor) / FACTOR_SCALE;
+        uint256 capacity = (reservesInTreasury * _config.reserveFactor) / ONE_HUNDRED_PERCENT;
         if (high_) {
             capacity =
                 (capacity.mulDiv(
                     10**ohmDecimals * 10**PRICE.decimals(),
                     10**reserveDecimals * RANGE.price(true, true)
-                ) * (FACTOR_SCALE + RANGE.spread(true) * 2)) /
-                FACTOR_SCALE;
+                ) * (ONE_HUNDRED_PERCENT + RANGE.spread(true) * 2)) /
+                ONE_HUNDRED_PERCENT;
         }
         return capacity;
     }
