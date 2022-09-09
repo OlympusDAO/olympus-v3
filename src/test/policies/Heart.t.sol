@@ -98,7 +98,7 @@ contract HeartTest is Test {
                 kernel,
                 IOperator(address(operator)),
                 rewardToken,
-                uint256(1e18) // 1 reward token
+                uint256(2e18) // 2 reward tokens
             );
         }
 
@@ -267,7 +267,7 @@ contract HeartTest is Test {
         assertEq(heart.reward(), newReward);
 
         /// Mint some new tokens to the heart to pay rewards
-        newToken.mint(address(heart), uint256(1000 * 1e18));
+        newToken.mint(address(heart), uint256(3 * 1e18));
 
         /// Expect the heart to reward the new token and amount on a beat
         uint256 startBalance = newToken.balanceOf(address(this));
@@ -277,6 +277,14 @@ contract HeartTest is Test {
 
         uint256 endBalance = newToken.balanceOf(address(this));
         assertEq(endBalance, startBalance + heart.reward());
+
+        /// Balance is now less than the reward amount, test the min function
+        startBalance = newToken.balanceOf(address(this));
+        vm.warp(block.timestamp + frequency);
+        heart.beat();
+
+        endBalance = newToken.balanceOf(address(this));
+        assertEq(endBalance, startBalance + 1e18);
     }
 
     function testCorrectness_withdrawUnspentRewards() public {

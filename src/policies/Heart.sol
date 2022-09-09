@@ -109,8 +109,11 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     }
 
     function _issueReward(address to_) internal {
-        rewardToken.safeTransfer(to_, reward);
-        emit RewardIssued(to_, reward);
+        uint256 amount = reward > rewardToken.balanceOf(address(this))
+            ? rewardToken.balanceOf(address(this))
+            : reward;
+        rewardToken.safeTransfer(to_, amount);
+        emit RewardIssued(to_, amount);
     }
 
     /*//////////////////////////////////////////////////////////////
