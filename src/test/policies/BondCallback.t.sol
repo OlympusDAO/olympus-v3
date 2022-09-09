@@ -127,6 +127,7 @@ contract BondCallbackTest is Test {
             price.setMovingAverage(100 * 1e18);
             price.setLastPrice(100 * 1e18);
             price.setDecimals(18);
+            price.setLastTime(uint48(block.timestamp));
         }
 
         {

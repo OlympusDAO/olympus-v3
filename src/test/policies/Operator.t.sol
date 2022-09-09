@@ -104,6 +104,7 @@ contract OperatorTest is Test {
             price.setMovingAverage(100 * 1e18);
             price.setLastPrice(100 * 1e18);
             price.setDecimals(18);
+            price.setLastTime(uint48(block.timestamp));
         }
 
         {
@@ -223,6 +224,7 @@ contract OperatorTest is Test {
     /// [X] Splippage check when swapping
     /// [X] Wall breaks when capacity drops below the configured threshold
     /// [X] Not able to swap at the walls when they are down
+    /// [ ] Not able to swap at the walls when price is stale
 
     function testCorrectness_swapHighWall() public {
         /// Initialize operator
@@ -373,6 +375,48 @@ contract OperatorTest is Test {
         uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
 
         bytes memory err = abi.encodeWithSignature("Operator_WallDown()");
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.swap(ohm, amountIn, expAmountOut);
+    }
+
+    function testCorrectness_cannotSwapHighWallWithStalePrice() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Confirm wall is up
+        assertTrue(range.active(true));
+
+        /// Set timestamp forward so price is stale
+        vm.warp(block.timestamp + 3 * uint256(price.observationFrequency()) + 1);
+
+        /// Try to swap, expect to fail
+        uint256 amountIn = 100 * 1e18;
+        uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * range.price(true, true));
+
+        bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.swap(reserve, amountIn, expAmountOut);
+    }
+
+    function testCorrectness_cannotSwapLowWallWithStalePrice() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Confirm wall is up
+        assertTrue(range.active(false));
+
+        /// Set timestamp forward so price is stale
+        vm.warp(block.timestamp + 3 * uint256(price.observationFrequency()) + 1);
+
+        /// Try to swap, expect to fail
+        uint256 amountIn = 100 * 1e9;
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
+
+        bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
         vm.expectRevert(err);
         vm.prank(alice);
         operator.swap(ohm, amountIn, expAmountOut);
@@ -864,6 +908,17 @@ contract OperatorTest is Test {
 
         /// Check that the side capacity has been reduced by the amount of the payout
         assertEq(range.capacity(true), startCapacity - payout);
+
+        /// Set timestamp forward so that price is stale
+        vm.warp(block.timestamp + uint256(price.observationFrequency()) * 3 + 1);
+
+        /// Try to purchase another bond and expect to revert
+        amountIn = auctioneer.maxAmountAccepted(id, guardian) / 2;
+        minAmountOut = auctioneer.payoutFor(amountIn, id, guardian);
+
+        vm.expectRevert(abi.encodeWithSignature("Operator_Inactive()"));
+        vm.prank(alice);
+        teller.purchase(alice, guardian, id, amountIn, minAmountOut);
     }
 
     function testCorrectness_lowCushionPurchasesReduceCapacity() public {
@@ -895,6 +950,17 @@ contract OperatorTest is Test {
 
         /// Check that the side capacity has been reduced by the amount of the payout
         assertEq(range.capacity(false), startCapacity - payout);
+
+        /// Set timestamp forward so that price is stale
+        vm.warp(block.timestamp + uint256(price.observationFrequency()) * 3 + 1);
+
+        /// Try to purchase another bond and expect to revert
+        amountIn = auctioneer.maxAmountAccepted(id, guardian) / 2;
+        minAmountOut = auctioneer.payoutFor(amountIn, id, guardian);
+
+        vm.expectRevert(abi.encodeWithSignature("Operator_Inactive()"));
+        vm.prank(alice);
+        teller.purchase(alice, guardian, id, amountIn, minAmountOut);
     }
 
     /* ========== REGENERATION TESTS ========== */

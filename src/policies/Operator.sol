@@ -186,7 +186,10 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     }
 
     modifier onlyWhileActive() {
-        if (!active) revert Operator_Inactive();
+        if (
+            !active ||
+            uint48(block.timestamp) > PRICE.lastObservationTime() + 3 * PRICE.observationFrequency()
+        ) revert Operator_Inactive();
         _;
     }
 
@@ -624,6 +627,12 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     function toggleActive() external onlyRole("operator_admin") {
         /// Toggle active state
         active = !active;
+    }
+
+    /// @inheritdoc IOperator
+    function deactivateCushion(bool high_) external onlyRole("operator_admin") {
+        /// Manually deactivate a cushion
+        _deactivate(high_);
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */

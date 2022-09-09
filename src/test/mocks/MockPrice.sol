@@ -14,6 +14,7 @@ contract MockPrice is Module {
     uint8 public decimals;
     bool public result;
     uint48 public observationFrequency;
+    uint48 public lastObservationTime;
 
     error Price_CustomError();
 
@@ -79,5 +80,9 @@ contract MockPrice is Module {
 
     function setDecimals(uint8 decimals_) external {
         decimals = decimals_;
+    }
+
+    function setLastTime(uint48 lastObservationTime_) external {
+        lastObservationTime = lastObservationTime_;
     }
 }
