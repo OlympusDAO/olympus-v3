@@ -130,10 +130,15 @@ interface IOperator {
     /// @dev    This function is an escape hatch to trigger out of cycle regenerations and may be useful when doing migrations of Treasury funds
     function regenerate(bool high_) external;
 
-    /// @notice Toggle the Operator status between active and inactive
+    /// @notice Deactivate the Operator
     /// @notice Access restricted
-    /// @dev    Emergency shutdown function for the Operator. Set to inactive to prevent any market operations from occurring.
-    function toggleActive() external;
+    /// @dev    Emergency pause function for the Operator. Prevents market operations from occurring.
+    function deactivate() external;
+
+    /// @notice Activate the Operator
+    /// @notice Access restricted
+    /// @dev    Restart function for the Operator after a pause.
+    function activate() external;
 
     /// @notice Manually close a cushion bond market
     /// @notice Access restricted

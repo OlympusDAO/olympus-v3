@@ -157,7 +157,7 @@ contract HeartTest is Test {
     function testCorrectness_cannotBeatIfInactive() public {
         /// Set the heart to inactive
         vm.prank(guardian);
-        heart.toggleBeat();
+        heart.deactivate();
 
         /// Try to beat the heart and expect revert
         bytes memory err = abi.encodeWithSignature("Heart_BeatStopped()");
@@ -229,7 +229,7 @@ contract HeartTest is Test {
     /* ========== ADMIN FUNCTIONS ========== */
     /// DONE
     /// [X] resetBeat
-    /// [X] toggleBeat
+    /// [X] activate and deactivate
     /// [X] setRewardTokenAndAmount
     /// [X] withdrawUnspentRewards
     /// [X] cannot call admin functions without permissions
@@ -255,7 +255,7 @@ contract HeartTest is Test {
         assertEq(endBalance, startBalance + heart.reward());
     }
 
-    function testCorrectness_toggleBeat() public {
+    function testCorrectness_activate_deactivate() public {
         /// Expect the heart to be active to begin with
         assertTrue(heart.active());
 
@@ -263,7 +263,7 @@ contract HeartTest is Test {
 
         /// Toggle the heart to make it inactive
         vm.prank(guardian);
-        heart.toggleBeat();
+        heart.deactivate();
 
         /// Expect the heart to be inactive and lastBeat to remain the same
         assertTrue(!heart.active());
@@ -271,7 +271,7 @@ contract HeartTest is Test {
 
         /// Toggle the heart to make it active again
         vm.prank(guardian);
-        heart.toggleBeat();
+        heart.activate();
 
         /// Expect the heart to be active again and lastBeat to be reset
         assertTrue(heart.active());
@@ -361,7 +361,10 @@ contract HeartTest is Test {
         heart.resetBeat();
 
         vm.expectRevert(err);
-        heart.toggleBeat();
+        heart.deactivate();
+
+        vm.expectRevert(err);
+        heart.activate();
 
         vm.expectRevert(err);
         heart.setRewardTokenAndAmount(rewardToken, uint256(2e18));

@@ -1540,7 +1540,7 @@ contract OperatorTest is Test {
     function testCorrectness_cannotOperatorIfNotInitialized() public {
         /// Toggle operator to active manually erroneously (so it will not revert with inactive)
         vm.prank(guardian);
-        operator.toggleActive();
+        operator.activate();
 
         /// Call operate as heart contract and expect to revert
         bytes memory err = abi.encodeWithSignature("Operator_NotInitialized()");
@@ -2055,7 +2055,7 @@ contract OperatorTest is Test {
 
         /// Toggle the operator to inactive
         vm.prank(guardian);
-        operator.toggleActive();
+        operator.deactivate();
 
         /// Try to call operator, swap, and bondPurchase, expect reverts
         bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
@@ -2072,6 +2072,23 @@ contract OperatorTest is Test {
         operator.swap(reserve, 1e18, 1);
 
         vm.expectRevert(err);
+        vm.prank(address(callback));
+        operator.bondPurchase(0, 1e18);
+
+        // Activate the operator again
+        vm.prank(guardian);
+        operator.activate();
+
+        /// Confirm that the operator is active
+        vm.prank(guardian);
+        operator.operate();
+
+        vm.prank(alice);
+        operator.swap(ohm, 1e9, 1);
+
+        vm.prank(alice);
+        operator.swap(reserve, 1e18, 1);
+
         vm.prank(address(callback));
         operator.bondPurchase(0, 1e18);
     }

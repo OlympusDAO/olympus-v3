@@ -624,9 +624,13 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function toggleActive() external onlyRole("operator_admin") {
-        // Toggle active state
-        active = !active;
+    function activate() external onlyRole("operator_admin") {
+        active = true;
+    }
+
+    /// @inheritdoc IOperator
+    function deactivate() external onlyRole("operator_admin") {
+        active = false;
     }
 
     /// @inheritdoc IOperator
