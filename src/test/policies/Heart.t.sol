@@ -172,6 +172,25 @@ contract HeartTest is Test {
         heart.beat();
     }
 
+    function testCorrectness_cannotBeatRepeatedlyIfSkipped() public {
+        // Warp forward 2 frequencies
+        vm.warp(block.timestamp + heart.frequency() * 2);
+
+        // Check that lastBeat is less than or equal to the current timestamp minus two frequencies
+        assertLe(heart.lastBeat(), block.timestamp - heart.frequency() * 2);
+
+        // Beat the heart
+        heart.beat();
+
+        // Check that lastBeat is greater than block.timestamp minus one frequency
+        assertGt(heart.lastBeat(), block.timestamp - heart.frequency());
+
+        // Try to beat heart again, expect to revert
+        bytes memory err = abi.encodeWithSignature("Heart_OutOfCycle()");
+        vm.expectRevert(err);
+        heart.beat();
+    }
+
     function testFail_beatFailsIfPriceReverts() public {
         /// Get the beat frequency of the heart and wait that amount of time
         uint256 frequency = heart.frequency();

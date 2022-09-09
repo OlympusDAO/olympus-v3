@@ -100,7 +100,8 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         _operator.operate();
 
         // Update the last beat timestamp
-        lastBeat += frequency();
+        // Ensure that update frequency doesn't change, but do not allow multiple beats if one is skipped
+        lastBeat = block.timestamp - ((block.timestamp - lastBeat) % frequency());
 
         // Issue reward to sender
         _issueReward(msg.sender);
