@@ -185,24 +185,19 @@ contract PriceTest is Test {
         /// Get the current price from the price module
         uint256 currentPrice = price.getCurrentPrice();
 
-        /// Get the current moving average from the price module
-        uint256 movingAverage = price.getMovingAverage();
+        /// Get the current cumulativeObs from the price module
+        uint256 cumulativeObs = price.cumulativeObs();
 
         /// Calculate the expected moving average
-        uint256 expMovingAverage;
-        if (currentPrice > earliestPrice) {
-            expMovingAverage = movingAverage + ((currentPrice - earliestPrice) / numObservations);
-        } else {
-            expMovingAverage = movingAverage - ((earliestPrice - currentPrice) / numObservations);
-        }
+        uint256 expCumulativeObs = cumulativeObs + currentPrice - earliestPrice;
+        uint256 expMovingAverage = expCumulativeObs / numObservations;
 
         /// Update the moving average on the price module
         vm.prank(writer);
         price.updateMovingAverage();
 
         /// Check that the moving average was updated correctly
-        console2.log(expMovingAverage);
-        console2.log(price.getMovingAverage());
+        assertEq(expCumulativeObs, price.cumulativeObs());
         assertEq(expMovingAverage, price.getMovingAverage());
     }
 
@@ -226,9 +221,8 @@ contract PriceTest is Test {
         }
         expMovingAverage /= numObs;
 
-        /// Check that the moving average was updated correctly (use a range to account for rounding between two methods)
-        assertGt(expMovingAverage, price.getMovingAverage().mulDiv(999, 1000));
-        assertLt(expMovingAverage, price.getMovingAverage().mulDiv(1001, 1000));
+        /// Check that the moving average was updated correctly
+        assertEq(expMovingAverage, price.getMovingAverage());
     }
 
     /* ========== VIEW TESTS ========== */

@@ -32,8 +32,9 @@ contract OlympusPrice is Module {
     AggregatorV2V3Interface internal immutable _ohmEthPriceFeed;
     AggregatorV2V3Interface internal immutable _reserveEthPriceFeed;
 
-    /// @dev Moving average data
-    uint256 internal _movingAverage; /// See getMovingAverage()
+    /// @notice    Running sum of observations to calculate the moving average price from
+    /// @dev       See getMovingAverage()
+    uint256 public cumulativeObs;
 
     /// @notice Array of price observations. Check nextObsIndex to determine latest data point.
     /// @dev    Observations are stored in a ring buffer where the moving average is the sum of all observations divided by the number of observations.
@@ -131,19 +132,15 @@ contract OlympusPrice is Module {
 
         uint256 currentPrice = getCurrentPrice();
 
-        // Calculate new moving average
-        if (currentPrice > earliestPrice) {
-            _movingAverage += (currentPrice - earliestPrice) / numObs;
-        } else {
-            _movingAverage -= (earliestPrice - currentPrice) / numObs;
-        }
+        // Calculate new cumulative observation total
+        cumulativeObs = cumulativeObs + currentPrice - earliestPrice;
 
         // Push new observation into storage and store timestamp taken at
         observations[nextObsIndex] = currentPrice;
         lastObservationTime = uint48(block.timestamp);
         nextObsIndex = (nextObsIndex + 1) % numObs;
 
-        emit NewObservation(block.timestamp, currentPrice, _movingAverage);
+        emit NewObservation(block.timestamp, currentPrice, getMovingAverage());
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -187,9 +184,9 @@ contract OlympusPrice is Module {
     }
 
     /// @notice Get the moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
-    function getMovingAverage() external view returns (uint256) {
+    function getMovingAverage() public view returns (uint256) {
         if (!initialized) revert Price_NotInitialized();
-        return _movingAverage;
+        return cumulativeObs / numObservations;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -226,8 +223,8 @@ contract OlympusPrice is Module {
             }
         }
 
-        // Set moving average, last observation time, and initialized flag
-        _movingAverage = total / numObs;
+        // Set cumulative observations, last observation time, and initialized flag
+        cumulativeObs = total;
         lastObservationTime = lastObservationTime_;
         initialized = true;
     }
@@ -251,7 +248,7 @@ contract OlympusPrice is Module {
         // Set initialized to false and update state variables
         initialized = false;
         lastObservationTime = 0;
-        _movingAverage = 0;
+        cumulativeObs = 0;
         nextObsIndex = 0;
         movingAverageDuration = movingAverageDuration_;
         numObservations = uint32(newObservations);
@@ -283,7 +280,7 @@ contract OlympusPrice is Module {
         // Set initialized to false and update state variables
         initialized = false;
         lastObservationTime = 0;
-        _movingAverage = 0;
+        cumulativeObs = 0;
         nextObsIndex = 0;
         observationFrequency = observationFrequency_;
         numObservations = uint32(newObservations);
