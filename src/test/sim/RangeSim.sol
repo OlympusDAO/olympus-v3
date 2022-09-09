@@ -330,12 +330,10 @@ abstract contract RangeSim is Test {
             );
             range = new OlympusRange(
                 kernel,
-                [ERC20(ohm), ERC20(reserve)],
-                [
-                    vm.envUint("THRESHOLD_FACTOR"),
-                    uint256(_params.cushionSpread),
-                    uint256(_params.wallSpread)
-                ]
+                ERC20(ohm), ERC20(reserve),
+                vm.envUint("THRESHOLD_FACTOR"),
+                uint256(_params.cushionSpread),
+                uint256(_params.wallSpread)
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));

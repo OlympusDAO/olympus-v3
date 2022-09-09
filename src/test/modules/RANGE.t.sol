@@ -57,8 +57,11 @@ contract RangeTest is Test {
             /// Deploy module
             range = new OlympusRange(
                 kernel,
-                [ERC20(ohm), ERC20(reserve)],
-                [uint256(100), uint256(1000), uint256(2000)]
+                ERC20(ohm),
+                ERC20(reserve),
+                uint256(100),
+                uint256(1000),
+                uint256(2000)
             );
 
             // Deploy mock module writer

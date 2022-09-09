@@ -91,8 +91,11 @@ contract OperatorTest is Test {
             price = new MockPrice(kernel, uint48(8 hours));
             range = new OlympusRange(
                 kernel,
-                [ERC20(ohm), ERC20(reserve)],
-                [uint256(100), uint256(1000), uint256(2000)]
+                ERC20(ohm),
+                ERC20(reserve),
+                uint256(100),
+                uint256(1000),
+                uint256(2000)
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));

@@ -119,11 +119,7 @@ contract OlympusDeploy is Script {
         );
         console2.log("Price module deployed at:", address(PRICE));
 
-        RANGE = new OlympusRange(
-            kernel,
-            [ohm, reserve],
-            [uint256(100), uint256(1200), uint256(3000)]
-        );
+        RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1200), uint256(3000));
         console2.log("Range module deployed at:", address(RANGE));
 
         /// Deploy policies

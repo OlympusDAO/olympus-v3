@@ -76,9 +76,23 @@ contract OlympusRange is Module {
 
     constructor(
         Kernel kernel_,
-        ERC20[2] memory tokens_,
-        uint256[3] memory rangeParams_ // [thresholdFactor, cushionSpread, wallSpread]
+        ERC20 ohm_,
+        ERC20 reserve_,
+        uint256 thresholdFactor_,
+        uint256 cushionSpread_,
+        uint256 wallSpread_
     ) Module(kernel_) {
+        // Validate parameters
+        if (
+            wallSpread_ >= 10000 ||
+            wallSpread_ < 100 ||
+            cushionSpread_ >= 10000 ||
+            cushionSpread_ < 100 ||
+            cushionSpread_ > wallSpread_ ||
+            thresholdFactor_ >= 10000 ||
+            thresholdFactor_ < 100
+        ) revert RANGE_InvalidParams();
+
         _range = Range({
             low: Side({
                 active: false,
@@ -94,16 +108,16 @@ contract OlympusRange is Module {
                 threshold: 0,
                 market: type(uint256).max
             }),
-            cushion: Band({low: Line({price: 0}), high: Line({price: 0}), spread: rangeParams_[1]}),
-            wall: Band({low: Line({price: 0}), high: Line({price: 0}), spread: rangeParams_[2]})
+            cushion: Band({low: Line({price: 0}), high: Line({price: 0}), spread: cushionSpread_}),
+            wall: Band({low: Line({price: 0}), high: Line({price: 0}), spread: wallSpread_})
         });
 
-        thresholdFactor = rangeParams_[0];
-        ohm = tokens_[0];
-        reserve = tokens_[1];
+        thresholdFactor = thresholdFactor_;
+        ohm = ohm_;
+        reserve = reserve_;
 
-        emit SpreadsChanged(rangeParams_[1], rangeParams_[2]);
-        emit ThresholdFactorChanged(rangeParams_[0]);
+        emit SpreadsChanged(cushionSpread_, wallSpread_);
+        emit ThresholdFactorChanged(thresholdFactor_);
     }
 
     /// @inheritdoc Module
@@ -261,7 +275,7 @@ contract OlympusRange is Module {
     /// @param  thresholdFactor_ - Percent of capacity that the wall should close below, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev    The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
     function setThresholdFactor(uint256 thresholdFactor_) external permissioned {
-        if (thresholdFactor_ > 10000 || thresholdFactor_ < 100) revert RANGE_InvalidParams();
+        if (thresholdFactor_ >= 10000 || thresholdFactor_ < 100) revert RANGE_InvalidParams();
         thresholdFactor = thresholdFactor_;
 
         emit ThresholdFactorChanged(thresholdFactor_);
