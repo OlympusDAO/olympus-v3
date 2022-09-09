@@ -242,9 +242,9 @@ contract OlympusRange is Module {
     function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external permissioned {
         // Confirm spreads are within allowed values
         if (
-            wallSpread_ > 10000 ||
+            wallSpread_ >= 10000 ||
             wallSpread_ < 100 ||
-            cushionSpread_ > 10000 ||
+            cushionSpread_ >= 10000 ||
             cushionSpread_ < 100 ||
             cushionSpread_ > wallSpread_
         ) revert RANGE_InvalidParams();
