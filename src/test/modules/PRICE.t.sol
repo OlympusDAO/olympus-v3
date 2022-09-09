@@ -53,7 +53,9 @@ contract PriceTest is Test {
             price = new OlympusPrice(
                 kernel,
                 ohmEthPriceFeed, // AggregatorInterface ohmEthPriceFeed_,
+                uint48(24 hours), // uint32 ohmEthUpdateThreshold_,
                 reserveEthPriceFeed, // AggregatorInterface reserveEthPriceFeed_,
+                uint48(24 hours), // uint32 reserveEthUpdateThreshold_,
                 uint48(8 hours), // uint32 observationFrequency_,
                 uint48(7 days) // uint32 movingAverageDuration_,
             );
@@ -240,17 +242,17 @@ contract PriceTest is Test {
     }
 
     function testCorrectness_getCurrentPrice(uint8 nonce) public {
-        /// Initialize price module
+        // Initialize price module
         initializePrice(nonce);
 
-        /// Get the current price from the price module
+        // Get the current price from the price module
         uint256 currentPrice = price.getCurrentPrice();
 
-        /// Get the current price from the price module
+        // Get the current price from the price module
         uint256 ohmEthPrice = uint256(ohmEthPriceFeed.latestAnswer());
         uint256 reserveEthPrice = uint256(reserveEthPriceFeed.latestAnswer());
 
-        /// Check that the current price is correct
+        // Check that the current price is correct
         assertEq(
             currentPrice,
             ohmEthPrice.mulDiv(
@@ -259,10 +261,8 @@ contract PriceTest is Test {
             )
         );
 
-        /// Set the timestamp on each feed to before the acceptable window and expect the call to revert
-        ohmEthPriceFeed.setTimestamp(
-            block.timestamp - 3 * uint256(price.observationFrequency()) - 1
-        );
+        // Set the price on the feeds to be 0 and expect the call to revert
+        ohmEthPriceFeed.setLatestAnswer(0);
 
         bytes memory err = abi.encodeWithSignature(
             "Price_BadFeed(address)",
@@ -271,14 +271,48 @@ contract PriceTest is Test {
         vm.expectRevert(err);
         price.getCurrentPrice();
 
+        ohmEthPriceFeed.setLatestAnswer(1e18);
+        reserveEthPriceFeed.setLatestAnswer(0);
+
+        err = abi.encodeWithSignature("Price_BadFeed(address)", address(reserveEthPriceFeed));
+        vm.expectRevert(err);
+        price.getCurrentPrice();
+
+        reserveEthPriceFeed.setLatestAnswer(1e18);
+
+        // Set the timestamp on each feed to before the acceptable window and expect the call to revert
+        ohmEthPriceFeed.setTimestamp(block.timestamp - uint256(price.ohmEthUpdateThreshold()) - 1);
+
+        err = abi.encodeWithSignature("Price_BadFeed(address)", address(ohmEthPriceFeed));
+        vm.expectRevert(err);
+        price.getCurrentPrice();
+
         ohmEthPriceFeed.setTimestamp(block.timestamp);
+
         reserveEthPriceFeed.setTimestamp(
-            block.timestamp - 3 * uint256(price.observationFrequency()) - 1
+            block.timestamp - uint256(price.reserveEthUpdateThreshold()) - 1
         );
 
         err = abi.encodeWithSignature("Price_BadFeed(address)", address(reserveEthPriceFeed));
         vm.expectRevert(err);
         price.getCurrentPrice();
+
+        reserveEthPriceFeed.setTimestamp(block.timestamp);
+
+        // Set the round Id on each feed ahead of the answered in round id and expect the call to revert
+        ohmEthPriceFeed.setRoundId(1);
+        err = abi.encodeWithSignature("Price_BadFeed(address)", address(ohmEthPriceFeed));
+        vm.expectRevert(err);
+        price.getCurrentPrice();
+
+        ohmEthPriceFeed.setRoundId(0);
+
+        reserveEthPriceFeed.setRoundId(1);
+        err = abi.encodeWithSignature("Price_BadFeed(address)", address(reserveEthPriceFeed));
+        vm.expectRevert(err);
+        price.getCurrentPrice();
+
+        reserveEthPriceFeed.setRoundId(0);
     }
 
     function testCorrectness_getLastPrice(uint8 nonce) public {
@@ -358,9 +392,7 @@ contract PriceTest is Test {
         assertEq(price.lastObservationTime(), block.timestamp);
     }
 
-    /// For some reason vm.expectRevert would not work here
-    /// TODO: convert to vm.expectRevert
-    function testFail_cannotReinitialize(uint8 nonce) public {
+    function testCorrectness_cannotReinitialize(uint8 nonce) public {
         /// Check that the module is not initialized
         assertTrue(!price.initialized());
 
@@ -370,7 +402,10 @@ contract PriceTest is Test {
         /// Check the the module is initialized
         assertTrue(price.initialized());
 
-        initializePrice(nonce);
+        uint256[] memory observations = new uint256[](price.numObservations());
+        vm.expectRevert(abi.encodeWithSignature("Price_AlreadyInitialized()"));
+        vm.prank(writer);
+        price.initialize(observations, uint48(block.timestamp));
     }
 
     function testCorrectness_noObservationsBeforeInitialized() public {

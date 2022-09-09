@@ -57,7 +57,9 @@ contract OlympusPriceDeploy is Script {
         PRICE = new OlympusPrice(
             kernel,
             ohmEthPriceFeed,
+            uint48(24 hours),
             reserveEthPriceFeed,
+            uint48(24 hours),
             uint48(8 hours),
             uint48(30 days)
         );

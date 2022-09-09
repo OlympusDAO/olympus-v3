@@ -322,7 +322,9 @@ abstract contract RangeSim is Test {
             price = new OlympusPrice(
                 kernel,
                 ohmEthPriceFeed,
+                uint48(24 hours),
                 reserveEthPriceFeed,
+                uint48(24 hours),
                 uint48(vm.envUint("EPOCH_DURATION")),
                 uint48(vm.envUint("MA_DURATION"))
             );

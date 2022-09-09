@@ -29,8 +29,19 @@ contract OlympusPrice is Module {
     /* ========== STATE VARIABLES ========== */
 
     /// @dev    Price feeds. Chainlink typically provides price feeds for an asset in ETH. Therefore, we use two price feeds against ETH, one for OHM and one for the Reserve asset, to calculate the relative price of OHM in the Reserve asset.
-    AggregatorV2V3Interface internal immutable _ohmEthPriceFeed;
-    AggregatorV2V3Interface internal immutable _reserveEthPriceFeed;
+    /// @dev    Update thresholds are the maximum amount of time that can pass between price feed updates before the price oracle is considered stale. These should be set based on the parameters of the price feed.
+
+    /// @notice OHM/ETH price feed
+    AggregatorV2V3Interface public immutable ohmEthPriceFeed;
+
+    /// @notice Maximum expected time between OHM/ETH price feed updates
+    uint48 public ohmEthUpdateThreshold;
+
+    /// @notice Reserve/ETH price feed
+    AggregatorV2V3Interface public immutable reserveEthPriceFeed;
+
+    /// @notice Maximum expected time between OHM/ETH price feed updates
+    uint48 public reserveEthUpdateThreshold;
 
     /// @notice    Running sum of observations to calculate the moving average price from
     /// @dev       See getMovingAverage()
@@ -72,7 +83,9 @@ contract OlympusPrice is Module {
     constructor(
         Kernel kernel_,
         AggregatorV2V3Interface ohmEthPriceFeed_,
+        uint48 ohmEthUpdateThreshold_,
         AggregatorV2V3Interface reserveEthPriceFeed_,
+        uint48 reserveEthUpdateThreshold_,
         uint48 observationFrequency_,
         uint48 movingAverageDuration_
     ) Module(kernel_) {
@@ -81,11 +94,13 @@ contract OlympusPrice is Module {
             revert Price_InvalidParams();
 
         // Set price feeds, decimals, and scale factor
-        _ohmEthPriceFeed = ohmEthPriceFeed_;
-        uint8 ohmEthDecimals = _ohmEthPriceFeed.decimals();
+        ohmEthPriceFeed = ohmEthPriceFeed_;
+        ohmEthUpdateThreshold = ohmEthUpdateThreshold_;
+        uint8 ohmEthDecimals = ohmEthPriceFeed.decimals();
 
-        _reserveEthPriceFeed = reserveEthPriceFeed_;
-        uint8 reserveEthDecimals = _reserveEthPriceFeed.decimals();
+        reserveEthPriceFeed = reserveEthPriceFeed_;
+        reserveEthUpdateThreshold = reserveEthUpdateThreshold_;
+        uint8 reserveEthDecimals = reserveEthPriceFeed.decimals();
 
         uint256 exponent = decimals + reserveEthDecimals - ohmEthDecimals;
         if (exponent > 38) revert Price_InvalidParams();
@@ -99,7 +114,7 @@ contract OlympusPrice is Module {
 
         // Store blank observations array
         observations = new uint256[](numObservations);
-        /// nextObsIndex is initialized to 0
+        // nextObsIndex is initialized to 0
 
         emit MovingAverageDurationChanged(movingAverageDuration_);
         emit ObservationFrequencyChanged(observationFrequency_);
@@ -155,18 +170,33 @@ contract OlympusPrice is Module {
         uint256 ohmEthPrice;
         uint256 reserveEthPrice;
         {
-            (, int256 ohmEthPriceInt, , uint256 updatedAt, ) = _ohmEthPriceFeed.latestRoundData();
-            // Use a multiple of observation frequency to determine what is too old to use.
-            // Price feeds will not provide an updated answer if the data doesn't change much.
-            // This would be similar to if the feed just stopped updating; therefore, we need a cutoff.
-            if (updatedAt < block.timestamp - 3 * uint256(observationFrequency))
-                revert Price_BadFeed(address(_ohmEthPriceFeed));
+            (
+                uint80 roundId,
+                int256 ohmEthPriceInt,
+                ,
+                uint256 updatedAt,
+                uint80 answeredInRound
+            ) = ohmEthPriceFeed.latestRoundData();
+
+            // Validate chainlink price feed data
+            // 1. Answer should be greater than zero
+            // 2. Updated at timestamp should be within the update threshold
+            // 3. Answered in round ID should be the same as the round ID
+            if (
+                ohmEthPriceInt <= 0 ||
+                updatedAt < block.timestamp - uint256(ohmEthUpdateThreshold) ||
+                answeredInRound < roundId
+            ) revert Price_BadFeed(address(ohmEthPriceFeed));
             ohmEthPrice = uint256(ohmEthPriceInt);
 
             int256 reserveEthPriceInt;
-            (, reserveEthPriceInt, , updatedAt, ) = _reserveEthPriceFeed.latestRoundData();
-            if (updatedAt < block.timestamp - uint256(observationFrequency))
-                revert Price_BadFeed(address(_reserveEthPriceFeed));
+            (roundId, reserveEthPriceInt, , updatedAt, answeredInRound) = reserveEthPriceFeed
+                .latestRoundData();
+            if (
+                reserveEthPriceInt <= 0 ||
+                updatedAt < block.timestamp - uint256(reserveEthUpdateThreshold) ||
+                answeredInRound < roundId
+            ) revert Price_BadFeed(address(reserveEthPriceFeed));
             reserveEthPrice = uint256(reserveEthPriceInt);
         }
 

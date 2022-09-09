@@ -7,6 +7,8 @@ contract MockPriceFeed is AggregatorV2V3Interface {
     int256 public s_answer;
     uint8 public s_decimals;
     uint256 public s_timestamp;
+    uint80 public s_roundId;
+    uint80 public s_answeredInRound;
 
     function setLatestAnswer(int256 answer) public {
         s_answer = answer;
@@ -32,6 +34,22 @@ contract MockPriceFeed is AggregatorV2V3Interface {
         return s_timestamp;
     }
 
+    function setRoundId(uint80 roundId_) public {
+        s_roundId = roundId_;
+    }
+
+    function latestRound() external view override returns (uint256) {
+        return uint256(s_roundId);
+    }
+
+    function setAnsweredInRound(uint80 answeredInRound_) public {
+        s_answeredInRound = answeredInRound_;
+    }
+
+    function latestAnsweredInRound() external view returns (uint256) {
+        return uint256(s_answeredInRound);
+    }
+
     function latestRoundData()
         external
         view
@@ -44,12 +62,10 @@ contract MockPriceFeed is AggregatorV2V3Interface {
             uint80 answeredInRound
         )
     {
-        return (0, s_answer, 0, s_timestamp, 0);
+        return (s_roundId, s_answer, 0, s_timestamp, s_answeredInRound);
     }
 
     /// Not implemented but required by interface
-
-    function latestRound() external view override returns (uint256) {}
 
     function getAnswer(uint256 roundId) external view override returns (int256) {}
 
