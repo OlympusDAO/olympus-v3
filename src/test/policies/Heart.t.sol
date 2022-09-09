@@ -279,9 +279,23 @@ contract HeartTest is Test {
     }
 
     function testCorrectness_setRewardTokenAndAmount() public {
-        /// Set the heart's reward token to a new token and amount to a new amount
+        /// Set timestamp so that a heart beat is available
+        vm.warp(block.timestamp + heart.frequency());
+
+        /// Create new reward token
         MockERC20 newToken = new MockERC20("New Token", "NT", 18);
         uint256 newReward = uint256(2e18);
+
+        /// Try to set new reward token and amount while a beat is available, expect to fail
+        bytes memory err = abi.encodeWithSignature("Heart_BeatAvailable()");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        heart.setRewardTokenAndAmount(newToken, newReward);
+
+        /// Beat the heart
+        heart.beat();
+
+        /// Set a new reward token and amount from the guardian
         vm.prank(guardian);
         heart.setRewardTokenAndAmount(newToken, newReward);
 
@@ -311,6 +325,18 @@ contract HeartTest is Test {
     }
 
     function testCorrectness_withdrawUnspentRewards() public {
+        /// Set timestamp so that a heart beat is available
+        vm.warp(block.timestamp + heart.frequency());
+
+        /// Try to call while a beat is available, expect to fail
+        bytes memory err = abi.encodeWithSignature("Heart_BeatAvailable()");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        heart.withdrawUnspentRewards(rewardToken);
+
+        /// Beat the heart
+        heart.beat();
+
         /// Get the balance of the reward token on the contract
         uint256 startBalance = rewardToken.balanceOf(address(guardian));
         uint256 heartBalance = rewardToken.balanceOf(address(heart));
