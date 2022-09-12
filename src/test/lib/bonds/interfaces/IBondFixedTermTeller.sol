@@ -32,12 +32,12 @@ interface IBondFixedTermTeller {
     /// @return             ID of the ERC1155 bond token being created
     function deploy(ERC20 underlying_, uint48 expiry_) external returns (uint256);
 
-    /// @notice          Redeem a fixed-expiration bond token for the underlying token (bond token must have matured)
+    /// @notice          Redeem a fixed-term bond token for the underlying token (bond token must have matured)
     /// @param tokenId_  ID of the bond token to redeem
     /// @param amount_   Amount of bond token to redeem
     function redeem(uint256 tokenId_, uint256 amount_) external;
 
-    /// @notice          Redeem multiple fixed-expiration bond tokens for the underlying tokens (bond tokens must have matured)
+    /// @notice          Redeem multiple fixed-term bond tokens for the underlying tokens (bond tokens must have matured)
     /// @param tokenIds_ Array of bond token ids
     /// @param amounts_  Array of amounts of bond tokens to redeem
     function batchRedeem(uint256[] memory tokenIds_, uint256[] memory amounts_) external;

@@ -12,6 +12,7 @@ import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/author
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
+import {MockOhm} from "test/mocks/MockOhm.sol";
 
 import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
@@ -25,22 +26,6 @@ import {OlympusMinter, OHM} from "modules/MINTR.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
-
-contract MockOhm is ERC20 {
-    constructor(
-        string memory _name,
-        string memory _symbol,
-        uint8 _decimals
-    ) ERC20(_name, _symbol, _decimals) {}
-
-    function mint(address to, uint256 value) public virtual {
-        _mint(to, value);
-    }
-
-    function burnFrom(address from, uint256 value) public virtual {
-        _burn(from, value);
-    }
-}
 
 // solhint-disable-next-line max-states-count
 contract OperatorTest is Test {
