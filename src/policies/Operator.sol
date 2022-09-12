@@ -208,8 +208,6 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         // Update the prices for the range, save new regen observations, and update capacities based on bond market activity
         _updateRangePrices();
         _addObservation();
-        _updateCapacity(true, 0);
-        _updateCapacity(false, 0);
 
         // Cache config in memory
         Config memory config_ = _config;
