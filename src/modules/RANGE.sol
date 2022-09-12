@@ -272,7 +272,7 @@ contract OlympusRange is Module {
         _range.wall.spread = wallSpread_;
         _range.cushion.spread = cushionSpread_;
 
-        emit SpreadsChanged(wallSpread_, cushionSpread_);
+        emit SpreadsChanged(cushionSpread_, wallSpread_);
     }
 
     /// @notice Set the threshold factor for when a wall is considered "down".

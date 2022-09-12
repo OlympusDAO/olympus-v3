@@ -104,8 +104,9 @@ contract RangeTest is Test {
     /// [X] cannot set parameters with invalid params
     /// [X] only permitted policies can call these functions
 
-    event WallUp(bool high, uint256 timestamp, uint256 capacity);
-    event WallDown(bool high, uint256 timestamp, uint256 capacity);
+    event WallUp(bool high_, uint256 timestamp_, uint256 capacity_);
+    event WallDown(bool high_, uint256 timestamp_, uint256 capacity_);
+    event SpreadsChanged(uint256 cushionSpread_, uint256 wallSpread_);
 
     function testCorrectness_updateCapacity() public {
         /// Confirm that the capacities are initialiized
@@ -268,6 +269,8 @@ contract RangeTest is Test {
         OlympusRange.Range memory startRange = range.range();
 
         /// Update the spreads with valid parameters from an approved address
+        vm.expectEmit(false, false, false, true);
+        emit SpreadsChanged(500, 1000);
         vm.prank(writer);
         range.setSpreads(500, 1000);
 
