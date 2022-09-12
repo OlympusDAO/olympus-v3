@@ -96,6 +96,14 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         }
     }
 
+    /// @notice Remove a market ID on a teller from the whitelist
+    /// @dev    Shutdown function in case there's an issue with the teller
+    /// @param  teller_ Address of the Teller contract which serves the market
+    /// @param  id_     ID of the market to remove from whitelist
+    function blacklist(address teller_, uint256 id_) external onlyRole("callback_whitelist") {
+        approvedMarkets[teller_][id_] = false;
+    }
+
     /// @inheritdoc IBondCallback
     function callback(
         uint256 id_,

@@ -450,12 +450,22 @@ contract BondCallbackTest is Test {
         // Check teller balance is updated
         newTellerBal = ohm.balanceOf(address(teller));
         assertEq(newTellerBal, oldTellerBal + 10);
+
+        // Change the market to not be whitelisted and expect revert
+        vm.prank(policy);
+        callback.blacklist(address(teller), regBond);
+
+        err = abi.encodeWithSignature("Callback_MarketNotSupported(uint256)", regBond);
+        vm.prank(address(teller));
+        vm.expectRevert(err);
+        callback.callback(regBond, 10, 10);
     }
 
     /* ========== ADMIN TESTS ========== */
 
     /// DONE
     /// [X] whitelist
+    /// [X] blacklist
     /// [X] setOperator
     /// [X] batchToTreasury
 
@@ -486,6 +496,25 @@ contract BondCallbackTest is Test {
 
         // Check whitelist is applied
         assert(callback.approvedMarkets(address(teller), wlTwo));
+    }
+
+    function testCorrectness_blacklist() public {
+        // Create two new markets to test whitelist functionality
+        uint256 wlOne = createMarket(reserve, ohm, 0, 1, 3);
+
+        // Whitelist the bond market from the policy address
+        vm.prank(policy);
+        callback.whitelist(address(teller), wlOne);
+
+        // Check whitelist is applied
+        assert(callback.approvedMarkets(address(teller), wlOne));
+
+        // Remove the market from the whitelist
+        vm.prank(policy);
+        callback.blacklist(address(teller), wlOne);
+
+        // Check whitelist is applied
+        assert(!callback.approvedMarkets(address(teller), wlOne));
     }
 
     function testCorrectness_setOperator() public {
