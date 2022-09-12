@@ -71,6 +71,7 @@ contract OperatorDeploy is Script {
                 uint32(1 hours), // regenWait
                 uint32(18), // regenThreshold
                 uint32(21) // regenObserve
+                // uint32(8 hours) // observationFrequency
             ] // TODO verify initial parameters
         );
         console2.log("Operator deployed at:", address(operator));

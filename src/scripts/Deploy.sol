@@ -138,8 +138,9 @@ contract OlympusDeploy is Script {
                 uint32(1 hours), // cushionDepositInterval
                 uint32(800), // reserveFactor
                 uint32(1 hours), // regenWait
-                uint32(5), // regenThreshold // 18
-                uint32(7) // regenObserve    // 21
+                uint32(18), // regenThreshold // 18
+                uint32(21) // regenObserve    // 21
+                // uint32(8 hours) // observationFrequency
             ] // TODO verify initial parameters
         );
         console2.log("Operator deployed at:", address(operator));

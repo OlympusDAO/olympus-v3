@@ -95,7 +95,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         IBondAuctioneer auctioneer_,
         IBondCallback callback_,
         ERC20[2] memory tokens_, // [ohm, reserve]
-        uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve]
+        uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
     ) Policy(kernel_) {
         // Check params are valid
         if (address(auctioneer_) == address(0) || address(callback_) == address(0))
@@ -118,7 +118,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         if (
             configParams[5] < 1 hours ||
             configParams[6] > configParams[7] ||
-            configParams[7] == uint32(0)
+            configParams[7] == uint32(0) ||
+            configParams[6] == uint32(0)
         ) revert Operator_InvalidParams();
 
         auctioneer = auctioneer_;
@@ -575,8 +576,13 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         uint32 observe_
     ) external onlyRole("operator_policy") {
         // Confirm regen parameters are within allowed values
-        if (wait_ < 1 hours || threshold_ > observe_ || observe_ == 0 || threshold_ == 0)
-            revert Operator_InvalidParams();
+        if (
+            wait_ < 1 hours ||
+            threshold_ > observe_ ||
+            observe_ == 0 ||
+            threshold_ == 0 ||
+            wait_ / PRICE.observationFrequency() < observe_ - threshold_
+        ) revert Operator_InvalidParams();
 
         // Set regen params
         _config.regenWait = wait_;

@@ -149,6 +149,7 @@ contract BondCallbackTest is Test {
                     uint32(1 hours), // regenWait
                     uint32(5), // regenThreshold
                     uint32(7) // regenObserve
+                    // uint32(8 hours) // observationFrequency
                 ]
             );
 

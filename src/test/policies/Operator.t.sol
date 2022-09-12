@@ -126,6 +126,7 @@ contract OperatorTest is Test {
                     uint32(1 hours), // regenWait
                     uint32(5), // regenThreshold
                     uint32(7) // regenObserve
+                    // uint32(8 hours) // observationFrequency
                 ]
             );
 
@@ -1856,22 +1857,32 @@ contract OperatorTest is Test {
         /// Case 2: observe == 0
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setRegenParams(uint32(1 days), uint32(0), uint32(0));
+        operator.setRegenParams(uint32(7 days), uint32(0), uint32(0));
 
-        /// Case 3: observe < threshold
+        /// Case 3: threshold == 0
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setRegenParams(uint32(1 days), uint32(10), uint32(9));
+        operator.setRegenParams(uint32(7 days), uint32(0), uint32(10));
+
+        /// Case 4: observe < threshold
+        vm.expectRevert(err);
+        vm.prank(policy);
+        operator.setRegenParams(uint32(7 days), uint32(10), uint32(9));
+
+        /// Case 5: wait / frequency < observe - threshold
+        vm.expectRevert(err);
+        vm.prank(policy);
+        operator.setRegenParams(uint32(1 days), uint32(10), uint32(15));
 
         /// Set regen params as admin with valid params
         vm.prank(policy);
-        operator.setRegenParams(uint32(1 days), uint32(11), uint32(15));
+        operator.setRegenParams(uint32(7 days), uint32(11), uint32(15));
 
         /// Get new regen params
         Operator.Config memory newConfig = operator.config();
 
         /// Check that the regen params have been set
-        assertEq(newConfig.regenWait, uint256(1 days));
+        assertEq(newConfig.regenWait, uint256(7 days));
         assertEq(newConfig.regenThreshold, 11);
         assertEq(newConfig.regenObserve, 15);
         assertGt(newConfig.regenWait, startConfig.regenWait);
