@@ -293,7 +293,8 @@ contract Kernel {
     }
 
     function _activatePolicy(Policy policy_) internal {
-        if (policy_.isActive()) revert Kernel_PolicyAlreadyActivated(address(policy_));
+        if (policy_.isActive() && activePolicies[getPolicyIndex[policy_]] == policy_)
+            revert Kernel_PolicyAlreadyActivated(address(policy_));
 
         // Add policy to list of active policies
         activePolicies.push(policy_);
@@ -323,7 +324,8 @@ contract Kernel {
     }
 
     function _deactivatePolicy(Policy policy_) internal {
-        if (!policy_.isActive()) revert Kernel_PolicyNotActivated(address(policy_));
+        if (!policy_.isActive() && activePolicies[getPolicyIndex[policy_]] != policy_)
+            revert Kernel_PolicyNotActivated(address(policy_));
 
         // Revoke permissions
         Permissions[] memory requests = policy_.requestPermissions();

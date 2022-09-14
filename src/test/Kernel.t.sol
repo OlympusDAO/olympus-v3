@@ -165,6 +165,7 @@ contract KernelTest is Test {
     function testCorrectness_ActivatePolicy() public {
         Keycode testKeycode = Keycode.wrap("MOCKY");
 
+        // Try to activate policy without module installed
         vm.prank(deployer);
         err = abi.encodeWithSignature("Policy_ModuleDoesNotExist(bytes5)", testKeycode);
         vm.expectRevert(err);
@@ -172,22 +173,27 @@ contract KernelTest is Test {
 
         _initModuleAndPolicy();
 
+        // Ensure policy was activated correctly
         assertEq(
             kernel.modulePermissions(testKeycode, policy, MOCKY.permissionedCall.selector),
             true
         );
         assertEq(address(kernel.activePolicies(0)), address(policy));
+        assertTrue(policy.isActive());
 
         uint256 depIndex = kernel.getDependentIndex(testKeycode, policy);
         Policy[] memory dependencies = new Policy[](1);
         dependencies[0] = policy;
         assertEq(address(kernel.moduleDependents(testKeycode, depIndex)), address(dependencies[0]));
 
+        // Try to add same policy again
         vm.prank(deployer);
         err = abi.encodeWithSignature("Kernel_PolicyAlreadyActivated(address)", address(policy));
         vm.expectRevert(err);
         kernel.executeAction(Actions.ActivatePolicy, address(policy));
     }
+
+    function testRevert_ActivatePolicyTwice() public {}
 
     function testCorrectness_PolicyPermissions() public {
         _initModuleAndPolicy();
@@ -264,7 +270,8 @@ contract KernelTest is Test {
             false
         );
         vm.expectRevert();
-        assertEq(address(kernel.activePolicies(0)), address(0));
+        //assertEq(address(kernel.activePolicies(0)), address(0));
+        kernel.activePolicies(0);
     }
 
     function testCorrectness_UpgradeModule() public {
