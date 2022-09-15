@@ -191,6 +191,10 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         requests[8] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
+    /// @dev Checks to see if the policy is active and ensures the range data isn't stale before performing market operations.
+    ///      This check is different from the price feed staleness checks in the PRICE module.
+    ///      The PRICE module checks new price feed data for staleness when storing a new observations,
+    ///      whereas this check ensures that the range data is using a recent observation.
     modifier onlyWhileActive() {
         if (
             !active ||
