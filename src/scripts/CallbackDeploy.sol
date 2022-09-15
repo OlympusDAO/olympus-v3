@@ -5,7 +5,7 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {Script, console2} from "forge-std/Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -35,8 +35,8 @@ contract CallbackDeploy is Script {
     // ERC20 public constant rewardToken =
     //     ERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // WETH mainnet address
 
-    // IBondAuctioneer public constant bondAuctioneer =
-    //     IBondAuctioneer(address(0));
+    // IBondSDA public constant bondAuctioneer =
+    //     IBondSDA(address(0));
 
     /// Goerli testnet addresses
     ERC20 public constant ohm = ERC20(0x0595328847AF962F951a4f8F8eE9A3Bf261e4f6b); // OHM goerli address
@@ -44,8 +44,7 @@ contract CallbackDeploy is Script {
     ERC20 public constant rewardToken = ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
 
     /// Bond system addresses
-    IBondAuctioneer public constant bondAuctioneer =
-        IBondAuctioneer(0xaE73A94b94F6E7aca37f4c79C4b865F1AF06A68b);
+    IBondSDA public constant bondAuctioneer = IBondSDA(0xaE73A94b94F6E7aca37f4c79C4b865F1AF06A68b);
     IBondAggregator public constant bondAggregator =
         IBondAggregator(0xB4860B2c12C6B894B64471dFb5a631ff569e220e);
 

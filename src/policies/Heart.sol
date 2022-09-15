@@ -24,6 +24,7 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     error Heart_OutOfCycle();
     error Heart_BeatStopped();
     error Heart_InvalidParams();
+    error Heart_BeatAvailable();
 
     event Beat(uint256 timestamp_);
     event RewardIssued(address to_, uint256 rewardAmount_);
@@ -100,7 +101,8 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         _operator.operate();
 
         // Update the last beat timestamp
-        lastBeat += frequency();
+        // Ensure that update frequency doesn't change, but do not allow multiple beats if one is skipped
+        lastBeat = block.timestamp - ((block.timestamp - lastBeat) % frequency());
 
         // Issue reward to sender
         _issueReward(msg.sender);
@@ -109,8 +111,11 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     }
 
     function _issueReward(address to_) internal {
-        rewardToken.safeTransfer(to_, reward);
-        emit RewardIssued(to_, reward);
+        uint256 amount = reward > rewardToken.balanceOf(address(this))
+            ? rewardToken.balanceOf(address(this))
+            : reward;
+        rewardToken.safeTransfer(to_, amount);
+        emit RewardIssued(to_, amount);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -126,20 +131,37 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
                             ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /// @inheritdoc IHeart
-    function resetBeat() external onlyRole("heart_admin") {
+    function _resetBeat() internal {
         lastBeat = block.timestamp - frequency();
     }
 
     /// @inheritdoc IHeart
-    function toggleBeat() external onlyRole("heart_admin") {
-        active = !active;
+    function resetBeat() external onlyRole("heart_admin") {
+        _resetBeat();
+    }
+
+    /// @inheritdoc IHeart
+    function activate() external onlyRole("heart_admin") {
+        active = true;
+        _resetBeat();
+    }
+
+    /// @inheritdoc IHeart
+    function deactivate() external onlyRole("heart_admin") {
+        active = false;
+    }
+
+    modifier notWhileBeatAvailable() {
+        // Prevent calling if a beat is available to avoid front-running a keeper
+        if (block.timestamp >= lastBeat + frequency()) revert Heart_BeatAvailable();
+        _;
     }
 
     /// @inheritdoc IHeart
     function setRewardTokenAndAmount(ERC20 token_, uint256 reward_)
         external
         onlyRole("heart_admin")
+        notWhileBeatAvailable
     {
         rewardToken = token_;
         reward = reward_;
@@ -147,7 +169,11 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
-    function withdrawUnspentRewards(ERC20 token_) external onlyRole("heart_admin") {
+    function withdrawUnspentRewards(ERC20 token_)
+        external
+        onlyRole("heart_admin")
+        notWhileBeatAvailable
+    {
         token_.safeTransfer(msg.sender, token_.balanceOf(address(this)));
     }
 }

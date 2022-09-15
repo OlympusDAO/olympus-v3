@@ -14,7 +14,7 @@ import "src/Kernel.sol";
 
 import {OlympusHeart} from "policies/Heart.sol";
 
-import {IOperator, ERC20, IBondAuctioneer, IBondCallback} from "policies/interfaces/IOperator.sol";
+import {IOperator} from "policies/interfaces/IOperator.sol";
 
 /**
  * @notice Mock Operator to test Heart
@@ -98,7 +98,7 @@ contract HeartTest is Test {
                 kernel,
                 IOperator(address(operator)),
                 rewardToken,
-                uint256(1e18) // 1 reward token
+                uint256(2e18) // 2 reward tokens
             );
         }
 
@@ -157,7 +157,7 @@ contract HeartTest is Test {
     function testCorrectness_cannotBeatIfInactive() public {
         /// Set the heart to inactive
         vm.prank(guardian);
-        heart.toggleBeat();
+        heart.deactivate();
 
         /// Try to beat the heart and expect revert
         bytes memory err = abi.encodeWithSignature("Heart_BeatStopped()");
@@ -167,6 +167,25 @@ contract HeartTest is Test {
 
     function testCorrectness_cannotBeatIfTooEarly() public {
         /// Try to beat the heart and expect revert since it hasn't been more than the frequency since the last beat (deployment)
+        bytes memory err = abi.encodeWithSignature("Heart_OutOfCycle()");
+        vm.expectRevert(err);
+        heart.beat();
+    }
+
+    function testCorrectness_cannotBeatRepeatedlyIfSkipped() public {
+        // Warp forward 2 frequencies
+        vm.warp(block.timestamp + heart.frequency() * 2);
+
+        // Check that lastBeat is less than or equal to the current timestamp minus two frequencies
+        assertLe(heart.lastBeat(), block.timestamp - heart.frequency() * 2);
+
+        // Beat the heart
+        heart.beat();
+
+        // Check that lastBeat is greater than block.timestamp minus one frequency
+        assertGt(heart.lastBeat(), block.timestamp - heart.frequency());
+
+        // Try to beat heart again, expect to revert
         bytes memory err = abi.encodeWithSignature("Heart_OutOfCycle()");
         vm.expectRevert(err);
         heart.beat();
@@ -210,7 +229,7 @@ contract HeartTest is Test {
     /* ========== ADMIN FUNCTIONS ========== */
     /// DONE
     /// [X] resetBeat
-    /// [X] toggleBeat
+    /// [X] activate and deactivate
     /// [X] setRewardTokenAndAmount
     /// [X] withdrawUnspentRewards
     /// [X] cannot call admin functions without permissions
@@ -236,29 +255,47 @@ contract HeartTest is Test {
         assertEq(endBalance, startBalance + heart.reward());
     }
 
-    function testCorrectness_toggleBeat() public {
+    function testCorrectness_activate_deactivate() public {
         /// Expect the heart to be active to begin with
         assertTrue(heart.active());
 
+        uint256 lastBeat = heart.lastBeat();
+
         /// Toggle the heart to make it inactive
         vm.prank(guardian);
-        heart.toggleBeat();
+        heart.deactivate();
 
-        /// Expect the heart to be inactive
+        /// Expect the heart to be inactive and lastBeat to remain the same
         assertTrue(!heart.active());
+        assertEq(heart.lastBeat(), lastBeat);
 
         /// Toggle the heart to make it active again
         vm.prank(guardian);
-        heart.toggleBeat();
+        heart.activate();
 
-        /// Expect the heart to be active again
+        /// Expect the heart to be active again and lastBeat to be reset
         assertTrue(heart.active());
+        assertEq(heart.lastBeat(), block.timestamp - heart.frequency());
     }
 
     function testCorrectness_setRewardTokenAndAmount() public {
-        /// Set the heart's reward token to a new token and amount to a new amount
+        /// Set timestamp so that a heart beat is available
+        vm.warp(block.timestamp + heart.frequency());
+
+        /// Create new reward token
         MockERC20 newToken = new MockERC20("New Token", "NT", 18);
         uint256 newReward = uint256(2e18);
+
+        /// Try to set new reward token and amount while a beat is available, expect to fail
+        bytes memory err = abi.encodeWithSignature("Heart_BeatAvailable()");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        heart.setRewardTokenAndAmount(newToken, newReward);
+
+        /// Beat the heart
+        heart.beat();
+
+        /// Set a new reward token and amount from the guardian
         vm.prank(guardian);
         heart.setRewardTokenAndAmount(newToken, newReward);
 
@@ -267,7 +304,7 @@ contract HeartTest is Test {
         assertEq(heart.reward(), newReward);
 
         /// Mint some new tokens to the heart to pay rewards
-        newToken.mint(address(heart), uint256(1000 * 1e18));
+        newToken.mint(address(heart), uint256(3 * 1e18));
 
         /// Expect the heart to reward the new token and amount on a beat
         uint256 startBalance = newToken.balanceOf(address(this));
@@ -277,9 +314,29 @@ contract HeartTest is Test {
 
         uint256 endBalance = newToken.balanceOf(address(this));
         assertEq(endBalance, startBalance + heart.reward());
+
+        /// Balance is now less than the reward amount, test the min function
+        startBalance = newToken.balanceOf(address(this));
+        vm.warp(block.timestamp + frequency);
+        heart.beat();
+
+        endBalance = newToken.balanceOf(address(this));
+        assertEq(endBalance, startBalance + 1e18);
     }
 
     function testCorrectness_withdrawUnspentRewards() public {
+        /// Set timestamp so that a heart beat is available
+        vm.warp(block.timestamp + heart.frequency());
+
+        /// Try to call while a beat is available, expect to fail
+        bytes memory err = abi.encodeWithSignature("Heart_BeatAvailable()");
+        vm.expectRevert(err);
+        vm.prank(guardian);
+        heart.withdrawUnspentRewards(rewardToken);
+
+        /// Beat the heart
+        heart.beat();
+
         /// Get the balance of the reward token on the contract
         uint256 startBalance = rewardToken.balanceOf(address(guardian));
         uint256 heartBalance = rewardToken.balanceOf(address(heart));
@@ -304,7 +361,10 @@ contract HeartTest is Test {
         heart.resetBeat();
 
         vm.expectRevert(err);
-        heart.toggleBeat();
+        heart.deactivate();
+
+        vm.expectRevert(err);
+        heart.activate();
 
         vm.expectRevert(err);
         heart.setRewardTokenAndAmount(rewardToken, uint256(2e18));

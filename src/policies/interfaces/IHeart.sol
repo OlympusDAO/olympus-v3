@@ -23,9 +23,15 @@ interface IHeart {
     /// @notice Access restricted
     function resetBeat() external;
 
-    /// @notice Turns the heart on or off, emergency stop and resume function
+    /// @notice Turns the heart on and resets the beat
     /// @notice Access restricted
-    function toggleBeat() external;
+    /// @dev    This function is used to restart the heart after a pause
+    function activate() external;
+
+    /// @notice Turns the heart off
+    /// @notice Access restricted
+    /// @dev    Emergency stop function for the heart
+    function deactivate() external;
 
     /// @notice Sets the reward token and amount for the beat function
     /// @notice Access restricted

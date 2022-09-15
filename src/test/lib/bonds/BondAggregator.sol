@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.15;
+pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
@@ -12,7 +12,7 @@ import {FullMath} from "libraries/FullMath.sol";
 
 /// @title Bond Aggregator
 /// @notice Bond Aggregator Contract
-/// @dev Bond is a permissionless system to create Olympus-style bond markets
+/// @dev Bond Protocol is a permissionless system to create Olympus-style bond markets
 ///      for any token pair. The markets do not require maintenance and will manage
 ///      bond prices based on activity. Bond issuers create BondMarkets that pay out
 ///      a Payout Token in exchange for deposited Quote Tokens. Users can purchase
@@ -51,7 +51,7 @@ contract BondAggregator is IBondAggregator, Auth {
     /// @notice Market IDs for quote token
     mapping(address => uint256[]) public marketsForQuote;
 
-    // A 'vesting' param longer than 50 years is considered a timestamp for fixed expiration.
+    // A 'vesting' param longer than 50 years is considered a timestamp for fixed expiry.
     uint48 private constant MAX_FIXED_TERM = 52 weeks * 50;
 
     constructor(address guardian_, Authority authority_) Auth(guardian_, authority_) {}
@@ -245,6 +245,7 @@ contract BondAggregator is IBondAggregator, Auth {
         return id;
     }
 
+    /// @inheritdoc IBondAggregator
     function liveMarketsBy(address owner_) external view returns (uint256[] memory) {
         uint256 count;
         IBondAuctioneer auctioneer;

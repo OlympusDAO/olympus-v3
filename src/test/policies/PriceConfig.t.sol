@@ -65,7 +65,9 @@ contract PriceConfigTest is Test {
             price = new OlympusPrice(
                 kernel,
                 ohmEthPriceFeed, // AggregatorInterface ohmEthPriceFeed_,
+                uint48(24 hours), // uint32 ohmEthUpdateThreshold_,
                 reserveEthPriceFeed, // AggregatorInterface reserveEthPriceFeed_,
+                uint48(24 hours), // uint32 reserveEthUpdateThreshold_,
                 uint48(8 hours), // uint32 observationFrequency_,
                 uint48(7 days) // uint32 movingAverageDuration_,
             );

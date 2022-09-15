@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondCallback} from "interfaces/IBondCallback.sol";
 
 interface IOperator {
@@ -12,8 +12,8 @@ interface IOperator {
     struct Config {
         uint32 cushionFactor; // percent of capacity to be used for a single cushion deployment, assumes 2 decimals (i.e. 1000 = 10%)
         uint32 cushionDuration; // duration of a single cushion deployment in seconds
-        uint32 cushionDebtBuffer; // Percentage over the initial debt to allow the market to accumulate at any one time. Percent with 3 decimals, e.g. 1_000 = 1 %. See IBondAuctioneer for more info.
-        uint32 cushionDepositInterval; // Target frequency of deposits. Determines max payout of the bond market. See IBondAuctioneer for more info.
+        uint32 cushionDebtBuffer; // Percentage over the initial debt to allow the market to accumulate at any one time. Percent with 3 decimals, e.g. 1_000 = 1 %. See IBondSDA for more info.
+        uint32 cushionDepositInterval; // Target frequency of deposits. Determines max payout of the bond market. See IBondSDA for more info.
         uint32 reserveFactor; // percent of reserves in treasury to be used for a single wall, assumes 2 decimals (i.e. 1000 = 10%)
         uint32 regenWait; // minimum duration to wait to reinstate a wall in seconds
         uint32 regenThreshold; // number of price points on other side of moving average to reinstate a wall
@@ -87,8 +87,8 @@ interface IOperator {
     /// @notice Set the parameters used to deploy cushion bond markets
     /// @notice Access restricted
     /// @param  duration_ - Duration of cushion bond markets in seconds
-    /// @param  debtBuffer_ - Percentage over the initial debt to allow the market to accumulate at any one time. Percent with 3 decimals, e.g. 1_000 = 1 %. See IBondAuctioneer for more info.
-    /// @param  depositInterval_ - Target frequency of deposits in seconds. Determines max payout of the bond market. See IBondAuctioneer for more info.
+    /// @param  debtBuffer_ - Percentage over the initial debt to allow the market to accumulate at any one time. Percent with 3 decimals, e.g. 1_000 = 1 %. See IBondSDA for more info.
+    /// @param  depositInterval_ - Target frequency of deposits in seconds. Determines max payout of the bond market. See IBondSDA for more info.
     function setCushionParams(
         uint32 duration_,
         uint32 debtBuffer_,
@@ -116,7 +116,7 @@ interface IOperator {
     /// @notice Access restricted
     /// @param  auctioneer_ - Address of the bond auctioneer to use.
     /// @param  callback_ - Address of the callback to use.
-    function setBondContracts(IBondAuctioneer auctioneer_, IBondCallback callback_) external;
+    function setBondContracts(IBondSDA auctioneer_, IBondCallback callback_) external;
 
     /// @notice Initialize the Operator to begin market operations
     /// @notice Access restricted
@@ -130,10 +130,21 @@ interface IOperator {
     /// @dev    This function is an escape hatch to trigger out of cycle regenerations and may be useful when doing migrations of Treasury funds
     function regenerate(bool high_) external;
 
-    /// @notice Toggle the Operator status between active and inactive
+    /// @notice Deactivate the Operator
     /// @notice Access restricted
-    /// @dev    Emergency shutdown function for the Operator. Set to inactive to prevent any market operations from occurring.
-    function toggleActive() external;
+    /// @dev    Emergency pause function for the Operator. Prevents market operations from occurring.
+    function deactivate() external;
+
+    /// @notice Activate the Operator
+    /// @notice Access restricted
+    /// @dev    Restart function for the Operator after a pause.
+    function activate() external;
+
+    /// @notice Manually close a cushion bond market
+    /// @notice Access restricted
+    /// @param  high_ Whether to deactivate the high or low side cushion (true = high, false = low)
+    /// @dev    Emergency shutdown function for Cushions
+    function deactivateCushion(bool high_) external;
 
     /* ========== VIEW FUNCTIONS ========== */
 
