@@ -29,8 +29,8 @@ contract OlympusPriceDeploy is Script {
     // ERC20 public constant rewardToken =
     //     ERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // WETH mainnet address
 
-    // IBondAuctioneer public constant bondAuctioneer =
-    //     IBondAuctioneer(address(0));
+    // IBondSDA public constant bondAuctioneer =
+    //     IBondSDA(address(0));
     // IBondAggregator public constant bondAggregator =
     //     IBondAggregator(address(0));
 

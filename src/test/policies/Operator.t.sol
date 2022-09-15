@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
-import {BondFixedTermCDA} from "test/lib/bonds/BondFixedTermCDA.sol";
+import {BondFixedTermSDA} from "test/lib/bonds/BondFixedTermSDA.sol";
 import {BondAggregator} from "test/lib/bonds/BondAggregator.sol";
 import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
@@ -14,7 +14,7 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
 
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
@@ -41,7 +41,7 @@ contract OperatorTest is Test {
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
     BondFixedTermTeller internal teller;
-    BondFixedTermCDA internal auctioneer;
+    BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
 
@@ -70,7 +70,7 @@ contract OperatorTest is Test {
             /// Deploy the bond system
             aggregator = new BondAggregator(guardian, auth);
             teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
-            auctioneer = new BondFixedTermCDA(teller, aggregator, guardian, auth);
+            auctioneer = new BondFixedTermSDA(teller, aggregator, guardian, auth);
 
             /// Register auctioneer on the bond system
             vm.prank(guardian);
@@ -114,7 +114,7 @@ contract OperatorTest is Test {
             /// Deploy operator
             operator = new Operator(
                 kernel,
-                IBondAuctioneer(address(auctioneer)),
+                IBondSDA(address(auctioneer)),
                 callback,
                 [ERC20(ohm), ERC20(reserve)],
                 [
@@ -1597,7 +1597,7 @@ contract OperatorTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(alice);
-        operator.setBondContracts(IBondAuctioneer(alice), BondCallback(alice));
+        operator.setBondContracts(IBondSDA(alice), BondCallback(alice));
 
         /// Try to initialize as a random user, expect revert
         vm.expectRevert(err);
@@ -1910,18 +1910,18 @@ contract OperatorTest is Test {
         bytes memory err = abi.encodeWithSignature("Operator_InvalidParams()");
         vm.expectRevert(err);
         vm.prank(guardian);
-        operator.setBondContracts(IBondAuctioneer(address(0)), BondCallback(address(0)));
+        operator.setBondContracts(IBondSDA(address(0)), BondCallback(address(0)));
 
         /// Create new bond contracts
-        BondFixedTermCDA newCDA = new BondFixedTermCDA(teller, aggregator, guardian, auth);
+        BondFixedTermSDA newSDA = new BondFixedTermSDA(teller, aggregator, guardian, auth);
         BondCallback newCb = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
         /// Update the bond contracts as guardian
         vm.prank(guardian);
-        operator.setBondContracts(IBondAuctioneer(address(newCDA)), newCb);
+        operator.setBondContracts(IBondSDA(address(newSDA)), newCb);
 
         /// Check that the bond contracts have been set
-        assertEq(address(operator.auctioneer()), address(newCDA));
+        assertEq(address(operator.auctioneer()), address(newSDA));
         assertEq(address(operator.callback()), address(newCb));
     }
 

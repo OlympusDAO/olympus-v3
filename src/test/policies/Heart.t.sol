@@ -14,7 +14,7 @@ import "src/Kernel.sol";
 
 import {OlympusHeart} from "policies/Heart.sol";
 
-import {IOperator, ERC20, IBondAuctioneer, IBondCallback} from "policies/interfaces/IOperator.sol";
+import {IOperator} from "policies/interfaces/IOperator.sol";
 
 /**
  * @notice Mock Operator to test Heart

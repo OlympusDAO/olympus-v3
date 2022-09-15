@@ -6,7 +6,7 @@ import {Script, console2} from "forge-std/Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IWETH9} from "interfaces/IWETH9.sol";
 
 import "src/Kernel.sol";
@@ -61,8 +61,8 @@ contract OlympusDeploy is Script {
     // ERC20 public constant rewardToken =
     //     ERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // WETH mainnet address
 
-    // IBondAuctioneer public constant bondAuctioneer =
-    //     IBondAuctioneer(address(0));
+    // IBondSDA public constant bondAuctioneer =
+    //     IBondSDA(address(0));
     // IBondAggregator public constant bondAggregator =
     //     IBondAggregator(address(0));
 
@@ -77,8 +77,7 @@ contract OlympusDeploy is Script {
     ERC20 public constant rewardToken = ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
 
     /// Bond system addresses
-    IBondAuctioneer public constant bondAuctioneer =
-        IBondAuctioneer(0xaE73A94b94F6E7aca37f4c79C4b865F1AF06A68b);
+    IBondSDA public constant bondAuctioneer = IBondSDA(0xaE73A94b94F6E7aca37f4c79C4b865F1AF06A68b);
     IBondAggregator public constant bondAggregator =
         IBondAggregator(0xB4860B2c12C6B894B64471dFb5a631ff569e220e);
 

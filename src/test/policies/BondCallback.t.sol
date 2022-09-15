@@ -5,16 +5,16 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
-import {BondFixedTermCDA} from "test/lib/bonds/BondFixedTermCDA.sol";
+import {BondFixedTermSDA} from "test/lib/bonds/BondFixedTermSDA.sol";
 import {BondAggregator} from "test/lib/bonds/BondAggregator.sol";
 import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
-import {IBondAuctioneer as LibAuctioneer} from "test/lib/bonds/interfaces/IBondAuctioneer.sol";
+import {IBondSDA as LibIBondSDA} from "test/lib/bonds/interfaces/IBondSDA.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
 
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
@@ -56,7 +56,7 @@ contract BondCallbackTest is Test {
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
     BondFixedTermTeller internal teller;
-    BondFixedTermCDA internal auctioneer;
+    BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
     MockERC20 internal other;
@@ -92,7 +92,7 @@ contract BondCallbackTest is Test {
             /// Deploy the bond system
             aggregator = new BondAggregator(guardian, auth);
             teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
-            auctioneer = new BondFixedTermCDA(teller, aggregator, guardian, auth);
+            auctioneer = new BondFixedTermSDA(teller, aggregator, guardian, auth);
 
             /// Register auctioneer on the bond system
             vm.prank(guardian);
@@ -137,7 +137,7 @@ contract BondCallbackTest is Test {
             /// Deploy operator
             operator = new Operator(
                 kernel,
-                IBondAuctioneer(address(auctioneer)),
+                IBondSDA(address(auctioneer)),
                 callback,
                 [ERC20(ohm), ERC20(reserve)],
                 [
@@ -284,7 +284,7 @@ contract BondCallbackTest is Test {
                     )
                 );
 
-        LibAuctioneer.MarketParams memory params = LibAuctioneer.MarketParams(
+        LibIBondSDA.MarketParams memory params = LibIBondSDA.MarketParams(
             payoutToken, // ERC20 payoutToken
             quoteToken, // ERC20 quoteToken
             address(callback), // address callbackAddr
@@ -299,7 +299,7 @@ contract BondCallbackTest is Test {
             scaleAdjustment // int8 scaleAdjustment
         );
 
-        return auctioneer.createMarket(params);
+        return auctioneer.createMarket(abi.encode(params));
     }
 
     /* ========== CALLBACK TESTS ========== */

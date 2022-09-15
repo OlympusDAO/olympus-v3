@@ -81,6 +81,10 @@ interface IBondAggregator {
         view
         returns (uint256[] memory);
 
+    /// @notice             Returns an array of all active market IDs for a given owner
+    /// @param owner_       Address of owner to query by
+    function liveMarketsBy(address owner_) external view returns (uint256[] memory);
+
     /// @notice             Returns an array of all active market IDs for a given payout and quote token
     /// @param payout_      Address of payout token
     /// @param quote_       Address of quote token
@@ -91,7 +95,7 @@ interface IBondAggregator {
     /// @param quote_           Address of quote token
     /// @param amountIn_        Amount of quote tokens to deposit
     /// @param minAmountOut_    Minimum amount of payout tokens to receive as payout
-    /// @param maxExpiry_     Latest acceptable vesting timestamp for bond
+    /// @param maxExpiry_       Latest acceptable vesting timestamp for bond
     ///                         Inputting the zero address will take into account just the protocol fee.
     function findMarketFor(
         address payout_,

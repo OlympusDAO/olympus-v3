@@ -5,7 +5,7 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {IOperator} from "policies/interfaces/IOperator.sol";
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondCallback} from "interfaces/IBondCallback.sol";
 
 import {OlympusTreasury} from "modules/TRSRY.sol";
@@ -73,7 +73,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
 
     // External contracts
     /// @notice     Auctioneer contract used for cushion bond market deployments
-    IBondAuctioneer public auctioneer;
+    IBondSDA public auctioneer;
     /// @notice     Callback contract used for cushion bond market payouts
     IBondCallback public callback;
 
@@ -92,7 +92,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     /* ========== CONSTRUCTOR ========== */
     constructor(
         Kernel kernel_,
-        IBondAuctioneer auctioneer_,
+        IBondSDA auctioneer_,
         IBondCallback callback_,
         ERC20[2] memory tokens_, // [ohm, reserve]
         uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
@@ -402,7 +402,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
             );
 
             // Create new bond market to buy the reserve with OHM
-            IBondAuctioneer.MarketParams memory params = IBondAuctioneer.MarketParams({
+            IBondSDA.MarketParams memory params = IBondSDA.MarketParams({
                 payoutToken: ohm,
                 quoteToken: reserve,
                 callbackAddr: address(callback),
@@ -417,7 +417,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
                 scaleAdjustment: scaleAdjustment
             });
 
-            uint256 market = auctioneer.createMarket(params);
+            uint256 market = auctioneer.createMarket(abi.encode(params));
 
             // Whitelist the bond market on the callback
             callback.whitelist(address(auctioneer.getTeller()), market);
@@ -457,7 +457,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
             );
 
             // Create new bond market to buy OHM with the reserve
-            IBondAuctioneer.MarketParams memory params = IBondAuctioneer.MarketParams({
+            IBondSDA.MarketParams memory params = IBondSDA.MarketParams({
                 payoutToken: reserve,
                 quoteToken: ohm,
                 callbackAddr: address(callback),
@@ -472,7 +472,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
                 scaleAdjustment: scaleAdjustment
             });
 
-            uint256 market = auctioneer.createMarket(params);
+            uint256 market = auctioneer.createMarket(abi.encode(params));
 
             // Whitelist the bond market on the callback
             callback.whitelist(address(auctioneer.getTeller()), market);
@@ -604,7 +604,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function setBondContracts(IBondAuctioneer auctioneer_, IBondCallback callback_)
+    function setBondContracts(IBondSDA auctioneer_, IBondCallback callback_)
         external
         onlyRole("operator_admin")
     {

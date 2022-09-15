@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.15;
+pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
@@ -15,7 +15,7 @@ import {FullMath} from "libraries/FullMath.sol";
 
 /// @title Bond Teller
 /// @notice Bond Teller Base Contract
-/// @dev Bond is a permissionless system to create Olympus-style bond markets
+/// @dev Bond Protocol is a permissionless system to create Olympus-style bond markets
 ///      for any token pair. The markets do not require maintenance and will manage
 ///      bond prices based on activity. Bond issuers create BondMarkets that pay out
 ///      a Payout Token in exchange for deposited Quote Tokens. Users can purchase
@@ -53,7 +53,6 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
     /// @dev There are some situations where the fees may round down to zero if quantity of baseToken
     ///      is < 1e5 wei (can happen with big price differences on small decimal tokens). This is purely
     ///      a theoretical edge case, as the bond amount would not be practical.
-    ///      TODO update comment to reflect new format
     mapping(address => uint48) public referrerFees;
 
     /// @notice Fee paid to protocol. Configurable by policy, must be greater than 30 bps.
@@ -110,7 +109,6 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
 
     /// @inheritdoc IBondTeller
     function getFee(address referrer_) external view returns (uint48) {
-        /// TODO look at use cases to see if I need to provide referrer in to get total fees
         return protocolFee + referrerFees[referrer_];
     }
 
@@ -232,8 +230,8 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
     /// @notice             Derive name and symbol of token for market
     /// @param underlying_   Underlying token to be paid out when the Bond Token vests
     /// @param expiry_      Timestamp that the Bond Token vests at
-    /// @return name        Bond token name, format is "Token DD-MM-YY"
-    /// @return symbol      Bond token symbol, format is "TKN-DDMMYY"
+    /// @return name        Bond token name, format is "Token YYYY-MM-DD"
+    /// @return symbol      Bond token symbol, format is "TKN-YYYYMMDD"
     function _getNameAndSymbol(ERC20 underlying_, uint256 expiry_)
         internal
         view
@@ -264,7 +262,7 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
             day = uint256(_day);
         }
 
-        string memory yearStr = _uint2str(year % 100);
+        string memory yearStr = _uint2str(year % 10000);
         string memory monthStr = month < 10
             ? string(abi.encodePacked("0", _uint2str(month)))
             : _uint2str(month);
@@ -274,9 +272,9 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
 
         // Construct name/symbol strings.
         name = string(
-            abi.encodePacked(underlying_.name(), " ", dayStr, "-", monthStr, "-", yearStr)
+            abi.encodePacked(underlying_.name(), " ", yearStr, "-", monthStr, "-", dayStr)
         );
-        symbol = string(abi.encodePacked(underlying_.symbol(), "-", dayStr, monthStr, yearStr));
+        symbol = string(abi.encodePacked(underlying_.symbol(), "-", yearStr, monthStr, dayStr));
     }
 
     // Some fancy math to convert a uint into a string, courtesy of Provable Things.
