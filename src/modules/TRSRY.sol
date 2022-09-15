@@ -77,7 +77,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         ERC20 token_,
         uint256 amount_
     ) public {
-        _checkApproval(msg.sender, token_, amount_);
+        _updateApproval(msg.sender, token_, amount_);
 
         token_.safeTransfer(to_, amount_);
 
@@ -90,7 +90,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
 
     /// @notice Pre-approved policies can get a loan to perform operations on treasury assets.
     function getTreasuryLoan(ERC20 token_, uint256 amount_) external permissioned {
-        _checkApproval(msg.sender, token_, amount_);
+        _updateApproval(msg.sender, token_, amount_);
 
         // Add debt to caller
         reserveDebt[token_][msg.sender] += amount_;
@@ -138,7 +138,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         emit DebtSet(token_, debtor_, amount_);
     }
 
-    function _checkApproval(
+    function _updateApproval(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
