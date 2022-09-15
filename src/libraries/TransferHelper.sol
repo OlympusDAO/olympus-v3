@@ -17,7 +17,12 @@ library TransferHelper {
             abi.encodeWithSelector(ERC20.transferFrom.selector, from, to, amount)
         );
 
-        require(success && (data.length == 0 || abi.decode(data, (bool))), "TRANSFER_FROM_FAILED");
+        require(
+            success &&
+                (data.length == 0 || abi.decode(data, (bool))) &&
+                address(token).code.length > 0,
+            "TRANSFER_FROM_FAILED"
+        );
     }
 
     function safeTransfer(
@@ -25,8 +30,6 @@ library TransferHelper {
         address to,
         uint256 amount
     ) internal {
-        require(address(token).code.length > 0, "TRANSFER_FAILED");
-
         (bool success, bytes memory data) = address(token).call(
             abi.encodeWithSelector(ERC20.transfer.selector, to, amount)
         );
