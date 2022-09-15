@@ -181,19 +181,21 @@ contract KernelTest is Test {
         assertEq(address(kernel.activePolicies(0)), address(policy));
         assertTrue(policy.isActive());
 
+        // Ensure policy is a dependent
         uint256 depIndex = kernel.getDependentIndex(testKeycode, policy);
         Policy[] memory dependencies = new Policy[](1);
         dependencies[0] = policy;
         assertEq(address(kernel.moduleDependents(testKeycode, depIndex)), address(dependencies[0]));
+    }
 
-        // Try to add same policy again
+    function testRevert_ActivatePolicyTwice() public {
+        _initModuleAndPolicy();
+
         vm.prank(deployer);
-        err = abi.encodeWithSignature("Kernel_PolicyAlreadyActivated(address)", address(policy));
+        err = abi.encodeWithSelector(Kernel_PolicyAlreadyActivated.selector, address(policy));
         vm.expectRevert(err);
         kernel.executeAction(Actions.ActivatePolicy, address(policy));
     }
-
-    function testRevert_ActivatePolicyTwice() public {}
 
     function testCorrectness_PolicyPermissions() public {
         _initModuleAndPolicy();
