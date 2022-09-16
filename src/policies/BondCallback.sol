@@ -69,7 +69,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
         requests = new Permissions[](4);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.approveWithdrawer.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[2] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         requests[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
@@ -92,7 +92,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
 
         /// If payout token is not OHM, request approval from TRSRY for withdrawals
         if (address(payoutToken) != address(ohm)) {
-            TRSRY.setApprovalFor(address(this), payoutToken, type(uint256).max);
+            TRSRY.approveWithdrawer(address(this), payoutToken, type(uint256).max);
         }
     }
 

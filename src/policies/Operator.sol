@@ -180,7 +180,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         requests[3] = Permissions(RANGE_KEYCODE, RANGE.regenerate.selector);
         requests[4] = Permissions(RANGE_KEYCODE, RANGE.setSpreads.selector);
         requests[5] = Permissions(RANGE_KEYCODE, RANGE.setThresholdFactor.selector);
-        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
+        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.approveWithdrawer.selector);
         requests[7] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         requests[8] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
@@ -600,7 +600,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         if (initialized) revert Operator_AlreadyInitialized();
 
         /// Request approval for reserves from TRSRY
-        TRSRY.setApprovalFor(address(this), reserve, type(uint256).max);
+        TRSRY.approveWithdrawer(address(this), reserve, type(uint256).max);
 
         /// Update range prices (wall and cushion)
         _updateRangePrices();

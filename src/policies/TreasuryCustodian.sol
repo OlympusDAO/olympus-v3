@@ -35,7 +35,7 @@ contract TreasuryCustodian is Policy {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
 
         requests = new Permissions[](2);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.approveWithdrawer.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
     }
 
@@ -44,12 +44,11 @@ contract TreasuryCustodian is Policy {
         ERC20 token_,
         uint256 amount_
     ) external onlyRole("custodian") {
-        TRSRY.setApprovalFor(for_, token_, amount_);
+        TRSRY.approveWithdrawer(for_, token_, amount_);
     }
 
-    // Anyone can call to revoke a deactivated policy's approvals.
+    /// @notice Anyone can call to revoke a deactivated policy's approvals.
     // TODO Currently allows anyone to revoke any approval EXCEPT activated policies.
-    // TODO must reorg policy storage to be able to check for deactivated policies.
     function revokePolicyApprovals(address policy_, ERC20[] memory tokens_) external {
         if (Policy(policy_).isActive()) revert PolicyStillActive();
 
@@ -57,7 +56,7 @@ contract TreasuryCustodian is Policy {
 
         uint256 len = tokens_.length;
         for (uint256 j; j < len; ) {
-            TRSRY.setApprovalFor(policy_, tokens_[j], 0);
+            TRSRY.approveWithdrawer(policy_, tokens_[j], 0);
             unchecked {
                 ++j;
             }
@@ -74,7 +73,7 @@ contract TreasuryCustodian is Policy {
         uint256 amount_
     ) external onlyRole("custodian") {
         uint256 debt = TRSRY.reserveDebt(token_, debtor_);
-        TRSRY.setDebt(token_, debtor_, debt + amount_);
+        TRSRY.setDebt(debtor_, token_, debt + amount_);
     }
 
     function decreaseDebt(
@@ -83,6 +82,6 @@ contract TreasuryCustodian is Policy {
         uint256 amount_
     ) external onlyRole("custodian") {
         uint256 debt = TRSRY.reserveDebt(token_, debtor_);
-        TRSRY.setDebt(token_, debtor_, debt - amount_);
+        TRSRY.setDebt(debtor_, token_, debt - amount_);
     }
 }
