@@ -133,6 +133,8 @@ contract OlympusTreasury is Module, ReentrancyGuard {
     }
 
     /// @notice Repay a debtor debt.
+    /// @dev    Only confirmed to safely handle standard and non-standard ERC20s.
+    /// @dev    Can have unforeseen consequences with ERC777. Be careful with ERC777 as reserve.
     function repayDebt(
         address debtor_,
         ERC20 token_,
