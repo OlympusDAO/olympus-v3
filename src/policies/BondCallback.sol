@@ -58,13 +58,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     }
 
     /// @inheritdoc Policy
-    function requestPermissions()
-        external
-        view
-        override
-        onlyKernel
-        returns (Permissions[] memory requests)
-    {
+    function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 

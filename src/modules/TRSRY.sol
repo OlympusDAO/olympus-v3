@@ -75,6 +75,26 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         emit ApprovedForWithdrawal(withdrawer_, token_, amount_);
     }
 
+    function increaseWithdrawerApproval(
+        address withdrawer_,
+        ERC20 token_,
+        uint256 amount_
+    ) external permissioned {
+        uint256 newAmount = withdrawApproval[withdrawer_][token_] + amount_;
+        withdrawApproval[withdrawer_][token_] = newAmount;
+        emit IncreaseWithdrawerApproval(withdrawer_, token_, newAmount);
+    }
+
+    function decreaseWithdrawerApproval(
+        address withdrawer_,
+        ERC20 token_,
+        uint256 amount_
+    ) external permissioned {
+        uint256 newAmount = withdrawApproval[withdrawer_][token_] - amount_;
+        withdrawApproval[withdrawer_][token_] = newAmount;
+        emit DecreaseWithdrawerApproval(withdrawer_, token_, newAmount);
+    }
+
     /// @notice Allow withdrawal of reserve funds from pre-approved addresses.
     function withdrawReserves(
         address to_,
@@ -109,6 +129,26 @@ contract OlympusTreasury is Module, ReentrancyGuard {
     ) external permissioned {
         debtApproval[debtor_][token_] = amount_;
         emit ApprovedForDebt(debtor_, token_, amount_);
+    }
+
+    function increaseDebtorApproval(
+        address debtor_,
+        ERC20 token_,
+        uint256 amount_
+    ) external permissioned {
+        uint256 newAmount = debtApproval[debtor_][token_] + amount_;
+        debtApproval[debtor_][token_] = newAmount;
+        emit IncreaseDebtorApproval(withdrawer_, token_, newAmount);
+    }
+
+    function decreaseDebtorApproval(
+        address debtor_,
+        ERC20 token_,
+        uint256 amount_
+    ) external permissioned {
+        uint256 newAmount = debtApproval[debtor_][token_] - amount_;
+        debtApproval[debtor_][token_] = newAmount;
+        emit DecreaseDebtorApproval(withdrawer_, token_, newAmount);
     }
 
     /// @notice Pre-approved policies can get a loan to perform operations with treasury assets.
@@ -147,6 +187,9 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         token_.safeTransferFrom(msg.sender, address(this), amount_);
 
         uint256 received = token_.balanceOf(address(this)) - prevBalance;
+
+        // Choose minimum between passed-in amount and received amount
+        if (recieved > amount_) received = amount_;
 
         // Subtract debt from caller
         reserveDebt[token_][debtor_] -= received;
