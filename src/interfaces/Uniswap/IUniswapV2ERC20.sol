@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.10;
+pragma solidity 0.8.15;
 
 interface IUniswapV2ERC20 {
-    event Approval(address indexed owner, address indexed spender, uint256 value);
+    event Approval(
+        address indexed owner,
+        address indexed spender,
+        uint256 value
+    );
     event Transfer(address indexed from, address indexed to, uint256 value);
 
     function name() external pure returns (string memory);
@@ -15,7 +19,10 @@ interface IUniswapV2ERC20 {
 
     function balanceOf(address owner) external view returns (uint256);
 
-    function allowance(address owner, address spender) external view returns (uint256);
+    function allowance(address owner, address spender)
+        external
+        view
+        returns (uint256);
 
     function approve(address spender, uint256 value) external returns (bool);
 
