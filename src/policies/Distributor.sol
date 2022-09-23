@@ -82,11 +82,7 @@ contract Distributor is Policy {
     /* ========== FRAMEWORK CONFIGURATION ========== */
 
     /// @inheritdoc Policy
-    function configureDependencies()
-        external
-        override
-        returns (Keycode[] memory dependencies)
-    {
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("MINTR");
         dependencies[1] = toKeycode("TRSRY");
@@ -216,10 +212,7 @@ contract Distributor is Policy {
     /// @notice Sets the Uniswap V2 pools to be minted into
     /// @param  pools_ The array of Uniswap V2 pools.
     /// @dev    This function is only available to an authorized user.
-    function setPools(address[] calldata pools_)
-        external
-        onlyRole("distributor_admin")
-    {
+    function setPools(address[] calldata pools_) external onlyRole("distributor_admin") {
         pools = pools_;
     }
 
@@ -227,10 +220,7 @@ contract Distributor is Policy {
     /// @param  index_ The index in the pools array of the liquidity pool to remove.
     /// @param  pool_ The address of the liquidity pool to remove.
     /// @dev    This function is only available to an authorized user.
-    function removePool(uint256 index_, address pool_)
-        external
-        onlyRole("distributor_admin")
-    {
+    function removePool(uint256 index_, address pool_) external onlyRole("distributor_admin") {
         if (pools[index_] != pool_) revert Distributor_SanityCheck();
         pools[index_] = address(0);
     }
@@ -238,10 +228,7 @@ contract Distributor is Policy {
     /// @notice Adds a liquidity pool to the list of pools to be minted into
     /// @param  index_ The index in the pools array to add the liquidity pool to.
     /// @param  pool_ The address of the liquidity pool to add.
-    function addPool(uint256 index_, address pool_)
-        external
-        onlyRole("distributor_admin")
-    {
+    function addPool(uint256 index_, address pool_) external onlyRole("distributor_admin") {
         // we want to overwrite slots where possible
         if (pools[index_] == address(0)) {
             pools[index_] = pool_;
@@ -260,10 +247,8 @@ contract Distributor is Policy {
         uint256 rate_,
         uint256 target_
     ) external onlyRole("distributor_admin") {
-        if (rate_ > (rewardRate * 25) / 1000)
-            revert Distributor_AdjustmentLimit();
-        if (!add_ && rate_ > rewardRate)
-            revert Distributor_AdjustmentUnderflow();
+        if (rate_ > (rewardRate * 25) / 1000) revert Distributor_AdjustmentLimit();
+        if (!add_ && rate_ > rewardRate) revert Distributor_AdjustmentUnderflow();
 
         adjustment = Adjust({add: add_, rate: rate_, target: target_});
     }

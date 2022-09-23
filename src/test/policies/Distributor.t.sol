@@ -70,21 +70,9 @@ contract DistributorTest is Test {
 
         {
             /// Deploy Staking and Distributor
-            staking = new MockStaking(
-                address(ohm),
-                address(sohm),
-                address(gohm),
-                2200,
-                0,
-                2200
-            );
+            staking = new MockStaking(address(ohm), address(sohm), address(gohm), 2200, 0, 2200);
 
-            distributor = new Distributor(
-                address(kernel),
-                address(ohm),
-                address(staking),
-                1000
-            );
+            distributor = new Distributor(address(kernel), address(ohm), address(staking), 1000);
 
             staking.setDistributor(address(distributor));
         }
@@ -144,17 +132,13 @@ contract DistributorTest is Test {
     /// []  Can only be called by staking
     /// []  Cannot be called if not unlocked
     function testCorrectness_distributeOnlyStaking() public {
-        bytes memory err = abi.encodeWithSelector(
-            Distributor_OnlyStaking.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Distributor_OnlyStaking.selector);
         vm.expectRevert(err);
         distributor.distribute();
     }
 
     function testCorrectness_distributeNotUnlocked() public {
-        bytes memory err = abi.encodeWithSelector(
-            Distributor_NotUnlocked.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Distributor_NotUnlocked.selector);
         vm.expectRevert(err);
 
         vm.prank(address(staking));
@@ -165,9 +149,7 @@ contract DistributorTest is Test {
     /// []  Can only be called by staking
     /// []  Bounty is zero and no OHM is minted
     function test_retrieveBountyOnlyStaking() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(Distributor_OnlyStaking.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(Distributor_OnlyStaking.selector));
         distributor.retrieveBounty();
     }
 
@@ -278,9 +260,7 @@ contract DistributorTest is Test {
         distributor.setPools(newPools);
 
         /// Remove Pool (should fail)
-        bytes memory err = abi.encodeWithSelector(
-            Distributor_SanityCheck.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Distributor_SanityCheck.selector);
         vm.expectRevert(err);
 
         distributor.removePool(0, address(gohm));
@@ -370,9 +350,7 @@ contract DistributorTest is Test {
     }
 
     function testCorrectness_cannotAdjustmentLimit() public {
-        bytes memory err = abi.encodeWithSelector(
-            Distributor_AdjustmentLimit.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Distributor_AdjustmentLimit.selector);
         vm.expectRevert(err);
 
         distributor.setAdjustment(true, 50, 1050);
@@ -406,9 +384,7 @@ contract DistributorTest is Test {
         assertGt(end, block.timestamp);
 
         uint256 balanceBefore = ohm.balanceOf(address(staking));
-        bytes memory err = abi.encodeWithSelector(
-            Distributor_NoRebaseOccurred.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Distributor_NoRebaseOccurred.selector);
         vm.expectRevert(err);
 
         distributor.triggerRebase();
@@ -439,9 +415,7 @@ contract DistributorTest is Test {
 
         /// Move forward a little bit
         vm.warp(2500);
-        bytes memory err = abi.encodeWithSelector(
-            Distributor_NoRebaseOccurred.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Distributor_NoRebaseOccurred.selector);
         vm.expectRevert(err);
 
         distributor.triggerRebase();
@@ -458,9 +432,7 @@ contract DistributorTest is Test {
         (uint256 reserve0, uint256 reserve1, ) = ohmDai.getReserves();
         uint256 priceBefore = reserve1 / (reserve0 * 1000000000);
         uint256 balanceBefore = ohm.balanceOf(address(ohmDai));
-        uint256 expectedBalanceAfter = balanceBefore +
-            (balanceBefore * 1000) /
-            1_000_000;
+        uint256 expectedBalanceAfter = balanceBefore + (balanceBefore * 1000) / 1_000_000;
 
         distributor.triggerRebase();
 
@@ -482,19 +454,15 @@ contract DistributorTest is Test {
         distributor.setPools(newPools);
         vm.warp(2200);
 
-        (uint256 ohmDaiReserve0, uint256 ohmDaiReserve1, ) = ohmDai
-            .getReserves();
-        uint256 ohmDaiPriceBefore = ohmDaiReserve1 /
-            (ohmDaiReserve0 * 1000000000);
+        (uint256 ohmDaiReserve0, uint256 ohmDaiReserve1, ) = ohmDai.getReserves();
+        uint256 ohmDaiPriceBefore = ohmDaiReserve1 / (ohmDaiReserve0 * 1000000000);
         uint256 ohmDaiBalanceBefore = ohm.balanceOf(address(ohmDai));
         uint256 expectedOhmDaiBalanceAfter = ohmDaiBalanceBefore +
             (ohmDaiBalanceBefore * 1000) /
             1_000_000;
 
-        (uint256 ohmWethReserve0, uint256 ohmWethReserve1, ) = ohmWeth
-            .getReserves();
-        uint256 ohmWethPriceBefore = ohmWethReserve1 /
-            (ohmWethReserve0 * 1000000000);
+        (uint256 ohmWethReserve0, uint256 ohmWethReserve1, ) = ohmWeth.getReserves();
+        uint256 ohmWethPriceBefore = ohmWethReserve1 / (ohmWethReserve0 * 1000000000);
         uint256 ohmWethBalanceBefore = ohm.balanceOf(address(ohmWeth));
         uint256 expectedOhmWethBalanceAfter = ohmWethBalanceBefore +
             (ohmWethBalanceBefore * 1000) /
@@ -503,13 +471,11 @@ contract DistributorTest is Test {
         distributor.triggerRebase();
 
         (ohmDaiReserve0, ohmDaiReserve1, ) = ohmDai.getReserves();
-        uint256 ohmDaiPriceAfter = ohmDaiReserve1 /
-            (ohmDaiReserve0 * 1000000000);
+        uint256 ohmDaiPriceAfter = ohmDaiReserve1 / (ohmDaiReserve0 * 1000000000);
         uint256 ohmDaiBalanceAfter = ohm.balanceOf(address(ohmDai));
 
         (ohmWethReserve0, ohmWethReserve1, ) = ohmWeth.getReserves();
-        uint256 ohmWethPriceAfter = ohmWethReserve1 /
-            (ohmWethReserve0 * 1000000000);
+        uint256 ohmWethPriceAfter = ohmWethReserve1 / (ohmWethReserve0 * 1000000000);
         uint256 ohmWethBalanceAfter = ohm.balanceOf(address(ohmWeth));
 
         assertGt(ohmDaiBalanceAfter, ohmDaiBalanceBefore);
