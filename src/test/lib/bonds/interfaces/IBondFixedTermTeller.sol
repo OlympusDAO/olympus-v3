@@ -30,29 +30,23 @@ interface IBondFixedTermTeller {
     /// @param underlying_  ERC20 token redeemable when the bond token vests
     /// @param expiry_      Timestamp at which the bond token can be redeemed for the underlying token
     /// @return             ID of the ERC1155 bond token being created
-    function deploy(ERC20 underlying_, uint48 expiry_)
-        external
-        returns (uint256);
+    function deploy(ERC20 underlying_, uint48 expiry_) external returns (uint256);
 
-    /// @notice          Redeem a fixed-expiration bond token for the underlying token (bond token must have matured)
+    /// @notice          Redeem a fixed-term bond token for the underlying token (bond token must have matured)
     /// @param tokenId_  ID of the bond token to redeem
     /// @param amount_   Amount of bond token to redeem
     function redeem(uint256 tokenId_, uint256 amount_) external;
 
-    /// @notice          Redeem multiple fixed-expiration bond tokens for the underlying tokens (bond tokens must have matured)
+    /// @notice          Redeem multiple fixed-term bond tokens for the underlying tokens (bond tokens must have matured)
     /// @param tokenIds_ Array of bond token ids
     /// @param amounts_  Array of amounts of bond tokens to redeem
-    function batchRedeem(uint256[] memory tokenIds_, uint256[] memory amounts_)
-        external;
+    function batchRedeem(uint256[] memory tokenIds_, uint256[] memory amounts_) external;
 
     /// @notice             Get token ID from token and expiry
-    /// @param payoutToken_   Payout token of bond
+    /// @param payoutToken_ Payout token of bond
     /// @param expiry_      Expiry of the bond
     /// @return             ID of the bond token
-    function getTokenId(ERC20 payoutToken_, uint48 expiry_)
-        external
-        pure
-        returns (uint256);
+    function getTokenId(ERC20 payoutToken_, uint48 expiry_) external pure returns (uint256);
 
     /// @notice             Get the token name and symbol for a bond token
     /// @param tokenId_     ID of the bond token

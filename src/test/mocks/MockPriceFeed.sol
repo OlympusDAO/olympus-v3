@@ -6,6 +6,9 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 contract MockPriceFeed is AggregatorV2V3Interface {
     int256 public s_answer;
     uint8 public s_decimals;
+    uint256 public s_timestamp;
+    uint80 public s_roundId;
+    uint80 public s_answeredInRound;
 
     function setLatestAnswer(int256 answer) public {
         s_answer = answer;
@@ -23,34 +26,31 @@ contract MockPriceFeed is AggregatorV2V3Interface {
         return s_decimals;
     }
 
-    /// Not implemented but required by interface
+    function setTimestamp(uint256 timestamp_) public {
+        s_timestamp = timestamp_;
+    }
 
-    function latestTimestamp() external view override returns (uint256) {}
+    function latestTimestamp() external view override returns (uint256) {
+        return s_timestamp;
+    }
 
-    function latestRound() external view override returns (uint256) {}
+    function setRoundId(uint80 roundId_) public {
+        s_roundId = roundId_;
+    }
 
-    function getAnswer(uint256 roundId)
-        external
-        view
-        override
-        returns (int256)
-    {}
+    function latestRound() external view override returns (uint256) {
+        return uint256(s_roundId);
+    }
 
-    function getTimestamp(uint256 roundId)
-        external
-        view
-        override
-        returns (uint256)
-    {}
+    function setAnsweredInRound(uint80 answeredInRound_) public {
+        s_answeredInRound = answeredInRound_;
+    }
 
-    function description() external view override returns (string memory) {}
+    function latestAnsweredInRound() external view returns (uint256) {
+        return uint256(s_answeredInRound);
+    }
 
-    function version() external view override returns (uint256) {}
-
-    // getRoundData and latestRoundData should both raise "No data present"
-    // if they do not have data to report, instead of returning unset values
-    // which could be misinterpreted as actual reported values.
-    function getRoundData(uint80 _roundId)
+    function latestRoundData()
         external
         view
         override
@@ -61,9 +61,24 @@ contract MockPriceFeed is AggregatorV2V3Interface {
             uint256 updatedAt,
             uint80 answeredInRound
         )
-    {}
+    {
+        return (s_roundId, s_answer, 0, s_timestamp, s_answeredInRound);
+    }
 
-    function latestRoundData()
+    /// Not implemented but required by interface
+
+    function getAnswer(uint256 roundId) external view override returns (int256) {}
+
+    function getTimestamp(uint256 roundId) external view override returns (uint256) {}
+
+    function description() external view override returns (string memory) {}
+
+    function version() external view override returns (uint256) {}
+
+    // getRoundData and latestRoundData should both raise "No data present"
+    // if they do not have data to report, instead of returning unset values
+    // which could be misinterpreted as actual reported values.
+    function getRoundData(uint80 _roundId)
         external
         view
         override

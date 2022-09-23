@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.13;
+pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
@@ -15,7 +15,7 @@ import {FullMath} from "libraries/FullMath.sol";
 
 /// @title Bond Teller
 /// @notice Bond Teller Base Contract
-/// @dev Bond is a permissionless system to create Olympus-style bond markets
+/// @dev Bond Protocol is a permissionless system to create Olympus-style bond markets
 ///      for any token pair. The markets do not require maintenance and will manage
 ///      bond prices based on activity. Bond issuers create BondMarkets that pay out
 ///      a Payout Token in exchange for deposited Quote Tokens. Users can purchase
@@ -45,26 +45,26 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
     error Teller_InvalidParams();
 
     /* ========== EVENTS ========== */
-    event Bonded(uint256 indexed id, uint256 amount, uint256 payout);
+    event Bonded(uint256 indexed id, address indexed referrer, uint256 amount, uint256 payout);
 
     /* ========== STATE VARIABLES ========== */
 
-    /// @notice Tokens the protocol prefers as fees. Used to change what fee is paid in if Quote Token is preferred.
-    mapping(ERC20 => bool) public preferredFeeToken;
+    /// @notice Fee paid to a front end operator. Set by the referrer, must be less than or equal to 5e4.
+    /// @dev There are some situations where the fees may round down to zero if quantity of baseToken
+    ///      is < 1e5 wei (can happen with big price differences on small decimal tokens). This is purely
+    ///      a theoretical edge case, as the bond amount would not be practical.
+    mapping(address => uint48) public referrerFees;
 
-    /// @notice Fee tiers charged by the protocol. Index -> fee, 0 index is the default fee. Configurable by policy.
-    mapping(uint256 => uint48) public feeTiers;
-
-    /// @notice Fee tier applicable to each market owner. Default fee tier is 0. Configurable by policy.
-    mapping(address => uint256) public partnerFeeTier;
+    /// @notice Fee paid to protocol. Configurable by policy, must be greater than 30 bps.
+    uint48 public protocolFee;
 
     /// @notice 'Create' function fee discount. Amount standard fee is reduced by for partners who just want to use the 'create' function to issue bond tokens. Configurable by policy.
     uint48 public createFeeDiscount;
 
     uint48 public constant FEE_DECIMALS = 1e5; // one percent equals 1000.
 
-    /// @notice Fees earned by the protocol by token
-    mapping(ERC20 => uint256) public fees;
+    /// @notice Fees earned by an address, by token
+    mapping(address => mapping(ERC20 => uint256)) public rewards;
 
     // Address the protocol receives fees at
     address internal immutable _protocol;
@@ -81,67 +81,35 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
         _protocol = protocol_;
         _aggregator = aggregator_;
 
-        feeTiers[0] = uint48(2500); // Default fee tier
-        feeTiers[1] = uint48(1500);
-        feeTiers[2] = uint48(1000);
+        protocolFee = 0;
     }
 
     /// @inheritdoc IBondTeller
-    function setFeeTier(uint256 tier_, uint48 fee_)
-        external
-        override
-        requiresAuth
-    {
-        /// Restricted to authorized addresses, initially restricted to guardian
-
-        /// Check if the fee is valid
-        if (fee_ > FEE_DECIMALS) revert Teller_InvalidParams();
-
-        /// Set the fee for the tier
-        feeTiers[tier_] = fee_;
+    function setReferrerFee(uint48 fee_) external override {
+        if (fee_ > 5e4) revert Teller_InvalidParams();
+        referrerFees[msg.sender] = fee_;
     }
 
     /// @inheritdoc IBondTeller
-    function setPartnerFeeTier(address partner_, uint256 tier_)
-        external
-        override
-        requiresAuth
-    {
-        /// Restricted to authorized addresses, initially restricted to guardian
-
-        /// Ensure fee tier is not 0
-        if (feeTiers[tier_] == 0) revert Teller_InvalidParams();
-
-        /// Set the fee tier for the partner
-        partnerFeeTier[partner_] = tier_;
+    function setProtocolFee(uint48 fee_) external override requiresAuth {
+        protocolFee = fee_;
     }
 
     /// @inheritdoc IBondTeller
-    function changePreferredTokenStatus(ERC20 token_, bool status_)
-        external
-        override
-        requiresAuth
-    {
-        /// Restricted to authorized addresses, initially restricted to policy
-        preferredFeeToken[token_] = status_;
-    }
-
-    /// @inheritdoc IBondTeller
-    function claimFees(ERC20[] memory tokens_) external override requiresAuth {
-        /// Restricted to authorized addresses, initially restricted to policy
+    function claimFees(ERC20[] memory tokens_, address to_) external override {
         uint256 len = tokens_.length;
         for (uint256 i; i < len; ++i) {
             ERC20 token = tokens_[i];
-            uint256 send = fees[token];
+            uint256 send = rewards[msg.sender][token];
 
-            fees[token] = 0;
-            token.safeTransfer(_protocol, send);
+            rewards[msg.sender][token] = 0;
+            token.safeTransfer(to_, send);
         }
     }
 
     /// @inheritdoc IBondTeller
-    function getFee(address partner_) external view returns (uint48) {
-        return feeTiers[partnerFeeTier[partner_]];
+    function getFee(address referrer_) external view returns (uint48) {
+        return protocolFee + referrerFees[referrer_];
     }
 
     /* ========== USER FUNCTIONS ========== */
@@ -149,6 +117,7 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
     /// @inheritdoc IBondTeller
     function purchase(
         address recipient_,
+        address referrer_,
         uint256 id_,
         uint256 amount_,
         uint256 minAmountOut_
@@ -158,41 +127,37 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
         uint48 vesting;
         uint256 payout;
 
-        bool feeInQuote;
-        uint256 feeAmount;
+        // Calculate fees for purchase
+        // 1. Calculate referrer fee
+        // 2. Calculate protocol fee as the total expected fee amount minus the referrer fee
+        //    to avoid issues with rounding from separate fee calculations
+        uint256 toReferrer = amount_.mulDiv(referrerFees[referrer_], FEE_DECIMALS);
+        uint256 toProtocol = amount_.mulDiv(protocolFee + referrerFees[referrer_], FEE_DECIMALS) -
+            toReferrer;
 
         {
             IBondAuctioneer auctioneer = _aggregator.getAuctioneer(id_);
             address owner;
-            (owner, , payoutToken, quoteToken, vesting, ) = auctioneer
-                .getMarketInfoForPurchase(id_);
-
-            // Fees are paid in payout token, unless the quote token is designated
-            // as a preferred fee token when the market is created.
-            feeInQuote = preferredFeeToken[quoteToken];
+            (owner, , payoutToken, quoteToken, vesting, ) = auctioneer.getMarketInfoForPurchase(
+                id_
+            );
 
             // Auctioneer handles bond pricing, capacity, and duration
-            // Fee information needs to be passed to the auctioneer to correctly account
-            // for fees in the market capacity adjustments
-            (payout, feeAmount) = auctioneer.purchaseBond(
-                id_,
-                amount_,
-                minAmountOut_,
-                feeInQuote,
-                feeTiers[partnerFeeTier[owner]]
-            );
+            uint256 amountLessFee = amount_ - toReferrer - toProtocol;
+            payout = auctioneer.purchaseBond(id_, amountLessFee, minAmountOut_);
         }
 
-        // Allocate fee to protocol
-        fees[(feeInQuote ? quoteToken : payoutToken)] += feeAmount;
+        // Allocate fees to protocol and referrer
+        rewards[referrer_][quoteToken] += toReferrer;
+        rewards[_protocol][quoteToken] += toProtocol;
 
         // Ensure enough payout tokens are available
-        _handleTransfers(id_, amount_, payout, feeInQuote, feeAmount);
+        _handleTransfers(id_, amount_, payout, toReferrer + toProtocol);
 
         // Handle payout to user (either transfer tokens if instant swap or issue bond token)
         uint48 expiry = _handlePayout(recipient_, payout, payoutToken, vesting);
 
-        emit Bonded(id_, amount_, payout);
+        emit Bonded(id_, referrer_, amount_, payout);
 
         return (payout, expiry);
     }
@@ -202,24 +167,17 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
         uint256 id_,
         uint256 amount_,
         uint256 payout_,
-        bool feeInQuote_,
         uint256 feePaid_
     ) internal {
         // Get info from auctioneer
-        (
-            address owner,
-            address callbackAddr,
-            ERC20 payoutToken,
-            ERC20 quoteToken,
-            ,
+        (address owner, address callbackAddr, ERC20 payoutToken, ERC20 quoteToken, , ) = _aggregator
+            .getAuctioneer(id_)
+            .getMarketInfoForPurchase(id_);
 
-        ) = _aggregator.getAuctioneer(id_).getMarketInfoForPurchase(id_);
+        // Calculate amount net of fees
+        uint256 amountLessFee = amount_ - feePaid_;
 
-        // Calculate amounts net of fees
-        uint256 totalPaid = payout_ + (feeInQuote_ ? 0 : feePaid_);
-        uint256 amount = amount_ - (feeInQuote_ ? feePaid_ : 0);
-
-        // Have to transfer to teller first if fee in quote token
+        // Have to transfer to teller first since fee is in quote token
         // Check balance before and after to ensure full amount received, revert if not
         // Handles edge cases like fee-on-transfer tokens (which are not supported)
         uint256 quoteBalance = quoteToken.balanceOf(address(this));
@@ -231,30 +189,25 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
         // and ensure proper amount of tokens transferred in.
         if (callbackAddr != address(0)) {
             // Send quote token to callback transferred in first to allow use during callback
-            // Note to auditor: Please verify these transfers cannot be manipulated
-            quoteToken.safeTransfer(callbackAddr, amount);
+            quoteToken.safeTransfer(callbackAddr, amountLessFee);
 
             // Call the callback function to receive payout tokens for payout
             uint256 payoutBalance = payoutToken.balanceOf(address(this));
-            IBondCallback(callbackAddr).callback(id_, amount, totalPaid);
+            IBondCallback(callbackAddr).callback(id_, amountLessFee, payout_);
 
-            if (
-                payoutToken.balanceOf(address(this)) <
-                (payoutBalance + totalPaid)
-            ) revert Teller_InvalidCallback();
+            if (payoutToken.balanceOf(address(this)) < (payoutBalance + payout_))
+                revert Teller_InvalidCallback();
         } else {
             // If no callback is provided, transfer tokens from market owner to this contract
             // for payout.
             // Check balance before and after to ensure full amount received, revert if not
             // Handles edge cases like fee-on-transfer tokens (which are not supported)
             uint256 payoutBalance = payoutToken.balanceOf(address(this));
-            payoutToken.safeTransferFrom(owner, address(this), totalPaid);
-            if (
-                payoutToken.balanceOf(address(this)) <
-                (payoutBalance + totalPaid)
-            ) revert Teller_UnsupportedToken();
+            payoutToken.safeTransferFrom(owner, address(this), payout_);
+            if (payoutToken.balanceOf(address(this)) < (payoutBalance + payout_))
+                revert Teller_UnsupportedToken();
 
-            quoteToken.safeTransfer(owner, amount);
+            quoteToken.safeTransfer(owner, amountLessFee);
         }
     }
 
@@ -277,8 +230,8 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
     /// @notice             Derive name and symbol of token for market
     /// @param underlying_   Underlying token to be paid out when the Bond Token vests
     /// @param expiry_      Timestamp that the Bond Token vests at
-    /// @return name        Bond token name, format is "Token DD-MM-YY"
-    /// @return symbol      Bond token symbol, format is "TKN-DDMMYY"
+    /// @return name        Bond token name, format is "Token YYYY-MM-DD"
+    /// @return symbol      Bond token symbol, format is "TKN-YYYYMMDD"
     function _getNameAndSymbol(ERC20 underlying_, uint256 expiry_)
         internal
         view
@@ -309,7 +262,7 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
             day = uint256(_day);
         }
 
-        string memory yearStr = _uint2str(year % 100);
+        string memory yearStr = _uint2str(year % 10000);
         string memory monthStr = month < 10
             ? string(abi.encodePacked("0", _uint2str(month)))
             : _uint2str(month);
@@ -319,25 +272,9 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
 
         // Construct name/symbol strings.
         name = string(
-            abi.encodePacked(
-                underlying_.name(),
-                " ",
-                dayStr,
-                "-",
-                monthStr,
-                "-",
-                yearStr
-            )
+            abi.encodePacked(underlying_.name(), " ", yearStr, "-", monthStr, "-", dayStr)
         );
-        symbol = string(
-            abi.encodePacked(
-                underlying_.symbol(),
-                "-",
-                dayStr,
-                monthStr,
-                yearStr
-            )
-        );
+        symbol = string(abi.encodePacked(underlying_.symbol(), "-", yearStr, monthStr, dayStr));
     }
 
     // Some fancy math to convert a uint into a string, courtesy of Provable Things.

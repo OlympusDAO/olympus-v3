@@ -6,6 +6,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 interface IBondTeller {
     /// @notice                 Exchange quote tokens for a bond in a specified market
     /// @param recipient_       Address of recipient of bond. Allows deposits for other addresses
+    /// @param referrer_        Address of referrer who will receive referral fee. For frontends to fill.
+    ///                         Direct calls can use the zero address for no referrer fee.
     /// @param id_              ID of the Market the bond is being purchased from
     /// @param amount_          Amount to deposit in exchange for bond
     /// @param minAmountOut_    Minimum acceptable amount of bond to receive. Prevents frontrunning
@@ -13,36 +15,30 @@ interface IBondTeller {
     /// @return                 Timestamp at which the bond token can be redeemed for the underlying token
     function purchase(
         address recipient_,
+        address referrer_,
         uint256 id_,
         uint256 amount_,
         uint256 minAmountOut_
     ) external returns (uint256, uint48);
 
-    /// @notice         Get current fee charged by the teller for a partner's markets
-    /// @param partner_ Address of the partner
-    /// @return         Fee in basis points (3 decimal places)
-    function getFee(address partner_) external view returns (uint48);
+    /// @notice          Get current fee charged by the teller based on the combined protocol and referrer fee
+    /// @param referrer_ Address of the referrer
+    /// @return          Fee in basis points (3 decimal places)
+    function getFee(address referrer_) external view returns (uint48);
 
-    /// @notice         Set fee for a partner tier
+    /// @notice         Set protocol fee
     /// @notice         Must be guardian
-    /// @param tier_    Tier index for the fee being set (0 is the Default tier)
     /// @param fee_     Protocol fee in basis points (3 decimal places)
-    function setFeeTier(uint256 tier_, uint48 fee_) external;
+    function setProtocolFee(uint48 fee_) external;
 
-    /// @notice         Set the fee tier applicable to a partner
-    /// @notice         Must be guardian
-    /// @param partner_ Address of the partner
-    /// @param tier_    Tier index to set for the partner (0 is the Default tier)
-    function setPartnerFeeTier(address partner_, uint256 tier_) external;
+    /// @notice         Set your fee as a referrer to the protocol
+    /// @notice         Fee is set for sending address
+    /// @param fee_     Referrer fee in basis points (3 decimal places)
+    function setReferrerFee(uint48 fee_) external;
 
     /// @notice         Claim fees accrued for input tokens and sends to protocol
     /// @notice         Must be guardian
     /// @param tokens_  Array of tokens to claim fees for
-    function claimFees(ERC20[] memory tokens_) external;
-
-    /// @notice         Changes a token's status as a protocol-preferred fee token
-    /// @notice         Must be policy
-    /// @param token_   ERC20 token to set the status for
-    /// @param status_  Add preferred fee token (true) or remove preferred fee token (false)
-    function changePreferredTokenStatus(ERC20 token_, bool status_) external;
+    /// @param to_      Address to send fees to
+    function claimFees(ERC20[] memory tokens_, address to_) external;
 }

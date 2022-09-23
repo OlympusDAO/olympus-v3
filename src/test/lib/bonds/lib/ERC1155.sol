@@ -25,11 +25,7 @@ abstract contract ERC1155 {
         uint256[] amounts
     );
 
-    event ApprovalForAll(
-        address indexed owner,
-        address indexed operator,
-        bool approved
-    );
+    event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
 
     // event URI(string value, uint256 indexed id);
 
@@ -58,10 +54,7 @@ abstract contract ERC1155 {
         uint256 amount,
         bytes memory data
     ) public virtual {
-        require(
-            msg.sender == from || isApprovedForAll[from][msg.sender],
-            "NOT_AUTHORIZED"
-        );
+        require(msg.sender == from || isApprovedForAll[from][msg.sender], "NOT_AUTHORIZED");
 
         balanceOf[from][id] -= amount;
         balanceOf[to][id] += amount;
@@ -71,13 +64,8 @@ abstract contract ERC1155 {
         require(
             to.code.length == 0
                 ? to != address(0)
-                : ERC1155TokenReceiver(to).onERC1155Received(
-                    msg.sender,
-                    from,
-                    id,
-                    amount,
-                    data
-                ) == ERC1155TokenReceiver.onERC1155Received.selector,
+                : ERC1155TokenReceiver(to).onERC1155Received(msg.sender, from, id, amount, data) ==
+                    ERC1155TokenReceiver.onERC1155Received.selector,
             "UNSAFE_RECIPIENT"
         );
     }
@@ -93,16 +81,13 @@ abstract contract ERC1155 {
 
         require(idsLength == amounts.length, "LENGTH_MISMATCH");
 
-        require(
-            msg.sender == from || isApprovedForAll[from][msg.sender],
-            "NOT_AUTHORIZED"
-        );
+        require(msg.sender == from || isApprovedForAll[from][msg.sender], "NOT_AUTHORIZED");
 
         // Storing these outside the loop saves ~15 gas per iteration.
         uint256 id;
         uint256 amount;
 
-        for (uint256 i = 0; i < idsLength; ) {
+        for (uint256 i; i < idsLength; ) {
             id = ids[i];
             amount = amounts[i];
 
@@ -147,7 +132,7 @@ abstract contract ERC1155 {
         // Unchecked because the only math done is incrementing
         // the array index counter which cannot possibly overflow.
         unchecked {
-            for (uint256 i = 0; i < ownersLength; ++i) {
+            for (uint256 i; i < ownersLength; ++i) {
                 balances[i] = balanceOf[owners[i]][ids[i]];
             }
         }
@@ -157,12 +142,7 @@ abstract contract ERC1155 {
                               ERC165 LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        virtual
-        returns (bool)
-    {
+    function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
         return
             interfaceId == 0x01ffc9a7 || // ERC165 Interface ID for ERC165
             interfaceId == 0xd9b67a26 || // ERC165 Interface ID for ERC1155
@@ -207,7 +187,7 @@ abstract contract ERC1155 {
 
         require(idsLength == amounts.length, "LENGTH_MISMATCH");
 
-        for (uint256 i = 0; i < idsLength; ) {
+        for (uint256 i; i < idsLength; ) {
             balanceOf[to][ids[i]] += amounts[i];
 
             // An array can't have a total length
@@ -242,7 +222,7 @@ abstract contract ERC1155 {
 
         require(idsLength == amounts.length, "LENGTH_MISMATCH");
 
-        for (uint256 i = 0; i < idsLength; ) {
+        for (uint256 i; i < idsLength; ) {
             balanceOf[from][ids[i]] -= amounts[i];
 
             // An array can't have a total length

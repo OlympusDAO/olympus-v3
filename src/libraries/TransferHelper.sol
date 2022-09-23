@@ -14,18 +14,10 @@ library TransferHelper {
         uint256 amount
     ) internal {
         (bool success, bytes memory data) = address(token).call(
-            abi.encodeWithSelector(
-                ERC20.transferFrom.selector,
-                from,
-                to,
-                amount
-            )
+            abi.encodeWithSelector(ERC20.transferFrom.selector, from, to, amount)
         );
 
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            "TRANSFER_FROM_FAILED"
-        );
+        require(success && (data.length == 0 || abi.decode(data, (bool))), "TRANSFER_FROM_FAILED");
     }
 
     function safeTransfer(
@@ -37,10 +29,7 @@ library TransferHelper {
             abi.encodeWithSelector(ERC20.transfer.selector, to, amount)
         );
 
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            "TRANSFER_FAILED"
-        );
+        require(success && (data.length == 0 || abi.decode(data, (bool))), "TRANSFER_FAILED");
     }
 
     function safeApprove(
@@ -52,15 +41,6 @@ library TransferHelper {
             abi.encodeWithSelector(ERC20.approve.selector, to, amount)
         );
 
-        require(
-            success && (data.length == 0 || abi.decode(data, (bool))),
-            "APPROVE_FAILED"
-        );
-    }
-
-    function safeTransferETH(address to, uint256 amount) internal {
-        (bool success, ) = to.call{value: amount}(new bytes(0));
-
-        require(success, "ETH_TRANSFER_FAILED");
+        require(success && (data.length == 0 || abi.decode(data, (bool))), "APPROVE_FAILED");
     }
 }

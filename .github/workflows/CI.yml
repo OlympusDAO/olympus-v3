@@ -1,28 +1,31 @@
 name: CI
 on:
-  push:
-    branches:
-      - master
-  pull_request:
+    push:
+        branches:
+            - master
+    pull_request:
 
 jobs:
-  run-ci:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          submodules: recursive
-      - uses: actions/setup-node@v2
-      - name: Install dev dependencies
-        run: npm install
+    run-ci:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
 
-      - name: Install Foundry
-        uses: onbjerg/foundry-toolchain@v1
-        with:
-          version: nightly
+            - uses: actions/setup-node@v2
 
-      - name: Run lint check
-        run: npm run lint:check
+            - name: Install Node dependencies
+              run: npm install
 
-      - name: Run tests
-        run: forge test
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+              with:
+                  version: nightly
+
+            - name: Install Foundry dependencies
+              run: forge install
+
+            - name: Run lint check
+              run: npm run lint:check
+
+            - name: Run tests
+              run: forge test
