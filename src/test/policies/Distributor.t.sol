@@ -4,9 +4,7 @@ pragma solidity ^0.8.10;
 /// External Dependencies
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "test-utils/UserFactory.sol";
-
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {UserFactory} from "test/lib/UserFactory.sol";
 
 /// Import Distributor
 import "src/policies/Distributor.sol";
@@ -15,18 +13,12 @@ import {OlympusMinter} from "src/modules/MINTR.sol";
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
 
 /// Import Mocks for non-Bophades contracts
-import {MockStaking} from "../mocks/MockStaking.sol";
-import {MockGOHM} from "../mocks/MockGOHM.sol";
-import {MockSOHM} from "../mocks/MockSOHM.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockGohm, MockStaking} from "../mocks/OlympusMocks.sol";
 import {MockUniV2Pair} from "../mocks/MockUniV2Pair.sol";
-import {OlympusERC20Token as OHM, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {MockLegacyAuthority} from "../modules/MINTR.t.sol";
 
 contract DistributorTest is Test {
-    using larping for *;
-    using convert for *;
-    using errors for *;
-
     /// Bophades Systems
     Kernel internal kernel;
     OlympusMinter internal mintr;
@@ -34,15 +26,14 @@ contract DistributorTest is Test {
     Distributor internal distributor;
 
     /// Tokens
-    OHM internal ohm;
-    MockSOHM internal sohm;
-    MockGOHM internal gohm;
+    MockERC20 internal ohm;
+    MockERC20 internal sohm;
+    MockGohm internal gohm;
     MockERC20 internal dai;
     MockERC20 internal weth;
 
     /// Legacy Contracts
     MockStaking internal staking;
-    IOlympusAuthority internal auth;
 
     /// External Contracts
     MockUniV2Pair internal ohmDai;
@@ -52,10 +43,9 @@ contract DistributorTest is Test {
         {
             /// Deploy Kernal and tokens
             kernel = new Kernel();
-            auth = new MockLegacyAuthority(address(0x0));
-            ohm = new OHM(address(auth));
-            sohm = new MockSOHM();
-            gohm = new MockGOHM(address(this), address(sohm));
+            ohm = new MockERC20("OHM", "OHM", 9);
+            sohm = new MockERC20("sOHM", "sOHM", 9);
+            gohm = new MockGohm(100_000_000_000);
             dai = new MockERC20("DAI", "DAI", 18);
             weth = new MockERC20("WETH", "WETH", 18);
         }
@@ -70,16 +60,12 @@ contract DistributorTest is Test {
             /// Deploy Bophades Modules
             mintr = new OlympusMinter(kernel, address(ohm));
             trsry = new OlympusTreasury(kernel);
-            authr = new OlympusAuthority(kernel);
         }
 
         {
             /// Initialize Modules
             kernel.executeAction(Actions.InstallModule, address(mintr));
             kernel.executeAction(Actions.InstallModule, address(trsry));
-            kernel.executeAction(Actions.InstallModule, address(authr));
-
-            auth.vault.larp(address(mintr));
         }
 
         {
@@ -101,17 +87,12 @@ contract DistributorTest is Test {
             );
 
             staking.setDistributor(address(distributor));
-
-            sohm.setgOHM(address(gohm));
-            sohm.initialize(address(staking), address(trsry));
-            sohm.setIndex(10 gwei);
-
-            gohm.approved.larp(address(staking));
         }
 
         {
             /// Initialize Distributor Policy
-            kernel.executeAction(Actions.ApprovePolicy, address(distributor));
+            kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+            kernel.grantRole(toRole("distributor_admin"), address(this));
         }
 
         {
@@ -144,14 +125,8 @@ contract DistributorTest is Test {
     }
 
     /// Basic post-setup functionality tests
-    function test_hasWriteAccess() public {
-        Kernel.Role role = mintr.MINTER();
-        bool writeAccess = kernel.hasRole(address(distributor), role);
-        assertEq(writeAccess, true);
-    }
 
     function test_defaultState() public {
-        assertEq(address(distributor.authority()), address(authr));
         assertEq(distributor.rewardRate(), 1000);
         assertEq(distributor.bounty(), 0);
 
@@ -163,27 +138,32 @@ contract DistributorTest is Test {
         assertEq(ohm.balanceOf(address(staking)), 100100 gwei);
     }
 
-    /////////////////////////////////////////////////////////////////////////////////
-    ///                       Single Function Interactions                        ///
-    /////////////////////////////////////////////////////////////////////////////////
+    /* ========== BASIC TESTS ========== */
 
-    /// distribute() tests
-    function test_distributeOnlyStaking() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(Distributor_OnlyStaking.selector)
+    /// distribute()
+    /// []  Can only be called by staking
+    /// []  Cannot be called if not unlocked
+    function testCorrectness_distributeOnlyStaking() public {
+        bytes memory err = abi.encodeWithSelector(
+            Distributor_OnlyStaking.selector
         );
+        vm.expectRevert(err);
         distributor.distribute();
     }
 
-    function test_distributeNotUnlocked() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(Distributor_NotUnlocked.selector)
+    function testCorrectness_distributeNotUnlocked() public {
+        bytes memory err = abi.encodeWithSelector(
+            Distributor_NotUnlocked.selector
         );
+        vm.expectRevert(err);
+
         vm.prank(address(staking));
         distributor.distribute();
     }
 
-    /// retrieveBounty() tests
+    /// retrieveBounty()
+    /// []  Can only be called by staking
+    /// []  Bounty is zero and no OHM is minted
     function test_retrieveBountyOnlyStaking() public {
         vm.expectRevert(
             abi.encodeWithSelector(Distributor_OnlyStaking.selector)
@@ -203,7 +183,9 @@ contract DistributorTest is Test {
         assertEq(supplyAfter, supplyBefore);
     }
 
-    function test_nextRewardFor() public {
+    /// nextRewardFor()
+    /// []  Next reward for the staking contract matches the expected calculation
+    function testCorrectness_nextRewardFor() public {
         uint256 stakingBalance = 100100 gwei;
         uint256 rewardRate = distributor.rewardRate();
         uint256 denominator = 1_000_000;
@@ -212,88 +194,138 @@ contract DistributorTest is Test {
         assertEq(distributor.nextRewardFor(address(staking)), expected);
     }
 
-    /// setBounty() tests
-    function testFail_setBountyRequiresAuth() public {
+    /* ========== POLICY FUNCTION TESTS ========== */
+
+    /// setBounty()
+    /// []  Can only be called by an address with the distributor_admin role
+    /// []  Sets bounty correctly
+    function testCorrectness_setBountyRequiresRole(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            Policy_OnlyRole.selector,
+            toRole("distributor_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
         distributor.setBounty(0);
     }
 
-    function test_setBounty() public {
-        vm.prank(address(kernel));
+    function testCorrectness_setBounty() public {
         distributor.setBounty(10);
         assertEq(distributor.bounty(), 10);
     }
 
-    /// setPools() tests
-    function testFail_setPoolsRequiresAuth() public {
+    /// setPools()
+    /// []  Can only be called by an address with the distributor_admin role
+    /// []  Sets pools correctly
+    function testCorrectness_setPoolsRequiresRole(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            Policy_OnlyRole.selector,
+            toRole("distributor_admin")
+        );
+        vm.expectRevert(err);
+
         address[] memory newPools = new address[](2);
         newPools[0] = address(staking);
         newPools[1] = address(gohm);
+
+        vm.prank(user_);
         distributor.setPools(newPools);
     }
 
-    function test_setPools() public {
+    function testCorrectness_setPools() public {
         address[] memory newPools = new address[](2);
         newPools[0] = address(staking);
         newPools[1] = address(gohm);
-        vm.prank(address(kernel));
+
         distributor.setPools(newPools);
     }
 
-    function testFail_removePoolRequiresAuth() public {
+    /// removePool()
+    /// []  Can only be called by an address with the distributor_admin role
+    /// []  Fails on sanity check when parameters are invalid
+    /// []  Correctly removes pool
+
+    function testCorrectness_removePoolRequiresRole(address user_) public {
+        vm.assume(user_ != address(this));
+
         /// Set up
         address[] memory newPools = new address[](2);
         newPools[0] = address(staking);
         newPools[1] = address(gohm);
-        vm.prank(address(kernel));
         distributor.setPools(newPools);
 
+        bytes memory err = abi.encodeWithSelector(
+            Policy_OnlyRole.selector,
+            toRole("distributor_admin")
+        );
+        vm.expectRevert(err);
+
         /// Remove Pool (should fail)
+        vm.prank(user_);
         distributor.removePool(0, address(staking));
     }
 
-    function test_removePoolSanityCheck() public {
+    function testCorrectness_removePoolFailsOnSanityCheck() public {
         /// Set up
         address[] memory newPools = new address[](2);
         newPools[0] = address(staking);
         newPools[1] = address(gohm);
-        vm.startPrank(address(kernel));
         distributor.setPools(newPools);
 
         /// Remove Pool (should fail)
-        vm.expectRevert(
-            abi.encodeWithSelector(Distributor_SanityCheck.selector)
+        bytes memory err = abi.encodeWithSelector(
+            Distributor_SanityCheck.selector
         );
+        vm.expectRevert(err);
+
         distributor.removePool(0, address(gohm));
-        vm.stopPrank();
     }
 
-    function test_removePool() public {
+    function testCorrectness_removesPool() public {
         /// Set up
         address[] memory newPools = new address[](2);
         newPools[0] = address(staking);
         newPools[1] = address(gohm);
-        vm.startPrank(address(kernel));
         distributor.setPools(newPools);
 
         /// Remove first pool
         distributor.removePool(0, address(staking));
+
+        /// Verify state after first removal
         assertEq(distributor.pools(0), address(0x0));
         assertEq(distributor.pools(1), address(gohm));
 
         /// Remove second pool
         distributor.removePool(1, address(gohm));
+
+        /// Verify end state
         assertEq(distributor.pools(0), address(0x0));
         assertEq(distributor.pools(1), address(0x0));
-        vm.stopPrank();
     }
 
-    /// addPool() tests
-    function testFail_addPoolRequiresAuth() public {
+    /// addPool()
+    /// []  Can only be called by an address with the distributor_admin role
+    /// []  Correctly adds pool to an empty slot
+    /// []  Pushes pool to end of list when trying to add to an occupied slot
+    function testCorrectness_addPoolRequiresRole(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            Policy_OnlyRole.selector,
+            toRole("distributor_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
         distributor.addPool(0, address(staking));
     }
 
-    function test_addPoolEmptySlot() public {
-        vm.startPrank(address(kernel));
+    function testCorrectness_addPoolEmptySlot() public {
         /// Set up
         address[] memory newPools = new address[](2);
         newPools[0] = address(mintr);
@@ -306,8 +338,8 @@ contract DistributorTest is Test {
         assertEq(distributor.pools(0), address(staking));
     }
 
-    function test_addPoolOccupiedSlot() public {
-        vm.startPrank(address(kernel));
+    function testCorrectness_addPoolOccupiedSlot() public {
+        /// Set up
         address[] memory newPools = new address[](2);
         newPools[0] = address(mintr);
         newPools[1] = address(trsry);
@@ -318,19 +350,31 @@ contract DistributorTest is Test {
 
         distributor.addPool(0, address(gohm));
         assertEq(distributor.pools(2), address(gohm));
-        vm.stopPrank();
     }
 
-    /// setAdjustment() tests
-    function testFail_setAdjustmentRequiresAuth() public {
+    /// setAdjustment()
+    /// []  Can only be called by an address with the distributor_admin role
+    /// []  Cannot violate adjustment limit
+    /// []  Correctly sets adjustment
+    function testCorrectness_setAdjustmentRequiresRole(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            Policy_OnlyRole.selector,
+            toRole("distributor_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
         distributor.setAdjustment(false, 1100, 1100);
     }
 
-    function test_setAdjustmentAdjustmentLimit() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(Distributor_AdjustmentLimit.selector)
+    function testCorrectness_cannotAdjustmentLimit() public {
+        bytes memory err = abi.encodeWithSelector(
+            Distributor_AdjustmentLimit.selector
         );
-        vm.prank(address(kernel));
+        vm.expectRevert(err);
+
         distributor.setAdjustment(true, 50, 1050);
     }
 
@@ -344,8 +388,7 @@ contract DistributorTest is Test {
     }
     */
 
-    function test_setAdjustment() public {
-        vm.prank(address(kernel));
+    function testCorrectness_setAdjustment() public {
         distributor.setAdjustment(true, 20, 1500);
 
         (bool add, uint256 rate, uint256 target) = distributor.adjustment();
@@ -355,9 +398,7 @@ contract DistributorTest is Test {
         assertEq(target, 1500);
     }
 
-    /////////////////////////////////////////////////////////////////////////////////
-    ///                          User Story Interactions                          ///
-    /////////////////////////////////////////////////////////////////////////////////
+    /* ========== USER STORY TESTS ========== */
 
     /// User Story 1: triggerRebase() fails when block timestamp is before epoch end
     function test_triggerRebaseStory1() public {
@@ -365,9 +406,11 @@ contract DistributorTest is Test {
         assertGt(end, block.timestamp);
 
         uint256 balanceBefore = ohm.balanceOf(address(staking));
-        vm.expectRevert(
-            abi.encodeWithSelector(Distributor_NoRebaseOccurred.selector)
+        bytes memory err = abi.encodeWithSelector(
+            Distributor_NoRebaseOccurred.selector
         );
+        vm.expectRevert(err);
+
         distributor.triggerRebase();
         uint256 balanceAfter = ohm.balanceOf(address(staking));
         assertEq(balanceBefore, balanceAfter);
@@ -396,9 +439,11 @@ contract DistributorTest is Test {
 
         /// Move forward a little bit
         vm.warp(2500);
-        vm.expectRevert(
-            abi.encodeWithSelector(Distributor_NoRebaseOccurred.selector)
+        bytes memory err = abi.encodeWithSelector(
+            Distributor_NoRebaseOccurred.selector
         );
+        vm.expectRevert(err);
+
         distributor.triggerRebase();
     }
 
@@ -407,7 +452,6 @@ contract DistributorTest is Test {
         /// Set up
         address[] memory newPools = new address[](1);
         newPools[0] = address(ohmDai);
-        vm.prank(address(kernel));
         distributor.setPools(newPools);
         vm.warp(2200);
 
@@ -435,7 +479,6 @@ contract DistributorTest is Test {
         address[] memory newPools = new address[](3);
         newPools[0] = address(ohmDai);
         newPools[1] = address(ohmWeth);
-        vm.prank(address(kernel));
         distributor.setPools(newPools);
         vm.warp(2200);
 
