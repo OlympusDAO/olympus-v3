@@ -2,18 +2,15 @@
 pragma solidity ^0.8.10;
 
 /// External Dependencies
-import "forge-std/Test.sol";
-import "forge-std/console2.sol";
-import "test-utils/UserFactory.sol";
-import "test-utils/larping.sol";
-import "test-utils/convert.sol";
-import "test-utils/errors.sol";
+import {Test} from "forge-std/Test.sol";
+import {console2} from "forge-std/console2.sol";
+import {UserFactory} from "test-utils/UserFactory.sol";
+
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 /// Import Distributor
 import "src/policies/Distributor.sol";
 import "src/Kernel.sol";
-import {OlympusAuthority} from "src/modules/AUTHR.sol";
 import {OlympusMinter} from "src/modules/MINTR.sol";
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
 
@@ -34,7 +31,6 @@ contract DistributorTest is Test {
     Kernel internal kernel;
     OlympusMinter internal mintr;
     OlympusTreasury internal trsry;
-    OlympusAuthority internal authr;
     Distributor internal distributor;
 
     /// Tokens
