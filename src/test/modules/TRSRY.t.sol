@@ -50,11 +50,21 @@ contract TRSRYTest is Test {
         assertEq32("TRSRY", Keycode.unwrap(TRSRY.KEYCODE()));
     }
 
-    function testCorrectness_WithdrawApproval(uint256 amount_) public {
+    function testCorrectness_IncreaseWithdrawApproval(uint256 amount_) public {
         vm.prank(godmode);
-        TRSRY.approveWithdrawer(testUser, ngmi, amount_);
+        TRSRY.increaseWithdrawerApproval(testUser, ngmi, amount_);
 
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), amount_);
+    }
+
+    function testCorrectness_DecreaseWithdrawApproval(uint256 amount_) public {
+        vm.prank(godmode);
+        TRSRY.increaseWithdrawerApproval(testUser, ngmi, amount_);
+
+        vm.prank(godmode);
+        TRSRY.decreaseWithdrawerApproval(testUser, ngmi, amount_);
+
+        assertEq(TRSRY.withdrawApproval(testUser, ngmi), 0);
     }
 
     /*
@@ -80,7 +90,7 @@ contract TRSRYTest is Test {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
 
         vm.prank(godmode);
-        TRSRY.approveWithdrawer(testUser, ngmi, amount_);
+        TRSRY.increaseWithdrawerApproval(testUser, ngmi, amount_);
 
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), amount_);
 
@@ -108,7 +118,7 @@ contract TRSRYTest is Test {
         vm.assume(amount_ > 0);
 
         vm.prank(godmode);
-        TRSRY.approveDebtor(debtor, ngmi, amount_);
+        TRSRY.increaseDebtorApproval(debtor, ngmi, amount_);
 
         vm.prank(debtor);
         TRSRY.incurDebt(ngmi, amount_);
@@ -128,7 +138,7 @@ contract TRSRYTest is Test {
         address unapprovedPolicy = address(new MockPolicy(kernel));
 
         vm.prank(godmode);
-        TRSRY.approveWithdrawer(unapprovedPolicy, ngmi, amount_);
+        TRSRY.increaseDebtorApproval(unapprovedPolicy, ngmi, amount_);
 
         bytes memory err = abi.encodeWithSelector(
             Module_PolicyNotPermitted.selector,
@@ -144,7 +154,7 @@ contract TRSRYTest is Test {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
 
         vm.prank(godmode);
-        TRSRY.approveDebtor(debtor, ngmi, amount_);
+        TRSRY.increaseDebtorApproval(debtor, ngmi, amount_);
 
         vm.startPrank(debtor);
         TRSRY.incurDebt(ngmi, amount_);
@@ -162,7 +172,7 @@ contract TRSRYTest is Test {
 
     function testCorrectness_SetDebt() public {
         vm.prank(godmode);
-        TRSRY.approveDebtor(debtor, ngmi, INITIAL_TOKEN_AMOUNT);
+        TRSRY.increaseDebtorApproval(debtor, ngmi, INITIAL_TOKEN_AMOUNT);
 
         vm.prank(debtor);
         TRSRY.incurDebt(ngmi, INITIAL_TOKEN_AMOUNT);
@@ -177,7 +187,7 @@ contract TRSRYTest is Test {
 
     function testRevert_UnauthorizedPolicyCannotSetDebt() public {
         vm.prank(godmode);
-        TRSRY.approveDebtor(debtor, ngmi, INITIAL_TOKEN_AMOUNT);
+        TRSRY.increaseDebtorApproval(debtor, ngmi, INITIAL_TOKEN_AMOUNT);
 
         vm.prank(debtor);
         TRSRY.incurDebt(ngmi, INITIAL_TOKEN_AMOUNT);
@@ -191,7 +201,7 @@ contract TRSRYTest is Test {
 
     function testCorrectness_ClearDebt() public {
         vm.prank(godmode);
-        TRSRY.approveDebtor(debtor, ngmi, INITIAL_TOKEN_AMOUNT);
+        TRSRY.increaseDebtorApproval(debtor, ngmi, INITIAL_TOKEN_AMOUNT);
 
         vm.prank(debtor);
         TRSRY.incurDebt(ngmi, INITIAL_TOKEN_AMOUNT);

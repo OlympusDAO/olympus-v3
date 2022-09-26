@@ -17,14 +17,24 @@ error TRSRY_NoDebtOutstanding();
 contract OlympusTreasury is Module, ReentrancyGuard {
     using TransferHelper for ERC20;
 
-    event ApprovedForWithdrawal(address indexed policy_, ERC20 indexed token_, uint256 amount_);
+    event IncreaseWithdrawerApproval(
+        address indexed withdrawer_,
+        ERC20 indexed token_,
+        uint256 newAmount_
+    );
+    event DecreaseWithdrawerApproval(
+        address indexed withdrawer_,
+        ERC20 indexed token_,
+        uint256 newAmount_
+    );
     event Withdrawal(
         address indexed policy_,
         address indexed withdrawer_,
         ERC20 indexed token_,
         uint256 amount_
     );
-    event ApprovedForDebt(address indexed policy_, ERC20 indexed token_, uint256 amount_);
+    event IncreaseDebtorApproval(address indexed debtor_, ERC20 indexed token_, uint256 newAmount_);
+    event DecreaseDebtorApproval(address indexed debtor_, ERC20 indexed token_, uint256 newAmount_);
     event DebtIncurred(ERC20 indexed token_, address indexed policy_, uint256 amount_);
     event DebtRepaid(ERC20 indexed token_, address indexed policy_, uint256 amount_);
     event DebtSet(ERC20 indexed token_, address indexed policy_, uint256 amount_);
@@ -61,20 +71,12 @@ contract OlympusTreasury is Module, ReentrancyGuard {
                                CORE LOGIC
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Get total balance of assets inside the treasury + any debt taken out against those assets.
     function getReserveBalance(ERC20 token_) external view returns (uint256) {
         return token_.balanceOf(address(this)) + totalDebt[token_];
     }
 
-    /// @notice Sets approval for specific withdrawer addresses
-    function approveWithdrawer(
-        address withdrawer_,
-        ERC20 token_,
-        uint256 amount_
-    ) external permissioned {
-        withdrawApproval[withdrawer_][token_] = amount_;
-        emit ApprovedForWithdrawal(withdrawer_, token_, amount_);
-    }
-
+    /// @notice Increase approval for specific withdrawer addresses
     function increaseWithdrawerApproval(
         address withdrawer_,
         ERC20 token_,
@@ -85,6 +87,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         emit IncreaseWithdrawerApproval(withdrawer_, token_, newAmount);
     }
 
+    /// @notice Decrease approval for specific withdrawer addresses
     function decreaseWithdrawerApproval(
         address withdrawer_,
         ERC20 token_,
@@ -120,17 +123,8 @@ contract OlympusTreasury is Module, ReentrancyGuard {
                              DEBT FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Sets approval for someone to incur debt in order to withdraw reserves.
+    /// @notice Increase approval for someone to accrue debt in order to withdraw reserves.
     /// @dev    Debt will generally be taken by contracts to allocate treasury funds in yield sources.
-    function approveDebtor(
-        address debtor_,
-        ERC20 token_,
-        uint256 amount_
-    ) external permissioned {
-        debtApproval[debtor_][token_] = amount_;
-        emit ApprovedForDebt(debtor_, token_, amount_);
-    }
-
     function increaseDebtorApproval(
         address debtor_,
         ERC20 token_,
@@ -138,9 +132,10 @@ contract OlympusTreasury is Module, ReentrancyGuard {
     ) external permissioned {
         uint256 newAmount = debtApproval[debtor_][token_] + amount_;
         debtApproval[debtor_][token_] = newAmount;
-        emit IncreaseDebtorApproval(withdrawer_, token_, newAmount);
+        emit IncreaseDebtorApproval(debtor_, token_, newAmount);
     }
 
+    /// @notice Decrease approval for someone to withdraw reserves as debt.
     function decreaseDebtorApproval(
         address debtor_,
         ERC20 token_,
@@ -148,7 +143,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
     ) external permissioned {
         uint256 newAmount = debtApproval[debtor_][token_] - amount_;
         debtApproval[debtor_][token_] = newAmount;
-        emit DecreaseDebtorApproval(withdrawer_, token_, newAmount);
+        emit DecreaseDebtorApproval(debtor_, token_, newAmount);
     }
 
     /// @notice Pre-approved policies can get a loan to perform operations with treasury assets.
@@ -189,7 +184,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         uint256 received = token_.balanceOf(address(this)) - prevBalance;
 
         // Choose minimum between passed-in amount and received amount
-        if (recieved > amount_) received = amount_;
+        if (received > amount_) received = amount_;
 
         // Subtract debt from caller
         reserveDebt[token_][debtor_] -= received;

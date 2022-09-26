@@ -13,17 +13,15 @@ error PolicyNotFound();
 // Generic contract to allow authorized contracts to interact with treasury
 // Use cases include setting and removing approvals, as well as allocating assets for yield
 contract TreasuryCustodian is Policy {
-    /* ========== STATE VARIABLES ========== */
     event ApprovalRevoked(address indexed policy_, ERC20[] tokens_);
 
-    // Modules
     OlympusTreasury internal TRSRY;
 
-    /* ========== CONSTRUCTOR ========== */
-
+    /*//////////////////////////////////////////////////////////////
+                            POLICY INTERFACE
+    //////////////////////////////////////////////////////////////*/
     constructor(Kernel kernel_) Policy(kernel_) {}
 
-    /* ========== FRAMEWORK CONFIGURATION ========== */
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);
         dependencies[0] = toKeycode("TRSRY");
@@ -34,29 +32,46 @@ contract TreasuryCustodian is Policy {
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
 
-        requests = new Permissions[](2);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.approveWithdrawer.selector);
-        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
+        requests = new Permissions[](5);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawerApproval.selector);
+        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseDebtorApproval.selector);
+        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseDebtorApproval.selector);
+        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
     }
 
-    function grantApproval(
+    /*//////////////////////////////////////////////////////////////
+                               CORE LOGIC
+    //////////////////////////////////////////////////////////////*/
+
+    function grantWithdrawerApproval(
         address for_,
         ERC20 token_,
         uint256 amount_
     ) external onlyRole("custodian") {
-        TRSRY.approveWithdrawer(for_, token_, amount_);
+        TRSRY.increaseWithdrawerApproval(for_, token_, amount_);
+    }
+
+    function grantDebtorApproval(
+        address for_,
+        ERC20 token_,
+        uint256 amount_
+    ) external onlyRole("custodian") {
+        TRSRY.increaseDebtorApproval(for_, token_, amount_);
     }
 
     /// @notice Anyone can call to revoke a deactivated policy's approvals.
-    // TODO Currently allows anyone to revoke any approval EXCEPT activated policies.
     function revokePolicyApprovals(address policy_, ERC20[] memory tokens_) external {
         if (Policy(policy_).isActive()) revert PolicyStillActive();
 
-        // TODO Make sure `policy_` is an actual policy and not a random address.
-
         uint256 len = tokens_.length;
         for (uint256 j; j < len; ) {
-            TRSRY.approveWithdrawer(policy_, tokens_[j], 0);
+            uint256 wApproval = TRSRY.withdrawApproval(policy_, tokens_[j]);
+            if (wApproval > 0) TRSRY.decreaseWithdrawerApproval(policy_, tokens_[j], wApproval);
+
+            uint256 dApproval = TRSRY.debtApproval(policy_, tokens_[j]);
+            if (dApproval > 0) TRSRY.decreaseDebtorApproval(policy_, tokens_[j], dApproval);
+
             unchecked {
                 ++j;
             }

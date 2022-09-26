@@ -72,9 +72,14 @@ contract TreasuryCustodianTest is Test {
         assertEq(TRSRY.totalDebt(ngmi), 0);
     }
 
-    function test_GrantApproval(uint256 amount_) public {
-        custodian.grantApproval(randomWallet, ngmi, amount_);
+    function test_GrantWithdrawerApproval(uint256 amount_) public {
+        custodian.grantWithdrawerApproval(randomWallet, ngmi, amount_);
         assertEq(TRSRY.withdrawApproval(randomWallet, ngmi), amount_);
+    }
+
+    function test_GrantDebtorApproval(uint256 amount_) public {
+        custodian.grantDebtorApproval(randomWallet, ngmi, amount_);
+        assertEq(TRSRY.debtApproval(randomWallet, ngmi), amount_);
     }
 
     function test_RevokeOldPolicyApproval() public {
@@ -86,7 +91,7 @@ contract TreasuryCustodianTest is Test {
 
         kernel.executeAction(Actions.ActivatePolicy, dummy);
 
-        custodian.grantApproval(dummy, ngmi, amount);
+        custodian.grantWithdrawerApproval(dummy, ngmi, amount);
         assertEq(TRSRY.withdrawApproval(dummy, ngmi), amount);
 
         // deactivate second custodian to test approval revocation
