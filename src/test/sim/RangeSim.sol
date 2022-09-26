@@ -94,7 +94,6 @@ library SimIO {
         netflows = abi.decode(res, (Netflow[]));
     }
 
-    // TODO work with R&D to get all the data they need out
     struct Result {
         uint32 epoch;
         bool rebalanced;
@@ -103,6 +102,12 @@ library SimIO {
         uint256 reserves;
         uint256 liqRatio;
         uint256 supply;
+        uint256 lowCapacity;
+        uint256 highCapacity;
+        uint256 lowWall;
+        uint256 highWall;
+        uint256 lowCushion;
+        uint256 highCushion;
     }
 
     function writeResults(
@@ -140,9 +145,24 @@ library SimIO {
                 ', "reserves": ',
                 bytes(vm.toString(results[i].reserves)),
                 ', "liqRatio": ',
-                bytes(vm.toString(results[i].liqRatio)),
+                bytes(vm.toString(results[i].liqRatio))
+            );
+            data = bytes.concat(
+                data,
                 ', "supply": ',
                 bytes(vm.toString(results[i].supply)),
+                ', "lowCapacity": ',
+                bytes(vm.toString(results[i].lowCapacity)),
+                ', "highCapacity": ',
+                bytes(vm.toString(results[i].highCapacity)),
+                ', "lowWall": ',
+                bytes(vm.toString(results[i].lowWall)),
+                ', "highWall": ',
+                bytes(vm.toString(results[i].highWall)),
+                ', "lowCushion": ',
+                bytes(vm.toString(results[i].lowCushion)),
+                ', "highCushion": ',
+                bytes(vm.toString(results[i].highCushion)),
                 "}"
             );
             if (i < len - 1) {
@@ -940,6 +960,7 @@ abstract contract RangeSim is Test {
         uint256 reservesInLiquidity = reserve.balanceOf(address(pool));
         uint256 reservesInTotal = reservesInTreasury + reservesInLiquidity;
         uint256 liquidityRatio = uint256((reservesInLiquidity * 1e4) / reservesInTotal);
+        OlympusRange.Range memory _range = range.range();
 
         // Create result struct
         result = SimIO.Result(
@@ -949,7 +970,13 @@ abstract contract RangeSim is Test {
             lastPrice,
             reservesInTotal,
             liquidityRatio,
-            supply
+            supply,
+            _range.low.capacity,
+            _range.high.capacity,
+            _range.wall.low.price,
+            _range.wall.high.price,
+            _range.cushion.low.price,
+            _range.cushion.high.price
         );
     }
 

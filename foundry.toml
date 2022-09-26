@@ -11,3 +11,4 @@ remappings = [
     'libraries/=src/libraries',
 ]
 ffi = true
+fs_permissions = [{access = "write", path = "./src/test/sim/out/"}]
