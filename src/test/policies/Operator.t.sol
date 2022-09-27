@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
-import {BondFixedTermCDA} from "test/lib/bonds/BondFixedTermCDA.sol";
+import {BondFixedTermSDA} from "test/lib/bonds/BondFixedTermSDA.sol";
 import {BondAggregator} from "test/lib/bonds/BondAggregator.sol";
 import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
@@ -14,7 +14,7 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
 
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
@@ -41,7 +41,7 @@ contract OperatorTest is Test {
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
     BondFixedTermTeller internal teller;
-    BondFixedTermCDA internal auctioneer;
+    BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
 
@@ -70,7 +70,7 @@ contract OperatorTest is Test {
             /// Deploy the bond system
             aggregator = new BondAggregator(guardian, auth);
             teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
-            auctioneer = new BondFixedTermCDA(teller, aggregator, guardian, auth);
+            auctioneer = new BondFixedTermSDA(teller, aggregator, guardian, auth);
 
             /// Register auctioneer on the bond system
             vm.prank(guardian);
@@ -91,8 +91,11 @@ contract OperatorTest is Test {
             price = new MockPrice(kernel, uint48(8 hours));
             range = new OlympusRange(
                 kernel,
-                [ERC20(ohm), ERC20(reserve)],
-                [uint256(100), uint256(1000), uint256(2000)]
+                ERC20(ohm),
+                ERC20(reserve),
+                uint256(100),
+                uint256(1000),
+                uint256(2000)
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
@@ -101,6 +104,7 @@ contract OperatorTest is Test {
             price.setMovingAverage(100 * 1e18);
             price.setLastPrice(100 * 1e18);
             price.setDecimals(18);
+            price.setLastTime(uint48(block.timestamp));
         }
 
         {
@@ -110,7 +114,7 @@ contract OperatorTest is Test {
             /// Deploy operator
             operator = new Operator(
                 kernel,
-                IBondAuctioneer(address(auctioneer)),
+                IBondSDA(address(auctioneer)),
                 callback,
                 [ERC20(ohm), ERC20(reserve)],
                 [
@@ -122,6 +126,7 @@ contract OperatorTest is Test {
                     uint32(1 hours), // regenWait
                     uint32(5), // regenThreshold
                     uint32(7) // regenObserve
+                    // uint32(8 hours) // observationFrequency
                 ]
             );
 
@@ -220,6 +225,7 @@ contract OperatorTest is Test {
     /// [X] Splippage check when swapping
     /// [X] Wall breaks when capacity drops below the configured threshold
     /// [X] Not able to swap at the walls when they are down
+    /// [ ] Not able to swap at the walls when price is stale
 
     function testCorrectness_swapHighWall() public {
         /// Initialize operator
@@ -370,6 +376,48 @@ contract OperatorTest is Test {
         uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
 
         bytes memory err = abi.encodeWithSignature("Operator_WallDown()");
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.swap(ohm, amountIn, expAmountOut);
+    }
+
+    function testCorrectness_cannotSwapHighWallWithStalePrice() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Confirm wall is up
+        assertTrue(range.active(true));
+
+        /// Set timestamp forward so price is stale
+        vm.warp(block.timestamp + 3 * uint256(price.observationFrequency()) + 1);
+
+        /// Try to swap, expect to fail
+        uint256 amountIn = 100 * 1e18;
+        uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * range.price(true, true));
+
+        bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.swap(reserve, amountIn, expAmountOut);
+    }
+
+    function testCorrectness_cannotSwapLowWallWithStalePrice() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Confirm wall is up
+        assertTrue(range.active(false));
+
+        /// Set timestamp forward so price is stale
+        vm.warp(block.timestamp + 3 * uint256(price.observationFrequency()) + 1);
+
+        /// Try to swap, expect to fail
+        uint256 amountIn = 100 * 1e9;
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
+
+        bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
         vm.expectRevert(err);
         vm.prank(alice);
         operator.swap(ohm, amountIn, expAmountOut);
@@ -861,6 +909,17 @@ contract OperatorTest is Test {
 
         /// Check that the side capacity has been reduced by the amount of the payout
         assertEq(range.capacity(true), startCapacity - payout);
+
+        /// Set timestamp forward so that price is stale
+        vm.warp(block.timestamp + uint256(price.observationFrequency()) * 3 + 1);
+
+        /// Try to purchase another bond and expect to revert
+        amountIn = auctioneer.maxAmountAccepted(id, guardian) / 2;
+        minAmountOut = auctioneer.payoutFor(amountIn, id, guardian);
+
+        vm.expectRevert(abi.encodeWithSignature("Operator_Inactive()"));
+        vm.prank(alice);
+        teller.purchase(alice, guardian, id, amountIn, minAmountOut);
     }
 
     function testCorrectness_lowCushionPurchasesReduceCapacity() public {
@@ -892,6 +951,17 @@ contract OperatorTest is Test {
 
         /// Check that the side capacity has been reduced by the amount of the payout
         assertEq(range.capacity(false), startCapacity - payout);
+
+        /// Set timestamp forward so that price is stale
+        vm.warp(block.timestamp + uint256(price.observationFrequency()) * 3 + 1);
+
+        /// Try to purchase another bond and expect to revert
+        amountIn = auctioneer.maxAmountAccepted(id, guardian) / 2;
+        minAmountOut = auctioneer.payoutFor(amountIn, id, guardian);
+
+        vm.expectRevert(abi.encodeWithSignature("Operator_Inactive()"));
+        vm.prank(alice);
+        teller.purchase(alice, guardian, id, amountIn, minAmountOut);
     }
 
     /* ========== REGENERATION TESTS ========== */
@@ -1471,7 +1541,7 @@ contract OperatorTest is Test {
     function testCorrectness_cannotOperatorIfNotInitialized() public {
         /// Toggle operator to active manually erroneously (so it will not revert with inactive)
         vm.prank(guardian);
-        operator.toggleActive();
+        operator.activate();
 
         /// Call operate as heart contract and expect to revert
         bytes memory err = abi.encodeWithSignature("Operator_NotInitialized()");
@@ -1527,7 +1597,7 @@ contract OperatorTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(alice);
-        operator.setBondContracts(IBondAuctioneer(alice), BondCallback(alice));
+        operator.setBondContracts(IBondSDA(alice), BondCallback(alice));
 
         /// Try to initialize as a random user, expect revert
         vm.expectRevert(err);
@@ -1787,22 +1857,32 @@ contract OperatorTest is Test {
         /// Case 2: observe == 0
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setRegenParams(uint32(1 days), uint32(0), uint32(0));
+        operator.setRegenParams(uint32(7 days), uint32(0), uint32(0));
 
-        /// Case 3: observe < threshold
+        /// Case 3: threshold == 0
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setRegenParams(uint32(1 days), uint32(10), uint32(9));
+        operator.setRegenParams(uint32(7 days), uint32(0), uint32(10));
+
+        /// Case 4: observe < threshold
+        vm.expectRevert(err);
+        vm.prank(policy);
+        operator.setRegenParams(uint32(7 days), uint32(10), uint32(9));
+
+        /// Case 5: wait / frequency < observe - threshold
+        vm.expectRevert(err);
+        vm.prank(policy);
+        operator.setRegenParams(uint32(1 days), uint32(10), uint32(15));
 
         /// Set regen params as admin with valid params
         vm.prank(policy);
-        operator.setRegenParams(uint32(1 days), uint32(11), uint32(15));
+        operator.setRegenParams(uint32(7 days), uint32(11), uint32(15));
 
         /// Get new regen params
         Operator.Config memory newConfig = operator.config();
 
         /// Check that the regen params have been set
-        assertEq(newConfig.regenWait, uint256(1 days));
+        assertEq(newConfig.regenWait, uint256(7 days));
         assertEq(newConfig.regenThreshold, 11);
         assertEq(newConfig.regenObserve, 15);
         assertGt(newConfig.regenWait, startConfig.regenWait);
@@ -1830,18 +1910,18 @@ contract OperatorTest is Test {
         bytes memory err = abi.encodeWithSignature("Operator_InvalidParams()");
         vm.expectRevert(err);
         vm.prank(guardian);
-        operator.setBondContracts(IBondAuctioneer(address(0)), BondCallback(address(0)));
+        operator.setBondContracts(IBondSDA(address(0)), BondCallback(address(0)));
 
         /// Create new bond contracts
-        BondFixedTermCDA newCDA = new BondFixedTermCDA(teller, aggregator, guardian, auth);
+        BondFixedTermSDA newSDA = new BondFixedTermSDA(teller, aggregator, guardian, auth);
         BondCallback newCb = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
         /// Update the bond contracts as guardian
         vm.prank(guardian);
-        operator.setBondContracts(IBondAuctioneer(address(newCDA)), newCb);
+        operator.setBondContracts(IBondSDA(address(newSDA)), newCb);
 
         /// Check that the bond contracts have been set
-        assertEq(address(operator.auctioneer()), address(newCDA));
+        assertEq(address(operator.auctioneer()), address(newSDA));
         assertEq(address(operator.callback()), address(newCb));
     }
 
@@ -1986,7 +2066,7 @@ contract OperatorTest is Test {
 
         /// Toggle the operator to inactive
         vm.prank(guardian);
-        operator.toggleActive();
+        operator.deactivate();
 
         /// Try to call operator, swap, and bondPurchase, expect reverts
         bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
@@ -2003,6 +2083,23 @@ contract OperatorTest is Test {
         operator.swap(reserve, 1e18, 1);
 
         vm.expectRevert(err);
+        vm.prank(address(callback));
+        operator.bondPurchase(0, 1e18);
+
+        // Activate the operator again
+        vm.prank(guardian);
+        operator.activate();
+
+        /// Confirm that the operator is active
+        vm.prank(guardian);
+        operator.operate();
+
+        vm.prank(alice);
+        operator.swap(ohm, 1e9, 1);
+
+        vm.prank(alice);
+        operator.swap(reserve, 1e18, 1);
+
         vm.prank(address(callback));
         operator.bondPurchase(0, 1e18);
     }

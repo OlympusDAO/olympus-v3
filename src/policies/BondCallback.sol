@@ -92,6 +92,14 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         }
     }
 
+    /// @notice Remove a market ID on a teller from the whitelist
+    /// @dev    Shutdown function in case there's an issue with the teller
+    /// @param  teller_ Address of the Teller contract which serves the market
+    /// @param  id_     ID of the market to remove from whitelist
+    function blacklist(address teller_, uint256 id_) external onlyRole("callback_whitelist") {
+        approvedMarkets[teller_][id_] = false;
+    }
+
     /// @inheritdoc IBondCallback
     function callback(
         uint256 id_,
@@ -112,12 +120,10 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
 
         // Handle payout
         if (quoteToken == payoutToken && quoteToken == ohm) {
-            // If OHM-OHM bond, only mint the difference and transfer back to teller
-            uint256 toMint = outputAmount_ - inputAmount_;
-            MINTR.mintOhm(address(this), toMint);
-
-            // Transfer payoutTokens to sender
-            payoutToken.safeTransfer(msg.sender, outputAmount_);
+            // If OHM-OHM bond, burn OHM received and then mint OHM to the Teller
+            // We don't mint the difference because there could be rare cases where input is greater than output
+            MINTR.burnOhm(address(this), inputAmount_);
+            MINTR.mintOhm(msg.sender, outputAmount_);
         } else if (quoteToken == ohm) {
             // If inverse bond (buying ohm), transfer payout tokens to sender
             TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);

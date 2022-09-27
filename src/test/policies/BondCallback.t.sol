@@ -5,16 +5,16 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
-import {BondFixedTermCDA} from "test/lib/bonds/BondFixedTermCDA.sol";
+import {BondFixedTermSDA} from "test/lib/bonds/BondFixedTermSDA.sol";
 import {BondAggregator} from "test/lib/bonds/BondAggregator.sol";
 import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
-import {IBondAuctioneer as LibAuctioneer} from "test/lib/bonds/interfaces/IBondAuctioneer.sol";
+import {IBondSDA as LibIBondSDA} from "test/lib/bonds/interfaces/IBondSDA.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
 
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
@@ -56,7 +56,7 @@ contract BondCallbackTest is Test {
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
     BondFixedTermTeller internal teller;
-    BondFixedTermCDA internal auctioneer;
+    BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
     MockERC20 internal other;
@@ -92,7 +92,7 @@ contract BondCallbackTest is Test {
             /// Deploy the bond system
             aggregator = new BondAggregator(guardian, auth);
             teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
-            auctioneer = new BondFixedTermCDA(teller, aggregator, guardian, auth);
+            auctioneer = new BondFixedTermSDA(teller, aggregator, guardian, auth);
 
             /// Register auctioneer on the bond system
             vm.prank(guardian);
@@ -114,8 +114,11 @@ contract BondCallbackTest is Test {
             price = new MockPrice(kernel, uint48(8 hours));
             range = new OlympusRange(
                 kernel,
-                [ERC20(ohm), ERC20(reserve)],
-                [uint256(100), uint256(1000), uint256(2000)]
+                ERC20(ohm),
+                ERC20(reserve),
+                uint256(100),
+                uint256(1000),
+                uint256(2000)
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
@@ -124,6 +127,7 @@ contract BondCallbackTest is Test {
             price.setMovingAverage(100 * 1e18);
             price.setLastPrice(100 * 1e18);
             price.setDecimals(18);
+            price.setLastTime(uint48(block.timestamp));
         }
 
         {
@@ -133,7 +137,7 @@ contract BondCallbackTest is Test {
             /// Deploy operator
             operator = new Operator(
                 kernel,
-                IBondAuctioneer(address(auctioneer)),
+                IBondSDA(address(auctioneer)),
                 callback,
                 [ERC20(ohm), ERC20(reserve)],
                 [
@@ -145,6 +149,7 @@ contract BondCallbackTest is Test {
                     uint32(1 hours), // regenWait
                     uint32(5), // regenThreshold
                     uint32(7) // regenObserve
+                    // uint32(8 hours) // observationFrequency
                 ]
             );
 
@@ -279,7 +284,7 @@ contract BondCallbackTest is Test {
                     )
                 );
 
-        LibAuctioneer.MarketParams memory params = LibAuctioneer.MarketParams(
+        LibIBondSDA.MarketParams memory params = LibIBondSDA.MarketParams(
             payoutToken, // ERC20 payoutToken
             quoteToken, // ERC20 quoteToken
             address(callback), // address callbackAddr
@@ -294,7 +299,7 @@ contract BondCallbackTest is Test {
             scaleAdjustment // int8 scaleAdjustment
         );
 
-        return auctioneer.createMarket(params);
+        return auctioneer.createMarket(abi.encode(params));
     }
 
     /* ========== CALLBACK TESTS ========== */
@@ -446,12 +451,22 @@ contract BondCallbackTest is Test {
         // Check teller balance is updated
         newTellerBal = ohm.balanceOf(address(teller));
         assertEq(newTellerBal, oldTellerBal + 10);
+
+        // Change the market to not be whitelisted and expect revert
+        vm.prank(policy);
+        callback.blacklist(address(teller), regBond);
+
+        err = abi.encodeWithSignature("Callback_MarketNotSupported(uint256)", regBond);
+        vm.prank(address(teller));
+        vm.expectRevert(err);
+        callback.callback(regBond, 10, 10);
     }
 
     /* ========== ADMIN TESTS ========== */
 
     /// DONE
     /// [X] whitelist
+    /// [X] blacklist
     /// [X] setOperator
     /// [X] batchToTreasury
 
@@ -482,6 +497,25 @@ contract BondCallbackTest is Test {
 
         // Check whitelist is applied
         assert(callback.approvedMarkets(address(teller), wlTwo));
+    }
+
+    function testCorrectness_blacklist() public {
+        // Create two new markets to test whitelist functionality
+        uint256 wlOne = createMarket(reserve, ohm, 0, 1, 3);
+
+        // Whitelist the bond market from the policy address
+        vm.prank(policy);
+        callback.whitelist(address(teller), wlOne);
+
+        // Check whitelist is applied
+        assert(callback.approvedMarkets(address(teller), wlOne));
+
+        // Remove the market from the whitelist
+        vm.prank(policy);
+        callback.blacklist(address(teller), wlOne);
+
+        // Check whitelist is applied
+        assert(!callback.approvedMarkets(address(teller), wlOne));
     }
 
     function testCorrectness_setOperator() public {

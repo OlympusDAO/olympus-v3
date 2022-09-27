@@ -8,12 +8,12 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
-import {BondFixedTermCDA} from "test/lib/bonds/BondFixedTermCDA.sol";
+import {BondFixedTermSDA} from "test/lib/bonds/BondFixedTermSDA.sol";
 import {BondAggregator} from "test/lib/bonds/BondAggregator.sol";
 import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority} from "solmate/auth/authorities/RolesAuthority.sol";
 
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {ZuniswapV2Factory} from "test/lib/zuniswapv2/ZuniswapV2Factory.sol";
@@ -186,7 +186,7 @@ abstract contract RangeSim is Test {
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
     BondFixedTermTeller internal teller;
-    BondFixedTermCDA internal auctioneer;
+    BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
     ZuniswapV2Factory internal lpFactory;
@@ -244,7 +244,7 @@ abstract contract RangeSim is Test {
             // Deploy the bond system
             aggregator = new BondAggregator(guardian, auth);
             teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
-            auctioneer = new BondFixedTermCDA(teller, aggregator, guardian, auth);
+            auctioneer = new BondFixedTermSDA(teller, aggregator, guardian, auth);
 
             // Register auctioneer on the bond system
             vm.prank(guardian);
@@ -322,18 +322,18 @@ abstract contract RangeSim is Test {
             price = new OlympusPrice(
                 kernel,
                 ohmEthPriceFeed,
+                uint48(24 hours),
                 reserveEthPriceFeed,
+                uint48(24 hours),
                 uint48(vm.envUint("EPOCH_DURATION")),
                 uint48(vm.envUint("MA_DURATION"))
             );
             range = new OlympusRange(
                 kernel,
-                [ERC20(ohm), ERC20(reserve)],
-                [
-                    vm.envUint("THRESHOLD_FACTOR"),
-                    uint256(_params.cushionSpread),
-                    uint256(_params.wallSpread)
-                ]
+                ERC20(ohm), ERC20(reserve),
+                vm.envUint("THRESHOLD_FACTOR"),
+                uint256(_params.cushionSpread),
+                uint256(_params.wallSpread)
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
@@ -346,7 +346,7 @@ abstract contract RangeSim is Test {
             /// Deploy operator
             operator = new Operator(
                 kernel,
-                IBondAuctioneer(address(auctioneer)),
+                IBondSDA(address(auctioneer)),
                 callback,
                 [ERC20(ohm), ERC20(reserve)],
                 [
@@ -358,6 +358,7 @@ abstract contract RangeSim is Test {
                     uint32(vm.envUint("REGEN_WAIT")), // regenWait
                     uint32(vm.envUint("REGEN_THRESHOLD")), // regenThreshold
                     uint32(vm.envUint("REGEN_OBSERVE")) // regenObserve
+                    // uint32(vm.envUint("EPOCH_DURATION")) // observationFrequency
                 ]
             );
 
