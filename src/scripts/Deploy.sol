@@ -16,6 +16,7 @@ import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
 import {OlympusInstructions} from "modules/INSTR.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
+import {OlympusRoles, toRole} from "modules/ROLES.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
@@ -41,6 +42,7 @@ contract OlympusDeploy is Script {
     OlympusMinter public MINTR;
     OlympusInstructions public INSTR;
     OlympusVotes public VOTES;
+    OlympusRoles public ROLES;
 
     /// Policies
     Operator public operator;
@@ -121,6 +123,9 @@ contract OlympusDeploy is Script {
         RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1200), uint256(3000));
         console2.log("Range module deployed at:", address(RANGE));
 
+        ROLES = new OlympusRoles();
+        console2.log("Roles module deployed at:", address(ROLES));
+
         /// Deploy policies
         callback = new BondCallback(kernel, bondAggregator, ohm);
         console2.log("Bond Callback deployed at:", address(callback));
@@ -157,7 +162,7 @@ contract OlympusDeploy is Script {
         console2.log("Governance deployed at:", address(governance));
 
         faucet = new Faucet(
-            kernel,
+            msg.sender,
             ohm,
             reserve,
             1 ether,
@@ -175,6 +180,7 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.InstallModule, address(RANGE));
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
         kernel.executeAction(Actions.InstallModule, address(MINTR));
+        kernel.executeAction(Actions.InstallModule, address(ROLES));
 
         /// Approve policies
         kernel.executeAction(Actions.ActivatePolicy, address(callback));
@@ -210,9 +216,6 @@ contract OlympusDeploy is Script {
 
         /// TreasuryCustodian roles
         kernel.grantRole(toRole("custodian"), guardian_);
-
-        /// Faucet roles
-        kernel.grantRole(toRole("faucet_admin"), guardian_);
 
         // /// Transfer executor powers to INSTR
         // kernel.executeAction(Actions.ChangeExecutor, address(INSTR));

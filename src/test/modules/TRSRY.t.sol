@@ -8,7 +8,7 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
-import {MockPolicy} from "test/mocks/KernelTestMocks.sol";
+//import {MockPolicy} from "test/mocks/KernelTestMocks.sol";
 
 import "src/modules/TRSRY.sol";
 import "src/Kernel.sol";
@@ -135,7 +135,7 @@ contract TRSRYTest is Test {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
         vm.assume(amount_ > 0);
 
-        address unapprovedPolicy = address(new MockPolicy(kernel));
+        address unapprovedPolicy = address(0x0);
 
         vm.prank(godmode);
         TRSRY.increaseDebtorApproval(unapprovedPolicy, ngmi, amount_);

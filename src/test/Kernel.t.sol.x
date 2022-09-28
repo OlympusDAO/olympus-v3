@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
+import "src/modules/OlympusRoles.sol";
 import "./mocks/KernelTestMocks.sol";
 import "src/Kernel.sol";
 
@@ -11,6 +12,7 @@ contract KernelTest is Test {
     Kernel internal kernel;
     MockPolicy internal policy;
     MockModule internal MOCKY;
+    OlympusRoles internal ROLES;
 
     address public deployer;
     address public multisig;
@@ -30,7 +32,10 @@ contract KernelTest is Test {
         vm.startPrank(deployer);
         kernel = new Kernel();
         MOCKY = new MockModule(kernel);
+        ROLES = new OlympusRoles(kernel);
         policy = new MockPolicy(kernel);
+
+        kernel.executeAction(Actions.InstallModule, address(ROLES));
 
         vm.stopPrank();
     }
@@ -38,8 +43,8 @@ contract KernelTest is Test {
     function testCorrectness_InitializeKernel() public {
         Keycode keycode = Keycode.wrap(0);
 
-        assertEq(kernel.admin(), deployer);
         assertEq(kernel.executor(), deployer);
+        assertEq(ROLES.rolesAdmin(), deployer);
         assertEq(kernel.modulePermissions(keycode, policy, bytes4(0)), false);
         assertEq(address(kernel.getModuleForKeycode(keycode)), address(0));
         assertEq(Keycode.unwrap(kernel.getKeycodeForModule(MOCKY)), bytes5(0));
@@ -51,11 +56,11 @@ contract KernelTest is Test {
 
         err = abi.encodeWithSignature("Kernel_OnlyAdmin(address)", address(this));
         vm.expectRevert(err);
-        kernel.grantRole(Role.wrap("executor"), address(deployer));
+        ROLES.grantRole(Role.wrap("executor"), address(deployer));
 
         err = abi.encodeWithSignature("Kernel_OnlyAdmin(address)", address(this));
         vm.expectRevert(err);
-        kernel.grantRole(Role.wrap("executor"), address(deployer));
+        ROLES.grantRole(Role.wrap("executor"), address(deployer));
         //kernel.revokeRole(deployer);
     }
 
