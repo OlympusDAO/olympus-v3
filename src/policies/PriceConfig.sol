@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE.sol";
+import {OlympusRoles} from "modules/ROLES.sol";
+import "src/Kernel.sol";
 
 contract OlympusPriceConfig is Policy {
     /* ========== STATE VARIABLES ========== */
 
     /// Modules
     OlympusPrice internal PRICE;
+    OlympusRoles internal ROLES;
 
     /* ========== CONSTRUCTOR ========== */
 
@@ -16,10 +18,12 @@ contract OlympusPriceConfig is Policy {
 
     /* ========== FRAMEWORK CONFIGURATION ========== */
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](1);
+        dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("PRICE");
+        dependencies[1] = toKeycode("ROLES");
 
         PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
+        ROLES = OlympusRoles(getModuleAddress(dependencies[1]));
     }
 
     function requestPermissions()
@@ -42,10 +46,8 @@ contract OlympusPriceConfig is Policy {
     /// @param lastObservationTime_ Unix timestamp of last observation being provided (in seconds).
     /// @dev This function must be called after the Price module is deployed to activate it and after updating the observationFrequency
     ///      or movingAverageDuration (in certain cases) in order for the Price module to function properly.
-    function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
-        external
-        onlyRole("price_admin")
-    {
+    function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_) external {
+        ROLES.onlyRole("price_admin");
         PRICE.initialize(startObservations_, lastObservationTime_);
     }
 
@@ -55,10 +57,8 @@ contract OlympusPriceConfig is Policy {
     ///      the data in the current window and require the initialize function to be called again.
     ///      Ensure that you have saved the existing data and can re-populate before calling this
     ///      function with a number of observations larger than have been recorded.
-    function changeMovingAverageDuration(uint48 movingAverageDuration_)
-        external
-        onlyRole("price_admin")
-    {
+    function changeMovingAverageDuration(uint48 movingAverageDuration_) external {
+        ROLES.onlyRole("price_admin");
         PRICE.changeMovingAverageDuration(movingAverageDuration_);
     }
 
@@ -66,10 +66,8 @@ contract OlympusPriceConfig is Policy {
     /// @param    observationFrequency_   Observation frequency in seconds, must be a divisor of the moving average duration
     /// @dev      Changing the observation frequency clears existing observation data since it will not be taken at the right time intervals.
     ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
-    function changeObservationFrequency(uint48 observationFrequency_)
-        external
-        onlyRole("price_admin")
-    {
+    function changeObservationFrequency(uint48 observationFrequency_) external {
+        ROLES.onlyRole("price_admin");
         PRICE.changeObservationFrequency(observationFrequency_);
     }
 }

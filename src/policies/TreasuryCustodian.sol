@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
+import {OlympusRoles} from "src/modules/ROLES.sol";
 import "src/Kernel.sol";
 
 // ERRORS
@@ -15,7 +16,8 @@ error PolicyNotFound();
 contract TreasuryCustodian is Policy {
     event ApprovalRevoked(address indexed policy_, ERC20[] tokens_);
 
-    OlympusTreasury internal TRSRY;
+    OlympusTreasury public TRSRY;
+    OlympusRoles public ROLES;
 
     /*//////////////////////////////////////////////////////////////
                             POLICY INTERFACE
@@ -23,10 +25,12 @@ contract TreasuryCustodian is Policy {
     constructor(Kernel kernel_) Policy(kernel_) {}
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](1);
+        dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("TRSRY");
+        dependencies[1] = toKeycode("ROLES");
 
         TRSRY = OlympusTreasury(getModuleAddress(dependencies[0]));
+        ROLES = OlympusRoles(getModuleAddress(dependencies[1]));
     }
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {
@@ -48,7 +52,8 @@ contract TreasuryCustodian is Policy {
         address for_,
         ERC20 token_,
         uint256 amount_
-    ) external onlyRole("custodian") {
+    ) external {
+        ROLES.onlyRole("custodian");
         TRSRY.increaseWithdrawerApproval(for_, token_, amount_);
     }
 
@@ -56,7 +61,8 @@ contract TreasuryCustodian is Policy {
         address for_,
         ERC20 token_,
         uint256 amount_
-    ) external onlyRole("custodian") {
+    ) external {
+        ROLES.onlyRole("custodian");
         TRSRY.increaseDebtorApproval(for_, token_, amount_);
     }
 
@@ -86,7 +92,8 @@ contract TreasuryCustodian is Policy {
         ERC20 token_,
         address debtor_,
         uint256 amount_
-    ) external onlyRole("custodian") {
+    ) external {
+        ROLES.onlyRole("custodian");
         uint256 debt = TRSRY.reserveDebt(token_, debtor_);
         TRSRY.setDebt(debtor_, token_, debt + amount_);
     }
@@ -95,7 +102,8 @@ contract TreasuryCustodian is Policy {
         ERC20 token_,
         address debtor_,
         uint256 amount_
-    ) external onlyRole("custodian") {
+    ) external {
+        ROLES.onlyRole("custodian");
         uint256 debt = TRSRY.reserveDebt(token_, debtor_);
         TRSRY.setDebt(debtor_, token_, debt - amount_);
     }

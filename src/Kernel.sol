@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import "src/utils/KernelUtils.sol";
-
 // Kernel Adapter errors
 error KernelAdapter_OnlyKernel(address caller_);
 
@@ -10,19 +8,14 @@ error KernelAdapter_OnlyKernel(address caller_);
 error Module_PolicyNotPermitted(address policy_);
 
 // Policy errors
-error Policy_OnlyRole(Role role_);
 error Policy_ModuleDoesNotExist(Keycode keycode_);
 
 // Kernel errors
 error Kernel_OnlyExecutor(address caller_);
-error Kernel_OnlyAdmin(address caller_);
 error Kernel_ModuleAlreadyInstalled(Keycode module_);
 error Kernel_InvalidModuleUpgrade(Keycode module_);
 error Kernel_PolicyAlreadyActivated(address policy_);
 error Kernel_PolicyNotActivated(address policy_);
-error Kernel_AddressAlreadyHasRole(address addr_, Role role_);
-error Kernel_AddressDoesNotHaveRole(address addr_, Role role_);
-error Kernel_RoleDoesNotExist(Role role_);
 
 /*//////////////////////////////////////////////////////////////
                           GLOBAL TYPES
@@ -35,7 +28,6 @@ enum Actions {
     ActivatePolicy,
     DeactivatePolicy,
     ChangeExecutor,
-    ChangeAdmin,
     MigrateKernel
 }
 
@@ -52,7 +44,40 @@ struct Permissions {
 }
 
 type Keycode is bytes5;
-type Role is bytes32;
+
+/*//////////////////////////////////////////////////////////////
+                        UTIL FUNCTIONS
+//////////////////////////////////////////////////////////////*/
+
+error TargetNotAContract(address target_);
+error InvalidKeycode(Keycode keycode_);
+
+// solhint-disable-next-line func-visibility
+function toKeycode(bytes5 keycode_) pure returns (Keycode) {
+    return Keycode.wrap(keycode_);
+}
+
+// solhint-disable-next-line func-visibility
+function fromKeycode(Keycode keycode_) pure returns (bytes5) {
+    return Keycode.unwrap(keycode_);
+}
+
+// solhint-disable-next-line func-visibility
+function ensureContract(address target_) view {
+    return target_.code.length > 0;
+}
+
+// solhint-disable-next-line func-visibility
+function ensureValidKeycode(Keycode keycode_) pure {
+    bytes5 unwrapped = Keycode.unwrap(keycode_);
+    for (uint256 i = 0; i < 5; ) {
+        bytes1 char = unwrapped[i];
+        if (char < 0x41 || char > 0x5A) revert InvalidKeycode(keycode_); // A-Z only
+        unchecked {
+            i++;
+        }
+    }
+}
 
 /*//////////////////////////////////////////////////////////////
                       COMPONENT ABSTRACTS
@@ -114,14 +139,6 @@ abstract contract Policy is KernelAdapter {
 
     constructor(Kernel kernel_) KernelAdapter(kernel_) {}
 
-    /// @notice Modifier to restrict policy function access to certain addresses with a role.
-    /// @dev    Roles are defined in the policy and set by the kernel admin.
-    modifier onlyRole(bytes32 role_) {
-        Role role = toRole(role_);
-        if (!kernel.hasRole(msg.sender, role)) revert Policy_OnlyRole(role);
-        _;
-    }
-
     /// @notice Function to let kernel grant or revoke active status.
     function setActiveStatus(bool activate_) external onlyKernel {
         isActive = activate_;
@@ -144,7 +161,7 @@ abstract contract Policy is KernelAdapter {
 }
 
 /// @notice Main contract that acts as a central component registry for the protocol.
-/// @dev    The kernel manages modules, policies and defined roles. The kernel is mutated via predefined Actions,
+/// @dev    The kernel manages modules and policies. The kernel is mutated via predefined Actions,
 /// @dev    which are input from any address assigned as the executor. The executor can be changed as needed.
 contract Kernel {
     /*//////////////////////////////////////////////////////////////
@@ -153,9 +170,6 @@ contract Kernel {
 
     /// @notice Address that is able to initiate Actions in the kernel. Can be assigned to a multisig or governance contract.
     address public executor;
-
-    /// @notice Address that is responsible for assigning policy-defined roles to addresses.
-    address public admin;
 
     /*//////////////////////////////////////////////////////////////
                            MODULE MANAGEMENT
@@ -190,12 +204,6 @@ contract Kernel {
     /// @notice Helper to get active policy quickly. Prevents need to loop through array.
     mapping(Policy => uint256) public getPolicyIndex;
 
-    /// @notice Mapping for if an address has a policy-defined role.
-    mapping(address => mapping(Role => bool)) public hasRole;
-
-    /// @notice Mapping for if role exists.
-    mapping(Role => bool) public isRole;
-
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -206,8 +214,6 @@ contract Kernel {
         bytes4 funcSelector_,
         bool granted_
     );
-    event RoleGranted(Role indexed role_, address indexed addr_);
-    event RoleRevoked(Role indexed role_, address indexed addr_);
     event ActionExecuted(Actions indexed action_, address indexed target_);
 
     /*//////////////////////////////////////////////////////////////
@@ -216,18 +222,11 @@ contract Kernel {
 
     constructor() {
         executor = msg.sender;
-        admin = msg.sender;
     }
 
     /// @notice Modifier to check if caller is the executor.
     modifier onlyExecutor() {
         if (msg.sender != executor) revert Kernel_OnlyExecutor(msg.sender);
-        _;
-    }
-
-    /// @notice Modifier to check if caller is the roles admin.
-    modifier onlyAdmin() {
-        if (msg.sender != admin) revert Kernel_OnlyAdmin(msg.sender);
         _;
     }
 
@@ -249,8 +248,6 @@ contract Kernel {
             _deactivatePolicy(Policy(target_));
         } else if (action_ == Actions.ChangeExecutor) {
             executor = target_;
-        } else if (action_ == Actions.ChangeAdmin) {
-            admin = target_;
         } else if (action_ == Actions.MigrateKernel) {
             ensureContract(target_);
             _migrateKernel(Kernel(target_));
@@ -432,30 +429,38 @@ contract Kernel {
             }
         }
     }
+}
 
-    /*//////////////////////////////////////////////////////////////
-                          ROLES ADMIN FUNCTION
-    //////////////////////////////////////////////////////////////*/
+/*//////////////////////////////////////////////////////////////
+                        UTIL FUNCTIONS
+//////////////////////////////////////////////////////////////*/
 
-    /// @notice Function to grant policy-defined roles to some address. Can only be called by admin.
-    function grantRole(Role role_, address addr_) public onlyAdmin {
-        if (hasRole[addr_][role_]) revert Kernel_AddressAlreadyHasRole(addr_, role_);
+function toKeycode(bytes5 keycode_) pure returns (Keycode) {
+    return Keycode.wrap(keycode_);
+}
 
-        ensureValidRole(role_);
-        if (!isRole[role_]) isRole[role_] = true;
+function fromKeycode(Keycode keycode_) pure returns (bytes5) {
+    return Keycode.unwrap(keycode_);
+}
 
-        hasRole[addr_][role_] = true;
-
-        emit RoleGranted(role_, addr_);
+function ensureContract(address target_) view {
+    uint256 size;
+    assembly {
+        size := extcodesize(target_)
     }
+    if (size == 0) revert TargetNotAContract(target_);
+}
 
-    /// @notice Function to revoke policy-defined roles from some address. Can only be called by admin.
-    function revokeRole(Role role_, address addr_) public onlyAdmin {
-        if (!isRole[role_]) revert Kernel_RoleDoesNotExist(role_);
-        if (!hasRole[addr_][role_]) revert Kernel_AddressDoesNotHaveRole(addr_, role_);
+function ensureValidKeycode(Keycode keycode_) pure {
+    bytes5 unwrapped = Keycode.unwrap(keycode_);
 
-        hasRole[addr_][role_] = false;
+    for (uint256 i = 0; i < 5; ) {
+        bytes1 char = unwrapped[i];
 
-        emit RoleRevoked(role_, addr_);
+        if (char < 0x41 || char > 0x5A) revert InvalidKeycode(keycode_); // A-Z only
+
+        unchecked {
+            i++;
+        }
     }
 }

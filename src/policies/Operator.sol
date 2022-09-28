@@ -12,6 +12,7 @@ import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
 import {OlympusPrice} from "modules/PRICE.sol";
 import {OlympusRange} from "modules/RANGE.sol";
+import {OlympusRoles} from "modules/ROLES.sol";
 
 import "src/Kernel.sol";
 
@@ -70,6 +71,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     OlympusRange internal RANGE;
     OlympusTreasury internal TRSRY;
     OlympusMinter internal MINTR;
+    OlympusRoles internal ROLES;
 
     // External contracts
     /// @notice     Auctioneer contract used for cushion bond market deployments
@@ -158,11 +160,12 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     /* ========== FRAMEWORK CONFIGURATION ========== */
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](4);
+        dependencies = new Keycode[](5);
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("RANGE");
         dependencies[2] = toKeycode("TRSRY");
         dependencies[3] = toKeycode("MINTR");
+        dependencies[4] = toKeycode("ROLES");
 
         PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
         RANGE = OlympusRange(getModuleAddress(dependencies[1]));
@@ -205,7 +208,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
 
     /* ========== HEART FUNCTIONS ========== */
     /// @inheritdoc IOperator
-    function operate() external override onlyWhileActive onlyRole("operator_operate") {
+    function operate() external override onlyWhileActive {
+        ROLES.onlyRole("operator_operate");
+
         // Revert if not initialized
         if (!initialized) revert Operator_NotInitialized();
 
@@ -354,11 +359,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     /// @notice             Access restricted (BondCallback)
     /// @param id_          ID of the bond market
     /// @param amountOut_   Amount of capacity expended
-    function bondPurchase(uint256 id_, uint256 amountOut_)
-        external
-        onlyWhileActive
-        onlyRole("operator_reporter")
-    {
+    function bondPurchase(uint256 id_, uint256 amountOut_) external onlyWhileActive {
+        ROLES.onlyRole("operator_reporter");
+
         if (id_ == RANGE.market(true)) {
             _updateCapacity(true, amountOut_);
             _checkCushion(true);
@@ -509,10 +512,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
 
     /* ========== OPERATOR CONFIGURATION ========== */
     /// @inheritdoc IOperator
-    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
-        external
-        onlyRole("operator_policy")
-    {
+    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external {
+        ROLES.onlyRole("operator_policy");
+
         // Set spreads on the range module
         RANGE.setSpreads(cushionSpread_, wallSpread_);
 
@@ -521,13 +523,15 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function setThresholdFactor(uint256 thresholdFactor_) external onlyRole("operator_policy") {
+    function setThresholdFactor(uint256 thresholdFactor_) external {
         // Set threshold factor on the range module
         RANGE.setThresholdFactor(thresholdFactor_);
     }
 
     /// @inheritdoc IOperator
-    function setCushionFactor(uint32 cushionFactor_) external onlyRole("operator_policy") {
+    function setCushionFactor(uint32 cushionFactor_) external {
+        ROLES.onlyRole("operator_policy");
+
         // Confirm factor is within allowed values
         if (cushionFactor_ > ONE_HUNDRED_PERCENT || cushionFactor_ < ONE_PERCENT)
             revert Operator_InvalidParams();
@@ -543,7 +547,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         uint32 duration_,
         uint32 debtBuffer_,
         uint32 depositInterval_
-    ) external onlyRole("operator_policy") {
+    ) external {
+        ROLES.onlyRole("operator_policy");
+
         // Confirm values are valid
         if (duration_ > uint256(7 days) || duration_ < uint256(1 days))
             revert Operator_InvalidParams();
@@ -560,7 +566,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function setReserveFactor(uint32 reserveFactor_) external onlyRole("operator_policy") {
+    function setReserveFactor(uint32 reserveFactor_) external {
+        ROLES.onlyRole("operator_policy");
+
         // Confirm factor is within allowed values
         if (reserveFactor_ > ONE_HUNDRED_PERCENT || reserveFactor_ < ONE_PERCENT)
             revert Operator_InvalidParams();
@@ -576,7 +584,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         uint32 wait_,
         uint32 threshold_,
         uint32 observe_
-    ) external onlyRole("operator_policy") {
+    ) external {
+        ROLES.onlyRole("operator_policy");
+
         // Confirm regen parameters are within allowed values
         if (
             wait_ < 1 hours ||
@@ -606,8 +616,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     /// @inheritdoc IOperator
     function setBondContracts(IBondSDA auctioneer_, IBondCallback callback_)
         external
-        onlyRole("operator_admin")
     {
+        ROLES.onlyRole("operator_admin");
+
         if (address(auctioneer_) == address(0) || address(callback_) == address(0))
             revert Operator_InvalidParams();
         // Set contracts
@@ -616,7 +627,9 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function initialize() external onlyRole("operator_admin") {
+    function initialize() external {
+        ROLES.onlyRole("operator_admin");
+
         // Can only call once
         if (initialized) revert Operator_AlreadyInitialized();
 
@@ -636,23 +649,27 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function regenerate(bool high_) external onlyRole("operator_admin") {
+    function regenerate(bool high_) external  {
+        ROLES.onlyRole("operator_admin");
         // Regenerate side
         _regenerate(high_);
     }
 
     /// @inheritdoc IOperator
-    function activate() external onlyRole("operator_admin") {
+    function activate() external  {
+        ROLES.onlyRole("operator_admin");
         active = true;
     }
 
     /// @inheritdoc IOperator
-    function deactivate() external onlyRole("operator_admin") {
+    function deactivate() external  {
+        ROLES.onlyRole("operator_admin");
         active = false;
     }
 
     /// @inheritdoc IOperator
-    function deactivateCushion(bool high_) external onlyRole("operator_admin") {
+    function deactivateCushion(bool high_) external  {
+        ROLES.onlyRole("operator_admin");
         // Manually deactivate a cushion
         _deactivate(high_);
     }

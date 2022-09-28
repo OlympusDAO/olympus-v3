@@ -7,7 +7,7 @@ import {IHeart} from "policies/interfaces/IHeart.sol";
 import {IOperator} from "policies/interfaces/IOperator.sol";
 
 import {OlympusPrice} from "modules/PRICE.sol";
-
+import {OlympusRoles} from "modules/ROLES.sol";
 import "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
@@ -44,6 +44,7 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
 
     // Modules
     OlympusPrice internal PRICE;
+    OlympusRoles internal ROLES;
 
     // Policies
     IOperator internal _operator;
@@ -68,10 +69,12 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](1);
+        dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("PRICE");
+        dependencies[1] = toKeycode("ROLES");
 
         PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
+        ROLES = OlympusRoles(getModuleAddress(dependencies[1]));
     }
 
     /// @inheritdoc Policy
@@ -136,18 +139,27 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
-    function resetBeat() external onlyRole("heart_admin") {
+    function resetBeat() external {
+        ROLES.onlyRole("heart_admin");
         _resetBeat();
     }
 
     /// @inheritdoc IHeart
-    function activate() external onlyRole("heart_admin") {
+    function toggleBeat() external {
+        ROLES.onlyRole("heart_admin");
+        active = !active;
+    }
+
+    /// @inheritdoc IHeart
+    function activate() external {
+        ROLES.onlyRole("heart_admin");
         active = true;
         _resetBeat();
     }
 
     /// @inheritdoc IHeart
-    function deactivate() external onlyRole("heart_admin") {
+    function deactivate() external {
+        ROLES.onlyRole("heart_admin");
         active = false;
     }
 
@@ -158,22 +170,16 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
-    function setRewardTokenAndAmount(ERC20 token_, uint256 reward_)
-        external
-        onlyRole("heart_admin")
-        notWhileBeatAvailable
-    {
+    function setRewardTokenAndAmount(ERC20 token_, uint256 reward_) external notWhileBeatAvailable {
+        ROLES.onlyRole("heart_admin");
         rewardToken = token_;
         reward = reward_;
         emit RewardUpdated(token_, reward_);
     }
 
     /// @inheritdoc IHeart
-    function withdrawUnspentRewards(ERC20 token_)
-        external
-        onlyRole("heart_admin")
-        notWhileBeatAvailable
-    {
+    function withdrawUnspentRewards(ERC20 token_) external notWhileBeatAvailable {
+        ROLES.onlyRole("heart_admin");
         token_.safeTransfer(msg.sender, token_.balanceOf(address(this)));
     }
 }
