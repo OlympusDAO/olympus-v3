@@ -10,9 +10,10 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
-import "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
+import {OlympusPrice} from "modules/PRICE.sol";
+import "modules/ROLES.sol";
+import "src/Kernel.sol";
 
 contract PriceConfigTest is Test {
     using FullMath for uint256;
@@ -30,6 +31,7 @@ contract PriceConfigTest is Test {
 
     Kernel internal kernel;
     OlympusPrice internal price;
+    OlympusRoles internal roles;
     OlympusPriceConfig internal priceConfig;
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
@@ -72,6 +74,8 @@ contract PriceConfigTest is Test {
                 uint48(7 days) // uint32 movingAverageDuration_,
             );
 
+            roles = new OlympusRoles(kernel);
+
             /// Deploy price config policy
             priceConfig = new OlympusPriceConfig(kernel);
         }
@@ -90,7 +94,7 @@ contract PriceConfigTest is Test {
             /// Configure access control
 
             /// PriceConfig roles
-            kernel.grantRole(toRole("price_admin"), guardian);
+            roles.grantRole(toRole("price_admin"), guardian);
         }
 
         {
@@ -241,7 +245,7 @@ contract PriceConfigTest is Test {
 
     function testCorrectness_onlyAuthorizedCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodeWithSelector(Policy_OnlyRole.selector, toRole("price_admin"));
+        bytes memory err = abi.encodeWithSelector(ROLES_OnlyRole.selector, toRole("price_admin"));
 
         /// initialize
         uint256[] memory obs = new uint256[](21);

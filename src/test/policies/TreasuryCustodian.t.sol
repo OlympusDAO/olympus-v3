@@ -7,10 +7,10 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import "src/Kernel.sol";
-
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
+import {} from "modules/ROLES.sol";
 import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
+import "src/Kernel.sol";
 
 contract TreasuryCustodianTest is Test {
     UserFactory public userCreator;
@@ -32,27 +32,23 @@ contract TreasuryCustodianTest is Test {
 
         ngmi = new MockERC20("not gonna make it", "NGMI", 18);
 
-        /// Deploy kernel
         kernel = new Kernel(); // this contract will be the executor
 
-        /// Deploy modules (some mocks)
         TRSRY = new OlympusTreasury(kernel);
 
-        /// Deploy policies
         custodian = new TreasuryCustodian(kernel);
 
-        /// Install modules
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
+        kernel.executeAction(Actions.InstallModule, address(ROLES));
 
-        /// Approve policies`
         kernel.executeAction(Actions.ActivatePolicy, address(custodian));
 
         /// Configure access control
-        kernel.grantRole(toRole("custodian"), address(this));
+        roles.grantRole(toRole("custodian"), address(this));
     }
 
     function test_UnauthorizedChangeDebt(uint256 amount_) public {
-        bytes memory err = abi.encodeWithSelector(Policy_OnlyRole.selector, toRole("custodian"));
+        bytes memory err = abi.encodeWithSelector(ROLES_OnlyRole.selector, toRole("custodian"));
         vm.expectRevert(err);
         vm.prank(randomWallet);
         custodian.increaseDebt(ngmi, randomWallet, amount_);

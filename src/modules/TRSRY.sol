@@ -64,7 +64,8 @@ contract OlympusTreasury is Module, ReentrancyGuard {
     }
 
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
-        return (1, 0);
+        major = 1;
+        minor = 0;
     }
 
     /*//////////////////////////////////////////////////////////////

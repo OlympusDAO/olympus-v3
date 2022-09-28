@@ -23,6 +23,7 @@ import "src/Kernel.sol";
 import {OlympusRange} from "modules/RANGE.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter, OHM} from "modules/MINTR.sol";
+import {OlympusRoles, toRole, ROLES_OnlyRole} from "modules/ROLES.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
@@ -50,6 +51,7 @@ contract OperatorTest is Test {
     OlympusRange internal range;
     OlympusTreasury internal treasury;
     OlympusMinter internal minter;
+    OlympusRoles internal roles;
 
     Operator internal operator;
     BondCallback internal callback;
@@ -152,16 +154,16 @@ contract OperatorTest is Test {
             /// Configure access control
 
             /// Operator roles
-            kernel.grantRole(toRole("operator_operate"), address(heart));
-            kernel.grantRole(toRole("operator_operate"), guardian);
-            kernel.grantRole(toRole("operator_reporter"), address(callback));
-            kernel.grantRole(toRole("operator_policy"), policy);
-            kernel.grantRole(toRole("operator_admin"), guardian);
+            roles.grantRole(toRole("operator_operate"), address(heart));
+            roles.grantRole(toRole("operator_operate"), guardian);
+            roles.grantRole(toRole("operator_reporter"), address(callback));
+            roles.grantRole(toRole("operator_policy"), policy);
+            roles.grantRole(toRole("operator_admin"), guardian);
 
             /// Bond callback roles
-            kernel.grantRole(toRole("callback_whitelist"), address(operator));
-            kernel.grantRole(toRole("callback_whitelist"), guardian);
-            kernel.grantRole(toRole("callback_admin"), guardian);
+            roles.grantRole(toRole("callback_whitelist"), address(operator));
+            roles.grantRole(toRole("callback_whitelist"), guardian);
+            roles.grantRole(toRole("callback_admin"), guardian);
         }
 
         /// Set operator on the callback
@@ -1530,7 +1532,7 @@ contract OperatorTest is Test {
 
         /// Try to call operate as anyone else
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_OnlyRole.selector,
             toRole("operator_operate")
         );
         vm.expectRevert(err);
@@ -1557,7 +1559,7 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_OnlyRole.selector,
             toRole("operator_policy")
         );
         vm.expectRevert(err);
@@ -1592,7 +1594,7 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_OnlyRole.selector,
             toRole("operator_admin")
         );
         vm.expectRevert(err);
@@ -2019,7 +2021,7 @@ contract OperatorTest is Test {
 
         /// Try to call regenerate without being guardian and expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_OnlyRole.selector,
             toRole("operator_admin")
         );
 

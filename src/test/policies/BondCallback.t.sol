@@ -22,7 +22,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import {OlympusRange} from "modules/RANGE.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter, OHM} from "modules/MINTR.sol";
-import {OlympusRoles, toRole} from "modules/ROLES.sol";
+import {OlympusRoles, toRole, ROLES_OnlyRole} from "modules/ROLES.sol";
 import "src/Kernel.sol";
 
 import {Operator} from "policies/Operator.sol";
@@ -67,6 +67,7 @@ contract BondCallbackTest is Test {
     OlympusRange internal range;
     OlympusTreasury internal treasury;
     OlympusMinter internal minter;
+    OlympusRoles internal roles;
 
     Operator internal operator;
     BondCallback internal callback;
@@ -180,15 +181,15 @@ contract BondCallbackTest is Test {
             /// Configure access control
 
             /// Operator roles
-            kernel.grantRole(toRole("operator_operate"), guardian);
-            kernel.grantRole(toRole("operator_reporter"), address(callback));
-            kernel.grantRole(toRole("operator_policy"), policy);
-            kernel.grantRole(toRole("operator_admin"), guardian);
+            roles.grantRole(toRole("operator_operate"), guardian);
+            roles.grantRole(toRole("operator_reporter"), address(callback));
+            roles.grantRole(toRole("operator_policy"), policy);
+            roles.grantRole(toRole("operator_admin"), guardian);
 
             /// Bond callback roles
-            kernel.grantRole(toRole("callback_whitelist"), address(operator));
-            kernel.grantRole(toRole("callback_whitelist"), policy);
-            kernel.grantRole(toRole("callback_admin"), guardian);
+            roles.grantRole(toRole("callback_whitelist"), address(operator));
+            roles.grantRole(toRole("callback_whitelist"), policy);
+            roles.grantRole(toRole("callback_admin"), guardian);
         }
 
         /// Set operator on the callback
@@ -478,7 +479,7 @@ contract BondCallbackTest is Test {
 
         // Attempt to whitelist a market as a non-approved address, expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_OnlyRole.selector,
             toRole("callback_whitelist")
         );
         vm.prank(alice);
@@ -570,7 +571,7 @@ contract BondCallbackTest is Test {
         /// Try to call batch to treasury as non-policy, expect revert
         {
             bytes memory err = abi.encodeWithSelector(
-                Policy_OnlyRole.selector,
+                ROLES_OnlyRole.selector,
                 toRole("callback_admin")
             );
             vm.prank(alice);

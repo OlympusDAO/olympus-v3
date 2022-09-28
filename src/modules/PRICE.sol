@@ -123,7 +123,8 @@ contract OlympusPrice is Module {
 
     /// @inheritdoc Module
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
-        return (1, 0);
+        major = 1;
+        minor = 0;
     }
 
     /* ========== POLICY FUNCTIONS ========== */
