@@ -63,7 +63,7 @@ function fromKeycode(Keycode keycode_) pure returns (bytes5) {
 }
 
 // solhint-disable-next-line func-visibility
-function ensureContract(address target_) view {
+function ensureContract(address target_) view returns (bool) {
     return target_.code.length > 0;
 }
 
@@ -427,40 +427,6 @@ contract Kernel {
             unchecked {
                 ++i;
             }
-        }
-    }
-}
-
-/*//////////////////////////////////////////////////////////////
-                        UTIL FUNCTIONS
-//////////////////////////////////////////////////////////////*/
-
-function toKeycode(bytes5 keycode_) pure returns (Keycode) {
-    return Keycode.wrap(keycode_);
-}
-
-function fromKeycode(Keycode keycode_) pure returns (bytes5) {
-    return Keycode.unwrap(keycode_);
-}
-
-function ensureContract(address target_) view {
-    uint256 size;
-    assembly {
-        size := extcodesize(target_)
-    }
-    if (size == 0) revert TargetNotAContract(target_);
-}
-
-function ensureValidKeycode(Keycode keycode_) pure {
-    bytes5 unwrapped = Keycode.unwrap(keycode_);
-
-    for (uint256 i = 0; i < 5; ) {
-        bytes1 char = unwrapped[i];
-
-        if (char < 0x41 || char > 0x5A) revert InvalidKeycode(keycode_); // A-Z only
-
-        unchecked {
-            i++;
         }
     }
 }

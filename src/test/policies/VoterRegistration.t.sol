@@ -8,6 +8,7 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import "src/Kernel.sol";
 
 import {OlympusVotes} from "modules/VOTES.sol";
+import "modules/ROLES.sol";
 
 import {VoterRegistration} from "policies/VoterRegistration.sol";
 
@@ -35,12 +36,14 @@ contract VoterRegistrationTest is Test {
 
         /// Deploy modules
         votes = new OlympusVotes(kernel);
+        roles = new OlympusRoles(kernel);
 
         /// Deploy policies
         voterRegistration = new VoterRegistration(kernel);
 
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(votes));
+        kernel.executeAction(Actions.InstallModule, address(roles));
 
         /// Approve policies`
         kernel.executeAction(Actions.ActivatePolicy, address(voterRegistration));

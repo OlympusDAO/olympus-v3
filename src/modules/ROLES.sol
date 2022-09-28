@@ -7,9 +7,9 @@ import "src/Kernel.sol";
 error ROLES_CallerIsNotNewAdmin();
 error ROLES_OnlyAdmin();
 error ROLES_InvalidAddress();
-error ROLES_InvalidRole();
-error ROLES_OnlyRole();
-error ROLES_RoleDoesNotExist();
+error ROLES_InvalidRole(Role role_);
+error ROLES_OnlyRole(Role role_);
+error ROLES_RoleDoesNotExist(Role role_);
 error ROLES_AddressAlreadyHasRole(address addr_, Role role_);
 error ROLES_AddressDoesNotHaveRole(address addr_, Role role_);
 
@@ -80,7 +80,7 @@ contract OlympusRoles is Module {
     /// @dev    Roles are defined in the policy and set by the ROLES admin.
     function onlyRole(bytes32 role_) external {
         Role role = toRole(role_);
-        if (!hasRole(msg.sender, role)) revert ROLES_OnlyRole(role);
+        if (!hasRole[msg.sender][role]) revert ROLES_OnlyRole(role);
     }
 
     /// @notice Function to grant policy-defined roles to some address. Can only be called by admin.

@@ -8,7 +8,8 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
-import {} from "modules/ROLES.sol";
+import "modules/ROLES.sol";
+
 import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
 import "src/Kernel.sol";
 
@@ -19,6 +20,7 @@ contract TreasuryCustodianTest is Test {
     Kernel internal kernel;
 
     OlympusTreasury internal TRSRY;
+    OlympusRoles internal ROLES;
     TreasuryCustodian internal custodian;
 
     MockERC20 public ngmi;
@@ -35,6 +37,7 @@ contract TreasuryCustodianTest is Test {
         kernel = new Kernel(); // this contract will be the executor
 
         TRSRY = new OlympusTreasury(kernel);
+        ROLES = new OlympusRoles(kernel);
 
         custodian = new TreasuryCustodian(kernel);
 
@@ -44,7 +47,7 @@ contract TreasuryCustodianTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(custodian));
 
         /// Configure access control
-        roles.grantRole(toRole("custodian"), address(this));
+        ROLES.grantRole(toRole("custodian"), address(this));
     }
 
     function test_UnauthorizedChangeDebt(uint256 amount_) public {

@@ -29,6 +29,7 @@ import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
 import {OlympusInstructions} from "modules/INSTR.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
+import "modules/ROLES.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
@@ -168,6 +169,7 @@ abstract contract RangeSim is Test {
     OlympusRange public range;
     OlympusTreasury public treasury;
     OlympusMinter public minter;
+    OlympusRoles public roles;
     Operator public operator;
     BondCallback public callback;
     OlympusHeart public heart;
@@ -337,6 +339,7 @@ abstract contract RangeSim is Test {
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
+            roles = new OlympusRoles(kernel);
         }
 
         {
@@ -382,6 +385,7 @@ abstract contract RangeSim is Test {
             kernel.executeAction(Actions.InstallModule, address(range));
             kernel.executeAction(Actions.InstallModule, address(treasury));
             kernel.executeAction(Actions.InstallModule, address(minter));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
@@ -393,22 +397,22 @@ abstract contract RangeSim is Test {
             // Configure access control
 
             // Operator roles
-            kernel.grantRole(toRole("operator_operate"), address(heart));
-            kernel.grantRole(toRole("operator_operate"), guardian);
-            kernel.grantRole(toRole("operator_reporter"), address(callback));
-            kernel.grantRole(toRole("operator_policy"), policy);
-            kernel.grantRole(toRole("operator_admin"), guardian);
+            roles.grantRole(toRole("operator_operate"), address(heart));
+            roles.grantRole(toRole("operator_operate"), guardian);
+            roles.grantRole(toRole("operator_reporter"), address(callback));
+            roles.grantRole(toRole("operator_policy"), policy);
+            roles.grantRole(toRole("operator_admin"), guardian);
 
             // Bond callback roles
-            kernel.grantRole(toRole("callback_whitelist"), address(operator));
-            kernel.grantRole(toRole("callback_whitelist"), guardian);
-            kernel.grantRole(toRole("callback_admin"), guardian);
+            roles.grantRole(toRole("callback_whitelist"), address(operator));
+            roles.grantRole(toRole("callback_whitelist"), guardian);
+            roles.grantRole(toRole("callback_admin"), guardian);
 
             // Heart roles
-            kernel.grantRole(toRole("heart_admin"), guardian);
+            roles.grantRole(toRole("heart_admin"), guardian);
 
             // PriceConfig roles
-            kernel.grantRole(toRole("price_admin"), guardian);
+            roles.grantRole(toRole("price_admin"), guardian);
         }
 
         {

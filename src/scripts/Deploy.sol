@@ -123,7 +123,7 @@ contract OlympusDeploy is Script {
         RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1200), uint256(3000));
         console2.log("Range module deployed at:", address(RANGE));
 
-        ROLES = new OlympusRoles();
+        ROLES = new OlympusRoles(kernel);
         console2.log("Roles module deployed at:", address(ROLES));
 
         /// Deploy policies
@@ -194,28 +194,28 @@ contract OlympusDeploy is Script {
         /// Configure access control for policies
 
         /// Operator roles
-        kernel.grantRole(toRole("operator_operate"), address(heart));
-        kernel.grantRole(toRole("operator_operate"), guardian_);
-        kernel.grantRole(toRole("operator_reporter"), address(callback));
-        kernel.grantRole(toRole("operator_policy"), policy_);
-        kernel.grantRole(toRole("operator_admin"), guardian_);
+        ROLES.grantRole(toRole("operator_operate"), address(heart));
+        ROLES.grantRole(toRole("operator_operate"), guardian_);
+        ROLES.grantRole(toRole("operator_reporter"), address(callback));
+        ROLES.grantRole(toRole("operator_policy"), policy_);
+        ROLES.grantRole(toRole("operator_admin"), guardian_);
 
         /// Bond callback roles
-        kernel.grantRole(toRole("callback_whitelist"), address(operator));
-        kernel.grantRole(toRole("callback_whitelist"), guardian_);
-        kernel.grantRole(toRole("callback_admin"), guardian_);
+        ROLES.grantRole(toRole("callback_whitelist"), address(operator));
+        ROLES.grantRole(toRole("callback_whitelist"), guardian_);
+        ROLES.grantRole(toRole("callback_admin"), guardian_);
 
         /// Heart roles
-        kernel.grantRole(toRole("heart_admin"), guardian_);
+        ROLES.grantRole(toRole("heart_admin"), guardian_);
 
         /// VoterRegistration roles
-        kernel.grantRole(toRole("voter_admin"), guardian_);
+        ROLES.grantRole(toRole("voter_admin"), guardian_);
 
         /// PriceConfig roles
-        kernel.grantRole(toRole("price_admin"), guardian_);
+        ROLES.grantRole(toRole("price_admin"), guardian_);
 
         /// TreasuryCustodian roles
-        kernel.grantRole(toRole("custodian"), guardian_);
+        ROLES.grantRole(toRole("custodian"), guardian_);
 
         // /// Transfer executor powers to INSTR
         // kernel.executeAction(Actions.ChangeExecutor, address(INSTR));
