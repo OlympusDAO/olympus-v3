@@ -252,7 +252,10 @@ contract PriceConfigTest is Test {
 
     function testCorrectness_onlyAuthorizedCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodeWithSelector(ROLES_RequireRole.selector, toRole("price_admin"));
+        bytes memory err = abi.encodeWithSelector(
+            ROLES_RequireRole.selector,
+            toRole("price_admin")
+        );
 
         /// initialize
         uint256[] memory obs = new uint256[](21);

@@ -64,7 +64,7 @@ function fromKeycode(Keycode keycode_) pure returns (bytes5) {
 
 // solhint-disable-next-line func-visibility
 function ensureContract(address target_) view {
-    if(target_.code.length == 0) revert TargetNotAContract(target_);
+    if (target_.code.length == 0) revert TargetNotAContract(target_);
 }
 
 // solhint-disable-next-line func-visibility

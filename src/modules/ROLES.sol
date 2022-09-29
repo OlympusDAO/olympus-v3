@@ -34,7 +34,6 @@ contract OlympusRoles is Module {
                             MODULE INTERFACE
     //////////////////////////////////////////////////////////////*/
 
-
     constructor(Kernel kernel_) Module(kernel_) {}
 
     function KEYCODE() public pure override returns (Keycode) {

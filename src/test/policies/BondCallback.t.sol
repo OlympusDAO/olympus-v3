@@ -137,9 +137,8 @@ contract BondCallbackTest is Test {
         }
 
         {
-            /// Deploy roles admin 
+            /// Deploy roles admin
             rolesAdmin = new RolesAdmin(kernel);
-
 
             /// Deploy bond callback
             callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);

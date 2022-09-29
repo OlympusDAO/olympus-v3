@@ -173,7 +173,6 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         MINTR = OlympusMinter(getModuleAddress(dependencies[3]));
         ROLES = OlympusRoles(getModuleAddress(dependencies[4]));
 
-
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
     }
