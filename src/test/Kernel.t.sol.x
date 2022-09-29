@@ -277,8 +277,7 @@ contract KernelTest is Test {
             false
         );
         vm.expectRevert();
-        //assertEq(address(kernel.activePolicies(0)), address(0));
-        kernel.activePolicies(0);
+        assertEq(address(kernel.activePolicies(0)), address(0));
     }
 
     function testCorrectness_UpgradeModule() public {
