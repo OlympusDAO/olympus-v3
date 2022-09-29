@@ -13,7 +13,7 @@ results=()
 for count in {0..2}; do
     for row in $netflows; do
         key=$(echo $row | jq -r '.key')
-        epoch=$(echo "$(echo $row | jq -r '.day') * 3 + $count" | bc)
+        epoch=$(echo "($(echo $row | jq -r '.day')-1) * 3 + $count" | bc)
         netflow=$(echo "$(echo $row | jq -r '.netflow') * 10^18 / 3" | bc)
         
         result=($key $epoch $netflow)
