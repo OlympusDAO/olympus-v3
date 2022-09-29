@@ -84,7 +84,7 @@ contract OlympusRoles is Module {
     }
 
     /// @notice Function to grant policy-defined roles to some address. Can only be called by admin.
-    function grantRole(Role role_, address addr_) public {
+    function grantRole(Role role_, address addr_) external {
         if (msg.sender != rolesAdmin) revert ROLES_OnlyAdmin();
         if (hasRole[addr_][role_]) revert ROLES_AddressAlreadyHasRole(addr_, role_);
 
@@ -100,7 +100,7 @@ contract OlympusRoles is Module {
     }
 
     /// @notice Function to revoke policy-defined roles from some address. Can only be called by admin.
-    function revokeRole(Role role_, address addr_) public {
+    function revokeRole(Role role_, address addr_) external {
         if (msg.sender != rolesAdmin) revert ROLES_OnlyAdmin();
         if (!isRole[role_]) revert ROLES_RoleDoesNotExist(role_);
         if (!hasRole[addr_][role_]) revert ROLES_AddressDoesNotHaveRole(addr_, role_);

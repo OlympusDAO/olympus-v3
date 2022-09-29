@@ -96,6 +96,7 @@ contract TreasuryCustodianTest is Test {
 
         kernel.executeAction(Actions.ActivatePolicy, dummy);
 
+        vm.prank(guardian);
         custodian.grantWithdrawerApproval(dummy, ngmi, amount);
         assertEq(TRSRY.withdrawApproval(dummy, ngmi), amount);
 
