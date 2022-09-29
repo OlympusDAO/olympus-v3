@@ -22,9 +22,11 @@ import {FullMath} from "libraries/FullMath.sol";
 import {OlympusRange} from "modules/RANGE.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter, OHM} from "modules/MINTR.sol";
-import {OlympusRoles, toRole, ROLES_OnlyRole} from "modules/ROLES.sol";
+import {OlympusRoles, toRole, ROLES_RequireRole} from "modules/ROLES.sol";
+
 import "src/Kernel.sol";
 
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 
@@ -71,6 +73,7 @@ contract BondCallbackTest is Test {
 
     Operator internal operator;
     BondCallback internal callback;
+    RolesAdmin internal rolesAdmin;
 
     // Bond market ids to reference
     uint256 internal regBond;
@@ -134,6 +137,10 @@ contract BondCallbackTest is Test {
         }
 
         {
+            /// Deploy roles admin 
+            rolesAdmin = new RolesAdmin(kernel);
+
+
             /// Deploy bond callback
             callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
@@ -178,20 +185,21 @@ contract BondCallbackTest is Test {
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
             /// Configure access control
 
             /// Operator roles
-            roles.grantRole(toRole("operator_operate"), guardian);
-            roles.grantRole(toRole("operator_reporter"), address(callback));
-            roles.grantRole(toRole("operator_policy"), policy);
-            roles.grantRole(toRole("operator_admin"), guardian);
+            rolesAdmin.grantRole("operator_operate", guardian);
+            rolesAdmin.grantRole("operator_reporter", address(callback));
+            rolesAdmin.grantRole("operator_policy", policy);
+            rolesAdmin.grantRole("operator_admin", guardian);
 
             /// Bond callback roles
-            roles.grantRole(toRole("callback_whitelist"), address(operator));
-            roles.grantRole(toRole("callback_whitelist"), policy);
-            roles.grantRole(toRole("callback_admin"), guardian);
+            rolesAdmin.grantRole("callback_whitelist", address(operator));
+            rolesAdmin.grantRole("callback_whitelist", policy);
+            rolesAdmin.grantRole("callback_admin", guardian);
         }
 
         /// Set operator on the callback
@@ -481,7 +489,7 @@ contract BondCallbackTest is Test {
 
         // Attempt to whitelist a market as a non-approved address, expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_OnlyRole.selector,
+            ROLES_RequireRole.selector,
             toRole("callback_whitelist")
         );
         vm.prank(alice);
@@ -573,7 +581,7 @@ contract BondCallbackTest is Test {
         /// Try to call batch to treasury as non-policy, expect revert
         {
             bytes memory err = abi.encodeWithSelector(
-                ROLES_OnlyRole.selector,
+                ROLES_RequireRole.selector,
                 toRole("callback_admin")
             );
             vm.prank(alice);

@@ -34,9 +34,10 @@ contract VoterRegistration is Policy {
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](2);
-        permissions[0] = Permissions(VOTES.KEYCODE(), VOTES.mintTo.selector);
-        permissions[1] = Permissions(VOTES.KEYCODE(), VOTES.burnFrom.selector);
+        permissions = new Permissions[](3);
+        permissions[0] = Permissions(ROLES.KEYCODE(), ROLES.requireRole.selector);
+        permissions[1] = Permissions(VOTES.KEYCODE(), VOTES.mintTo.selector);
+        permissions[2] = Permissions(VOTES.KEYCODE(), VOTES.burnFrom.selector);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -47,7 +48,7 @@ contract VoterRegistration is Policy {
     /// @param  wallet_ - The address receiving the votes.
     /// @param  amount_ - The amount of votes to mint to the wallet.
     function issueVotesTo(address wallet_, uint256 amount_) external {
-        ROLES.onlyRole("voter_admin", msg.sender);
+        ROLES.requireRole("voter_admin", msg.sender);
         // Issue the votes in the VOTES module
         VOTES.mintTo(wallet_, amount_);
     }
@@ -56,7 +57,7 @@ contract VoterRegistration is Policy {
     /// @param  wallet_ - The address losing the votes.
     /// @param  amount_ - The amount of votes to burn from the wallet.
     function revokeVotesFrom(address wallet_, uint256 amount_) external {
-        ROLES.onlyRole("voter_admin", msg.sender);
+        ROLES.requireRole("voter_admin", msg.sender);
         // Revoke the votes in the VOTES module
         VOTES.burnFrom(wallet_, amount_);
     }

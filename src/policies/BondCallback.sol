@@ -66,11 +66,12 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        requests = new Permissions[](4);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
-        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        requests[2] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        requests[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests = new Permissions[](5);
+        requests[0] = Permissions(ROLES.KEYCODE(), ROLES.requireRole.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
+        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        requests[3] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[4] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -79,7 +80,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
 
     /// @inheritdoc IBondCallback
     function whitelist(address teller_, uint256 id_) external override {
-        ROLES.onlyRole("callback_whitelist", msg.sender);
+        ROLES.requireRole("callback_whitelist", msg.sender);
 
         approvedMarkets[teller_][id_] = true;
 
@@ -99,7 +100,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     /// @param  teller_ Address of the Teller contract which serves the market
     /// @param  id_     ID of the market to remove from whitelist
     function blacklist(address teller_, uint256 id_) external {
-        ROLES.onlyRole("callback_whitelist", msg.sender);
+        ROLES.requireRole("callback_whitelist", msg.sender);
 
         approvedMarkets[teller_][id_] = false;
     }
@@ -156,7 +157,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     /// @notice Send tokens to the TRSRY in a batch
     /// @param  tokens_ - Array of tokens to send
     function batchToTreasury(ERC20[] memory tokens_) external {
-        ROLES.onlyRole("callback_admin", msg.sender);
+        ROLES.requireRole("callback_admin", msg.sender);
 
         ERC20 token;
         uint256 balance;
@@ -196,7 +197,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     /// @notice Must be set before the callback is used
     /// @param  operator_ - Address of the Operator contract
     function setOperator(Operator operator_) external {
-        ROLES.onlyRole("callback_admin", msg.sender);
+        ROLES.requireRole("callback_admin", msg.sender);
 
         if (address(operator_) == address(0)) revert Callback_InvalidParams();
         operator = operator_;
