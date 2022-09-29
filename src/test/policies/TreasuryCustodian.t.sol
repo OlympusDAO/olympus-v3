@@ -9,6 +9,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
 import "modules/ROLES.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
 import "src/Kernel.sol";
@@ -23,6 +24,7 @@ contract TreasuryCustodianTest is Test {
     OlympusTreasury internal TRSRY;
     OlympusRoles internal ROLES;
     TreasuryCustodian internal custodian;
+    RolesAdmin internal rolesAdmin;
 
     MockERC20 public ngmi;
 
@@ -42,18 +44,20 @@ contract TreasuryCustodianTest is Test {
         ROLES = new OlympusRoles(kernel);
 
         custodian = new TreasuryCustodian(kernel);
+        rolesAdmin = new RolesAdmin(kernel);
 
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
         kernel.executeAction(Actions.InstallModule, address(ROLES));
 
         kernel.executeAction(Actions.ActivatePolicy, address(custodian));
+        kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         /// Configure access control
-        ROLES.grantRole(toRole("custodian"), guardian);
+        rolesAdmin.grantRole("custodian", guardian);
     }
 
     function test_UnauthorizedChangeDebt(uint256 amount_) public {
-        bytes memory err = abi.encodeWithSelector(ROLES_OnlyRole.selector, toRole("custodian"));
+        bytes memory err = abi.encodeWithSelector(ROLES_RequireRole.selector, toRole("custodian"));
         vm.expectRevert(err);
         vm.prank(randomWallet);
         custodian.increaseDebt(ngmi, randomWallet, amount_);

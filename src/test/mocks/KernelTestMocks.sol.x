@@ -28,7 +28,7 @@ contract MockPolicy is Policy {
     }
 
     function callPermissionedFunction() external {
-        ROLES.onlyRole("tester");
+        ROLES.requireRole("tester");
         MOCKY.permissionedCall();
     }
 }

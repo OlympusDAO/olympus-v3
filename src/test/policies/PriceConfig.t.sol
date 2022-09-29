@@ -13,6 +13,7 @@ import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {OlympusPrice} from "modules/PRICE.sol";
 import "modules/ROLES.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 import "src/Kernel.sol";
 
 contract PriceConfigTest is Test {
@@ -33,6 +34,7 @@ contract PriceConfigTest is Test {
     OlympusPrice internal price;
     OlympusRoles internal roles;
     OlympusPriceConfig internal priceConfig;
+    RolesAdmin internal rolesAdmin;
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
 
@@ -78,6 +80,9 @@ contract PriceConfigTest is Test {
 
             /// Deploy price config policy
             priceConfig = new OlympusPriceConfig(kernel);
+
+            /// Deploy rolesAdmin
+            rolesAdmin = new RolesAdmin(kernel);
         }
 
         {
@@ -85,16 +90,18 @@ contract PriceConfigTest is Test {
 
             /// Install modules
             kernel.executeAction(Actions.InstallModule, address(price));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
 
         {
             /// Configure access control
 
             /// PriceConfig roles
-            roles.grantRole(toRole("price_admin"), guardian);
+            rolesAdmin.grantRole("price_admin", guardian);
         }
 
         {
@@ -245,7 +252,7 @@ contract PriceConfigTest is Test {
 
     function testCorrectness_onlyAuthorizedCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodeWithSelector(ROLES_OnlyRole.selector, toRole("price_admin"));
+        bytes memory err = abi.encodeWithSelector(ROLES_RequireRole.selector, toRole("price_admin"));
 
         /// initialize
         uint256[] memory obs = new uint256[](21);

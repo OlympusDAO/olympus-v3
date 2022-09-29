@@ -32,10 +32,11 @@ contract OlympusPriceConfig is Policy {
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](3);
-        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.initialize.selector);
-        permissions[1] = Permissions(PRICE.KEYCODE(), PRICE.changeMovingAverageDuration.selector);
-        permissions[2] = Permissions(PRICE.KEYCODE(), PRICE.changeObservationFrequency.selector);
+        permissions = new Permissions[](4);
+        permissions[0] = Permissions(ROLES.KEYCODE(), ROLES.requireRole.selector);
+        permissions[1] = Permissions(PRICE.KEYCODE(), PRICE.initialize.selector);
+        permissions[2] = Permissions(PRICE.KEYCODE(), PRICE.changeMovingAverageDuration.selector);
+        permissions[3] = Permissions(PRICE.KEYCODE(), PRICE.changeObservationFrequency.selector);
     }
 
     /* ========== ADMIN FUNCTIONS ========== */
@@ -47,7 +48,7 @@ contract OlympusPriceConfig is Policy {
     /// @dev This function must be called after the Price module is deployed to activate it and after updating the observationFrequency
     ///      or movingAverageDuration (in certain cases) in order for the Price module to function properly.
     function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_) external {
-        ROLES.onlyRole("price_admin", msg.sender);
+        ROLES.requireRole("price_admin", msg.sender);
         PRICE.initialize(startObservations_, lastObservationTime_);
     }
 
@@ -58,7 +59,7 @@ contract OlympusPriceConfig is Policy {
     ///      Ensure that you have saved the existing data and can re-populate before calling this
     ///      function with a number of observations larger than have been recorded.
     function changeMovingAverageDuration(uint48 movingAverageDuration_) external {
-        ROLES.onlyRole("price_admin", msg.sender);
+        ROLES.requireRole("price_admin", msg.sender);
         PRICE.changeMovingAverageDuration(movingAverageDuration_);
     }
 
@@ -67,7 +68,7 @@ contract OlympusPriceConfig is Policy {
     /// @dev      Changing the observation frequency clears existing observation data since it will not be taken at the right time intervals.
     ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
     function changeObservationFrequency(uint48 observationFrequency_) external {
-        ROLES.onlyRole("price_admin", msg.sender);
+        ROLES.requireRole("price_admin", msg.sender);
         PRICE.changeObservationFrequency(observationFrequency_);
     }
 }

@@ -4,12 +4,8 @@ pragma solidity 0.8.15;
 import "src/Kernel.sol";
 
 // ERRORS
-error ROLES_CallerIsNotNewAdmin();
-error ROLES_OnlyAdmin();
-error ROLES_InvalidAddress();
 error ROLES_InvalidRole(Role role_);
-error ROLES_OnlyRole(Role role_);
-error ROLES_RoleDoesNotExist(Role role_);
+error ROLES_RequireRole(Role role_);
 error ROLES_AddressAlreadyHasRole(address addr_, Role role_);
 error ROLES_AddressDoesNotHaveRole(address addr_, Role role_);
 
@@ -27,28 +23,19 @@ function fromRole(Role role_) pure returns (bytes32) {
 contract OlympusRoles is Module {
     event RoleGranted(Role indexed role_, address indexed addr_);
     event RoleRevoked(Role indexed role_, address indexed addr_);
-    event RolesAdminPushed(address indexed newAdmin_);
-    event RolesAdminPulled(address indexed newAdmin_);
-
-    /// @notice Special role that is responsible for assigning policy-defined roles to addresses.
-    address public rolesAdmin;
-
-    /// @notice Proposed new admin. Address must call `pullRolesAdmin` to become the new roles admin.
-    address public newAdmin;
 
     /// @notice Mapping for if an address has a policy-defined role.
     mapping(address => mapping(Role => bool)) public hasRole;
 
-    /// @notice Mapping for if role exists.
-    mapping(Role => bool) public isRole;
+    // /// @notice Mapping for if role exists.
+    // mapping(Role => bool) public isRole;
 
     /*//////////////////////////////////////////////////////////////
                             MODULE INTERFACE
     //////////////////////////////////////////////////////////////*/
 
-    constructor(Kernel kernel_) Module(kernel_) {
-        rolesAdmin = msg.sender;
-    }
+
+    constructor(Kernel kernel_) Module(kernel_) {}
 
     function KEYCODE() public pure override returns (Keycode) {
         return toKeycode("ROLES");
@@ -63,35 +50,18 @@ contract OlympusRoles is Module {
                                CORE LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function pushRolesAdmin(address newAdmin_) external {
-        if (msg.sender != rolesAdmin) revert ROLES_OnlyAdmin();
-        newAdmin = newAdmin_;
-        emit RolesAdminPushed(newAdmin_);
-    }
-
-    function pullRolesAdmin() external {
-        if (msg.sender != newAdmin) revert ROLES_CallerIsNotNewAdmin();
-        rolesAdmin = newAdmin;
-        newAdmin = address(0);
-        emit RolesAdminPulled(rolesAdmin);
-    }
-
     /// @notice "Modifier" to restrict policy function access to certain addresses with a role.
     /// @dev    Roles are defined in the policy and set by the ROLES admin.
-    function onlyRole(bytes32 role_, address caller_) external {
+    function requireRole(bytes32 role_, address caller_) external permissioned {
         Role role = toRole(role_);
-        if (!hasRole[caller_][role]) revert ROLES_OnlyRole(role);
+        if (!hasRole[caller_][role]) revert ROLES_RequireRole(role);
     }
 
     /// @notice Function to grant policy-defined roles to some address. Can only be called by admin.
-    function grantRole(Role role_, address addr_) external {
-        if (msg.sender != rolesAdmin) revert ROLES_OnlyAdmin();
+    function saveRole(Role role_, address addr_) external permissioned {
         if (hasRole[addr_][role_]) revert ROLES_AddressAlreadyHasRole(addr_, role_);
 
         ensureValidRole(role_);
-
-        // Activate this role
-        if (!isRole[role_]) isRole[role_] = true;
 
         // Grant role to the address
         hasRole[addr_][role_] = true;
@@ -100,9 +70,7 @@ contract OlympusRoles is Module {
     }
 
     /// @notice Function to revoke policy-defined roles from some address. Can only be called by admin.
-    function revokeRole(Role role_, address addr_) external {
-        if (msg.sender != rolesAdmin) revert ROLES_OnlyAdmin();
-        if (!isRole[role_]) revert ROLES_RoleDoesNotExist(role_);
+    function removeRole(Role role_, address addr_) external permissioned {
         if (!hasRole[addr_][role_]) revert ROLES_AddressDoesNotHaveRole(addr_, role_);
 
         hasRole[addr_][role_] = false;
@@ -110,7 +78,7 @@ contract OlympusRoles is Module {
         emit RoleRevoked(role_, addr_);
     }
 
-
+    /// @notice Function that checks
     function ensureValidRole(Role role_) public pure {
         bytes32 unwrapped = Role.unwrap(role_);
 

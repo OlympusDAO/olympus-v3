@@ -8,6 +8,7 @@ import {console2} from "forge-std/console2.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
 import "modules/ROLES.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -57,10 +58,11 @@ contract HeartTest is Test {
     Kernel internal kernel;
     MockPrice internal price;
     OlympusRoles internal roles;
+    
 
     MockOperator internal operator;
-
     OlympusHeart internal heart;
+    RolesAdmin internal rolesAdmin;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -103,6 +105,8 @@ contract HeartTest is Test {
                 rewardToken,
                 uint256(2e18) // 2 reward tokens
             );
+
+            rolesAdmin = new RolesAdmin(kernel);
         }
 
         {
@@ -115,11 +119,12 @@ contract HeartTest is Test {
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(heart));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
             /// Configure access control
 
             /// Heart roles
-            roles.grantRole(toRole("heart_admin"), guardian);
+            rolesAdmin.grantRole("heart_admin", guardian);
         }
 
         {
@@ -355,7 +360,7 @@ contract HeartTest is Test {
 
     function testCorrectness_cannotCallAdminFunctionsWithoutPermissions() public {
         /// Try to call admin functions on the heart as non-guardian and expect revert
-        bytes memory err = abi.encodeWithSelector(ROLES_OnlyRole.selector, toRole("heart_admin"));
+        bytes memory err = abi.encodeWithSelector(ROLES_RequireRole.selector, toRole("heart_admin"));
 
         vm.expectRevert(err);
         heart.resetBeat();

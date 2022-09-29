@@ -36,6 +36,7 @@ import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -170,10 +171,12 @@ abstract contract RangeSim is Test {
     OlympusTreasury public treasury;
     OlympusMinter public minter;
     OlympusRoles public roles;
+
     Operator public operator;
     BondCallback public callback;
     OlympusHeart public heart;
     OlympusPriceConfig public priceConfig;
+    RolesAdmin public rolesAdmin;
 
     mapping(uint32 => SimIO.Params) internal params; // map of sim keys to sim params
     mapping(uint32 => mapping(uint32 => int256)) internal netflows; // map of sim keys to epochs to netflows
@@ -375,6 +378,9 @@ abstract contract RangeSim is Test {
                 reserve,
                 uint256(0) // no keeper rewards for sim
             );
+
+            /// Deploy RolesAdmin
+            rolesAdmin = new RolesAdmin(kernel);
         }
 
         {
@@ -392,27 +398,28 @@ abstract contract RangeSim is Test {
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
             kernel.executeAction(Actions.ActivatePolicy, address(heart));
             kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
             // Configure access control
 
             // Operator roles
-            roles.grantRole(toRole("operator_operate"), address(heart));
-            roles.grantRole(toRole("operator_operate"), guardian);
-            roles.grantRole(toRole("operator_reporter"), address(callback));
-            roles.grantRole(toRole("operator_policy"), policy);
-            roles.grantRole(toRole("operator_admin"), guardian);
+            rolesAdmin.grantRole("operator_operate", address(heart));
+            rolesAdmin.grantRole("operator_operate", guardian);
+            rolesAdmin.grantRole("operator_reporter", address(callback));
+            rolesAdmin.grantRole("operator_policy", policy);
+            rolesAdmin.grantRole("operator_admin", guardian);
 
             // Bond callback roles
-            roles.grantRole(toRole("callback_whitelist"), address(operator));
-            roles.grantRole(toRole("callback_whitelist"), guardian);
-            roles.grantRole(toRole("callback_admin"), guardian);
+            rolesAdmin.grantRole("callback_whitelist", address(operator));
+            rolesAdmin.grantRole("callback_whitelist", guardian);
+            rolesAdmin.grantRole("callback_admin", guardian);
 
             // Heart roles
-            roles.grantRole(toRole("heart_admin"), guardian);
+            rolesAdmin.grantRole("heart_admin", guardian);
 
             // PriceConfig roles
-            roles.grantRole(toRole("price_admin"), guardian);
+            rolesAdmin.grantRole("price_admin", guardian);
         }
 
         {

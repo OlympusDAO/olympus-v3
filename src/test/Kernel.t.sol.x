@@ -227,7 +227,7 @@ contract KernelTest is Test {
 
         vm.startPrank(deployer);
 
-        err = abi.encodeWithSignature("ROLES_OnlyRole(bytes32)", testerRole);
+        err = abi.encodeWithSignature("ROLES_requireRole(bytes32)", testerRole);
         vm.expectRevert(err);
         policy.callPermissionedFunction();
 
@@ -243,7 +243,7 @@ contract KernelTest is Test {
         kernel.revokeRole(testerRole, multisig);
 
         vm.prank(multisig);
-        err = abi.encodeWithSignature("ROLES_OnlyRole(bytes32)", testerRole);
+        err = abi.encodeWithSignature("ROLES_requireRole(bytes32)", testerRole);
         vm.expectRevert(err);
         policy.callPermissionedFunction();
     }
@@ -370,7 +370,7 @@ contract KernelTest is Test {
         kernel.revokeRole(Role.wrap("tester"), user);
         assertFalse(kernel.hasRole(user, Role.wrap("tester")));
 
-        err = abi.encodeWithSignature("ROLES_OnlyRole(bytes32)", Role.wrap("tester"));
+        err = abi.encodeWithSignature("ROLES_requireRole(bytes32)", Role.wrap("tester"));
         vm.expectRevert(err);
         vm.prank(user);
         policy.callPermissionedFunction();
