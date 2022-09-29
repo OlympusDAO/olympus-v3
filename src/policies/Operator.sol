@@ -632,7 +632,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         // Can only call once
         if (initialized) revert Operator_AlreadyInitialized();
 
-        /// Request approval for reserves from TRSRY
+        // Request approval for reserves from TRSRY
         TRSRY.increaseWithdrawerApproval(address(this), reserve, type(uint256).max);
 
         // Update range prices (wall and cushion)

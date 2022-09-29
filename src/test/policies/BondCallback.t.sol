@@ -124,6 +124,7 @@ contract BondCallbackTest is Test {
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
+            roles = new OlympusRoles(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -172,6 +173,7 @@ contract BondCallbackTest is Test {
             kernel.executeAction(Actions.InstallModule, address(range));
             kernel.executeAction(Actions.InstallModule, address(treasury));
             kernel.executeAction(Actions.InstallModule, address(minter));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));

@@ -187,7 +187,7 @@ contract OlympusTreasury is Module, ReentrancyGuard {
         // Choose minimum between passed-in amount and received amount
         if (received > amount_) received = amount_;
 
-        // Subtract debt from caller
+        // Subtract debt from debtor
         reserveDebt[token_][debtor_] -= received;
         totalDebt[token_] -= received;
 
