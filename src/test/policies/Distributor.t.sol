@@ -70,21 +70,9 @@ contract DistributorTest is Test {
 
         {
             /// Deploy Staking and Distributor
-            staking = new MockStaking(
-                address(ohm),
-                address(sohm),
-                address(gohm),
-                2200,
-                0,
-                2200
-            );
+            staking = new MockStaking(address(ohm), address(sohm), address(gohm), 2200, 0, 2200);
 
-            distributor = new Distributor(
-                address(kernel),
-                address(ohm),
-                address(staking),
-                1000
-            );
+            distributor = new Distributor(address(kernel), address(ohm), address(staking), 1000);
 
             staking.setDistributor(address(distributor));
         }
@@ -130,44 +118,33 @@ contract DistributorTest is Test {
         assertEq(distributor.rewardRate(), 1000);
         assertEq(distributor.bounty(), 0);
 
-        (bool add, uint256 rate, uint256 target) = distributor.adjustment();
-        assertEq(add, false);
-        assertEq(rate, 0);
-        assertEq(target, 0);
-
         assertEq(ohm.balanceOf(address(staking)), 100100 gwei);
     }
 
     /* ========== BASIC TESTS ========== */
 
-    /// distribute()
-    /// []  Can only be called by staking
-    /// []  Cannot be called if not unlocked
+    /// [X]  distribute()
+    ///     [X]  Can only be called by staking
+    ///     [X]  Cannot be called if not unlocked
     function testCorrectness_distributeOnlyStaking() public {
-        bytes memory err = abi.encodeWithSelector(
-            Distributor_OnlyStaking.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Distributor_OnlyStaking.selector);
         vm.expectRevert(err);
         distributor.distribute();
     }
 
     function testCorrectness_distributeNotUnlocked() public {
-        bytes memory err = abi.encodeWithSelector(
-            Distributor_NotUnlocked.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Distributor_NotUnlocked.selector);
         vm.expectRevert(err);
 
         vm.prank(address(staking));
         distributor.distribute();
     }
 
-    /// retrieveBounty()
-    /// []  Can only be called by staking
-    /// []  Bounty is zero and no OHM is minted
+    /// [X]  retrieveBounty()
+    ///     [X]  Can only be called by staking
+    ///     [X]  Bounty is zero and no OHM is minted
     function test_retrieveBountyOnlyStaking() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(Distributor_OnlyStaking.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(Distributor_OnlyStaking.selector));
         distributor.retrieveBounty();
     }
 
@@ -183,8 +160,8 @@ contract DistributorTest is Test {
         assertEq(supplyAfter, supplyBefore);
     }
 
-    /// nextRewardFor()
-    /// []  Next reward for the staking contract matches the expected calculation
+    /// [X] nextRewardFor()
+    ///     [X]  Next reward for the staking contract matches the expected calculation
     function testCorrectness_nextRewardFor() public {
         uint256 stakingBalance = 100100 gwei;
         uint256 rewardRate = distributor.rewardRate();
@@ -196,9 +173,9 @@ contract DistributorTest is Test {
 
     /* ========== POLICY FUNCTION TESTS ========== */
 
-    /// setBounty()
-    /// []  Can only be called by an address with the distributor_admin role
-    /// []  Sets bounty correctly
+    /// [X]  setBounty()
+    ///     [X]  Can only be called by an address with the distributor_admin role
+    ///     [X]  Sets bounty correctly
     function testCorrectness_setBountyRequiresRole(address user_) public {
         vm.assume(user_ != address(this));
 
@@ -217,9 +194,9 @@ contract DistributorTest is Test {
         assertEq(distributor.bounty(), 10);
     }
 
-    /// setPools()
-    /// []  Can only be called by an address with the distributor_admin role
-    /// []  Sets pools correctly
+    /// [X] setPools()
+    ///     [X]  Can only be called by an address with the distributor_admin role
+    ///     [X]  Sets pools correctly
     function testCorrectness_setPoolsRequiresRole(address user_) public {
         vm.assume(user_ != address(this));
 
@@ -245,10 +222,10 @@ contract DistributorTest is Test {
         distributor.setPools(newPools);
     }
 
-    /// removePool()
-    /// []  Can only be called by an address with the distributor_admin role
-    /// []  Fails on sanity check when parameters are invalid
-    /// []  Correctly removes pool
+    /// [X]  removePool()
+    ///     [X]  Can only be called by an address with the distributor_admin role
+    ///     [X]  Fails on sanity check when parameters are invalid
+    ///     [X]  Correctly removes pool
 
     function testCorrectness_removePoolRequiresRole(address user_) public {
         vm.assume(user_ != address(this));
@@ -278,9 +255,7 @@ contract DistributorTest is Test {
         distributor.setPools(newPools);
 
         /// Remove Pool (should fail)
-        bytes memory err = abi.encodeWithSelector(
-            Distributor_SanityCheck.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Distributor_SanityCheck.selector);
         vm.expectRevert(err);
 
         distributor.removePool(0, address(gohm));
@@ -308,10 +283,10 @@ contract DistributorTest is Test {
         assertEq(distributor.pools(1), address(0x0));
     }
 
-    /// addPool()
-    /// []  Can only be called by an address with the distributor_admin role
-    /// []  Correctly adds pool to an empty slot
-    /// []  Pushes pool to end of list when trying to add to an occupied slot
+    /// [X]  addPool()
+    ///     [X]  Can only be called by an address with the distributor_admin role
+    ///     [X]  Correctly adds pool to an empty slot
+    ///     [X]  Pushes pool to end of list when trying to add to an occupied slot
     function testCorrectness_addPoolRequiresRole(address user_) public {
         vm.assume(user_ != address(this));
 
@@ -352,11 +327,11 @@ contract DistributorTest is Test {
         assertEq(distributor.pools(2), address(gohm));
     }
 
-    /// setAdjustment()
-    /// []  Can only be called by an address with the distributor_admin role
-    /// []  Cannot violate adjustment limit
-    /// []  Correctly sets adjustment
-    function testCorrectness_setAdjustmentRequiresRole(address user_) public {
+    /// [X]  setRewardRate
+    ///     [X]  Can only be called by an address with the distributor_admin role
+    ///     [X]  Correctly sets reward rate
+
+    function testCorrectness_setRewardRateRequiresRole(address user_) public {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
@@ -366,36 +341,12 @@ contract DistributorTest is Test {
         vm.expectRevert(err);
 
         vm.prank(user_);
-        distributor.setAdjustment(false, 1100, 1100);
+        distributor.setRewardRate(0);
     }
 
-    function testCorrectness_cannotAdjustmentLimit() public {
-        bytes memory err = abi.encodeWithSelector(
-            Distributor_AdjustmentLimit.selector
-        );
-        vm.expectRevert(err);
-
-        distributor.setAdjustment(true, 50, 1050);
-    }
-
-    /* What conditions cause this in reality?
-    function test_setAdjustmentAdjustmentUnderflow() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(Distributor_AdjustmentUnderflow.selector)
-        );
-        vm.prank(address(kernel));
-        distributor.setAdjustment(false, 2000, 2000);
-    }
-    */
-
-    function testCorrectness_setAdjustment() public {
-        distributor.setAdjustment(true, 20, 1500);
-
-        (bool add, uint256 rate, uint256 target) = distributor.adjustment();
-
-        assertEq(add, true);
-        assertEq(rate, 20);
-        assertEq(target, 1500);
+    function testCorrectness_setsRewardRate(uint256 amount_) public {
+        distributor.setRewardRate(amount_);
+        assertEq(distributor.rewardRate(), amount_);
     }
 
     /* ========== USER STORY TESTS ========== */
@@ -406,9 +357,7 @@ contract DistributorTest is Test {
         assertGt(end, block.timestamp);
 
         uint256 balanceBefore = ohm.balanceOf(address(staking));
-        bytes memory err = abi.encodeWithSelector(
-            Distributor_NoRebaseOccurred.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Distributor_NoRebaseOccurred.selector);
         vm.expectRevert(err);
 
         distributor.triggerRebase();
@@ -439,9 +388,7 @@ contract DistributorTest is Test {
 
         /// Move forward a little bit
         vm.warp(2500);
-        bytes memory err = abi.encodeWithSelector(
-            Distributor_NoRebaseOccurred.selector
-        );
+        bytes memory err = abi.encodeWithSelector(Distributor_NoRebaseOccurred.selector);
         vm.expectRevert(err);
 
         distributor.triggerRebase();
@@ -458,9 +405,7 @@ contract DistributorTest is Test {
         (uint256 reserve0, uint256 reserve1, ) = ohmDai.getReserves();
         uint256 priceBefore = reserve1 / (reserve0 * 1000000000);
         uint256 balanceBefore = ohm.balanceOf(address(ohmDai));
-        uint256 expectedBalanceAfter = balanceBefore +
-            (balanceBefore * 1000) /
-            1_000_000;
+        uint256 expectedBalanceAfter = balanceBefore + (balanceBefore * 1000) / 1_000_000;
 
         distributor.triggerRebase();
 
@@ -482,19 +427,15 @@ contract DistributorTest is Test {
         distributor.setPools(newPools);
         vm.warp(2200);
 
-        (uint256 ohmDaiReserve0, uint256 ohmDaiReserve1, ) = ohmDai
-            .getReserves();
-        uint256 ohmDaiPriceBefore = ohmDaiReserve1 /
-            (ohmDaiReserve0 * 1000000000);
+        (uint256 ohmDaiReserve0, uint256 ohmDaiReserve1, ) = ohmDai.getReserves();
+        uint256 ohmDaiPriceBefore = ohmDaiReserve1 / (ohmDaiReserve0 * 1000000000);
         uint256 ohmDaiBalanceBefore = ohm.balanceOf(address(ohmDai));
         uint256 expectedOhmDaiBalanceAfter = ohmDaiBalanceBefore +
             (ohmDaiBalanceBefore * 1000) /
             1_000_000;
 
-        (uint256 ohmWethReserve0, uint256 ohmWethReserve1, ) = ohmWeth
-            .getReserves();
-        uint256 ohmWethPriceBefore = ohmWethReserve1 /
-            (ohmWethReserve0 * 1000000000);
+        (uint256 ohmWethReserve0, uint256 ohmWethReserve1, ) = ohmWeth.getReserves();
+        uint256 ohmWethPriceBefore = ohmWethReserve1 / (ohmWethReserve0 * 1000000000);
         uint256 ohmWethBalanceBefore = ohm.balanceOf(address(ohmWeth));
         uint256 expectedOhmWethBalanceAfter = ohmWethBalanceBefore +
             (ohmWethBalanceBefore * 1000) /
@@ -503,13 +444,11 @@ contract DistributorTest is Test {
         distributor.triggerRebase();
 
         (ohmDaiReserve0, ohmDaiReserve1, ) = ohmDai.getReserves();
-        uint256 ohmDaiPriceAfter = ohmDaiReserve1 /
-            (ohmDaiReserve0 * 1000000000);
+        uint256 ohmDaiPriceAfter = ohmDaiReserve1 / (ohmDaiReserve0 * 1000000000);
         uint256 ohmDaiBalanceAfter = ohm.balanceOf(address(ohmDai));
 
         (ohmWethReserve0, ohmWethReserve1, ) = ohmWeth.getReserves();
-        uint256 ohmWethPriceAfter = ohmWethReserve1 /
-            (ohmWethReserve0 * 1000000000);
+        uint256 ohmWethPriceAfter = ohmWethReserve1 / (ohmWethReserve0 * 1000000000);
         uint256 ohmWethBalanceAfter = ohm.balanceOf(address(ohmWeth));
 
         assertGt(ohmDaiBalanceAfter, ohmDaiBalanceBefore);

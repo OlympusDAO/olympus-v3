@@ -22,13 +22,6 @@ interface IStaking {
     ) external returns (uint256);
 }
 
-/// Define Inline Data Structures
-struct Adjust {
-    bool add; // whether to add or subtract from the reward rate
-    uint256 rate; // the amount to add or subtract per epoch
-    uint256 target; // the target rate to adjust the reward rate to
-}
-
 /// Define Custom Errors
 error Distributor_InvalidConstruction();
 error Distributor_NoRebaseOccurred();
@@ -52,7 +45,6 @@ contract Distributor is Policy {
     address private immutable staking; // OHM Staking Contract
 
     /// Policy state
-    Adjust public adjustment; // Information about adjusting reward rate
     address[] public pools; // Liquidity pools to receive rewards
     uint256 public rewardRate; // % to increase balances per epoch
     uint256 public bounty; // A bounty for keepers to call the triggerRebase() function
@@ -82,11 +74,7 @@ contract Distributor is Policy {
     /* ========== FRAMEWORK CONFIGURATION ========== */
 
     /// @inheritdoc Policy
-    function configureDependencies()
-        external
-        override
-        returns (Keycode[] memory dependencies)
-    {
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("MINTR");
         dependencies[1] = toKeycode("TRSRY");
@@ -146,10 +134,6 @@ contract Distributor is Policy {
             }
         }
 
-        if (adjustment.rate != 0) {
-            _adjust();
-        }
-
         unlockRebase = false;
     }
 
@@ -162,38 +146,6 @@ contract Distributor is Policy {
 
         return bounty;
     }
-
-    /* ========== INTERNAL FUNCTIONS ========== */
-
-    function _adjust() internal {
-        if (adjustment.add) {
-            // if rate should increase
-            rewardRate += adjustment.rate; // raise rate
-
-            if (rewardRate >= adjustment.target) {
-                // if target met
-                adjustment.rate = 0; // turn off adjustment
-                rewardRate = adjustment.target; // set to target
-            }
-        } else {
-            // if rate should decrease
-            if (rewardRate > adjustment.rate) {
-                // protect from underflow
-                rewardRate -= adjustment.rate; // lower rate
-            } else {
-                rewardRate = 0;
-            }
-
-            if (rewardRate <= adjustment.target) {
-                // if target met
-                adjustment.rate = 0; // turn off adjustment
-                rewardRate = adjustment.target; // set to target
-            }
-        }
-    }
-
-    // TODO: Pull OHM supply and current reserves from Treasury, confirm we are not minting more than reserves
-    function _checkExcessReserves(uint256 amount_) internal returns (bool) {}
 
     /* ========== VIEW FUNCTIONS ========== */
 
@@ -216,10 +168,7 @@ contract Distributor is Policy {
     /// @notice Sets the Uniswap V2 pools to be minted into
     /// @param  pools_ The array of Uniswap V2 pools.
     /// @dev    This function is only available to an authorized user.
-    function setPools(address[] calldata pools_)
-        external
-        onlyRole("distributor_admin")
-    {
+    function setPools(address[] calldata pools_) external onlyRole("distributor_admin") {
         pools = pools_;
     }
 
@@ -227,10 +176,7 @@ contract Distributor is Policy {
     /// @param  index_ The index in the pools array of the liquidity pool to remove.
     /// @param  pool_ The address of the liquidity pool to remove.
     /// @dev    This function is only available to an authorized user.
-    function removePool(uint256 index_, address pool_)
-        external
-        onlyRole("distributor_admin")
-    {
+    function removePool(uint256 index_, address pool_) external onlyRole("distributor_admin") {
         if (pools[index_] != pool_) revert Distributor_SanityCheck();
         pools[index_] = address(0);
     }
@@ -238,10 +184,7 @@ contract Distributor is Policy {
     /// @notice Adds a liquidity pool to the list of pools to be minted into
     /// @param  index_ The index in the pools array to add the liquidity pool to.
     /// @param  pool_ The address of the liquidity pool to add.
-    function addPool(uint256 index_, address pool_)
-        external
-        onlyRole("distributor_admin")
-    {
+    function addPool(uint256 index_, address pool_) external onlyRole("distributor_admin") {
         // we want to overwrite slots where possible
         if (pools[index_] == address(0)) {
             pools[index_] = pool_;
@@ -251,20 +194,7 @@ contract Distributor is Policy {
         }
     }
 
-    /// @notice Sets an adjustment to the reward rate.
-    /// @param  add_ If reward rate should increase
-    /// @param  rate_ Amount to add or decrease reward rate by
-    /// @param  target_ Target reward rate
-    function setAdjustment(
-        bool add_,
-        uint256 rate_,
-        uint256 target_
-    ) external onlyRole("distributor_admin") {
-        if (rate_ > (rewardRate * 25) / 1000)
-            revert Distributor_AdjustmentLimit();
-        if (!add_ && rate_ > rewardRate)
-            revert Distributor_AdjustmentUnderflow();
-
-        adjustment = Adjust({add: add_, rate: rate_, target: target_});
+    function setRewardRate(uint256 newRewardRate_) external onlyRole("distributor_admin") {
+        rewardRate = newRewardRate_;
     }
 }
