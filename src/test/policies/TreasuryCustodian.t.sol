@@ -16,6 +16,7 @@ import "src/Kernel.sol";
 contract TreasuryCustodianTest is Test {
     UserFactory public userCreator;
     address internal randomWallet;
+    address internal guardian;
 
     Kernel internal kernel;
 
@@ -31,6 +32,7 @@ contract TreasuryCustodianTest is Test {
         /// Create Voters
         address[] memory users = userCreator.create(2);
         randomWallet = users[0];
+        guardian = users[1];
 
         ngmi = new MockERC20("not gonna make it", "NGMI", 18);
 
@@ -47,7 +49,7 @@ contract TreasuryCustodianTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(custodian));
 
         /// Configure access control
-        ROLES.grantRole(toRole("custodian"), address(this));
+        ROLES.grantRole(toRole("custodian"), guardian);
     }
 
     function test_UnauthorizedChangeDebt(uint256 amount_) public {
@@ -62,21 +64,25 @@ contract TreasuryCustodianTest is Test {
     }
 
     function test_ChangeDebt(uint256 amount_) public {
+        vm.prank(guardian);
         custodian.increaseDebt(ngmi, randomWallet, amount_);
         assertEq(TRSRY.reserveDebt(ngmi, randomWallet), amount_);
         assertEq(TRSRY.totalDebt(ngmi), amount_);
 
+        vm.prank(guardian);
         custodian.decreaseDebt(ngmi, randomWallet, amount_);
         assertEq(TRSRY.reserveDebt(ngmi, randomWallet), 0);
         assertEq(TRSRY.totalDebt(ngmi), 0);
     }
 
     function test_GrantWithdrawerApproval(uint256 amount_) public {
+        vm.prank(guardian);
         custodian.grantWithdrawerApproval(randomWallet, ngmi, amount_);
         assertEq(TRSRY.withdrawApproval(randomWallet, ngmi), amount_);
     }
 
     function test_GrantDebtorApproval(uint256 amount_) public {
+        vm.prank(guardian);
         custodian.grantDebtorApproval(randomWallet, ngmi, amount_);
         assertEq(TRSRY.debtApproval(randomWallet, ngmi), amount_);
     }
@@ -98,6 +104,7 @@ contract TreasuryCustodianTest is Test {
         ERC20[] memory tokens = new ERC20[](1);
         tokens[0] = ngmi;
 
+        vm.prank(guardian);
         custodian.revokePolicyApprovals(dummy, tokens);
         assertEq(TRSRY.withdrawApproval(dummy, ngmi), 0);
     }

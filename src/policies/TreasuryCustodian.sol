@@ -53,7 +53,7 @@ contract TreasuryCustodian is Policy {
         ERC20 token_,
         uint256 amount_
     ) external {
-        ROLES.onlyRole("custodian");
+        ROLES.onlyRole("custodian", msg.sender);
         TRSRY.increaseWithdrawerApproval(for_, token_, amount_);
     }
 
@@ -62,7 +62,7 @@ contract TreasuryCustodian is Policy {
         ERC20 token_,
         uint256 amount_
     ) external {
-        ROLES.onlyRole("custodian");
+        ROLES.onlyRole("custodian", msg.sender);
         TRSRY.increaseDebtorApproval(for_, token_, amount_);
     }
 
@@ -93,7 +93,7 @@ contract TreasuryCustodian is Policy {
         address debtor_,
         uint256 amount_
     ) external {
-        ROLES.onlyRole("custodian");
+        ROLES.onlyRole("custodian", msg.sender);
         uint256 debt = TRSRY.reserveDebt(token_, debtor_);
         TRSRY.setDebt(debtor_, token_, debt + amount_);
     }
@@ -103,7 +103,7 @@ contract TreasuryCustodian is Policy {
         address debtor_,
         uint256 amount_
     ) external {
-        ROLES.onlyRole("custodian");
+        ROLES.onlyRole("custodian", msg.sender);
         uint256 debt = TRSRY.reserveDebt(token_, debtor_);
         TRSRY.setDebt(debtor_, token_, debt - amount_);
     }

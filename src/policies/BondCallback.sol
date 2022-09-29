@@ -79,7 +79,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
 
     /// @inheritdoc IBondCallback
     function whitelist(address teller_, uint256 id_) external override {
-        ROLES.onlyRole("callback_whitelist");
+        ROLES.onlyRole("callback_whitelist", msg.sender);
 
         approvedMarkets[teller_][id_] = true;
 
@@ -99,7 +99,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     /// @param  teller_ Address of the Teller contract which serves the market
     /// @param  id_     ID of the market to remove from whitelist
     function blacklist(address teller_, uint256 id_) external {
-        ROLES.onlyRole("callback_whitelist");
+        ROLES.onlyRole("callback_whitelist", msg.sender);
 
         approvedMarkets[teller_][id_] = false;
     }
@@ -156,7 +156,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     /// @notice Send tokens to the TRSRY in a batch
     /// @param  tokens_ - Array of tokens to send
     function batchToTreasury(ERC20[] memory tokens_) external {
-        ROLES.onlyRole("callback_admin");
+        ROLES.onlyRole("callback_admin", msg.sender);
 
         ERC20 token;
         uint256 balance;
@@ -196,7 +196,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     /// @notice Must be set before the callback is used
     /// @param  operator_ - Address of the Operator contract
     function setOperator(Operator operator_) external {
-        ROLES.onlyRole("callback_admin");
+        ROLES.onlyRole("callback_admin", msg.sender);
 
         if (address(operator_) == address(0)) revert Callback_InvalidParams();
         operator = operator_;

@@ -78,9 +78,9 @@ contract OlympusRoles is Module {
 
     /// @notice "Modifier" to restrict policy function access to certain addresses with a role.
     /// @dev    Roles are defined in the policy and set by the ROLES admin.
-    function onlyRole(bytes32 role_) external {
+    function onlyRole(bytes32 role_, address caller_) external {
         Role role = toRole(role_);
-        if (!hasRole[msg.sender][role]) revert ROLES_OnlyRole(role);
+        if (!hasRole[caller_][role]) revert ROLES_OnlyRole(role);
     }
 
     /// @notice Function to grant policy-defined roles to some address. Can only be called by admin.
@@ -89,8 +89,11 @@ contract OlympusRoles is Module {
         if (hasRole[addr_][role_]) revert ROLES_AddressAlreadyHasRole(addr_, role_);
 
         ensureValidRole(role_);
+
+        // Activate this role
         if (!isRole[role_]) isRole[role_] = true;
 
+        // Grant role to the address
         hasRole[addr_][role_] = true;
 
         emit RoleGranted(role_, addr_);
