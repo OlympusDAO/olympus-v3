@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
-import {OlympusRoles} from "src/modules/ROLES.sol";
+import {OlympusRoles, RolesConsumer} from "src/modules/ROLES.sol";
 import "src/Kernel.sol";
 
 // ERRORS
@@ -13,11 +13,12 @@ error PolicyNotFound();
 
 // Generic contract to allow authorized contracts to interact with treasury
 // Use cases include setting and removing approvals, as well as allocating assets for yield
-contract TreasuryCustodian is Policy {
+contract TreasuryCustodian is Policy, RolesConsumer {
     event ApprovalRevoked(address indexed policy_, ERC20[] tokens_);
 
     OlympusTreasury public TRSRY;
-    OlympusRoles public ROLES;
+
+    //OlympusRoles public ROLES;
 
     /*//////////////////////////////////////////////////////////////
                             POLICY INTERFACE
@@ -31,6 +32,8 @@ contract TreasuryCustodian is Policy {
 
         TRSRY = OlympusTreasury(getModuleAddress(dependencies[0]));
         ROLES = OlympusRoles(getModuleAddress(dependencies[1]));
+
+        _setRoles(ROLES);
     }
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {
@@ -52,8 +55,8 @@ contract TreasuryCustodian is Policy {
         address for_,
         ERC20 token_,
         uint256 amount_
-    ) external {
-        ROLES.requireRole("custodian", msg.sender);
+    ) external onlyRole("custodian") {
+        //ROLES.requireRole("custodian", msg.sender);
         TRSRY.increaseWithdrawerApproval(for_, token_, amount_);
     }
 
