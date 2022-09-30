@@ -7,8 +7,8 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {RolesAdmin} from "policies/RolesAdmin.sol";
-import "modules/ROLES.sol";
+import "policies/RolesAdmin.sol";
+//import "modules/ROLES.sol";
 
 import "src/Kernel.sol";
 
@@ -17,6 +17,8 @@ contract TreasuryCustodianTest is Test {
     address internal admin;
     address internal testUser;
     address internal newAdmin;
+
+    bytes32 internal testRole = "test_role";
 
     Kernel internal kernel;
     OlympusRoles internal ROLES;
@@ -35,22 +37,57 @@ contract TreasuryCustodianTest is Test {
         rolesAdmin = new RolesAdmin(kernel);
 
         kernel.executeAction(Actions.InstallModule, address(ROLES));
-
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // NOTE: This test contract is the rolesAdmin, since it is the deployer
-        address admin = address(this);
+        admin = address(this);
     }
 
-    function testCorrectness_OnlyAdmin() public {}
+    function testCorrectness_OnlyAdmin() public {
+        bytes memory err = abi.encodeWithSelector(OnlyAdmin.selector);
+        vm.expectRevert(err);
+        vm.prank(testUser);
+        rolesAdmin.grantRole(testRole, testUser);
 
-    function testCorrectness_GrantRole() public {}
+        vm.prank(admin);
+        rolesAdmin.grantRole(testRole, testUser);
 
-    function testCorrectness_RevokeRole() public {}
+        assertTrue(ROLES.hasRole(testUser, toRole(testRole)));
+    }
+
+    function testCorrectness_GrantRole() public {
+        // Give role to test user
+        vm.prank(admin);
+        rolesAdmin.grantRole(testRole, testUser);
+
+        assertTrue(ROLES.hasRole(testUser, toRole(testRole)));
+    }
+
+    function testCorrectness_RevokeRole() public {
+        // Give then remove role from test user
+        vm.startPrank(admin);
+        rolesAdmin.grantRole(testRole, testUser);
+        rolesAdmin.revokeRole(testRole, testUser);
+        vm.stopPrank();
+
+        assertFalse(ROLES.hasRole(testUser, toRole(testRole)));
+    }
 
     function testCorrectness_ChangeAdmin() public {
         // try pulling admin without push
+        bytes memory err = abi.encodeWithSelector(OnlyNewAdmin.selector);
+        vm.expectRevert(err);
+        vm.prank(newAdmin);
+        rolesAdmin.pullNewAdmin();
+
         // push new admin
+        vm.prank(admin);
+        rolesAdmin.pushNewAdmin(newAdmin);
+
         // pull new admin
+        vm.prank(newAdmin);
+        rolesAdmin.pullNewAdmin();
+
+        assertEq(rolesAdmin.admin(), newAdmin);
     }
 }

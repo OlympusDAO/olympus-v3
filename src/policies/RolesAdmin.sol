@@ -16,11 +16,11 @@ contract RolesAdmin is Policy {
     OlympusRoles public ROLES;
 
     constructor(Kernel _kernel) Policy(_kernel) {
-        rolesAdmin = msg.sender;
+        admin = msg.sender;
     }
 
     modifier onlyAdmin() {
-        if (msg.sender != rolesAdmin) revert OnlyAdmin();
+        if (msg.sender != admin) revert OnlyAdmin();
         _;
     }
 
@@ -47,11 +47,11 @@ contract RolesAdmin is Policy {
     //                             Policy Variables                                //
     /////////////////////////////////////////////////////////////////////////////////
 
-    event RolesAdminPushed(address indexed newAdmin_);
-    event RolesAdminPulled(address indexed newAdmin_);
+    event NewAdminPushed(address indexed newAdmin_);
+    event NewAdminPulled(address indexed newAdmin_);
 
     /// @notice Special role that is responsible for assigning policy-defined roles to addresses.
-    address public rolesAdmin;
+    address public admin;
 
     /// @notice Proposed new admin. Address must call `pullRolesAdmin` to become the new roles admin.
     address public newAdmin;
@@ -64,15 +64,15 @@ contract RolesAdmin is Policy {
         ROLES.removeRole(toRole(role_), wallet_);
     }
 
-    function pushRolesAdmin(address newAdmin_) external onlyAdmin {
+    function pushNewAdmin(address newAdmin_) external onlyAdmin {
         newAdmin = newAdmin_;
-        emit RolesAdminPushed(newAdmin_);
+        emit NewAdminPushed(newAdmin_);
     }
 
-    function pullRolesAdmin() external {
+    function pullNewAdmin() external {
         if (msg.sender != newAdmin) revert OnlyNewAdmin();
-        rolesAdmin = newAdmin;
+        admin = newAdmin;
         newAdmin = address(0);
-        emit RolesAdminPulled(rolesAdmin);
+        emit NewAdminPulled(admin);
     }
 }
