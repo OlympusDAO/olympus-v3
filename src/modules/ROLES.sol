@@ -19,6 +19,8 @@ function fromRole(Role role_) pure returns (bytes32) {
     return Role.unwrap(role_);
 }
 
+// TODO create abstract with modifier?
+
 /// @notice Module that holds multisig roles needed by various policies.
 contract OlympusRoles is Module {
     event RoleGranted(Role indexed role_, address indexed addr_);
@@ -50,8 +52,8 @@ contract OlympusRoles is Module {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice "Modifier" to restrict policy function access to certain addresses with a role.
-    /// @dev    Roles are defined in the policy and set by the ROLES admin.
-    function requireRole(bytes32 role_, address caller_) external permissioned {
+    /// @dev    Roles are defined in the policy and granted by the ROLES admin.
+    function requireRole(bytes32 role_, address caller_) external view {
         Role role = toRole(role_);
         if (!hasRole[caller_][role]) revert ROLES_RequireRole(role);
     }
@@ -77,7 +79,7 @@ contract OlympusRoles is Module {
         emit RoleRevoked(role_, addr_);
     }
 
-    /// @notice Function that checks
+    /// @notice Function that checks if role is valid (all lower case)
     function ensureValidRole(Role role_) public pure {
         bytes32 unwrapped = Role.unwrap(role_);
 

@@ -84,9 +84,8 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](2);
-        permissions[0] = Permissions(ROLES.KEYCODE(), ROLES.requireRole.selector);
-        permissions[1] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
+        permissions = new Permissions[](1);
+        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
     }
 
     /*//////////////////////////////////////////////////////////////

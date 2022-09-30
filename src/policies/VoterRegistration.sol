@@ -34,10 +34,9 @@ contract VoterRegistration is Policy {
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](3);
-        permissions[0] = Permissions(ROLES.KEYCODE(), ROLES.requireRole.selector);
-        permissions[1] = Permissions(VOTES.KEYCODE(), VOTES.mintTo.selector);
-        permissions[2] = Permissions(VOTES.KEYCODE(), VOTES.burnFrom.selector);
+        permissions = new Permissions[](2);
+        permissions[0] = Permissions(VOTES.KEYCODE(), VOTES.mintTo.selector);
+        permissions[1] = Permissions(VOTES.KEYCODE(), VOTES.burnFrom.selector);
     }
 
     /*//////////////////////////////////////////////////////////////

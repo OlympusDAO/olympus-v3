@@ -15,7 +15,6 @@ import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
 import "src/Kernel.sol";
 
 contract TreasuryCustodianTest is Test {
-    UserFactory public userCreator;
     address internal randomWallet;
     address internal guardian;
 
@@ -29,10 +28,7 @@ contract TreasuryCustodianTest is Test {
     MockERC20 public ngmi;
 
     function setUp() public {
-        userCreator = new UserFactory();
-
-        /// Create Voters
-        address[] memory users = userCreator.create(2);
+        address[] memory users = (new UserFactory()).create(2);
         randomWallet = users[0];
         guardian = users[1];
 

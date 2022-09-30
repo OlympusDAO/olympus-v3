@@ -182,19 +182,17 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         Keycode RANGE_KEYCODE = RANGE.KEYCODE();
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
-        Keycode ROLES_KEYCODE = ROLES.KEYCODE();
 
-        requests = new Permissions[](10);
-        requests[0] = Permissions(ROLES_KEYCODE, ROLES.requireRole.selector);
-        requests[1] = Permissions(RANGE_KEYCODE, RANGE.updateCapacity.selector);
-        requests[2] = Permissions(RANGE_KEYCODE, RANGE.updateMarket.selector);
-        requests[3] = Permissions(RANGE_KEYCODE, RANGE.updatePrices.selector);
-        requests[4] = Permissions(RANGE_KEYCODE, RANGE.regenerate.selector);
-        requests[5] = Permissions(RANGE_KEYCODE, RANGE.setSpreads.selector);
-        requests[6] = Permissions(RANGE_KEYCODE, RANGE.setThresholdFactor.selector);
-        requests[7] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
-        requests[8] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        requests[9] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests = new Permissions[](9);
+        requests[0] = Permissions(RANGE_KEYCODE, RANGE.updateCapacity.selector);
+        requests[1] = Permissions(RANGE_KEYCODE, RANGE.updateMarket.selector);
+        requests[2] = Permissions(RANGE_KEYCODE, RANGE.updatePrices.selector);
+        requests[3] = Permissions(RANGE_KEYCODE, RANGE.regenerate.selector);
+        requests[4] = Permissions(RANGE_KEYCODE, RANGE.setSpreads.selector);
+        requests[5] = Permissions(RANGE_KEYCODE, RANGE.setThresholdFactor.selector);
+        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
+        requests[7] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[8] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
     /// @dev Checks to see if the policy is active and ensures the range data isn't stale before performing market operations.

@@ -36,13 +36,12 @@ contract TreasuryCustodian is Policy {
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
 
-        requests = new Permissions[](6);
-        requests[0] = Permissions(ROLES.KEYCODE(), ROLES.requireRole.selector);
-        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
-        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawerApproval.selector);
-        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.increaseDebtorApproval.selector);
-        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseDebtorApproval.selector);
-        requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
+        requests = new Permissions[](5);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawerApproval.selector);
+        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseDebtorApproval.selector);
+        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseDebtorApproval.selector);
+        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
     }
 
     /*//////////////////////////////////////////////////////////////

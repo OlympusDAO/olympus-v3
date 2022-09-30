@@ -32,11 +32,10 @@ contract OlympusPriceConfig is Policy {
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](4);
-        permissions[0] = Permissions(ROLES.KEYCODE(), ROLES.requireRole.selector);
-        permissions[1] = Permissions(PRICE.KEYCODE(), PRICE.initialize.selector);
-        permissions[2] = Permissions(PRICE.KEYCODE(), PRICE.changeMovingAverageDuration.selector);
-        permissions[3] = Permissions(PRICE.KEYCODE(), PRICE.changeObservationFrequency.selector);
+        permissions = new Permissions[](3);
+        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.initialize.selector);
+        permissions[1] = Permissions(PRICE.KEYCODE(), PRICE.changeMovingAverageDuration.selector);
+        permissions[2] = Permissions(PRICE.KEYCODE(), PRICE.changeObservationFrequency.selector);
     }
 
     /* ========== ADMIN FUNCTIONS ========== */

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {Role, toRole, OlympusRoles} from "modules/ROLES.sol";
+import {OlympusRoles, toRole, OlympusRoles} from "modules/ROLES.sol";
 import "../Kernel.sol";
 
 error OnlyAdmin();
@@ -38,10 +38,9 @@ contract RolesAdmin is Policy {
         onlyKernel
         returns (Permissions[] memory requests)
     {
-        requests = new Permissions[](3);
-        requests[0] = Permissions(toKeycode("ROLES"), ROLES.requireRole.selector);
-        requests[1] = Permissions(toKeycode("ROLES"), ROLES.saveRole.selector);
-        requests[2] = Permissions(toKeycode("ROLES"), ROLES.removeRole.selector);
+        requests = new Permissions[](2);
+        requests[0] = Permissions(toKeycode("ROLES"), ROLES.saveRole.selector);
+        requests[1] = Permissions(toKeycode("ROLES"), ROLES.removeRole.selector);
     }
 
     /////////////////////////////////////////////////////////////////////////////////
