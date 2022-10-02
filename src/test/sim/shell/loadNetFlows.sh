@@ -3,7 +3,7 @@
 
 # Create filter from passed in seed
 # filter=$(echo "$1" | tr -d '\')
-filter=".[] | { key: (.key | ltrimstr(\"${1}_\") | tonumber), day: (.day | tonumber), netflow: (.netflow | tonumber)}"
+filter=".[] | if .seed==\"${1}\" then { key: (.key | ltrimstr(\"${1}_\") | tonumber), day: (.day | tonumber), netflow: (.netflow | tonumber)} else empty end"
 
 # Get query result from provided json file
 netflows=$(jq -c "$filter" $2)

@@ -235,6 +235,9 @@ abstract contract RangeSim is Test {
     /// @notice Number of epochs between rebalancing the liquidity pool
     uint32 internal REBALANCE_FREQUENCY;
 
+    /// @notice Max percent of treasury to use for rebalancing liquidity
+    uint32 internal MAX_OUTFLOW_RATE;
+
     /* ========== SETUP ========== */
 
     function setUp() public {
@@ -248,6 +251,7 @@ abstract contract RangeSim is Test {
         EPOCHS = uint32(vm.envUint("EPOCHS"));
         EPOCH_DURATION = uint32(vm.envUint("EPOCH_DURATION"));
         REBALANCE_FREQUENCY = uint32(vm.envUint("REBALANCE_FREQUENCY"));
+        MAX_OUTFLOW_RATE = uint32(vm.envUint("MAX_OUTFLOW_RATE"));
 
         // Create accounts for sim
         userCreator = new UserFactory();
@@ -575,7 +579,7 @@ abstract contract RangeSim is Test {
 
         // Mint OHM to the market account
         vm.startPrank(address(minter));
-        ohm.mint(market, (((ohm.balanceOf(market) * 8) / 10) * perc) / 1e6);
+        ohm.mint(market, (ohm.balanceOf(market) * perc) / 1e6);
 
         // Mint OHM to the liquidity pool and sync the balances
         uint256 poolBalance = ohm.balanceOf(address(pool));
@@ -688,8 +692,9 @@ abstract contract RangeSim is Test {
         uint256 reservesInTotal = reservesInTreasury + reservesInLiquidity;
 
         uint32 liquidityRatio = uint32((reservesInLiquidity * 1e4) / reservesInTotal);
+        console2.log("Current Liq Ratio: ", liquidityRatio);
 
-        // Get the target ratio
+        // Cache the target ratio and the max ratio
         uint32 targetRatio = uint32(params[key].maxLiqRatio);
 
         // Compare ratios and calculate swap amount
@@ -700,12 +705,21 @@ abstract contract RangeSim is Test {
         if (liquidityRatio < targetRatio) {
             // Sell reserves into the liquidity pool
             uint256 amountIn = (reservesInTotal * targetRatio) / 1e4 - reservesInLiquidity;
+            uint256 maxIn = reservesInTreasury * MAX_OUTFLOW_RATE / 1e4;
+            amountIn = amountIn > maxIn ? maxIn : amountIn;
             if (amountIn > price.getCurrentPrice() / 1e9) swap(address(treasury), true, amountIn);
-        } else if (liquidityRatio > targetRatio) {
+        } else if (liquidityRatio > params[key].maxLiqRatio) {
             // Buy reserves from the liquidity pool
             uint256 amountOut = reservesInLiquidity - (reservesInTotal * targetRatio) / 1e4;
             if (amountOut > price.getCurrentPrice() / 1e9) swap(address(treasury), false, amountOut);
         }
+
+        reservesInTreasury = reserve.balanceOf(address(treasury));
+        reservesInLiquidity = reserve.balanceOf(address(pool));
+        reservesInTotal = reservesInTreasury + reservesInLiquidity;
+
+        liquidityRatio = uint32((reservesInLiquidity * 1e4) / reservesInTotal);
+        console2.log("New Liq Ratio: ", liquidityRatio);
     }
 
     function marketAction(int256 netflow) internal {
@@ -1012,17 +1026,19 @@ abstract contract RangeSim is Test {
         rangeSetup(key);
 
         // Initialize variables for tracking status
-        uint32 lastRebalance = uint32(block.timestamp);
+        
+        uint32 step = 1 hours;
         uint32 epochs = EPOCHS; // cache
         uint32 duration = EPOCH_DURATION; // cache
-        uint32 rebalance_frequency = REBALANCE_FREQUENCY; // cache
+        uint32 rebalance_frequency = REBALANCE_FREQUENCY / duration; // cache
         bool dynamicRR = params[key].dynamicRR; // cache
         SimIO.Result[] memory results = new SimIO.Result[](epochs);
         int256 netflow;
+        uint32 lastRebalance;
 
-        uint32 steps = duration / 3600; // 1 hour steps
-        vm.warp(block.timestamp + duration);
-        duration = 3600;
+        uint32 steps = duration / step;
+        vm.warp(block.timestamp + duration); // Move forward one epoch to allow beating the heart at the start
+        duration = duration / steps;
         // Run simulation
         for (uint32 e; e < epochs; ++e) {
             console2.log("Epoch", e);
@@ -1032,30 +1048,30 @@ abstract contract RangeSim is Test {
             // 1. Perform rebase
             rebase(dynamicRR);
 
+            // // 2. Perform rebalance
+            // if (e > lastRebalance + rebalance_frequency) {
+            //     console2.log("Rebalance liquidity");
+            //     rebalanceLiquidity(key);
+            //     lastRebalance = e;
+            // } 
+
             netflow = netflows[key][e] / int256(uint256(steps));
             for (uint32 i; i < steps; ++i) {
-                // 2. Update price and moving average data from LP pool
+                // 3. Update price and moving average data from LP pool
                 updatePrice();
 
-                // 3. RBS Operations triggered only on the epoch
+                // 4. RBS Operations triggered only on the epoch
                 if (i == uint32(0)) heart.beat();
 
-                // 4. Implement market actions for net flows
+                // 5. Implement market actions for net flows
                 marketAction(netflow);
 
                 // Warp time forward
                 vm.warp(block.timestamp + duration);
             }
 
-            // 5. Rebalance liquidity if enough epochs have passed
             // 6. Store results for output
-            if (e > lastRebalance + rebalance_frequency) {
-                rebalanceLiquidity(key);
-                lastRebalance = e;
-                results[e] = getResult(e, true);
-            } else {
-                results[e] = getResult(e, false);
-            }
+            results[e] = getResult(e, e == lastRebalance);
         }
 
         // Write results to output file
