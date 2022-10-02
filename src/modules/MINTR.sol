@@ -4,8 +4,14 @@ pragma solidity 0.8.15;
 import {OlympusERC20Token as OHM} from "src/external/OlympusERC20.sol";
 import "src/Kernel.sol";
 
+interface MINTR_V1 {
+    function mintOhm(address to_, uint256 amount_) external;
+
+    function burnOhm(address from_, uint256 amount_) external;
+}
+
 /// @notice Wrapper for minting and burning functions of OHM token.
-contract OlympusMinter is Module {
+contract OlympusMinter is Module, MINTR_V1 {
     OHM public immutable ohm;
 
     /*//////////////////////////////////////////////////////////////
