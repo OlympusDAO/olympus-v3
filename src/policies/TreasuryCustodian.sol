@@ -32,8 +32,6 @@ contract TreasuryCustodian is Policy, RolesConsumer {
 
         TRSRY = OlympusTreasury(getModuleAddress(dependencies[0]));
         ROLES = OlympusRoles(getModuleAddress(dependencies[1]));
-
-        _setRoles(ROLES);
     }
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {

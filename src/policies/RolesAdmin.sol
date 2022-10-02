@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {OlympusRoles, toRole, OlympusRoles} from "modules/ROLES.sol";
+import {ROLES_V1} from "modules/ROLES.sol";
 import "../Kernel.sol";
 
 error OnlyAdmin();
@@ -13,7 +13,7 @@ contract RolesAdmin is Policy {
     //                         Kernel Policy Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
 
-    OlympusRoles public ROLES;
+    ROLES_V1 public ROLES;
 
     constructor(Kernel _kernel) Policy(_kernel) {
         admin = msg.sender;
@@ -28,7 +28,7 @@ contract RolesAdmin is Policy {
         dependencies = new Keycode[](1);
         dependencies[0] = toKeycode("ROLES");
 
-        ROLES = OlympusRoles(getModuleAddress(dependencies[0]));
+        ROLES = ROLES_V1(getModuleAddress(dependencies[0]));
     }
 
     function requestPermissions()
@@ -57,11 +57,11 @@ contract RolesAdmin is Policy {
     address public newAdmin;
 
     function grantRole(bytes32 role_, address wallet_) external onlyAdmin {
-        ROLES.saveRole(toRole(role_), wallet_);
+        ROLES.saveRole(role_, wallet_);
     }
 
     function revokeRole(bytes32 role_, address wallet_) external onlyAdmin {
-        ROLES.removeRole(toRole(role_), wallet_);
+        ROLES.removeRole(role_, wallet_);
     }
 
     function pushNewAdmin(address newAdmin_) external onlyAdmin {

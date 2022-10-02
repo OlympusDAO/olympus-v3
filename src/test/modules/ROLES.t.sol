@@ -6,7 +6,7 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import "src/modules/ROLES.sol";
+import {ROLES_V1, OlympusRoles} from "src/modules/ROLES.sol";
 import "src/Kernel.sol";
 
 contract ROLESTest is Test {
@@ -40,7 +40,7 @@ contract ROLESTest is Test {
     }
 
     function testCorrectness_SaveRole() public {
-        Role testRole = toRole("test_role");
+        bytes32 testRole = "test_role";
 
         // Give role to test user
         vm.prank(godmode);
@@ -50,7 +50,7 @@ contract ROLESTest is Test {
     }
 
     function testCorrectness_RemoveRole() public {
-        Role testRole = toRole("test_role");
+        bytes32 testRole = "test_role";
 
         // Give then remove role from test user
         vm.startPrank(godmode);
@@ -62,13 +62,13 @@ contract ROLESTest is Test {
     }
 
     function testCorrectness_EnsureValidRole() public {
-        ROLES.ensureValidRole(toRole("valid"));
+        ROLES.ensureValidRole("valid");
 
         bytes memory err = abi.encodeWithSelector(
-            ROLES_InvalidRole.selector,
-            toRole(bytes32("INVALID_ID"))
+            ROLES_V1.ROLES_InvalidRole.selector,
+            bytes32("INVALID_ID")
         );
         vm.expectRevert(err);
-        ROLES.ensureValidRole(toRole("INVALID_ID"));
+        ROLES.ensureValidRole("INVALID_ID");
     }
 }

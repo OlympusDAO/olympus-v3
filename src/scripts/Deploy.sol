@@ -16,7 +16,7 @@ import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
 import {OlympusInstructions} from "modules/INSTR.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
-import {OlympusRoles, Role, toRole} from "modules/ROLES.sol";
+import {OlympusRoles} from "modules/ROLES.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";

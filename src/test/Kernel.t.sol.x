@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
-import "src/modules/OlympusRoles.sol";
+import "src/modules/ROLES.sol";
 import "./mocks/KernelTestMocks.sol";
 import "src/Kernel.sol";
 
@@ -86,49 +86,6 @@ contract KernelTest is Test {
         err = abi.encodeWithSignature("InvalidKeycode(bytes5)", Keycode.wrap(""));
         vm.expectRevert(err);
         ensureValidKeycode(Keycode.wrap(bytes5("")));
-    }
-
-    function testCorrectness_EnsureValidRole() public {
-        ensureValidRole(Role.wrap("valid"));
-
-        err = abi.encodeWithSignature("InvalidRole(bytes32)", Role.wrap("INVALID_ID"));
-        vm.expectRevert(err);
-        ensureValidRole(Role.wrap(bytes32("INVALID_ID")));
-    }
-
-    function testCorrectness_GrantRole() public {
-        // Ensure role doesn't exist yet
-        assertFalse(kernel.isRole(Role.wrap("tester")));
-
-        err = abi.encodeWithSignature("Kernel_OnlyAdmin(address)", address(this));
-        vm.expectRevert(err);
-        kernel.grantRole(Role.wrap("tester"), multisig);
-
-        vm.prank(deployer);
-        kernel.grantRole(Role.wrap("tester"), multisig);
-        assertTrue(kernel.isRole(Role.wrap("tester")));
-        assertTrue(kernel.hasRole(multisig, Role.wrap("tester")));
-    }
-
-    function testCorrectness_RevokeRole() public {
-        Role testerRole = toRole("tester");
-
-        err = abi.encodeWithSignature("Kernel_OnlyAdmin(address)", address(this));
-        vm.expectRevert(err);
-        kernel.revokeRole(testerRole, deployer);
-
-        // TODO test role not existing
-
-        vm.startPrank(deployer);
-        kernel.grantRole(testerRole, multisig);
-        assertTrue(kernel.hasRole(multisig, testerRole));
-
-        kernel.revokeRole(testerRole, multisig);
-        assertFalse(kernel.hasRole(multisig, testerRole));
-
-        err = abi.encodeWithSelector(Kernel_AddressDoesNotHaveRole.selector, multisig, testerRole);
-        vm.expectRevert(err);
-        kernel.revokeRole(testerRole, multisig);
     }
 
     function testCorrectness_InitializeModule() public {
@@ -223,7 +180,7 @@ contract KernelTest is Test {
         _initModuleAndPolicy();
 
         // Test role-based auth for policy calls
-        Role testerRole = Role.wrap("tester");
+        bytes32 testerRole = Role.wrap("tester");
 
         vm.startPrank(deployer);
 
@@ -334,45 +291,6 @@ contract KernelTest is Test {
 
         vm.startPrank(deployer);
         kernel.executeAction(Actions.ChangeExecutor, address(multisig));
-    }
-
-    function testCorrectness_ChangeAdmin() public {
-        err = abi.encodeWithSignature("Kernel_OnlyExecutor(address)", address(this));
-        vm.expectRevert(err);
-        kernel.executeAction(Actions.ChangeAdmin, address(multisig));
-
-        vm.startPrank(deployer);
-
-        {
-            kernel.executeAction(Actions.InstallModule, address(MOCKY));
-            kernel.executeAction(Actions.ActivatePolicy, address(policy));
-            kernel.executeAction(Actions.ChangeAdmin, address(multisig));
-            vm.stopPrank();
-        }
-
-        vm.prank(multisig);
-
-        kernel.grantRole(Role.wrap("tester"), user);
-        vm.prank(user);
-        policy.callPermissionedFunction();
-
-        vm.prank(deployer);
-        kernel.executeAction(Actions.ChangeAdmin, address(user));
-
-        vm.startPrank(multisig);
-        err = abi.encodeWithSignature("Kernel_OnlyAdmin(address)", multisig);
-        vm.expectRevert(err);
-        kernel.grantRole(Role.wrap("tester"), multisig);
-        vm.stopPrank();
-
-        vm.prank(user);
-        kernel.revokeRole(Role.wrap("tester"), user);
-        assertFalse(kernel.hasRole(user, Role.wrap("tester")));
-
-        err = abi.encodeWithSignature("ROLES_requireRole(bytes32)", Role.wrap("tester"));
-        vm.expectRevert(err);
-        vm.prank(user);
-        policy.callPermissionedFunction();
     }
 
     function testCorrectness_MigrateKernel() public {
