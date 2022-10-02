@@ -45,7 +45,7 @@ contract InstructionsTest is Test {
     }
 
     function testRevert_InstructionsCannotBeEmpty() public {
-        vm.expectRevert(INSTR_InstructionsCannotBeEmpty.selector);
+        vm.expectRevert(INSTR_V1.INSTR_InstructionsCannotBeEmpty.selector);
 
         // create valid instructions
         Instruction[] memory instructions = new Instruction[](0);
@@ -59,7 +59,7 @@ contract InstructionsTest is Test {
         instructions[0] = Instruction(Actions.ChangeExecutor, address(governance));
         instructions[1] = Instruction(Actions.ActivatePolicy, address(governance));
 
-        vm.expectRevert(INSTR_InvalidChangeExecutorAction.selector);
+        vm.expectRevert(INSTR_V1.INSTR_InvalidChangeExecutorAction.selector);
         vm.prank(writer);
         instr.store(instructions);
     }

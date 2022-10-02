@@ -3,13 +3,19 @@ pragma solidity 0.8.15;
 
 import "src/Kernel.sol";
 
-error INSTR_InstructionsCannotBeEmpty();
-error INSTR_InvalidChangeExecutorAction();
-
-/// @notice Caches and executes batched instructions for protocol upgrades in the Kernel.
-contract OlympusInstructions is Module {
+interface INSTR_V1 {
     event InstructionsStored(uint256 instructionsId);
 
+    error INSTR_InstructionsCannotBeEmpty();
+    error INSTR_InvalidChangeExecutorAction();
+
+    function getInstructions(uint256 instructionsId_) external view returns (Instruction[] memory);
+
+    function store(Instruction[] calldata instructions_) external returns (uint256);
+}
+
+/// @notice Caches and executes batched instructions for protocol upgrades in the Kernel.
+contract OlympusInstructions is Module, INSTR_V1 {
     uint256 public totalInstructions;
     mapping(uint256 => Instruction[]) public storedInstructions;
 
