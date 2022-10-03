@@ -7,22 +7,25 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import "src/Kernel.sol";
 
 interface PRICE_V1 {
+    // EVENTS
     event NewObservation(uint256 timestamp_, uint256 price_, uint256 movingAverage_);
     event MovingAverageDurationChanged(uint48 movingAverageDuration_);
     event ObservationFrequencyChanged(uint48 observationFrequency_);
 
+    // ERRORS
     error Price_InvalidParams();
     error Price_NotInitialized();
     error Price_AlreadyInitialized();
     error Price_BadFeed(address priceFeed);
 
+    // FUNCTIONS
     function updateMovingAverage() external;
 
-    function getCurrentPrice() public view returns (uint256);
+    function getCurrentPrice() external view returns (uint256);
 
     function getLastPrice() external view returns (uint256);
 
-    function getMovingAverage() public view returns (uint256);
+    function getMovingAverage() external view returns (uint256);
 
     function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_) external;
 
@@ -147,7 +150,7 @@ contract OlympusPrice is Module, PRICE_V1 {
     /// @notice Trigger an update of the moving average. Permissioned.
     /// @dev    This function does not have a time-gating on the observationFrequency on this contract. It is set on the Heart policy contract.
     ///         The Heart beat frequency should be set to the same value as the observationFrequency.
-    function updateMovingAverage() external permissioned {
+    function updateMovingAverage() external override permissioned {
         // Revert if not initialized
         if (!initialized) revert Price_NotInitialized();
 
@@ -175,7 +178,7 @@ contract OlympusPrice is Module, PRICE_V1 {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Get the current price of OHM in the Reserve asset from the price feeds
-    function getCurrentPrice() public view returns (uint256) {
+    function getCurrentPrice() public view override returns (uint256) {
         if (!initialized) revert Price_NotInitialized();
 
         // Get prices from feeds
@@ -219,14 +222,14 @@ contract OlympusPrice is Module, PRICE_V1 {
     }
 
     /// @notice Get the last stored price observation of OHM in the Reserve asset
-    function getLastPrice() external view returns (uint256) {
+    function getLastPrice() external view override returns (uint256) {
         if (!initialized) revert Price_NotInitialized();
         uint32 lastIndex = nextObsIndex == 0 ? numObservations - 1 : nextObsIndex - 1;
         return observations[lastIndex];
     }
 
     /// @notice Get the moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
-    function getMovingAverage() public view returns (uint256) {
+    function getMovingAverage() public view override returns (uint256) {
         if (!initialized) revert Price_NotInitialized();
         return cumulativeObs / numObservations;
     }
@@ -243,6 +246,7 @@ contract OlympusPrice is Module, PRICE_V1 {
     ///         or movingAverageDuration (in certain cases) in order for the Price module to function properly.
     function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
         external
+        override
         permissioned
     {
         if (initialized) revert Price_AlreadyInitialized();
@@ -276,7 +280,11 @@ contract OlympusPrice is Module, PRICE_V1 {
     /// @dev    Changing the moving average duration will erase the current observations array
     ///         and require the initialize function to be called again. Ensure that you have saved
     ///         the existing data and can re-populate before calling this function.
-    function changeMovingAverageDuration(uint48 movingAverageDuration_) external permissioned {
+    function changeMovingAverageDuration(uint48 movingAverageDuration_)
+        external
+        override
+        permissioned
+    {
         // Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
         if (movingAverageDuration_ == 0 || movingAverageDuration_ % observationFrequency != 0)
             revert Price_InvalidParams();
@@ -302,7 +310,11 @@ contract OlympusPrice is Module, PRICE_V1 {
     /// @param    observationFrequency_ - Observation frequency in seconds, must be a divisor of the moving average duration
     /// @dev      Changing the observation frequency clears existing observation data since it will not be taken at the right time intervals.
     ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
-    function changeObservationFrequency(uint48 observationFrequency_) external permissioned {
+    function changeObservationFrequency(uint48 observationFrequency_)
+        external
+        override
+        permissioned
+    {
         // Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
         if (observationFrequency_ == 0 || movingAverageDuration % observationFrequency_ != 0)
             revert Price_InvalidParams();

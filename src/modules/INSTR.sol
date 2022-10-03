@@ -4,11 +4,14 @@ pragma solidity 0.8.15;
 import "src/Kernel.sol";
 
 interface INSTR_V1 {
+    // EVENTS
     event InstructionsStored(uint256 instructionsId);
 
+    // ERRORS
     error INSTR_InstructionsCannotBeEmpty();
     error INSTR_InvalidChangeExecutorAction();
 
+    // FUNCTIONS
     function getInstructions(uint256 instructionsId_) external view returns (Instruction[] memory);
 
     function store(Instruction[] calldata instructions_) external returns (uint256);

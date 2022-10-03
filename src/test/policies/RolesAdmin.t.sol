@@ -8,7 +8,7 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {OlympusRoles} from "modules/ROLES.sol";
+import {OlympusRoles, ROLES_V1} from "modules/ROLES.sol";
 
 import "src/Kernel.sol";
 
@@ -44,7 +44,7 @@ contract TreasuryCustodianTest is Test {
     }
 
     function testCorrectness_OnlyAdmin() public {
-        bytes memory err = abi.encodeWithSelector(OnlyAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(RolesAdmin.OnlyAdmin.selector);
         vm.expectRevert(err);
         vm.prank(testUser);
         rolesAdmin.grantRole(testRole, testUser);
@@ -75,7 +75,7 @@ contract TreasuryCustodianTest is Test {
 
     function testCorrectness_ChangeAdmin() public {
         // try pulling admin without push
-        bytes memory err = abi.encodeWithSelector(OnlyNewAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(RolesAdmin.OnlyNewAdmin.selector);
         vm.expectRevert(err);
         vm.prank(newAdmin);
         rolesAdmin.pullNewAdmin();

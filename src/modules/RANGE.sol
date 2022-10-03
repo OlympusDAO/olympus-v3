@@ -5,16 +5,8 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import "src/Kernel.sol";
 
-error RANGE_InvalidParams();
-
-/// @notice Olympus Range data storage module
-/// @dev    The Olympus Range contract stores information about the Olympus Range market operations status.
-///         It provides a standard interface for Range data, including range prices and capacities of each range side.
-///         The data provided by this contract is used by the Olympus Range Operator to perform market operations.
-///         The Olympus Range Data is updated each epoch by the Olympus Range Operator contract.
-contract OlympusRange is Module {
-    using TransferHelper for ERC20;
-
+interface RANGE_V1 {
+    // EVENTS
     event WallUp(bool high_, uint256 timestamp_, uint256 capacity_);
     event WallDown(bool high_, uint256 timestamp_, uint256 capacity_);
     event CushionUp(bool high_, uint256 timestamp_, uint256 capacity_);
@@ -28,6 +20,10 @@ contract OlympusRange is Module {
     event SpreadsChanged(uint256 cushionSpread_, uint256 wallSpread_);
     event ThresholdFactorChanged(uint256 thresholdFactor_);
 
+    // ERRORS
+    error RANGE_InvalidParams();
+
+    // DATA STRUCTURES
     struct Line {
         uint256 price; // Price for the specified level
     }
@@ -52,6 +48,46 @@ contract OlympusRange is Module {
         Band cushion; // Data relevant to cushions on both sides of the range
         Band wall; // Data relevant to walls on both sides of the range
     }
+
+    // FUNCTIONS
+    function updateCapacity(bool high_, uint256 capacity_) external;
+
+    function updatePrices(uint256 movingAverage_) external;
+
+    function regenerate(bool high_, uint256 capacity_) external;
+
+    function updateMarket(
+        bool high_,
+        uint256 market_,
+        uint256 marketCapacity_
+    ) external;
+
+    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external;
+
+    function setThresholdFactor(uint256 thresholdFactor_) external;
+
+    function range() external view returns (Range memory);
+
+    function capacity(bool high_) external returns (uint256);
+
+    function active(bool high_) external returns (bool);
+
+    function price(bool wall_, bool high_) external returns (uint256);
+
+    function spread(bool wall_) external returns (uint256);
+
+    function market(bool high_) external returns (uint256);
+
+    function lastActive(bool high_) external returns (uint256);
+}
+
+/// @notice Olympus Range data storage module
+/// @dev    The Olympus Range contract stores information about the Olympus Range market operations status.
+///         It provides a standard interface for Range data, including range prices and capacities of each range side.
+///         The data provided by this contract is used by the Olympus Range Operator to perform market operations.
+///         The Olympus Range Data is updated each epoch by the Olympus Range Operator contract.
+contract OlympusRange is Module, RANGE_V1 {
+    using TransferHelper for ERC20;
 
     // Range data singleton. See range().
     Range internal _range;
@@ -138,7 +174,7 @@ contract OlympusRange is Module {
     /// @notice Access restricted to activated policies.
     /// @param  high_ - Specifies the side of the range to update capacity for (true = high side, false = low side).
     /// @param  capacity_ - Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
-    function updateCapacity(bool high_, uint256 capacity_) external permissioned {
+    function updateCapacity(bool high_, uint256 capacity_) external override permissioned {
         if (high_) {
             // Update capacity
             _range.high.capacity = capacity_;
@@ -169,7 +205,7 @@ contract OlympusRange is Module {
     /// @notice Update the prices for the low and high sides.
     /// @notice Access restricted to activated policies.
     /// @param  movingAverage_ - Current moving average price to set range prices from.
-    function updatePrices(uint256 movingAverage_) external permissioned {
+    function updatePrices(uint256 movingAverage_) external override permissioned {
         // Cache the spreads
         uint256 wallSpread = _range.wall.spread;
         uint256 cushionSpread = _range.cushion.spread;
@@ -236,7 +272,7 @@ contract OlympusRange is Module {
         bool high_,
         uint256 market_,
         uint256 marketCapacity_
-    ) public permissioned {
+    ) public override permissioned {
         // If market id is max uint256, then marketCapacity must be 0
         if (market_ == type(uint256).max && marketCapacity_ != 0) revert RANGE_InvalidParams();
 
@@ -259,7 +295,11 @@ contract OlympusRange is Module {
     /// @param  cushionSpread_ - Percent spread to set the cushions at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
     /// @param  wallSpread_ - Percent spread to set the walls at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev    The new spreads will not go into effect until the next time updatePrices() is called.
-    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external permissioned {
+    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
+        external
+        override
+        permissioned
+    {
         // Confirm spreads are within allowed values
         if (
             wallSpread_ >= ONE_HUNDRED_PERCENT ||
@@ -280,7 +320,7 @@ contract OlympusRange is Module {
     /// @notice Access restricted to activated policies.
     /// @param  thresholdFactor_ - Percent of capacity that the wall should close below, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev    The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
-    function setThresholdFactor(uint256 thresholdFactor_) external permissioned {
+    function setThresholdFactor(uint256 thresholdFactor_) external override permissioned {
         if (thresholdFactor_ >= ONE_HUNDRED_PERCENT || thresholdFactor_ < ONE_PERCENT)
             revert RANGE_InvalidParams();
         thresholdFactor = thresholdFactor_;
@@ -293,13 +333,13 @@ contract OlympusRange is Module {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Get the full Range data in a struct.
-    function range() external view returns (Range memory) {
+    function range() external view override returns (Range memory) {
         return _range;
     }
 
     /// @notice Get the capacity for a side of the range.
     /// @param  high_ - Specifies the side of the range to get capacity for (true = high side, false = low side).
-    function capacity(bool high_) external view returns (uint256) {
+    function capacity(bool high_) external view override returns (uint256) {
         if (high_) {
             return _range.high.capacity;
         } else {
@@ -309,7 +349,7 @@ contract OlympusRange is Module {
 
     /// @notice Get the status of a side of the range (whether it is active or not).
     /// @param  high_ - Specifies the side of the range to get status for (true = high side, false = low side).
-    function active(bool high_) external view returns (bool) {
+    function active(bool high_) external view override returns (bool) {
         if (high_) {
             return _range.high.active;
         } else {
@@ -320,7 +360,7 @@ contract OlympusRange is Module {
     /// @notice Get the price for the wall or cushion for a side of the range.
     /// @param  wall_ - Specifies the band to get the price for (true = wall, false = cushion).
     /// @param  high_ - Specifies the side of the range to get the price for (true = high side, false = low side).
-    function price(bool wall_, bool high_) external view returns (uint256) {
+    function price(bool wall_, bool high_) external view override returns (uint256) {
         if (wall_) {
             if (high_) {
                 return _range.wall.high.price;
@@ -338,7 +378,7 @@ contract OlympusRange is Module {
 
     /// @notice Get the spread for the wall or cushion band.
     /// @param  wall_ - Specifies the band to get the spread for (true = wall, false = cushion).
-    function spread(bool wall_) external view returns (uint256) {
+    function spread(bool wall_) external view override returns (uint256) {
         if (wall_) {
             return _range.wall.spread;
         } else {
@@ -348,7 +388,7 @@ contract OlympusRange is Module {
 
     /// @notice Get the market ID for a side of the range.
     /// @param  high_ - Specifies the side of the range to get market for (true = high side, false = low side).
-    function market(bool high_) external view returns (uint256) {
+    function market(bool high_) external view override returns (uint256) {
         if (high_) {
             return _range.high.market;
         } else {
@@ -358,7 +398,7 @@ contract OlympusRange is Module {
 
     /// @notice Get the timestamp when the range was last active.
     /// @param  high_ - Specifies the side of the range to get timestamp for (true = high side, false = low side).
-    function lastActive(bool high_) external view returns (uint256) {
+    function lastActive(bool high_) external view override returns (uint256) {
         if (high_) {
             return _range.high.lastActive;
         } else {

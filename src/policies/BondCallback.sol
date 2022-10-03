@@ -8,14 +8,14 @@ import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusRoles} from "modules/ROLES.sol";
+import {OlympusRoles, RolesConsumer} from "modules/ROLES.sol";
 import {Operator} from "policies/Operator.sol";
 import "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
 /// @title Olympus Bond Callback
-contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
+contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     using TransferHelper for ERC20;
 
     error Callback_MarketNotSupported(uint256 id);
@@ -29,7 +29,6 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     IBondAggregator public aggregator;
     OlympusTreasury public TRSRY;
     OlympusMinter public MINTR;
-    OlympusRoles public ROLES;
     Operator public operator;
     ERC20 public ohm;
 
@@ -78,9 +77,11 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IBondCallback
-    function whitelist(address teller_, uint256 id_) external override {
-        ROLES.requireRole("callback_whitelist", msg.sender);
-
+    function whitelist(address teller_, uint256 id_)
+        external
+        override
+        onlyRole("callback_whitelist")
+    {
         approvedMarkets[teller_][id_] = true;
 
         // Get payout tokens for market

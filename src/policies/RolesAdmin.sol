@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {ROLES_V1} from "modules/ROLES.sol";
-import "../Kernel.sol";
-
-error OnlyAdmin();
-error OnlyNewAdmin();
+import {ROLES_V1} from "src/modules/ROLES.sol";
+import "src/Kernel.sol";
 
 /// @notice The RolesAdmin Policy grants and revokes Roles in the ROLES module.
 contract RolesAdmin is Policy {
@@ -31,13 +28,7 @@ contract RolesAdmin is Policy {
         ROLES = ROLES_V1(getModuleAddress(dependencies[0]));
     }
 
-    function requestPermissions()
-        external
-        view
-        override
-        onlyKernel
-        returns (Permissions[] memory requests)
-    {
+    function requestPermissions() external view override returns (Permissions[] memory requests) {
         requests = new Permissions[](2);
         requests[0] = Permissions(toKeycode("ROLES"), ROLES.saveRole.selector);
         requests[1] = Permissions(toKeycode("ROLES"), ROLES.removeRole.selector);
@@ -49,6 +40,9 @@ contract RolesAdmin is Policy {
 
     event NewAdminPushed(address indexed newAdmin_);
     event NewAdminPulled(address indexed newAdmin_);
+
+    error OnlyAdmin();
+    error OnlyNewAdmin();
 
     /// @notice Special role that is responsible for assigning policy-defined roles to addresses.
     address public admin;
