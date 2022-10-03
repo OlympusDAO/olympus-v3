@@ -4,6 +4,17 @@ pragma solidity 0.8.15;
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import "src/Kernel.sol";
 
+/// @notice Abstract contract to have the `onlyRole` modifier
+/// @dev    Inheriting this automatically makes ROLES module a dependency
+abstract contract RolesConsumer {
+    ROLESv1 public ROLES;
+
+    modifier onlyRole(bytes32 role_) {
+        ROLES.requireRole(role_, msg.sender);
+        _;
+    }
+}
+
 /// @notice Module that holds multisig roles needed by various policies.
 contract OlympusRoles is ROLESv1 {
     /*//////////////////////////////////////////////////////////////

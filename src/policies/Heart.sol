@@ -2,23 +2,25 @@
 pragma solidity 0.8.15;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-
-import {IHeart} from "policies/interfaces/IHeart.sol";
-import {IOperator} from "policies/interfaces/IOperator.sol";
-
-import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusRoles} from "modules/ROLES.sol";
-import "src/Kernel.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
+
+import {IOperator} from "policies/interfaces/IOperator.sol";
+import {IHeart} from "policies/interfaces/IHeart.sol";
+
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
+
+import "src/Kernel.sol";
 
 /// @title  Olympus Heart
 /// @notice Olympus Heart (Policy) Contract
 /// @dev    The Olympus Heart contract provides keeper rewards to call the heart beat function which fuels
 ///         Olympus market operations. The Heart orchestrates state updates in the correct order to ensure
 ///         market operations use up to date information.
-contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
+contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
 
     error Heart_OutOfCycle();
@@ -43,8 +45,7 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     ERC20 public rewardToken;
 
     // Modules
-    OlympusPrice internal PRICE;
-    OlympusRoles internal ROLES;
+    PRICEv1 internal PRICE;
 
     // Policies
     IOperator internal _operator;

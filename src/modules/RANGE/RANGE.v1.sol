@@ -80,17 +80,17 @@ abstract contract RANGEv1 is Module {
 
     function setThresholdFactor(uint256 thresholdFactor_) external virtual;
 
-    function range() external virtual returns (Range memory);
+    function range() external view virtual returns (Range memory);
 
-    function capacity(bool high_) external virtual returns (uint256);
+    function capacity(bool high_) external view virtual returns (uint256);
 
-    function active(bool high_) external virtual returns (bool);
+    function active(bool high_) external view virtual returns (bool);
 
-    function price(bool wall_, bool high_) external virtual returns (uint256);
+    function price(bool wall_, bool high_) external view virtual returns (uint256);
 
-    function spread(bool wall_) external virtual returns (uint256);
+    function spread(bool wall_) external view virtual returns (uint256);
 
-    function market(bool high_) external virtual returns (uint256);
+    function market(bool high_) external view virtual returns (uint256);
 
-    function lastActive(bool high_) external virtual returns (uint256);
+    function lastActive(bool high_) external view virtual returns (uint256);
 }

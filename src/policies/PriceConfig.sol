@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusRoles} from "modules/ROLES.sol";
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
+
 import "src/Kernel.sol";
 
-contract OlympusPriceConfig is Policy {
+contract OlympusPriceConfig is Policy, RolesConsumer {
     /* ========== STATE VARIABLES ========== */
 
     /// Modules
-    OlympusPrice internal PRICE;
-    OlympusRoles internal ROLES;
+    PRICEv1 internal PRICE;
 
     /* ========== CONSTRUCTOR ========== */
 
@@ -32,10 +33,12 @@ contract OlympusPriceConfig is Policy {
         override
         returns (Permissions[] memory permissions)
     {
+        Keycode PRICE_KEYCODE = PRICE.KEYCODE();
+
         permissions = new Permissions[](3);
-        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.initialize.selector);
-        permissions[1] = Permissions(PRICE.KEYCODE(), PRICE.changeMovingAverageDuration.selector);
-        permissions[2] = Permissions(PRICE.KEYCODE(), PRICE.changeObservationFrequency.selector);
+        permissions[0] = Permissions(PRICE_KEYCODE, PRICE.initialize.selector);
+        permissions[1] = Permissions(PRICE_KEYCODE, PRICE.changeMovingAverageDuration.selector);
+        permissions[2] = Permissions(PRICE_KEYCODE, PRICE.changeObservationFrequency.selector);
     }
 
     /* ========== ADMIN FUNCTIONS ========== */

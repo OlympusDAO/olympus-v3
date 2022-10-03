@@ -5,14 +5,15 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {IOperator} from "policies/interfaces/IOperator.sol";
-import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondCallback} from "interfaces/IBondCallback.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusRoles} from "modules/ROLES.sol";
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
+import {RANGEv1} from "modules/RANGE/RANGE.v1.sol";
 
 import "src/Kernel.sol";
 
@@ -28,7 +29,7 @@ import {FullMath} from "libraries/FullMath.sol";
 ///         the cushion spread, the Operator deploys bond markets to support the price. The Operator also offers
 ///         zero slippage swaps at prices dictated by the wall spread from the moving average. These market operations
 ///         are performed up to a specific capacity before the market must stabilize to regenerate the capacity.
-contract Operator is IOperator, Policy, ReentrancyGuard {
+contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
@@ -67,11 +68,10 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     bool public active;
 
     // Modules
-    OlympusPrice internal PRICE;
-    OlympusRange internal RANGE;
-    OlympusTreasury internal TRSRY;
-    OlympusMinter internal MINTR;
-    OlympusRoles internal ROLES;
+    PRICEv1 internal PRICE;
+    RANGEv1 internal RANGE;
+    TRSRYv1 internal TRSRY;
+    MINTRv1 internal MINTR;
 
     // External contracts
     /// @notice     Auctioneer contract used for cushion bond market deployments
@@ -237,7 +237,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         }
 
         // Cache range data after potential regeneration
-        OlympusRange.Range memory range = RANGE.range();
+        RANGEv1.Range memory range = RANGE.range();
 
         // Get latest price
         // See note in addObservation() for more details
@@ -376,7 +376,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     /// @notice      Activate a cushion by deploying a bond market
     /// @param high_ Whether the cushion is for the high or low side of the range (true = high, false = low)
     function _activate(bool high_) internal {
-        OlympusRange.Range memory range = RANGE.range();
+        RANGEv1.Range memory range = RANGE.range();
 
         if (high_) {
             // Calculate scaleAdjustment for bond market

@@ -49,7 +49,7 @@ abstract contract TRSRYv1 is Module {
     mapping(ERC20 => mapping(address => uint256)) public reserveDebt;
 
     // FUNCTIONS
-    function getReserveBalance(ERC20 token_) external view returns (uint256);
+    function getReserveBalance(ERC20 token_) external view virtual returns (uint256);
 
     function increaseWithdrawerApproval(
         address withdrawer_,

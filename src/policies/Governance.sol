@@ -3,8 +3,8 @@ pragma solidity 0.8.15;
 
 // The Governance Policy submits & activates instructions in a INSTR module
 
-import {OlympusInstructions} from "modules/INSTR.sol";
-import {OlympusVotes} from "modules/VOTES.sol";
+import {INSTRv1} from "modules/INSTR/INSTR.v1.sol";
+import {VOTESv1} from "modules/VOTES/VOTES.v1.sol";
 import "src/Kernel.sol";
 
 // proposing
@@ -53,8 +53,8 @@ contract OlympusGovernance is Policy {
     //                         Kernel Policy Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
 
-    OlympusInstructions public INSTR;
-    OlympusVotes public VOTES;
+    INSTRv1 public INSTR;
+    VOTESv1 public VOTES;
 
     constructor(Kernel kernel_) Policy(kernel_) {}
 

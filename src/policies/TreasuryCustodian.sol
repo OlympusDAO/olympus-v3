@@ -3,8 +3,10 @@ pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {OlympusTreasury} from "src/modules/TRSRY.sol";
-import {OlympusRoles, RolesConsumer} from "src/modules/ROLES.sol";
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+
 import "src/Kernel.sol";
 
 // Generic contract to allow authorized contracts to interact with treasury
@@ -15,9 +17,7 @@ contract TreasuryCustodian is Policy, RolesConsumer {
     error PolicyStillActive();
     error PolicyNotFound();
 
-    OlympusTreasury public TRSRY;
-
-    //OlympusRoles public ROLES;
+    TRSRYv1 public TRSRY;
 
     /*//////////////////////////////////////////////////////////////
                             POLICY INTERFACE

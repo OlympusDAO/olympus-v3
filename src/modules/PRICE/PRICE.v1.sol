@@ -60,6 +60,9 @@ abstract contract PRICEv1 is Module {
     /// @notice Whether the price module is initialized (and therefore active).
     bool public initialized;
 
+    /// @notice Number of decimals in the price values provided by the contract.
+    uint8 public constant decimals = 18;
+
     // FUNCTIONS
     function updateMovingAverage() external virtual;
 

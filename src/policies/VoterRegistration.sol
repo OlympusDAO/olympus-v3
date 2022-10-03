@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {OlympusVotes} from "modules/VOTES.sol";
-import {OlympusRoles} from "modules/ROLES.sol";
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {VOTESv1} from "modules/VOTES/VOTES.v1.sol";
+
 import "src/Kernel.sol";
 
 /// @notice Policy to mint and burn votes to arbitrary addresses
 /// @dev A policy to distribute votes for OlympusGovernance during the test run.
-contract VoterRegistration is Policy {
-    OlympusVotes public VOTES;
-    OlympusRoles public ROLES;
+contract VoterRegistration is Policy, RolesConsumer {
+    VOTESv1 public VOTES;
 
     /*//////////////////////////////////////////////////////////////
                             POLICY INTERFACE

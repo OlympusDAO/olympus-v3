@@ -12,9 +12,6 @@ import "src/Kernel.sol";
 ///         duration and observation frequency. The data provided by this contract is used by the Olympus Range Operator to
 ///         perform market operations. The Olympus Price Oracle is updated each epoch by the Olympus Heart contract.
 contract OlympusPrice is PRICEv1 {
-    /// @notice Number of decimals in the price values provided by the contract.
-    uint8 public constant decimals = 18;
-
     // Scale factor for converting prices, calculated from decimal values.
     uint256 internal immutable _scaleFactor;
 

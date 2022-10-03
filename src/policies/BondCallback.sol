@@ -6,9 +6,12 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusRoles, RolesConsumer} from "modules/ROLES.sol";
+
+import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+
 import {Operator} from "policies/Operator.sol";
 import "src/Kernel.sol";
 
@@ -27,8 +30,8 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     mapping(ERC20 => uint256) public priorBalances;
 
     IBondAggregator public aggregator;
-    OlympusTreasury public TRSRY;
-    OlympusMinter public MINTR;
+    TRSRYv1 public TRSRY;
+    MINTRv1 public MINTR;
     Operator public operator;
     ERC20 public ohm;
 
