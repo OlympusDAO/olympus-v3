@@ -23,8 +23,8 @@ contract VoterRegistration is Policy {
         dependencies[0] = toKeycode("VOTES");
         dependencies[1] = toKeycode("ROLES");
 
-        VOTES = OlympusVotes(getModuleAddress(dependencies[0]));
-        ROLES = OlympusRoles(getModuleAddress(dependencies[1]));
+        VOTES = VOTES_V1(getModuleAddress(dependencies[0]));
+        ROLES = ROLES_V1(getModuleAddress(dependencies[1]));
     }
 
     /// @inheritdoc Policy

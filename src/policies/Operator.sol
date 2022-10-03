@@ -167,11 +167,11 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         dependencies[3] = toKeycode("MINTR");
         dependencies[4] = toKeycode("ROLES");
 
-        PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
-        RANGE = OlympusRange(getModuleAddress(dependencies[1]));
-        TRSRY = OlympusTreasury(getModuleAddress(dependencies[2]));
-        MINTR = OlympusMinter(getModuleAddress(dependencies[3]));
-        ROLES = OlympusRoles(getModuleAddress(dependencies[4]));
+        PRICE = PRICE_V1(getModuleAddress(dependencies[0]));
+        RANGE = RANGE_V1(getModuleAddress(dependencies[1]));
+        TRSRY = TRSRY_V1(getModuleAddress(dependencies[2]));
+        MINTR = MINTR_V1(getModuleAddress(dependencies[3]));
+        ROLES = ROLES_V1(getModuleAddress(dependencies[4]));
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
