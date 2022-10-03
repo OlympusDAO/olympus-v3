@@ -7,14 +7,13 @@ import {OlympusTreasury} from "src/modules/TRSRY.sol";
 import {OlympusRoles, RolesConsumer} from "src/modules/ROLES.sol";
 import "src/Kernel.sol";
 
-// ERRORS
-error PolicyStillActive();
-error PolicyNotFound();
-
 // Generic contract to allow authorized contracts to interact with treasury
 // Use cases include setting and removing approvals, as well as allocating assets for yield
 contract TreasuryCustodian is Policy, RolesConsumer {
     event ApprovalRevoked(address indexed policy_, ERC20[] tokens_);
+
+    error PolicyStillActive();
+    error PolicyNotFound();
 
     OlympusTreasury public TRSRY;
 

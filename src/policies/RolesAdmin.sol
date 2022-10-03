@@ -29,9 +29,11 @@ contract RolesAdmin is Policy {
     }
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {
+        Keycode ROLES_KEYCODE = toKeycode("ROLES");
+
         requests = new Permissions[](2);
-        requests[0] = Permissions(toKeycode("ROLES"), ROLES.saveRole.selector);
-        requests[1] = Permissions(toKeycode("ROLES"), ROLES.removeRole.selector);
+        requests[0] = Permissions(ROLES_KEYCODE, ROLES.saveRole.selector);
+        requests[1] = Permissions(ROLES_KEYCODE, ROLES.removeRole.selector);
     }
 
     /////////////////////////////////////////////////////////////////////////////////
