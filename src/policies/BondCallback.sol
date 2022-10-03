@@ -99,9 +99,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     /// @dev    Shutdown function in case there's an issue with the teller
     /// @param  teller_ Address of the Teller contract which serves the market
     /// @param  id_     ID of the market to remove from whitelist
-    function blacklist(address teller_, uint256 id_) external {
-        ROLES.requireRole("callback_whitelist", msg.sender);
-
+    function blacklist(address teller_, uint256 id_) external onlyRole("callback_whitelist") {
         approvedMarkets[teller_][id_] = false;
     }
 
@@ -156,9 +154,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
 
     /// @notice Send tokens to the TRSRY in a batch
     /// @param  tokens_ - Array of tokens to send
-    function batchToTreasury(ERC20[] memory tokens_) external {
-        ROLES.requireRole("callback_admin", msg.sender);
-
+    function batchToTreasury(ERC20[] memory tokens_) external onlyRole("callback_admin") {
         ERC20 token;
         uint256 balance;
         uint256 len = tokens_.length;
@@ -196,9 +192,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     /// @notice Sets the operator contract for the callback to use to report bond purchases
     /// @notice Must be set before the callback is used
     /// @param  operator_ - Address of the Operator contract
-    function setOperator(Operator operator_) external {
-        ROLES.requireRole("callback_admin", msg.sender);
-
+    function setOperator(Operator operator_) external onlyRole("callback_admin") {
         if (address(operator_) == address(0)) revert Callback_InvalidParams();
         operator = operator_;
     }

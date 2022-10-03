@@ -26,7 +26,7 @@ interface ROLES_V1 {
 }
 
 /// @notice Abstract contract to have the `onlyRole` modifier
-/// @dev    jnheriting this automatically makes ROLES module a dependency
+/// @dev    Inheriting this automatically makes ROLES module a dependency
 abstract contract RolesConsumer {
     ROLES_V1 public ROLES;
 
