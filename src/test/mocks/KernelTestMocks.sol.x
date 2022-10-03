@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
+import {OlympusRoles} from "src/modules/ROLES.sol";
 import "src/Kernel.sol";
 
 contract MockPolicy is Policy {
@@ -9,10 +10,12 @@ contract MockPolicy is Policy {
     constructor(Kernel kernel_) Policy(kernel_) {}
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](1);
+        dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("MOCKY");
+        dependencies[1] = toKeycode("ROLES");
 
         MOCKY = MockModule(getModuleAddress(dependencies[0]));
+        ROLES = OlympusRoles(getModuleAddress(dependencies[1]));
     }
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {
@@ -24,7 +27,8 @@ contract MockPolicy is Policy {
         MOCKY.publicCall();
     }
 
-    function callPermissionedFunction() external onlyRole("tester") {
+    function callPermissionedFunction() external {
+        ROLES.requireRole("tester");
         MOCKY.permissionedCall();
     }
 }

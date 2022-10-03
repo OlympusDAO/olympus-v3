@@ -1,4 +1,5 @@
 [profile.default]
+ffi = true
 remappings = [
     'ds-test/=lib/ds-test/src/',
     'solmate/=lib/solmate/src/',
@@ -10,4 +11,3 @@ remappings = [
     'policies/=src/policies',
     'libraries/=src/libraries',
 ]
-ffi = true
