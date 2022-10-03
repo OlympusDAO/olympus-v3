@@ -55,43 +55,43 @@ abstract contract TRSRYv1 is Module {
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
-    ) external;
+    ) external virtual;
 
     function decreaseWithdrawerApproval(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
-    ) external;
+    ) external virtual;
 
     function withdrawReserves(
         address to_,
         ERC20 token_,
         uint256 amount_
-    ) external;
+    ) external virtual;
 
     function increaseDebtorApproval(
         address debtor_,
         ERC20 token_,
         uint256 amount_
-    ) external;
+    ) external virtual;
 
     function decreaseDebtorApproval(
         address debtor_,
         ERC20 token_,
         uint256 amount_
-    ) external;
+    ) external virtual;
 
-    function incurDebt(ERC20 token_, uint256 amount_) external;
+    function incurDebt(ERC20 token_, uint256 amount_) external virtual;
 
     function repayDebt(
         address debtor_,
         ERC20 token_,
         uint256 amount_
-    ) external;
+    ) external virtual;
 
     function setDebt(
         address debtor_,
         ERC20 token_,
         uint256 amount_
-    ) external;
+    ) external virtual;
 }

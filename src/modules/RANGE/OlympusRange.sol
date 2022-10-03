@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {RANGEv1} from "src/modules/RANGE/RANGE.V1.sol";
+import {RANGEv1} from "src/modules/RANGE/RANGE.v1.sol";
 import "src/Kernel.sol";
 
 /// @notice Olympus Range data storage module

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {ROLESv1} from "src/modules/ROLES/ROLES.V1.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import "src/Kernel.sol";
 
 /// @notice Module that holds multisig roles needed by various policies.
