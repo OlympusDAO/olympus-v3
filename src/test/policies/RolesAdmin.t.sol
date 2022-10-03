@@ -8,7 +8,7 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {OlympusRoles, ROLES_V1} from "modules/ROLES.sol";
+import {OlympusRoles, ROLESv1} from "modules/ROLES.sol";
 
 import "src/Kernel.sol";
 

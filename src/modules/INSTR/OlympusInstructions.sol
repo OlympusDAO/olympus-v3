@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {INSTR_V1} from "src/modules/INSTR/INSTR.V1.sol";
+import {INSTRv1} from "src/modules/INSTR/INSTR.V1.sol";
 import "src/Kernel.sol";
 
 /// @notice Caches and executes batched instructions for protocol upgrades in the Kernel.
-contract OlympusInstructions is INSTR_V1 {
+contract OlympusInstructions is INSTRv1 {
     /*//////////////////////////////////////////////////////////////
                             MODULE INTERFACE
     //////////////////////////////////////////////////////////////*/

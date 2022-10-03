@@ -8,7 +8,7 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {Kernel, Module, Instruction, Actions} from "../../Kernel.sol";
-import {OlympusVotes, VOTES_V1} from "modules/VOTES.sol";
+import {OlympusVotes, VOTESv1} from "modules/VOTES.sol";
 
 contract VotesTest is Test {
     Kernel internal kernel;
@@ -38,7 +38,7 @@ contract VotesTest is Test {
     }
 
     function testRevert_TransfersDisabled() public {
-        vm.expectRevert(VOTES_V1.VOTES_TransferDisabled.selector);
+        vm.expectRevert(VOTESv1.VOTES_TransferDisabled.selector);
 
         vm.prank(writer);
         VOTES.transfer(address(0), 10);

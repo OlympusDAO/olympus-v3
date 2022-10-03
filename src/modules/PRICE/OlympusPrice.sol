@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 
-import {PRICE_V1} from "src/modules/PRICE/PRICE.V1.sol";
+import {PRICEv1} from "src/modules/PRICE/PRICE.V1.sol";
 import "src/Kernel.sol";
 
 /// @notice Price oracle data storage contract
@@ -11,7 +11,7 @@ import "src/Kernel.sol";
 ///         It also implements a moving average price calculation (same as a TWAP) on the price feed data over a configured
 ///         duration and observation frequency. The data provided by this contract is used by the Olympus Range Operator to
 ///         perform market operations. The Olympus Price Oracle is updated each epoch by the Olympus Heart contract.
-contract OlympusPrice is PRICE_V1 {
+contract OlympusPrice is PRICEv1 {
     /// @notice Number of decimals in the price values provided by the contract.
     uint8 public constant decimals = 18;
 

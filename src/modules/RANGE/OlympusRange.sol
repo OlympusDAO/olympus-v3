@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {RANGE_V1} from "src/modules/RANGE/RANGE.V1.sol";
+import {RANGEv1} from "src/modules/RANGE/RANGE.V1.sol";
 import "src/Kernel.sol";
 
 /// @notice Olympus Range data storage module
@@ -10,7 +10,7 @@ import "src/Kernel.sol";
 ///         It provides a standard interface for Range data, including range prices and capacities of each range side.
 ///         The data provided by this contract is used by the Olympus Range Operator to perform market operations.
 ///         The Olympus Range Data is updated each epoch by the Olympus Range Operator contract.
-contract OlympusRange is RANGE_V1 {
+contract OlympusRange is RANGEv1 {
     uint256 public constant ONE_HUNDRED_PERCENT = 100e2;
     uint256 public constant ONE_PERCENT = 1e2;
 

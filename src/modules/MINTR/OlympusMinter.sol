@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {MINTR_V1, OHM} from "src/modules/MINTR/MINTR.V1.sol";
+import {MINTRv1, OHM} from "src/modules/MINTR/MINTR.V1.sol";
 import "src/Kernel.sol";
 
 /// @notice Wrapper for minting and burning functions of OHM token.
-contract OlympusMinter is MINTR_V1 {
+contract OlympusMinter is MINTRv1 {
     /*//////////////////////////////////////////////////////////////
                             MODULE INTERFACE
     //////////////////////////////////////////////////////////////*/
@@ -29,12 +29,12 @@ contract OlympusMinter is MINTR_V1 {
                                CORE LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    /// @inheritdoc MINTR_V1
+    /// @inheritdoc MINTRv1
     function mintOhm(address to_, uint256 amount_) external override permissioned {
         ohm.mint(to_, amount_);
     }
 
-    /// @inheritdoc MINTR_V1
+    /// @inheritdoc MINTRv1
     function burnOhm(address from_, uint256 amount_) external override permissioned {
         ohm.burnFrom(from_, amount_);
     }

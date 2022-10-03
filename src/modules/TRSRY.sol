@@ -8,7 +8,7 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import "src/Kernel.sol";
 
-interface TRSRY_V1 {
+interface TRSRYv1 {
     // ERRORS
     error TRSRY_NotApproved();
     error TRSRY_NoDebtOutstanding();
@@ -86,7 +86,7 @@ interface TRSRY_V1 {
 
 /// @notice Treasury holds reserves, LP tokens and all other assets under the control
 ///         of the protocol.
-contract OlympusTreasury is Module, TRSRY_V1, ReentrancyGuard {
+contract OlympusTreasury is Module, TRSRYv1, ReentrancyGuard {
     using TransferHelper for ERC20;
 
     /// @notice Mapping of who is approved for withdrawal.

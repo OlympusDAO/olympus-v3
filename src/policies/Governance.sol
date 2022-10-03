@@ -63,8 +63,8 @@ contract OlympusGovernance is Policy {
         dependencies[0] = toKeycode("INSTR");
         dependencies[1] = toKeycode("VOTES");
 
-        INSTR = INSTR_V1(getModuleAddress(dependencies[0]));
-        VOTES = VOTES_V1(getModuleAddress(dependencies[1]));
+        INSTR = INSTRv1(getModuleAddress(dependencies[0]));
+        VOTES = VOTESv1(getModuleAddress(dependencies[1]));
     }
 
     function requestPermissions()

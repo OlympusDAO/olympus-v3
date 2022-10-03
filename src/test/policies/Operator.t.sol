@@ -23,7 +23,7 @@ import "src/Kernel.sol";
 import {OlympusRange} from "modules/RANGE.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter, OHM} from "modules/MINTR.sol";
-import {OlympusRoles, ROLES_V1} from "modules/ROLES.sol";
+import {OlympusRoles, ROLESv1} from "modules/ROLES.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
@@ -1539,7 +1539,7 @@ contract OperatorTest is Test {
 
         /// Try to call operate as anyone else
         bytes memory err = abi.encodeWithSelector(
-            ROLES_V1.ROLES_RequireRole.selector,
+            ROLESv1.ROLES_RequireRole.selector,
             bytes32("operator_operate")
         );
         vm.expectRevert(err);
@@ -1566,7 +1566,7 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_V1.ROLES_RequireRole.selector,
+            ROLESv1.ROLES_RequireRole.selector,
             bytes32("operator_policy")
         );
         vm.expectRevert(err);
@@ -1601,7 +1601,7 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_V1.ROLES_RequireRole.selector,
+            ROLESv1.ROLES_RequireRole.selector,
             bytes32("operator_admin")
         );
         vm.expectRevert(err);
@@ -2028,7 +2028,7 @@ contract OperatorTest is Test {
 
         /// Try to call regenerate without being guardian and expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_V1.ROLES_RequireRole.selector,
+            ROLESv1.ROLES_RequireRole.selector,
             bytes32("operator_admin")
         );
 

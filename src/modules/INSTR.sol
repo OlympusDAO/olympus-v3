@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import "src/Kernel.sol";
 
-interface INSTR_V1 {
+interface INSTRv1 {
     // EVENTS
     event InstructionsStored(uint256 instructionsId);
 
@@ -18,7 +18,7 @@ interface INSTR_V1 {
 }
 
 /// @notice Caches and executes batched instructions for protocol upgrades in the Kernel.
-contract OlympusInstructions is Module, INSTR_V1 {
+contract OlympusInstructions is Module, INSTRv1 {
     uint256 public totalInstructions;
     mapping(uint256 => Instruction[]) public storedInstructions;
 

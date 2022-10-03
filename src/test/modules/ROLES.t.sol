@@ -6,7 +6,7 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import {ROLES_V1, OlympusRoles} from "src/modules/ROLES.sol";
+import {ROLESv1, OlympusRoles} from "src/modules/ROLES.sol";
 import "src/Kernel.sol";
 
 contract ROLESTest is Test {
@@ -65,7 +65,7 @@ contract ROLESTest is Test {
         ROLES.ensureValidRole("valid");
 
         bytes memory err = abi.encodeWithSelector(
-            ROLES_V1.ROLES_InvalidRole.selector,
+            ROLESv1.ROLES_InvalidRole.selector,
             bytes32("INVALID_ID")
         );
         vm.expectRevert(err);

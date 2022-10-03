@@ -52,9 +52,9 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         dependencies[1] = toKeycode("MINTR");
         dependencies[2] = toKeycode("ROLES");
 
-        TRSRY = TRSRY_V1(getModuleAddress(dependencies[0]));
-        MINTR = MINTR_V1(getModuleAddress(dependencies[1]));
-        ROLES = ROLES_V1(getModuleAddress(dependencies[2]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
+        MINTR = MINTRv1(getModuleAddress(dependencies[1]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);

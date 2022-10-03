@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import "src/Kernel.sol";
 
-interface VOTES_V1 {
+interface VOTESv1 {
     // ERRORS
     error VOTES_TransferDisabled();
 
@@ -16,7 +16,7 @@ interface VOTES_V1 {
 
 /// @notice Votes module is the ERC20 token that represents voting power in the network.
 /// @dev    This is currently a substitute module that stubs gOHM.
-contract OlympusVotes is Module, VOTES_V1, ERC20 {
+contract OlympusVotes is Module, VOTESv1, ERC20 {
     /*//////////////////////////////////////////////////////////////
                             MODULE INTERFACE
     //////////////////////////////////////////////////////////////*/

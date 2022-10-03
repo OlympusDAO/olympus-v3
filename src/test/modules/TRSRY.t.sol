@@ -10,7 +10,7 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 //import {MockPolicy} from "test/mocks/KernelTestMocks.sol";
 
-import {OlympusTreasury, TRSRY_V1} from "src/modules/TRSRY.sol";
+import {OlympusTreasury, TRSRYv1} from "src/modules/TRSRY.sol";
 import "src/Kernel.sol";
 
 contract TRSRYTest is Test {
@@ -108,7 +108,7 @@ contract TRSRYTest is Test {
         vm.assume(amount_ > 0);
 
         // Fail when withdrawal using policy without write access
-        vm.expectRevert(TRSRY_V1.TRSRY_NotApproved.selector);
+        vm.expectRevert(TRSRYv1.TRSRY_NotApproved.selector);
         vm.prank(testUser);
         TRSRY.withdrawReserves(address(this), ngmi, amount_);
     }

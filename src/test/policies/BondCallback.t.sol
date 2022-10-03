@@ -22,7 +22,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import {OlympusRange} from "modules/RANGE.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter, OHM} from "modules/MINTR.sol";
-import {OlympusRoles, ROLES_V1} from "modules/ROLES.sol";
+import {OlympusRoles, ROLESv1} from "modules/ROLES.sol";
 
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Operator} from "policies/Operator.sol";
@@ -488,7 +488,7 @@ contract BondCallbackTest is Test {
 
         // Attempt to whitelist a market as a non-approved address, expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_V1.ROLES_RequireRole.selector,
+            ROLESv1.ROLES_RequireRole.selector,
             bytes32("callback_whitelist")
         );
         vm.prank(alice);
@@ -580,7 +580,7 @@ contract BondCallbackTest is Test {
         /// Try to call batch to treasury as non-policy, expect revert
         {
             bytes memory err = abi.encodeWithSelector(
-                ROLES_V1.ROLES_RequireRole.selector,
+                ROLESv1.ROLES_RequireRole.selector,
                 bytes32("callback_admin")
             );
             vm.prank(alice);

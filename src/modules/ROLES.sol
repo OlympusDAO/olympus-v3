@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import "src/Kernel.sol";
 
-abstract contract ROLES_V1 is Module {
+abstract contract ROLESv1 is Module {
     // EVENTS
     event RoleGranted(bytes32 indexed role_, address indexed addr_);
     event RoleRevoked(bytes32 indexed role_, address indexed addr_);
@@ -28,7 +28,7 @@ abstract contract ROLES_V1 is Module {
 /// @notice Abstract contract to have the `onlyRole` modifier
 /// @dev    Inheriting this automatically makes ROLES module a dependency
 abstract contract RolesConsumer {
-    ROLES_V1 public ROLES;
+    ROLESv1 public ROLES;
 
     modifier onlyRole(bytes32 role_) {
         ROLES.requireRole(role_, msg.sender);
@@ -37,7 +37,7 @@ abstract contract RolesConsumer {
 }
 
 /// @notice Module that holds multisig roles needed by various policies.
-contract OlympusRoles is ROLES_V1 {
+contract OlympusRoles is ROLESv1 {
     /// @notice Mapping for if an address has a policy-defined role.
     mapping(address => mapping(bytes32 => bool)) public hasRole;
 

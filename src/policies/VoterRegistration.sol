@@ -23,8 +23,8 @@ contract VoterRegistration is Policy {
         dependencies[0] = toKeycode("VOTES");
         dependencies[1] = toKeycode("ROLES");
 
-        VOTES = VOTES_V1(getModuleAddress(dependencies[0]));
-        ROLES = ROLES_V1(getModuleAddress(dependencies[1]));
+        VOTES = VOTESv1(getModuleAddress(dependencies[0]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
     }
 
     /// @inheritdoc Policy

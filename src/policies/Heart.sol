@@ -73,8 +73,8 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("ROLES");
 
-        PRICE = PRICE_V1(getModuleAddress(dependencies[0]));
-        ROLES = ROLES_V1(getModuleAddress(dependencies[1]));
+        PRICE = PRICEv1(getModuleAddress(dependencies[0]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
     }
 
     /// @inheritdoc Policy

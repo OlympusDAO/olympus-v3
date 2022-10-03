@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import "src/Kernel.sol";
 
-abstract contract PRICE_V1 is Module {
+abstract contract PRICEv1 is Module {
     // EVENTS
     event NewObservation(uint256 timestamp_, uint256 price_, uint256 movingAverage_);
     event MovingAverageDurationChanged(uint48 movingAverageDuration_);

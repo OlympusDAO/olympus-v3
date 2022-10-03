@@ -8,7 +8,7 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {OlympusTreasury} from "src/modules/TRSRY.sol";
-import {OlympusRoles, ROLES_V1} from "modules/ROLES.sol";
+import {OlympusRoles, ROLESv1} from "modules/ROLES.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
@@ -54,7 +54,7 @@ contract TreasuryCustodianTest is Test {
 
     function test_UnauthorizedChangeDebt(uint256 amount_) public {
         bytes memory err = abi.encodeWithSelector(
-            ROLES_V1.ROLES_RequireRole.selector,
+            ROLESv1.ROLES_RequireRole.selector,
             bytes32("custodian")
         );
         vm.expectRevert(err);

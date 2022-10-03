@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {ROLES_V1} from "src/modules/ROLES.sol";
+import {ROLESv1} from "src/modules/ROLES.sol";
 import "src/Kernel.sol";
 
 /// @notice The RolesAdmin Policy grants and revokes Roles in the ROLES module.
@@ -10,7 +10,7 @@ contract RolesAdmin is Policy {
     //                         Kernel Policy Configuration                         //
     /////////////////////////////////////////////////////////////////////////////////
 
-    ROLES_V1 public ROLES;
+    ROLESv1 public ROLES;
 
     constructor(Kernel _kernel) Policy(_kernel) {
         admin = msg.sender;
@@ -25,7 +25,7 @@ contract RolesAdmin is Policy {
         dependencies = new Keycode[](1);
         dependencies[0] = toKeycode("ROLES");
 
-        ROLES = ROLES_V1(getModuleAddress(dependencies[0]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[0]));
     }
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {

@@ -5,7 +5,7 @@ import {OlympusERC20Token as OHM} from "src/external/OlympusERC20.sol";
 import "src/Kernel.sol";
 
 /// @notice Wrapper for minting and burning functions of OHM token.
-abstract contract MINTR_V1 is Module {
+abstract contract MINTRv1 is Module {
     // STATE
 
     OHM public ohm;

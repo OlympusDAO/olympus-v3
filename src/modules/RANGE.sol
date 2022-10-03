@@ -5,7 +5,7 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import "src/Kernel.sol";
 
-interface RANGE_V1 {
+interface RANGEv1 {
     // EVENTS
     event WallUp(bool high_, uint256 timestamp_, uint256 capacity_);
     event WallDown(bool high_, uint256 timestamp_, uint256 capacity_);
@@ -86,7 +86,7 @@ interface RANGE_V1 {
 ///         It provides a standard interface for Range data, including range prices and capacities of each range side.
 ///         The data provided by this contract is used by the Olympus Range Operator to perform market operations.
 ///         The Olympus Range Data is updated each epoch by the Olympus Range Operator contract.
-contract OlympusRange is Module, RANGE_V1 {
+contract OlympusRange is Module, RANGEv1 {
     using TransferHelper for ERC20;
 
     // Range data singleton. See range().

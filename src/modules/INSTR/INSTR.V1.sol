@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import "src/Kernel.sol";
 
-abstract contract INSTR_V1 is Module {
+abstract contract INSTRv1 is Module {
     // EVENTS
 
     event InstructionsStored(uint256 instructionsId);

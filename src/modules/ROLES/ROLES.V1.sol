@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import "src/Kernel.sol";
 
-abstract contract ROLES_V1 is Module {
+abstract contract ROLESv1 is Module {
     // EVENTS
 
     event RoleGranted(bytes32 indexed role_, address indexed addr_);

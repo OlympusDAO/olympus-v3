@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {ROLES_V1} from "src/modules/ROLES/ROLES.V1.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.V1.sol";
 import "src/Kernel.sol";
 
 /// @notice Module that holds multisig roles needed by various policies.
-contract OlympusRoles is ROLES_V1 {
+contract OlympusRoles is ROLESv1 {
     /*//////////////////////////////////////////////////////////////
                             MODULE INTERFACE
     //////////////////////////////////////////////////////////////*/
@@ -27,12 +27,12 @@ contract OlympusRoles is ROLES_V1 {
                                CORE LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    /// @inheritdoc ROLES_V1
+    /// @inheritdoc ROLESv1
     function requireRole(bytes32 role_, address caller_) external view override {
         if (!hasRole[caller_][role_]) revert ROLES_RequireRole(role_);
     }
 
-    /// @inheritdoc ROLES_V1
+    /// @inheritdoc ROLESv1
     function saveRole(bytes32 role_, address addr_) external override permissioned {
         if (hasRole[addr_][role_]) revert ROLES_AddressAlreadyHasRole(addr_, role_);
 
@@ -44,7 +44,7 @@ contract OlympusRoles is ROLES_V1 {
         emit RoleGranted(role_, addr_);
     }
 
-    /// @inheritdoc ROLES_V1
+    /// @inheritdoc ROLESv1
     function removeRole(bytes32 role_, address addr_) external override permissioned {
         if (!hasRole[addr_][role_]) revert ROLES_AddressDoesNotHaveRole(addr_, role_);
 
@@ -53,7 +53,7 @@ contract OlympusRoles is ROLES_V1 {
         emit RoleRevoked(role_, addr_);
     }
 
-    /// @inheritdoc ROLES_V1
+    /// @inheritdoc ROLESv1
     function ensureValidRole(bytes32 role_) public pure override {
         for (uint256 i = 0; i < 32; ) {
             bytes1 char = role_[i];

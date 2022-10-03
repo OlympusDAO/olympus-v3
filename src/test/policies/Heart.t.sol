@@ -360,7 +360,7 @@ contract HeartTest is Test {
     function testCorrectness_cannotCallAdminFunctionsWithoutPermissions() public {
         /// Try to call admin functions on the heart as non-guardian and expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_V1.ROLES_RequireRole.selector,
+            ROLESv1.ROLES_RequireRole.selector,
             bytes32("heart_admin")
         );
 
