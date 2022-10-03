@@ -1,46 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
+import {ROLES_V1} from "src/modules/ROLES/ROLES.V1.sol";
 import "src/Kernel.sol";
-
-abstract contract ROLES_V1 is Module {
-    // EVENTS
-    event RoleGranted(bytes32 indexed role_, address indexed addr_);
-    event RoleRevoked(bytes32 indexed role_, address indexed addr_);
-
-    // ERRORS
-    error ROLES_InvalidRole(bytes32 role_);
-    error ROLES_RequireRole(bytes32 role_);
-    error ROLES_AddressAlreadyHasRole(address addr_, bytes32 role_);
-    error ROLES_AddressDoesNotHaveRole(address addr_, bytes32 role_);
-    error ROLES_RoleDoesNotExist(bytes32 role_);
-
-    // FUNCTIONS
-    function requireRole(bytes32 role_, address caller_) external virtual;
-
-    function saveRole(bytes32 role_, address addr_) external virtual;
-
-    function removeRole(bytes32 role_, address addr_) external virtual;
-
-    function ensureValidRole(bytes32 role_) external virtual;
-}
-
-/// @notice Abstract contract to have the `onlyRole` modifier
-/// @dev    Inheriting this automatically makes ROLES module a dependency
-abstract contract RolesConsumer {
-    ROLES_V1 public ROLES;
-
-    modifier onlyRole(bytes32 role_) {
-        ROLES.requireRole(role_, msg.sender);
-        _;
-    }
-}
 
 /// @notice Module that holds multisig roles needed by various policies.
 contract OlympusRoles is ROLES_V1 {
-    /// @notice Mapping for if an address has a policy-defined role.
-    mapping(address => mapping(bytes32 => bool)) public hasRole;
-
     /*//////////////////////////////////////////////////////////////
                             MODULE INTERFACE
     //////////////////////////////////////////////////////////////*/
@@ -62,13 +27,12 @@ contract OlympusRoles is ROLES_V1 {
                                CORE LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice "Modifier" to restrict policy function access to certain addresses with a role.
-    /// @dev    Roles are defined in the policy and granted by the ROLES admin.
+    /// @inheritdoc ROLES_V1
     function requireRole(bytes32 role_, address caller_) external view override {
         if (!hasRole[caller_][role_]) revert ROLES_RequireRole(role_);
     }
 
-    /// @notice Function to grant policy-defined roles to some address. Can only be called by admin.
+    /// @inheritdoc ROLES_V1
     function saveRole(bytes32 role_, address addr_) external override permissioned {
         if (hasRole[addr_][role_]) revert ROLES_AddressAlreadyHasRole(addr_, role_);
 
@@ -80,7 +44,7 @@ contract OlympusRoles is ROLES_V1 {
         emit RoleGranted(role_, addr_);
     }
 
-    /// @notice Function to revoke policy-defined roles from some address. Can only be called by admin.
+    /// @inheritdoc ROLES_V1
     function removeRole(bytes32 role_, address addr_) external override permissioned {
         if (!hasRole[addr_][role_]) revert ROLES_AddressDoesNotHaveRole(addr_, role_);
 
@@ -89,7 +53,7 @@ contract OlympusRoles is ROLES_V1 {
         emit RoleRevoked(role_, addr_);
     }
 
-    /// @notice Function that checks if role is valid (all lower case)
+    /// @inheritdoc ROLES_V1
     function ensureValidRole(bytes32 role_) public pure override {
         for (uint256 i = 0; i < 32; ) {
             bytes1 char = role_[i];
