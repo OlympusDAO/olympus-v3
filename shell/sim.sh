@@ -1,4 +1,8 @@
 #!/bin/sh
+
+# Clear existing sim files
+rm ./src/test/sim/sims/*.t.sol
+
 # Range simulation - Creates and runs simulations for the provided input files (in/params.json and in/netflows.json). Results are generated are saved in the output folder.
 source .env
 

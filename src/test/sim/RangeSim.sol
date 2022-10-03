@@ -1048,12 +1048,12 @@ abstract contract RangeSim is Test {
             // 1. Perform rebase
             rebase(dynamicRR);
 
-            // // 2. Perform rebalance
-            // if (e > lastRebalance + rebalance_frequency) {
-            //     console2.log("Rebalance liquidity");
-            //     rebalanceLiquidity(key);
-            //     lastRebalance = e;
-            // } 
+            // 2. Perform rebalance
+            if (e > lastRebalance + rebalance_frequency) {
+                console2.log("Rebalance liquidity");
+                rebalanceLiquidity(key);
+                lastRebalance = e;
+            } 
 
             netflow = netflows[key][e] / int256(uint256(steps));
             for (uint32 i; i < steps; ++i) {
