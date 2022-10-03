@@ -4,11 +4,19 @@ pragma solidity 0.8.15;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import "src/Kernel.sol";
 
-error VOTES_TransferDisabled();
+interface VOTES_V1 {
+    // ERRORS
+    error VOTES_TransferDisabled();
+
+    // FUNCTIONS
+    function mintTo(address wallet_, uint256 amount_) external;
+
+    function burnFrom(address wallet_, uint256 amount_) external;
+}
 
 /// @notice Votes module is the ERC20 token that represents voting power in the network.
 /// @dev    This is currently a substitute module that stubs gOHM.
-contract OlympusVotes is Module, ERC20 {
+contract OlympusVotes is Module, VOTES_V1, ERC20 {
     /*//////////////////////////////////////////////////////////////
                             MODULE INTERFACE
     //////////////////////////////////////////////////////////////*/
@@ -33,11 +41,11 @@ contract OlympusVotes is Module, ERC20 {
                                CORE LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function mintTo(address wallet_, uint256 amount_) external permissioned {
+    function mintTo(address wallet_, uint256 amount_) external override permissioned {
         _mint(wallet_, amount_);
     }
 
-    function burnFrom(address wallet_, uint256 amount_) external permissioned {
+    function burnFrom(address wallet_, uint256 amount_) external override permissioned {
         _burn(wallet_, amount_);
     }
 
