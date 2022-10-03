@@ -36,7 +36,7 @@ contract ROLESTest is Test {
     }
 
     function testCorrectness_KEYCODE() public {
-        assertEq32("ROLES", Keycode.unwrap(ROLES.KEYCODE()));
+        assertEq32("ROLES", fromKeycode(ROLES.KEYCODE()));
     }
 
     function testCorrectness_SaveRole() public {

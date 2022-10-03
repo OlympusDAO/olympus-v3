@@ -18,9 +18,12 @@ interface ROLES_V1 {
     function saveRole(bytes32 role_, address addr_) external;
 
     function removeRole(bytes32 role_, address addr_) external;
+
+    function ensureValidRole(bytes32 role_) external;
 }
 
 /// @notice Abstract contract to have the `onlyRole` modifier
+/// @dev    jnheriting this automatically makes ROLES module a dependency
 abstract contract RolesConsumer {
     ROLES_V1 public ROLES;
 
@@ -58,12 +61,12 @@ contract OlympusRoles is Module, ROLES_V1 {
 
     /// @notice "Modifier" to restrict policy function access to certain addresses with a role.
     /// @dev    Roles are defined in the policy and granted by the ROLES admin.
-    function requireRole(bytes32 role_, address caller_) external view {
+    function requireRole(bytes32 role_, address caller_) external view override {
         if (!hasRole[caller_][role_]) revert ROLES_RequireRole(role_);
     }
 
     /// @notice Function to grant policy-defined roles to some address. Can only be called by admin.
-    function saveRole(bytes32 role_, address addr_) external permissioned {
+    function saveRole(bytes32 role_, address addr_) external override permissioned {
         if (hasRole[addr_][role_]) revert ROLES_AddressAlreadyHasRole(addr_, role_);
 
         ensureValidRole(role_);
@@ -75,7 +78,7 @@ contract OlympusRoles is Module, ROLES_V1 {
     }
 
     /// @notice Function to revoke policy-defined roles from some address. Can only be called by admin.
-    function removeRole(bytes32 role_, address addr_) external permissioned {
+    function removeRole(bytes32 role_, address addr_) external override permissioned {
         if (!hasRole[addr_][role_]) revert ROLES_AddressDoesNotHaveRole(addr_, role_);
 
         hasRole[addr_][role_] = false;
@@ -84,7 +87,7 @@ contract OlympusRoles is Module, ROLES_V1 {
     }
 
     /// @notice Function that checks if role is valid (all lower case)
-    function ensureValidRole(bytes32 role_) public pure {
+    function ensureValidRole(bytes32 role_) public pure override {
         for (uint256 i = 0; i < 32; ) {
             bytes1 char = role_[i];
             if ((char < 0x61 || char > 0x7A) && char != 0x5f && char != 0x00) {

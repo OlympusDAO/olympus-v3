@@ -6,22 +6,37 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import "src/Kernel.sol";
 
-// ERRORS
-error Price_InvalidParams();
-error Price_NotInitialized();
-error Price_AlreadyInitialized();
-error Price_BadFeed(address priceFeed);
+interface PRICE_V1 {
+    event NewObservation(uint256 timestamp_, uint256 price_, uint256 movingAverage_);
+    event MovingAverageDurationChanged(uint48 movingAverageDuration_);
+    event ObservationFrequencyChanged(uint48 observationFrequency_);
+
+    error Price_InvalidParams();
+    error Price_NotInitialized();
+    error Price_AlreadyInitialized();
+    error Price_BadFeed(address priceFeed);
+
+    function updateMovingAverage() external;
+
+    function getCurrentPrice() public view returns (uint256);
+
+    function getLastPrice() external view returns (uint256);
+
+    function getMovingAverage() public view returns (uint256);
+
+    function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_) external;
+
+    function changeMovingAverageDuration(uint48 movingAverageDuration_) external;
+
+    function changeObservationFrequency(uint48 observationFrequency_) external;
+}
 
 /// @notice Price oracle data storage contract
 /// @dev    The Olympus Price Oracle contract provides a standard interface for OHM price data against a reserve asset.
 ///         It also implements a moving average price calculation (same as a TWAP) on the price feed data over a configured
 ///         duration and observation frequency. The data provided by this contract is used by the Olympus Range Operator to
 ///         perform market operations. The Olympus Price Oracle is updated each epoch by the Olympus Heart contract.
-contract OlympusPrice is Module {
-    /* ========== EVENTS =========== */
-    event NewObservation(uint256 timestamp_, uint256 price_, uint256 movingAverage_);
-    event MovingAverageDurationChanged(uint48 movingAverageDuration_);
-    event ObservationFrequencyChanged(uint48 observationFrequency_);
+contract OlympusPrice is Module, PRICE_V1 {
     /* ========== STATE VARIABLES ========== */
 
     /// @dev    Price feeds. Chainlink typically provides price feeds for an asset in ETH. Therefore, we use two price feeds against ETH, one for OHM and one for the Reserve asset, to calculate the relative price of OHM in the Reserve asset.
