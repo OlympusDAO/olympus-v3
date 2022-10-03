@@ -4,15 +4,18 @@ pragma solidity 0.8.15;
 import "src/Kernel.sol";
 
 interface ROLES_V1 {
+    // EVENTS
     event RoleGranted(bytes32 indexed role_, address indexed addr_);
     event RoleRevoked(bytes32 indexed role_, address indexed addr_);
 
+    // ERRORS
     error ROLES_InvalidRole(bytes32 role_);
     error ROLES_RequireRole(bytes32 role_);
     error ROLES_AddressAlreadyHasRole(address addr_, bytes32 role_);
     error ROLES_AddressDoesNotHaveRole(address addr_, bytes32 role_);
     error ROLES_RoleDoesNotExist(bytes32 role_);
 
+    // FUNCTIONS
     function requireRole(bytes32 role_, address caller_) external;
 
     function saveRole(bytes32 role_, address addr_) external;
