@@ -5,9 +5,7 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
-import "src/Kernel.sol";
-
-contract Faucet is Policy, ReentrancyGuard {
+contract Faucet is ReentrancyGuard {
     using TransferHelper for ERC20;
 
     /* ========== ERRORS =========== */
@@ -26,6 +24,8 @@ contract Faucet is Policy, ReentrancyGuard {
     }
 
     /* ========== STATE VARIABLES ========== */
+    address public admin;
+
     mapping(Asset => uint256) public dripAmount;
     mapping(Asset => ERC20) public token;
     mapping(address => mapping(Asset => uint256)) public lastDrip;
@@ -33,14 +33,15 @@ contract Faucet is Policy, ReentrancyGuard {
 
     /* ========== CONSTRUCTOR ========== */
     constructor(
-        Kernel kernel_,
+        address admin_,
         ERC20 ohm_,
         ERC20 reserve_,
         uint256 ethDrip_,
         uint256 ohmDrip_,
         uint256 reserveDrip_,
         uint256 dripInterval_
-    ) Policy(kernel_) {
+    ) {
+        admin = admin_;
         token[Asset.OHM] = ohm_;
         token[Asset.RESERVE] = reserve_;
 
@@ -77,7 +78,9 @@ contract Faucet is Policy, ReentrancyGuard {
 
     /* ========== ADMIN FUNCTIONS ========== */
 
-    function withdrawAll(address to_, Asset asset_) external onlyRole("faucet_admin") {
+    function withdrawAll(address to_, Asset asset_) external {
+        require(msg.sender == admin, "Must be admin");
+
         if (asset_ == Asset.ETH) {
             (bool success, ) = payable(to_).call{value: address(this).balance}("");
             require(success, "Withdraw Failed");
@@ -86,11 +89,15 @@ contract Faucet is Policy, ReentrancyGuard {
         }
     }
 
-    function setDripInterval(uint256 interval_) external onlyRole("faucet_admin") {
+    function setDripInterval(uint256 interval_) external {
+        require(msg.sender == admin, "Must be admin");
+
         dripInterval = interval_;
     }
 
-    function setDripAmount(Asset asset_, uint256 amount_) external onlyRole("faucet_admin") {
+    function setDripAmount(Asset asset_, uint256 amount_) external {
+        require(msg.sender == admin, "Must be admin");
+
         dripAmount[asset_] = amount_;
     }
 }

@@ -8,6 +8,7 @@ import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
+import {OlympusRoles} from "modules/ROLES.sol";
 import {Operator} from "policies/Operator.sol";
 import "src/Kernel.sol";
 
@@ -28,6 +29,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     IBondAggregator public aggregator;
     OlympusTreasury public TRSRY;
     OlympusMinter public MINTR;
+    OlympusRoles public ROLES;
     Operator public operator;
     ERC20 public ohm;
 
@@ -46,30 +48,26 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
+        dependencies = new Keycode[](3);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("MINTR");
+        dependencies[2] = toKeycode("ROLES");
 
         TRSRY = OlympusTreasury(getModuleAddress(dependencies[0]));
         MINTR = OlympusMinter(getModuleAddress(dependencies[1]));
+        ROLES = OlympusRoles(getModuleAddress(dependencies[2]));
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
     }
 
     /// @inheritdoc Policy
-    function requestPermissions()
-        external
-        view
-        override
-        onlyKernel
-        returns (Permissions[] memory requests)
-    {
+    function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
         requests = new Permissions[](4);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[2] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         requests[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
@@ -80,19 +78,19 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IBondCallback
-    function whitelist(address teller_, uint256 id_)
-        external
-        override
-        onlyRole("callback_whitelist")
-    {
+    function whitelist(address teller_, uint256 id_) external override {
+        ROLES.requireRole("callback_whitelist", msg.sender);
+
         approvedMarkets[teller_][id_] = true;
 
         // Get payout tokens for market
         (, , ERC20 payoutToken, , , ) = aggregator.getAuctioneer(id_).getMarketInfoForPurchase(id_);
 
-        /// If payout token is not OHM, request approval from TRSRY for withdrawals
+        /// If payout token is not OHM, request infinite approval from TRSRY for withdrawals
         if (address(payoutToken) != address(ohm)) {
-            TRSRY.setApprovalFor(address(this), payoutToken, type(uint256).max);
+            uint256 toApprove = type(uint256).max -
+                TRSRY.withdrawApproval(address(this), payoutToken);
+            TRSRY.increaseWithdrawerApproval(address(this), payoutToken, toApprove);
         }
     }
 
@@ -100,7 +98,9 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     /// @dev    Shutdown function in case there's an issue with the teller
     /// @param  teller_ Address of the Teller contract which serves the market
     /// @param  id_     ID of the market to remove from whitelist
-    function blacklist(address teller_, uint256 id_) external onlyRole("callback_whitelist") {
+    function blacklist(address teller_, uint256 id_) external {
+        ROLES.requireRole("callback_whitelist", msg.sender);
+
         approvedMarkets[teller_][id_] = false;
     }
 
@@ -155,7 +155,9 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
 
     /// @notice Send tokens to the TRSRY in a batch
     /// @param  tokens_ - Array of tokens to send
-    function batchToTreasury(ERC20[] memory tokens_) external onlyRole("callback_admin") {
+    function batchToTreasury(ERC20[] memory tokens_) external {
+        ROLES.requireRole("callback_admin", msg.sender);
+
         ERC20 token;
         uint256 balance;
         uint256 len = tokens_.length;
@@ -193,7 +195,9 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     /// @notice Sets the operator contract for the callback to use to report bond purchases
     /// @notice Must be set before the callback is used
     /// @param  operator_ - Address of the Operator contract
-    function setOperator(Operator operator_) external onlyRole("callback_admin") {
+    function setOperator(Operator operator_) external {
+        ROLES.requireRole("callback_admin", msg.sender);
+
         if (address(operator_) == address(0)) revert Callback_InvalidParams();
         operator = operator_;
     }

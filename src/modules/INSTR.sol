@@ -26,7 +26,8 @@ contract OlympusInstructions is Module {
 
     /// @inheritdoc Module
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
-        return (1, 0);
+        major = 1;
+        minor = 0;
     }
 
     /*//////////////////////////////////////////////////////////////

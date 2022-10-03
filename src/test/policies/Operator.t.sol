@@ -23,9 +23,11 @@ import "src/Kernel.sol";
 import {OlympusRange} from "modules/RANGE.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter, OHM} from "modules/MINTR.sol";
+import {OlympusRoles, toRole, ROLES_RequireRole} from "modules/ROLES.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 // solhint-disable-next-line max-states-count
 contract OperatorTest is Test {
@@ -50,9 +52,11 @@ contract OperatorTest is Test {
     OlympusRange internal range;
     OlympusTreasury internal treasury;
     OlympusMinter internal minter;
+    OlympusRoles internal roles;
 
     Operator internal operator;
     BondCallback internal callback;
+    RolesAdmin internal rolesAdmin;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -99,6 +103,7 @@ contract OperatorTest is Test {
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
+            roles = new OlympusRoles(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -130,6 +135,8 @@ contract OperatorTest is Test {
                 ]
             );
 
+            /// Deploy roles administrator
+            rolesAdmin = new RolesAdmin(kernel);
             /// Registor operator to create bond markets with a callback
             vm.prank(guardian);
             auctioneer.setCallbackAuthStatus(address(operator), true);
@@ -143,25 +150,27 @@ contract OperatorTest is Test {
             kernel.executeAction(Actions.InstallModule, address(range));
             kernel.executeAction(Actions.InstallModule, address(treasury));
             kernel.executeAction(Actions.InstallModule, address(minter));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
             /// Configure access control
 
             /// Operator roles
-            kernel.grantRole(toRole("operator_operate"), address(heart));
-            kernel.grantRole(toRole("operator_operate"), guardian);
-            kernel.grantRole(toRole("operator_reporter"), address(callback));
-            kernel.grantRole(toRole("operator_policy"), policy);
-            kernel.grantRole(toRole("operator_admin"), guardian);
+            rolesAdmin.grantRole("operator_operate", address(heart));
+            rolesAdmin.grantRole("operator_operate", guardian);
+            rolesAdmin.grantRole("operator_reporter", address(callback));
+            rolesAdmin.grantRole("operator_policy", policy);
+            rolesAdmin.grantRole("operator_admin", guardian);
 
             /// Bond callback roles
-            kernel.grantRole(toRole("callback_whitelist"), address(operator));
-            kernel.grantRole(toRole("callback_whitelist"), guardian);
-            kernel.grantRole(toRole("callback_admin"), guardian);
+            rolesAdmin.grantRole("callback_whitelist", address(operator));
+            rolesAdmin.grantRole("callback_whitelist", guardian);
+            rolesAdmin.grantRole("callback_admin", guardian);
         }
 
         /// Set operator on the callback
@@ -1530,7 +1539,7 @@ contract OperatorTest is Test {
 
         /// Try to call operate as anyone else
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_RequireRole.selector,
             toRole("operator_operate")
         );
         vm.expectRevert(err);
@@ -1557,7 +1566,7 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_RequireRole.selector,
             toRole("operator_policy")
         );
         vm.expectRevert(err);
@@ -1592,7 +1601,7 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_RequireRole.selector,
             toRole("operator_admin")
         );
         vm.expectRevert(err);
@@ -2019,7 +2028,7 @@ contract OperatorTest is Test {
 
         /// Try to call regenerate without being guardian and expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_RequireRole.selector,
             toRole("operator_admin")
         );
 

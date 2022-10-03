@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
+import "src/modules/OlympusRoles.sol";
 import "./mocks/KernelTestMocks.sol";
 import "src/Kernel.sol";
 
@@ -11,6 +12,7 @@ contract KernelTest is Test {
     Kernel internal kernel;
     MockPolicy internal policy;
     MockModule internal MOCKY;
+    OlympusRoles internal ROLES;
 
     address public deployer;
     address public multisig;
@@ -30,7 +32,10 @@ contract KernelTest is Test {
         vm.startPrank(deployer);
         kernel = new Kernel();
         MOCKY = new MockModule(kernel);
+        ROLES = new OlympusRoles(kernel);
         policy = new MockPolicy(kernel);
+
+        kernel.executeAction(Actions.InstallModule, address(ROLES));
 
         vm.stopPrank();
     }
@@ -38,8 +43,8 @@ contract KernelTest is Test {
     function testCorrectness_InitializeKernel() public {
         Keycode keycode = Keycode.wrap(0);
 
-        assertEq(kernel.admin(), deployer);
         assertEq(kernel.executor(), deployer);
+        assertEq(ROLES.rolesAdmin(), deployer);
         assertEq(kernel.modulePermissions(keycode, policy, bytes4(0)), false);
         assertEq(address(kernel.getModuleForKeycode(keycode)), address(0));
         assertEq(Keycode.unwrap(kernel.getKeycodeForModule(MOCKY)), bytes5(0));
@@ -51,11 +56,11 @@ contract KernelTest is Test {
 
         err = abi.encodeWithSignature("Kernel_OnlyAdmin(address)", address(this));
         vm.expectRevert(err);
-        kernel.grantRole(Role.wrap("executor"), address(deployer));
+        ROLES.grantRole(Role.wrap("executor"), address(deployer));
 
         err = abi.encodeWithSignature("Kernel_OnlyAdmin(address)", address(this));
         vm.expectRevert(err);
-        kernel.grantRole(Role.wrap("executor"), address(deployer));
+        ROLES.grantRole(Role.wrap("executor"), address(deployer));
         //kernel.revokeRole(deployer);
     }
 
@@ -165,6 +170,7 @@ contract KernelTest is Test {
     function testCorrectness_ActivatePolicy() public {
         Keycode testKeycode = Keycode.wrap("MOCKY");
 
+        // Try to activate policy without module installed
         vm.prank(deployer);
         err = abi.encodeWithSignature("Policy_ModuleDoesNotExist(bytes5)", testKeycode);
         vm.expectRevert(err);
@@ -172,19 +178,26 @@ contract KernelTest is Test {
 
         _initModuleAndPolicy();
 
+        // Ensure policy was activated correctly
         assertEq(
             kernel.modulePermissions(testKeycode, policy, MOCKY.permissionedCall.selector),
             true
         );
         assertEq(address(kernel.activePolicies(0)), address(policy));
+        assertTrue(policy.isActive());
 
+        // Ensure policy is a dependent
         uint256 depIndex = kernel.getDependentIndex(testKeycode, policy);
         Policy[] memory dependencies = new Policy[](1);
         dependencies[0] = policy;
         assertEq(address(kernel.moduleDependents(testKeycode, depIndex)), address(dependencies[0]));
+    }
+
+    function testRevert_ActivatePolicyTwice() public {
+        _initModuleAndPolicy();
 
         vm.prank(deployer);
-        err = abi.encodeWithSignature("Kernel_PolicyAlreadyActivated(address)", address(policy));
+        err = abi.encodeWithSelector(Kernel_PolicyAlreadyActivated.selector, address(policy));
         vm.expectRevert(err);
         kernel.executeAction(Actions.ActivatePolicy, address(policy));
     }
@@ -214,7 +227,7 @@ contract KernelTest is Test {
 
         vm.startPrank(deployer);
 
-        err = abi.encodeWithSignature("Policy_OnlyRole(bytes32)", testerRole);
+        err = abi.encodeWithSignature("ROLES_requireRole(bytes32)", testerRole);
         vm.expectRevert(err);
         policy.callPermissionedFunction();
 
@@ -230,7 +243,7 @@ contract KernelTest is Test {
         kernel.revokeRole(testerRole, multisig);
 
         vm.prank(multisig);
-        err = abi.encodeWithSignature("Policy_OnlyRole(bytes32)", testerRole);
+        err = abi.encodeWithSignature("ROLES_requireRole(bytes32)", testerRole);
         vm.expectRevert(err);
         policy.callPermissionedFunction();
     }
@@ -356,7 +369,7 @@ contract KernelTest is Test {
         kernel.revokeRole(Role.wrap("tester"), user);
         assertFalse(kernel.hasRole(user, Role.wrap("tester")));
 
-        err = abi.encodeWithSignature("Policy_OnlyRole(bytes32)", Role.wrap("tester"));
+        err = abi.encodeWithSignature("ROLES_requireRole(bytes32)", Role.wrap("tester"));
         vm.expectRevert(err);
         vm.prank(user);
         policy.callPermissionedFunction();

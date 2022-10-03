@@ -29,12 +29,14 @@ import {OlympusTreasury} from "modules/TRSRY.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
 import {OlympusInstructions} from "modules/INSTR.sol";
 import {OlympusVotes} from "modules/VOTES.sol";
+import "modules/ROLES.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -168,10 +170,13 @@ abstract contract RangeSim is Test {
     OlympusRange public range;
     OlympusTreasury public treasury;
     OlympusMinter public minter;
+    OlympusRoles public roles;
+
     Operator public operator;
     BondCallback public callback;
     OlympusHeart public heart;
     OlympusPriceConfig public priceConfig;
+    RolesAdmin public rolesAdmin;
 
     mapping(uint32 => SimIO.Params) internal params; // map of sim keys to sim params
     mapping(uint32 => mapping(uint32 => int256)) internal netflows; // map of sim keys to epochs to netflows
@@ -337,6 +342,7 @@ abstract contract RangeSim is Test {
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
+            roles = new OlympusRoles(kernel);
         }
 
         {
@@ -372,6 +378,9 @@ abstract contract RangeSim is Test {
                 reserve,
                 uint256(0) // no keeper rewards for sim
             );
+
+            /// Deploy RolesAdmin
+            rolesAdmin = new RolesAdmin(kernel);
         }
 
         {
@@ -382,33 +391,35 @@ abstract contract RangeSim is Test {
             kernel.executeAction(Actions.InstallModule, address(range));
             kernel.executeAction(Actions.InstallModule, address(treasury));
             kernel.executeAction(Actions.InstallModule, address(minter));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
             kernel.executeAction(Actions.ActivatePolicy, address(heart));
             kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
             // Configure access control
 
             // Operator roles
-            kernel.grantRole(toRole("operator_operate"), address(heart));
-            kernel.grantRole(toRole("operator_operate"), guardian);
-            kernel.grantRole(toRole("operator_reporter"), address(callback));
-            kernel.grantRole(toRole("operator_policy"), policy);
-            kernel.grantRole(toRole("operator_admin"), guardian);
+            rolesAdmin.grantRole("operator_operate", address(heart));
+            rolesAdmin.grantRole("operator_operate", guardian);
+            rolesAdmin.grantRole("operator_reporter", address(callback));
+            rolesAdmin.grantRole("operator_policy", policy);
+            rolesAdmin.grantRole("operator_admin", guardian);
 
             // Bond callback roles
-            kernel.grantRole(toRole("callback_whitelist"), address(operator));
-            kernel.grantRole(toRole("callback_whitelist"), guardian);
-            kernel.grantRole(toRole("callback_admin"), guardian);
+            rolesAdmin.grantRole("callback_whitelist", address(operator));
+            rolesAdmin.grantRole("callback_whitelist", guardian);
+            rolesAdmin.grantRole("callback_admin", guardian);
 
             // Heart roles
-            kernel.grantRole(toRole("heart_admin"), guardian);
+            rolesAdmin.grantRole("heart_admin", guardian);
 
             // PriceConfig roles
-            kernel.grantRole(toRole("price_admin"), guardian);
+            rolesAdmin.grantRole("price_admin", guardian);
         }
 
         {
