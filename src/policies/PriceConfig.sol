@@ -22,8 +22,8 @@ contract OlympusPriceConfig is Policy {
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("ROLES");
 
-        PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
-        ROLES = OlympusRoles(getModuleAddress(dependencies[1]));
+        PRICE = PRICE_V1(getModuleAddress(dependencies[0]));
+        ROLES = ROLES_V1(getModuleAddress(dependencies[1]));
     }
 
     function requestPermissions()
