@@ -10,13 +10,13 @@ import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IWETH9} from "interfaces/IWETH9.sol";
 
 import "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusInstructions} from "modules/INSTR.sol";
-import {OlympusVotes} from "modules/VOTES.sol";
-import {OlympusRoles} from "modules/ROLES.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
+import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";

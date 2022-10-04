@@ -10,8 +10,8 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import "src/Kernel.sol";
-import {OlympusRange} from "modules/RANGE.sol";
 
 contract RangeTest is Test {
     using FullMath for uint256;

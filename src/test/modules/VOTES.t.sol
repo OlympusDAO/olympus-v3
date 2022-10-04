@@ -8,7 +8,8 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {Kernel, Module, Instruction, Actions} from "../../Kernel.sol";
-import {OlympusVotes, VOTESv1} from "modules/VOTES.sol";
+import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
+import {VOTESv1} from "modules/VOTES/VOTES.v1.sol";
 
 contract VotesTest is Test {
     Kernel internal kernel;

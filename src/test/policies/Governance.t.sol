@@ -8,8 +8,10 @@ import {ModuleTestFixtureGenerator} from "../lib/ModuleTestFixtureGenerator.sol"
 
 import "src/Kernel.sol";
 
-import {OlympusInstructions} from "modules/INSTR.sol";
-import {OlympusVotes} from "modules/VOTES.sol";
+import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
+import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 
 import "policies/Governance.sol";
 import {VoterRegistration} from "policies/VoterRegistration.sol";

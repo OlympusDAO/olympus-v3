@@ -7,7 +7,8 @@ import {console2} from "forge-std/console2.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
-import "modules/ROLES.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {FullMath} from "libraries/FullMath.sol";

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {ROLESv1} from "src/modules/ROLES.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import "src/Kernel.sol";
 
 /// @notice The RolesAdmin Policy grants and revokes Roles in the ROLES module.

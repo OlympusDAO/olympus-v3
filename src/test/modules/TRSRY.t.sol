@@ -10,7 +10,9 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 //import {MockPolicy} from "test/mocks/KernelTestMocks.sol";
 
-import {OlympusTreasury, TRSRYv1} from "src/modules/TRSRY.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+
 import "src/Kernel.sol";
 
 contract TRSRYTest is Test {

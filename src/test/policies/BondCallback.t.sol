@@ -19,11 +19,11 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter, OHM} from "modules/MINTR.sol";
-import {OlympusRoles, ROLESv1} from "modules/ROLES.sol";
-
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";

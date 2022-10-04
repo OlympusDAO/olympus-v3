@@ -11,7 +11,7 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
-import {OlympusPrice} from "modules/PRICE.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import "src/Kernel.sol";
 
 contract PriceTest is Test {

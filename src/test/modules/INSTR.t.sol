@@ -7,7 +7,7 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import "src/Kernel.sol";
-import "modules/INSTR.sol";
+import "modules/INSTR/OlympusInstructions.sol";
 import {OlympusGovernance} from "policies/Governance.sol";
 import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 import {MockInvalidModule} from "test/mocks/MockInvalidModule.sol";
