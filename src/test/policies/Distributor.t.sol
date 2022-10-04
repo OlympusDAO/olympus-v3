@@ -7,10 +7,12 @@ import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
 /// Import Distributor
-import "src/policies/Distributor.sol";
+import "policies/Distributor.sol";
 import "src/Kernel.sol";
-import {OlympusMinter} from "src/modules/MINTR.sol";
-import {OlympusTreasury} from "src/modules/TRSRY.sol";
+import "modules/ROLES.sol";
+import {OlympusMinter} from "modules/MINTR.sol";
+import {OlympusTreasury} from "modules/TRSRY.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 /// Import Mocks for non-Bophades contracts
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -23,7 +25,10 @@ contract DistributorTest is Test {
     Kernel internal kernel;
     OlympusMinter internal mintr;
     OlympusTreasury internal trsry;
+    OlympusRoles internal roles;
+
     Distributor internal distributor;
+    RolesAdmin internal rolesAdmin;
 
     /// Tokens
     MockERC20 internal ohm;
@@ -60,19 +65,21 @@ contract DistributorTest is Test {
             /// Deploy Bophades Modules
             mintr = new OlympusMinter(kernel, address(ohm));
             trsry = new OlympusTreasury(kernel);
+            roles = new OlympusRoles(kernel);
         }
 
         {
             /// Initialize Modules
             kernel.executeAction(Actions.InstallModule, address(mintr));
             kernel.executeAction(Actions.InstallModule, address(trsry));
+            kernel.executeAction(Actions.InstallModule, address(roles));
         }
 
         {
-            /// Deploy Staking and Distributor
+            /// Deploy Staking, Distributor, and Roles Admin
             staking = new MockStaking(address(ohm), address(sohm), address(gohm), 2200, 0, 2200);
-
             distributor = new Distributor(address(kernel), address(ohm), address(staking), 1000);
+            rolesAdmin = new RolesAdmin(kernel);
 
             staking.setDistributor(address(distributor));
         }
@@ -80,7 +87,9 @@ contract DistributorTest is Test {
         {
             /// Initialize Distributor Policy
             kernel.executeAction(Actions.ActivatePolicy, address(distributor));
-            kernel.grantRole(toRole("distributor_admin"), address(this));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+
+            rolesAdmin.grantRole("distributor_admin", address(this));
         }
 
         {
@@ -180,7 +189,7 @@ contract DistributorTest is Test {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_RequireRole.selector,
             toRole("distributor_admin")
         );
         vm.expectRevert(err);
@@ -201,7 +210,7 @@ contract DistributorTest is Test {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_RequireRole.selector,
             toRole("distributor_admin")
         );
         vm.expectRevert(err);
@@ -237,7 +246,7 @@ contract DistributorTest is Test {
         distributor.setPools(newPools);
 
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_RequireRole.selector,
             toRole("distributor_admin")
         );
         vm.expectRevert(err);
@@ -291,7 +300,7 @@ contract DistributorTest is Test {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_RequireRole.selector,
             toRole("distributor_admin")
         );
         vm.expectRevert(err);
@@ -335,7 +344,7 @@ contract DistributorTest is Test {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
+            ROLES_RequireRole.selector,
             toRole("distributor_admin")
         );
         vm.expectRevert(err);
