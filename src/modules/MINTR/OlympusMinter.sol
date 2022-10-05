@@ -6,9 +6,9 @@ import "src/Kernel.sol";
 
 /// @notice Wrapper for minting and burning functions of OHM token.
 contract OlympusMinter is MINTRv1 {
-    /*//////////////////////////////////////////////////////////////
-                            MODULE INTERFACE
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      MODULE SETUP                                          //
+    //============================================================================================//
 
     constructor(Kernel kernel_, address ohm_) Module(kernel_) {
         ohm = OHM(ohm_);
@@ -25,9 +25,9 @@ contract OlympusMinter is MINTRv1 {
         minor = 0;
     }
 
-    /*//////////////////////////////////////////////////////////////
-                               CORE LOGIC
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                    MODULE FUNCTIONS                                        //
+    //============================================================================================//
 
     /// @inheritdoc MINTRv1
     function mintOhm(address to_, uint256 amount_) external override permissioned {

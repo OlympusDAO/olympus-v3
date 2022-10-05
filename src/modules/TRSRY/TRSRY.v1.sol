@@ -6,11 +6,10 @@ import "src/Kernel.sol";
 
 /// @notice Treasury holds all other assets under the control of the protocol.
 abstract contract TRSRYv1 is Module {
-    // ERRORS
-    error TRSRY_NotApproved();
-    error TRSRY_NoDebtOutstanding();
+    //============================================================================================//
+    //                                           EVENTS                                           //
+    //============================================================================================//
 
-    // EVENTS
     event IncreaseWithdrawerApproval(
         address indexed withdrawer_,
         ERC20 indexed token_,
@@ -33,7 +32,16 @@ abstract contract TRSRYv1 is Module {
     event DebtRepaid(ERC20 indexed token_, address indexed policy_, uint256 amount_);
     event DebtSet(ERC20 indexed token_, address indexed policy_, uint256 amount_);
 
-    // STATE
+    //============================================================================================//
+    //                                           ERRORS                                           //
+    //============================================================================================//
+
+    error TRSRY_NotApproved();
+    error TRSRY_NoDebtOutstanding();
+
+    //============================================================================================//
+    //                                            STATE                                           //
+    //============================================================================================//
 
     /// @notice Mapping of who is approved for withdrawal.
     /// @dev    withdrawer -> token -> amount. Infinite approval is max(uint256).
@@ -49,10 +57,9 @@ abstract contract TRSRYv1 is Module {
     /// @notice Debt for particular token and debtor address
     mapping(ERC20 => mapping(address => uint256)) public reserveDebt;
 
-    // FUNCTIONS
-
-    /// @notice Get total balance of assets inside the treasury + any debt taken out against those assets.
-    function getReserveBalance(ERC20 token_) external view virtual returns (uint256);
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice Increase approval for specific withdrawer addresses
     function increaseWithdrawerApproval(
@@ -108,4 +115,11 @@ abstract contract TRSRYv1 is Module {
         ERC20 token_,
         uint256 amount_
     ) external virtual;
+
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @notice Get total balance of assets inside the treasury + any debt taken out against those assets.
+    function getReserveBalance(ERC20 token_) external view virtual returns (uint256);
 }

@@ -4,12 +4,16 @@ pragma solidity 0.8.15;
 import "src/Kernel.sol";
 
 abstract contract ROLESv1 is Module {
-    // EVENTS
+    //============================================================================================//
+    //                                           EVENTS                                           //
+    //============================================================================================//
 
     event RoleGranted(bytes32 indexed role_, address indexed addr_);
     event RoleRevoked(bytes32 indexed role_, address indexed addr_);
 
-    // ERRORS
+    //============================================================================================//
+    //                                           ERRORS                                           //
+    //============================================================================================//
 
     error ROLES_InvalidRole(bytes32 role_);
     error ROLES_RequireRole(bytes32 role_);
@@ -17,16 +21,16 @@ abstract contract ROLESv1 is Module {
     error ROLES_AddressDoesNotHaveRole(address addr_, bytes32 role_);
     error ROLES_RoleDoesNotExist(bytes32 role_);
 
-    // STATE
+    //============================================================================================//
+    //                                            STATE                                           //
+    //============================================================================================//
 
     /// @notice Mapping for if an address has a policy-defined role.
     mapping(address => mapping(bytes32 => bool)) public hasRole;
 
-    // FUNCTIONS
-
-    /// @notice "Modifier" to restrict policy function access to certain addresses with a role.
-    /// @dev    Roles are defined in the policy and granted by the ROLES admin.
-    function requireRole(bytes32 role_, address caller_) external virtual;
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice Function to grant policy-defined roles to some address. Can only be called by admin.
     function saveRole(bytes32 role_, address addr_) external virtual;
@@ -34,6 +38,14 @@ abstract contract ROLESv1 is Module {
     /// @notice Function to revoke policy-defined roles from some address. Can only be called by admin.
     function removeRole(bytes32 role_, address addr_) external virtual;
 
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @notice "Modifier" to restrict policy function access to certain addresses with a role.
+    /// @dev    Roles are defined in the policy and granted by the ROLES admin.
+    function requireRole(bytes32 role_, address caller_) external virtual;
+
     /// @notice Function that checks if role is valid (all lower case)
-    function ensureValidRole(bytes32 role_) external virtual;
+    function ensureValidRole(bytes32 role_) external pure virtual;
 }

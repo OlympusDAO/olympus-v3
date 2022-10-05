@@ -5,10 +5,15 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import "src/Kernel.sol";
 
 abstract contract VOTESv1 is Module, ERC20 {
-    // ERRORS
+    //============================================================================================//
+    //                                           ERRORS                                           //
+    //============================================================================================//
+
     error VOTES_TransferDisabled();
 
-    // FUNCTIONS
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice Mint VOTES token to an address
     function mintTo(address wallet_, uint256 amount_) external virtual;

@@ -11,9 +11,9 @@ contract OlympusPrice is PRICEv1 {
     // Scale factor for converting prices, calculated from decimal values.
     uint256 internal immutable _scaleFactor;
 
-    /*//////////////////////////////////////////////////////////////
-                            MODULE INTERFACE
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                        MODULE SETUP                                        //
+    //============================================================================================//
 
     constructor(
         Kernel kernel_,
@@ -66,7 +66,9 @@ contract OlympusPrice is PRICEv1 {
         minor = 0;
     }
 
-    /* ========== POLICY FUNCTIONS ========== */
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @inheritdoc PRICEv1
     function updateMovingAverage() external override permissioned {
@@ -91,71 +93,6 @@ contract OlympusPrice is PRICEv1 {
 
         emit NewObservation(block.timestamp, currentPrice, getMovingAverage());
     }
-
-    /*//////////////////////////////////////////////////////////////
-                             VIEW FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @inheritdoc PRICEv1
-    function getCurrentPrice() public view override returns (uint256) {
-        if (!initialized) revert Price_NotInitialized();
-
-        // Get prices from feeds
-        uint256 ohmEthPrice;
-        uint256 reserveEthPrice;
-        {
-            (
-                uint80 roundId,
-                int256 ohmEthPriceInt,
-                ,
-                uint256 updatedAt,
-                uint80 answeredInRound
-            ) = ohmEthPriceFeed.latestRoundData();
-
-            // Validate chainlink price feed data
-            // 1. Answer should be greater than zero
-            // 2. Updated at timestamp should be within the update threshold
-            // 3. Answered in round ID should be the same as the round ID
-            if (
-                ohmEthPriceInt <= 0 ||
-                updatedAt < block.timestamp - uint256(ohmEthUpdateThreshold) ||
-                answeredInRound < roundId
-            ) revert Price_BadFeed(address(ohmEthPriceFeed));
-            ohmEthPrice = uint256(ohmEthPriceInt);
-
-            int256 reserveEthPriceInt;
-            (roundId, reserveEthPriceInt, , updatedAt, answeredInRound) = reserveEthPriceFeed
-                .latestRoundData();
-            if (
-                reserveEthPriceInt <= 0 ||
-                updatedAt < block.timestamp - uint256(reserveEthUpdateThreshold) ||
-                answeredInRound < roundId
-            ) revert Price_BadFeed(address(reserveEthPriceFeed));
-            reserveEthPrice = uint256(reserveEthPriceInt);
-        }
-
-        // Convert to OHM/RESERVE price
-        uint256 currentPrice = (ohmEthPrice * _scaleFactor) / reserveEthPrice;
-
-        return currentPrice;
-    }
-
-    /// @inheritdoc PRICEv1
-    function getLastPrice() external view override returns (uint256) {
-        if (!initialized) revert Price_NotInitialized();
-        uint32 lastIndex = nextObsIndex == 0 ? numObservations - 1 : nextObsIndex - 1;
-        return observations[lastIndex];
-    }
-
-    /// @inheritdoc PRICEv1
-    function getMovingAverage() public view override returns (uint256) {
-        if (!initialized) revert Price_NotInitialized();
-        return cumulativeObs / numObservations;
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            ADMIN FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc PRICEv1
     function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
@@ -247,5 +184,66 @@ contract OlympusPrice is PRICEv1 {
         numObservations = uint32(newObservations);
 
         emit ObservationFrequencyChanged(observationFrequency_);
+    }
+
+    //============================================================================================//
+    //                                      VIEW FUNCTIONS                                        //
+    //============================================================================================//
+
+    /// @inheritdoc PRICEv1
+    function getCurrentPrice() public view override returns (uint256) {
+        if (!initialized) revert Price_NotInitialized();
+
+        // Get prices from feeds
+        uint256 ohmEthPrice;
+        uint256 reserveEthPrice;
+        {
+            (
+                uint80 roundId,
+                int256 ohmEthPriceInt,
+                ,
+                uint256 updatedAt,
+                uint80 answeredInRound
+            ) = ohmEthPriceFeed.latestRoundData();
+
+            // Validate chainlink price feed data
+            // 1. Answer should be greater than zero
+            // 2. Updated at timestamp should be within the update threshold
+            // 3. Answered in round ID should be the same as the round ID
+            if (
+                ohmEthPriceInt <= 0 ||
+                updatedAt < block.timestamp - uint256(ohmEthUpdateThreshold) ||
+                answeredInRound < roundId
+            ) revert Price_BadFeed(address(ohmEthPriceFeed));
+            ohmEthPrice = uint256(ohmEthPriceInt);
+
+            int256 reserveEthPriceInt;
+            (roundId, reserveEthPriceInt, , updatedAt, answeredInRound) = reserveEthPriceFeed
+                .latestRoundData();
+            if (
+                reserveEthPriceInt <= 0 ||
+                updatedAt < block.timestamp - uint256(reserveEthUpdateThreshold) ||
+                answeredInRound < roundId
+            ) revert Price_BadFeed(address(reserveEthPriceFeed));
+            reserveEthPrice = uint256(reserveEthPriceInt);
+        }
+
+        // Convert to OHM/RESERVE price
+        uint256 currentPrice = (ohmEthPrice * _scaleFactor) / reserveEthPrice;
+
+        return currentPrice;
+    }
+
+    /// @inheritdoc PRICEv1
+    function getLastPrice() external view override returns (uint256) {
+        if (!initialized) revert Price_NotInitialized();
+        uint32 lastIndex = nextObsIndex == 0 ? numObservations - 1 : nextObsIndex - 1;
+        return observations[lastIndex];
+    }
+
+    /// @inheritdoc PRICEv1
+    function getMovingAverage() public view override returns (uint256) {
+        if (!initialized) revert Price_NotInitialized();
+        return cumulativeObs / numObservations;
     }
 }

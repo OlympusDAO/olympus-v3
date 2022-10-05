@@ -17,9 +17,9 @@ abstract contract RolesConsumer {
 
 /// @notice Module that holds multisig roles needed by various policies.
 contract OlympusRoles is ROLESv1 {
-    /*//////////////////////////////////////////////////////////////
-                            MODULE INTERFACE
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                        MODULE SETUP                                        //
+    //============================================================================================//
 
     constructor(Kernel kernel_) Module(kernel_) {}
 
@@ -34,14 +34,9 @@ contract OlympusRoles is ROLESv1 {
         minor = 0;
     }
 
-    /*//////////////////////////////////////////////////////////////
-                               CORE LOGIC
-    //////////////////////////////////////////////////////////////*/
-
-    /// @inheritdoc ROLESv1
-    function requireRole(bytes32 role_, address caller_) external view override {
-        if (!hasRole[caller_][role_]) revert ROLES_RequireRole(role_);
-    }
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @inheritdoc ROLESv1
     function saveRole(bytes32 role_, address addr_) external override permissioned {
@@ -62,6 +57,15 @@ contract OlympusRoles is ROLESv1 {
         hasRole[addr_][role_] = false;
 
         emit RoleRevoked(role_, addr_);
+    }
+
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @inheritdoc ROLESv1
+    function requireRole(bytes32 role_, address caller_) external view override {
+        if (!hasRole[caller_][role_]) revert ROLES_RequireRole(role_);
     }
 
     /// @inheritdoc ROLESv1

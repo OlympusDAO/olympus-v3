@@ -10,18 +10,26 @@ import "src/Kernel.sol";
 ///         duration and observation frequency. The data provided by this contract is used by the Olympus Range Operator to
 ///         perform market operations. The Olympus Price Oracle is updated each epoch by the Olympus Heart contract.
 abstract contract PRICEv1 is Module {
-    // EVENTS
+    //============================================================================================//
+    //                                           EVENTS                                           //
+    //============================================================================================//
+
     event NewObservation(uint256 timestamp_, uint256 price_, uint256 movingAverage_);
     event MovingAverageDurationChanged(uint48 movingAverageDuration_);
     event ObservationFrequencyChanged(uint48 observationFrequency_);
 
-    // ERRORS
+    //============================================================================================//
+    //                                           ERRORS                                           //
+    //============================================================================================//
+
     error Price_InvalidParams();
     error Price_NotInitialized();
     error Price_AlreadyInitialized();
     error Price_BadFeed(address priceFeed);
 
-    // STATE
+    //============================================================================================//
+    //                                            STATE                                           //
+    //============================================================================================//
 
     /// @dev    Price feeds. Chainlink typically provides price feeds for an asset in ETH. Therefore, we use two price feeds against ETH, one for OHM and one for the Reserve asset, to calculate the relative price of OHM in the Reserve asset.
     /// @dev    Update thresholds are the maximum amount of time that can pass between price feed updates before the price oracle is considered stale. These should be set based on the parameters of the price feed.
@@ -68,21 +76,14 @@ abstract contract PRICEv1 is Module {
     /// @notice Number of decimals in the price values provided by the contract.
     uint8 public constant decimals = 18;
 
-    // FUNCTIONS
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice Trigger an update of the moving average. Permissioned.
     /// @dev    This function does not have a time-gating on the observationFrequency on this contract. It is set on the Heart policy contract.
     ///         The Heart beat frequency should be set to the same value as the observationFrequency.
     function updateMovingAverage() external virtual;
-
-    /// @notice Get the current price of OHM in the Reserve asset from the price feeds
-    function getCurrentPrice() external virtual returns (uint256);
-
-    /// @notice Get the last stored price observation of OHM in the Reserve asset
-    function getLastPrice() external virtual returns (uint256);
-
-    /// @notice Get the moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
-    function getMovingAverage() external virtual returns (uint256);
 
     /// @notice Initialize the price module
     /// @notice Access restricted to activated policies
@@ -106,4 +107,17 @@ abstract contract PRICEv1 is Module {
     /// @dev      Changing the observation frequency clears existing observation data since it will not be taken at the right time intervals.
     ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
     function changeObservationFrequency(uint48 observationFrequency_) external virtual;
+
+    //============================================================================================//
+    //                                      VIEW FUNCTIONS                                        //
+    //============================================================================================//
+
+    /// @notice Get the current price of OHM in the Reserve asset from the price feeds
+    function getCurrentPrice() external view virtual returns (uint256);
+
+    /// @notice Get the last stored price observation of OHM in the Reserve asset
+    function getLastPrice() external view virtual returns (uint256);
+
+    /// @notice Get the moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
+    function getMovingAverage() external view virtual returns (uint256);
 }

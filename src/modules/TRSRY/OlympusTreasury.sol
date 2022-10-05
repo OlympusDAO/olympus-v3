@@ -13,9 +13,9 @@ import "src/Kernel.sol";
 contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
     using TransferHelper for ERC20;
 
-    /*//////////////////////////////////////////////////////////////
-                            MODULE INTERFACE
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      MODULE SETUP                                          //
+    //============================================================================================//
 
     constructor(Kernel kernel_) Module(kernel_) {}
 
@@ -30,14 +30,9 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         minor = 0;
     }
 
-    /*//////////////////////////////////////////////////////////////
-                               CORE LOGIC
-    //////////////////////////////////////////////////////////////*/
-
-    /// @inheritdoc TRSRYv1
-    function getReserveBalance(ERC20 token_) external view override returns (uint256) {
-        return token_.balanceOf(address(this)) + totalDebt[token_];
-    }
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @inheritdoc TRSRYv1
     function increaseWithdrawerApproval(
@@ -81,10 +76,6 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
 
         emit Withdrawal(msg.sender, to_, token_, amount_);
     }
-
-    /*//////////////////////////////////////////////////////////////
-                             DEBT FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc TRSRYv1
     function increaseDebtorApproval(
@@ -167,5 +158,14 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         else totalDebt[token_] -= oldDebt - amount_;
 
         emit DebtSet(token_, debtor_, amount_);
+    }
+
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @inheritdoc TRSRYv1
+    function getReserveBalance(ERC20 token_) external view override returns (uint256) {
+        return token_.balanceOf(address(this)) + totalDebt[token_];
     }
 }
