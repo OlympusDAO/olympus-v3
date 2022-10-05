@@ -209,9 +209,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /* ========== HEART FUNCTIONS ========== */
     /// @inheritdoc IOperator
-    function operate() external override onlyWhileActive {
-        ROLES.requireRole("operator_operate", msg.sender);
-
+    function operate() external override onlyWhileActive onlyRole("operator_operate") {
         // Revert if not initialized
         if (!initialized) revert Operator_NotInitialized();
 
@@ -360,9 +358,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice             Access restricted (BondCallback)
     /// @param id_          ID of the bond market
     /// @param amountOut_   Amount of capacity expended
-    function bondPurchase(uint256 id_, uint256 amountOut_) external onlyWhileActive {
-        ROLES.requireRole("operator_reporter", msg.sender);
-
+    function bondPurchase(uint256 id_, uint256 amountOut_)
+        external
+        onlyWhileActive
+        onlyRole("operator_reporter")
+    {
         if (id_ == RANGE.market(true)) {
             _updateCapacity(true, amountOut_);
             _checkCushion(true);
@@ -513,9 +513,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /* ========== OPERATOR CONFIGURATION ========== */
     /// @inheritdoc IOperator
-    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external {
-        ROLES.requireRole("operator_policy", msg.sender);
-
+    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
+        external
+        onlyRole("operator_policy")
+    {
         // Set spreads on the range module
         RANGE.setSpreads(cushionSpread_, wallSpread_);
 
@@ -524,16 +525,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function setThresholdFactor(uint256 thresholdFactor_) external {
-        ROLES.requireRole("operator_policy", msg.sender);
+    function setThresholdFactor(uint256 thresholdFactor_) external onlyRole("operator_policy") {
         // Set threshold factor on the range module
         RANGE.setThresholdFactor(thresholdFactor_);
     }
 
     /// @inheritdoc IOperator
-    function setCushionFactor(uint32 cushionFactor_) external {
-        ROLES.requireRole("operator_policy", msg.sender);
-
+    function setCushionFactor(uint32 cushionFactor_) external onlyRole("operator_policy") {
         // Confirm factor is within allowed values
         if (cushionFactor_ > ONE_HUNDRED_PERCENT || cushionFactor_ < ONE_PERCENT)
             revert Operator_InvalidParams();
@@ -549,9 +547,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         uint32 duration_,
         uint32 debtBuffer_,
         uint32 depositInterval_
-    ) external {
-        ROLES.requireRole("operator_policy", msg.sender);
-
+    ) external onlyRole("operator_policy") {
         // Confirm values are valid
         if (duration_ > uint256(7 days) || duration_ < uint256(1 days))
             revert Operator_InvalidParams();
@@ -568,9 +564,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function setReserveFactor(uint32 reserveFactor_) external {
-        ROLES.requireRole("operator_policy", msg.sender);
-
+    function setReserveFactor(uint32 reserveFactor_) external onlyRole("operator_policy") {
         // Confirm factor is within allowed values
         if (reserveFactor_ > ONE_HUNDRED_PERCENT || reserveFactor_ < ONE_PERCENT)
             revert Operator_InvalidParams();
@@ -586,9 +580,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         uint32 wait_,
         uint32 threshold_,
         uint32 observe_
-    ) external {
-        ROLES.requireRole("operator_policy", msg.sender);
-
+    ) external onlyRole("operator_policy") {
         // Confirm regen parameters are within allowed values
         if (
             wait_ < 1 hours ||
@@ -616,9 +608,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function setBondContracts(IBondSDA auctioneer_, IBondCallback callback_) external {
-        ROLES.requireRole("operator_admin", msg.sender);
-
+    function setBondContracts(IBondSDA auctioneer_, IBondCallback callback_)
+        external
+        onlyRole("operator_admin")
+    {
         if (address(auctioneer_) == address(0) || address(callback_) == address(0))
             revert Operator_InvalidParams();
         // Set contracts
@@ -627,9 +620,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function initialize() external {
-        ROLES.requireRole("operator_admin", msg.sender);
-
+    function initialize() external onlyRole("operator_admin") {
         // Can only call once
         if (initialized) revert Operator_AlreadyInitialized();
 
@@ -649,27 +640,23 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function regenerate(bool high_) external {
-        ROLES.requireRole("operator_admin", msg.sender);
+    function regenerate(bool high_) external onlyRole("operator_admin") {
         // Regenerate side
         _regenerate(high_);
     }
 
     /// @inheritdoc IOperator
-    function activate() external {
-        ROLES.requireRole("operator_admin", msg.sender);
+    function activate() external onlyRole("operator_admin") {
         active = true;
     }
 
     /// @inheritdoc IOperator
-    function deactivate() external {
-        ROLES.requireRole("operator_admin", msg.sender);
+    function deactivate() external onlyRole("operator_admin") {
         active = false;
     }
 
     /// @inheritdoc IOperator
-    function deactivateCushion(bool high_) external {
-        ROLES.requireRole("operator_admin", msg.sender);
+    function deactivateCushion(bool high_) external onlyRole("operator_admin") {
         // Manually deactivate a cushion
         _deactivate(high_);
     }

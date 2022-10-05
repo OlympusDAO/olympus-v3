@@ -49,8 +49,10 @@ contract OlympusPriceConfig is Policy, RolesConsumer {
     /// @param lastObservationTime_ Unix timestamp of last observation being provided (in seconds).
     /// @dev This function must be called after the Price module is deployed to activate it and after updating the observationFrequency
     ///      or movingAverageDuration (in certain cases) in order for the Price module to function properly.
-    function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_) external {
-        ROLES.requireRole("price_admin", msg.sender);
+    function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
+        external
+        onlyRole("price_admin")
+    {
         PRICE.initialize(startObservations_, lastObservationTime_);
     }
 
@@ -60,8 +62,10 @@ contract OlympusPriceConfig is Policy, RolesConsumer {
     ///      the data in the current window and require the initialize function to be called again.
     ///      Ensure that you have saved the existing data and can re-populate before calling this
     ///      function with a number of observations larger than have been recorded.
-    function changeMovingAverageDuration(uint48 movingAverageDuration_) external {
-        ROLES.requireRole("price_admin", msg.sender);
+    function changeMovingAverageDuration(uint48 movingAverageDuration_)
+        external
+        onlyRole("price_admin")
+    {
         PRICE.changeMovingAverageDuration(movingAverageDuration_);
     }
 
@@ -69,8 +73,10 @@ contract OlympusPriceConfig is Policy, RolesConsumer {
     /// @param    observationFrequency_   Observation frequency in seconds, must be a divisor of the moving average duration
     /// @dev      Changing the observation frequency clears existing observation data since it will not be taken at the right time intervals.
     ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
-    function changeObservationFrequency(uint48 observationFrequency_) external {
-        ROLES.requireRole("price_admin", msg.sender);
+    function changeObservationFrequency(uint48 observationFrequency_)
+        external
+        onlyRole("price_admin")
+    {
         PRICE.changeObservationFrequency(observationFrequency_);
     }
 }

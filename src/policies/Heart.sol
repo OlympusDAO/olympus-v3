@@ -140,21 +140,18 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
-    function resetBeat() external {
-        ROLES.requireRole("heart_admin", msg.sender);
+    function resetBeat() external onlyRole("heart_admin") {
         _resetBeat();
     }
 
     /// @inheritdoc IHeart
-    function activate() external {
-        ROLES.requireRole("heart_admin", msg.sender);
+    function activate() external onlyRole("heart_admin") {
         active = true;
         _resetBeat();
     }
 
     /// @inheritdoc IHeart
-    function deactivate() external {
-        ROLES.requireRole("heart_admin", msg.sender);
+    function deactivate() external onlyRole("heart_admin") {
         active = false;
     }
 
@@ -165,16 +162,22 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
-    function setRewardTokenAndAmount(ERC20 token_, uint256 reward_) external notWhileBeatAvailable {
-        ROLES.requireRole("heart_admin", msg.sender);
+    function setRewardTokenAndAmount(ERC20 token_, uint256 reward_)
+        external
+        onlyRole("heart_admin")
+        notWhileBeatAvailable
+    {
         rewardToken = token_;
         reward = reward_;
         emit RewardUpdated(token_, reward_);
     }
 
     /// @inheritdoc IHeart
-    function withdrawUnspentRewards(ERC20 token_) external notWhileBeatAvailable {
-        ROLES.requireRole("heart_admin", msg.sender);
+    function withdrawUnspentRewards(ERC20 token_)
+        external
+        onlyRole("heart_admin")
+        notWhileBeatAvailable
+    {
         token_.safeTransfer(msg.sender, token_.balanceOf(address(this)));
     }
 }

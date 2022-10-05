@@ -47,8 +47,7 @@ contract VoterRegistration is Policy, RolesConsumer {
     /// @notice Issue votes to a wallet
     /// @param  wallet_ - The address receiving the votes.
     /// @param  amount_ - The amount of votes to mint to the wallet.
-    function issueVotesTo(address wallet_, uint256 amount_) external {
-        ROLES.requireRole("voter_admin", msg.sender);
+    function issueVotesTo(address wallet_, uint256 amount_) external onlyRole("voter_admin") {
         // Issue the votes in the VOTES module
         VOTES.mintTo(wallet_, amount_);
     }
@@ -56,8 +55,7 @@ contract VoterRegistration is Policy, RolesConsumer {
     /// @notice Burn votes from a wallet
     /// @param  wallet_ - The address losing the votes.
     /// @param  amount_ - The amount of votes to burn from the wallet.
-    function revokeVotesFrom(address wallet_, uint256 amount_) external {
-        ROLES.requireRole("voter_admin", msg.sender);
+    function revokeVotesFrom(address wallet_, uint256 amount_) external onlyRole("voter_admin") {
         // Revoke the votes in the VOTES module
         VOTES.burnFrom(wallet_, amount_);
     }
