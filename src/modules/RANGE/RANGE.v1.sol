@@ -64,33 +64,73 @@ abstract contract RANGEv1 is Module {
     ERC20 public reserve;
 
     // FUNCTIONS
+
+    /// @notice Update the capacity for a side of the range.
+    /// @notice Access restricted to activated policies.
+    /// @param  high_ - Specifies the side of the range to update capacity for (true = high side, false = low side).
+    /// @param  capacity_ - Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
     function updateCapacity(bool high_, uint256 capacity_) external virtual;
 
+    /// @notice Update the prices for the low and high sides.
+    /// @notice Access restricted to activated policies.
+    /// @param  movingAverage_ - Current moving average price to set range prices from.
     function updatePrices(uint256 movingAverage_) external virtual;
 
+    /// @notice Regenerate a side of the range to a specific capacity.
+    /// @notice Access restricted to activated policies.
+    /// @param  high_ - Specifies the side of the range to regenerate (true = high side, false = low side).
+    /// @param  capacity_ - Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
     function regenerate(bool high_, uint256 capacity_) external virtual;
 
+    /// @notice Update the market ID (cushion) for a side of the range.
+    /// @notice Access restricted to activated policies.
+    /// @param  high_ - Specifies the side of the range to update market for (true = high side, false = low side).
+    /// @param  market_ - Market ID to set for the side.
+    /// @param  marketCapacity_ - Amount to set the last market capacity to (OHM tokens for high side, Reserve tokens for low side).
     function updateMarket(
         bool high_,
         uint256 market_,
         uint256 marketCapacity_
     ) external virtual;
 
+    /// @notice Set the wall and cushion spreads.
+    /// @notice Access restricted to activated policies.
+    /// @param  cushionSpread_ - Percent spread to set the cushions at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
+    /// @param  wallSpread_ - Percent spread to set the walls at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
+    /// @dev    The new spreads will not go into effect until the next time updatePrices() is called.
     function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external virtual;
 
+    /// @notice Set the threshold factor for when a wall is considered "down".
+    /// @notice Access restricted to activated policies.
+    /// @param  thresholdFactor_ - Percent of capacity that the wall should close below, assumes 2 decimals (i.e. 1000 = 10%).
+    /// @dev    The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
     function setThresholdFactor(uint256 thresholdFactor_) external virtual;
 
+    /// @notice Get the full Range data in a struct.
     function range() external view virtual returns (Range memory);
 
+    /// @notice Get the capacity for a side of the range.
+    /// @param  high_ - Specifies the side of the range to get capacity for (true = high side, false = low side).
     function capacity(bool high_) external view virtual returns (uint256);
 
+    /// @notice Get the status of a side of the range (whether it is active or not).
+    /// @param  high_ - Specifies the side of the range to get status for (true = high side, false = low side).
     function active(bool high_) external view virtual returns (bool);
 
+    /// @notice Get the price for the wall or cushion for a side of the range.
+    /// @param  wall_ - Specifies the band to get the price for (true = wall, false = cushion).
+    /// @param  high_ - Specifies the side of the range to get the price for (true = high side, false = low side).
     function price(bool wall_, bool high_) external view virtual returns (uint256);
 
+    /// @notice Get the spread for the wall or cushion band.
+    /// @param  wall_ - Specifies the band to get the spread for (true = wall, false = cushion).
     function spread(bool wall_) external view virtual returns (uint256);
 
+    /// @notice Get the market ID for a side of the range.
+    /// @param  high_ - Specifies the side of the range to get market for (true = high side, false = low side).
     function market(bool high_) external view virtual returns (uint256);
 
+    /// @notice Get the timestamp when the range was last active.
+    /// @param  high_ - Specifies the side of the range to get timestamp for (true = high side, false = low side).
     function lastActive(bool high_) external view virtual returns (uint256);
 }

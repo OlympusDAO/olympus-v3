@@ -9,8 +9,7 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import "src/Kernel.sol";
 
-/// @notice Treasury holds reserves, LP tokens and all other assets under the control
-///         of the protocol.
+/// @notice Treasury holds all other assets under the control of the protocol.
 contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
     using TransferHelper for ERC20;
 
@@ -20,10 +19,12 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
 
     constructor(Kernel kernel_) Module(kernel_) {}
 
+    /// @inheritdoc Module
     function KEYCODE() public pure override returns (Keycode) {
         return toKeycode("TRSRY");
     }
 
+    /// @inheritdoc Module
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
         major = 1;
         minor = 0;
@@ -33,12 +34,12 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
                                CORE LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Get total balance of assets inside the treasury + any debt taken out against those assets.
+    /// @inheritdoc TRSRYv1
     function getReserveBalance(ERC20 token_) external view override returns (uint256) {
         return token_.balanceOf(address(this)) + totalDebt[token_];
     }
 
-    /// @notice Increase approval for specific withdrawer addresses
+    /// @inheritdoc TRSRYv1
     function increaseWithdrawerApproval(
         address withdrawer_,
         ERC20 token_,
@@ -49,7 +50,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         emit IncreaseWithdrawerApproval(withdrawer_, token_, newAmount);
     }
 
-    /// @notice Decrease approval for specific withdrawer addresses
+    /// @inheritdoc TRSRYv1
     function decreaseWithdrawerApproval(
         address withdrawer_,
         ERC20 token_,
@@ -60,7 +61,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         emit DecreaseWithdrawerApproval(withdrawer_, token_, newAmount);
     }
 
-    /// @notice Allow withdrawal of reserve funds from pre-approved addresses.
+    /// @inheritdoc TRSRYv1
     function withdrawReserves(
         address to_,
         ERC20 token_,
@@ -85,8 +86,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
                              DEBT FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Increase approval for someone to accrue debt in order to withdraw reserves.
-    /// @dev    Debt will generally be taken by contracts to allocate treasury funds in yield sources.
+    /// @inheritdoc TRSRYv1
     function increaseDebtorApproval(
         address debtor_,
         ERC20 token_,
@@ -97,7 +97,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         emit IncreaseDebtorApproval(debtor_, token_, newAmount);
     }
 
-    /// @notice Decrease approval for someone to withdraw reserves as debt.
+    /// @inheritdoc TRSRYv1
     function decreaseDebtorApproval(
         address debtor_,
         ERC20 token_,
@@ -108,7 +108,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         emit DecreaseDebtorApproval(debtor_, token_, newAmount);
     }
 
-    /// @notice Pre-approved policies can get a loan to perform operations with treasury assets.
+    /// @inheritdoc TRSRYv1
     function incurDebt(ERC20 token_, uint256 amount_) external override permissioned {
         uint256 approval = debtApproval[msg.sender][token_];
         if (approval < amount_) revert TRSRY_NotApproved();
@@ -129,9 +129,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         emit DebtIncurred(token_, msg.sender, amount_);
     }
 
-    /// @notice Repay a debtor debt.
-    /// @dev    Only confirmed to safely handle standard and non-standard ERC20s.
-    /// @dev    Can have unforeseen consequences with ERC777. Be careful with ERC777 as reserve.
+    /// @inheritdoc TRSRYv1
     function repayDebt(
         address debtor_,
         ERC20 token_,
@@ -155,7 +153,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         emit DebtRepaid(token_, debtor_, received);
     }
 
-    /// @notice An escape hatch for setting debt in special cases, like swapping reserves to another token.
+    /// @inheritdoc TRSRYv1
     function setDebt(
         address debtor_,
         ERC20 token_,

@@ -27,7 +27,7 @@ contract OlympusInstructions is INSTRv1 {
                                CORE LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice View function for retrieving a list of Instructions in an outside contract.
+    /// @inheritdoc INSTRv1
     function getInstructions(uint256 instructionsId_)
         public
         view
@@ -37,7 +37,7 @@ contract OlympusInstructions is INSTRv1 {
         return storedInstructions[instructionsId_];
     }
 
-    /// @notice Store a list of Instructions to be executed in the future.
+    /// @inheritdoc INSTRv1
     function store(Instruction[] calldata instructions_)
         external
         override

@@ -7,7 +7,7 @@ import "src/Kernel.sol";
 
 /// @notice Votes module is the ERC20 token that represents voting power in the network.
 /// @dev    This is currently a substitute module that stubs gOHM.
-contract OlympusVotes is Module, VOTESv1 {
+contract OlympusVotes is VOTESv1 {
     /*//////////////////////////////////////////////////////////////
                             MODULE INTERFACE
     //////////////////////////////////////////////////////////////*/
@@ -32,10 +32,12 @@ contract OlympusVotes is Module, VOTESv1 {
                                CORE LOGIC
     //////////////////////////////////////////////////////////////*/
 
+    /// @inheritdoc VOTESv1
     function mintTo(address wallet_, uint256 amount_) external override permissioned {
         _mint(wallet_, amount_);
     }
 
+    /// @inheritdoc VOTESv1
     function burnFrom(address wallet_, uint256 amount_) external override permissioned {
         _burn(wallet_, amount_);
     }

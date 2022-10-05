@@ -6,11 +6,7 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
 import "src/Kernel.sol";
 
-/// @notice Price oracle data storage contract
-/// @dev    The Olympus Price Oracle contract provides a standard interface for OHM price data against a reserve asset.
-///         It also implements a moving average price calculation (same as a TWAP) on the price feed data over a configured
-///         duration and observation frequency. The data provided by this contract is used by the Olympus Range Operator to
-///         perform market operations. The Olympus Price Oracle is updated each epoch by the Olympus Heart contract.
+/// @notice Price oracle data storage contract.
 contract OlympusPrice is PRICEv1 {
     // Scale factor for converting prices, calculated from decimal values.
     uint256 internal immutable _scaleFactor;
@@ -72,9 +68,7 @@ contract OlympusPrice is PRICEv1 {
 
     /* ========== POLICY FUNCTIONS ========== */
 
-    /// @notice Trigger an update of the moving average. Permissioned.
-    /// @dev    This function does not have a time-gating on the observationFrequency on this contract. It is set on the Heart policy contract.
-    ///         The Heart beat frequency should be set to the same value as the observationFrequency.
+    /// @inheritdoc PRICEv1
     function updateMovingAverage() external override permissioned {
         // Revert if not initialized
         if (!initialized) revert Price_NotInitialized();
@@ -102,7 +96,7 @@ contract OlympusPrice is PRICEv1 {
                              VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Get the current price of OHM in the Reserve asset from the price feeds
+    /// @inheritdoc PRICEv1
     function getCurrentPrice() public view override returns (uint256) {
         if (!initialized) revert Price_NotInitialized();
 
@@ -146,14 +140,14 @@ contract OlympusPrice is PRICEv1 {
         return currentPrice;
     }
 
-    /// @notice Get the last stored price observation of OHM in the Reserve asset
+    /// @inheritdoc PRICEv1
     function getLastPrice() external view override returns (uint256) {
         if (!initialized) revert Price_NotInitialized();
         uint32 lastIndex = nextObsIndex == 0 ? numObservations - 1 : nextObsIndex - 1;
         return observations[lastIndex];
     }
 
-    /// @notice Get the moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
+    /// @inheritdoc PRICEv1
     function getMovingAverage() public view override returns (uint256) {
         if (!initialized) revert Price_NotInitialized();
         return cumulativeObs / numObservations;
@@ -163,12 +157,7 @@ contract OlympusPrice is PRICEv1 {
                             ADMIN FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Initialize the price module
-    /// @notice Access restricted to activated policies
-    /// @param  startObservations_ - Array of observations to initialize the moving average with. Must be of length numObservations.
-    /// @param  lastObservationTime_ - Unix timestamp of last observation being provided (in seconds).
-    /// @dev    This function must be called after the Price module is deployed to activate it and after updating the observationFrequency
-    ///         or movingAverageDuration (in certain cases) in order for the Price module to function properly.
+    /// @inheritdoc PRICEv1
     function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
         external
         override
@@ -200,11 +189,7 @@ contract OlympusPrice is PRICEv1 {
         initialized = true;
     }
 
-    /// @notice Change the moving average window (duration)
-    /// @param  movingAverageDuration_ - Moving average duration in seconds, must be a multiple of observation frequency
-    /// @dev    Changing the moving average duration will erase the current observations array
-    ///         and require the initialize function to be called again. Ensure that you have saved
-    ///         the existing data and can re-populate before calling this function.
+    /// @inheritdoc PRICEv1
     function changeMovingAverageDuration(uint48 movingAverageDuration_)
         external
         override
@@ -231,10 +216,7 @@ contract OlympusPrice is PRICEv1 {
         emit MovingAverageDurationChanged(movingAverageDuration_);
     }
 
-    /// @notice   Change the observation frequency of the moving average (i.e. how often a new observation is taken)
-    /// @param    observationFrequency_ - Observation frequency in seconds, must be a divisor of the moving average duration
-    /// @dev      Changing the observation frequency clears existing observation data since it will not be taken at the right time intervals.
-    ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
+    /// @inheritdoc PRICEv1
     function changeObservationFrequency(uint48 observationFrequency_)
         external
         override

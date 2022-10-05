@@ -9,7 +9,10 @@ abstract contract VOTESv1 is Module, ERC20 {
     error VOTES_TransferDisabled();
 
     // FUNCTIONS
+
+    /// @notice Mint VOTES token to an address
     function mintTo(address wallet_, uint256 amount_) external virtual;
 
+    /// @notice Burn VOTES token from an address. Needs approval.
     function burnFrom(address wallet_, uint256 amount_) external virtual;
 }

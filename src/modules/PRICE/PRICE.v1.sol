@@ -4,6 +4,11 @@ pragma solidity 0.8.15;
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import "src/Kernel.sol";
 
+/// @notice Price oracle data storage
+/// @dev    The Olympus Price Oracle contract provides a standard interface for OHM price data against a reserve asset.
+///         It also implements a moving average price calculation (same as a TWAP) on the price feed data over a configured
+///         duration and observation frequency. The data provided by this contract is used by the Olympus Range Operator to
+///         perform market operations. The Olympus Price Oracle is updated each epoch by the Olympus Heart contract.
 abstract contract PRICEv1 is Module {
     // EVENTS
     event NewObservation(uint256 timestamp_, uint256 price_, uint256 movingAverage_);
@@ -64,19 +69,41 @@ abstract contract PRICEv1 is Module {
     uint8 public constant decimals = 18;
 
     // FUNCTIONS
+
+    /// @notice Trigger an update of the moving average. Permissioned.
+    /// @dev    This function does not have a time-gating on the observationFrequency on this contract. It is set on the Heart policy contract.
+    ///         The Heart beat frequency should be set to the same value as the observationFrequency.
     function updateMovingAverage() external virtual;
 
+    /// @notice Get the current price of OHM in the Reserve asset from the price feeds
     function getCurrentPrice() external virtual returns (uint256);
 
+    /// @notice Get the last stored price observation of OHM in the Reserve asset
     function getLastPrice() external virtual returns (uint256);
 
+    /// @notice Get the moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
     function getMovingAverage() external virtual returns (uint256);
 
+    /// @notice Initialize the price module
+    /// @notice Access restricted to activated policies
+    /// @param  startObservations_ - Array of observations to initialize the moving average with. Must be of length numObservations.
+    /// @param  lastObservationTime_ - Unix timestamp of last observation being provided (in seconds).
+    /// @dev    This function must be called after the Price module is deployed to activate it and after updating the observationFrequency
+    ///         or movingAverageDuration (in certain cases) in order for the Price module to function properly.
     function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
         external
         virtual;
 
+    /// @notice Change the moving average window (duration)
+    /// @param  movingAverageDuration_ - Moving average duration in seconds, must be a multiple of observation frequency
+    /// @dev    Changing the moving average duration will erase the current observations array
+    ///         and require the initialize function to be called again. Ensure that you have saved
+    ///         the existing data and can re-populate before calling this function.
     function changeMovingAverageDuration(uint48 movingAverageDuration_) external virtual;
 
+    /// @notice   Change the observation frequency of the moving average (i.e. how often a new observation is taken)
+    /// @param    observationFrequency_ - Observation frequency in seconds, must be a divisor of the moving average duration
+    /// @dev      Changing the observation frequency clears existing observation data since it will not be taken at the right time intervals.
+    ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
     function changeObservationFrequency(uint48 observationFrequency_) external virtual;
 }

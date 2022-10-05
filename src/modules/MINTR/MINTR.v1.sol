@@ -12,7 +12,9 @@ abstract contract MINTRv1 is Module {
 
     // FUNCTIONS
 
+    /// @notice Mint OHM to an address.
     function mintOhm(address to_, uint256 amount_) external virtual;
 
+    /// @notice Burn OHM from an address. Must have approval.
     function burnOhm(address from_, uint256 amount_) external virtual;
 }
