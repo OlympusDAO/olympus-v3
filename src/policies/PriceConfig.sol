@@ -8,16 +8,15 @@ import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import "src/Kernel.sol";
 
 contract OlympusPriceConfig is Policy, RolesConsumer {
-    /* ========== STATE VARIABLES ========== */
-
     /// Modules
     PRICEv1 internal PRICE;
 
-    /* ========== CONSTRUCTOR ========== */
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
 
     constructor(Kernel kernel_) Policy(kernel_) {}
 
-    /* ========== FRAMEWORK CONFIGURATION ========== */
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("PRICE");
@@ -41,7 +40,9 @@ contract OlympusPriceConfig is Policy, RolesConsumer {
         permissions[2] = Permissions(PRICE_KEYCODE, PRICE.changeObservationFrequency.selector);
     }
 
-    /* ========== ADMIN FUNCTIONS ========== */
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice                     Initialize the price module
     /// @notice                     Access restricted to approved policies

@@ -50,9 +50,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     // Policies
     IOperator internal _operator;
 
-    /*//////////////////////////////////////////////////////////////
-                            POLICY INTERFACE
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
 
     constructor(
         Kernel kernel_,
@@ -89,9 +89,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                               CORE LOGIC
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @inheritdoc IHeart
     function beat() external nonReentrant {
@@ -122,18 +122,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         emit RewardIssued(to_, amount);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                             VIEW FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @inheritdoc IHeart
-    function frequency() public view returns (uint256) {
-        return uint256(PRICE.observationFrequency());
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            ADMIN FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
 
     function _resetBeat() internal {
         lastBeat = block.timestamp - frequency();
@@ -179,5 +170,14 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         notWhileBeatAvailable
     {
         token_.safeTransfer(msg.sender, token_.balanceOf(address(this)));
+    }
+
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @inheritdoc IHeart
+    function frequency() public view returns (uint256) {
+        return uint256(PRICE.observationFrequency());
     }
 }

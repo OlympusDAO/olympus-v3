@@ -4,7 +4,9 @@ pragma solidity >=0.8.0;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 interface IHeart {
-    /* ========== KEEPER FUNCTIONS ========== */
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice Beats the heart
     /// @notice Only callable when enough time has passed since last beat (determined by frequency variable)
@@ -12,12 +14,9 @@ interface IHeart {
     /// @dev    Triggers price oracle update and market operations
     function beat() external;
 
-    /* ========== VIEW FUNCTIONS ========== */
-
-    /// @notice Heart beat frequency, in seconds
-    function frequency() external view returns (uint256);
-
-    /* ========== ADMIN FUNCTIONS ========== */
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice Unlocks the cycle if stuck on one side, eject function
     /// @notice Access restricted
@@ -42,4 +41,11 @@ interface IHeart {
     /// @notice Withdraws unspent balance of provided token to sender
     /// @notice Access restricted
     function withdrawUnspentRewards(ERC20 token_) external;
+
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @notice Heart beat frequency, in seconds
+    function frequency() external view returns (uint256);
 }

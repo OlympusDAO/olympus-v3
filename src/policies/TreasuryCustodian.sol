@@ -19,11 +19,13 @@ contract TreasuryCustodian is Policy, RolesConsumer {
 
     TRSRYv1 public TRSRY;
 
-    /*//////////////////////////////////////////////////////////////
-                            POLICY INTERFACE
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
+
     constructor(Kernel kernel_) Policy(kernel_) {}
 
+    /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("TRSRY");
@@ -33,6 +35,7 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
     }
 
+    /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
 
@@ -44,10 +47,11 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                               CORE LOGIC
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
+    /// @notice Allow an address to withdraw `amount_` from the treasury
     function grantWithdrawerApproval(
         address for_,
         ERC20 token_,
@@ -56,12 +60,33 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         TRSRY.increaseWithdrawerApproval(for_, token_, amount_);
     }
 
+    /// @notice Allow an address to incur `amount_` of debt from the treasury
     function grantDebtorApproval(
         address for_,
         ERC20 token_,
         uint256 amount_
     ) external onlyRole("custodian") {
         TRSRY.increaseDebtorApproval(for_, token_, amount_);
+    }
+
+    /// @notice Allow authorized addresses to increase debt in special cases
+    function increaseDebt(
+        ERC20 token_,
+        address debtor_,
+        uint256 amount_
+    ) external onlyRole("custodian") {
+        uint256 debt = TRSRY.reserveDebt(token_, debtor_);
+        TRSRY.setDebt(debtor_, token_, debt + amount_);
+    }
+
+    /// @notice Allow authorized addresses to decrease debt in special cases
+    function decreaseDebt(
+        ERC20 token_,
+        address debtor_,
+        uint256 amount_
+    ) external onlyRole("custodian") {
+        uint256 debt = TRSRY.reserveDebt(token_, debtor_);
+        TRSRY.setDebt(debtor_, token_, debt - amount_);
     }
 
     /// @notice Anyone can call to revoke a deactivated policy's approvals.
@@ -82,25 +107,5 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         }
 
         emit ApprovalRevoked(policy_, tokens_);
-    }
-
-    // Debt admin functions for authorized addresses to manipulate debt in special cases
-
-    function increaseDebt(
-        ERC20 token_,
-        address debtor_,
-        uint256 amount_
-    ) external onlyRole("custodian") {
-        uint256 debt = TRSRY.reserveDebt(token_, debtor_);
-        TRSRY.setDebt(debtor_, token_, debt + amount_);
-    }
-
-    function decreaseDebt(
-        ERC20 token_,
-        address debtor_,
-        uint256 amount_
-    ) external onlyRole("custodian") {
-        uint256 debt = TRSRY.reserveDebt(token_, debtor_);
-        TRSRY.setDebt(debtor_, token_, debt - amount_);
     }
 }

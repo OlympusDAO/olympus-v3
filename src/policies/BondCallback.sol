@@ -29,15 +29,17 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     mapping(uint256 => uint256[2]) internal _amountsPerMarket;
     mapping(ERC20 => uint256) public priorBalances;
 
-    IBondAggregator public aggregator;
     TRSRYv1 public TRSRY;
     MINTRv1 public MINTR;
+
     Operator public operator;
+
+    IBondAggregator public aggregator;
     ERC20 public ohm;
 
-    /*//////////////////////////////////////////////////////////////
-                            POLICY INTERFACE
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
 
     constructor(
         Kernel kernel_,
@@ -75,9 +77,9 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         requests[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                               CORE LOGIC
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @inheritdoc IBondCallback
     function whitelist(address teller_, uint256 id_)
@@ -173,9 +175,21 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         }
     }
 
-    /*//////////////////////////////////////////////////////////////
-                             VIEW FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @notice Sets the operator contract for the callback to use to report bond purchases
+    /// @notice Must be set before the callback is used
+    /// @param  operator_ - Address of the Operator contract
+    function setOperator(Operator operator_) external onlyRole("callback_admin") {
+        if (address(operator_) == address(0)) revert Callback_InvalidParams();
+        operator = operator_;
+    }
+
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @inheritdoc IBondCallback
     function amountsForMarket(uint256 id_)
@@ -186,17 +200,5 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     {
         uint256[2] memory marketAmounts = _amountsPerMarket[id_];
         return (marketAmounts[0], marketAmounts[1]);
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            ADMIN FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Sets the operator contract for the callback to use to report bond purchases
-    /// @notice Must be set before the callback is used
-    /// @param  operator_ - Address of the Operator contract
-    function setOperator(Operator operator_) external onlyRole("callback_admin") {
-        if (address(operator_) == address(0)) revert Callback_InvalidParams();
-        operator = operator_;
     }
 }

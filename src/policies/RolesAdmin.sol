@@ -6,19 +6,26 @@ import "src/Kernel.sol";
 
 /// @notice The RolesAdmin Policy grants and revokes Roles in the ROLES module.
 contract RolesAdmin is Policy {
-    /////////////////////////////////////////////////////////////////////////////////
-    //                         Kernel Policy Configuration                         //
-    /////////////////////////////////////////////////////////////////////////////////
+    event NewAdminPushed(address indexed newAdmin_);
+    event NewAdminPulled(address indexed newAdmin_);
+
+    error OnlyAdmin();
+    error OnlyNewAdmin();
+
+    /// @notice Special role that is responsible for assigning policy-defined roles to addresses.
+    address public admin;
+
+    /// @notice Proposed new admin. Address must call `pullRolesAdmin` to become the new roles admin.
+    address public newAdmin;
 
     ROLESv1 public ROLES;
 
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
+
     constructor(Kernel _kernel) Policy(_kernel) {
         admin = msg.sender;
-    }
-
-    modifier onlyAdmin() {
-        if (msg.sender != admin) revert OnlyAdmin();
-        _;
     }
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -36,21 +43,14 @@ contract RolesAdmin is Policy {
         requests[1] = Permissions(ROLES_KEYCODE, ROLES.removeRole.selector);
     }
 
-    /////////////////////////////////////////////////////////////////////////////////
-    //                             Policy Variables                                //
-    /////////////////////////////////////////////////////////////////////////////////
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
-    event NewAdminPushed(address indexed newAdmin_);
-    event NewAdminPulled(address indexed newAdmin_);
-
-    error OnlyAdmin();
-    error OnlyNewAdmin();
-
-    /// @notice Special role that is responsible for assigning policy-defined roles to addresses.
-    address public admin;
-
-    /// @notice Proposed new admin. Address must call `pullRolesAdmin` to become the new roles admin.
-    address public newAdmin;
+    modifier onlyAdmin() {
+        if (msg.sender != admin) revert OnlyAdmin();
+        _;
+    }
 
     function grantRole(bytes32 role_, address wallet_) external onlyAdmin {
         ROLES.saveRole(role_, wallet_);
@@ -59,6 +59,10 @@ contract RolesAdmin is Policy {
     function revokeRole(bytes32 role_, address wallet_) external onlyAdmin {
         ROLES.removeRole(role_, wallet_);
     }
+
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
 
     function pushNewAdmin(address newAdmin_) external onlyAdmin {
         newAdmin = newAdmin_;

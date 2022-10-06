@@ -4,6 +4,9 @@ pragma solidity 0.8.15;
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+import {TransferHelper} from "libraries/TransferHelper.sol";
+import {FullMath} from "libraries/FullMath.sol";
+
 import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
@@ -16,9 +19,6 @@ import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import {RANGEv1} from "modules/RANGE/RANGE.v1.sol";
 
 import "src/Kernel.sol";
-
-import {TransferHelper} from "libraries/TransferHelper.sol";
-import {FullMath} from "libraries/FullMath.sol";
 
 /// @title  Olympus Range Operator
 /// @notice Olympus Range Operator (Policy) Contract
@@ -33,17 +33,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
-    /* ========== ERRORS =========== */
+    /* ========== EVENTS ========== */
 
-    error Operator_InvalidParams();
-    error Operator_InsufficientCapacity();
-    error Operator_AmountLessThanMinimum(uint256 amountOut, uint256 minAmountOut);
-    error Operator_WallDown();
-    error Operator_AlreadyInitialized();
-    error Operator_NotInitialized();
-    error Operator_Inactive();
-
-    /* ========== EVENTS =========== */
     event Swap(
         ERC20 indexed tokenIn_,
         ERC20 indexed tokenOut_,
@@ -54,6 +45,16 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     event CushionParamsChanged(uint32 duration_, uint32 debtBuffer_, uint32 depositInterval_);
     event ReserveFactorChanged(uint32 reserveFactor_);
     event RegenParamsChanged(uint32 wait_, uint32 threshold_, uint32 observe_);
+
+    /* ========== ERRORS ========== */
+
+    error Operator_InvalidParams();
+    error Operator_InsufficientCapacity();
+    error Operator_AmountLessThanMinimum(uint256 amountOut, uint256 minAmountOut);
+    error Operator_WallDown();
+    error Operator_AlreadyInitialized();
+    error Operator_NotInitialized();
+    error Operator_Inactive();
 
     /* ========== STATE VARIABLES ========== */
 
@@ -91,7 +92,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     uint32 public constant ONE_HUNDRED_PERCENT = 100e2;
     uint32 public constant ONE_PERCENT = 1e2;
 
-    /* ========== CONSTRUCTOR ========== */
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
+
     constructor(
         Kernel kernel_,
         IBondSDA auctioneer_,
@@ -157,7 +161,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         emit RegenParamsChanged(configParams[5], configParams[6], configParams[7]);
     }
 
-    /* ========== FRAMEWORK CONFIGURATION ========== */
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](5);
@@ -195,6 +198,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         requests[8] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
+
     /// @dev Checks to see if the policy is active and ensures the range data isn't stale before performing market operations.
     ///      This check is different from the price feed staleness checks in the PRICE module.
     ///      The PRICE module checks new price feed data for staleness when storing a new observations,
@@ -208,6 +215,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /* ========== HEART FUNCTIONS ========== */
+
     /// @inheritdoc IOperator
     function operate() external override onlyWhileActive onlyRole("operator_operate") {
         // Revert if not initialized
@@ -283,6 +291,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /* ========== OPEN MARKET OPERATIONS (WALL) ========== */
+
     /// @inheritdoc IOperator
     function swap(
         ERC20 tokenIn_,
@@ -354,6 +363,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /* ========== BOND MARKET OPERATIONS (CUSHION) ========== */
+
     /// @notice             Records a bond purchase and updates capacity correctly
     /// @notice             Access restricted (BondCallback)
     /// @param id_          ID of the bond market
@@ -511,7 +521,126 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         return decimals - int8(PRICE.decimals());
     }
 
-    /* ========== OPERATOR CONFIGURATION ========== */
+    /* ========== INTERNAL FUNCTIONS ========== */
+
+    /// @notice          Update the capacity on the RANGE module.
+    /// @param high_     Whether to update the high side or low side capacity (true = high, false = low).
+    /// @param reduceBy_ The amount to reduce the capacity by (OHM tokens for high side, Reserve tokens for low side).
+    function _updateCapacity(bool high_, uint256 reduceBy_) internal {
+        // Initialize update variables, decrement capacity if a reduceBy amount is provided
+        uint256 capacity = RANGE.capacity(high_) - reduceBy_;
+
+        // Update capacities on the range module for the wall and market
+        RANGE.updateCapacity(high_, capacity);
+    }
+
+    /// @notice Update the prices on the RANGE module
+    function _updateRangePrices() internal {
+        // Get latest moving average from the price module
+        uint256 movingAverage = PRICE.getMovingAverage();
+
+        // Update the prices on the range module
+        RANGE.updatePrices(movingAverage);
+    }
+
+    /// @notice Add an observation to the regeneration status variables for each side
+    function _addObservation() internal {
+        // Get latest moving average from the price module
+        uint256 movingAverage = PRICE.getMovingAverage();
+
+        // Get price from latest update
+        uint256 currentPrice = PRICE.getLastPrice();
+
+        // Store observations and update counts for regeneration
+
+        // Update low side regen status with a new observation
+        // Observation is positive if the current price is greater than the MA
+        uint32 observe = _config.regenObserve;
+        Regen memory regen = _status.low;
+        if (currentPrice >= movingAverage) {
+            if (!regen.observations[regen.nextObservation]) {
+                _status.low.observations[regen.nextObservation] = true;
+                _status.low.count++;
+            }
+        } else {
+            if (regen.observations[regen.nextObservation]) {
+                _status.low.observations[regen.nextObservation] = false;
+                _status.low.count--;
+            }
+        }
+        _status.low.nextObservation = (regen.nextObservation + 1) % observe;
+
+        // Update high side regen status with a new observation
+        // Observation is positive if the current price is less than the MA
+        regen = _status.high;
+        if (currentPrice <= movingAverage) {
+            if (!regen.observations[regen.nextObservation]) {
+                _status.high.observations[regen.nextObservation] = true;
+                _status.high.count++;
+            }
+        } else {
+            if (regen.observations[regen.nextObservation]) {
+                _status.high.observations[regen.nextObservation] = false;
+                _status.high.count--;
+            }
+        }
+        _status.high.nextObservation = (regen.nextObservation + 1) % observe;
+    }
+
+    /// @notice      Regenerate the wall for a side
+    /// @param high_ Whether to regenerate the high side or low side (true = high, false = low)
+    function _regenerate(bool high_) internal {
+        // Deactivate cushion if active on the side being regenerated
+        _deactivate(high_);
+
+        if (high_) {
+            // Reset the regeneration data for the side
+            _status.high.count = uint32(0);
+            _status.high.observations = new bool[](_config.regenObserve);
+            _status.high.nextObservation = uint32(0);
+            _status.high.lastRegen = uint48(block.timestamp);
+
+            // Calculate capacity
+            uint256 capacity = fullCapacity(true);
+
+            // Regenerate the side with the capacity
+            RANGE.regenerate(true, capacity);
+        } else {
+            // Reset the regeneration data for the side
+            _status.low.count = uint32(0);
+            _status.low.observations = new bool[](_config.regenObserve);
+            _status.low.nextObservation = uint32(0);
+            _status.low.lastRegen = uint48(block.timestamp);
+
+            // Calculate capacity
+            uint256 capacity = fullCapacity(false);
+
+            // Regenerate the side with the capacity
+            RANGE.regenerate(false, capacity);
+        }
+    }
+
+    /// @notice      Takes down cushions (if active) when a wall is taken down or if available capacity drops below cushion capacity
+    /// @param high_ Whether to check the high side or low side cushion (true = high, false = low)
+    function _checkCushion(bool high_) internal {
+        // Check if the wall is down, if so ensure the cushion is also down
+        // Additionally, if wall is not down, but the wall capacity has dropped below the cushion capacity, take the cushion down
+        bool sideActive = RANGE.active(high_);
+        uint256 market = RANGE.market(high_);
+        if (
+            !sideActive ||
+            (sideActive &&
+                auctioneer.isLive(market) &&
+                RANGE.capacity(high_) < auctioneer.currentCapacity(market))
+        ) {
+            _deactivate(high_);
+        }
+    }
+
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
+
     /// @inheritdoc IOperator
     function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
         external
@@ -661,123 +790,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         _deactivate(high_);
     }
 
-    /* ========== INTERNAL FUNCTIONS ========== */
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
 
-    /// @notice          Update the capacity on the RANGE module.
-    /// @param high_     Whether to update the high side or low side capacity (true = high, false = low).
-    /// @param reduceBy_ The amount to reduce the capacity by (OHM tokens for high side, Reserve tokens for low side).
-    function _updateCapacity(bool high_, uint256 reduceBy_) internal {
-        // Initialize update variables, decrement capacity if a reduceBy amount is provided
-        uint256 capacity = RANGE.capacity(high_) - reduceBy_;
-
-        // Update capacities on the range module for the wall and market
-        RANGE.updateCapacity(high_, capacity);
-    }
-
-    /// @notice Update the prices on the RANGE module
-    function _updateRangePrices() internal {
-        // Get latest moving average from the price module
-        uint256 movingAverage = PRICE.getMovingAverage();
-
-        // Update the prices on the range module
-        RANGE.updatePrices(movingAverage);
-    }
-
-    /// @notice Add an observation to the regeneration status variables for each side
-    function _addObservation() internal {
-        // Get latest moving average from the price module
-        uint256 movingAverage = PRICE.getMovingAverage();
-
-        // Get price from latest update
-        uint256 currentPrice = PRICE.getLastPrice();
-
-        // Store observations and update counts for regeneration
-
-        // Update low side regen status with a new observation
-        // Observation is positive if the current price is greater than the MA
-        uint32 observe = _config.regenObserve;
-        Regen memory regen = _status.low;
-        if (currentPrice >= movingAverage) {
-            if (!regen.observations[regen.nextObservation]) {
-                _status.low.observations[regen.nextObservation] = true;
-                _status.low.count++;
-            }
-        } else {
-            if (regen.observations[regen.nextObservation]) {
-                _status.low.observations[regen.nextObservation] = false;
-                _status.low.count--;
-            }
-        }
-        _status.low.nextObservation = (regen.nextObservation + 1) % observe;
-
-        // Update high side regen status with a new observation
-        // Observation is positive if the current price is less than the MA
-        regen = _status.high;
-        if (currentPrice <= movingAverage) {
-            if (!regen.observations[regen.nextObservation]) {
-                _status.high.observations[regen.nextObservation] = true;
-                _status.high.count++;
-            }
-        } else {
-            if (regen.observations[regen.nextObservation]) {
-                _status.high.observations[regen.nextObservation] = false;
-                _status.high.count--;
-            }
-        }
-        _status.high.nextObservation = (regen.nextObservation + 1) % observe;
-    }
-
-    /// @notice      Regenerate the wall for a side
-    /// @param high_ Whether to regenerate the high side or low side (true = high, false = low)
-    function _regenerate(bool high_) internal {
-        // Deactivate cushion if active on the side being regenerated
-        _deactivate(high_);
-
-        if (high_) {
-            // Reset the regeneration data for the side
-            _status.high.count = uint32(0);
-            _status.high.observations = new bool[](_config.regenObserve);
-            _status.high.nextObservation = uint32(0);
-            _status.high.lastRegen = uint48(block.timestamp);
-
-            // Calculate capacity
-            uint256 capacity = fullCapacity(true);
-
-            // Regenerate the side with the capacity
-            RANGE.regenerate(true, capacity);
-        } else {
-            // Reset the regeneration data for the side
-            _status.low.count = uint32(0);
-            _status.low.observations = new bool[](_config.regenObserve);
-            _status.low.nextObservation = uint32(0);
-            _status.low.lastRegen = uint48(block.timestamp);
-
-            // Calculate capacity
-            uint256 capacity = fullCapacity(false);
-
-            // Regenerate the side with the capacity
-            RANGE.regenerate(false, capacity);
-        }
-    }
-
-    /// @notice      Takes down cushions (if active) when a wall is taken down or if available capacity drops below cushion capacity
-    /// @param high_ Whether to check the high side or low side cushion (true = high, false = low)
-    function _checkCushion(bool high_) internal {
-        // Check if the wall is down, if so ensure the cushion is also down
-        // Additionally, if wall is not down, but the wall capacity has dropped below the cushion capacity, take the cushion down
-        bool sideActive = RANGE.active(high_);
-        uint256 market = RANGE.market(high_);
-        if (
-            !sideActive ||
-            (sideActive &&
-                auctioneer.isLive(market) &&
-                RANGE.capacity(high_) < auctioneer.currentCapacity(market))
-        ) {
-            _deactivate(high_);
-        }
-    }
-
-    /* ========== VIEW FUNCTIONS ========== */
     /// @inheritdoc IOperator
     function getAmountOut(ERC20 tokenIn_, uint256 amountIn_) public view returns (uint256) {
         if (tokenIn_ == ohm) {
