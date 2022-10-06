@@ -7,8 +7,9 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {OlympusTreasury} from "src/modules/TRSRY.sol";
-import "modules/ROLES.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
@@ -53,7 +54,10 @@ contract TreasuryCustodianTest is Test {
     }
 
     function test_UnauthorizedChangeDebt(uint256 amount_) public {
-        bytes memory err = abi.encodeWithSelector(ROLES_RequireRole.selector, toRole("custodian"));
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("custodian")
+        );
         vm.expectRevert(err);
         vm.prank(randomWallet);
         custodian.increaseDebt(ngmi, randomWallet, amount_);

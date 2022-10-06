@@ -1,21 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
+import {INSTRv1} from "src/modules/INSTR/INSTR.v1.sol";
 import "src/Kernel.sol";
 
-error INSTR_InstructionsCannotBeEmpty();
-error INSTR_InvalidChangeExecutorAction();
-
 /// @notice Caches and executes batched instructions for protocol upgrades in the Kernel.
-contract OlympusInstructions is Module {
-    event InstructionsStored(uint256 instructionsId);
-
-    uint256 public totalInstructions;
-    mapping(uint256 => Instruction[]) public storedInstructions;
-
-    /*//////////////////////////////////////////////////////////////
-                            MODULE INTERFACE
-    //////////////////////////////////////////////////////////////*/
+contract OlympusInstructions is INSTRv1 {
+    //============================================================================================//
+    //                                      MODULE SETUP                                          //
+    //============================================================================================//
 
     constructor(Kernel kernel_) Module(kernel_) {}
 
@@ -30,17 +23,27 @@ contract OlympusInstructions is Module {
         minor = 0;
     }
 
-    /*//////////////////////////////////////////////////////////////
-                               CORE LOGIC
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                    MODULE FUNCTIONS                                        //
+    //============================================================================================//
 
-    /// @notice View function for retrieving a list of Instructions in an outside contract.
-    function getInstructions(uint256 instructionsId_) public view returns (Instruction[] memory) {
+    /// @inheritdoc INSTRv1
+    function getInstructions(uint256 instructionsId_)
+        public
+        view
+        override
+        returns (Instruction[] memory)
+    {
         return storedInstructions[instructionsId_];
     }
 
-    /// @notice Store a list of Instructions to be executed in the future.
-    function store(Instruction[] calldata instructions_) external permissioned returns (uint256) {
+    /// @inheritdoc INSTRv1
+    function store(Instruction[] calldata instructions_)
+        external
+        override
+        permissioned
+        returns (uint256)
+    {
         uint256 length = instructions_.length;
         uint256 instructionsId = ++totalInstructions;
 

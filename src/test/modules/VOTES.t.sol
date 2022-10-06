@@ -8,7 +8,8 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {Kernel, Module, Instruction, Actions} from "../../Kernel.sol";
-import "modules/VOTES.sol";
+import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
+import {VOTESv1} from "modules/VOTES/VOTES.v1.sol";
 
 contract VotesTest is Test {
     Kernel internal kernel;
@@ -28,12 +29,6 @@ contract VotesTest is Test {
         VOTES = new OlympusVotes(kernel);
 
         /// Deploy policies
-        Permissions[] memory requests = new Permissions[](3);
-        Keycode VOTES_KEYCODE = VOTES.KEYCODE();
-        requests[0] = Permissions(VOTES_KEYCODE, VOTES.mintTo.selector);
-        requests[1] = Permissions(VOTES_KEYCODE, VOTES.burnFrom.selector);
-        requests[2] = Permissions(VOTES_KEYCODE, VOTES.transferFrom.selector);
-
         writer = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
 
         /// Install modules
@@ -44,7 +39,7 @@ contract VotesTest is Test {
     }
 
     function testRevert_TransfersDisabled() public {
-        vm.expectRevert(VOTES_TransferDisabled.selector);
+        vm.expectRevert(VOTESv1.VOTES_TransferDisabled.selector);
 
         vm.prank(writer);
         VOTES.transfer(address(0), 10);

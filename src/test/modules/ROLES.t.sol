@@ -6,7 +6,8 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import "src/modules/ROLES.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol"; 
+import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import "src/Kernel.sol";
 
 contract ROLESTest is Test {
@@ -36,11 +37,11 @@ contract ROLESTest is Test {
     }
 
     function testCorrectness_KEYCODE() public {
-        assertEq32("ROLES", Keycode.unwrap(ROLES.KEYCODE()));
+        assertEq32("ROLES", fromKeycode(ROLES.KEYCODE()));
     }
 
     function testCorrectness_SaveRole() public {
-        Role testRole = toRole("test_role");
+        bytes32 testRole = "test_role";
 
         // Give role to test user
         vm.prank(godmode);
@@ -50,7 +51,7 @@ contract ROLESTest is Test {
     }
 
     function testCorrectness_RemoveRole() public {
-        Role testRole = toRole("test_role");
+        bytes32 testRole = "test_role";
 
         // Give then remove role from test user
         vm.startPrank(godmode);
@@ -62,13 +63,13 @@ contract ROLESTest is Test {
     }
 
     function testCorrectness_EnsureValidRole() public {
-        ROLES.ensureValidRole(toRole("valid"));
+        ROLES.ensureValidRole("valid");
 
         bytes memory err = abi.encodeWithSelector(
-            ROLES_InvalidRole.selector,
-            toRole(bytes32("INVALID_ID"))
+            ROLESv1.ROLES_InvalidRole.selector,
+            bytes32("INVALID_ID")
         );
         vm.expectRevert(err);
-        ROLES.ensureValidRole(toRole("INVALID_ID"));
+        ROLES.ensureValidRole("INVALID_ID");
     }
 }

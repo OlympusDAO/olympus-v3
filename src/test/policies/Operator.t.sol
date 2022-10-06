@@ -20,11 +20,11 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter, OHM} from "modules/MINTR.sol";
-import {OlympusRoles, toRole, ROLES_RequireRole} from "modules/ROLES.sol";
-
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -1539,8 +1539,8 @@ contract OperatorTest is Test {
 
         /// Try to call operate as anyone else
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("operator_operate")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_operate")
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -1566,8 +1566,8 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("operator_policy")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_policy")
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -1601,8 +1601,8 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("operator_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_admin")
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -2028,8 +2028,8 @@ contract OperatorTest is Test {
 
         /// Try to call regenerate without being guardian and expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("operator_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_admin")
         );
 
         vm.expectRevert(err);

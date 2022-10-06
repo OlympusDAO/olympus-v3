@@ -2,16 +2,15 @@
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {VOTESv1} from "src/modules/VOTES/VOTES.v1.sol";
 import "src/Kernel.sol";
-
-error VOTES_TransferDisabled();
 
 /// @notice Votes module is the ERC20 token that represents voting power in the network.
 /// @dev    This is currently a substitute module that stubs gOHM.
-contract OlympusVotes is Module, ERC20 {
-    /*//////////////////////////////////////////////////////////////
-                            MODULE INTERFACE
-    //////////////////////////////////////////////////////////////*/
+contract OlympusVotes is VOTESv1 {
+    //============================================================================================//
+    //                                      MODULE SETUP                                          //
+    //============================================================================================//
 
     constructor(Kernel kernel_)
         Module(kernel_)
@@ -29,15 +28,17 @@ contract OlympusVotes is Module, ERC20 {
         minor = 0;
     }
 
-    /*//////////////////////////////////////////////////////////////
-                               CORE LOGIC
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
-    function mintTo(address wallet_, uint256 amount_) external permissioned {
+    /// @inheritdoc VOTESv1
+    function mintTo(address wallet_, uint256 amount_) external override permissioned {
         _mint(wallet_, amount_);
     }
 
-    function burnFrom(address wallet_, uint256 amount_) external permissioned {
+    /// @inheritdoc VOTESv1
+    function burnFrom(address wallet_, uint256 amount_) external override permissioned {
         _burn(wallet_, amount_);
     }
 

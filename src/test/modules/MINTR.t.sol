@@ -10,7 +10,7 @@ import {Quabi} from "test/lib/quabi/Quabi.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
-import "modules/MINTR.sol";
+import "modules/MINTR/OlympusMinter.sol";
 import "src/Kernel.sol";
 
 contract MINTRTest is Test {

@@ -34,6 +34,10 @@ interface IOperator {
         bool[] observations; // individual observations: true = price on other side of average, false = price on same side of average
     }
 
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
+
     /* ========== HEART FUNCTIONS ========== */
 
     /// @notice Executes market operations logic.
@@ -64,7 +68,9 @@ interface IOperator {
     /// @return Amount of opposite token received
     function getAmountOut(ERC20 tokenIn_, uint256 amountIn_) external view returns (uint256);
 
-    /* ========== OPERATOR CONFIGURATION ========== */
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice Set the wall and cushion spreads
     /// @notice Access restricted
@@ -146,7 +152,9 @@ interface IOperator {
     /// @dev    Emergency shutdown function for Cushions
     function deactivateCushion(bool high_) external;
 
-    /* ========== VIEW FUNCTIONS ========== */
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice Returns the full capacity of the specified wall (if it was regenerated now)
     /// @dev    Calculates the capacity to deploy for a wall based on the amount of reserves owned by the treasury and the reserve factor.

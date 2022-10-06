@@ -2,23 +2,25 @@
 pragma solidity 0.8.15;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-
-import {IHeart} from "policies/interfaces/IHeart.sol";
-import {IOperator} from "policies/interfaces/IOperator.sol";
-
-import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusRoles} from "modules/ROLES.sol";
-import "src/Kernel.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
+
+import {IOperator} from "policies/interfaces/IOperator.sol";
+import {IHeart} from "policies/interfaces/IHeart.sol";
+
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
+
+import "src/Kernel.sol";
 
 /// @title  Olympus Heart
 /// @notice Olympus Heart (Policy) Contract
 /// @dev    The Olympus Heart contract provides keeper rewards to call the heart beat function which fuels
 ///         Olympus market operations. The Heart orchestrates state updates in the correct order to ensure
 ///         market operations use up to date information.
-contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
+contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
 
     error Heart_OutOfCycle();
@@ -43,15 +45,14 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     ERC20 public rewardToken;
 
     // Modules
-    OlympusPrice internal PRICE;
-    OlympusRoles internal ROLES;
+    PRICEv1 internal PRICE;
 
     // Policies
     IOperator internal _operator;
 
-    /*//////////////////////////////////////////////////////////////
-                            POLICY INTERFACE
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
 
     constructor(
         Kernel kernel_,
@@ -73,8 +74,8 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("ROLES");
 
-        PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
-        ROLES = OlympusRoles(getModuleAddress(dependencies[1]));
+        PRICE = PRICEv1(getModuleAddress(dependencies[0]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
     }
 
     /// @inheritdoc Policy
@@ -88,9 +89,9 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                               CORE LOGIC
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @inheritdoc IHeart
     function beat() external nonReentrant {
@@ -121,39 +122,27 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         emit RewardIssued(to_, amount);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                             VIEW FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @inheritdoc IHeart
-    function frequency() public view returns (uint256) {
-        return uint256(PRICE.observationFrequency());
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            ADMIN FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
 
     function _resetBeat() internal {
         lastBeat = block.timestamp - frequency();
     }
 
     /// @inheritdoc IHeart
-    function resetBeat() external {
-        ROLES.requireRole("heart_admin", msg.sender);
+    function resetBeat() external onlyRole("heart_admin") {
         _resetBeat();
     }
 
     /// @inheritdoc IHeart
-    function activate() external {
-        ROLES.requireRole("heart_admin", msg.sender);
+    function activate() external onlyRole("heart_admin") {
         active = true;
         _resetBeat();
     }
 
     /// @inheritdoc IHeart
-    function deactivate() external {
-        ROLES.requireRole("heart_admin", msg.sender);
+    function deactivate() external onlyRole("heart_admin") {
         active = false;
     }
 
@@ -164,16 +153,31 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
-    function setRewardTokenAndAmount(ERC20 token_, uint256 reward_) external notWhileBeatAvailable {
-        ROLES.requireRole("heart_admin", msg.sender);
+    function setRewardTokenAndAmount(ERC20 token_, uint256 reward_)
+        external
+        onlyRole("heart_admin")
+        notWhileBeatAvailable
+    {
         rewardToken = token_;
         reward = reward_;
         emit RewardUpdated(token_, reward_);
     }
 
     /// @inheritdoc IHeart
-    function withdrawUnspentRewards(ERC20 token_) external notWhileBeatAvailable {
-        ROLES.requireRole("heart_admin", msg.sender);
+    function withdrawUnspentRewards(ERC20 token_)
+        external
+        onlyRole("heart_admin")
+        notWhileBeatAvailable
+    {
         token_.safeTransfer(msg.sender, token_.balanceOf(address(this)));
+    }
+
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @inheritdoc IHeart
+    function frequency() public view returns (uint256) {
+        return uint256(PRICE.observationFrequency());
     }
 }
