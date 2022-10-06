@@ -6,7 +6,7 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol"; 
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import "src/Kernel.sol";
 

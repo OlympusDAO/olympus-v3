@@ -9,8 +9,8 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 /// Import Distributor
 import "policies/Distributor.sol";
 import "src/Kernel.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
