@@ -9,9 +9,10 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 /// Import Distributor
 import "policies/Distributor.sol";
 import "src/Kernel.sol";
-import "modules/ROLES.sol";
 import {OlympusMinter} from "modules/MINTR.sol";
 import {OlympusTreasury} from "modules/TRSRY.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 /// Import Mocks for non-Bophades contracts
@@ -189,8 +190,8 @@ contract DistributorTest is Test {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("distributor_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("distributor_admin")
         );
         vm.expectRevert(err);
 
@@ -210,8 +211,8 @@ contract DistributorTest is Test {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("distributor_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("distributor_admin")
         );
         vm.expectRevert(err);
 
@@ -246,8 +247,8 @@ contract DistributorTest is Test {
         distributor.setPools(newPools);
 
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("distributor_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("distributor_admin")
         );
         vm.expectRevert(err);
 
@@ -300,8 +301,8 @@ contract DistributorTest is Test {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("distributor_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("distributor_admin")
         );
         vm.expectRevert(err);
 
@@ -344,8 +345,8 @@ contract DistributorTest is Test {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("distributor_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("distributor_admin")
         );
         vm.expectRevert(err);
 

@@ -6,9 +6,10 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// Import Local Dependencies
 import "src/Kernel.sol";
-import {OlympusTreasury} from "src/modules/TRSRY.sol";
-import {OlympusMinter} from "src/modules/MINTR.sol";
-import {OlympusRoles} from "modules/ROLES.sol";
+import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 
 /// Import interfaces
 import "src/interfaces/Uniswap/IUniswapV2Pair.sol";
@@ -33,12 +34,11 @@ error Distributor_AdjustmentLimit();
 error Distributor_AdjustmentUnderflow();
 error Distributor_NotPermissioned();
 
-contract Distributor is Policy {
+contract Distributor is Policy, RolesConsumer {
     /* ========== MODULE DEPENDENCIES ========== */
 
-    OlympusTreasury public TRSRY;
-    OlympusMinter public MINTR;
-    OlympusRoles internal ROLES;
+    TRSRYv1 public TRSRY;
+    MINTRv1 public MINTR;
 
     /* ========== SYSTEM VARIABLES ========== */
 
@@ -82,9 +82,9 @@ contract Distributor is Policy {
         dependencies[1] = toKeycode("TRSRY");
         dependencies[2] = toKeycode("ROLES");
 
-        MINTR = OlympusMinter(getModuleAddress(dependencies[0]));
-        TRSRY = OlympusTreasury(getModuleAddress(dependencies[1]));
-        ROLES = OlympusRoles(getModuleAddress(dependencies[2]));
+        MINTR = MINTRv1(getModuleAddress(dependencies[0]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[1]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
     }
 
     /// @inheritdoc Policy
@@ -165,16 +165,14 @@ contract Distributor is Policy {
     /// @notice Adjusts the bounty
     /// @param  bounty_ The new bounty amount.
     /// @dev    This function is only available to an authorized user.
-    function setBounty(uint256 bounty_) external {
-        ROLES.requireRole("distributor_admin", msg.sender);
+    function setBounty(uint256 bounty_) external onlyRole("distributor_admin") {
         bounty = bounty_;
     }
 
     /// @notice Sets the Uniswap V2 pools to be minted into
     /// @param  pools_ The array of Uniswap V2 pools.
     /// @dev    This function is only available to an authorized user.
-    function setPools(address[] calldata pools_) external {
-        ROLES.requireRole("distributor_admin", msg.sender);
+    function setPools(address[] calldata pools_) external onlyRole("distributor_admin") {
         pools = pools_;
     }
 
@@ -182,8 +180,7 @@ contract Distributor is Policy {
     /// @param  index_ The index in the pools array of the liquidity pool to remove.
     /// @param  pool_ The address of the liquidity pool to remove.
     /// @dev    This function is only available to an authorized user.
-    function removePool(uint256 index_, address pool_) external {
-        ROLES.requireRole("distributor_admin", msg.sender);
+    function removePool(uint256 index_, address pool_) external onlyRole("distributor_admin") {
         if (pools[index_] != pool_) revert Distributor_SanityCheck();
         pools[index_] = address(0);
     }
@@ -191,9 +188,7 @@ contract Distributor is Policy {
     /// @notice Adds a liquidity pool to the list of pools to be minted into
     /// @param  index_ The index in the pools array to add the liquidity pool to.
     /// @param  pool_ The address of the liquidity pool to add.
-    function addPool(uint256 index_, address pool_) external {
-        ROLES.requireRole("distributor_admin", msg.sender);
-
+    function addPool(uint256 index_, address pool_) external onlyRole("distributor_admin") {
         // We want to overwrite slots where possible
         if (pools[index_] == address(0)) {
             pools[index_] = pool_;
@@ -203,8 +198,7 @@ contract Distributor is Policy {
         }
     }
 
-    function setRewardRate(uint256 newRewardRate_) external {
-        ROLES.requireRole("distributor_admin", msg.sender);
+    function setRewardRate(uint256 newRewardRate_) external onlyRole("distributor_admin") {
         rewardRate = newRewardRate_;
     }
 }
