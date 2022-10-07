@@ -18,7 +18,7 @@ contract MockModuleWriter is Policy {
         }
     }
 
-    /* ========== FRAMEWORK CONFIFURATION ========== */
+    // =========  FRAMEWORK CONFIFURATION ========= //
     function configureDependencies() external override returns (Keycode[] memory dependencies) {}
 
     function requestPermissions()
@@ -34,7 +34,7 @@ contract MockModuleWriter is Policy {
         }
     }
 
-    /* ========== DELEGATE TO MODULE ========== */
+    // =========  DELEGATE TO MODULE ========= //
     // solhint-disable-next-line no-complex-fallback, payable-fallback
     fallback(bytes calldata input) external returns (bytes memory) {
         (bool success, bytes memory output) = address(_module).call(input);

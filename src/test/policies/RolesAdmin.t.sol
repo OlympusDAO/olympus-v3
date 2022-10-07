@@ -7,9 +7,9 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import "policies/RolesAdmin.sol";
-//import "modules/ROLES.sol";
-
+import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import "src/Kernel.sol";
 
 contract TreasuryCustodianTest is Test {
@@ -44,7 +44,7 @@ contract TreasuryCustodianTest is Test {
     }
 
     function testCorrectness_OnlyAdmin() public {
-        bytes memory err = abi.encodeWithSelector(OnlyAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(RolesAdmin.OnlyAdmin.selector);
         vm.expectRevert(err);
         vm.prank(testUser);
         rolesAdmin.grantRole(testRole, testUser);
@@ -52,7 +52,7 @@ contract TreasuryCustodianTest is Test {
         vm.prank(admin);
         rolesAdmin.grantRole(testRole, testUser);
 
-        assertTrue(ROLES.hasRole(testUser, toRole(testRole)));
+        assertTrue(ROLES.hasRole(testUser, testRole));
     }
 
     function testCorrectness_GrantRole() public {
@@ -60,7 +60,7 @@ contract TreasuryCustodianTest is Test {
         vm.prank(admin);
         rolesAdmin.grantRole(testRole, testUser);
 
-        assertTrue(ROLES.hasRole(testUser, toRole(testRole)));
+        assertTrue(ROLES.hasRole(testUser, testRole));
     }
 
     function testCorrectness_RevokeRole() public {
@@ -70,12 +70,12 @@ contract TreasuryCustodianTest is Test {
         rolesAdmin.revokeRole(testRole, testUser);
         vm.stopPrank();
 
-        assertFalse(ROLES.hasRole(testUser, toRole(testRole)));
+        assertFalse(ROLES.hasRole(testUser, testRole));
     }
 
     function testCorrectness_ChangeAdmin() public {
         // try pulling admin without push
-        bytes memory err = abi.encodeWithSelector(OnlyNewAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(RolesAdmin.OnlyNewAdmin.selector);
         vm.expectRevert(err);
         vm.prank(newAdmin);
         rolesAdmin.pullNewAdmin();

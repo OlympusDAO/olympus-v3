@@ -11,8 +11,9 @@ import {FullMath} from "libraries/FullMath.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
-import "modules/ROLES.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import "src/Kernel.sol";
 
@@ -111,7 +112,7 @@ contract PriceConfigTest is Test {
         }
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
     function getObs(uint8 nonce) internal returns (uint256[] memory) {
         /// Assume that the reserveEth price feed is fixed at 0.0005 ETH = 1 Reserve
         reserveEthPriceFeed.setLatestAnswer(int256(5e14));
@@ -149,7 +150,7 @@ contract PriceConfigTest is Test {
         return observations;
     }
 
-    /* ========== ADMIN TESTS ========== */
+    // =========  ADMIN TESTS ========= //
 
     /// DONE
     /// [X] initialize
@@ -253,8 +254,8 @@ contract PriceConfigTest is Test {
     function testCorrectness_onlyAuthorizedCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("price_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("price_admin")
         );
 
         /// initialize

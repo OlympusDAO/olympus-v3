@@ -10,7 +10,9 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 //import {MockPolicy} from "test/mocks/KernelTestMocks.sol";
 
-import "src/modules/TRSRY.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+
 import "src/Kernel.sol";
 
 contract TRSRYTest is Test {
@@ -108,7 +110,7 @@ contract TRSRYTest is Test {
         vm.assume(amount_ > 0);
 
         // Fail when withdrawal using policy without write access
-        vm.expectRevert(TRSRY_NotApproved.selector);
+        vm.expectRevert(TRSRYv1.TRSRY_NotApproved.selector);
         vm.prank(testUser);
         TRSRY.withdrawReserves(address(this), ngmi, amount_);
     }
@@ -141,7 +143,7 @@ contract TRSRYTest is Test {
         TRSRY.increaseDebtorApproval(unapprovedPolicy, ngmi, amount_);
 
         bytes memory err = abi.encodeWithSelector(
-            Module_PolicyNotPermitted.selector,
+            Module.Module_PolicyNotPermitted.selector,
             unapprovedPolicy
         );
         vm.expectRevert(err);
@@ -193,7 +195,10 @@ contract TRSRYTest is Test {
         TRSRY.incurDebt(ngmi, INITIAL_TOKEN_AMOUNT);
 
         // Fail when calling setDebt from debtor (policy without setDebt permissions)
-        bytes memory err = abi.encodeWithSelector(Module_PolicyNotPermitted.selector, debtor);
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
+            debtor
+        );
         vm.expectRevert(err);
         vm.prank(debtor);
         TRSRY.setDebt(debtor, ngmi, INITIAL_TOKEN_AMOUNT / 2);

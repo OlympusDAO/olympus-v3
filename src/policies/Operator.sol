@@ -4,20 +4,21 @@ pragma solidity 0.8.15;
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {IOperator} from "policies/interfaces/IOperator.sol";
-import {IBondSDA} from "interfaces/IBondSDA.sol";
-import {IBondCallback} from "interfaces/IBondCallback.sol";
-
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusRoles} from "modules/ROLES.sol";
-
-import "src/Kernel.sol";
-
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
+
+import {IOperator} from "policies/interfaces/IOperator.sol";
+import {IBondCallback} from "interfaces/IBondCallback.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
+
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
+import {RANGEv1} from "modules/RANGE/RANGE.v1.sol";
+
+import "src/Kernel.sol";
 
 /// @title  Olympus Range Operator
 /// @notice Olympus Range Operator (Policy) Contract
@@ -28,21 +29,12 @@ import {FullMath} from "libraries/FullMath.sol";
 ///         the cushion spread, the Operator deploys bond markets to support the price. The Operator also offers
 ///         zero slippage swaps at prices dictated by the wall spread from the moving average. These market operations
 ///         are performed up to a specific capacity before the market must stabilize to regenerate the capacity.
-contract Operator is IOperator, Policy, ReentrancyGuard {
+contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
-    /* ========== ERRORS =========== */
+    // =========  EVENTS ========= //
 
-    error Operator_InvalidParams();
-    error Operator_InsufficientCapacity();
-    error Operator_AmountLessThanMinimum(uint256 amountOut, uint256 minAmountOut);
-    error Operator_WallDown();
-    error Operator_AlreadyInitialized();
-    error Operator_NotInitialized();
-    error Operator_Inactive();
-
-    /* ========== EVENTS =========== */
     event Swap(
         ERC20 indexed tokenIn_,
         ERC20 indexed tokenOut_,
@@ -54,36 +46,45 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     event ReserveFactorChanged(uint32 reserveFactor_);
     event RegenParamsChanged(uint32 wait_, uint32 threshold_, uint32 observe_);
 
-    /* ========== STATE VARIABLES ========== */
+    // =========  ERRORS ========= //
+
+    error Operator_InvalidParams();
+    error Operator_InsufficientCapacity();
+    error Operator_AmountLessThanMinimum(uint256 amountOut, uint256 minAmountOut);
+    error Operator_WallDown();
+    error Operator_AlreadyInitialized();
+    error Operator_NotInitialized();
+    error Operator_Inactive();
+
+    // =========  STATE ========= //
 
     // Operator variables, defined in the interface on the external getter functions
     Status internal _status;
     Config internal _config;
 
-    /// @notice    Whether the Operator has been initialized
+    /// @notice Whether the Operator has been initialized
     bool public initialized;
 
     /// @notice    Whether the Operator is active
     bool public active;
 
     // Modules
-    OlympusPrice internal PRICE;
-    OlympusRange internal RANGE;
-    OlympusTreasury internal TRSRY;
-    OlympusMinter internal MINTR;
-    OlympusRoles internal ROLES;
+    PRICEv1 internal PRICE;
+    RANGEv1 internal RANGE;
+    TRSRYv1 internal TRSRY;
+    MINTRv1 internal MINTR;
 
     // External contracts
-    /// @notice     Auctioneer contract used for cushion bond market deployments
+    /// @notice Auctioneer contract used for cushion bond market deployments
     IBondSDA public auctioneer;
-    /// @notice     Callback contract used for cushion bond market payouts
+    /// @notice Callback contract used for cushion bond market payouts
     IBondCallback public callback;
 
     // Tokens
-    /// @notice     OHM token contract
+    /// @notice OHM token contract
     ERC20 public immutable ohm;
     uint8 public immutable ohmDecimals;
-    /// @notice     Reserve token contract
+    /// @notice Reserve token contract
     ERC20 public immutable reserve;
     uint8 public immutable reserveDecimals;
 
@@ -91,7 +92,10 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     uint32 public constant ONE_HUNDRED_PERCENT = 100e2;
     uint32 public constant ONE_PERCENT = 1e2;
 
-    /* ========== CONSTRUCTOR ========== */
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
+
     constructor(
         Kernel kernel_,
         IBondSDA auctioneer_,
@@ -157,7 +161,6 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         emit RegenParamsChanged(configParams[5], configParams[6], configParams[7]);
     }
 
-    /* ========== FRAMEWORK CONFIGURATION ========== */
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](5);
@@ -167,11 +170,11 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         dependencies[3] = toKeycode("MINTR");
         dependencies[4] = toKeycode("ROLES");
 
-        PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
-        RANGE = OlympusRange(getModuleAddress(dependencies[1]));
-        TRSRY = OlympusTreasury(getModuleAddress(dependencies[2]));
-        MINTR = OlympusMinter(getModuleAddress(dependencies[3]));
-        ROLES = OlympusRoles(getModuleAddress(dependencies[4]));
+        PRICE = PRICEv1(getModuleAddress(dependencies[0]));
+        RANGE = RANGEv1(getModuleAddress(dependencies[1]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[2]));
+        MINTR = MINTRv1(getModuleAddress(dependencies[3]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[4]));
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
@@ -195,6 +198,10 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         requests[8] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
+
     /// @dev Checks to see if the policy is active and ensures the range data isn't stale before performing market operations.
     ///      This check is different from the price feed staleness checks in the PRICE module.
     ///      The PRICE module checks new price feed data for staleness when storing a new observations,
@@ -207,11 +214,10 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         _;
     }
 
-    /* ========== HEART FUNCTIONS ========== */
-    /// @inheritdoc IOperator
-    function operate() external override onlyWhileActive {
-        ROLES.requireRole("operator_operate", msg.sender);
+    // =========  HEART FUNCTIONS ========= //
 
+    /// @inheritdoc IOperator
+    function operate() external override onlyWhileActive onlyRole("operator_operate") {
         // Revert if not initialized
         if (!initialized) revert Operator_NotInitialized();
 
@@ -237,7 +243,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         }
 
         // Cache range data after potential regeneration
-        OlympusRange.Range memory range = RANGE.range();
+        RANGEv1.Range memory range = RANGE.range();
 
         // Get latest price
         // See note in addObservation() for more details
@@ -284,7 +290,8 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         }
     }
 
-    /* ========== OPEN MARKET OPERATIONS (WALL) ========== */
+    // =========  OPEN MARKET OPERATIONS (WALL) ========= //
+
     /// @inheritdoc IOperator
     function swap(
         ERC20 tokenIn_,
@@ -355,14 +362,17 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         }
     }
 
-    /* ========== BOND MARKET OPERATIONS (CUSHION) ========== */
+    // =========  BOND MARKET OPERATIONS (CUSHION) ========= //
+
     /// @notice             Records a bond purchase and updates capacity correctly
     /// @notice             Access restricted (BondCallback)
     /// @param id_          ID of the bond market
     /// @param amountOut_   Amount of capacity expended
-    function bondPurchase(uint256 id_, uint256 amountOut_) external onlyWhileActive {
-        ROLES.requireRole("operator_reporter", msg.sender);
-
+    function bondPurchase(uint256 id_, uint256 amountOut_)
+        external
+        onlyWhileActive
+        onlyRole("operator_reporter")
+    {
         if (id_ == RANGE.market(true)) {
             _updateCapacity(true, amountOut_);
             _checkCushion(true);
@@ -376,7 +386,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
     /// @notice      Activate a cushion by deploying a bond market
     /// @param high_ Whether the cushion is for the high or low side of the range (true = high, false = low)
     function _activate(bool high_) internal {
-        OlympusRange.Range memory range = RANGE.range();
+        RANGEv1.Range memory range = RANGE.range();
 
         if (high_) {
             // Calculate scaleAdjustment for bond market
@@ -511,170 +521,7 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         return decimals - int8(PRICE.decimals());
     }
 
-    /* ========== OPERATOR CONFIGURATION ========== */
-    /// @inheritdoc IOperator
-    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external {
-        ROLES.requireRole("operator_policy", msg.sender);
-
-        // Set spreads on the range module
-        RANGE.setSpreads(cushionSpread_, wallSpread_);
-
-        // Update range prices (wall and cushion)
-        _updateRangePrices();
-    }
-
-    /// @inheritdoc IOperator
-    function setThresholdFactor(uint256 thresholdFactor_) external {
-        ROLES.requireRole("operator_policy", msg.sender);
-        // Set threshold factor on the range module
-        RANGE.setThresholdFactor(thresholdFactor_);
-    }
-
-    /// @inheritdoc IOperator
-    function setCushionFactor(uint32 cushionFactor_) external {
-        ROLES.requireRole("operator_policy", msg.sender);
-
-        // Confirm factor is within allowed values
-        if (cushionFactor_ > ONE_HUNDRED_PERCENT || cushionFactor_ < ONE_PERCENT)
-            revert Operator_InvalidParams();
-
-        // Set factor
-        _config.cushionFactor = cushionFactor_;
-
-        emit CushionFactorChanged(cushionFactor_);
-    }
-
-    /// @inheritdoc IOperator
-    function setCushionParams(
-        uint32 duration_,
-        uint32 debtBuffer_,
-        uint32 depositInterval_
-    ) external {
-        ROLES.requireRole("operator_policy", msg.sender);
-
-        // Confirm values are valid
-        if (duration_ > uint256(7 days) || duration_ < uint256(1 days))
-            revert Operator_InvalidParams();
-        if (debtBuffer_ < uint32(10_000)) revert Operator_InvalidParams();
-        if (depositInterval_ < uint32(1 hours) || depositInterval_ > duration_)
-            revert Operator_InvalidParams();
-
-        // Update values
-        _config.cushionDuration = duration_;
-        _config.cushionDebtBuffer = debtBuffer_;
-        _config.cushionDepositInterval = depositInterval_;
-
-        emit CushionParamsChanged(duration_, debtBuffer_, depositInterval_);
-    }
-
-    /// @inheritdoc IOperator
-    function setReserveFactor(uint32 reserveFactor_) external {
-        ROLES.requireRole("operator_policy", msg.sender);
-
-        // Confirm factor is within allowed values
-        if (reserveFactor_ > ONE_HUNDRED_PERCENT || reserveFactor_ < ONE_PERCENT)
-            revert Operator_InvalidParams();
-
-        // Set factor
-        _config.reserveFactor = reserveFactor_;
-
-        emit ReserveFactorChanged(reserveFactor_);
-    }
-
-    /// @inheritdoc IOperator
-    function setRegenParams(
-        uint32 wait_,
-        uint32 threshold_,
-        uint32 observe_
-    ) external {
-        ROLES.requireRole("operator_policy", msg.sender);
-
-        // Confirm regen parameters are within allowed values
-        if (
-            wait_ < 1 hours ||
-            threshold_ > observe_ ||
-            observe_ == 0 ||
-            threshold_ == 0 ||
-            wait_ / PRICE.observationFrequency() < observe_ - threshold_
-        ) revert Operator_InvalidParams();
-
-        // Set regen params
-        _config.regenWait = wait_;
-        _config.regenThreshold = threshold_;
-        _config.regenObserve = observe_;
-
-        // Re-initialize regen structs with new values (except for last regen)
-        _status.high.count = 0;
-        _status.high.nextObservation = 0;
-        _status.high.observations = new bool[](observe_);
-
-        _status.low.count = 0;
-        _status.low.nextObservation = 0;
-        _status.low.observations = new bool[](observe_);
-
-        emit RegenParamsChanged(wait_, threshold_, observe_);
-    }
-
-    /// @inheritdoc IOperator
-    function setBondContracts(IBondSDA auctioneer_, IBondCallback callback_) external {
-        ROLES.requireRole("operator_admin", msg.sender);
-
-        if (address(auctioneer_) == address(0) || address(callback_) == address(0))
-            revert Operator_InvalidParams();
-        // Set contracts
-        auctioneer = auctioneer_;
-        callback = callback_;
-    }
-
-    /// @inheritdoc IOperator
-    function initialize() external {
-        ROLES.requireRole("operator_admin", msg.sender);
-
-        // Can only call once
-        if (initialized) revert Operator_AlreadyInitialized();
-
-        // Request approval for reserves from TRSRY
-        TRSRY.increaseWithdrawerApproval(address(this), reserve, type(uint256).max);
-
-        // Update range prices (wall and cushion)
-        _updateRangePrices();
-
-        // Regenerate sides
-        _regenerate(true);
-        _regenerate(false);
-
-        // Set initialized and active flags
-        initialized = true;
-        active = true;
-    }
-
-    /// @inheritdoc IOperator
-    function regenerate(bool high_) external {
-        ROLES.requireRole("operator_admin", msg.sender);
-        // Regenerate side
-        _regenerate(high_);
-    }
-
-    /// @inheritdoc IOperator
-    function activate() external {
-        ROLES.requireRole("operator_admin", msg.sender);
-        active = true;
-    }
-
-    /// @inheritdoc IOperator
-    function deactivate() external {
-        ROLES.requireRole("operator_admin", msg.sender);
-        active = false;
-    }
-
-    /// @inheritdoc IOperator
-    function deactivateCushion(bool high_) external {
-        ROLES.requireRole("operator_admin", msg.sender);
-        // Manually deactivate a cushion
-        _deactivate(high_);
-    }
-
-    /* ========== INTERNAL FUNCTIONS ========== */
+    // =========  INTERNAL FUNCTIONS ========= //
 
     /// @notice          Update the capacity on the RANGE module.
     /// @param high_     Whether to update the high side or low side capacity (true = high, false = low).
@@ -790,7 +637,163 @@ contract Operator is IOperator, Policy, ReentrancyGuard {
         }
     }
 
-    /* ========== VIEW FUNCTIONS ========== */
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @inheritdoc IOperator
+    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
+        external
+        onlyRole("operator_policy")
+    {
+        // Set spreads on the range module
+        RANGE.setSpreads(cushionSpread_, wallSpread_);
+
+        // Update range prices (wall and cushion)
+        _updateRangePrices();
+    }
+
+    /// @inheritdoc IOperator
+    function setThresholdFactor(uint256 thresholdFactor_) external onlyRole("operator_policy") {
+        // Set threshold factor on the range module
+        RANGE.setThresholdFactor(thresholdFactor_);
+    }
+
+    /// @inheritdoc IOperator
+    function setCushionFactor(uint32 cushionFactor_) external onlyRole("operator_policy") {
+        // Confirm factor is within allowed values
+        if (cushionFactor_ > ONE_HUNDRED_PERCENT || cushionFactor_ < ONE_PERCENT)
+            revert Operator_InvalidParams();
+
+        // Set factor
+        _config.cushionFactor = cushionFactor_;
+
+        emit CushionFactorChanged(cushionFactor_);
+    }
+
+    /// @inheritdoc IOperator
+    function setCushionParams(
+        uint32 duration_,
+        uint32 debtBuffer_,
+        uint32 depositInterval_
+    ) external onlyRole("operator_policy") {
+        // Confirm values are valid
+        if (duration_ > uint256(7 days) || duration_ < uint256(1 days))
+            revert Operator_InvalidParams();
+        if (debtBuffer_ < uint32(10_000)) revert Operator_InvalidParams();
+        if (depositInterval_ < uint32(1 hours) || depositInterval_ > duration_)
+            revert Operator_InvalidParams();
+
+        // Update values
+        _config.cushionDuration = duration_;
+        _config.cushionDebtBuffer = debtBuffer_;
+        _config.cushionDepositInterval = depositInterval_;
+
+        emit CushionParamsChanged(duration_, debtBuffer_, depositInterval_);
+    }
+
+    /// @inheritdoc IOperator
+    function setReserveFactor(uint32 reserveFactor_) external onlyRole("operator_policy") {
+        // Confirm factor is within allowed values
+        if (reserveFactor_ > ONE_HUNDRED_PERCENT || reserveFactor_ < ONE_PERCENT)
+            revert Operator_InvalidParams();
+
+        // Set factor
+        _config.reserveFactor = reserveFactor_;
+
+        emit ReserveFactorChanged(reserveFactor_);
+    }
+
+    /// @inheritdoc IOperator
+    function setRegenParams(
+        uint32 wait_,
+        uint32 threshold_,
+        uint32 observe_
+    ) external onlyRole("operator_policy") {
+        // Confirm regen parameters are within allowed values
+        if (
+            wait_ < 1 hours ||
+            threshold_ > observe_ ||
+            observe_ == 0 ||
+            threshold_ == 0 ||
+            wait_ / PRICE.observationFrequency() < observe_ - threshold_
+        ) revert Operator_InvalidParams();
+
+        // Set regen params
+        _config.regenWait = wait_;
+        _config.regenThreshold = threshold_;
+        _config.regenObserve = observe_;
+
+        // Re-initialize regen structs with new values (except for last regen)
+        _status.high.count = 0;
+        _status.high.nextObservation = 0;
+        _status.high.observations = new bool[](observe_);
+
+        _status.low.count = 0;
+        _status.low.nextObservation = 0;
+        _status.low.observations = new bool[](observe_);
+
+        emit RegenParamsChanged(wait_, threshold_, observe_);
+    }
+
+    /// @inheritdoc IOperator
+    function setBondContracts(IBondSDA auctioneer_, IBondCallback callback_)
+        external
+        onlyRole("operator_admin")
+    {
+        if (address(auctioneer_) == address(0) || address(callback_) == address(0))
+            revert Operator_InvalidParams();
+        // Set contracts
+        auctioneer = auctioneer_;
+        callback = callback_;
+    }
+
+    /// @inheritdoc IOperator
+    function initialize() external onlyRole("operator_admin") {
+        // Can only call once
+        if (initialized) revert Operator_AlreadyInitialized();
+
+        // Request approval for reserves from TRSRY
+        TRSRY.increaseWithdrawerApproval(address(this), reserve, type(uint256).max);
+
+        // Update range prices (wall and cushion)
+        _updateRangePrices();
+
+        // Regenerate sides
+        _regenerate(true);
+        _regenerate(false);
+
+        // Set initialized and active flags
+        initialized = true;
+        active = true;
+    }
+
+    /// @inheritdoc IOperator
+    function regenerate(bool high_) external onlyRole("operator_admin") {
+        // Regenerate side
+        _regenerate(high_);
+    }
+
+    /// @inheritdoc IOperator
+    function activate() external onlyRole("operator_admin") {
+        active = true;
+    }
+
+    /// @inheritdoc IOperator
+    function deactivate() external onlyRole("operator_admin") {
+        active = false;
+    }
+
+    /// @inheritdoc IOperator
+    function deactivateCushion(bool high_) external onlyRole("operator_admin") {
+        // Manually deactivate a cushion
+        _deactivate(high_);
+    }
+
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
+
     /// @inheritdoc IOperator
     function getAmountOut(ERC20 tokenIn_, uint256 amountIn_) public view returns (uint256) {
         if (tokenIn_ == ohm) {

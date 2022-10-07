@@ -20,11 +20,11 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter, OHM} from "modules/MINTR.sol";
-import {OlympusRoles, toRole, ROLES_RequireRole} from "modules/ROLES.sol";
-
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -198,7 +198,7 @@ contract OperatorTest is Test {
         reserve.approve(address(teller), testReserve * 20);
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
     function knockDownWall(bool high_) internal returns (uint256 amountIn, uint256 amountOut) {
         if (high_) {
             /// Get current capacity of the high wall
@@ -227,7 +227,7 @@ contract OperatorTest is Test {
         }
     }
 
-    /* ========== WALL TESTS ========== */
+    // =========  WALL TESTS ========= //
 
     /// DONE
     /// [X] Able to swap when walls are up
@@ -492,7 +492,7 @@ contract OperatorTest is Test {
         operator.swap(token, amountIn, minAmountOut);
     }
 
-    /* ========== CUSHION TESTS ========== */
+    // =========  CUSHION TESTS ========= //
 
     /// DONE
     /// [X] Cushions deployed when price set in the range and operate triggered
@@ -973,7 +973,7 @@ contract OperatorTest is Test {
         teller.purchase(alice, guardian, id, amountIn, minAmountOut);
     }
 
-    /* ========== REGENERATION TESTS ========== */
+    // =========  REGENERATION TESTS ========= //
 
     /// DONE
     /// [X] Wall regenerates when price on other side of MA for enough observations
@@ -1518,7 +1518,7 @@ contract OperatorTest is Test {
         assertEq(range.market(true), type(uint256).max);
     }
 
-    /* ========== ACCESS CONTROL TESTS ========== */
+    // =========  ACCESS CONTROL TESTS ========= //
 
     /// DONE
     /// [X] operate only callable by heart or guardian
@@ -1539,8 +1539,8 @@ contract OperatorTest is Test {
 
         /// Try to call operate as anyone else
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("operator_operate")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_operate")
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -1566,8 +1566,8 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("operator_policy")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_policy")
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -1601,8 +1601,8 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("operator_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_admin")
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -1614,7 +1614,7 @@ contract OperatorTest is Test {
         operator.initialize();
     }
 
-    /* ========== ADMIN TESTS ========== */
+    // =========  ADMIN TESTS ========= //
 
     /// DONE
     /// [X] setSpreads
@@ -2028,8 +2028,8 @@ contract OperatorTest is Test {
 
         /// Try to call regenerate without being guardian and expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("operator_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_admin")
         );
 
         vm.expectRevert(err);
@@ -2113,7 +2113,7 @@ contract OperatorTest is Test {
         operator.bondPurchase(0, 1e18);
     }
 
-    /* ========== VIEW TESTS ========== */
+    // =========  VIEW TESTS ========= //
 
     /// DONE
     /// [X] fullCapacity
@@ -2178,7 +2178,7 @@ contract OperatorTest is Test {
         operator.getAmountOut(token, amountIn);
     }
 
-    /* ========== INTERNAL FUNCTION TESTS ========== */
+    // =========  INTERNAL FUNCTION TESTS ========= //
 
     /// DONE
     /// [X] Range updates from new price data when operate is called (triggers _updateRange)

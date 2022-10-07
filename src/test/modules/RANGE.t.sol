@@ -10,8 +10,8 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import "src/Kernel.sol";
-import {OlympusRange} from "modules/RANGE.sol";
 
 contract RangeTest is Test {
     using FullMath for uint256;
@@ -88,7 +88,7 @@ contract RangeTest is Test {
         }
     }
 
-    /* ========== POLICY FUNCTION TESTS ========== */
+    // =========  POLICY FUNCTION TESTS ========= //
 
     /// DONE
     /// [X] updateCapacity
@@ -362,7 +362,7 @@ contract RangeTest is Test {
     function testCorrectness_onlyPermittedPoliciesCanCallGatedFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
         bytes memory err = abi.encodeWithSelector(
-            Module_PolicyNotPermitted.selector,
+            Module.Module_PolicyNotPermitted.selector,
             address(this)
         );
 
@@ -391,7 +391,7 @@ contract RangeTest is Test {
         range.setThresholdFactor(uint256(200));
     }
 
-    /* ========== VIEW TESTS ========== */
+    // =========  VIEW TESTS ========= //
 
     /// DONE
     /// [X] range

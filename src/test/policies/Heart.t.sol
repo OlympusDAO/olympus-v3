@@ -7,7 +7,8 @@ import {console2} from "forge-std/console2.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
-import "modules/ROLES.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
@@ -29,12 +30,12 @@ contract MockOperator is Policy {
         result = true;
     }
 
-    /* ========== FRAMEWORK CONFIFURATION ========== */
+    // =========  FRAMEWORK CONFIFURATION ========= //
     function configureDependencies() external override returns (Keycode[] memory dependencies) {}
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {}
 
-    /* ========== HEART FUNCTIONS ========== */
+    // =========  HEART FUNCTIONS ========= //
     function operate() external view {
         if (!result) revert Operator_CustomError();
     }
@@ -132,9 +133,9 @@ contract HeartTest is Test {
         }
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
 
-    /* ========== KEEPER FUNCTIONS ========== */
+    // =========  KEEPER FUNCTIONS ========= //
     /// DONE
     /// [X] beat
     ///     [X] active and frequency has passed
@@ -219,7 +220,7 @@ contract HeartTest is Test {
         heart.beat();
     }
 
-    /* ========== VIEW FUNCTIONS ========== */
+    // =========  VIEW FUNCTIONS ========= //
     /// [X] frequency
 
     function testCorrectness_viewFrequency() public {
@@ -230,7 +231,7 @@ contract HeartTest is Test {
         assertEq(frequency, uint256(8 hours));
     }
 
-    /* ========== ADMIN FUNCTIONS ========== */
+    // =========  ADMIN FUNCTIONS ========= //
     /// DONE
     /// [X] resetBeat
     /// [X] activate and deactivate
@@ -360,8 +361,8 @@ contract HeartTest is Test {
     function testCorrectness_cannotCallAdminFunctionsWithoutPermissions() public {
         /// Try to call admin functions on the heart as non-guardian and expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("heart_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("heart_admin")
         );
 
         vm.expectRevert(err);

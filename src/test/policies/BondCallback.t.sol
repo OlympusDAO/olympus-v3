@@ -19,16 +19,16 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter, OHM} from "modules/MINTR.sol";
-import {OlympusRoles, toRole, ROLES_RequireRole} from "modules/ROLES.sol";
-
-import "src/Kernel.sol";
-
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
+
+import "src/Kernel.sol";
 
 contract MockOhm is ERC20 {
     constructor(
@@ -255,7 +255,7 @@ contract BondCallbackTest is Test {
         callback.whitelist(address(teller), externalBond);
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
     function createMarket(
         ERC20 quoteToken,
         ERC20 payoutToken,
@@ -313,7 +313,7 @@ contract BondCallbackTest is Test {
         return auctioneer.createMarket(abi.encode(params));
     }
 
-    /* ========== CALLBACK TESTS ========== */
+    // =========  CALLBACK TESTS ========= //
 
     /// DONE
     /// [X] Callback correctly handles payouts for the 4 market cases
@@ -473,7 +473,7 @@ contract BondCallbackTest is Test {
         callback.callback(regBond, 10, 10);
     }
 
-    /* ========== ADMIN TESTS ========== */
+    // =========  ADMIN TESTS ========= //
 
     /// DONE
     /// [X] whitelist
@@ -488,8 +488,8 @@ contract BondCallbackTest is Test {
 
         // Attempt to whitelist a market as a non-approved address, expect revert
         bytes memory err = abi.encodeWithSelector(
-            ROLES_RequireRole.selector,
-            toRole("callback_whitelist")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("callback_whitelist")
         );
         vm.prank(alice);
         vm.expectRevert(err);
@@ -580,8 +580,8 @@ contract BondCallbackTest is Test {
         /// Try to call batch to treasury as non-policy, expect revert
         {
             bytes memory err = abi.encodeWithSelector(
-                ROLES_RequireRole.selector,
-                toRole("callback_admin")
+                ROLESv1.ROLES_RequireRole.selector,
+                bytes32("callback_admin")
             );
             vm.prank(alice);
             vm.expectRevert(err);
@@ -644,7 +644,7 @@ contract BondCallbackTest is Test {
         assertEq(other.balanceOf(address(treasury)), startBalances[1] + 10);
     }
 
-    /* ========== VIEW TESTS ========== */
+    // =========  VIEW TESTS ========= //
 
     /// DONE
     /// [X] amountsForMarket

@@ -8,22 +8,22 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 contract Faucet is ReentrancyGuard {
     using TransferHelper for ERC20;
 
-    /* ========== ERRORS =========== */
+    // =========  ERRORS ========== //
     error Faucet_InsufficientFunds(Asset asset);
     error Faucet_DripOnCooldown(Asset asset);
     error Faucet_DripFailed(Asset asset);
 
-    /* ========== EVENTS =========== */
+    // =========  EVENTS ========== //
     event Drip(address receiver, Asset asset, uint256 amount);
 
-    /* ========== STRUCTS ========== */
+    // =========  STRUCTS ========= //
     enum Asset {
         ETH,
         OHM,
         RESERVE
     }
 
-    /* ========== STATE VARIABLES ========== */
+    // =========  STATE VARIABLES ========= //
     address public admin;
 
     mapping(Asset => uint256) public dripAmount;
@@ -31,7 +31,7 @@ contract Faucet is ReentrancyGuard {
     mapping(address => mapping(Asset => uint256)) public lastDrip;
     uint256 public dripInterval;
 
-    /* ========== CONSTRUCTOR ========== */
+    // =========  CONSTRUCTOR ========= //
     constructor(
         address admin_,
         ERC20 ohm_,
@@ -52,7 +52,7 @@ contract Faucet is ReentrancyGuard {
         dripInterval = dripInterval_;
     }
 
-    /* ========== PUBLIC FUNCTIONS ========== */
+    // =========  PUBLIC FUNCTIONS ========= //
     function drip(Asset asset_) public nonReentrant {
         if (block.timestamp < lastDrip[msg.sender][asset_] + dripInterval)
             revert Faucet_DripOnCooldown(asset_);
@@ -76,7 +76,7 @@ contract Faucet is ReentrancyGuard {
 
     receive() external payable {}
 
-    /* ========== ADMIN FUNCTIONS ========== */
+    // =========  ADMIN FUNCTIONS ========= //
 
     function withdrawAll(address to_, Asset asset_) external {
         require(msg.sender == admin, "Must be admin");

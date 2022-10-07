@@ -10,20 +10,20 @@ import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IWETH9} from "interfaces/IWETH9.sol";
 
 import "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusInstructions} from "modules/INSTR.sol";
-import {OlympusVotes} from "modules/VOTES.sol";
-import {OlympusRoles, Role, toRole} from "modules/ROLES.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
+import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
-import {VoterRegistration} from "policies/VoterRegistration.sol";
-import {OlympusGovernance} from "policies/Governance.sol";
+//import {VoterRegistration} from "policies/VoterRegistration.sol";
+//import {OlympusGovernance} from "policies/Governance.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
@@ -51,8 +51,8 @@ contract OlympusDeploy is Script {
     OlympusHeart public heart;
     BondCallback public callback;
     OlympusPriceConfig public priceConfig;
-    VoterRegistration public voterReg;
-    OlympusGovernance public governance;
+    //VoterRegistration public voterReg;
+    //OlympusGovernance public governance;
     RolesAdmin public rolesAdmin;
     Faucet public faucet;
 
@@ -103,7 +103,7 @@ contract OlympusDeploy is Script {
         INSTR = new OlympusInstructions(kernel);
         console2.log("Instructions module deployed at:", address(INSTR));
 
-        VOTES = new OlympusVotes(kernel);
+        VOTES = new OlympusVotes(kernel, ohm);
         console2.log("Votes module deployed at:", address(VOTES));
 
         TRSRY = new OlympusTreasury(kernel);
@@ -158,11 +158,11 @@ contract OlympusDeploy is Script {
         priceConfig = new OlympusPriceConfig(kernel);
         console2.log("PriceConfig deployed at:", address(priceConfig));
 
-        voterReg = new VoterRegistration(kernel);
-        console2.log("VoterRegistration deployed at:", address(voterReg));
+        //voterReg = new VoterRegistration(kernel);
+        //console2.log("VoterRegistration deployed at:", address(voterReg));
 
-        governance = new OlympusGovernance(kernel);
-        console2.log("Governance deployed at:", address(governance));
+        //governance = new OlympusGovernance(kernel);
+        //console2.log("Governance deployed at:", address(governance));
 
         rolesAdmin = new RolesAdmin(kernel);
         console2.log("RolesAdmin deployed at:", address(rolesAdmin));
@@ -193,8 +193,8 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.ActivatePolicy, address(operator));
         kernel.executeAction(Actions.ActivatePolicy, address(heart));
         kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
-        kernel.executeAction(Actions.ActivatePolicy, address(voterReg));
-        kernel.executeAction(Actions.ActivatePolicy, address(governance));
+        //kernel.executeAction(Actions.ActivatePolicy, address(voterReg));
+        //kernel.executeAction(Actions.ActivatePolicy, address(governance));
         kernel.executeAction(Actions.ActivatePolicy, address(faucet));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
@@ -216,7 +216,7 @@ contract OlympusDeploy is Script {
         rolesAdmin.grantRole("heart_admin", guardian_);
 
         /// VoterRegistration roles
-        rolesAdmin.grantRole("voter_admin", guardian_);
+        //rolesAdmin.grantRole("voter_admin", guardian_);
 
         /// PriceConfig roles
         rolesAdmin.grantRole("price_admin", guardian_);
