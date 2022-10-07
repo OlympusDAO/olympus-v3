@@ -162,7 +162,7 @@ library SimIO {
 abstract contract RangeSim is Test {
     using FullMath for uint256;
 
-    /* ========== RANGE SYSTEM CONTRACTS ========== */
+    // =========  RANGE SYSTEM CONTRACTS ========= //
 
     Kernel public kernel;
     OlympusPrice public price;
@@ -180,7 +180,7 @@ abstract contract RangeSim is Test {
     mapping(uint32 => SimIO.Params) internal params; // map of sim keys to sim params
     mapping(uint32 => mapping(uint32 => int256)) internal netflows; // map of sim keys to epochs to netflows
 
-    /* ========== EXTERNAL CONTRACTS  ========== */
+    // =========  EXTERNAL CONTRACTS  ========= //
 
     UserFactory public userCreator;
     address internal market;
@@ -199,7 +199,7 @@ abstract contract RangeSim is Test {
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal reserveEthPriceFeed;
 
-    /* ========== SIMULATION VARIABLES ========== */
+    // =========  SIMULATION VARIABLES ========= //
 
     /// @notice Determines which data is pulled from the input files and allows writing results to compare against the same seed.
     /// @dev This is set dynamically by the test generator.
@@ -219,7 +219,7 @@ abstract contract RangeSim is Test {
     /// @notice Number of epochs between rebalancing the liquidity pool
     uint32 internal REBALANCE_FREQUENCY;
 
-    /* ========== SETUP ========== */
+    // =========  SETUP ========= //
 
     function setUp() public {
         // Deploy dependencies and setup users for simulation
@@ -498,7 +498,7 @@ abstract contract RangeSim is Test {
         }
     }
 
-    /* ========== SIMULATION HELPER FUNCTIONS ========== */
+    // =========  SIMULATION HELPER FUNCTIONS ========= //
     /// @notice Returns the rebase percent per epoch based on supply as a percentage with 4 decimals. i.e. 10000 = 1%.
     /// @dev Values are based on the minimum value for each tier as defined in OIP-18.
     function getRebasePercent() internal view returns (uint256) {
@@ -963,7 +963,7 @@ abstract contract RangeSim is Test {
         );
     }
 
-    /* ========== SIMULATION LOGIC ========== */
+    // =========  SIMULATION LOGIC ========= //
     function simulate(uint32 key) internal {
         // Deploy a RBS clone for the key
         rangeSetup(key);

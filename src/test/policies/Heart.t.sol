@@ -30,12 +30,12 @@ contract MockOperator is Policy {
         result = true;
     }
 
-    /* ========== FRAMEWORK CONFIFURATION ========== */
+    // =========  FRAMEWORK CONFIFURATION ========= //
     function configureDependencies() external override returns (Keycode[] memory dependencies) {}
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {}
 
-    /* ========== HEART FUNCTIONS ========== */
+    // =========  HEART FUNCTIONS ========= //
     function operate() external view {
         if (!result) revert Operator_CustomError();
     }
@@ -133,9 +133,9 @@ contract HeartTest is Test {
         }
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
 
-    /* ========== KEEPER FUNCTIONS ========== */
+    // =========  KEEPER FUNCTIONS ========= //
     /// DONE
     /// [X] beat
     ///     [X] active and frequency has passed
@@ -220,7 +220,7 @@ contract HeartTest is Test {
         heart.beat();
     }
 
-    /* ========== VIEW FUNCTIONS ========== */
+    // =========  VIEW FUNCTIONS ========= //
     /// [X] frequency
 
     function testCorrectness_viewFrequency() public {
@@ -231,7 +231,7 @@ contract HeartTest is Test {
         assertEq(frequency, uint256(8 hours));
     }
 
-    /* ========== ADMIN FUNCTIONS ========== */
+    // =========  ADMIN FUNCTIONS ========= //
     /// DONE
     /// [X] resetBeat
     /// [X] activate and deactivate

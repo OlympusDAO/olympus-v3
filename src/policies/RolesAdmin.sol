@@ -6,17 +6,17 @@ import "src/Kernel.sol";
 
 /// @notice The RolesAdmin Policy grants and revokes Roles in the ROLES module.
 contract RolesAdmin is Policy {
-    /* ========== EVENTS ========== */
+    // =========  EVENTS ========= //
 
     event NewAdminPushed(address indexed newAdmin_);
     event NewAdminPulled(address indexed newAdmin_);
 
-    /* ========== ERRORS ========== */
+    // =========  ERRORS ========= //
 
     error OnlyAdmin();
     error OnlyNewAdmin();
 
-    /* ========== STATE ========== */
+    // =========  STATE ========= //
 
     /// @notice Special role that is responsible for assigning policy-defined roles to addresses.
     address public admin;

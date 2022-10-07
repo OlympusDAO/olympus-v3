@@ -6,7 +6,7 @@ import "src/Kernel.sol";
 
 /// @notice Treasury holds all other assets under the control of the protocol.
 abstract contract TRSRYv1 is Module {
-    /* ========== EVENTS ========== */
+    // =========  EVENTS ========= //
 
     event IncreaseWithdrawerApproval(
         address indexed withdrawer_,
@@ -30,12 +30,12 @@ abstract contract TRSRYv1 is Module {
     event DebtRepaid(ERC20 indexed token_, address indexed policy_, uint256 amount_);
     event DebtSet(ERC20 indexed token_, address indexed policy_, uint256 amount_);
 
-    /* ========== ERRORS ========== */
+    // =========  ERRORS ========= //
 
     error TRSRY_NotApproved();
     error TRSRY_NoDebtOutstanding();
 
-    /* ========== STATE ========== */
+    // =========  STATE ========= //
 
     /// @notice Mapping of who is approved for withdrawal.
     /// @dev    withdrawer -> token -> amount. Infinite approval is max(uint256).
@@ -51,7 +51,7 @@ abstract contract TRSRYv1 is Module {
     /// @notice Debt for particular token and debtor address
     mapping(ERC20 => mapping(address => uint256)) public reserveDebt;
 
-    /* ========== FUNCTIONS ========== */
+    // =========  FUNCTIONS ========= //
 
     /// @notice Increase approval for specific withdrawer addresses
     function increaseWithdrawerApproval(

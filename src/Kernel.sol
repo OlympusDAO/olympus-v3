@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
+//============================================================================================//
+//                                        GLOBAL TYPES                                        //
+//============================================================================================//
+
 /// @notice Actions to trigger state changes in the kernel. Passed by the executor
 enum Actions {
     InstallModule,
@@ -150,7 +154,7 @@ abstract contract Policy is KernelAdapter {
 /// @dev    The kernel manages modules and policies. The kernel is mutated via predefined Actions,
 /// @dev    which are input from any address assigned as the executor. The executor can be changed as needed.
 contract Kernel {
-    /* ========== EVENTS ========== */
+    // =========  EVENTS ========= //
 
     event PermissionsUpdated(
         Keycode indexed keycode_,
@@ -160,7 +164,7 @@ contract Kernel {
     );
     event ActionExecuted(Actions indexed action_, address indexed target_);
 
-    /* ========== ERRORS ========== */
+    // =========  ERRORS ========= //
 
     error Kernel_OnlyExecutor(address caller_);
     error Kernel_ModuleAlreadyInstalled(Keycode module_);
@@ -168,12 +172,12 @@ contract Kernel {
     error Kernel_PolicyAlreadyActivated(address policy_);
     error Kernel_PolicyNotActivated(address policy_);
 
-    /* ========== PRIVILEGED ADDRESSES ========== */
+    // =========  PRIVILEGED ADDRESSES ========= //
 
     /// @notice Address that is able to initiate Actions in the kernel. Can be assigned to a multisig or governance contract.
     address public executor;
 
-    /* ========== MODULE MANAGEMENT ========== */
+    // =========  MODULE MANAGEMENT ========= //
 
     /// @notice Array of all modules currently installed.
     Keycode[] public allKeycodes;
@@ -194,7 +198,7 @@ contract Kernel {
     /// @dev    Keycode -> Policy -> Function Selector -> bool for permission
     mapping(Keycode => mapping(Policy => mapping(bytes4 => bool))) public modulePermissions;
 
-    /* ========== POLICY MANAGEMENT ========== */
+    // =========  POLICY MANAGEMENT ========= //
 
     /// @notice List of all active policies
     Policy[] public activePolicies;

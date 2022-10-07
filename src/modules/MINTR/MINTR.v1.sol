@@ -6,11 +6,11 @@ import "src/Kernel.sol";
 
 /// @notice Wrapper for minting and burning functions of OHM token.
 abstract contract MINTRv1 is Module {
-    /* ========== STATE ========== */
+    // =========  STATE ========= //
 
     OHM public ohm;
 
-    /* ========== FUNCTIONS ========== */
+    // =========  FUNCTIONS ========= //
 
     /// @notice Mint OHM to an address.
     function mintOhm(address to_, uint256 amount_) external virtual;

@@ -88,7 +88,7 @@ contract RangeTest is Test {
         }
     }
 
-    /* ========== POLICY FUNCTION TESTS ========== */
+    // =========  POLICY FUNCTION TESTS ========= //
 
     /// DONE
     /// [X] updateCapacity
@@ -391,7 +391,7 @@ contract RangeTest is Test {
         range.setThresholdFactor(uint256(200));
     }
 
-    /* ========== VIEW TESTS ========== */
+    // =========  VIEW TESTS ========= //
 
     /// DONE
     /// [X] range

@@ -6,7 +6,7 @@ import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondCallback} from "interfaces/IBondCallback.sol";
 
 interface IOperator {
-    /* ========== STRUCTS =========== */
+    // =========  STRUCTS ========== //
 
     /// @notice Configuration variables for the Operator
     struct Config {
@@ -34,14 +34,14 @@ interface IOperator {
         bool[] observations; // individual observations: true = price on other side of average, false = price on same side of average
     }
 
-    /* ========== CORE FUNCTIONS ========== */
+    // =========  CORE FUNCTIONS ========= //
 
     /// @notice Executes market operations logic.
     /// @notice Access restricted
     /// @dev    This function is triggered by a keeper on the Heart contract.
     function operate() external;
 
-    /* ========== OPEN MARKET OPERATIONS (WALL) ========== */
+    // =========  OPEN MARKET OPERATIONS (WALL) ========= //
 
     /// @notice Swap at the current wall prices
     /// @param  tokenIn_ - Token to swap into the wall
@@ -64,7 +64,7 @@ interface IOperator {
     /// @return Amount of opposite token received
     function getAmountOut(ERC20 tokenIn_, uint256 amountIn_) external view returns (uint256);
 
-    /* ========== ADMIN FUNCTIONS ========== */
+    // =========  ADMIN FUNCTIONS ========= //
 
     /// @notice Set the wall and cushion spreads
     /// @notice Access restricted
@@ -146,7 +146,7 @@ interface IOperator {
     /// @dev    Emergency shutdown function for Cushions
     function deactivateCushion(bool high_) external;
 
-    /* ========== VIEW FUNCTIONS ========== */
+    // =========  VIEW FUNCTIONS ========= //
 
     /// @notice Returns the full capacity of the specified wall (if it was regenerated now)
     /// @dev    Calculates the capacity to deploy for a wall based on the amount of reserves owned by the treasury and the reserve factor.

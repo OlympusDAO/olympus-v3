@@ -14,7 +14,7 @@ import "src/Kernel.sol";
 /// @notice Parthenon, OlympusDAO's on-chain governance system.
 /// @dev The Parthenon policy is also the Kernel's Executor.
 contract Parthenon is Policy {
-    /* ========== EVENTS ========== */
+    // =========  EVENTS ========= //
 
     event ProposalSubmitted(uint256 proposalId, string title, string proposalURI);
     event ProposalRegistered(uint256 proposalId, address voter, uint256 amount);
@@ -23,7 +23,7 @@ contract Parthenon is Policy {
     event ProposalExecuted(uint256 proposalId);
     event CollateralReclaimed(uint256 proposalId, uint256 tokensReclaimed_);
 
-    /* ========== ERRORS ========== */
+    // =========  ERRORS ========= //
 
     error NotAuthorized();
     error UnableToActivate();
@@ -43,7 +43,7 @@ contract Parthenon is Policy {
     error UnmetCollateralDuration();
     error CollateralAlreadyReturned();
 
-    /* ========== STATE ========== */
+    // =========  STATE ========= //
 
     struct ProposalMetadata {
         address submitter;

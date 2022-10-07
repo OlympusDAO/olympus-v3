@@ -4,12 +4,12 @@ pragma solidity 0.8.15;
 import "src/Kernel.sol";
 
 abstract contract ROLESv1 is Module {
-    /* ========== EVENTS ========== */
+    // =========  EVENTS ========= //
 
     event RoleGranted(bytes32 indexed role_, address indexed addr_);
     event RoleRevoked(bytes32 indexed role_, address indexed addr_);
 
-    /* ========== ERRORS ========== */
+    // =========  ERRORS ========= //
 
     error ROLES_InvalidRole(bytes32 role_);
     error ROLES_RequireRole(bytes32 role_);
@@ -17,12 +17,12 @@ abstract contract ROLESv1 is Module {
     error ROLES_AddressDoesNotHaveRole(address addr_, bytes32 role_);
     error ROLES_RoleDoesNotExist(bytes32 role_);
 
-    /* ========== STATE ========== */
+    // =========  STATE ========= //
 
     /// @notice Mapping for if an address has a policy-defined role.
     mapping(address => mapping(bytes32 => bool)) public hasRole;
 
-    /* ========== FUNCTIONS ========== */
+    // =========  FUNCTIONS ========= //
 
     /// @notice Function to grant policy-defined roles to some address. Can only be called by admin.
     function saveRole(bytes32 role_, address addr_) external virtual;

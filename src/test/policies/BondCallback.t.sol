@@ -255,7 +255,7 @@ contract BondCallbackTest is Test {
         callback.whitelist(address(teller), externalBond);
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
     function createMarket(
         ERC20 quoteToken,
         ERC20 payoutToken,
@@ -313,7 +313,7 @@ contract BondCallbackTest is Test {
         return auctioneer.createMarket(abi.encode(params));
     }
 
-    /* ========== CALLBACK TESTS ========== */
+    // =========  CALLBACK TESTS ========= //
 
     /// DONE
     /// [X] Callback correctly handles payouts for the 4 market cases
@@ -473,7 +473,7 @@ contract BondCallbackTest is Test {
         callback.callback(regBond, 10, 10);
     }
 
-    /* ========== ADMIN TESTS ========== */
+    // =========  ADMIN TESTS ========= //
 
     /// DONE
     /// [X] whitelist
@@ -644,7 +644,7 @@ contract BondCallbackTest is Test {
         assertEq(other.balanceOf(address(treasury)), startBalances[1] + 10);
     }
 
-    /* ========== VIEW TESTS ========== */
+    // =========  VIEW TESTS ========= //
 
     /// DONE
     /// [X] amountsForMarket

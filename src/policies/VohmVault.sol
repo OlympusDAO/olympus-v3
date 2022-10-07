@@ -10,7 +10,7 @@ error VohmVault_NotWarmedUp();
 
 /// @notice Policy to mint and burn VOTES to arbitrary addresses
 contract VohmVault is Policy {
-    /* ========== STATE ========== */
+    // =========  STATE ========= //
 
     ERC20 public gOHM;
 
