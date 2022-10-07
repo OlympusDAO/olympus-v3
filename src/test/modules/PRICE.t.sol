@@ -164,7 +164,7 @@ contract PriceTest is Test {
 
     function testCorrectness_onlyPermittedPoliciesCanCallUpdateMovingAverage(uint8 nonce) public {
         bytes memory err = abi.encodeWithSelector(
-            Module_PolicyNotPermitted.selector,
+            Module.Module_PolicyNotPermitted.selector,
             address(this)
         );
 
@@ -528,7 +528,7 @@ contract PriceTest is Test {
     function testCorrectness_onlyPermittedPoliciesCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
         bytes memory err = abi.encodeWithSelector(
-            Module_PolicyNotPermitted.selector,
+            Module.Module_PolicyNotPermitted.selector,
             address(this)
         );
 

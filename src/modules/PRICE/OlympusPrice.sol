@@ -8,6 +8,8 @@ import "src/Kernel.sol";
 
 /// @notice Price oracle data storage contract.
 contract OlympusPrice is PRICEv1 {
+    /* ========== STATE ========== */
+
     // Scale factor for converting prices, calculated from decimal values.
     uint256 internal immutable _scaleFactor;
 

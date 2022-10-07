@@ -5,22 +5,16 @@ import "src/Kernel.sol";
 
 /// @notice Caches and executes batched instructions for protocol upgrades in the Kernel.
 abstract contract INSTRv1 is Module {
-    //============================================================================================//
-    //                                           EVENTS                                           //
-    //============================================================================================//
+    /* ========== EVENTS ========== */
 
     event InstructionsStored(uint256 instructionsId);
 
-    //============================================================================================//
-    //                                           ERRORS                                           //
-    //============================================================================================//
+    /* ========== ERRORS ========== */
 
     error INSTR_InstructionsCannotBeEmpty();
     error INSTR_InvalidChangeExecutorAction();
 
-    //============================================================================================//
-    //                                            STATE                                           //
-    //============================================================================================//
+    /* ========== STATE ========== */
 
     /// @notice Counter of total instructions
     uint256 public totalInstructions;
@@ -28,9 +22,7 @@ abstract contract INSTRv1 is Module {
     /// @notice All stored instructions per count in totalInstructions
     mapping(uint256 => Instruction[]) public storedInstructions;
 
-    //============================================================================================//
-    //                                       CORE FUNCTIONS                                       //
-    //============================================================================================//
+    /* ========== FUNCTIONS ========== */
 
     /// @notice View function for retrieving a list of Instructions in an outside contract.
     function getInstructions(uint256 instructionsId_)

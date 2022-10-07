@@ -13,14 +13,22 @@ The following establishes a coding standard for the Olympus v3/Bophades repo.
     - `_issueReward(address to_)`
 - Module-specific functions are always `UPPERCASE`
     - ex. `KEYCODE()`
+- Errors defined in modules must be suffixed by module's respective keycode
+    - ex. `TRSRY_NotApproved(...)`
+    - Policies have no such restriction
 - Regular Comments use `//`
     - `// Regular comment hurr durr`
 - NatSpec comments use `///`
     - `/// @notice Natspec comment`
-- Custom errors defined outside of contract (makes it referable for testing)
-- Errors defined in modules must be suffixed by module's respective keycode
-    - ex. `TRSRY_NotApproved(...)`
-    - Policies have no such restriction
+- Contract and function groups or other major sections in SOURCE files should be denoted with
+```
+    //============================================================================================//
+    //                                           HEADER                                           //
+    //============================================================================================//
+```
+    - This is to denote sections when scrolling through large files
+- All other sections should be denoted with single line header: 
+```/* ========== HEADER ========== */ ```
 
 
 ## Principles (NOT HARD RULES)

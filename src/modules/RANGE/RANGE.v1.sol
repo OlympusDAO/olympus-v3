@@ -5,9 +5,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import "src/Kernel.sol";
 
 abstract contract RANGEv1 is Module {
-    //============================================================================================//
-    //                                           EVENTS                                           //
-    //============================================================================================//
+    /* ========== EVENTS ========== */
 
     event WallUp(bool high_, uint256 timestamp_, uint256 capacity_);
     event WallDown(bool high_, uint256 timestamp_, uint256 capacity_);
@@ -22,15 +20,11 @@ abstract contract RANGEv1 is Module {
     event SpreadsChanged(uint256 cushionSpread_, uint256 wallSpread_);
     event ThresholdFactorChanged(uint256 thresholdFactor_);
 
-    //============================================================================================//
-    //                                           ERRORS                                           //
-    //============================================================================================//
+    /* ========== ERRORS ========== */
 
     error RANGE_InvalidParams();
 
-    //============================================================================================//
-    //                                            STATE                                           //
-    //============================================================================================//
+    /* ========== STATE ========== */
 
     struct Line {
         uint256 price; // Price for the specified level
@@ -70,9 +64,7 @@ abstract contract RANGEv1 is Module {
     /// @notice Reserve token contract address
     ERC20 public reserve;
 
-    //============================================================================================//
-    //                                       CORE FUNCTIONS                                       //
-    //============================================================================================//
+    /* ========== FUNCTIONS ========== */
 
     /// @notice Update the capacity for a side of the range.
     /// @notice Access restricted to activated policies.
@@ -114,10 +106,6 @@ abstract contract RANGEv1 is Module {
     /// @param  thresholdFactor_ - Percent of capacity that the wall should close below, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev    The new threshold factor will not go into effect until the next time regenerate() is called for each side of the wall.
     function setThresholdFactor(uint256 thresholdFactor_) external virtual;
-
-    //============================================================================================//
-    //                                       VIEW FUNCTIONS                                       //
-    //============================================================================================//
 
     /// @notice Get the full Range data in a struct.
     function range() external view virtual returns (Range memory);

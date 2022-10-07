@@ -6,7 +6,8 @@ import {Script, console2} from "forge-std/Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
+import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 

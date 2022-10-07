@@ -69,7 +69,10 @@ contract MINTRTest is Test {
 
     function testRevert_UnapprovedAddressCannotMintOhm(address to_, uint256 amount_) public {
         // Have user try to mint
-        bytes memory err = abi.encodeWithSelector(Module_PolicyNotPermitted.selector, users[0]);
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
+            users[0]
+        );
         vm.expectRevert(err);
         vm.prank(users[0]);
         MINTR.mintOhm(to_, amount_);

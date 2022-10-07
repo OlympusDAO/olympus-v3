@@ -6,20 +6,21 @@ import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import "src/Kernel.sol";
-import "modules/INSTR/OlympusInstructions.sol";
-import {OlympusGovernance} from "policies/Governance.sol";
+import {Parthenon} from "policies/Parthenon.sol";
 import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 import {MockInvalidModule} from "test/mocks/MockInvalidModule.sol";
 import {MockValidModule} from "test/mocks/MockValidModule.sol";
 import {MockValidUpgradedModule} from "test/mocks/MockValidUpgradedModule.sol";
+
+import "modules/INSTR/OlympusInstructions.sol";
+import "src/Kernel.sol";
 
 contract InstructionsTest is Test {
     Kernel internal kernel;
     using ModuleTestFixtureGenerator for OlympusInstructions;
 
     OlympusInstructions internal instr;
-    OlympusGovernance internal governance;
+    Parthenon internal governance;
     address internal writer;
     Module internal invalidModule;
 
@@ -35,7 +36,7 @@ contract InstructionsTest is Test {
 
         /// Deploy policies
         writer = instr.generateGodmodeFixture(type(OlympusInstructions).name);
-        governance = new OlympusGovernance(kernel);
+        governance = new Parthenon(kernel);
 
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(instr));

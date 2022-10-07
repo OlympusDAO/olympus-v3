@@ -1,23 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import "src/Kernel.sol";
 
-abstract contract VOTESv1 is Module, ERC20 {
-    //============================================================================================//
-    //                                           ERRORS                                           //
-    //============================================================================================//
+abstract contract VOTESv1 is Module, ERC4626 {
+    /* ========== STATE ========== */
 
-    error VOTES_TransferDisabled();
+    mapping(address => uint256) public lastActionTimestamp;
+    mapping(address => uint256) public lastDepositTimestamp;
 
-    //============================================================================================//
-    //                                       CORE FUNCTIONS                                       //
-    //============================================================================================//
+    /* ========== FUNCTIONS ========== */
 
-    /// @notice Mint VOTES token to an address
-    function mintTo(address wallet_, uint256 amount_) external virtual;
-
-    /// @notice Burn VOTES token from an address. Needs approval.
-    function burnFrom(address wallet_, uint256 amount_) external virtual;
+    function resetActionTimestamp(address wallet_) external virtual;
 }

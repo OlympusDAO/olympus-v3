@@ -56,13 +56,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     error Operator_NotInitialized();
     error Operator_Inactive();
 
-    /* ========== STATE VARIABLES ========== */
+    /* ========== STATE ========== */
 
     // Operator variables, defined in the interface on the external getter functions
     Status internal _status;
     Config internal _config;
 
-    /// @notice    Whether the Operator has been initialized
+    /// @notice Whether the Operator has been initialized
     bool public initialized;
 
     /// @notice    Whether the Operator is active
@@ -75,16 +75,16 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     MINTRv1 internal MINTR;
 
     // External contracts
-    /// @notice     Auctioneer contract used for cushion bond market deployments
+    /// @notice Auctioneer contract used for cushion bond market deployments
     IBondSDA public auctioneer;
-    /// @notice     Callback contract used for cushion bond market payouts
+    /// @notice Callback contract used for cushion bond market payouts
     IBondCallback public callback;
 
     // Tokens
-    /// @notice     OHM token contract
+    /// @notice OHM token contract
     ERC20 public immutable ohm;
     uint8 public immutable ohmDecimals;
-    /// @notice     Reserve token contract
+    /// @notice Reserve token contract
     ERC20 public immutable reserve;
     uint8 public immutable reserveDecimals;
 

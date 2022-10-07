@@ -140,7 +140,10 @@ contract KernelTest is Test {
         _initModuleAndPolicy();
 
         vm.prank(deployer);
-        err = abi.encodeWithSelector(Kernel_PolicyAlreadyActivated.selector, address(policy));
+        err = abi.encodeWithSelector(
+            Kernel.Kernel_PolicyAlreadyActivated.selector,
+            address(policy)
+        );
         vm.expectRevert(err);
         kernel.executeAction(Actions.ActivatePolicy, address(policy));
     }

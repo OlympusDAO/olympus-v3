@@ -12,10 +12,16 @@ import "src/Kernel.sol";
 // Generic contract to allow authorized contracts to interact with treasury
 // Use cases include setting and removing approvals, as well as allocating assets for yield
 contract TreasuryCustodian is Policy, RolesConsumer {
+    /* ========== EVENTS ========== */
+
     event ApprovalRevoked(address indexed policy_, ERC20[] tokens_);
+
+    /* ========== ERRORS ========== */
 
     error PolicyStillActive();
     error PolicyNotFound();
+
+    /* ========== STATE ========== */
 
     TRSRYv1 public TRSRY;
 

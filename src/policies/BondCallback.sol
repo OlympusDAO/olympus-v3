@@ -21,9 +21,13 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     using TransferHelper for ERC20;
 
+    /* ========== ERRORS ========== */
+
     error Callback_MarketNotSupported(uint256 id);
     error Callback_TokensNotReceived();
     error Callback_InvalidParams();
+
+    /* ========== STATE ========== */
 
     mapping(address => mapping(uint256 => bool)) public approvedMarkets;
     mapping(uint256 => uint256[2]) internal _amountsPerMarket;

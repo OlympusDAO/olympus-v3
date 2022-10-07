@@ -1,26 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-// Kernel Adapter errors
-error KernelAdapter_OnlyKernel(address caller_);
-
-// Module errors
-error Module_PolicyNotPermitted(address policy_);
-
-// Policy errors
-error Policy_ModuleDoesNotExist(Keycode keycode_);
-
-// Kernel errors
-error Kernel_OnlyExecutor(address caller_);
-error Kernel_ModuleAlreadyInstalled(Keycode module_);
-error Kernel_InvalidModuleUpgrade(Keycode module_);
-error Kernel_PolicyAlreadyActivated(address policy_);
-error Kernel_PolicyNotActivated(address policy_);
-
-/*//////////////////////////////////////////////////////////////
-                          GLOBAL TYPES
-//////////////////////////////////////////////////////////////*/
-
 /// @notice Actions to trigger state changes in the kernel. Passed by the executor
 enum Actions {
     InstallModule,
@@ -45,9 +25,9 @@ struct Permissions {
 
 type Keycode is bytes5;
 
-/*//////////////////////////////////////////////////////////////
-                        UTIL FUNCTIONS
-//////////////////////////////////////////////////////////////*/
+//============================================================================================//
+//                                       UTIL FUNCTIONS                                       //
+//============================================================================================//
 
 error TargetNotAContract(address target_);
 error InvalidKeycode(Keycode keycode_);
@@ -79,12 +59,14 @@ function ensureValidKeycode(Keycode keycode_) pure {
     }
 }
 
-/*//////////////////////////////////////////////////////////////
-                      COMPONENT ABSTRACTS
-//////////////////////////////////////////////////////////////*/
+//============================================================================================//
+//                                        COMPONENTS                                          //
+//============================================================================================//
 
 /// @notice Generic adapter interface for kernel access in modules and policies.
 abstract contract KernelAdapter {
+    error KernelAdapter_OnlyKernel(address caller_);
+
     Kernel public kernel;
 
     constructor(Kernel kernel_) {
@@ -107,6 +89,8 @@ abstract contract KernelAdapter {
 ///         interacted with and mutated through policies.
 /// @dev    Modules are installed and uninstalled via the executor.
 abstract contract Module is KernelAdapter {
+    error Module_PolicyNotPermitted(address policy_);
+
     constructor(Kernel kernel_) KernelAdapter(kernel_) {}
 
     /// @notice Modifier to restrict which policies have access to module functions.
@@ -134,6 +118,8 @@ abstract contract Module is KernelAdapter {
 /// @dev    Policies are activated and deactivated in the kernel by the executor.
 /// @dev    Module dependencies and function permissions must be defined in appropriate functions.
 abstract contract Policy is KernelAdapter {
+    error Policy_ModuleDoesNotExist(Keycode keycode_);
+
     /// @notice Denote if a policy is activated or not.
     bool public isActive;
 
@@ -164,16 +150,30 @@ abstract contract Policy is KernelAdapter {
 /// @dev    The kernel manages modules and policies. The kernel is mutated via predefined Actions,
 /// @dev    which are input from any address assigned as the executor. The executor can be changed as needed.
 contract Kernel {
-    /*//////////////////////////////////////////////////////////////
-                          PRIVILEGED ADDRESSES
-    //////////////////////////////////////////////////////////////*/
+    /* ========== EVENTS ========== */
+
+    event PermissionsUpdated(
+        Keycode indexed keycode_,
+        Policy indexed policy_,
+        bytes4 funcSelector_,
+        bool granted_
+    );
+    event ActionExecuted(Actions indexed action_, address indexed target_);
+
+    /* ========== ERRORS ========== */
+
+    error Kernel_OnlyExecutor(address caller_);
+    error Kernel_ModuleAlreadyInstalled(Keycode module_);
+    error Kernel_InvalidModuleUpgrade(Keycode module_);
+    error Kernel_PolicyAlreadyActivated(address policy_);
+    error Kernel_PolicyNotActivated(address policy_);
+
+    /* ========== PRIVILEGED ADDRESSES ========== */
 
     /// @notice Address that is able to initiate Actions in the kernel. Can be assigned to a multisig or governance contract.
     address public executor;
 
-    /*//////////////////////////////////////////////////////////////
-                           MODULE MANAGEMENT
-    //////////////////////////////////////////////////////////////*/
+    /* ========== MODULE MANAGEMENT ========== */
 
     /// @notice Array of all modules currently installed.
     Keycode[] public allKeycodes;
@@ -191,12 +191,10 @@ contract Kernel {
     mapping(Keycode => mapping(Policy => uint256)) public getDependentIndex;
 
     /// @notice Module <> Policy Permissions.
-    /// @dev    Policy -> Keycode -> Function Selector -> bool for permission
+    /// @dev    Keycode -> Policy -> Function Selector -> bool for permission
     mapping(Keycode => mapping(Policy => mapping(bytes4 => bool))) public modulePermissions;
 
-    /*//////////////////////////////////////////////////////////////
-                           POLICY MANAGEMENT
-    //////////////////////////////////////////////////////////////*/
+    /* ========== POLICY MANAGEMENT ========== */
 
     /// @notice List of all active policies
     Policy[] public activePolicies;
@@ -204,21 +202,9 @@ contract Kernel {
     /// @notice Helper to get active policy quickly. Prevents need to loop through array.
     mapping(Policy => uint256) public getPolicyIndex;
 
-    /*//////////////////////////////////////////////////////////////
-                                 EVENTS
-    //////////////////////////////////////////////////////////////*/
-
-    event PermissionsUpdated(
-        Keycode indexed keycode_,
-        Policy indexed policy_,
-        bytes4 funcSelector_,
-        bool granted_
-    );
-    event ActionExecuted(Actions indexed action_, address indexed target_);
-
-    /*//////////////////////////////////////////////////////////////
-                              KERNEL LOGIC
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     constructor() {
         executor = msg.sender;
@@ -255,10 +241,6 @@ contract Kernel {
 
         emit ActionExecuted(action_, target_);
     }
-
-    /*//////////////////////////////////////////////////////////////
-                             ACTIONS LOGIC
-    //////////////////////////////////////////////////////////////*/
 
     function _installModule(Module newModule_) internal {
         Keycode keycode = newModule_.KEYCODE();
@@ -369,10 +351,6 @@ contract Kernel {
             }
         }
     }
-
-    /*//////////////////////////////////////////////////////////////
-                            INTERNAL HELPERS
-    //////////////////////////////////////////////////////////////*/
 
     function _reconfigurePolicies(Keycode keycode_) internal {
         Policy[] memory dependents = moduleDependents[keycode_];
