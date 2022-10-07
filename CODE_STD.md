@@ -28,7 +28,7 @@ The following establishes a coding standard for the Olympus v3/Bophades repo.
 ```
     - This is to denote sections when scrolling through large files
 - All other sections should be denoted with single line header: 
-```/* ========== HEADER ========== */ ```
+```// ========= HEADER ========= // ```
 
 
 ## Principles (NOT HARD RULES)
