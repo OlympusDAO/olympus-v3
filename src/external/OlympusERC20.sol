@@ -6,7 +6,7 @@ pragma solidity >=0.7.5;
 ///      since it is not being changed and is imported in some contracts.
 
 interface IOlympusAuthority {
-    /* ========== EVENTS ========== */
+    // =========  EVENTS ========= //
 
     event GovernorPushed(address indexed from, address indexed to, bool _effectiveImmediately);
     event GuardianPushed(address indexed from, address indexed to, bool _effectiveImmediately);
@@ -18,7 +18,7 @@ interface IOlympusAuthority {
     event PolicyPulled(address indexed from, address indexed to);
     event VaultPulled(address indexed from, address indexed to);
 
-    /* ========== VIEW ========== */
+    // =========  VIEW ========= //
 
     function governor() external view returns (address);
 
@@ -32,24 +32,24 @@ interface IOlympusAuthority {
 // File: types/OlympusAccessControlled.sol
 
 abstract contract OlympusAccessControlled {
-    /* ========== EVENTS ========== */
+    // =========  EVENTS ========= //
 
     event AuthorityUpdated(IOlympusAuthority indexed authority);
 
     string internal UNAUTHORIZED = "UNAUTHORIZED"; // save gas
 
-    /* ========== STATE VARIABLES ========== */
+    // =========  STATE VARIABLES ========= //
 
     IOlympusAuthority public authority;
 
-    /* ========== Constructor ========== */
+    // =========  Constructor ========= //
 
     constructor(IOlympusAuthority _authority) {
         authority = _authority;
         emit AuthorityUpdated(_authority);
     }
 
-    /* ========== MODIFIERS ========== */
+    // =========  MODIFIERS ========= //
 
     modifier onlyGovernor() {
         require(msg.sender == authority.governor(), UNAUTHORIZED);
@@ -71,7 +71,7 @@ abstract contract OlympusAccessControlled {
         _;
     }
 
-    /* ========== GOV ONLY ========== */
+    // =========  GOV ONLY ========= //
 
     function setAuthority(IOlympusAuthority _newAuthority) external onlyGovernor {
         authority = _newAuthority;

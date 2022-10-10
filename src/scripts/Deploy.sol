@@ -10,19 +10,22 @@ import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IWETH9} from "interfaces/IWETH9.sol";
 
 import "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusInstructions} from "modules/INSTR.sol";
-import {OlympusVotes} from "modules/VOTES.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
+import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
-import {VoterRegistration} from "policies/VoterRegistration.sol";
-import {OlympusGovernance} from "policies/Governance.sol";
+//import {VoterRegistration} from "policies/VoterRegistration.sol";
+//import {OlympusGovernance} from "policies/Governance.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
+
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
 
@@ -41,14 +44,16 @@ contract OlympusDeploy is Script {
     OlympusMinter public MINTR;
     OlympusInstructions public INSTR;
     OlympusVotes public VOTES;
+    OlympusRoles public ROLES;
 
     /// Policies
     Operator public operator;
     OlympusHeart public heart;
     BondCallback public callback;
     OlympusPriceConfig public priceConfig;
-    VoterRegistration public voterReg;
-    OlympusGovernance public governance;
+    //VoterRegistration public voterReg;
+    //OlympusGovernance public governance;
+    RolesAdmin public rolesAdmin;
     Faucet public faucet;
 
     /// Construction variables
@@ -98,7 +103,7 @@ contract OlympusDeploy is Script {
         INSTR = new OlympusInstructions(kernel);
         console2.log("Instructions module deployed at:", address(INSTR));
 
-        VOTES = new OlympusVotes(kernel);
+        VOTES = new OlympusVotes(kernel, ohm);
         console2.log("Votes module deployed at:", address(VOTES));
 
         TRSRY = new OlympusTreasury(kernel);
@@ -120,6 +125,9 @@ contract OlympusDeploy is Script {
 
         RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1200), uint256(3000));
         console2.log("Range module deployed at:", address(RANGE));
+
+        ROLES = new OlympusRoles(kernel);
+        console2.log("Roles module deployed at:", address(ROLES));
 
         /// Deploy policies
         callback = new BondCallback(kernel, bondAggregator, ohm);
@@ -150,14 +158,17 @@ contract OlympusDeploy is Script {
         priceConfig = new OlympusPriceConfig(kernel);
         console2.log("PriceConfig deployed at:", address(priceConfig));
 
-        voterReg = new VoterRegistration(kernel);
-        console2.log("VoterRegistration deployed at:", address(voterReg));
+        //voterReg = new VoterRegistration(kernel);
+        //console2.log("VoterRegistration deployed at:", address(voterReg));
 
-        governance = new OlympusGovernance(kernel);
-        console2.log("Governance deployed at:", address(governance));
+        //governance = new OlympusGovernance(kernel);
+        //console2.log("Governance deployed at:", address(governance));
+
+        rolesAdmin = new RolesAdmin(kernel);
+        console2.log("RolesAdmin deployed at:", address(rolesAdmin));
 
         faucet = new Faucet(
-            kernel,
+            msg.sender,
             ohm,
             reserve,
             1 ether,
@@ -175,44 +186,43 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.InstallModule, address(RANGE));
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
         kernel.executeAction(Actions.InstallModule, address(MINTR));
+        kernel.executeAction(Actions.InstallModule, address(ROLES));
 
         /// Approve policies
         kernel.executeAction(Actions.ActivatePolicy, address(callback));
         kernel.executeAction(Actions.ActivatePolicy, address(operator));
         kernel.executeAction(Actions.ActivatePolicy, address(heart));
         kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
-        kernel.executeAction(Actions.ActivatePolicy, address(voterReg));
-        kernel.executeAction(Actions.ActivatePolicy, address(governance));
+        //kernel.executeAction(Actions.ActivatePolicy, address(voterReg));
+        //kernel.executeAction(Actions.ActivatePolicy, address(governance));
         kernel.executeAction(Actions.ActivatePolicy, address(faucet));
+        kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         /// Configure access control for policies
 
         /// Operator roles
-        kernel.grantRole(toRole("operator_operate"), address(heart));
-        kernel.grantRole(toRole("operator_operate"), guardian_);
-        kernel.grantRole(toRole("operator_reporter"), address(callback));
-        kernel.grantRole(toRole("operator_policy"), policy_);
-        kernel.grantRole(toRole("operator_admin"), guardian_);
+        rolesAdmin.grantRole("operator_operate", address(heart));
+        rolesAdmin.grantRole("operator_operate", guardian_);
+        rolesAdmin.grantRole("operator_reporter", address(callback));
+        rolesAdmin.grantRole("operator_policy", policy_);
+        rolesAdmin.grantRole("operator_admin", guardian_);
 
         /// Bond callback roles
-        kernel.grantRole(toRole("callback_whitelist"), address(operator));
-        kernel.grantRole(toRole("callback_whitelist"), guardian_);
-        kernel.grantRole(toRole("callback_admin"), guardian_);
+        rolesAdmin.grantRole("callback_whitelist", address(operator));
+        rolesAdmin.grantRole("callback_whitelist", guardian_);
+        rolesAdmin.grantRole("callback_admin", guardian_);
 
         /// Heart roles
-        kernel.grantRole(toRole("heart_admin"), guardian_);
+        rolesAdmin.grantRole("heart_admin", guardian_);
 
         /// VoterRegistration roles
-        kernel.grantRole(toRole("voter_admin"), guardian_);
+        //rolesAdmin.grantRole("voter_admin", guardian_);
 
         /// PriceConfig roles
-        kernel.grantRole(toRole("price_admin"), guardian_);
+        rolesAdmin.grantRole("price_admin", guardian_);
 
         /// TreasuryCustodian roles
-        kernel.grantRole(toRole("custodian"), guardian_);
-
-        /// Faucet roles
-        kernel.grantRole(toRole("faucet_admin"), guardian_);
+        rolesAdmin.grantRole("custodian", guardian_);
 
         // /// Transfer executor powers to INSTR
         // kernel.executeAction(Actions.ChangeExecutor, address(INSTR));

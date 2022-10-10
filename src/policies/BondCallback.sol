@@ -6,34 +6,44 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
+
+import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+
 import {Operator} from "policies/Operator.sol";
 import "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
 /// @title Olympus Bond Callback
-contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
+contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     using TransferHelper for ERC20;
+
+    // =========  ERRORS ========= //
 
     error Callback_MarketNotSupported(uint256 id);
     error Callback_TokensNotReceived();
     error Callback_InvalidParams();
 
+    // =========  STATE ========= //
+
     mapping(address => mapping(uint256 => bool)) public approvedMarkets;
     mapping(uint256 => uint256[2]) internal _amountsPerMarket;
     mapping(ERC20 => uint256) public priorBalances;
 
-    IBondAggregator public aggregator;
-    OlympusTreasury public TRSRY;
-    OlympusMinter public MINTR;
+    TRSRYv1 public TRSRY;
+    MINTRv1 public MINTR;
+
     Operator public operator;
+
+    IBondAggregator public aggregator;
     ERC20 public ohm;
 
-    /*//////////////////////////////////////////////////////////////
-                            POLICY INTERFACE
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
 
     constructor(
         Kernel kernel_,
@@ -46,38 +56,34 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
+        dependencies = new Keycode[](3);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("MINTR");
+        dependencies[2] = toKeycode("ROLES");
 
-        TRSRY = OlympusTreasury(getModuleAddress(dependencies[0]));
-        MINTR = OlympusMinter(getModuleAddress(dependencies[1]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
+        MINTR = MINTRv1(getModuleAddress(dependencies[1]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
     }
 
     /// @inheritdoc Policy
-    function requestPermissions()
-        external
-        view
-        override
-        onlyKernel
-        returns (Permissions[] memory requests)
-    {
+    function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
         requests = new Permissions[](4);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[2] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         requests[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                               CORE LOGIC
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @inheritdoc IBondCallback
     function whitelist(address teller_, uint256 id_)
@@ -90,9 +96,11 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         // Get payout tokens for market
         (, , ERC20 payoutToken, , , ) = aggregator.getAuctioneer(id_).getMarketInfoForPurchase(id_);
 
-        /// If payout token is not OHM, request approval from TRSRY for withdrawals
+        /// If payout token is not OHM, request infinite approval from TRSRY for withdrawals
         if (address(payoutToken) != address(ohm)) {
-            TRSRY.setApprovalFor(address(this), payoutToken, type(uint256).max);
+            uint256 toApprove = type(uint256).max -
+                TRSRY.withdrawApproval(address(this), payoutToken);
+            TRSRY.increaseWithdrawerApproval(address(this), payoutToken, toApprove);
         }
     }
 
@@ -171,9 +179,21 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
         }
     }
 
-    /*//////////////////////////////////////////////////////////////
-                             VIEW FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @notice Sets the operator contract for the callback to use to report bond purchases
+    /// @notice Must be set before the callback is used
+    /// @param  operator_ - Address of the Operator contract
+    function setOperator(Operator operator_) external onlyRole("callback_admin") {
+        if (address(operator_) == address(0)) revert Callback_InvalidParams();
+        operator = operator_;
+    }
+
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @inheritdoc IBondCallback
     function amountsForMarket(uint256 id_)
@@ -184,17 +204,5 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback {
     {
         uint256[2] memory marketAmounts = _amountsPerMarket[id_];
         return (marketAmounts[0], marketAmounts[1]);
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            ADMIN FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Sets the operator contract for the callback to use to report bond purchases
-    /// @notice Must be set before the callback is used
-    /// @param  operator_ - Address of the Operator contract
-    function setOperator(Operator operator_) external onlyRole("callback_admin") {
-        if (address(operator_) == address(0)) revert Callback_InvalidParams();
-        operator = operator_;
     }
 }

@@ -1,25 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
+
 import "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
 
-contract OlympusPriceConfig is Policy {
-    /* ========== STATE VARIABLES ========== */
+contract OlympusPriceConfig is Policy, RolesConsumer {
+    // =========  STATE ========= //
 
-    /// Modules
-    OlympusPrice internal PRICE;
+    PRICEv1 internal PRICE;
 
-    /* ========== CONSTRUCTOR ========== */
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
 
     constructor(Kernel kernel_) Policy(kernel_) {}
 
-    /* ========== FRAMEWORK CONFIGURATION ========== */
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](1);
+        dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("PRICE");
+        dependencies[1] = toKeycode("ROLES");
 
-        PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
+        PRICE = PRICEv1(getModuleAddress(dependencies[0]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
     }
 
     function requestPermissions()
@@ -28,13 +33,17 @@ contract OlympusPriceConfig is Policy {
         override
         returns (Permissions[] memory permissions)
     {
+        Keycode PRICE_KEYCODE = PRICE.KEYCODE();
+
         permissions = new Permissions[](3);
-        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.initialize.selector);
-        permissions[1] = Permissions(PRICE.KEYCODE(), PRICE.changeMovingAverageDuration.selector);
-        permissions[2] = Permissions(PRICE.KEYCODE(), PRICE.changeObservationFrequency.selector);
+        permissions[0] = Permissions(PRICE_KEYCODE, PRICE.initialize.selector);
+        permissions[1] = Permissions(PRICE_KEYCODE, PRICE.changeMovingAverageDuration.selector);
+        permissions[2] = Permissions(PRICE_KEYCODE, PRICE.changeObservationFrequency.selector);
     }
 
-    /* ========== ADMIN FUNCTIONS ========== */
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice                     Initialize the price module
     /// @notice                     Access restricted to approved policies

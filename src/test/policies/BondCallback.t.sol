@@ -19,13 +19,16 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter, OHM} from "modules/MINTR.sol";
-import "src/Kernel.sol";
-
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
+
+import "src/Kernel.sol";
 
 contract MockOhm is ERC20 {
     constructor(
@@ -66,9 +69,11 @@ contract BondCallbackTest is Test {
     OlympusRange internal range;
     OlympusTreasury internal treasury;
     OlympusMinter internal minter;
+    OlympusRoles internal roles;
 
     Operator internal operator;
     BondCallback internal callback;
+    RolesAdmin internal rolesAdmin;
 
     // Bond market ids to reference
     uint256 internal regBond;
@@ -122,6 +127,7 @@ contract BondCallbackTest is Test {
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
+            roles = new OlympusRoles(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -131,6 +137,9 @@ contract BondCallbackTest is Test {
         }
 
         {
+            /// Deploy roles admin
+            rolesAdmin = new RolesAdmin(kernel);
+
             /// Deploy bond callback
             callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
@@ -170,24 +179,26 @@ contract BondCallbackTest is Test {
             kernel.executeAction(Actions.InstallModule, address(range));
             kernel.executeAction(Actions.InstallModule, address(treasury));
             kernel.executeAction(Actions.InstallModule, address(minter));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
             /// Configure access control
 
             /// Operator roles
-            kernel.grantRole(toRole("operator_operate"), guardian);
-            kernel.grantRole(toRole("operator_reporter"), address(callback));
-            kernel.grantRole(toRole("operator_policy"), policy);
-            kernel.grantRole(toRole("operator_admin"), guardian);
+            rolesAdmin.grantRole("operator_operate", guardian);
+            rolesAdmin.grantRole("operator_reporter", address(callback));
+            rolesAdmin.grantRole("operator_policy", policy);
+            rolesAdmin.grantRole("operator_admin", guardian);
 
             /// Bond callback roles
-            kernel.grantRole(toRole("callback_whitelist"), address(operator));
-            kernel.grantRole(toRole("callback_whitelist"), policy);
-            kernel.grantRole(toRole("callback_admin"), guardian);
+            rolesAdmin.grantRole("callback_whitelist", address(operator));
+            rolesAdmin.grantRole("callback_whitelist", policy);
+            rolesAdmin.grantRole("callback_admin", guardian);
         }
 
         /// Set operator on the callback
@@ -244,7 +255,7 @@ contract BondCallbackTest is Test {
         callback.whitelist(address(teller), externalBond);
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
     function createMarket(
         ERC20 quoteToken,
         ERC20 payoutToken,
@@ -302,7 +313,7 @@ contract BondCallbackTest is Test {
         return auctioneer.createMarket(abi.encode(params));
     }
 
-    /* ========== CALLBACK TESTS ========== */
+    // =========  CALLBACK TESTS ========= //
 
     /// DONE
     /// [X] Callback correctly handles payouts for the 4 market cases
@@ -462,7 +473,7 @@ contract BondCallbackTest is Test {
         callback.callback(regBond, 10, 10);
     }
 
-    /* ========== ADMIN TESTS ========== */
+    // =========  ADMIN TESTS ========= //
 
     /// DONE
     /// [X] whitelist
@@ -477,8 +488,8 @@ contract BondCallbackTest is Test {
 
         // Attempt to whitelist a market as a non-approved address, expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
-            toRole("callback_whitelist")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("callback_whitelist")
         );
         vm.prank(alice);
         vm.expectRevert(err);
@@ -569,8 +580,8 @@ contract BondCallbackTest is Test {
         /// Try to call batch to treasury as non-policy, expect revert
         {
             bytes memory err = abi.encodeWithSelector(
-                Policy_OnlyRole.selector,
-                toRole("callback_admin")
+                ROLESv1.ROLES_RequireRole.selector,
+                bytes32("callback_admin")
             );
             vm.prank(alice);
             vm.expectRevert(err);
@@ -633,7 +644,7 @@ contract BondCallbackTest is Test {
         assertEq(other.balanceOf(address(treasury)), startBalances[1] + 10);
     }
 
-    /* ========== VIEW TESTS ========== */
+    // =========  VIEW TESTS ========= //
 
     /// DONE
     /// [X] amountsForMarket

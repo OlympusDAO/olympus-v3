@@ -42,7 +42,7 @@ contract FaucetDeploy is Script {
 
         /// Deploy new faucet
         faucet = new Faucet(
-            kernel,
+            msg.sender,
             ohm,
             reserve,
             1 ether,

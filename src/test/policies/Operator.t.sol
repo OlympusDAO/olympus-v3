@@ -20,12 +20,14 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter, OHM} from "modules/MINTR.sol";
-
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 // solhint-disable-next-line max-states-count
 contract OperatorTest is Test {
@@ -50,9 +52,11 @@ contract OperatorTest is Test {
     OlympusRange internal range;
     OlympusTreasury internal treasury;
     OlympusMinter internal minter;
+    OlympusRoles internal roles;
 
     Operator internal operator;
     BondCallback internal callback;
+    RolesAdmin internal rolesAdmin;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -99,6 +103,7 @@ contract OperatorTest is Test {
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
+            roles = new OlympusRoles(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -130,6 +135,8 @@ contract OperatorTest is Test {
                 ]
             );
 
+            /// Deploy roles administrator
+            rolesAdmin = new RolesAdmin(kernel);
             /// Registor operator to create bond markets with a callback
             vm.prank(guardian);
             auctioneer.setCallbackAuthStatus(address(operator), true);
@@ -143,25 +150,27 @@ contract OperatorTest is Test {
             kernel.executeAction(Actions.InstallModule, address(range));
             kernel.executeAction(Actions.InstallModule, address(treasury));
             kernel.executeAction(Actions.InstallModule, address(minter));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
             /// Configure access control
 
             /// Operator roles
-            kernel.grantRole(toRole("operator_operate"), address(heart));
-            kernel.grantRole(toRole("operator_operate"), guardian);
-            kernel.grantRole(toRole("operator_reporter"), address(callback));
-            kernel.grantRole(toRole("operator_policy"), policy);
-            kernel.grantRole(toRole("operator_admin"), guardian);
+            rolesAdmin.grantRole("operator_operate", address(heart));
+            rolesAdmin.grantRole("operator_operate", guardian);
+            rolesAdmin.grantRole("operator_reporter", address(callback));
+            rolesAdmin.grantRole("operator_policy", policy);
+            rolesAdmin.grantRole("operator_admin", guardian);
 
             /// Bond callback roles
-            kernel.grantRole(toRole("callback_whitelist"), address(operator));
-            kernel.grantRole(toRole("callback_whitelist"), guardian);
-            kernel.grantRole(toRole("callback_admin"), guardian);
+            rolesAdmin.grantRole("callback_whitelist", address(operator));
+            rolesAdmin.grantRole("callback_whitelist", guardian);
+            rolesAdmin.grantRole("callback_admin", guardian);
         }
 
         /// Set operator on the callback
@@ -189,7 +198,7 @@ contract OperatorTest is Test {
         reserve.approve(address(teller), testReserve * 20);
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
     function knockDownWall(bool high_) internal returns (uint256 amountIn, uint256 amountOut) {
         if (high_) {
             /// Get current capacity of the high wall
@@ -218,7 +227,7 @@ contract OperatorTest is Test {
         }
     }
 
-    /* ========== WALL TESTS ========== */
+    // =========  WALL TESTS ========= //
 
     /// DONE
     /// [X] Able to swap when walls are up
@@ -483,7 +492,7 @@ contract OperatorTest is Test {
         operator.swap(token, amountIn, minAmountOut);
     }
 
-    /* ========== CUSHION TESTS ========== */
+    // =========  CUSHION TESTS ========= //
 
     /// DONE
     /// [X] Cushions deployed when price set in the range and operate triggered
@@ -964,7 +973,7 @@ contract OperatorTest is Test {
         teller.purchase(alice, guardian, id, amountIn, minAmountOut);
     }
 
-    /* ========== REGENERATION TESTS ========== */
+    // =========  REGENERATION TESTS ========= //
 
     /// DONE
     /// [X] Wall regenerates when price on other side of MA for enough observations
@@ -1509,7 +1518,7 @@ contract OperatorTest is Test {
         assertEq(range.market(true), type(uint256).max);
     }
 
-    /* ========== ACCESS CONTROL TESTS ========== */
+    // =========  ACCESS CONTROL TESTS ========= //
 
     /// DONE
     /// [X] operate only callable by heart or guardian
@@ -1530,8 +1539,8 @@ contract OperatorTest is Test {
 
         /// Try to call operate as anyone else
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
-            toRole("operator_operate")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_operate")
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -1557,8 +1566,8 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
-            toRole("operator_policy")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_policy")
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -1592,8 +1601,8 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
-            toRole("operator_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_admin")
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -1605,7 +1614,7 @@ contract OperatorTest is Test {
         operator.initialize();
     }
 
-    /* ========== ADMIN TESTS ========== */
+    // =========  ADMIN TESTS ========= //
 
     /// DONE
     /// [X] setSpreads
@@ -2019,8 +2028,8 @@ contract OperatorTest is Test {
 
         /// Try to call regenerate without being guardian and expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
-            toRole("operator_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_admin")
         );
 
         vm.expectRevert(err);
@@ -2104,7 +2113,7 @@ contract OperatorTest is Test {
         operator.bondPurchase(0, 1e18);
     }
 
-    /* ========== VIEW TESTS ========== */
+    // =========  VIEW TESTS ========= //
 
     /// DONE
     /// [X] fullCapacity
@@ -2169,7 +2178,7 @@ contract OperatorTest is Test {
         operator.getAmountOut(token, amountIn);
     }
 
-    /* ========== INTERNAL FUNCTION TESTS ========== */
+    // =========  INTERNAL FUNCTION TESTS ========= //
 
     /// DONE
     /// [X] Range updates from new price data when operate is called (triggers _updateRange)

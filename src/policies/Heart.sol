@@ -2,33 +2,41 @@
 pragma solidity 0.8.15;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-
-import {IHeart} from "policies/interfaces/IHeart.sol";
-import {IOperator} from "policies/interfaces/IOperator.sol";
-
-import {OlympusPrice} from "modules/PRICE.sol";
-
-import "src/Kernel.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
+
+import {IOperator} from "policies/interfaces/IOperator.sol";
+import {IHeart} from "policies/interfaces/IHeart.sol";
+
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
+
+import "src/Kernel.sol";
 
 /// @title  Olympus Heart
 /// @notice Olympus Heart (Policy) Contract
 /// @dev    The Olympus Heart contract provides keeper rewards to call the heart beat function which fuels
 ///         Olympus market operations. The Heart orchestrates state updates in the correct order to ensure
 ///         market operations use up to date information.
-contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
+contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
+
+    // =========  EVENTS ========= //
+
+    event Beat(uint256 timestamp_);
+    event RewardIssued(address to_, uint256 rewardAmount_);
+    event RewardUpdated(ERC20 token_, uint256 rewardAmount_);
+
+    // =========  ERRORS ========= //
 
     error Heart_OutOfCycle();
     error Heart_BeatStopped();
     error Heart_InvalidParams();
     error Heart_BeatAvailable();
 
-    event Beat(uint256 timestamp_);
-    event RewardIssued(address to_, uint256 rewardAmount_);
-    event RewardUpdated(ERC20 token_, uint256 rewardAmount_);
+    // =========  STATE ========= //
 
     /// @notice Status of the Heart, false = stopped, true = beating
     bool public active;
@@ -43,14 +51,14 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
     ERC20 public rewardToken;
 
     // Modules
-    OlympusPrice internal PRICE;
+    PRICEv1 internal PRICE;
 
     // Policies
     IOperator internal _operator;
 
-    /*//////////////////////////////////////////////////////////////
-                            POLICY INTERFACE
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
 
     constructor(
         Kernel kernel_,
@@ -68,10 +76,12 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](1);
+        dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("PRICE");
+        dependencies[1] = toKeycode("ROLES");
 
-        PRICE = OlympusPrice(getModuleAddress(dependencies[0]));
+        PRICE = PRICEv1(getModuleAddress(dependencies[0]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
     }
 
     /// @inheritdoc Policy
@@ -85,9 +95,9 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                               CORE LOGIC
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @inheritdoc IHeart
     function beat() external nonReentrant {
@@ -118,18 +128,9 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         emit RewardIssued(to_, amount);
     }
 
-    /*//////////////////////////////////////////////////////////////
-                             VIEW FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @inheritdoc IHeart
-    function frequency() public view returns (uint256) {
-        return uint256(PRICE.observationFrequency());
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            ADMIN FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
 
     function _resetBeat() internal {
         lastBeat = block.timestamp - frequency();
@@ -175,5 +176,14 @@ contract OlympusHeart is IHeart, Policy, ReentrancyGuard {
         notWhileBeatAvailable
     {
         token_.safeTransfer(msg.sender, token_.balanceOf(address(this)));
+    }
+
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @inheritdoc IHeart
+    function frequency() public view returns (uint256) {
+        return uint256(PRICE.observationFrequency());
     }
 }

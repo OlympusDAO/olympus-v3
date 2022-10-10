@@ -3,86 +3,115 @@ pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {OlympusTreasury} from "src/modules/TRSRY.sol";
-import "src/Kernel.sol";
+import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 
-// ERRORS
-error PolicyStillActive();
-error PolicyNotFound();
+import "src/Kernel.sol";
 
 // Generic contract to allow authorized contracts to interact with treasury
 // Use cases include setting and removing approvals, as well as allocating assets for yield
-contract TreasuryCustodian is Policy {
-    /* ========== STATE VARIABLES ========== */
+contract TreasuryCustodian is Policy, RolesConsumer {
+    // =========  EVENTS ========= //
+
     event ApprovalRevoked(address indexed policy_, ERC20[] tokens_);
 
-    // Modules
-    OlympusTreasury internal TRSRY;
+    // =========  ERRORS ========= //
 
-    /* ========== CONSTRUCTOR ========== */
+    error PolicyStillActive();
+    error PolicyNotFound();
+
+    // =========  STATE ========= //
+
+    TRSRYv1 public TRSRY;
+
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
 
     constructor(Kernel kernel_) Policy(kernel_) {}
 
-    /* ========== FRAMEWORK CONFIGURATION ========== */
+    /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](1);
+        dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("TRSRY");
+        dependencies[1] = toKeycode("ROLES");
 
-        TRSRY = OlympusTreasury(getModuleAddress(dependencies[0]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
     }
 
+    /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
 
-        requests = new Permissions[](2);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setApprovalFor.selector);
-        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
+        requests = new Permissions[](5);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawerApproval.selector);
+        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseDebtorApproval.selector);
+        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseDebtorApproval.selector);
+        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
     }
 
-    function grantApproval(
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @notice Allow an address to withdraw `amount_` from the treasury
+    function grantWithdrawerApproval(
         address for_,
         ERC20 token_,
         uint256 amount_
     ) external onlyRole("custodian") {
-        TRSRY.setApprovalFor(for_, token_, amount_);
+        TRSRY.increaseWithdrawerApproval(for_, token_, amount_);
     }
 
-    // Anyone can call to revoke a deactivated policy's approvals.
-    // TODO Currently allows anyone to revoke any approval EXCEPT activated policies.
-    // TODO must reorg policy storage to be able to check for deactivated policies.
-    function revokePolicyApprovals(address policy_, ERC20[] memory tokens_) external {
-        if (Policy(policy_).isActive()) revert PolicyStillActive();
-
-        // TODO Make sure `policy_` is an actual policy and not a random address.
-
-        uint256 len = tokens_.length;
-        for (uint256 j; j < len; ) {
-            TRSRY.setApprovalFor(policy_, tokens_[j], 0);
-            unchecked {
-                ++j;
-            }
-        }
-
-        emit ApprovalRevoked(policy_, tokens_);
+    /// @notice Allow an address to incur `amount_` of debt from the treasury
+    function grantDebtorApproval(
+        address for_,
+        ERC20 token_,
+        uint256 amount_
+    ) external onlyRole("custodian") {
+        TRSRY.increaseDebtorApproval(for_, token_, amount_);
     }
 
-    // Debt admin functions for authorized addresses to manipulate debt in special cases
-
+    /// @notice Allow authorized addresses to increase debt in special cases
     function increaseDebt(
         ERC20 token_,
         address debtor_,
         uint256 amount_
     ) external onlyRole("custodian") {
         uint256 debt = TRSRY.reserveDebt(token_, debtor_);
-        TRSRY.setDebt(token_, debtor_, debt + amount_);
+        TRSRY.setDebt(debtor_, token_, debt + amount_);
     }
 
+    /// @notice Allow authorized addresses to decrease debt in special cases
     function decreaseDebt(
         ERC20 token_,
         address debtor_,
         uint256 amount_
     ) external onlyRole("custodian") {
         uint256 debt = TRSRY.reserveDebt(token_, debtor_);
-        TRSRY.setDebt(token_, debtor_, debt - amount_);
+        TRSRY.setDebt(debtor_, token_, debt - amount_);
+    }
+
+    /// @notice Anyone can call to revoke a deactivated policy's approvals.
+    function revokePolicyApprovals(address policy_, ERC20[] memory tokens_) external {
+        if (Policy(policy_).isActive()) revert PolicyStillActive();
+
+        uint256 len = tokens_.length;
+        for (uint256 j; j < len; ) {
+            uint256 wApproval = TRSRY.withdrawApproval(policy_, tokens_[j]);
+            if (wApproval > 0) TRSRY.decreaseWithdrawerApproval(policy_, tokens_[j], wApproval);
+
+            uint256 dApproval = TRSRY.debtApproval(policy_, tokens_[j]);
+            if (dApproval > 0) TRSRY.decreaseDebtorApproval(policy_, tokens_[j], dApproval);
+
+            unchecked {
+                ++j;
+            }
+        }
+
+        emit ApprovalRevoked(policy_, tokens_);
     }
 }

@@ -23,18 +23,19 @@ import {ZuniswapV2Router} from "test/lib/zuniswapv2/ZuniswapV2Router.sol";
 import {MathLibrary} from "test/lib/zuniswapv2/libraries/Math.sol";
 
 import "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusInstructions} from "modules/INSTR.sol";
-import {OlympusVotes} from "modules/VOTES.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
+import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -181,22 +182,25 @@ library SimIO {
 abstract contract RangeSim is Test {
     using FullMath for uint256;
 
-    /* ========== RANGE SYSTEM CONTRACTS ========== */
+    // =========  RANGE SYSTEM CONTRACTS ========= //
 
     Kernel public kernel;
     OlympusPrice public price;
     OlympusRange public range;
     OlympusTreasury public treasury;
     OlympusMinter public minter;
+    OlympusRoles public roles;
+
     Operator public operator;
     BondCallback public callback;
     OlympusHeart public heart;
     OlympusPriceConfig public priceConfig;
+    RolesAdmin public rolesAdmin;
 
     mapping(uint32 => SimIO.Params) internal params; // map of sim keys to sim params
     mapping(uint32 => mapping(uint32 => int256)) internal netflows; // map of sim keys to epochs to netflows
 
-    /* ========== EXTERNAL CONTRACTS  ========== */
+    // =========  EXTERNAL CONTRACTS  ========= //
 
     UserFactory public userCreator;
     address internal market;
@@ -215,7 +219,7 @@ abstract contract RangeSim is Test {
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal reserveEthPriceFeed;
 
-    /* ========== SIMULATION VARIABLES ========== */
+    // =========  SIMULATION VARIABLES ========= //
 
     /// @notice Determines which data is pulled from the input files and allows writing results to compare against the same seed.
     /// @dev This is set dynamically by the test generator.
@@ -361,6 +365,7 @@ abstract contract RangeSim is Test {
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
+            roles = new OlympusRoles(kernel);
         }
 
         {
@@ -396,6 +401,9 @@ abstract contract RangeSim is Test {
                 reserve,
                 uint256(0) // no keeper rewards for sim
             );
+
+            /// Deploy RolesAdmin
+            rolesAdmin = new RolesAdmin(kernel);
         }
 
         {
@@ -406,33 +414,35 @@ abstract contract RangeSim is Test {
             kernel.executeAction(Actions.InstallModule, address(range));
             kernel.executeAction(Actions.InstallModule, address(treasury));
             kernel.executeAction(Actions.InstallModule, address(minter));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
             kernel.executeAction(Actions.ActivatePolicy, address(heart));
             kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
             // Configure access control
 
             // Operator roles
-            kernel.grantRole(toRole("operator_operate"), address(heart));
-            kernel.grantRole(toRole("operator_operate"), guardian);
-            kernel.grantRole(toRole("operator_reporter"), address(callback));
-            kernel.grantRole(toRole("operator_policy"), policy);
-            kernel.grantRole(toRole("operator_admin"), guardian);
+            rolesAdmin.grantRole("operator_operate", address(heart));
+            rolesAdmin.grantRole("operator_operate", guardian);
+            rolesAdmin.grantRole("operator_reporter", address(callback));
+            rolesAdmin.grantRole("operator_policy", policy);
+            rolesAdmin.grantRole("operator_admin", guardian);
 
             // Bond callback roles
-            kernel.grantRole(toRole("callback_whitelist"), address(operator));
-            kernel.grantRole(toRole("callback_whitelist"), guardian);
-            kernel.grantRole(toRole("callback_admin"), guardian);
+            rolesAdmin.grantRole("callback_whitelist", address(operator));
+            rolesAdmin.grantRole("callback_whitelist", guardian);
+            rolesAdmin.grantRole("callback_admin", guardian);
 
             // Heart roles
-            kernel.grantRole(toRole("heart_admin"), guardian);
+            rolesAdmin.grantRole("heart_admin", guardian);
 
             // PriceConfig roles
-            kernel.grantRole(toRole("price_admin"), guardian);
+            rolesAdmin.grantRole("price_admin", guardian);
         }
 
         {
@@ -512,7 +522,7 @@ abstract contract RangeSim is Test {
         }
     }
 
-    /* ========== SIMULATION HELPER FUNCTIONS ========== */
+    // =========  SIMULATION HELPER FUNCTIONS ========= //
     /// @notice Returns the rebase percent per epoch based on supply as a percentage with 4 decimals. i.e. 10000 = 1%.
     /// @dev Values are based on the minimum value for each tier as defined in OIP-18.
     function getRebasePercent() internal view returns (uint256) {
@@ -1020,7 +1030,7 @@ abstract contract RangeSim is Test {
         );
     }
 
-    /* ========== SIMULATION LOGIC ========== */
+    // =========  SIMULATION LOGIC ========= //
     function simulate(uint32 key) internal {
         // Deploy a RBS clone for the key
         rangeSetup(key);

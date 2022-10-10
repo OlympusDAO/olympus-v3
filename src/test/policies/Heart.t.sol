@@ -7,6 +7,9 @@ import {console2} from "forge-std/console2.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -27,13 +30,13 @@ contract MockOperator is Policy {
         result = true;
     }
 
-    /* ========== FRAMEWORK CONFIFURATION ========== */
+    // =========  FRAMEWORK CONFIFURATION ========= //
     function configureDependencies() external override returns (Keycode[] memory dependencies) {}
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {}
 
-    /* ========== HEART FUNCTIONS ========== */
-    function operate() external view onlyRole("operator_operate") {
+    // =========  HEART FUNCTIONS ========= //
+    function operate() external view {
         if (!result) revert Operator_CustomError();
     }
 
@@ -55,10 +58,11 @@ contract HeartTest is Test {
 
     Kernel internal kernel;
     MockPrice internal price;
+    OlympusRoles internal roles;
 
     MockOperator internal operator;
-
     OlympusHeart internal heart;
+    RolesAdmin internal rolesAdmin;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -81,6 +85,7 @@ contract HeartTest is Test {
 
             /// Deploy modules (some mocks)
             price = new MockPrice(kernel, uint48(8 hours));
+            roles = new OlympusRoles(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -100,6 +105,8 @@ contract HeartTest is Test {
                 rewardToken,
                 uint256(2e18) // 2 reward tokens
             );
+
+            rolesAdmin = new RolesAdmin(kernel);
         }
 
         {
@@ -107,19 +114,17 @@ contract HeartTest is Test {
 
             /// Install modules
             kernel.executeAction(Actions.InstallModule, address(price));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(heart));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
             /// Configure access control
 
             /// Heart roles
-            kernel.grantRole(toRole("heart_admin"), guardian);
-
-            /// Operator roles
-            kernel.grantRole(toRole("operator_operate"), address(heart));
-            kernel.grantRole(toRole("operator_operate"), guardian);
+            rolesAdmin.grantRole("heart_admin", guardian);
         }
 
         {
@@ -128,9 +133,9 @@ contract HeartTest is Test {
         }
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
 
-    /* ========== KEEPER FUNCTIONS ========== */
+    // =========  KEEPER FUNCTIONS ========= //
     /// DONE
     /// [X] beat
     ///     [X] active and frequency has passed
@@ -215,7 +220,7 @@ contract HeartTest is Test {
         heart.beat();
     }
 
-    /* ========== VIEW FUNCTIONS ========== */
+    // =========  VIEW FUNCTIONS ========= //
     /// [X] frequency
 
     function testCorrectness_viewFrequency() public {
@@ -226,7 +231,7 @@ contract HeartTest is Test {
         assertEq(frequency, uint256(8 hours));
     }
 
-    /* ========== ADMIN FUNCTIONS ========== */
+    // =========  ADMIN FUNCTIONS ========= //
     /// DONE
     /// [X] resetBeat
     /// [X] activate and deactivate
@@ -355,7 +360,10 @@ contract HeartTest is Test {
 
     function testCorrectness_cannotCallAdminFunctionsWithoutPermissions() public {
         /// Try to call admin functions on the heart as non-guardian and expect revert
-        bytes memory err = abi.encodeWithSelector(Policy_OnlyRole.selector, toRole("heart_admin"));
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("heart_admin")
+        );
 
         vm.expectRevert(err);
         heart.resetBeat();

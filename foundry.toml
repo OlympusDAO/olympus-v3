@@ -1,4 +1,5 @@
 [profile.default]
+ffi = true
 remappings = [
     'ds-test/=lib/ds-test/src/',
     'solmate/=lib/solmate/src/',
@@ -10,5 +11,4 @@ remappings = [
     'policies/=src/policies',
     'libraries/=src/libraries',
 ]
-ffi = true
 fs_permissions = [{access = "write", path = "./src/test/sim/out/"}]
