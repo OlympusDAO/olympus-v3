@@ -112,7 +112,7 @@ contract PriceConfigTest is Test {
         }
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
     function getObs(uint8 nonce) internal returns (uint256[] memory) {
         /// Assume that the reserveEth price feed is fixed at 0.0005 ETH = 1 Reserve
         reserveEthPriceFeed.setLatestAnswer(int256(5e14));
@@ -150,7 +150,7 @@ contract PriceConfigTest is Test {
         return observations;
     }
 
-    /* ========== ADMIN TESTS ========== */
+    // =========  ADMIN TESTS ========= //
 
     /// DONE
     /// [X] initialize

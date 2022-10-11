@@ -77,7 +77,7 @@ contract PriceTest is Test {
         }
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
     function initializePrice(uint8 nonce) internal {
         /// Assume that the reserveEth price feed is fixed at 0.0005 ETH = 1 Reserve
         reserveEthPriceFeed.setLatestAnswer(int256(5e14));
@@ -147,7 +147,7 @@ contract PriceTest is Test {
         }
     }
 
-    /* ========== UPDATE TESTS ========== */
+    // =========  UPDATE TESTS ========= //
 
     /// DONE
     /// [X] update moving average cannot be called before price initialization
@@ -164,7 +164,7 @@ contract PriceTest is Test {
 
     function testCorrectness_onlyPermittedPoliciesCanCallUpdateMovingAverage(uint8 nonce) public {
         bytes memory err = abi.encodeWithSelector(
-            Module_PolicyNotPermitted.selector,
+            Module.Module_PolicyNotPermitted.selector,
             address(this)
         );
 
@@ -227,7 +227,7 @@ contract PriceTest is Test {
         assertEq(expMovingAverage, price.getMovingAverage());
     }
 
-    /* ========== VIEW TESTS ========== */
+    // =========  VIEW TESTS ========= //
 
     /// DONE
     /// [X] KEYCODE
@@ -361,7 +361,7 @@ contract PriceTest is Test {
         price.getMovingAverage();
     }
 
-    /* ========== ADMIN TESTS ========== */
+    // =========  ADMIN TESTS ========= //
 
     /// DONE
     /// [X] initialize the moving average with a set of observations and last observation time
@@ -528,7 +528,7 @@ contract PriceTest is Test {
     function testCorrectness_onlyPermittedPoliciesCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
         bytes memory err = abi.encodeWithSelector(
-            Module_PolicyNotPermitted.selector,
+            Module.Module_PolicyNotPermitted.selector,
             address(this)
         );
 

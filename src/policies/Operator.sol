@@ -33,7 +33,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
-    /* ========== EVENTS ========== */
+    // =========  EVENTS ========= //
 
     event Swap(
         ERC20 indexed tokenIn_,
@@ -46,7 +46,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     event ReserveFactorChanged(uint32 reserveFactor_);
     event RegenParamsChanged(uint32 wait_, uint32 threshold_, uint32 observe_);
 
-    /* ========== ERRORS ========== */
+    // =========  ERRORS ========= //
 
     error Operator_InvalidParams();
     error Operator_InsufficientCapacity();
@@ -56,13 +56,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     error Operator_NotInitialized();
     error Operator_Inactive();
 
-    /* ========== STATE VARIABLES ========== */
+    // =========  STATE ========= //
 
     // Operator variables, defined in the interface on the external getter functions
     Status internal _status;
     Config internal _config;
 
-    /// @notice    Whether the Operator has been initialized
+    /// @notice Whether the Operator has been initialized
     bool public initialized;
 
     /// @notice    Whether the Operator is active
@@ -75,16 +75,16 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     MINTRv1 internal MINTR;
 
     // External contracts
-    /// @notice     Auctioneer contract used for cushion bond market deployments
+    /// @notice Auctioneer contract used for cushion bond market deployments
     IBondSDA public auctioneer;
-    /// @notice     Callback contract used for cushion bond market payouts
+    /// @notice Callback contract used for cushion bond market payouts
     IBondCallback public callback;
 
     // Tokens
-    /// @notice     OHM token contract
+    /// @notice OHM token contract
     ERC20 public immutable ohm;
     uint8 public immutable ohmDecimals;
-    /// @notice     Reserve token contract
+    /// @notice Reserve token contract
     ERC20 public immutable reserve;
     uint8 public immutable reserveDecimals;
 
@@ -214,7 +214,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         _;
     }
 
-    /* ========== HEART FUNCTIONS ========== */
+    // =========  HEART FUNCTIONS ========= //
 
     /// @inheritdoc IOperator
     function operate() external override onlyWhileActive onlyRole("operator_operate") {
@@ -290,7 +290,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         }
     }
 
-    /* ========== OPEN MARKET OPERATIONS (WALL) ========== */
+    // =========  OPEN MARKET OPERATIONS (WALL) ========= //
 
     /// @inheritdoc IOperator
     function swap(
@@ -362,7 +362,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         }
     }
 
-    /* ========== BOND MARKET OPERATIONS (CUSHION) ========== */
+    // =========  BOND MARKET OPERATIONS (CUSHION) ========= //
 
     /// @notice             Records a bond purchase and updates capacity correctly
     /// @notice             Access restricted (BondCallback)
@@ -521,7 +521,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         return decimals - int8(PRICE.decimals());
     }
 
-    /* ========== INTERNAL FUNCTIONS ========== */
+    // =========  INTERNAL FUNCTIONS ========= //
 
     /// @notice          Update the capacity on the RANGE module.
     /// @param high_     Whether to update the high side or low side capacity (true = high, false = low).

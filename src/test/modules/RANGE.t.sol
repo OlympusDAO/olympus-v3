@@ -88,7 +88,7 @@ contract RangeTest is Test {
         }
     }
 
-    /* ========== POLICY FUNCTION TESTS ========== */
+    // =========  POLICY FUNCTION TESTS ========= //
 
     /// DONE
     /// [X] updateCapacity
@@ -362,7 +362,7 @@ contract RangeTest is Test {
     function testCorrectness_onlyPermittedPoliciesCanCallGatedFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
         bytes memory err = abi.encodeWithSelector(
-            Module_PolicyNotPermitted.selector,
+            Module.Module_PolicyNotPermitted.selector,
             address(this)
         );
 
@@ -391,7 +391,7 @@ contract RangeTest is Test {
         range.setThresholdFactor(uint256(200));
     }
 
-    /* ========== VIEW TESTS ========== */
+    // =========  VIEW TESTS ========= //
 
     /// DONE
     /// [X] range

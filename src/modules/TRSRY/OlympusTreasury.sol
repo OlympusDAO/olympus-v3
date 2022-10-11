@@ -77,6 +77,8 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         emit Withdrawal(msg.sender, to_, token_, amount_);
     }
 
+    // =========  DEBT FUNCTIONS ========= //
+
     /// @inheritdoc TRSRYv1
     function increaseDebtorApproval(
         address debtor_,

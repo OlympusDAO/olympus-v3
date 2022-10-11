@@ -2,19 +2,19 @@
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {VOTESv1} from "src/modules/VOTES/VOTES.v1.sol";
 import "src/Kernel.sol";
 
 /// @notice Votes module is the ERC20 token that represents voting power in the network.
-/// @dev    This is currently a substitute module that stubs gOHM.
 contract OlympusVotes is VOTESv1 {
     //============================================================================================//
     //                                      MODULE SETUP                                          //
     //============================================================================================//
 
-    constructor(Kernel kernel_)
+    constructor(Kernel kernel_, ERC20 ohm_)
         Module(kernel_)
-        ERC20("OlympusDAO Dummy Voting Tokens", "VOTES", 0)
+        ERC4626(ohm_, "Olympus Votes", "vOHM")
     {}
 
     /// @inheritdoc Module
@@ -32,21 +32,45 @@ contract OlympusVotes is VOTESv1 {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @inheritdoc VOTESv1
-    function mintTo(address wallet_, uint256 amount_) external override permissioned {
-        _mint(wallet_, amount_);
+    function deposit(uint256 assets_, address receiver_)
+        public
+        override
+        permissioned
+        returns (uint256)
+    {
+        lastDepositTimestamp[receiver_] = block.timestamp;
+        return super.deposit(assets_, receiver_);
     }
 
-    /// @inheritdoc VOTESv1
-    function burnFrom(address wallet_, uint256 amount_) external override permissioned {
-        _burn(wallet_, amount_);
+    function mint(uint256 shares_, address receiver_)
+        public
+        override
+        permissioned
+        returns (uint256)
+    {
+        lastDepositTimestamp[receiver_] = block.timestamp;
+        return super.mint(shares_, receiver_);
+    }
+
+    function withdraw(
+        uint256 assets_,
+        address receiver_,
+        address owner_
+    ) public override permissioned returns (uint256) {
+        return super.withdraw(assets_, receiver_, owner_);
+    }
+
+    function redeem(
+        uint256 shares_,
+        address receiver_,
+        address owner_
+    ) public override permissioned returns (uint256) {
+        return super.redeem(shares_, receiver_, owner_);
     }
 
     /// @notice Transfers are locked for this token.
-    // solhint-disable-next-line no-unused-vars
-    function transfer(address to_, uint256 amount_) public pure override returns (bool) {
-        revert VOTES_TransferDisabled();
-        return true;
+    function transfer(address to_, uint256 amt_) public override permissioned returns (bool) {
+        return super.transfer(to_, amt_);
     }
 
     /// @notice TransferFrom is only allowed by permissioned policies.
@@ -55,12 +79,19 @@ contract OlympusVotes is VOTESv1 {
         address to_,
         uint256 amount_
     ) public override permissioned returns (bool) {
-        balanceOf[from_] -= amount_;
-        unchecked {
-            balanceOf[to_] += amount_;
-        }
+        lastDepositTimestamp[to_] = block.timestamp;
+        return super.transferFrom(from_, to_, amount_);
+    }
 
-        emit Transfer(from_, to_, amount_);
-        return true;
+    function resetActionTimestamp(address _wallet) external override permissioned {
+        lastActionTimestamp[_wallet] = block.timestamp;
+    }
+
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
+
+    function totalAssets() public view override returns (uint256) {
+        return asset.balanceOf(address(this));
     }
 }

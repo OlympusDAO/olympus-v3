@@ -198,7 +198,7 @@ contract OperatorTest is Test {
         reserve.approve(address(teller), testReserve * 20);
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
     function knockDownWall(bool high_) internal returns (uint256 amountIn, uint256 amountOut) {
         if (high_) {
             /// Get current capacity of the high wall
@@ -227,7 +227,7 @@ contract OperatorTest is Test {
         }
     }
 
-    /* ========== WALL TESTS ========== */
+    // =========  WALL TESTS ========= //
 
     /// DONE
     /// [X] Able to swap when walls are up
@@ -492,7 +492,7 @@ contract OperatorTest is Test {
         operator.swap(token, amountIn, minAmountOut);
     }
 
-    /* ========== CUSHION TESTS ========== */
+    // =========  CUSHION TESTS ========= //
 
     /// DONE
     /// [X] Cushions deployed when price set in the range and operate triggered
@@ -973,7 +973,7 @@ contract OperatorTest is Test {
         teller.purchase(alice, guardian, id, amountIn, minAmountOut);
     }
 
-    /* ========== REGENERATION TESTS ========== */
+    // =========  REGENERATION TESTS ========= //
 
     /// DONE
     /// [X] Wall regenerates when price on other side of MA for enough observations
@@ -1518,7 +1518,7 @@ contract OperatorTest is Test {
         assertEq(range.market(true), type(uint256).max);
     }
 
-    /* ========== ACCESS CONTROL TESTS ========== */
+    // =========  ACCESS CONTROL TESTS ========= //
 
     /// DONE
     /// [X] operate only callable by heart or guardian
@@ -1614,7 +1614,7 @@ contract OperatorTest is Test {
         operator.initialize();
     }
 
-    /* ========== ADMIN TESTS ========== */
+    // =========  ADMIN TESTS ========= //
 
     /// DONE
     /// [X] setSpreads
@@ -2113,7 +2113,7 @@ contract OperatorTest is Test {
         operator.bondPurchase(0, 1e18);
     }
 
-    /* ========== VIEW TESTS ========== */
+    // =========  VIEW TESTS ========= //
 
     /// DONE
     /// [X] fullCapacity
@@ -2178,7 +2178,7 @@ contract OperatorTest is Test {
         operator.getAmountOut(token, amountIn);
     }
 
-    /* ========== INTERNAL FUNCTION TESTS ========== */
+    // =========  INTERNAL FUNCTION TESTS ========= //
 
     /// DONE
     /// [X] Range updates from new price data when operate is called (triggers _updateRange)

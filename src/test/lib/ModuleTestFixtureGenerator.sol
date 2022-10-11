@@ -21,7 +21,7 @@ contract ModuleTestFixture is Policy {
         }
     }
 
-    /* ========== FRAMEWORK CONFIFURATION ========== */
+    // =========  FRAMEWORK CONFIFURATION ========= //
     function configureDependencies()
         external
         view
