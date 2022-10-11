@@ -24,23 +24,22 @@ interface IStaking {
     ) external returns (uint256);
 }
 
-/// Define Custom Errors
-error Distributor_InvalidConstruction();
-error Distributor_NoRebaseOccurred();
-error Distributor_OnlyStaking();
-error Distributor_NotUnlocked();
-error Distributor_SanityCheck();
-error Distributor_AdjustmentLimit();
-error Distributor_AdjustmentUnderflow();
-error Distributor_NotPermissioned();
-
 contract Distributor is Policy, RolesConsumer {
-    /* ========== MODULE DEPENDENCIES ========== */
+    // ========= ERRORS ========= //
+    error Distributor_InvalidConstruction();
+    error Distributor_NoRebaseOccurred();
+    error Distributor_OnlyStaking();
+    error Distributor_NotUnlocked();
+    error Distributor_SanityCheck();
+    error Distributor_AdjustmentLimit();
+    error Distributor_AdjustmentUnderflow();
+    error Distributor_NotPermissioned();
 
+    // ========= STATE ========= //
+
+    /// Modules
     TRSRYv1 public TRSRY;
     MINTRv1 public MINTR;
-
-    /* ========== SYSTEM VARIABLES ========== */
 
     /// Olympus contract dependencies
     ERC20 private immutable ohm; // OHM Token
@@ -54,6 +53,10 @@ contract Distributor is Policy, RolesConsumer {
 
     /// Constants
     uint256 private constant DENOMINATOR = 1_000_000;
+
+    //============================================================================================//
+    //                                      POLICY SETUP                                          //
+    //============================================================================================//
 
     constructor(
         address kernel_,
@@ -72,8 +75,6 @@ contract Distributor is Policy, RolesConsumer {
         staking = staking_;
         rewardRate = initialRate_;
     }
-
-    /* ========== FRAMEWORK CONFIGURATION ========== */
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -98,7 +99,9 @@ contract Distributor is Policy, RolesConsumer {
         permissions[0] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
     }
 
-    /* ========== PUBLIC FUNCTIONS ========== */
+    //============================================================================================//
+    //                                       CORE FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice Trigger rebases via distributor. There is an error in Staking's `stake` function
     ///         which pulls forward part of the rebase for the next epoch. This path triggers a
@@ -110,8 +113,6 @@ contract Distributor is Policy, RolesConsumer {
         IStaking(staking).unstake(msg.sender, 0, true, true); // Give the caller the bounty OHM
         if (unlockRebase) revert Distributor_NoRebaseOccurred();
     }
-
-    /* ========== REWARDS FUNCTIONS ========== */
 
     /// @notice Send the epoch's reward to the staking contract, and mint rewards to Uniswap V2 pools.
     ///         This removes opportunity cost for liquidity providers by sending rebase rewards
@@ -151,7 +152,9 @@ contract Distributor is Policy, RolesConsumer {
         return bounty;
     }
 
-    /* ========== VIEW FUNCTIONS ========== */
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice Returns the next reward for the given address based on their OHM balance.
     /// @param  who_ The address to get the next reward for.
@@ -160,7 +163,9 @@ contract Distributor is Policy, RolesConsumer {
         return (ohm.balanceOf(who_) * rewardRate) / DENOMINATOR;
     }
 
-    /* ========== POLICY FUNCTIONS ========== */
+    //============================================================================================//
+    //                                     POLICY FUNCTIONS                                       //
+    //============================================================================================//
 
     /// @notice Adjusts the bounty
     /// @param  bounty_ The new bounty amount.
