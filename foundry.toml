@@ -11,3 +11,4 @@ remappings = [
     'policies/=src/policies',
     'libraries/=src/libraries',
 ]
+solc_version = "0.8.15"
