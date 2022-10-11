@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {Script, console2} from "forge-std/Script.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import "src/Kernel.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
@@ -38,5 +39,16 @@ contract TreasuryCustodianDeploy is Script {
         // rolesAdmin.grantRole("custodian", guardian_);
 
         vm.stopBroadcast();
+    }
+
+    /// @dev must be called with address which has custodian role
+    function increaseDebt(address borrower, uint256 amount) external {
+        // Load address from environment
+        treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
+        ERC20 reserve = ERC20(vm.envAddress("DAI_ADDRESS"));
+
+        // Increase the borrower's debt by amount
+        vm.broadcast();
+        treasuryCustodian.increaseDebt(reserve, borrower, amount);
     }
 }
