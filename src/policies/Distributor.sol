@@ -47,7 +47,7 @@ contract Distributor is Policy, RolesConsumer {
 
     /// Policy state
     address[] public pools; // Liquidity pools to receive rewards
-    uint256 public rewardRate; // % to increase balances per epoch
+    uint256 public rewardRate; // % to increase balances per epoch (6 decimals, i.e. 10_000 / 1_000_000 = 1%)
     uint256 public bounty; // A bounty for keepers to call the triggerRebase() function
     bool private unlockRebase; // Restricts distribute() to only triggerRebase()
 
@@ -142,7 +142,7 @@ contract Distributor is Policy, RolesConsumer {
         unlockRebase = false;
     }
 
-    /// @notice Mints the bounty (if > 0) to the saking contract for distribution.
+    /// @notice Mints the bounty (if > 0) to the staking contract for distribution.
     /// @return uint256 The amount of OHM minted as a bounty.
     function retrieveBounty() external returns (uint256) {
         if (msg.sender != staking) revert Distributor_OnlyStaking();
@@ -168,7 +168,7 @@ contract Distributor is Policy, RolesConsumer {
     //============================================================================================//
 
     /// @notice Adjusts the bounty
-    /// @param  bounty_ The new bounty amount.
+    /// @param  bounty_ The new bounty amount in OHM (9 decimals).
     /// @dev    This function is only available to an authorized user.
     function setBounty(uint256 bounty_) external onlyRole("distributor_admin") {
         bounty = bounty_;
@@ -203,6 +203,8 @@ contract Distributor is Policy, RolesConsumer {
         }
     }
 
+    /// @notice Sets the new OHM reward rate to mint and distribute per epoch
+    /// @param newRewardRate_ The new rate to set (6 decimals, i.e. 10_000 / 1_000_000 = 1%)
     function setRewardRate(uint256 newRewardRate_) external onlyRole("distributor_admin") {
         rewardRate = newRewardRate_;
     }

@@ -199,9 +199,9 @@ contract DistributorTest is Test {
         distributor.setBounty(0);
     }
 
-    function testCorrectness_setBounty() public {
-        distributor.setBounty(10);
-        assertEq(distributor.bounty(), 10);
+    function testCorrectness_setBounty(uint256 newBounty_) public {
+        distributor.setBounty(newBounty_);
+        assertEq(distributor.bounty(), newBounty_);
     }
 
     /// [X] setPools()
