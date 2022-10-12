@@ -22,6 +22,7 @@ import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
+import {Distributor} from "policies/Distributor.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
@@ -49,6 +50,7 @@ contract OlympusDeploy is Script {
     OlympusPriceConfig public priceConfig;
     RolesAdmin public rolesAdmin;
     TreasuryCustodian public treasuryCustodian;
+    Distributor public distributor;
 
     /// Construction variables
 
@@ -65,6 +67,9 @@ contract OlympusDeploy is Script {
     AggregatorV2V3Interface public ohmEthPriceFeed;
     AggregatorV2V3Interface public reserveEthPriceFeed;
 
+    /// External contracts
+    address public staking;
+
     function deploy(address guardian_, address policy_) external {
         /// Token addresses
         ohm = ERC20(vm.envAddress("OHM_ADDRESS"));
@@ -78,6 +83,9 @@ contract OlympusDeploy is Script {
         /// Chainlink price feed addresses
         ohmEthPriceFeed = AggregatorV2V3Interface(vm.envAddress("OHM_ETH_FEED"));
         reserveEthPriceFeed = AggregatorV2V3Interface(vm.envAddress("DAI_ETH_FEED"));
+
+        /// External Olympus contract addresses
+        staking = vm.envAddress("STAKING_ADDRESS");
 
         vm.startBroadcast();
 
@@ -146,6 +154,9 @@ contract OlympusDeploy is Script {
         treasuryCustodian = new TreasuryCustodian(kernel);
         console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
 
+        distributor = new Distributor(kernel, address(ohm), staking, vm.envUint("REWARD_RATE")); // TODO verify reward rate
+        console2.log("Distributor deployed at:", address(distributor));
+
         /// Execute actions on Kernel
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(INSTR));
@@ -162,6 +173,7 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
+        kernel.executeAction(Actions.ActivatePolicy, address(distributor));
 
         /// Configure access control for policies
 
@@ -185,6 +197,9 @@ contract OlympusDeploy is Script {
 
         /// TreasuryCustodian roles
         rolesAdmin.grantRole("custodian", guardian_);
+
+        /// Distributor roles
+        rolesAdmin.grantRole("distributor_admin", guardian_);
 
         // /// Transfer executor powers to INSTR
         // kernel.executeAction(Actions.ChangeExecutor, address(INSTR));
