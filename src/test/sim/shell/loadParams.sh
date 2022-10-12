@@ -2,7 +2,7 @@
 # Script to load params from a json file into solidity, using a filter defined in the arguments passed here.
 
 # Create filter with passed in seed
-filter=".[] | { key: (.key | ltrimstr(\"${1}_\") | tonumber), maxLiqRatio: ((.maxLiqRatio | tonumber) * 10000), reserveFactor: ((.askFactor | tonumber) * 10000), cushionFactor: ((.cushionFactor | tonumber) * 10000), wallSpread: ((.wall | tonumber) * 10000), cushionSpread: ((.cushion | tonumber) * 10000), dynamicRR: (.withDynamicRR == \"Yes\") }"
+filter=".[] | if .seed==\"${1}\" then { key: (.key | ltrimstr(\"${1}_\") | tonumber), maxLiqRatio: ((.maxLiqRatio | tonumber) * 10000), reserveFactor: ((.askFactor | tonumber) * 10000), cushionFactor: ((.cushionFactor | tonumber) * 10000), wallSpread: ((.wall | tonumber) * 10000), cushionSpread: ((.cushion | tonumber) * 10000), dynamicRR: (.withDynamicRR == \"Yes\") } else empty end"
 
 # Get query result from provided json file
 params=$(jq -c "$filter" $2)
