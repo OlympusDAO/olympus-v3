@@ -215,6 +215,8 @@ contract VOTESTest is Test {
         address receiver,
         uint256 balance
     ) public {
+        if (sender == user1 || sender == user2) return; // privileged accounts are allowed to transfer
+
         vm.assume(sender != address(0) && receiver != address(0) && balance != 0);
 
         // mint fuzzed amount to address

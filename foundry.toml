@@ -13,3 +13,6 @@ remappings = [
 ]
 fs_permissions = [{access = "write", path = "./src/test/sim/out/"}]
 solc_version = "0.8.15"
+
+[fuzz]
+runs = 4096
