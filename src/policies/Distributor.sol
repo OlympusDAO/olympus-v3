@@ -47,12 +47,12 @@ contract Distributor is Policy, RolesConsumer {
 
     /// Policy state
     address[] public pools; // Liquidity pools to receive rewards
-    uint256 public rewardRate; // % to increase balances per epoch (6 decimals, i.e. 10_000 / 1_000_000 = 1%)
+    uint256 public rewardRate; // % to increase balances per epoch (9 decimals, i.e. 10_000_000 / 1_000_000_000 = 1%)
     uint256 public bounty; // A bounty for keepers to call the triggerRebase() function
     bool private unlockRebase; // Restricts distribute() to only triggerRebase()
 
     /// Constants
-    uint256 private constant DENOMINATOR = 1_000_000;
+    uint256 private constant DENOMINATOR = 1e9;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -204,7 +204,7 @@ contract Distributor is Policy, RolesConsumer {
     }
 
     /// @notice Sets the new OHM reward rate to mint and distribute per epoch
-    /// @param newRewardRate_ The new rate to set (6 decimals, i.e. 10_000 / 1_000_000 = 1%)
+    /// @param newRewardRate_ The new rate to set (9 decimals, i.e. 10_000_000 / 1_000_000_000 = 1%)
     function setRewardRate(uint256 newRewardRate_) external onlyRole("distributor_admin") {
         rewardRate = newRewardRate_;
     }

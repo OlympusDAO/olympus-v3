@@ -79,7 +79,7 @@ contract DistributorTest is Test {
         {
             /// Deploy Staking, Distributor, and Roles Admin
             staking = new MockStaking(address(ohm), address(sohm), address(gohm), 2200, 0, 2200);
-            distributor = new Distributor(kernel, address(ohm), address(staking), 1000);
+            distributor = new Distributor(kernel, address(ohm), address(staking), 1000000); // 0.1%
             rolesAdmin = new RolesAdmin(kernel);
 
             staking.setDistributor(address(distributor));
@@ -125,7 +125,7 @@ contract DistributorTest is Test {
     /// Basic post-setup functionality tests
 
     function test_defaultState() public {
-        assertEq(distributor.rewardRate(), 1000);
+        assertEq(distributor.rewardRate(), 1000000);
         assertEq(distributor.bounty(), 0);
 
         assertEq(ohm.balanceOf(address(staking)), 100100 gwei);
@@ -175,7 +175,7 @@ contract DistributorTest is Test {
     function testCorrectness_nextRewardFor() public {
         uint256 stakingBalance = 100100 gwei;
         uint256 rewardRate = distributor.rewardRate();
-        uint256 denominator = 1_000_000;
+        uint256 denominator = 1e9;
         uint256 expected = (stakingBalance * rewardRate) / denominator;
 
         assertEq(distributor.nextRewardFor(address(staking)), expected);
