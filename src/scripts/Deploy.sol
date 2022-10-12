@@ -7,7 +7,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
-import {IWETH9} from "interfaces/IWETH9.sol";
 
 import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
@@ -15,16 +14,14 @@ import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
-import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
-//import {VoterRegistration} from "policies/VoterRegistration.sol";
-//import {OlympusGovernance} from "policies/Governance.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
@@ -43,7 +40,6 @@ contract OlympusDeploy is Script {
     OlympusTreasury public TRSRY;
     OlympusMinter public MINTR;
     OlympusInstructions public INSTR;
-    OlympusVotes public VOTES;
     OlympusRoles public ROLES;
 
     /// Policies
@@ -51,48 +47,38 @@ contract OlympusDeploy is Script {
     OlympusHeart public heart;
     BondCallback public callback;
     OlympusPriceConfig public priceConfig;
-    //VoterRegistration public voterReg;
-    //OlympusGovernance public governance;
     RolesAdmin public rolesAdmin;
-    Faucet public faucet;
+    TreasuryCustodian public treasuryCustodian;
 
     /// Construction variables
 
-    /// Mainnet addresses
-    // ERC20 public constant ohm =
-    //     ERC20(0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5); // OHM mainnet address
-    // ERC20 public constant reserve =
-    //     ERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F); // DAI mainnet address
-    // ERC20 public constant rewardToken =
-    //     ERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // WETH mainnet address
-
-    // IBondSDA public constant bondAuctioneer =
-    //     IBondSDA(address(0));
-    // IBondAggregator public constant bondAggregator =
-    //     IBondAggregator(address(0));
-
-    // AggregatorV2V3Interface public constant ohmEthPriceFeed =
-    //     AggregatorV2V3Interface(0x9a72298ae3886221820B1c878d12D872087D3a23); // OHM/ETH chainlink address
-    // AggregatorV2V3Interface public constant reserveEthPriceFeed =
-    //     AggregatorV2V3Interface(0x773616E4d11A78F511299002da57A0a94577F1f4); // DAI/ETH chainlink address
-
-    /// Goerli testnet addresses
-    ERC20 public constant ohm = ERC20(0x0595328847AF962F951a4f8F8eE9A3Bf261e4f6b); // OHM goerli address
-    ERC20 public constant reserve = ERC20(0x41e38e70a36150D08A8c97aEC194321b5eB545A5); // DAI goerli address
-    ERC20 public constant rewardToken = ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
+    /// Token addresses
+    ERC20 public ohm;
+    ERC20 public reserve;
+    ERC20 public rewardToken;
 
     /// Bond system addresses
-    IBondSDA public constant bondAuctioneer = IBondSDA(0xaE73A94b94F6E7aca37f4c79C4b865F1AF06A68b);
-    IBondAggregator public constant bondAggregator =
-        IBondAggregator(0xB4860B2c12C6B894B64471dFb5a631ff569e220e);
+    IBondSDA public bondAuctioneer;
+    IBondAggregator public bondAggregator;
 
-    /// Mock Price Feed addresses
-    AggregatorV2V3Interface public constant ohmEthPriceFeed =
-        AggregatorV2V3Interface(0x022710a589C9796dce59A0C52cA4E36f0a5e991A); // OHM/ETH
-    AggregatorV2V3Interface public constant reserveEthPriceFeed =
-        AggregatorV2V3Interface(0xdC8E4eD326cFb730a759312B6b1727C6Ef9ca233); // DAI/ETH
+    /// Chainlink price feed addresses
+    AggregatorV2V3Interface public ohmEthPriceFeed;
+    AggregatorV2V3Interface public reserveEthPriceFeed;
 
     function deploy(address guardian_, address policy_) external {
+        /// Token addresses
+        ohm = ERC20(vm.envAddress("OHM_ADDRESS"));
+        reserve = ERC20(vm.envAddress("DAI_ADDRESS"));
+        rewardToken = ERC20(vm.envAddress("OHM_ADDRESS"));
+
+        /// Bond system addresses
+        bondAuctioneer = IBondSDA(vm.envAddress("BOND_SDA_ADDRESS"));
+        bondAggregator = IBondAggregator(vm.envAddress("BOND_AGGREGATOR_ADDRESS"));
+
+        /// Chainlink price feed addresses
+        ohmEthPriceFeed = AggregatorV2V3Interface(vm.envAddress("OHM_ETH_FEED"));
+        reserveEthPriceFeed = AggregatorV2V3Interface(vm.envAddress("DAI_ETH_FEED"));
+
         vm.startBroadcast();
 
         /// Deploy kernel first
@@ -102,9 +88,6 @@ contract OlympusDeploy is Script {
         /// Deploy modules
         INSTR = new OlympusInstructions(kernel);
         console2.log("Instructions module deployed at:", address(INSTR));
-
-        VOTES = new OlympusVotes(kernel, ohm);
-        console2.log("Votes module deployed at:", address(VOTES));
 
         TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury module deployed at:", address(TRSRY));
@@ -123,7 +106,7 @@ contract OlympusDeploy is Script {
         );
         console2.log("Price module deployed at:", address(PRICE));
 
-        RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1200), uint256(3000));
+        RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1500), uint256(3000));
         console2.log("Range module deployed at:", address(RANGE));
 
         ROLES = new OlympusRoles(kernel);
@@ -142,46 +125,30 @@ contract OlympusDeploy is Script {
                 uint32(3000), // cushionFactor
                 uint32(3 days), // cushionDuration
                 uint32(100_000), // cushionDebtBuffer
-                uint32(1 hours), // cushionDepositInterval
-                uint32(800), // reserveFactor
-                uint32(1 hours), // regenWait
+                uint32(4 hours), // cushionDepositInterval
+                uint32(750), // reserveFactor
+                uint32(6 days), // regenWait
                 uint32(18), // regenThreshold // 18
                 uint32(21) // regenObserve    // 21
-                // uint32(8 hours) // observationFrequency
             ] // TODO verify initial parameters
         );
         console2.log("Operator deployed at:", address(operator));
 
-        heart = new OlympusHeart(kernel, operator, rewardToken, 0);
+        heart = new OlympusHeart(kernel, operator, rewardToken, 5 * 1e9); // TODO verify initial keeper reward
         console2.log("Heart deployed at:", address(heart));
 
         priceConfig = new OlympusPriceConfig(kernel);
         console2.log("PriceConfig deployed at:", address(priceConfig));
 
-        //voterReg = new VoterRegistration(kernel);
-        //console2.log("VoterRegistration deployed at:", address(voterReg));
-
-        //governance = new OlympusGovernance(kernel);
-        //console2.log("Governance deployed at:", address(governance));
-
         rolesAdmin = new RolesAdmin(kernel);
         console2.log("RolesAdmin deployed at:", address(rolesAdmin));
 
-        faucet = new Faucet(
-            msg.sender,
-            ohm,
-            reserve,
-            1 ether,
-            1_000_000 * 1e9,
-            10_000_000 * 1e18,
-            1 hours
-        );
-        console2.log("Faucet deployed at:", address(faucet));
+        treasuryCustodian = new TreasuryCustodian(kernel);
+        console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
 
         /// Execute actions on Kernel
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(INSTR));
-        kernel.executeAction(Actions.InstallModule, address(VOTES));
         kernel.executeAction(Actions.InstallModule, address(PRICE));
         kernel.executeAction(Actions.InstallModule, address(RANGE));
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
@@ -193,10 +160,8 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.ActivatePolicy, address(operator));
         kernel.executeAction(Actions.ActivatePolicy, address(heart));
         kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
-        //kernel.executeAction(Actions.ActivatePolicy, address(voterReg));
-        //kernel.executeAction(Actions.ActivatePolicy, address(governance));
-        kernel.executeAction(Actions.ActivatePolicy, address(faucet));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+        kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
 
         /// Configure access control for policies
 
@@ -215,9 +180,6 @@ contract OlympusDeploy is Script {
         /// Heart roles
         rolesAdmin.grantRole("heart_admin", guardian_);
 
-        /// VoterRegistration roles
-        //rolesAdmin.grantRole("voter_admin", guardian_);
-
         /// PriceConfig roles
         rolesAdmin.grantRole("price_admin", guardian_);
 
@@ -234,8 +196,8 @@ contract OlympusDeploy is Script {
     function initialize() external {
         // Set addresses from deployment
         // priceConfig = OlympusPriceConfig();
-        operator = Operator(0x532AC8804b233846645C1Cd53D3005604F5eC1c3);
-        callback = BondCallback(0xdff3e45D4BE6B354384D770Fd63DDF90eA788d13);
+        operator = Operator(vm.envAddress("OPERATOR"));
+        callback = BondCallback(vm.envAddress("CALLBACK"));
 
         /// Start broadcasting
         vm.startBroadcast();
@@ -249,10 +211,6 @@ contract OlympusDeploy is Script {
 
         /// Initialize the Operator policy
         operator.initialize();
-
-        // /// Deposit msg.value in WETH contract and deposit in heart
-        // IWETH9(address(rewardToken)).deposit{value: msg.value}();
-        // rewardToken.safeTransfer(address(heart), msg.value);
 
         /// Stop broadcasting
         vm.stopBroadcast();

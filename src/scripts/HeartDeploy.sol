@@ -56,4 +56,13 @@ contract HeartDeploy is Script {
 
         vm.stopBroadcast();
     }
+
+    /// @dev must call with address which has "heart_admin" role
+    function setRewardTokenAndAmount(ERC20 token, uint256 amount) external {
+        // Load address from environment
+        heart = OlympusHeart(vm.envAddress("HEART"));
+
+        vm.broadcast();
+        heart.setRewardTokenAndAmount(token, amount);
+    }
 }
