@@ -59,13 +59,13 @@ contract Distributor is Policy, RolesConsumer {
     //============================================================================================//
 
     constructor(
-        address kernel_,
+        Kernel kernel_,
         address ohm_,
         address staking_,
         uint256 initialRate_
-    ) Policy(Kernel(kernel_)) {
+    ) Policy(kernel_) {
         if (
-            kernel_ == address(0) ||
+            address(kernel_) == address(0) ||
             ohm_ == address(0) ||
             staking_ == address(0) ||
             initialRate_ == 0

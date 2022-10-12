@@ -79,7 +79,7 @@ contract DistributorTest is Test {
         {
             /// Deploy Staking, Distributor, and Roles Admin
             staking = new MockStaking(address(ohm), address(sohm), address(gohm), 2200, 0, 2200);
-            distributor = new Distributor(address(kernel), address(ohm), address(staking), 1000);
+            distributor = new Distributor(kernel, address(ohm), address(staking), 1000);
             rolesAdmin = new RolesAdmin(kernel);
 
             staking.setDistributor(address(distributor));
