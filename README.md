@@ -43,6 +43,7 @@ Set up a foundry config in foundry.toml.
 -   Operator - [0x3b01DAE0C0c24366FE9dEc2A93ae44d586B7afD6](https://goerli.etherscan.io/address/0x3b01DAE0C0c24366FE9dEc2A93ae44d586B7afD6)
 -   PriceConfig - [0x9E56edDd1D6F22047AcD722A185a2C66963C8d2F](https://goerli.etherscan.io/address/0x9E56edDd1D6F22047AcD722A185a2C66963C8d2F)
 -   TreasuryCustodian - [0x7BDA8f77af66aec12aB4D69342512C9D36B70cDe](https://goerli.etherscan.io/address/0x7BDA8f77af66aec12aB4D69342512C9D36B70cDe)
+-   Distributor - [0x1F3417581C6a5E6F680b22fec85E57B457a6A794](https://goerli.etherscan.io/address/0x1F3417581C6a5E6F680b22fec85E57B457a6A794)
 -   RolesAdmin - [0xF9a3420DbD332a609f9b7f091dd38fd58f73E9a6](https://goerli.etherscan.io/address/0xF9a3420DbD332a609f9b7f091dd38fd58f73E9a6)
 -   Faucet (Testnet only) - [0xA247156a39169c0FAFf979F57361CC734e82e3d0](https://goerli.etherscan.io/address/0xA247156a39169c0FAFf979F57361CC734e82e3d0)
 
