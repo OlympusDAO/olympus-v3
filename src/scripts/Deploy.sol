@@ -7,7 +7,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
-import {IWETH9} from "interfaces/IWETH9.sol";
 
 import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
@@ -41,7 +40,6 @@ contract OlympusDeploy is Script {
     OlympusTreasury public TRSRY;
     OlympusMinter public MINTR;
     OlympusInstructions public INSTR;
-    // OlympusVotes public VOTES;
     OlympusRoles public ROLES;
 
     /// Policies
@@ -49,11 +47,8 @@ contract OlympusDeploy is Script {
     OlympusHeart public heart;
     BondCallback public callback;
     OlympusPriceConfig public priceConfig;
-    //VoterRegistration public voterReg;
-    //OlympusGovernance public governance;
     RolesAdmin public rolesAdmin;
     TreasuryCustodian public treasuryCustodian;
-    Faucet public faucet;
 
     /// Construction variables
 
@@ -93,9 +88,6 @@ contract OlympusDeploy is Script {
         /// Deploy modules
         INSTR = new OlympusInstructions(kernel);
         console2.log("Instructions module deployed at:", address(INSTR));
-
-        // VOTES = new OlympusVotes(kernel, ohm);
-        // console2.log("Votes module deployed at:", address(VOTES));
 
         TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury module deployed at:", address(TRSRY));
@@ -142,7 +134,7 @@ contract OlympusDeploy is Script {
         );
         console2.log("Operator deployed at:", address(operator));
 
-        heart = new OlympusHeart(kernel, operator, rewardToken, 0);
+        heart = new OlympusHeart(kernel, operator, rewardToken, 5 * 1e9); // TODO verify initial keeper reward
         console2.log("Heart deployed at:", address(heart));
 
         priceConfig = new OlympusPriceConfig(kernel);
@@ -157,7 +149,6 @@ contract OlympusDeploy is Script {
         /// Execute actions on Kernel
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(INSTR));
-        // kernel.executeAction(Actions.InstallModule, address(VOTES));
         kernel.executeAction(Actions.InstallModule, address(PRICE));
         kernel.executeAction(Actions.InstallModule, address(RANGE));
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
@@ -169,8 +160,6 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.ActivatePolicy, address(operator));
         kernel.executeAction(Actions.ActivatePolicy, address(heart));
         kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
-        //kernel.executeAction(Actions.ActivatePolicy, address(voterReg));
-        //kernel.executeAction(Actions.ActivatePolicy, address(governance));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
 
@@ -190,9 +179,6 @@ contract OlympusDeploy is Script {
 
         /// Heart roles
         rolesAdmin.grantRole("heart_admin", guardian_);
-
-        /// VoterRegistration roles
-        //rolesAdmin.grantRole("voter_admin", guardian_);
 
         /// PriceConfig roles
         rolesAdmin.grantRole("price_admin", guardian_);
@@ -225,10 +211,6 @@ contract OlympusDeploy is Script {
 
         /// Initialize the Operator policy
         operator.initialize();
-
-        // /// Deposit msg.value in WETH contract and deposit in heart
-        // IWETH9(address(rewardToken)).deposit{value: msg.value}();
-        // rewardToken.safeTransfer(address(heart), msg.value);
 
         /// Stop broadcasting
         vm.stopBroadcast();
