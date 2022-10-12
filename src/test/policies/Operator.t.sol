@@ -2108,9 +2108,63 @@ contract OperatorTest is Test {
 
         vm.prank(alice);
         operator.swap(reserve, 1e18, 1);
+    }
 
-        vm.prank(address(callback));
-        operator.bondPurchase(0, 1e18);
+    function testCorrectness_deactivateShutsdownCushions() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Assert high wall is up
+        assertTrue(range.active(true));
+
+        /// Set price on mock oracle into the high cushion
+        price.setLastPrice(111 * 1e18);
+
+        /// Trigger the operate function manually
+        vm.prank(guardian);
+        operator.operate();
+
+        /// Get current market
+        uint256 currentMarket = range.market(true);
+
+        /// Check market has been updated and is live
+        assertTrue(type(uint256).max != currentMarket);
+        assertTrue(auctioneer.isLive(currentMarket));
+
+        /// Deactivate the operator
+        vm.prank(guardian);
+        operator.deactivate();
+
+        /// Check market has been updated and is not live
+        assertTrue(!auctioneer.isLive(currentMarket));
+        assertEq(type(uint256).max, range.market(true));
+
+        /// Reactivate the operator
+        vm.prank(guardian);
+        operator.activate();
+
+        /// Set price on mock oracle into the low cushion
+        price.setLastPrice(89 * 1e18);
+
+        /// Trigger the operate function manually
+        vm.prank(guardian);
+        operator.operate();
+
+        /// Get current market
+        currentMarket = range.market(false);
+
+        /// Check market has been updated and is live
+        assertTrue(type(uint256).max != currentMarket);
+        assertTrue(auctioneer.isLive(currentMarket));
+
+        /// Deactivate the operator
+        vm.prank(guardian);
+        operator.deactivate();
+
+        /// Check market has been updated and is not live
+        assertTrue(!auctioneer.isLive(currentMarket));
+        assertEq(type(uint256).max, range.market(false));
     }
 
     // =========  VIEW TESTS ========= //

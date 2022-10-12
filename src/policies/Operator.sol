@@ -782,6 +782,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IOperator
     function deactivate() external onlyRole("operator_admin") {
         active = false;
+        // Deactivate cushions
+        _deactivate(true);
+        _deactivate(false);
     }
 
     /// @inheritdoc IOperator
