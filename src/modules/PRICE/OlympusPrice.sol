@@ -215,7 +215,7 @@ contract OlympusPrice is PRICEv1 {
             if (
                 ohmEthPriceInt <= 0 ||
                 updatedAt < block.timestamp - uint256(ohmEthUpdateThreshold) ||
-                answeredInRound < roundId
+                answeredInRound != roundId
             ) revert Price_BadFeed(address(ohmEthPriceFeed));
             ohmEthPrice = uint256(ohmEthPriceInt);
 
@@ -225,7 +225,7 @@ contract OlympusPrice is PRICEv1 {
             if (
                 reserveEthPriceInt <= 0 ||
                 updatedAt < block.timestamp - uint256(reserveEthUpdateThreshold) ||
-                answeredInRound < roundId
+                answeredInRound != roundId
             ) revert Price_BadFeed(address(reserveEthPriceFeed));
             reserveEthPrice = uint256(reserveEthPriceInt);
         }
