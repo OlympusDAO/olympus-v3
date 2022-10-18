@@ -22,9 +22,7 @@ contract VohmVault is Policy {
     //                                      POLICY SETUP                                          //
     //============================================================================================//
 
-    constructor(Kernel kernel_, ERC20 gOHM_) Policy(kernel_) {
-        gOHM = gOHM_;
-    }
+    constructor(Kernel kernel_) Policy(kernel_) {}
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -32,7 +30,7 @@ contract VohmVault is Policy {
         dependencies[0] = toKeycode("VOTES");
 
         VOTES = VOTESv1(getModuleAddress(dependencies[0]));
-
+        gOHM = VOTES.gOHM();
         gOHM.approve(address(VOTES), type(uint256).max);
     }
 
