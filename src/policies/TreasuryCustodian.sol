@@ -115,10 +115,7 @@ contract TreasuryCustodian is Policy, RolesConsumer {
 
     /// @notice Anyone can call to revoke a deactivated policy's approvals.
     function revokePolicyApprovals(address policy_, ERC20[] memory tokens_) external {
-        //activePolicies[getPolicyIndex[policy_]] != policy_
-        if (address(kernel.activePolicies(kernel.getPolicyIndex(Policy(policy_)))) == policy_)
-            revert PolicyStillActive();
-        //if (Policy(policy_).isActive()) revert PolicyStillActive();
+        if (Policy(policy_).isActive()) revert PolicyStillActive();
 
         uint256 len = tokens_.length;
         for (uint256 j; j < len; ) {
