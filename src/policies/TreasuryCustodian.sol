@@ -66,6 +66,15 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         TRSRY.increaseWithdrawerApproval(for_, token_, amount_);
     }
 
+    /// @notice Lower an address's withdrawer approval
+    function reduceWithdrawerApproval(
+        address for_,
+        ERC20 token_,
+        uint256 amount_
+    ) external onlyRole("custodian") {
+        TRSRY.decreaseWithdrawerApproval(for_, token_, amount_);
+    }
+
     /// @notice Allow an address to incur `amount_` of debt from the treasury
     function grantDebtorApproval(
         address for_,
@@ -73,6 +82,15 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         uint256 amount_
     ) external onlyRole("custodian") {
         TRSRY.increaseDebtorApproval(for_, token_, amount_);
+    }
+
+    /// @notice Lower an address's debtor approval
+    function reduceDebtorApproval(
+        address for_,
+        ERC20 token_,
+        uint256 amount_
+    ) external onlyRole("custodian") {
+        TRSRY.decreaseDebtorApproval(for_, token_, amount_);
     }
 
     /// @notice Allow authorized addresses to increase debt in special cases
