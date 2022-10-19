@@ -186,7 +186,7 @@ contract OlympusDeploy is Script {
 
         /// Bond callback roles
         rolesAdmin.grantRole("callback_whitelist", address(operator));
-        rolesAdmin.grantRole("callback_whitelist", guardian_);
+        rolesAdmin.grantRole("callback_whitelist", policy_);
         rolesAdmin.grantRole("callback_admin", guardian_);
 
         /// Heart roles
