@@ -162,7 +162,6 @@ contract OperatorTest is Test {
 
             /// Operator roles
             rolesAdmin.grantRole("operator_operate", address(heart));
-            rolesAdmin.grantRole("operator_operate", guardian);
             rolesAdmin.grantRole("operator_reporter", address(callback));
             rolesAdmin.grantRole("operator_policy", policy);
             rolesAdmin.grantRole("operator_admin", guardian);
@@ -512,7 +511,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
@@ -545,7 +544,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
@@ -559,7 +558,7 @@ contract OperatorTest is Test {
         price.setLastPrice(105 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is closed
@@ -581,7 +580,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
@@ -595,7 +594,7 @@ contract OperatorTest is Test {
         price.setLastPrice(130 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is closed
@@ -617,7 +616,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
@@ -645,7 +644,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is not deployed
@@ -664,7 +663,7 @@ contract OperatorTest is Test {
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
@@ -697,7 +696,7 @@ contract OperatorTest is Test {
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
@@ -711,7 +710,7 @@ contract OperatorTest is Test {
         price.setLastPrice(79 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is closed
@@ -733,7 +732,7 @@ contract OperatorTest is Test {
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
@@ -747,7 +746,7 @@ contract OperatorTest is Test {
         price.setLastPrice(91 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is closed
@@ -769,7 +768,7 @@ contract OperatorTest is Test {
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
@@ -797,7 +796,7 @@ contract OperatorTest is Test {
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is not deployed
@@ -817,7 +816,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to almost regenerate the high wall
         for (uint256 i; i < 4; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -828,7 +827,7 @@ contract OperatorTest is Test {
         /// Cause price to spike to trigger high cushion
         uint256 cushionPrice = range.price(false, true);
         price.setLastPrice(cushionPrice + 500);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check market is live
@@ -844,7 +843,7 @@ contract OperatorTest is Test {
         /// Will set the operator market on high side to type(uint256).max
         /// However, the prior market will still be live when it's supposed to be deactivated
         price.setLastPrice(95 * 1e18);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
         /// Get latest market
         uint256 newMarket = range.market(true);
@@ -867,7 +866,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Get current market
@@ -901,7 +900,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
@@ -943,7 +942,7 @@ contract OperatorTest is Test {
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
@@ -1011,7 +1010,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1055,7 +1054,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function with negative
         for (uint256 i; i < 8; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1067,7 +1066,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1108,7 +1107,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 4; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1152,7 +1151,7 @@ contract OperatorTest is Test {
         price.setLastPrice(101 * 1e18);
 
         /// Trigger the operator once to get a positive check
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Set price below the moving average to get negative checks
@@ -1160,7 +1159,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function several times with negative checks
         for (uint256 i; i < 3; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1169,7 +1168,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function several times with positive checks
         for (uint256 i; i < 4; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1212,7 +1211,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1233,7 +1232,7 @@ contract OperatorTest is Test {
 
         /// Trigger a cushion
         price.setLastPrice(89 * 1e18);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
@@ -1280,7 +1279,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1324,7 +1323,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function with negative
         for (uint256 i; i < 8; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1336,7 +1335,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1377,7 +1376,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 4; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1421,7 +1420,7 @@ contract OperatorTest is Test {
         price.setLastPrice(98 * 1e18);
 
         /// Trigger the operator once to get a positive check
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Set price above the moving average to get negative checks
@@ -1429,7 +1428,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function several times with negative checks
         for (uint256 i; i < 3; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1438,7 +1437,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function several times with positive checks
         for (uint256 i; i < 4; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1481,7 +1480,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1502,7 +1501,7 @@ contract OperatorTest is Test {
 
         /// Trigger a cushion
         price.setLastPrice(111 * 1e18);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
@@ -1521,20 +1520,16 @@ contract OperatorTest is Test {
     // =========  ACCESS CONTROL TESTS ========= //
 
     /// DONE
-    /// [X] operate only callable by heart or guardian
+    /// [X] operate only callable by heart
     /// [X] admin configuration functions only callable by policy or guardian (negative here, positive in ADMIN TESTS sections)
 
-    function testCorrectness_onlyHeartOrGovernanceCanOperate() public {
+    function testCorrectness_onlyHeartCanOperate() public {
         /// Initialize operator
         vm.prank(guardian);
         operator.initialize();
 
         /// Call operate as heart contract
         vm.prank(heart);
-        operator.operate();
-
-        /// Call operate as governance
-        vm.prank(guardian);
         operator.operate();
 
         /// Try to call operate as anyone else
@@ -1549,7 +1544,7 @@ contract OperatorTest is Test {
 
     function testCorrectness_cannotOperatorIfNotInitialized() public {
         /// Toggle operator to active manually erroneously (so it will not revert with inactive)
-        vm.prank(guardian);
+        vm.prank(policy);
         operator.activate();
 
         /// Call operate as heart contract and expect to revert
@@ -1592,6 +1587,24 @@ contract OperatorTest is Test {
         vm.expectRevert(err);
         vm.prank(alice);
         operator.setRegenParams(uint32(1 days), uint32(8), uint32(11));
+
+        /// Try to set bond contracts as random user, expect revert
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.setBondContracts(IBondSDA(alice), BondCallback(alice));
+
+        /// Try to activate/deactivate the operator as random user, expect revert
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.activate();
+
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.deactivate();
+
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.deactivateCushion(true);
     }
 
     function testCorrectness_nonGuardianCannotCall() public {
@@ -1599,32 +1612,41 @@ contract OperatorTest is Test {
         vm.prank(guardian);
         operator.initialize();
 
-        /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
             bytes32("operator_admin")
         );
-        vm.expectRevert(err);
-        vm.prank(alice);
-        operator.setBondContracts(IBondSDA(alice), BondCallback(alice));
 
         /// Try to initialize as a random user, expect revert
         vm.expectRevert(err);
         vm.prank(alice);
         operator.initialize();
+
+        /// Try to regenerate as a random user, expect revert
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.regenerate(true);
+
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.regenerate(false);
     }
 
     // =========  ADMIN TESTS ========= //
 
     /// DONE
     /// [X] setSpreads
-    /// [X] setThresholdFactor (in Range.t.sol) TODO
+    /// [X] setThresholdFactor
     /// [X] setCushionFactor
     /// [X] setCushionParams
     /// [X] setReserveFactor
     /// [X] setRegenParams
     /// [X] setBondContracts
     /// [X] initialize
+    /// [X] regenerate
+    /// [X] activate
+    /// [X] deactivate
+    /// [X] deactivateCushion
 
     function testCorrectness_setSpreads() public {
         /// Initialize operator
@@ -1918,7 +1940,7 @@ contract OperatorTest is Test {
         /// Attempt to set bond contracts to zero address and expect revert
         bytes memory err = abi.encodeWithSignature("Operator_InvalidParams()");
         vm.expectRevert(err);
-        vm.prank(guardian);
+        vm.prank(policy);
         operator.setBondContracts(IBondSDA(address(0)), BondCallback(address(0)));
 
         /// Create new bond contracts
@@ -1926,7 +1948,7 @@ contract OperatorTest is Test {
         BondCallback newCb = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
         /// Update the bond contracts as guardian
-        vm.prank(guardian);
+        vm.prank(policy);
         operator.setBondContracts(IBondSDA(address(newSDA)), newCb);
 
         /// Check that the bond contracts have been set
@@ -2074,13 +2096,13 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Toggle the operator to inactive
-        vm.prank(guardian);
+        vm.prank(policy);
         operator.deactivate();
 
         /// Try to call operator, swap, and bondPurchase, expect reverts
         bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
         vm.expectRevert(err);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         vm.expectRevert(err);
@@ -2096,11 +2118,11 @@ contract OperatorTest is Test {
         operator.bondPurchase(0, 1e18);
 
         // Activate the operator again
-        vm.prank(guardian);
+        vm.prank(policy);
         operator.activate();
 
         /// Confirm that the operator is active
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         vm.prank(alice);
@@ -2122,7 +2144,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Get current market
@@ -2133,7 +2155,7 @@ contract OperatorTest is Test {
         assertTrue(auctioneer.isLive(currentMarket));
 
         /// Deactivate the operator
-        vm.prank(guardian);
+        vm.prank(policy);
         operator.deactivate();
 
         /// Check market has been updated and is not live
@@ -2141,14 +2163,14 @@ contract OperatorTest is Test {
         assertEq(type(uint256).max, range.market(true));
 
         /// Reactivate the operator
-        vm.prank(guardian);
+        vm.prank(policy);
         operator.activate();
 
         /// Set price on mock oracle into the low cushion
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Get current market
@@ -2159,7 +2181,7 @@ contract OperatorTest is Test {
         assertTrue(auctioneer.isLive(currentMarket));
 
         /// Deactivate the operator
-        vm.prank(guardian);
+        vm.prank(policy);
         operator.deactivate();
 
         /// Check market has been updated and is not live
@@ -2247,7 +2269,7 @@ contract OperatorTest is Test {
 
         /// Update moving average upwards and trigger the operator
         price.setMovingAverage(105 * 1e18);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the bands have updated
@@ -2258,7 +2280,7 @@ contract OperatorTest is Test {
 
         /// Update moving average downwards and trigger the operator
         price.setMovingAverage(95 * 1e18);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the bands have updated
