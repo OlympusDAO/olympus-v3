@@ -21,7 +21,7 @@ contract DistributorDeploy is Script {
     address public ohm;
     address public staking;
 
-    function deploy(address guardian_) external {
+    function deploy(address policy_) external {
         // Load addresses
         kernel = Kernel(vm.envAddress("KERNEL"));
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
@@ -42,7 +42,7 @@ contract DistributorDeploy is Script {
         /// Configure access control for policies
 
         /// Distributor roles
-        rolesAdmin.grantRole("distributor_admin", guardian_);
+        rolesAdmin.grantRole("distributor_admin", policy_);
 
         vm.stopBroadcast();
     }

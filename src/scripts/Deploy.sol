@@ -199,7 +199,7 @@ contract OlympusDeploy is Script {
         rolesAdmin.grantRole("custodian", guardian_);
 
         /// Distributor roles
-        rolesAdmin.grantRole("distributor_admin", guardian_);
+        rolesAdmin.grantRole("distributor_admin", policy_);
 
         // /// Transfer executor powers to INSTR
         // kernel.executeAction(Actions.ChangeExecutor, address(INSTR));
