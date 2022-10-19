@@ -194,6 +194,7 @@ contract OlympusDeploy is Script {
 
         /// PriceConfig roles
         rolesAdmin.grantRole("price_admin", guardian_);
+        rolesAdmin.grantRole("price_admin", policy_);
 
         /// TreasuryCustodian roles
         rolesAdmin.grantRole("custodian", guardian_);
