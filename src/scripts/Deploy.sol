@@ -190,7 +190,7 @@ contract OlympusDeploy is Script {
         rolesAdmin.grantRole("callback_admin", guardian_);
 
         /// Heart roles
-        rolesAdmin.grantRole("heart_admin", guardian_);
+        rolesAdmin.grantRole("heart_admin", policy_);
 
         /// PriceConfig roles
         rolesAdmin.grantRole("price_admin", guardian_);
