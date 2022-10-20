@@ -156,6 +156,7 @@ contract PriceConfigTest is Test {
     /// [X] initialize
     /// [X] change moving average duration
     /// [X] change observation frequency
+    /// [X] change price feed update thresholds
     /// [X] only authorized addresses can call admin functions
 
     function testCorrectness_initialize(uint8 nonce) public {
@@ -251,6 +252,43 @@ contract PriceConfigTest is Test {
         assertEq(price.observationFrequency(), uint48(12 hours));
     }
 
+    function testCorrectness_changeUpdateThresholds(uint8 nonce) public {
+        /// Initialize price module
+        uint256[] memory obs = getObs(nonce);
+        vm.prank(guardian);
+        priceConfig.initialize(obs, uint48(block.timestamp));
+
+        /// Check that the price feed errors after the existing update threshold is exceeded
+        uint48 startOhmEthThreshold = price.ohmEthUpdateThreshold();
+        vm.warp(block.timestamp + startOhmEthThreshold + 1);
+        vm.expectRevert(
+            abi.encodeWithSignature("Price_BadFeed(address)", address(ohmEthPriceFeed))
+        );
+        price.getCurrentPrice();
+
+        /// Roll back time
+        vm.warp(block.timestamp - startOhmEthThreshold - 1);
+
+        /// Change update thresholds to a different value (larger than current)
+        vm.prank(guardian);
+        priceConfig.changeUpdateThresholds(uint48(36 hours), uint48(36 hours));
+
+        /// Check that the update thresholds are updated correctly
+        assertEq(price.ohmEthUpdateThreshold(), uint48(36 hours));
+        assertEq(price.reserveEthUpdateThreshold(), uint48(36 hours));
+
+        /// Check that the price feed doesn't error at the old threshold
+        vm.warp(block.timestamp + startOhmEthThreshold + 1);
+        price.getCurrentPrice();
+
+        /// Roll time past new threshold
+        vm.warp(block.timestamp - startOhmEthThreshold + price.ohmEthUpdateThreshold());
+        vm.expectRevert(
+            abi.encodeWithSignature("Price_BadFeed(address)", address(ohmEthPriceFeed))
+        );
+        price.getCurrentPrice();
+    }
+
     function testCorrectness_onlyAuthorizedCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
         bytes memory err = abi.encodeWithSelector(
@@ -271,5 +309,9 @@ contract PriceConfigTest is Test {
         /// changeObservationFrequency
         vm.expectRevert(err);
         priceConfig.changeObservationFrequency(uint48(4 hours));
+
+        /// changeUpdateThresholds
+        vm.expectRevert(err);
+        priceConfig.changeUpdateThresholds(uint48(12 hours), uint48(12 hours));
     }
 }

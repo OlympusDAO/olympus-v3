@@ -186,20 +186,21 @@ contract OlympusDeploy is Script {
 
         /// Bond callback roles
         rolesAdmin.grantRole("callback_whitelist", address(operator));
-        rolesAdmin.grantRole("callback_whitelist", guardian_);
+        rolesAdmin.grantRole("callback_whitelist", policy_);
         rolesAdmin.grantRole("callback_admin", guardian_);
 
         /// Heart roles
-        rolesAdmin.grantRole("heart_admin", guardian_);
+        rolesAdmin.grantRole("heart_admin", policy_);
 
         /// PriceConfig roles
         rolesAdmin.grantRole("price_admin", guardian_);
+        rolesAdmin.grantRole("price_admin", policy_);
 
         /// TreasuryCustodian roles
         rolesAdmin.grantRole("custodian", guardian_);
 
         /// Distributor roles
-        rolesAdmin.grantRole("distributor_admin", guardian_);
+        rolesAdmin.grantRole("distributor_admin", policy_);
 
         // /// Transfer executor powers to INSTR
         // kernel.executeAction(Actions.ChangeExecutor, address(INSTR));

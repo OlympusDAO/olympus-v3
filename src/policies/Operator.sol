@@ -739,7 +739,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IOperator
     function setBondContracts(IBondSDA auctioneer_, IBondCallback callback_)
         external
-        onlyRole("operator_admin")
+        onlyRole("operator_policy")
     {
         if (address(auctioneer_) == address(0) || address(callback_) == address(0))
             revert Operator_InvalidParams();
@@ -775,12 +775,12 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function activate() external onlyRole("operator_admin") {
+    function activate() external onlyRole("operator_policy") {
         active = true;
     }
 
     /// @inheritdoc IOperator
-    function deactivate() external onlyRole("operator_admin") {
+    function deactivate() external onlyRole("operator_policy") {
         active = false;
         // Deactivate cushions
         _deactivate(true);
@@ -788,7 +788,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function deactivateCushion(bool high_) external onlyRole("operator_admin") {
+    function deactivateCushion(bool high_) external onlyRole("operator_policy") {
         // Manually deactivate a cushion
         _deactivate(high_);
     }

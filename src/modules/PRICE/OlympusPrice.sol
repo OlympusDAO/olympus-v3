@@ -55,6 +55,7 @@ contract OlympusPrice is PRICEv1 {
 
         emit MovingAverageDurationChanged(movingAverageDuration_);
         emit ObservationFrequencyChanged(observationFrequency_);
+        emit UpdateThresholdsChanged(ohmEthUpdateThreshold_, reserveEthUpdateThreshold_);
     }
 
     /// @inheritdoc Module
@@ -186,6 +187,16 @@ contract OlympusPrice is PRICEv1 {
         numObservations = uint32(newObservations);
 
         emit ObservationFrequencyChanged(observationFrequency_);
+    }
+
+    function changeUpdateThresholds(
+        uint48 ohmEthUpdateThreshold_,
+        uint48 reserveEthUpdateThreshold_
+    ) external override permissioned {
+        ohmEthUpdateThreshold = ohmEthUpdateThreshold_;
+        reserveEthUpdateThreshold = reserveEthUpdateThreshold_;
+
+        emit UpdateThresholdsChanged(ohmEthUpdateThreshold_, reserveEthUpdateThreshold_);
     }
 
     //============================================================================================//

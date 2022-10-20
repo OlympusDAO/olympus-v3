@@ -51,7 +51,6 @@ contract HeartTest is Test {
     UserFactory public userCreator;
     address internal alice;
     address internal bob;
-    address internal guardian;
     address internal policy;
 
     MockERC20 internal rewardToken;
@@ -68,11 +67,10 @@ contract HeartTest is Test {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
         {
-            address[] memory users = userCreator.create(5);
+            address[] memory users = userCreator.create(3);
             alice = users[0];
             bob = users[1];
-            guardian = users[2];
-            policy = users[3];
+            policy = users[2];
         }
         {
             /// Deploy token mocks
@@ -124,7 +122,7 @@ contract HeartTest is Test {
             /// Configure access control
 
             /// Heart roles
-            rolesAdmin.grantRole("heart_admin", guardian);
+            rolesAdmin.grantRole("heart_admin", policy);
         }
 
         {
@@ -161,7 +159,7 @@ contract HeartTest is Test {
 
     function testCorrectness_cannotBeatIfInactive() public {
         /// Set the heart to inactive
-        vm.prank(guardian);
+        vm.prank(policy);
         heart.deactivate();
 
         /// Try to beat the heart and expect revert
@@ -246,7 +244,7 @@ contract HeartTest is Test {
         heart.beat();
 
         /// Reset the beat so that it can be called without moving the time forward
-        vm.prank(guardian);
+        vm.prank(policy);
         heart.resetBeat();
 
         /// Store this contract's current reward token balance
@@ -267,7 +265,7 @@ contract HeartTest is Test {
         uint256 lastBeat = heart.lastBeat();
 
         /// Toggle the heart to make it inactive
-        vm.prank(guardian);
+        vm.prank(policy);
         heart.deactivate();
 
         /// Expect the heart to be inactive and lastBeat to remain the same
@@ -275,7 +273,7 @@ contract HeartTest is Test {
         assertEq(heart.lastBeat(), lastBeat);
 
         /// Toggle the heart to make it active again
-        vm.prank(guardian);
+        vm.prank(policy);
         heart.activate();
 
         /// Expect the heart to be active again and lastBeat to be reset
@@ -294,14 +292,14 @@ contract HeartTest is Test {
         /// Try to set new reward token and amount while a beat is available, expect to fail
         bytes memory err = abi.encodeWithSignature("Heart_BeatAvailable()");
         vm.expectRevert(err);
-        vm.prank(guardian);
+        vm.prank(policy);
         heart.setRewardTokenAndAmount(newToken, newReward);
 
         /// Beat the heart
         heart.beat();
 
-        /// Set a new reward token and amount from the guardian
-        vm.prank(guardian);
+        /// Set a new reward token and amount from the policy
+        vm.prank(policy);
         heart.setRewardTokenAndAmount(newToken, newReward);
 
         /// Expect the heart's reward token and reward to be updated
@@ -336,20 +334,20 @@ contract HeartTest is Test {
         /// Try to call while a beat is available, expect to fail
         bytes memory err = abi.encodeWithSignature("Heart_BeatAvailable()");
         vm.expectRevert(err);
-        vm.prank(guardian);
+        vm.prank(policy);
         heart.withdrawUnspentRewards(rewardToken);
 
         /// Beat the heart
         heart.beat();
 
         /// Get the balance of the reward token on the contract
-        uint256 startBalance = rewardToken.balanceOf(address(guardian));
+        uint256 startBalance = rewardToken.balanceOf(address(policy));
         uint256 heartBalance = rewardToken.balanceOf(address(heart));
 
         /// Withdraw the heart's unspent rewards
-        vm.prank(guardian);
+        vm.prank(policy);
         heart.withdrawUnspentRewards(rewardToken);
-        uint256 endBalance = rewardToken.balanceOf(address(guardian));
+        uint256 endBalance = rewardToken.balanceOf(address(policy));
 
         /// Expect the heart's reward token balance to be 0
         assertEq(rewardToken.balanceOf(address(heart)), uint256(0));
@@ -359,7 +357,7 @@ contract HeartTest is Test {
     }
 
     function testCorrectness_cannotCallAdminFunctionsWithoutPermissions() public {
-        /// Try to call admin functions on the heart as non-guardian and expect revert
+        /// Try to call admin functions on the heart as non-policy and expect revert
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
             bytes32("heart_admin")
