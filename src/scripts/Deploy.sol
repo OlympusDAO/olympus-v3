@@ -94,8 +94,8 @@ contract OlympusDeploy is Script {
         console2.log("Kernel deployed at:", address(kernel));
 
         /// Deploy modules
-        INSTR = new OlympusInstructions(kernel);
-        console2.log("Instructions module deployed at:", address(INSTR));
+        // INSTR = new OlympusInstructions(kernel);
+        // console2.log("Instructions module deployed at:", address(INSTR));
 
         TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury module deployed at:", address(TRSRY));
@@ -136,8 +136,8 @@ contract OlympusDeploy is Script {
                 uint32(4 hours), // cushionDepositInterval
                 uint32(1000), // reserveFactor
                 uint32(6 days), // regenWait
-                uint32(18), // regenThreshold // 18
-                uint32(21) // regenObserve    // 21
+                uint32(18), // regenThreshold
+                uint32(21) // regenObserve
             ] // TODO verify initial parameters
         );
         console2.log("Operator deployed at:", address(operator));
@@ -154,12 +154,12 @@ contract OlympusDeploy is Script {
         treasuryCustodian = new TreasuryCustodian(kernel);
         console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
 
-        distributor = new Distributor(kernel, address(ohm), staking, vm.envUint("REWARD_RATE")); // TODO verify reward rate
+        distributor = new Distributor(kernel, address(ohm), staking, vm.envUint("REWARD_RATE"));
         console2.log("Distributor deployed at:", address(distributor));
 
         /// Execute actions on Kernel
         /// Install modules
-        kernel.executeAction(Actions.InstallModule, address(INSTR));
+        // kernel.executeAction(Actions.InstallModule, address(INSTR));
         kernel.executeAction(Actions.InstallModule, address(PRICE));
         kernel.executeAction(Actions.InstallModule, address(RANGE));
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
@@ -202,8 +202,8 @@ contract OlympusDeploy is Script {
         /// Distributor roles
         rolesAdmin.grantRole("distributor_admin", policy_);
 
-        // /// Transfer executor powers to INSTR
-        // kernel.executeAction(Actions.ChangeExecutor, address(INSTR));
+        // /// Transfer executor powers to guardian
+        // kernel.executeAction(Actions.ChangeExecutor, guardian_);
 
         vm.stopBroadcast();
     }

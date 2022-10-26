@@ -4,11 +4,11 @@ source .env
 
 # Reset heart and call heart.beat()
 echo "Resetting the heart...";
-cast send --private-key=$GUARDIAN_PRIVATE_KEY --from=$GUARDIAN_ADDRESS --rpc-url=$RPC_URL --chain=$CHAIN $HEART "resetBeat()" > /dev/null;
+cast send --private-key=$POLICY_PRIVATE_KEY --from=$POLICY_ADDRESS --rpc-url=$RPC_URL --chain=$CHAIN $HEART "resetBeat()" > /dev/null;
 echo "Complete.";
 echo "";
 
 echo "Calling heart.beat()...";
-cast send --private-key=$GUARDIAN_PRIVATE_KEY --from=$GUARDIAN_ADDRESS --rpc-url=$RPC_URL --chain=$CHAIN $HEART "beat()" > /dev/null;
+cast send --private-key=$POLICY_PRIVATE_KEY --from=$POLICY_ADDRESS --rpc-url=$RPC_URL --chain=$CHAIN $HEART "beat()" > /dev/null;
 echo "Complete.";
 echo "";
