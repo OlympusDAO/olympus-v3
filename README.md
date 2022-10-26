@@ -25,26 +25,26 @@ Set up a foundry config in foundry.toml.
 
 ### Goerli Testnet
 
--   Kernel - [0x9E8eBfb1aC16B29f55DEa9B67C610a126AA2AAEd](https://goerli.etherscan.io/address/0x9E8eBfb1aC16B29f55DEa9B67C610a126AA2AAEd)
+-   Kernel - [0x7fDdf40f4Dbbd0B66dF26ea8Ba9d0b539d64c0b5](https://goerli.etherscan.io/address/0x7fDdf40f4Dbbd0B66dF26ea8Ba9d0b539d64c0b5)
 
 #### Modules
 
--   TRSRY - [0x4B253Ba186B76Ddb33C076bD6da27Ff6c2D6cDCf](https://goerli.etherscan.io/address/0x4B253Ba186B76Ddb33C076bD6da27Ff6c2D6cDCf)
--   MINTR - [0xC0Ad7066d848088B02efCB718A50bf967AbF4473](https://goerli.etherscan.io/address/0xC0Ad7066d848088B02efCB718A50bf967AbF4473)
--   PRICE - [0xBdeb1E1114AED0C13EE13df89a378F0ECa1A2518](https://goerli.etherscan.io/address/0xBdeb1E1114AED0C13EE13df89a378F0ECa1A2518)
--   RANGE - [0x923762c4BC5CbcB278907ee2e2207916938AF474](https://goerli.etherscan.io/address/0x923762c4BC5CbcB278907ee2e2207916938AF474)
--   INSTR - [0xc7Ca3CC84889053486298F52347C6563DaD33B5d](https://goerli.etherscan.io/address/0xc7Ca3CC84889053486298F52347C6563DaD33B5d)
--   ROLES - [0x1acd5097593A6F398EF07E52C0627d91c8D2d3ed](https://goerli.etherscan.io/address/0x1acd5097593A6F398EF07E52C0627d91c8D2d3ed)
+-   TRSRY - [0x91F9EE2074C2dC3B50d5242d0518AFE77938Cc87](https://goerli.etherscan.io/address/0x91F9EE2074C2dC3B50d5242d0518AFE77938Cc87)
+-   MINTR - [0x437B9093d74a5ad6416c6F655929C34785a6d338](https://goerli.etherscan.io/address/0x437B9093d74a5ad6416c6F655929C34785a6d338)
+-   PRICE - [0x6d39cDfa180974c5e1ac6FD325A1718F2Fd4412f](https://goerli.etherscan.io/address/0x6d39cDfa180974c5e1ac6FD325A1718F2Fd4412f)
+-   RANGE - [0x9ECDA630626a3aa9EF24A53c4Faca1Ce76a1A508](https://goerli.etherscan.io/address/0x9ECDA630626a3aa9EF24A53c4Faca1Ce76a1A508)
+-   INSTR - [0x7FB14e84c89F5bd93d3aB633C05d299eAD2455B2](https://goerli.etherscan.io/address/0x7FB14e84c89F5bd93d3aB633C05d299eAD2455B2)
+-   ROLES - [0xf588E6028Aa49313ecDE72b3CeC3Fd0C5BE50F99](https://goerli.etherscan.io/address/0xf588E6028Aa49313ecDE72b3CeC3Fd0C5BE50F99)
 
 #### Policies
 
--   BondCallback - [0xF75dEBAa512EEE4217533Ca3FaF61950A60d7d0e](https://goerli.etherscan.io/address/0xF75dEBAa512EEE4217533Ca3FaF61950A60d7d0e)
--   Heart - [0x08B41de3647Ae02D5749814411314C32E1854d19](https://goerli.etherscan.io/address/0x08B41de3647Ae02D5749814411314C32E1854d19)
--   Operator - [0x3b01DAE0C0c24366FE9dEc2A93ae44d586B7afD6](https://goerli.etherscan.io/address/0x3b01DAE0C0c24366FE9dEc2A93ae44d586B7afD6)
--   PriceConfig - [0x9E56edDd1D6F22047AcD722A185a2C66963C8d2F](https://goerli.etherscan.io/address/0x9E56edDd1D6F22047AcD722A185a2C66963C8d2F)
--   TreasuryCustodian - [0x7BDA8f77af66aec12aB4D69342512C9D36B70cDe](https://goerli.etherscan.io/address/0x7BDA8f77af66aec12aB4D69342512C9D36B70cDe)
--   Distributor - [0x1F3417581C6a5E6F680b22fec85E57B457a6A794](https://goerli.etherscan.io/address/0x1F3417581C6a5E6F680b22fec85E57B457a6A794)
--   RolesAdmin - [0xF9a3420DbD332a609f9b7f091dd38fd58f73E9a6](https://goerli.etherscan.io/address/0xF9a3420DbD332a609f9b7f091dd38fd58f73E9a6)
+-   BondCallback - [0xaBe5A8c818f7EA6fC4c2Ea2308E2B1ecd5b8f003](https://goerli.etherscan.io/address/0xaBe5A8c818f7EA6fC4c2Ea2308E2B1ecd5b8f003)
+-   Heart - [0x699C3d1DbCF524506dd98aC483F78C9Ba0B5D1dE](https://goerli.etherscan.io/address/0x699C3d1DbCF524506dd98aC483F78C9Ba0B5D1dE)
+-   Operator - [0x4099dACb7292138FA7d4C0e07Ff36930593D92a4](https://goerli.etherscan.io/address/0x4099dACb7292138FA7d4C0e07Ff36930593D92a4)
+-   PriceConfig - [0x00e2A89ec10473FA5FDfF0a2EBB16eCE4D480777](https://goerli.etherscan.io/address/0x00e2A89ec10473FA5FDfF0a2EBB16eCE4D480777)
+-   TreasuryCustodian - [0x5dC1B63A675365a00154FDD3B17C89b3491257f8](https://goerli.etherscan.io/address/0x5dC1B63A675365a00154FDD3B17C89b3491257f8)
+-   Distributor - [0x65dDa32eafC1a0db338e302ffa4a714FbD82c4cD](https://goerli.etherscan.io/address/0x65dDa32eafC1a0db338e302ffa4a714FbD82c4cD)
+-   RolesAdmin - [0xDa08D1dA7CcC756cfB62997c61C93Dd11b19e4F2](https://goerli.etherscan.io/address/0xDa08D1dA7CcC756cfB62997c61C93Dd11b19e4F2)
 -   Faucet (Testnet only) - [0xA247156a39169c0FAFf979F57361CC734e82e3d0](https://goerli.etherscan.io/address/0xA247156a39169c0FAFf979F57361CC734e82e3d0)
 
 #### Dependencies
