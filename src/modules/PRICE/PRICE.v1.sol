@@ -15,6 +15,7 @@ abstract contract PRICEv1 is Module {
     event NewObservation(uint256 timestamp_, uint256 price_, uint256 movingAverage_);
     event MovingAverageDurationChanged(uint48 movingAverageDuration_);
     event ObservationFrequencyChanged(uint48 observationFrequency_);
+    event UpdateThresholdsChanged(uint48 ohmEthUpdateThreshold_, uint48 reserveEthUpdateThreshold_);
 
     // =========  ERRORS ========= //
 
@@ -99,6 +100,15 @@ abstract contract PRICEv1 is Module {
     /// @dev      Changing the observation frequency clears existing observation data since it will not be taken at the right time intervals.
     ///           Ensure that you have saved the existing data and/or can re-populate before calling this function.
     function changeObservationFrequency(uint48 observationFrequency_) external virtual;
+
+    /// @notice   Change the update thresholds for the price feeds
+    /// @param    ohmEthUpdateThreshold_ - Maximum allowed time between OHM/ETH price feed updates
+    /// @param    reserveEthUpdateThreshold_ - Maximum allowed time between Reserve/ETH price feed updates
+    /// @dev      The update thresholds should be set based on the update threshold of the chainlink oracles.
+    function changeUpdateThresholds(
+        uint48 ohmEthUpdateThreshold_,
+        uint48 reserveEthUpdateThreshold_
+    ) external virtual;
 
     /// @notice Get the current price of OHM in the Reserve asset from the price feeds
     function getCurrentPrice() external view virtual returns (uint256);

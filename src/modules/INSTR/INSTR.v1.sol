@@ -12,7 +12,7 @@ abstract contract INSTRv1 is Module {
     // =========  ERRORS ========= //
 
     error INSTR_InstructionsCannotBeEmpty();
-    error INSTR_InvalidChangeExecutorAction();
+    error INSTR_InvalidAction();
 
     // =========  STATE ========= //
 

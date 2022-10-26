@@ -35,10 +35,11 @@ contract OlympusPriceConfig is Policy, RolesConsumer {
     {
         Keycode PRICE_KEYCODE = PRICE.KEYCODE();
 
-        permissions = new Permissions[](3);
+        permissions = new Permissions[](4);
         permissions[0] = Permissions(PRICE_KEYCODE, PRICE.initialize.selector);
         permissions[1] = Permissions(PRICE_KEYCODE, PRICE.changeMovingAverageDuration.selector);
         permissions[2] = Permissions(PRICE_KEYCODE, PRICE.changeObservationFrequency.selector);
+        permissions[3] = Permissions(PRICE_KEYCODE, PRICE.changeUpdateThresholds.selector);
     }
 
     //============================================================================================//
@@ -80,5 +81,16 @@ contract OlympusPriceConfig is Policy, RolesConsumer {
         onlyRole("price_admin")
     {
         PRICE.changeObservationFrequency(observationFrequency_);
+    }
+
+    /// @notice   Change the update thresholds for the price feeds
+    /// @param    ohmEthUpdateThreshold_ - Maximum allowed time between OHM/ETH price feed updates
+    /// @param    reserveEthUpdateThreshold_ - Maximum allowed time between Reserve/ETH price feed updates
+    /// @dev      The update thresholds should be set based on the update threshold of the chainlink oracles.
+    function changeUpdateThresholds(
+        uint48 ohmEthUpdateThreshold_,
+        uint48 reserveEthUpdateThreshold_
+    ) external onlyRole("price_admin") {
+        PRICE.changeUpdateThresholds(ohmEthUpdateThreshold_, reserveEthUpdateThreshold_);
     }
 }

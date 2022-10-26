@@ -54,13 +54,20 @@ contract InstructionsTest is Test {
         instr.store(instructions);
     }
 
-    function testRevert_InvalidChangeExecutorAction() public {
+    function testRevert_InvalidAction() public {
         // create invalid instructions
         Instruction[] memory instructions = new Instruction[](2);
-        instructions[0] = Instruction(Actions.ChangeExecutor, address(governance));
+        instructions[0] = Instruction(Actions.MigrateKernel, address(governance));
         instructions[1] = Instruction(Actions.ActivatePolicy, address(governance));
 
-        vm.expectRevert(INSTRv1.INSTR_InvalidChangeExecutorAction.selector);
+        vm.expectRevert(INSTRv1.INSTR_InvalidAction.selector);
+        vm.prank(writer);
+        instr.store(instructions);
+
+        // Change to first action to MigrateKernel to test if it reverts
+        instructions[0] = Instruction(Actions.MigrateKernel, address(governance));
+
+        vm.expectRevert(INSTRv1.INSTR_InvalidAction.selector);
         vm.prank(writer);
         instr.store(instructions);
     }

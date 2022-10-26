@@ -62,6 +62,8 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         ERC20 token_,
         uint256 amount_
     ) public override {
+        if (amount_ == 0) revert TRSRY_ZeroAmount();
+
         uint256 approval = withdrawApproval[msg.sender][token_];
         if (approval < amount_) revert TRSRY_NotApproved();
 

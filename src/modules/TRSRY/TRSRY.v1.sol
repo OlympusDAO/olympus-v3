@@ -32,6 +32,7 @@ abstract contract TRSRYv1 is Module {
 
     // =========  ERRORS ========= //
 
+    error TRSRY_ZeroAmount();
     error TRSRY_NotApproved();
     error TRSRY_NoDebtOutstanding();
 

@@ -62,13 +62,16 @@ contract OlympusInstructions is INSTRv1 {
             ) {
                 Module module = Module(instruction.target);
                 ensureValidKeycode(module.KEYCODE());
-            } else if (instruction.action == Actions.ChangeExecutor && i != length - 1) {
-                // Throw an error if ChangeExecutor exists and is not the last Action in the instruction list.
-                // This exists because if ChangeExecutor is not the last item in the list of instructions,
+            } else if (
+                (instruction.action == Actions.ChangeExecutor ||
+                    instruction.action == Actions.MigrateKernel) && i != length - 1
+            ) {
+                // Throw an error if ChangeExecutor or MigrateKernel exists and are not the last Action in the instruction list.
+                // This exists because if ChangeExecutor or MigrateKernel are not the last item in the list of instructions,
                 // the Kernel will not recognize any of the following instructions as valid, since the policy
                 // executing the list of instructions no longer has permissions in the Kernel. To avoid this issue
                 // and prevent invalid proposals from being saved, we perform this check.
-                revert INSTR_InvalidChangeExecutorAction();
+                revert INSTR_InvalidAction();
             }
 
             instructions.push(instructions_[i]);
