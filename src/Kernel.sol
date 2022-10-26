@@ -124,14 +124,11 @@ abstract contract Module is KernelAdapter {
 abstract contract Policy is KernelAdapter {
     error Policy_ModuleDoesNotExist(Keycode keycode_);
 
-    /// @notice Denote if a policy is activated or not.
-    bool public isActive;
-
     constructor(Kernel kernel_) KernelAdapter(kernel_) {}
 
-    /// @notice Function to let kernel grant or revoke active status.
-    function setActiveStatus(bool activate_) external onlyKernel {
-        isActive = activate_;
+    /// @notice Easily accessible indicator for if a policy is activated or not.
+    function isActive() external view returns (bool) {
+        return kernel.isPolicyActive(this);
     }
 
     /// @notice Function to grab module address from a given keycode.
@@ -220,6 +217,10 @@ contract Kernel {
         _;
     }
 
+    function isPolicyActive(Policy policy_) public view returns (bool) {
+        return activePolicies.length > 0 && activePolicies[getPolicyIndex[policy_]] == policy_;
+    }
+
     /// @notice Main kernel function. Initiates state changes to kernel depending on Action passed in.
     function executeAction(Actions action_, address target_) external onlyExecutor {
         if (action_ == Actions.InstallModule) {
@@ -276,8 +277,7 @@ contract Kernel {
     }
 
     function _activatePolicy(Policy policy_) internal {
-        if (policy_.isActive() && activePolicies[getPolicyIndex[policy_]] == policy_)
-            revert Kernel_PolicyAlreadyActivated(address(policy_));
+        if (isPolicyActive(policy_)) revert Kernel_PolicyAlreadyActivated(address(policy_));
 
         // Add policy to list of active policies
         activePolicies.push(policy_);
@@ -301,14 +301,10 @@ contract Kernel {
         // Grant permissions for policy to access restricted module functions
         Permissions[] memory requests = policy_.requestPermissions();
         _setPolicyPermissions(policy_, requests, true);
-
-        // Set policy status to active
-        policy_.setActiveStatus(true);
     }
 
     function _deactivatePolicy(Policy policy_) internal {
-        if (!policy_.isActive() && activePolicies[getPolicyIndex[policy_]] != policy_)
-            revert Kernel_PolicyNotActivated(address(policy_));
+        if (!isPolicyActive(policy_)) revert Kernel_PolicyNotActivated(address(policy_));
 
         // Revoke permissions
         Permissions[] memory requests = policy_.requestPermissions();
@@ -325,9 +321,6 @@ contract Kernel {
 
         // Remove policy from module dependents
         _pruneFromDependents(policy_);
-
-        // Set policy status to inactive
-        policy_.setActiveStatus(false);
     }
 
     /// @notice All functionality will move to the new kernel. WARNING: ACTION WILL BRICK THIS KERNEL.
@@ -348,7 +341,6 @@ contract Kernel {
             Policy policy = activePolicies[j];
 
             // Deactivate before changing kernel
-            policy.setActiveStatus(false);
             policy.changeKernel(newKernel_);
             unchecked {
                 ++j;

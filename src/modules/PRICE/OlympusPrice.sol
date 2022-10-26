@@ -55,6 +55,7 @@ contract OlympusPrice is PRICEv1 {
 
         emit MovingAverageDurationChanged(movingAverageDuration_);
         emit ObservationFrequencyChanged(observationFrequency_);
+        emit UpdateThresholdsChanged(ohmEthUpdateThreshold_, reserveEthUpdateThreshold_);
     }
 
     /// @inheritdoc Module
@@ -188,6 +189,16 @@ contract OlympusPrice is PRICEv1 {
         emit ObservationFrequencyChanged(observationFrequency_);
     }
 
+    function changeUpdateThresholds(
+        uint48 ohmEthUpdateThreshold_,
+        uint48 reserveEthUpdateThreshold_
+    ) external override permissioned {
+        ohmEthUpdateThreshold = ohmEthUpdateThreshold_;
+        reserveEthUpdateThreshold = reserveEthUpdateThreshold_;
+
+        emit UpdateThresholdsChanged(ohmEthUpdateThreshold_, reserveEthUpdateThreshold_);
+    }
+
     //============================================================================================//
     //                                      VIEW FUNCTIONS                                        //
     //============================================================================================//
@@ -215,7 +226,7 @@ contract OlympusPrice is PRICEv1 {
             if (
                 ohmEthPriceInt <= 0 ||
                 updatedAt < block.timestamp - uint256(ohmEthUpdateThreshold) ||
-                answeredInRound < roundId
+                answeredInRound != roundId
             ) revert Price_BadFeed(address(ohmEthPriceFeed));
             ohmEthPrice = uint256(ohmEthPriceInt);
 
@@ -225,7 +236,7 @@ contract OlympusPrice is PRICEv1 {
             if (
                 reserveEthPriceInt <= 0 ||
                 updatedAt < block.timestamp - uint256(reserveEthUpdateThreshold) ||
-                answeredInRound < roundId
+                answeredInRound != roundId
             ) revert Price_BadFeed(address(reserveEthPriceFeed));
             reserveEthPrice = uint256(reserveEthPriceInt);
         }

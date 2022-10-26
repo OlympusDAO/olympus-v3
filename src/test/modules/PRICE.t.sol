@@ -372,6 +372,7 @@ contract PriceTest is Test {
     /// [X] cannot change moving average duration with invalid params
     /// [X] change observation frequency
     /// [X] cannot change observation frequency with invalid params
+    /// [ ] change price feed update thresholds
 
     function testCorrectness_initialize(uint8 nonce) public {
         /// Check that the module is not initialized
@@ -523,6 +524,41 @@ contract PriceTest is Test {
         vm.expectRevert(err);
         price.changeObservationFrequency(uint48(23 hours));
         vm.stopPrank();
+    }
+
+    function testCorrectness_changeUpdateThresholds(uint8 nonce) public {
+        /// Initialize price module
+        initializePrice(nonce);
+
+        /// Check that the price feed errors after the existing update threshold is exceeded
+        uint48 startOhmEthThreshold = price.ohmEthUpdateThreshold();
+        vm.warp(block.timestamp + startOhmEthThreshold + 1);
+        vm.expectRevert(
+            abi.encodeWithSignature("Price_BadFeed(address)", address(ohmEthPriceFeed))
+        );
+        price.getCurrentPrice();
+
+        /// Roll back time
+        vm.warp(block.timestamp - startOhmEthThreshold - 1);
+
+        /// Change update thresholds to a different value (larger than current)
+        vm.prank(writer);
+        price.changeUpdateThresholds(uint48(36 hours), uint48(36 hours));
+
+        /// Check that the update thresholds are updated correctly
+        assertEq(price.ohmEthUpdateThreshold(), uint48(36 hours));
+        assertEq(price.reserveEthUpdateThreshold(), uint48(36 hours));
+
+        /// Check that the price feed doesn't error at the old threshold
+        vm.warp(block.timestamp + startOhmEthThreshold + 1);
+        price.getCurrentPrice();
+
+        /// Roll time past new threshold
+        vm.warp(block.timestamp - startOhmEthThreshold + price.ohmEthUpdateThreshold());
+        vm.expectRevert(
+            abi.encodeWithSignature("Price_BadFeed(address)", address(ohmEthPriceFeed))
+        );
+        price.getCurrentPrice();
     }
 
     function testCorrectness_onlyPermittedPoliciesCanCallAdminFunctions() public {

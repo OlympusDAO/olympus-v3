@@ -96,6 +96,9 @@ contract TRSRYTest is Test {
 
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), amount_);
 
+        // Test for revert on 0 withdrawal
+        if (amount_ == 0) vm.expectRevert(TRSRYv1.TRSRY_ZeroAmount.selector);
+
         vm.prank(testUser);
         TRSRY.withdrawReserves(address(this), ngmi, amount_);
 

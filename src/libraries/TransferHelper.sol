@@ -4,8 +4,7 @@ pragma solidity >=0.8.0;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @notice Safe ERC20 and ETH transfer library that safely handles missing return values.
-/// @author Modified from Uniswap (https://github.com/Uniswap/uniswap-v3-periphery/blob/main/contracts/libraries/TransferHelper.sol)
-/// @author Taken from Solmate.
+/// @author Modified from Uniswap & old Solmate (https://github.com/Uniswap/uniswap-v3-periphery/blob/main/contracts/libraries/TransferHelper.sol)
 library TransferHelper {
     function safeTransferFrom(
         ERC20 token,
@@ -13,18 +12,11 @@ library TransferHelper {
         address to,
         uint256 amount
     ) internal {
-        require(address(token).code.length > 0, "TRANSFER_FAILED");
-
         (bool success, bytes memory data) = address(token).call(
             abi.encodeWithSelector(ERC20.transferFrom.selector, from, to, amount)
         );
 
-        require(
-            success &&
-                (data.length == 0 || abi.decode(data, (bool))) &&
-                address(token).code.length > 0,
-            "TRANSFER_FROM_FAILED"
-        );
+        require(success && (data.length == 0 || abi.decode(data, (bool))), "TRANSFER_FROM_FAILED");
     }
 
     function safeTransfer(
@@ -32,8 +24,6 @@ library TransferHelper {
         address to,
         uint256 amount
     ) internal {
-        require(address(token).code.length > 0, "TRANSFER_FAILED");
-
         (bool success, bytes memory data) = address(token).call(
             abi.encodeWithSelector(ERC20.transfer.selector, to, amount)
         );
@@ -46,8 +36,6 @@ library TransferHelper {
         address to,
         uint256 amount
     ) internal {
-        require(address(token).code.length > 0, "TRANSFER_FAILED");
-
         (bool success, bytes memory data) = address(token).call(
             abi.encodeWithSelector(ERC20.approve.selector, to, amount)
         );
