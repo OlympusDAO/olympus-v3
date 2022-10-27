@@ -231,6 +231,45 @@ contract OlympusDeploy is Script {
         /// Stop broadcasting
         vm.stopBroadcast();
     }
+
+    /// @dev should be called by the deployer address after deployment
+    function verifyAndPushAuth(address guardian_, address policy_) external {
+        ROLES = OlympusRoles(vm.envAddress("ROLES"));
+        heart = OlympusHeart(vm.envAddress("HEART"));
+        callback = BondCallback(vm.envAddress("CALLBACK"));
+        operator = Operator(vm.envAddress("OPERATOR"));
+        rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
+        kernel = Kernel(vm.envAddress("KERNEL"));
+
+        /// Operator Roles
+        require(ROLES.hasRole(address(heart), "operator_operate"));
+        require(ROLES.hasRole(guardian_, "operator_operate"));
+        require(ROLES.hasRole(address(callback), "operator_reporter"));
+        require(ROLES.hasRole(policy_, "operator_policy"));
+        require(ROLES.hasRole(guardian_, "operator_admin"));
+
+        /// Callback Roles
+        require(ROLES.hasRole(address(operator), "callback_whitelist"));
+        require(ROLES.hasRole(policy_, "callback_whitelist"));
+        require(ROLES.hasRole(guardian_, "callback_admin"));
+
+        /// Heart Roles
+        require(ROLES.hasRole(policy_, "heart_admin"));
+
+        /// PriceConfig Roles
+        require(ROLES.hasRole(guardian_, "price_admin"));
+        require(ROLES.hasRole(policy_, "price_admin"));
+
+        /// TreasuryCustodian Roles
+        require(ROLES.hasRole(guardian_, "custodian"));
+
+        /// Distributor Roles
+        require(ROLES.hasRole(policy_, "distributor_admin"));
+
+        /// Push rolesAdmin and Executor
+        rolesAdmin.pushNewAdmin(guardian_);
+        kernel.executeAction(Actions.ChangeExecutor, guardian_);
+    }
 }
 
 contract DependencyDeploy is Script {
