@@ -242,7 +242,6 @@ contract OlympusDeploy is Script {
         RANGE = OlympusRange(vm.envAddress("RANGE"));
         TRSRY = OlympusTreasury(vm.envAddress("TRSRY"));
         MINTR = OlympusMinter(vm.envAddress("MINTR"));
-        INSTR = OlympusInstructions(vm.envAddress("INSTR"));
         ROLES = OlympusRoles(vm.envAddress("ROLES"));
 
         /// Policies
@@ -278,12 +277,6 @@ contract OlympusDeploy is Script {
         Keycode mintrKeycode = kernel.getKeycodeForModule(MINTR);
         require(mintrModule == MINTR);
         require(fromKeycode(mintrKeycode) == "MINTR");
-
-        /// INSTR
-        Module instrModule = kernel.getModuleForKeycode(toKeycode("INSTR"));
-        Keycode instrKeycode = kernel.getKeycodeForModule(INSTR);
-        require(instrModule == INSTR);
-        require(fromKeycode(instrKeycode) == "INSTR");
 
         /// ROLES
         Module rolesModule = kernel.getModuleForKeycode(toKeycode("ROLES"));
@@ -337,8 +330,10 @@ contract OlympusDeploy is Script {
         require(ROLES.hasRole(policy_, "distributor_admin"));
 
         /// Push rolesAdmin and Executor
+        vm.startBroadcast();
         rolesAdmin.pushNewAdmin(guardian_);
         kernel.executeAction(Actions.ChangeExecutor, guardian_);
+        vm.stopBroadcast();
     }
 }
 
