@@ -208,4 +208,9 @@ contract Distributor is Policy, RolesConsumer {
     function setRewardRate(uint256 newRewardRate_) external onlyRole("distributor_admin") {
         rewardRate = newRewardRate_;
     }
+
+    /// @notice Increases the distributor's minting permissions
+    function increaseMinterApproval(uint256 amount_) external onlyRole("distributor_admin") {
+        MINTR.increaseMinterApproval(address(this), amount_);
+    }
 }
