@@ -40,6 +40,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         ERC20 token_,
         uint256 amount_
     ) external override permissioned {
+        // TODO discuss if adding the overflow checks as in MINTR makes sense
         uint256 newAmount = withdrawApproval[withdrawer_][token_] + amount_;
         withdrawApproval[withdrawer_][token_] = newAmount;
         emit IncreaseWithdrawerApproval(withdrawer_, token_, newAmount);
@@ -51,6 +52,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         ERC20 token_,
         uint256 amount_
     ) external override permissioned {
+        // TODO discuss if adding the underflow checks as in MINTR makes sense
         uint256 newAmount = withdrawApproval[withdrawer_][token_] - amount_;
         withdrawApproval[withdrawer_][token_] = newAmount;
         emit DecreaseWithdrawerApproval(withdrawer_, token_, newAmount);
