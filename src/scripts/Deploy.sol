@@ -232,7 +232,8 @@ contract OlympusDeploy is Script {
         vm.stopBroadcast();
     }
 
-    /// @dev Should be called immediately after deployment
+    /// @dev Verifies that the environment variable addresses were set correctly following deployment
+    /// @dev Should be called prior to verifyAndPushAuth()
     function verifyKernelInstallation() external {
         kernel = Kernel(vm.envAddress("KERNEL"));
 
@@ -250,7 +251,7 @@ contract OlympusDeploy is Script {
         callback = BondCallback(vm.envAddress("CALLBACK"));
         priceConfig = OlympusPriceConfig(vm.envAddress("PRICECONFIG"));
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
-        treasuryCustodian = TreasuryCustodian(vm.envAddress("TREASURYCUSTODIAN"));
+        treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
         distributor = Distributor(vm.envAddress("DISTRIBUTOR"));
 
         /// Check that Modules are installed
