@@ -232,7 +232,77 @@ contract OlympusDeploy is Script {
         vm.stopBroadcast();
     }
 
-    /// @dev should be called by the deployer address after deployment
+    /// @dev Verifies that the environment variable addresses were set correctly following deployment
+    /// @dev Should be called prior to verifyAndPushAuth()
+    function verifyKernelInstallation() external {
+        kernel = Kernel(vm.envAddress("KERNEL"));
+
+        /// Modules
+        PRICE = OlympusPrice(vm.envAddress("PRICE"));
+        RANGE = OlympusRange(vm.envAddress("RANGE"));
+        TRSRY = OlympusTreasury(vm.envAddress("TRSRY"));
+        MINTR = OlympusMinter(vm.envAddress("MINTR"));
+        INSTR = OlympusInstructions(vm.envAddress("INSTR"));
+        ROLES = OlympusRoles(vm.envAddress("ROLES"));
+
+        /// Policies
+        operator = Operator(vm.envAddress("OPERATOR"));
+        heart = OlympusHeart(vm.envAddress("HEART"));
+        callback = BondCallback(vm.envAddress("CALLBACK"));
+        priceConfig = OlympusPriceConfig(vm.envAddress("PRICECONFIG"));
+        rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
+        treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
+        distributor = Distributor(vm.envAddress("DISTRIBUTOR"));
+
+        /// Check that Modules are installed
+        /// PRICE
+        Module priceModule = kernel.getModuleForKeycode(toKeycode("PRICE"));
+        Keycode priceKeycode = kernel.getKeycodeForModule(PRICE);
+        require(priceModule == PRICE);
+        require(fromKeycode(priceKeycode) == "PRICE");
+
+        /// RANGE
+        Module rangeModule = kernel.getModuleForKeycode(toKeycode("RANGE"));
+        Keycode rangeKeycode = kernel.getKeycodeForModule(RANGE);
+        require(rangeModule == RANGE);
+        require(fromKeycode(rangeKeycode) == "RANGE");
+
+        /// TRSRY
+        Module trsryModule = kernel.getModuleForKeycode(toKeycode("TRSRY"));
+        Keycode trsryKeycode = kernel.getKeycodeForModule(TRSRY);
+        require(trsryModule == TRSRY);
+        require(fromKeycode(trsryKeycode) == "TRSRY");
+
+        /// MINTR
+        Module mintrModule = kernel.getModuleForKeycode(toKeycode("MINTR"));
+        Keycode mintrKeycode = kernel.getKeycodeForModule(MINTR);
+        require(mintrModule == MINTR);
+        require(fromKeycode(mintrKeycode) == "MINTR");
+
+        /// INSTR
+        Module instrModule = kernel.getModuleForKeycode(toKeycode("INSTR"));
+        Keycode instrKeycode = kernel.getKeycodeForModule(INSTR);
+        require(instrModule == INSTR);
+        require(fromKeycode(instrKeycode) == "INSTR");
+
+        /// ROLES
+        Module rolesModule = kernel.getModuleForKeycode(toKeycode("ROLES"));
+        Keycode rolesKeycode = kernel.getKeycodeForModule(ROLES);
+        require(rolesModule == ROLES);
+        require(fromKeycode(rolesKeycode) == "ROLES");
+
+        /// Policies
+        /// Operator
+        require(kernel.isPolicyActive(operator));
+        require(kernel.isPolicyActive(heart));
+        require(kernel.isPolicyActive(callback));
+        require(kernel.isPolicyActive(priceConfig));
+        require(kernel.isPolicyActive(rolesAdmin));
+        require(kernel.isPolicyActive(treasuryCustodian));
+        require(kernel.isPolicyActive(distributor));
+    }
+
+    /// @dev Should be called by the deployer address after deployment
     function verifyAndPushAuth(address guardian_, address policy_) external {
         ROLES = OlympusRoles(vm.envAddress("ROLES"));
         heart = OlympusHeart(vm.envAddress("HEART"));
