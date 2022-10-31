@@ -186,7 +186,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        requests = new Permissions[](9);
+        requests = new Permissions[](12);
         requests[0] = Permissions(RANGE_KEYCODE, RANGE.updateCapacity.selector);
         requests[1] = Permissions(RANGE_KEYCODE, RANGE.updateMarket.selector);
         requests[2] = Permissions(RANGE_KEYCODE, RANGE.updatePrices.selector);
@@ -194,8 +194,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         requests[4] = Permissions(RANGE_KEYCODE, RANGE.setSpreads.selector);
         requests[5] = Permissions(RANGE_KEYCODE, RANGE.setThresholdFactor.selector);
         requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
-        requests[7] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        requests[8] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[7] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawerApproval.selector);
+        requests[8] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[9] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[10] = Permissions(MINTR_KEYCODE, MINTR.increaseMinterApproval.selector);
+        requests[11] = Permissions(MINTR_KEYCODE, MINTR.decreaseMinterApproval.selector);
     }
 
     //============================================================================================//
@@ -603,6 +606,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Calculate capacity
             uint256 capacity = fullCapacity(true);
 
+            // Get approval from MINTR to mint OHM up to the capacity
+            // If current approval is higher thn the capacity, reduce it
+            uint256 currentApproval = MINTR.mintApproval(address(this));
+            if (currentApproval < capacity) {
+                MINTR.increaseMinterApproval(address(this), capacity - currentApproval);
+            } else if (currentApproval > capacity) {
+                MINTR.decreaseMinterApproval(address(this), currentApproval - capacity);
+            }
+
             // Regenerate the side with the capacity
             RANGE.regenerate(true, capacity);
         } else {
@@ -614,6 +626,23 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
             // Calculate capacity
             uint256 capacity = fullCapacity(false);
+
+            // Get approval from the TRSRY to withdraw up to the capacity in reserves
+            // If current approval is higher thn the capacity, reduce it
+            uint256 currentApproval = TRSRY.withdrawApproval(address(this), reserve);
+            if (currentApproval < capacity) {
+                TRSRY.increaseWithdrawerApproval(
+                    address(this),
+                    reserve,
+                    capacity - currentApproval
+                );
+            } else if (currentApproval > capacity) {
+                TRSRY.decreaseWithdrawerApproval(
+                    address(this),
+                    reserve,
+                    currentApproval - capacity
+                );
+            }
 
             // Regenerate the side with the capacity
             RANGE.regenerate(false, capacity);
@@ -752,9 +781,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     function initialize() external onlyRole("operator_admin") {
         // Can only call once
         if (initialized) revert Operator_AlreadyInitialized();
-
-        // Request approval for reserves from TRSRY
-        TRSRY.increaseWithdrawerApproval(address(this), reserve, type(uint256).max);
 
         // Update range prices (wall and cushion)
         _updateRangePrices();
