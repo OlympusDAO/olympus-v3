@@ -16,10 +16,12 @@ import {Operator} from "policies/Operator.sol";
 import "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
+import {FullMath} from "libraries/FullMath.sol";
 
 /// @title Olympus Bond Callback
 contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     using TransferHelper for ERC20;
+    using FullMath for uint256;
 
     // =========  ERRORS ========= //
 
@@ -86,17 +88,27 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IBondCallback
-    function whitelist(uint256 id_) external override onlyRole("callback_whitelist") {
-        // Get teller from the bond aggregator
-        address teller = address(aggregator.getTeller(id_));
+    function whitelist(address teller_, uint256 id_)
+        external
+        override
+        onlyRole("callback_whitelist")
+    {
+        // Check that the teller matches the aggregator provided teller for the market ID
+        if (teller_ != address(aggregator.getTeller(id_))) revert Callback_InvalidParams();
 
         // Whitelist market for callback
-        approvedMarkets[teller][id_] = true;
+        approvedMarkets[teller_][id_] = true;
 
         // Get payout capacity required for market
         // If the capacity is in the payout token, then we need approval for the capacity amount
         // If the capacity is in the quote token, then we need approval for capacity / minPrice * scale
         //     since this is the maximum amount of payout tokens that could be received
+        // TODO determine if this format is better than importing the BaseBondSDA contract and casting the returned Auctioneer
+        (bool success, bytes memory data) = address(aggregator.getAuctioneer(id_)).call(
+            abi.encodeWithSignature("markets(uint256)", id_)
+        );
+
+        if (!success) revert Callback_InvalidParams();
         (
             ,
             ERC20 payoutToken,
@@ -110,7 +122,23 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
             ,
             ,
             uint256 scale
-        ) = aggregator.getAuctioneer(id_).markets(id_);
+        ) = abi.decode(
+                data,
+                (
+                    address,
+                    ERC20,
+                    ERC20,
+                    address,
+                    bool,
+                    uint256,
+                    uint256,
+                    uint256,
+                    uint256,
+                    uint256,
+                    uint256,
+                    uint256
+                )
+            );
 
         uint256 toApprove = capacityInQuote ? capacity.mulDiv(scale, minPrice) : capacity;
 
@@ -127,12 +155,12 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     /// @dev    Shutdown function in case there's an issue with the teller
     /// @param  teller_ Address of the Teller contract which serves the market
     /// @param  id_     ID of the market to remove from whitelist
-    function blacklist(uint256 id_) external onlyRole("callback_whitelist") {
-        // Get teller from the bond aggregator
-        address teller = address(aggregator.getTeller(id_));
+    function blacklist(address teller_, uint256 id_) external onlyRole("callback_whitelist") {
+        // Check that the teller matches the aggregator provided teller for the market ID
+        if (teller_ != address(aggregator.getTeller(id_))) revert Callback_InvalidParams();
 
         // Remove market from whitelist
-        approvedMarkets[teller][id_] = false;
+        approvedMarkets[teller_][id_] = false;
     }
 
     /// @inheritdoc IBondCallback
@@ -212,6 +240,13 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     function setOperator(Operator operator_) external onlyRole("callback_admin") {
         if (address(operator_) == address(0)) revert Callback_InvalidParams();
         operator = operator_;
+    }
+
+    /// @notice Sets the aggregator contract for the callback to use to get market info
+    /// @param  aggregator_ - Address of the Aggregator contract
+    function setAggregator(IBondAggregator aggregator_) external onlyRole("callback_admin") {
+        if (address(aggregator_) == address(0)) revert Callback_InvalidParams();
+        aggregator = aggregator_;
     }
 
     //============================================================================================//
