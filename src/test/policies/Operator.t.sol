@@ -1979,7 +1979,7 @@ contract OperatorTest is Test {
         assertTrue(operator.active());
         assertTrue(range.active(true));
         assertTrue(range.active(false));
-        assertEq(treasury.withdrawApproval(address(operator), reserve), type(uint256).max);
+        assertEq(treasury.withdrawApproval(address(operator), reserve), range.capacity(false));
         assertGt(range.price(false, false), 0);
         assertGt(range.price(true, false), 0);
         assertGt(range.price(false, true), 0);

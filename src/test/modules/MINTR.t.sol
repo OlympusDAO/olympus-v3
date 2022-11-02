@@ -54,8 +54,11 @@ contract MINTRTest is Test {
     function test_ApprovedAddressMintsOhm(address to_, uint256 amount_) public {
         // Will test mint not working against zero-address separately
         vm.assume(to_ != address(0x0));
+        vm.assume(amount_ != 0);
 
-        // This contract is approved
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, amount_);
+
         vm.prank(godmode);
         MINTR.mintOhm(to_, amount_);
 
@@ -80,8 +83,12 @@ contract MINTRTest is Test {
 
     function testCorrectness_ApprovedAddressBurnsOhm(address from_, uint256 amount_) public {
         vm.assume(from_ != address(0x0));
+        vm.assume(amount_ != 0);
 
         // Setup: mint ohm into user0
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, amount_);
+
         vm.prank(godmode);
         MINTR.mintOhm(from_, amount_);
         assertEq(ohm.balanceOf(from_), amount_);
