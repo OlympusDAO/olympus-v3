@@ -56,6 +56,8 @@ contract OlympusMinter is MINTRv1 {
         permissioned
         onlyWhileActive
     {
+        if (amount_ == 0) revert MINTR_ZeroAmount();
+
         ohm.burnFrom(from_, amount_);
 
         emit Burn(msg.sender, from_, amount_);
