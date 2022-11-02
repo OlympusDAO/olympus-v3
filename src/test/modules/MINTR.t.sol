@@ -282,6 +282,105 @@ contract MINTRTest is Test {
         vm.prank(godmode);
         MINTR.burnOhm(users[0], 0);
     }
+
+    function testCorrectness_Shutdown(uint256 amount_) public {
+        vm.assume(amount_ != 0);
+
+        // Approve test fixture to mint max uint256
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, type(uint256).max);
+
+        // Mint amount_ OHM to user0 so balance isn't 0
+        vm.prank(godmode);
+        MINTR.mintOhm(users[0], amount_);
+
+        // Shutdown the system
+        vm.prank(godmode);
+        MINTR.deactivate();
+
+        // Try to mint amount_ OHM and expect revert
+        bytes memory err = abi.encodeWithSignature("MINTR_NotActive()");
+        vm.expectRevert(err);
+        vm.prank(godmode);
+        MINTR.mintOhm(users[0], amount_);
+
+        // Try to burn 1 OHM and expect revert
+        vm.expectRevert(err);
+        vm.prank(godmode);
+        MINTR.burnOhm(users[0], amount_);
+
+        // Check balance still the same
+        assertEq(ohm.balanceOf(users[0]), amount_);
+
+        // Reactivate the system
+        vm.prank(godmode);
+        MINTR.activate();
+
+        // Approve MINTR to burn ohm from user0
+        vm.prank(users[0]);
+        ohm.approve(address(MINTR), amount_);
+
+        // Burn amount_ OHM from user0
+        vm.prank(godmode);
+        MINTR.burnOhm(users[0], amount_);
+
+        // Check balance is 0
+        assertEq(ohm.balanceOf(users[0]), 0);
+
+        // Mint amount_ OHM to user1
+        vm.prank(godmode);
+        MINTR.mintOhm(users[0], amount_);
+
+        // Check balance of user1
+        assertEq(ohm.balanceOf(users[0]), amount_);
+    }
+
+    function testRevert_AddressWithPermCannotShutdownOrRestart() public {
+        // Check status of MINTR
+        assertEq(MINTR.active(), true);
+
+        // Try to deactivate with non-approved user
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
+            users[0]
+        );
+        vm.expectRevert(err);
+        vm.prank(users[0]);
+        MINTR.deactivate();
+
+        assertEq(MINTR.active(), true);
+
+        // Deactivate with approved user
+        vm.prank(godmode);
+        MINTR.deactivate();
+
+        assertEq(MINTR.active(), false);
+
+        // Call deactivate again and expect nothing to happen since it's already deactivated
+        vm.prank(godmode);
+        MINTR.deactivate();
+
+        assertEq(MINTR.active(), false);
+
+        // Try to reactivate with non-approved user
+        vm.expectRevert(err);
+        vm.prank(users[0]);
+        MINTR.activate();
+
+        assertEq(MINTR.active(), false);
+
+        // Reactivate with approved user
+        vm.prank(godmode);
+        MINTR.activate();
+
+        assertEq(MINTR.active(), true);
+
+        // Call activate again and expect nothing to happen since it's already activated
+        vm.prank(godmode);
+        MINTR.activate();
+
+        assertEq(MINTR.active(), true);
+    }
 }
 
 contract MockLegacyAuthority is IOlympusAuthority {
