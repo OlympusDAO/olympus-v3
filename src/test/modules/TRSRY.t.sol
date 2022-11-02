@@ -223,4 +223,109 @@ contract TRSRYTest is Test {
         assertEq(TRSRY.reserveDebt(ngmi, debtor), 0);
         assertEq(TRSRY.totalDebt(ngmi), 0);
     }
+
+    function testCorrectness_Shutdown(uint256 amount_) public {
+        vm.assume(amount_ != 0);
+        vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
+
+        // Approve test fixture to withdraw and incurdebt for amount_
+        vm.prank(godmode);
+        TRSRY.increaseWithdrawerApproval(godmode, ngmi, amount_);
+
+        vm.prank(godmode);
+        TRSRY.increaseDebtorApproval(debtor, ngmi, amount_);
+
+        // Shutdown the TRSRY
+        vm.prank(godmode);
+        TRSRY.deactivate();
+
+        // Try to withdraw amount_ and expect revert
+        bytes memory err = abi.encodeWithSignature("TRSRY_NotActive()");
+        vm.expectRevert(err);
+        vm.prank(godmode);
+        TRSRY.withdrawReserves(godmode, ngmi, amount_);
+
+        // Try to incur debt and expect revert
+        vm.expectRevert(err);
+        vm.prank(debtor);
+        TRSRY.incurDebt(ngmi, amount_);
+
+        assertEq(ngmi.balanceOf(godmode), 0);
+        assertEq(TRSRY.reserveDebt(ngmi, debtor), 0);
+        assertEq(ngmi.balanceOf(debtor), 0);
+
+        // Reactivate the system
+        vm.prank(godmode);
+        TRSRY.activate();
+
+        // Withdraw amount_
+        vm.prank(godmode);
+        TRSRY.withdrawReserves(godmode, ngmi, amount_);
+        assertEq(ngmi.balanceOf(godmode), amount_);
+
+        // Transfer tokens back to TRSRY and incur debt
+        vm.prank(godmode);
+        ngmi.transfer(address(TRSRY), amount_);
+
+        vm.prank(debtor);
+        TRSRY.incurDebt(ngmi, amount_);
+        assertEq(ngmi.balanceOf(debtor), amount_);
+        assertEq(TRSRY.reserveDebt(ngmi, debtor), amount_);
+
+        // Repay loan
+        vm.prank(debtor);
+        ngmi.approve(address(TRSRY), amount_);
+        vm.prank(debtor);
+        TRSRY.repayDebt(debtor, ngmi, amount_);
+
+        assertEq(ngmi.balanceOf(debtor), 0);
+        assertEq(TRSRY.reserveDebt(ngmi, debtor), 0);
+    }
+
+    function testRevert_AddressWithPermCannotShutdownOrRestart() public {
+        // Check status of TRSRY
+        assertEq(TRSRY.active(), true);
+
+        // Try to deactivate with non-approved user
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
+            debtor
+        );
+        vm.expectRevert(err);
+        vm.prank(debtor);
+        TRSRY.deactivate();
+
+        assertEq(TRSRY.active(), true);
+
+        // Deactivate with approved user
+        vm.prank(godmode);
+        TRSRY.deactivate();
+
+        assertEq(TRSRY.active(), false);
+
+        // Call deactivate again and expect nothing to happen since it's already deactivated
+        vm.prank(godmode);
+        TRSRY.deactivate();
+
+        assertEq(TRSRY.active(), false);
+
+        // Try to reactivate with non-approved user
+        vm.expectRevert(err);
+        vm.prank(debtor);
+        TRSRY.activate();
+
+        assertEq(TRSRY.active(), false);
+
+        // Reactivate with approved user
+        vm.prank(godmode);
+        TRSRY.activate();
+
+        assertEq(TRSRY.active(), true);
+
+        // Call activate again and expect nothing to happen since it's already activated
+        vm.prank(godmode);
+        TRSRY.activate();
+
+        assertEq(TRSRY.active(), true);
+    }
 }
