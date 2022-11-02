@@ -25,26 +25,25 @@ Set up a foundry config in foundry.toml.
 
 ### Goerli Testnet
 
--   Kernel - [0x7fDdf40f4Dbbd0B66dF26ea8Ba9d0b539d64c0b5](https://goerli.etherscan.io/address/0x7fDdf40f4Dbbd0B66dF26ea8Ba9d0b539d64c0b5)
+-   Kernel - [0xD39e18BDaDa92a808b027b868dFF49F967Faf43b](https://goerli.etherscan.io/address/0xD39e18BDaDa92a808b027b868dFF49F967Faf43b)
 
 #### Modules
 
--   TRSRY - [0x91F9EE2074C2dC3B50d5242d0518AFE77938Cc87](https://goerli.etherscan.io/address/0x91F9EE2074C2dC3B50d5242d0518AFE77938Cc87)
--   MINTR - [0x437B9093d74a5ad6416c6F655929C34785a6d338](https://goerli.etherscan.io/address/0x437B9093d74a5ad6416c6F655929C34785a6d338)
--   PRICE - [0x6d39cDfa180974c5e1ac6FD325A1718F2Fd4412f](https://goerli.etherscan.io/address/0x6d39cDfa180974c5e1ac6FD325A1718F2Fd4412f)
--   RANGE - [0x9ECDA630626a3aa9EF24A53c4Faca1Ce76a1A508](https://goerli.etherscan.io/address/0x9ECDA630626a3aa9EF24A53c4Faca1Ce76a1A508)
--   INSTR - [0x7FB14e84c89F5bd93d3aB633C05d299eAD2455B2](https://goerli.etherscan.io/address/0x7FB14e84c89F5bd93d3aB633C05d299eAD2455B2)
--   ROLES - [0xf588E6028Aa49313ecDE72b3CeC3Fd0C5BE50F99](https://goerli.etherscan.io/address/0xf588E6028Aa49313ecDE72b3CeC3Fd0C5BE50F99)
+-   TRSRY - [0xC57d528ccD28B9075E2850A8A2845dec094C25f4](https://goerli.etherscan.io/address/0xC57d528ccD28B9075E2850A8A2845dec094C25f4)
+-   MINTR - [0xf8FEc699ed778aea53324101f5c52DaD45DF7053](https://goerli.etherscan.io/address/0xf8FEc699ed778aea53324101f5c52DaD45DF7053)
+-   PRICE - [0x60421d7FD7AcD732384b1AB157F81a81E65296Ec](https://goerli.etherscan.io/address/0x60421d7FD7AcD732384b1AB157F81a81E65296Ec)
+-   RANGE - [0xF4D2b752F1936fa69b98ab49BFD92EaEBdE4D266](https://goerli.etherscan.io/address/0xF4D2b752F1936fa69b98ab49BFD92EaEBdE4D266)
+-   ROLES - [0x65A036AF60bbC94c868E9E95D50b6981C4260b89](https://goerli.etherscan.io/address/0x65A036AF60bbC94c868E9E95D50b6981C4260b89)
 
 #### Policies
 
--   BondCallback - [0xaBe5A8c818f7EA6fC4c2Ea2308E2B1ecd5b8f003](https://goerli.etherscan.io/address/0xaBe5A8c818f7EA6fC4c2Ea2308E2B1ecd5b8f003)
--   Heart - [0x699C3d1DbCF524506dd98aC483F78C9Ba0B5D1dE](https://goerli.etherscan.io/address/0x699C3d1DbCF524506dd98aC483F78C9Ba0B5D1dE)
--   Operator - [0x4099dACb7292138FA7d4C0e07Ff36930593D92a4](https://goerli.etherscan.io/address/0x4099dACb7292138FA7d4C0e07Ff36930593D92a4)
--   PriceConfig - [0x00e2A89ec10473FA5FDfF0a2EBB16eCE4D480777](https://goerli.etherscan.io/address/0x00e2A89ec10473FA5FDfF0a2EBB16eCE4D480777)
--   TreasuryCustodian - [0x5dC1B63A675365a00154FDD3B17C89b3491257f8](https://goerli.etherscan.io/address/0x5dC1B63A675365a00154FDD3B17C89b3491257f8)
--   Distributor - [0x65dDa32eafC1a0db338e302ffa4a714FbD82c4cD](https://goerli.etherscan.io/address/0x65dDa32eafC1a0db338e302ffa4a714FbD82c4cD)
--   RolesAdmin - [0xDa08D1dA7CcC756cfB62997c61C93Dd11b19e4F2](https://goerli.etherscan.io/address/0xDa08D1dA7CcC756cfB62997c61C93Dd11b19e4F2)
+-   BondCallback - [0x79D3387fBf564663F3Ae6f7CEaab3D4f2cBA7744](https://goerli.etherscan.io/address/0x79D3387fBf564663F3Ae6f7CEaab3D4f2cBA7744)
+-   Heart - [0xAe5f66B7bc71625b3AD3EE65Ec04512c9Cfe379d](https://goerli.etherscan.io/address/0xAe5f66B7bc71625b3AD3EE65Ec04512c9Cfe379d)
+-   Operator - [0x0E37549093CB786C2584eceCb0A96497fCD2aBA0](https://goerli.etherscan.io/address/0x0E37549093CB786C2584eceCb0A96497fCD2aBA0)
+-   PriceConfig - [0xf1b31a45c7e4BE21eb9B090eF86DB9d12850345C](https://goerli.etherscan.io/address/0xf1b31a45c7e4BE21eb9B090eF86DB9d12850345C)
+-   TreasuryCustodian - [0xF7364d1752a0D914fB9642eD613D725fD8a8cA46](https://goerli.etherscan.io/address/0xF7364d1752a0D914fB9642eD613D725fD8a8cA46)
+-   Distributor - [0x54B5BB535F2A013E2B9803F356B8B7a28a564cF7](https://goerli.etherscan.io/address/0x54B5BB535F2A013E2B9803F356B8B7a28a564cF7)
+-   RolesAdmin - [0xa44602EA20012763b4f0AFdF6e8aD4f9563E7275](https://goerli.etherscan.io/address/0xa44602EA20012763b4f0AFdF6e8aD4f9563E7275)
 -   Faucet (Testnet only) - [0xA247156a39169c0FAFf979F57361CC734e82e3d0](https://goerli.etherscan.io/address/0xA247156a39169c0FAFf979F57361CC734e82e3d0)
 
 #### Dependencies
