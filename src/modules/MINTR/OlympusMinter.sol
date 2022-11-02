@@ -69,13 +69,14 @@ contract OlympusMinter is MINTRv1 {
         override
         permissioned
     {
-        if (mintApproval[policy_] == type(uint256).max) {
+        uint256 approval = mintApproval[policy_];
+        if (approval == type(uint256).max) {
             return;
         }
 
-        uint256 newAmount = type(uint256).max - mintApproval[policy_] < amount_
+        uint256 newAmount = type(uint256).max - approval < amount_
             ? type(uint256).max
-            : mintApproval[policy_] + amount_;
+            : approval + amount_;
         mintApproval[policy_] = newAmount;
         emit IncreaseMinterApproval(policy_, newAmount);
     }
@@ -86,11 +87,12 @@ contract OlympusMinter is MINTRv1 {
         override
         permissioned
     {
-        if (mintApproval[policy_] == 0) {
+        uint256 approval = mintApproval[policy_];
+        if (approval == 0) {
             return;
         }
 
-        uint256 newAmount = mintApproval[policy_] < amount_ ? 0 : mintApproval[policy_] - amount_;
+        uint256 newAmount = approval < amount_ ? 0 : approval - amount_;
         mintApproval[policy_] = newAmount;
         emit DecreaseMinterApproval(policy_, newAmount);
     }
