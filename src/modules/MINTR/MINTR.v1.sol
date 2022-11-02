@@ -17,16 +17,25 @@ abstract contract MINTRv1 is Module {
 
     error MINTR_NotApproved();
     error MINTR_ZeroAmount();
+    error MINTR_NotActive();
 
     // =========  STATE ========= //
 
     OHM public ohm;
+
+    /// @notice Status of the minter. If false, minting and burning OHM is disabled.
+    bool public active;
 
     /// @notice Mapping of who is approved for minting.
     /// @dev    minter -> amount. Infinite approval is max(uint256).
     mapping(address => uint256) public mintApproval;
 
     // =========  FUNCTIONS ========= //
+
+    modifier onlyWhileActive() {
+        if (!active) revert MINTR_NotActive();
+        _;
+    }
 
     /// @notice Mint OHM to an address.
     function mintOhm(address to_, uint256 amount_) external virtual;
@@ -39,4 +48,10 @@ abstract contract MINTRv1 is Module {
 
     /// @notice Decrease approval for specific withdrawer addresses
     function decreaseMinterApproval(address minter_, uint256 amount_) external virtual;
+
+    /// @notice Emergency shutdown of minting and burning.
+    function deactivate() external virtual;
+
+    /// @notice Re-activate minting and burning after shutdown.
+    function activate() external virtual;
 }

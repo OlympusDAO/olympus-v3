@@ -35,8 +35,12 @@ abstract contract TRSRYv1 is Module {
     error TRSRY_ZeroAmount();
     error TRSRY_NotApproved();
     error TRSRY_NoDebtOutstanding();
+    error TRSRY_NotActive();
 
     // =========  STATE ========= //
+
+    /// @notice Status of the treasury. If false, no withdrawals or debt can be incurred.
+    bool public active;
 
     /// @notice Mapping of who is approved for withdrawal.
     /// @dev    withdrawer -> token -> amount. Infinite approval is max(uint256).
@@ -53,6 +57,11 @@ abstract contract TRSRYv1 is Module {
     mapping(ERC20 => mapping(address => uint256)) public reserveDebt;
 
     // =========  FUNCTIONS ========= //
+
+    modifier onlyWhileActive() {
+        if (!active) revert TRSRY_NotActive();
+        _;
+    }
 
     /// @notice Increase approval for specific withdrawer addresses
     function increaseWithdrawerApproval(
@@ -111,4 +120,10 @@ abstract contract TRSRYv1 is Module {
 
     /// @notice Get total balance of assets inside the treasury + any debt taken out against those assets.
     function getReserveBalance(ERC20 token_) external view virtual returns (uint256);
+
+    /// @notice Emergency shutdown of withdrawals.
+    function deactivate() external virtual;
+
+    /// @notice Re-activate withdrawals after shutdown.
+    function activate() external virtual;
 }

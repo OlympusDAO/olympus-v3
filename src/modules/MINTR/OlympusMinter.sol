@@ -12,6 +12,7 @@ contract OlympusMinter is MINTRv1 {
 
     constructor(Kernel kernel_, address ohm_) Module(kernel_) {
         ohm = OHM(ohm_);
+        active = true;
     }
 
     /// @inheritdoc Module
@@ -30,7 +31,7 @@ contract OlympusMinter is MINTRv1 {
     //============================================================================================//
 
     /// @inheritdoc MINTRv1
-    function mintOhm(address to_, uint256 amount_) external override permissioned {
+    function mintOhm(address to_, uint256 amount_) external override permissioned onlyWhileActive {
         if (amount_ == 0) revert MINTR_ZeroAmount();
 
         uint256 approval = mintApproval[msg.sender];
@@ -49,7 +50,12 @@ contract OlympusMinter is MINTRv1 {
     }
 
     /// @inheritdoc MINTRv1
-    function burnOhm(address from_, uint256 amount_) external override permissioned {
+    function burnOhm(address from_, uint256 amount_)
+        external
+        override
+        permissioned
+        onlyWhileActive
+    {
         ohm.burnFrom(from_, amount_);
 
         emit Burn(msg.sender, from_, amount_);
@@ -85,5 +91,15 @@ contract OlympusMinter is MINTRv1 {
         uint256 newAmount = mintApproval[policy_] < amount_ ? 0 : mintApproval[policy_] - amount_;
         mintApproval[policy_] = newAmount;
         emit DecreaseMinterApproval(policy_, newAmount);
+    }
+
+    /// @inheritdoc MINTRv1
+    function deactivate() external override permissioned {
+        active = false;
+    }
+
+    /// @inheritdoc MINTRv1
+    function activate() external override permissioned {
+        active = true;
     }
 }
