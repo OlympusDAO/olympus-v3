@@ -95,8 +95,9 @@ contract Distributor is Policy, RolesConsumer {
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](1);
+        permissions = new Permissions[](2);
         permissions[0] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
+        permissions[1] = Permissions(MINTR.KEYCODE(), MINTR.increaseMinterApproval.selector);
     }
 
     //============================================================================================//
