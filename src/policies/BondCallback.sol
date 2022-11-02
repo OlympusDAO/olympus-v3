@@ -243,13 +243,6 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         operator = operator_;
     }
 
-    /// @notice Sets the aggregator contract for the callback to use to get market info
-    /// @param  aggregator_ - Address of the Aggregator contract
-    function setAggregator(IBondAggregator aggregator_) external onlyRole("callback_admin") {
-        if (address(aggregator_) == address(0)) revert Callback_InvalidParams();
-        aggregator = aggregator_;
-    }
-
     //============================================================================================//
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
