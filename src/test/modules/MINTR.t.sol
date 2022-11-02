@@ -65,7 +65,14 @@ contract MINTRTest is Test {
         assertEq(ohm.balanceOf(to_), amount_);
     }
 
-    function testFail_ApprovedAddressCannotMintToZeroAddress(uint256 amount_) public {
+    function testRevert_ApprovedAddressCannotMintToZeroAddress(uint256 amount_) public {
+        vm.assume(amount_ != 0);
+
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, amount_);
+
+        bytes memory err = abi.encodePacked("ERC20: mint to the zero address");
+        vm.expectRevert(err);
         vm.prank(godmode);
         MINTR.mintOhm(address(0x0), amount_);
     }
@@ -102,22 +109,178 @@ contract MINTRTest is Test {
         assertEq(ohm.balanceOf(from_), 0);
     }
 
-    function testFail_ApprovedAddressCannotBurnFromZeroAddress(uint256 amount_) public {
+    function testRevert_ApprovedAddressCannotBurnFromAddressWithoutApproval(uint256 amount_)
+        public
+    {
+        vm.assume(amount_ != 0);
+
+        // Setup: mint ohm into user0
         vm.prank(godmode);
-        MINTR.burnOhm(address(0x0), amount_);
+        MINTR.increaseMinterApproval(godmode, amount_);
+        vm.prank(godmode);
+        MINTR.mintOhm(users[0], amount_);
+
+        assertEq(ohm.balanceOf(users[0]), amount_);
+
+        bytes memory err = abi.encodePacked("ERC20: burn amount exceeds allowance");
+        vm.expectRevert(err);
+        vm.prank(godmode);
+        MINTR.burnOhm(users[0], amount_);
     }
 
-    // TODO use vm.expectRevert() instead. Did not work for me.
-    function testFail_UnapprovedAddressBurnsOhm(uint256 amount_) public {
+    // Removed burn from zero address test because the functionality cannot be tested.
+    // The OlympusERC20 requires the address to have approved a token before a burn (which is checked first).
+    // It's not possible to reach the burn error in a burnFrom call.
+
+    function testRevert_UnapprovedAddressCannotBurnOhm(uint256 amount_) public {
+        vm.assume(amount_ != 0);
+
         // Setup: mint ohm into user0
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, amount_);
+
+        vm.prank(godmode);
         MINTR.mintOhm(users[1], amount_);
         assertEq(ohm.balanceOf(users[1]), amount_);
 
         vm.prank(users[1]);
         ohm.approve(users[0], amount_);
 
+        // Have user try to burn, expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
+            users[0]
+        );
+        vm.expectRevert(err);
         vm.prank(users[0]);
         MINTR.burnOhm(users[1], amount_);
+    }
+
+    function testCorrectness_ApprovedAddressCanOnlyMintUpToApprovalLimit(uint256 approval_) public {
+        vm.assume(approval_ != 0 && approval_ != type(uint256).max);
+
+        // Approve address to mint approval_ amount
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, approval_);
+
+        // Mint approval_ amount to user0
+        vm.prank(godmode);
+        MINTR.mintOhm(users[0], approval_);
+
+        assertEq(ohm.balanceOf(users[0]), approval_);
+
+        // Try to mint 1 more OHM and expect revert
+        bytes memory err = abi.encodeWithSignature("MINTR_NotApproved()");
+        vm.expectRevert(err);
+        vm.prank(godmode);
+        MINTR.mintOhm(users[1], 1);
+
+        assertEq(ohm.balanceOf(users[1]), 0);
+    }
+
+    function testCorrectness_IncreaseMinterApprovalAllowsMoreMinting(uint256 amount_) public {
+        vm.assume(amount_ != 0);
+
+        // Check that test fixture has no mintApproval to start with
+        assertEq(MINTR.mintApproval(godmode), 0);
+
+        // Approve test fixture to mint amount_
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, amount_);
+
+        // Check that test fixture has mintApproval of amount_
+        assertEq(MINTR.mintApproval(godmode), amount_);
+
+        // Increase test fixture's mintApproval by max uint256, expect approval to be max uint256
+        // This should work because the increase function will not overflow
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, type(uint256).max);
+
+        // Check that test fixture has mintApproval of max uint256
+        assertEq(MINTR.mintApproval(godmode), type(uint256).max);
+
+        // Increase test fixture's mintApproval by 1, expect nothing to happen since it's already max uint256
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, 1);
+
+        // Check that test fixture has mintApproval of max uint256
+        assertEq(MINTR.mintApproval(godmode), type(uint256).max);
+    }
+
+    function testCorrectness_DecreaseMinterApprovalAllowsLessMinting(uint256 amount_) public {
+        vm.assume(amount_ > 1);
+
+        // Approve test fixture to mint amount_
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, amount_);
+
+        // Check that test fixture has mintApproval of amount_
+        assertEq(MINTR.mintApproval(godmode), amount_);
+
+        // Decrease test fixture's mintApproval to 0
+        vm.prank(godmode);
+        MINTR.decreaseMinterApproval(godmode, amount_);
+
+        // Check that test fixture has mintApproval of 0
+        assertEq(MINTR.mintApproval(godmode), 0);
+
+        // Decrease test fixture's mintApproval to 0 again, expect nothing to happen since it's already 0
+        vm.prank(godmode);
+        MINTR.decreaseMinterApproval(godmode, amount_);
+
+        // Increase test fixture's mintApproval to less than amount_
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, amount_ - 1);
+
+        // Check that test fixture has mintApproval of less than amount_
+        assertLt(MINTR.mintApproval(godmode), amount_);
+
+        // Decrease test fixture's mintApproval to 0 by calling with amount_
+        // This should work since the decrease function should decrease to 0 if the amount is greater than the current approval
+        vm.prank(godmode);
+        MINTR.decreaseMinterApproval(godmode, amount_);
+
+        // Check that test fixture has mintApproval of 0
+        assertEq(MINTR.mintApproval(godmode), 0);
+    }
+
+    function testCorrectness_MintAllowanceShouldntDecreaseIfMaxApproval(uint256 amount_) public {
+        vm.assume(amount_ != 0);
+
+        // Approve test fixture to mint max uint256
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, type(uint256).max);
+
+        // Check that test fixture has mintApproval of max uint256
+        assertEq(MINTR.mintApproval(godmode), type(uint256).max);
+
+        // Mint amount_ to user0
+        vm.prank(godmode);
+        MINTR.mintOhm(users[0], amount_);
+
+        // Check that test fixture has mintApproval of max uint256
+        assertEq(MINTR.mintApproval(godmode), type(uint256).max);
+    }
+
+    function testRevert_CannotMintorBurnZero() public {
+        // Approve test fixture to mint max uint256
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, type(uint256).max);
+
+        // Try to mint 0 OHM and expect revert
+        bytes memory err = abi.encodeWithSignature("MINTR_ZeroAmount()");
+        vm.expectRevert(err);
+        vm.prank(godmode);
+        MINTR.mintOhm(users[0], 0);
+
+        // Mint 1 OHM to user0 so balance isn't 0
+        vm.prank(godmode);
+        MINTR.mintOhm(users[0], 1);
+
+        // Try to burn 0 OHM and expect revert
+        vm.expectRevert(err);
+        vm.prank(godmode);
+        MINTR.burnOhm(users[0], 0);
     }
 }
 
