@@ -34,7 +34,7 @@ contract Emergency is Policy, RolesConsumer {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
+        dependencies = new Keycode[](3);
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("MINTR");
         dependencies[2] = toKeycode("ROLES");
@@ -49,7 +49,7 @@ contract Emergency is Policy, RolesConsumer {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        requests = new Permissions[](5);
+        requests = new Permissions[](4);
         requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.deactivate.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.activate.selector);
         requests[2] = Permissions(MINTR_KEYCODE, MINTR.deactivate.selector);

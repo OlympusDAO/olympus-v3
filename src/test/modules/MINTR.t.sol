@@ -6,6 +6,7 @@ import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {larping} from "test/lib/larping.sol";
 import {Quabi} from "test/lib/quabi/Quabi.sol";
+import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
 
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
@@ -380,29 +381,5 @@ contract MINTRTest is Test {
         MINTR.activate();
 
         assertEq(MINTR.active(), true);
-    }
-}
-
-contract MockLegacyAuthority is IOlympusAuthority {
-    address internal kernel;
-
-    constructor(address kernel_) {
-        kernel = kernel_;
-    }
-
-    function governor() external view returns (address) {
-        return kernel;
-    }
-
-    function guardian() external view returns (address) {
-        return kernel;
-    }
-
-    function policy() external view returns (address) {
-        return kernel;
-    }
-
-    function vault() external view returns (address) {
-        return kernel;
     }
 }
