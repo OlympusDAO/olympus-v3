@@ -3,6 +3,7 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
+import {larping} from "test/lib/larping.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
@@ -27,15 +28,18 @@ import {BondFixedExpiryTeller} from "test/lib/bonds/BondFixedExpiryTeller.sol";
 import {MockEasyAuction} from "test/mocks/MockEasyAuction.sol";
 
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 
 // solhint-disable-next-line max-states-count
 contract BondManagerTest is Test {
+    using larping for *;
+
     UserFactory public userCreator;
     address internal alice;
     address internal guardian;
     address internal policy;
 
-    MockLegacyAuthority internal legacyAuth;
+    IOlympusAuthority internal legacyAuth;
     OlympusERC20Token internal ohm;
 
     Kernel internal kernel;
@@ -54,17 +58,17 @@ contract BondManagerTest is Test {
     MockEasyAuction internal easyAuction;
 
     // Bond Protocol Parameters
-    uint256 INITIAL_PRICE = 1000000000000000000000000000000000000;
-    uint256 MIN_PRICE = 500000000000000000000000000000000000;
-    uint32 DEBT_BUFFER = 100000;
-    uint256 AUCTION_TIME = 7 * 24 * 60 * 60;
-    uint32 DEPOSIT_INTERVAL = 6 * 60 * 60;
+    uint256 internal INITIAL_PRICE = 1000000000000000000000000000000000000;
+    uint256 internal MIN_PRICE = 500000000000000000000000000000000000;
+    uint32 internal DEBT_BUFFER = 100000;
+    uint256 internal AUCTION_TIME = 7 * 24 * 60 * 60;
+    uint32 internal DEPOSIT_INTERVAL = 6 * 60 * 60;
 
     // Gnosis Parameters
-    uint256 AUCTION_CANCEL_TIME = 6 * 24 * 60 * 60;
-    uint96 MIN_RATIO_SOLD = 2;
-    uint256 MIN_BUY_AMOUNT = 1000000000;
-    uint256 MIN_FUNDING_THRESHOLD = 1000000000000;
+    uint256 internal AUCTION_CANCEL_TIME = 6 * 24 * 60 * 60;
+    uint96 internal MIN_RATIO_SOLD = 2;
+    uint256 internal MIN_BUY_AMOUNT = 1000000000;
+    uint256 internal MIN_FUNDING_THRESHOLD = 1000000000000;
 
     function setUp() public {
         userCreator = new UserFactory();
@@ -157,7 +161,14 @@ contract BondManagerTest is Test {
             rolesAdmin.grantRole("callback_admin", guardian);
 
             // OHM Authority Vault
-            legacyAuth.setKernel(address(mintr));
+            legacyAuth.vault.larp(address(mintr));
+
+            // Mint OHM to this contract
+            vm.prank(address(mintr));
+            ohm.mint(address(this), 100_000_000_000_000);
+
+            // Approve teller to spend OHM
+            ohm.increaseAllowance(address(fixedExpiryTeller), 100_000_000_000_000);
 
             // Register bond manager to create bond markets with a callback
             vm.prank(guardian);
@@ -169,9 +180,9 @@ contract BondManagerTest is Test {
     //                                      ADMIN FUNCTIONS                                       //
     //============================================================================================//
 
-    /// []  setBondProtocolParameters()
-    ///     []  Can only be accessed by an address with bondmanager_admin role
-    ///     []  Correctly sets parameters
+    /// [X]  setBondProtocolParameters()
+    ///     [X]  Can only be accessed by an address with bondmanager_admin role
+    ///     [X]  Correctly sets parameters
 
     function testCorrectness_setBondParametersRequiresRole(address user_) public {
         vm.assume(user_ != policy);
@@ -227,9 +238,9 @@ contract BondManagerTest is Test {
         assertEq(depositInterval, DEPOSIT_INTERVAL);
     }
 
-    /// []  setGnosisAuctionParameters()
-    ///     []  Can only be accessed by an address with bondmanager_admin role
-    ///     []  Correctly sets parameters
+    /// [X]  setGnosisAuctionParameters()
+    ///     [X]  Can only be accessed by an address with bondmanager_admin role
+    ///     [X]  Correctly sets parameters
 
     function testCorrectness_setGnosisParametersRequiresRole(address user_) public {
         vm.assume(user_ != policy);
@@ -290,9 +301,9 @@ contract BondManagerTest is Test {
         assertEq(minFundingThreshold, MIN_FUNDING_THRESHOLD);
     }
 
-    /// []  setCallback()
-    ///     []  Can only be accessed by an address with bondmanager_admin role
-    ///     []  Correctly sets callback address
+    /// [X]  setCallback()
+    ///     [X]  Can only be accessed by an address with bondmanager_admin role
+    ///     [X]  Correctly sets callback address
 
     function testCorrectness_setCallbackRequiresRole(address user_) public {
         vm.assume(user_ != policy);
@@ -323,10 +334,9 @@ contract BondManagerTest is Test {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    /// []  createBondProtocolMarket()
-    ///     []  Can only be accessed by an address with bondmanager_admin role
-    ///     []  Correctly launches a Bond Protocol market
-    ///     []  Market correctly mints on purchase
+    /// [X]  createBondProtocolMarket()
+    ///     [X]  Can only be accessed by an address with bondmanager_admin role
+    ///     [X]  Correctly launches a Bond Protocol market
 
     function _createBondSetup() internal {
         vm.startPrank(policy);
@@ -383,17 +393,15 @@ contract BondManagerTest is Test {
         assertEq(capacityInQuote, false);
         assertEq(capacity, 10_000_000_000_000);
         assertEq(sold, 0);
+
+        // Verify no OHM was minted
+        assertEq(ohm.balanceOf(address(bondManager)), 0);
+        assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 0);
     }
 
-    function testCorrectness_correctlyMintsOnBondProtocolPurchase(uint256 amount_) public {
-        vm.assume(amount_ != 0);
-
-        // Logic
-    }
-
-    /// []  closeBondProtocolMarket()
-    ///     []  Can only be accessed by an address with bondmanager_admin role
-    ///     []  Correcly shuts down market
+    /// [X]  closeBondProtocolMarket()
+    ///     [X]  Can only be accessed by an address with bondmanager_admin role
+    ///     [X]  Correcly shuts down market
 
     function _closeMarketSetup() internal {
         vm.startPrank(policy);
@@ -435,9 +443,9 @@ contract BondManagerTest is Test {
         assertEq(capacity, 0);
     }
 
-    /// []  createGnosisAuction()
-    ///     []  Can only be accessed by an address with bondmanager_admin role
-    ///     []  Correctly launches a Gnosis Auction
+    /// [X]  createGnosisAuction()
+    ///     [X]  Can only be accessed by an address with bondmanager_admin role
+    ///     [X]  Correctly launches a Gnosis Auction
 
     function _createGnosisSetup() internal {
         vm.prank(policy);
@@ -489,9 +497,9 @@ contract BondManagerTest is Test {
         assertEq(auctionEndDate, block.timestamp + 1 weeks);
     }
 
-    /// []  settleGnosisAuction()
-    ///     []  Can only be accessed by an address with bondmanager_admin role
-    ///     []  Correctly settles auction
+    /// [X]  settleGnosisAuction()
+    ///     [X]  Can only be accessed by an address with bondmanager_admin role
+    ///     [X]  Correctly settles auction
 
     function _settleGnosisSetup() internal {
         vm.startPrank(policy);
@@ -535,10 +543,10 @@ contract BondManagerTest is Test {
     //                                   EMERGENCY FUNCTIONS                                      //
     //============================================================================================//
 
-    /// []  emergencyShutdownBondProtocolMarket()
-    ///     []  Can only be accessed by an address with bondmanager_admin role
-    ///     []  Closes market on auctioneer
-    ///     []  Blacklists market on callback to stop minting OHM
+    /// [X]  emergencyShutdownBondProtocolMarket()
+    ///     [X]  Can only be accessed by an address with bondmanager_admin role
+    ///     [X]  Closes market on auctioneer
+    ///     [X]  Blacklists market on callback to stop minting OHM
 
     function testCorrectness_emergencyShutdownBondProtocolMarketRequiresRole(address user_) public {
         vm.assume(user_ != policy);
@@ -603,9 +611,9 @@ contract BondManagerTest is Test {
         vm.stopPrank();
     }
 
-    /// []  emergencySetApproval()
-    ///     []  Can only be accessed by an address with bondmanager_admin role
-    ///     []  Sets OHM approval correctly
+    /// [X]  emergencySetApproval()
+    ///     [X]  Can only be accessed by an address with bondmanager_admin role
+    ///     [X]  Sets OHM approval correctly
 
     function testCorrectness_emergencySetApprovalRequiresRole(address user_) public {
         vm.assume(user_ != policy);
@@ -632,9 +640,9 @@ contract BondManagerTest is Test {
         assertEq(ohm.allowance(address(bondManager), address(fixedExpiryTeller)), amount_);
     }
 
-    /// []  emergencyWithdraw()
-    ///     []  Can only be accessed by an address with bondmanager_admin role
-    ///     []  Sends OHM to the treasury
+    /// [X]  emergencyWithdraw()
+    ///     [X]  Can only be accessed by an address with bondmanager_admin role
+    ///     [X]  Sends OHM to the treasury
 
     function testCorrectness_emergencyWithdrawRequiresRole(address user_) public {
         vm.assume(user_ != policy);
@@ -650,6 +658,8 @@ contract BondManagerTest is Test {
     }
 
     function testCorrectness_emergencyWithdrawSendsOhmToTreasury(uint256 amount_) public {
+        vm.assume(amount_ <= type(uint256).max - 100_000_000_000_000);
+
         // Setup
         vm.prank(address(mintr));
         ohm.mint(address(bondManager), amount_);
@@ -665,5 +675,98 @@ contract BondManagerTest is Test {
         // Verify end state
         assertEq(ohm.balanceOf(address(bondManager)), 0);
         assertEq(ohm.balanceOf(address(trsry)), amount_);
+    }
+
+    // ========= USER PATH TESTS ========= //
+
+    function _userPathSetup() internal {
+        vm.startPrank(policy);
+        bondManager.setBondProtocolParameters(
+            INITIAL_PRICE,
+            MIN_PRICE,
+            DEBT_BUFFER,
+            AUCTION_TIME,
+            DEPOSIT_INTERVAL
+        );
+        bondManager.setGnosisAuctionParameters(
+            AUCTION_CANCEL_TIME,
+            AUCTION_TIME,
+            MIN_RATIO_SOLD,
+            MIN_BUY_AMOUNT,
+            MIN_FUNDING_THRESHOLD
+        );
+        bondManager.setCallback(bondCallback);
+        vm.stopPrank();
+    }
+
+    /// [X]  Can create bond protocol test then Gnosis test
+    function testCorrectness_createsMultipleMarkets1() public {
+        // Setup
+        _userPathSetup();
+        vm.startPrank(policy);
+
+        // Verify initial state
+        assertEq(ohm.balanceOf(address(bondManager)), 0);
+        assertEq(ohm.balanceOf(address(easyAuction)), 0);
+        assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 0);
+
+        // Create Bond Protocol market
+        bondManager.createBondProtocolMarket(10_000_000_000_000, 1 weeks);
+
+        // Create Gnosis market
+        bondManager.createGnosisAuction(10_000_000_000_000, 1 weeks);
+        ERC20 bondToken = ERC20(
+            address(
+                fixedExpiryTeller.bondTokens(ERC20(address(ohm)), uint48(block.timestamp + 1 weeks))
+            )
+        );
+
+        // Verify end state
+        assertEq(ohm.allowance(address(bondManager), address(fixedExpiryTeller)), 0);
+        assertEq(ohm.balanceOf(address(bondManager)), 0);
+        assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 10_000_000_000_000);
+        assertEq(bondToken.balanceOf(address(easyAuction)), 10_000_000_000_000);
+
+        vm.stopPrank();
+    }
+
+    /// [X]  Can create Gnosis then Bond then Gnosis
+    function testCorrectness_createsMultipleMarkets2() public {
+        // Setup
+        _userPathSetup();
+        vm.startPrank(policy);
+
+        // Verify initial state
+        assertEq(ohm.balanceOf(address(bondManager)), 0);
+        assertEq(ohm.balanceOf(address(easyAuction)), 0);
+        assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 0);
+
+        // Create Gnosis market 1
+        bondManager.createGnosisAuction(10_000_000_000_000, 1 weeks);
+        ERC20 bondToken1 = ERC20(
+            address(
+                fixedExpiryTeller.bondTokens(ERC20(address(ohm)), uint48(block.timestamp + 1 weeks))
+            )
+        );
+
+        // Create Bond Protocol market
+        bondManager.createBondProtocolMarket(10_000_000_000_000, 1 weeks);
+
+        // Create Gnosis market 2
+        bondManager.createGnosisAuction(10_000_000_000_000, 2 weeks);
+        ERC20 bondToken2 = ERC20(
+            address(
+                fixedExpiryTeller.bondTokens(ERC20(address(ohm)), uint48(block.timestamp + 1 weeks))
+            )
+        );
+
+        // Verify end state
+        assertEq(ohm.allowance(address(bondManager), address(fixedExpiryTeller)), 0);
+        assertEq(ohm.balanceOf(address(bondManager)), 0);
+        assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 20_000_000_000_000);
+        assertEq(bondToken1.balanceOf(address(easyAuction)), 10_000_000_000_000);
+        assertEq(bondToken2.balanceOf(address(easyAuction)), 10_000_000_000_000);
+
+        vm.stopPrank();
     }
 }

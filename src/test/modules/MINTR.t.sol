@@ -136,8 +136,4 @@ contract MockLegacyAuthority is IOlympusAuthority {
     function vault() external view returns (address) {
         return kernel;
     }
-
-    function setKernel(address newKernel_) external {
-        kernel = newKernel_;
-    }
 }

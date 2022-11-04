@@ -30,5 +30,7 @@ interface IEasyAuction {
         bytes calldata accessManagerData
     ) external returns (uint256);
 
+    /// @notice                         Settles the auction and determines the clearing orders
+    /// @param auctionId                The auction to settle
     function settleAuction(uint256 auctionId) external returns (bytes32);
 }

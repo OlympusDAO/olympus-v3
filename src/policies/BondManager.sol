@@ -107,6 +107,9 @@ contract BondManager is Policy, RolesConsumer {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
+    /// @notice                 Creates a market on the Bond Protocol contracts to auction off OHM bonds
+    /// @param capacity_        The amount of OHM to use in the OHM bonds
+    /// @param bondTerm_        How long should the OHM be locked in the bond
     function createBondProtocolMarket(uint256 capacity_, uint256 bondTerm_)
         external
         onlyRole("bondmanager_admin")
@@ -134,6 +137,9 @@ contract BondManager is Policy, RolesConsumer {
         emit BondProtocolMarketLaunched(marketId, capacity_, bondTerm_);
     }
 
+    /// @notice                 Creates a bond token using Bond Protocol and creates a Gnosis Auction to sell it
+    /// @param capacity_        The amount of OHM to use in the OHM bonds
+    /// @param bondTerm_        How long should the OHM be locked in the bond
     function createGnosisAuction(uint96 capacity_, uint256 bondTerm_)
         external
         onlyRole("bondmanager_admin")
@@ -143,7 +149,7 @@ contract BondManager is Policy, RolesConsumer {
 
         uint48 expiry = uint48(block.timestamp + bondTerm_);
 
-        // Create bond token
+        // Create bond token and pre-mint the necessary bond token amount using OHM
         ohm.increaseAllowance(address(fixedExpiryTeller), capacity_);
         fixedExpiryTeller.deploy(ERC20(address(ohm)), expiry);
         (ERC20 bondToken, ) = fixedExpiryTeller.create(ERC20(address(ohm)), expiry, capacity_);
@@ -167,10 +173,14 @@ contract BondManager is Policy, RolesConsumer {
         emit GnosisAuctionLaunched(auctionId, capacity_, bondTerm_);
     }
 
+    /// @notice                 Closes the specified bond protocol market to prevent future purchases
+    /// @param marketId_        The ID of the Bond Protocol auction
     function closeBondProtocolMarket(uint256 marketId_) external onlyRole("bondmanager_admin") {
         fixedExpiryAuctioneer.closeMarket(marketId_);
     }
 
+    /// @notice                 Settles the Gnosis Auction to find the clearing order and allow users to claim their bond tokens
+    /// @param auctionId_       The ID of the Gnosis auction
     function settleGnosisAuction(uint256 auctionId_) external onlyRole("bondmanager_admin") {
         gnosisEasyAuction.settleAuction(auctionId_);
     }
@@ -179,6 +189,12 @@ contract BondManager is Policy, RolesConsumer {
     //                                      ADMIN FUNCTIONS                                       //
     //============================================================================================//
 
+    /// @notice                     Sets the parameters that will likely be consistent across Bond Protocol market launches
+    /// @param initialPrice_        The initial ratio of OHM to OHM bonds that the bonds will sell for
+    /// @param minPrice_            The minim ratio of OHM to OHM bonds that the bonds will sell for
+    /// @param debtBuffer_          Variable used to calculate maximum capacity (should generally be set to 100_000)
+    /// @param auctionTime_         How long should the auctioning of the bond tokens last (should be less than planned bond terms)
+    /// @param depositInterval_     Desired frequency of purchases
     function setBondProtocolParameters(
         uint256 initialPrice_,
         uint256 minPrice_,
@@ -195,6 +211,12 @@ contract BondManager is Policy, RolesConsumer {
         });
     }
 
+    /// @notice                     Sets the parameters that will likely be consistent across Gnosis Auction launches
+    /// @param auctionCancelTime_   How long should users have to cancel their bids (should be less than auctionTime_)
+    /// @param auctionTime_         How long should the auctioning of the bond tokens last (should be less than planned bond terms)
+    /// @param minRatioSold_        What capacity/minRatioSold_ amount of bond tokens is the minimum acceptable level
+    /// @param minBuyAmount_        Minimum purchase size (in OHM) from a user
+    /// @param minFundingThreshold_ Minimum funding threshold
     function setGnosisAuctionParameters(
         uint256 auctionCancelTime_,
         uint256 auctionTime_,
@@ -211,6 +233,8 @@ contract BondManager is Policy, RolesConsumer {
         });
     }
 
+    /// @notice                     Sets the bond callback policy for use in minting upon Bond Protocol market purchases
+    /// @param newCallback_         The bond callback address to set
     function setCallback(IBondCallback newCallback_) external onlyRole("bondmanager_admin") {
         bondCallback = newCallback_;
     }
@@ -219,6 +243,8 @@ contract BondManager is Policy, RolesConsumer {
     //                                   EMERGENCY FUNCTIONS                                      //
     //============================================================================================//
 
+    /// @notice                     Blacklists the specified market to prevent the bond callback from minting more OHM on purchases
+    /// @param marketId_            The ID of the Bond Protocol auction to shutdown
     function emergencyShutdownBondProtocolMarket(uint256 marketId_)
         external
         onlyRole("bondmanager_admin")
@@ -227,6 +253,10 @@ contract BondManager is Policy, RolesConsumer {
         fixedExpiryAuctioneer.closeMarket(marketId_);
     }
 
+    /// @notice                     Increases a contract's allowance to spend the Bond Manager's OHM
+    /// @param contract_            The contract to give spending permission to
+    /// @param amount_              The amount to increase the OHM spending permission by
+    /// @dev                        This shouldn't be needed but is a safegaurd in the event of accounting errors in the market creation functions
     function emergencySetApproval(address contract_, uint256 amount_)
         external
         onlyRole("bondmanager_admin")
@@ -234,6 +264,8 @@ contract BondManager is Policy, RolesConsumer {
         ohm.increaseAllowance(contract_, amount_);
     }
 
+    /// @notice                     Sends OHM from the Bond Manager back to the treasury
+    /// @param amount_              The amount of OHM to send to the treasury
     function emergencyWithdraw(uint256 amount_) external onlyRole("bondmanager_admin") {
         ohm.transfer(address(TRSRY), amount_);
     }
