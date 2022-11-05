@@ -23,22 +23,22 @@ import {IEasyAuction} from "interfaces/IEasyAuction.sol";
 contract BondManager is Policy, RolesConsumer {
     // ========= EVENTS ========= //
 
-    event BondProtocolMarketLaunched(uint256 marketId, uint256 capacity, uint256 bondTerm);
+    event BondProtocolMarketLaunched(uint256 marketId, uint256 capacity, uint48 bondTerm);
     event GnosisAuctionLaunched(uint256 marketId, uint96 capacity, uint256 bondTerm);
 
     // ========= DATA STRUCTURES ========= //
 
-    struct BondProtocolParameters {
+    struct FixedExpiryParameters {
         uint256 initialPrice;
         uint256 minPrice;
+        uint48 auctionTime;
         uint32 debtBuffer;
-        uint256 auctionTime;
         uint32 depositInterval;
     }
 
-    struct GnosisAuctionParameters {
-        uint256 auctionCancelTime;
-        uint256 auctionTime;
+    struct BatchAuctionParameters {
+        uint48 auctionCancelTime;
+        uint48 auctionTime;
         uint96 minRatioSold;
         uint256 minBuyAmount;
         uint256 minFundingThreshold;
@@ -62,8 +62,8 @@ contract BondManager is Policy, RolesConsumer {
     OlympusERC20Token public ohm;
 
     // Market Parameters
-    BondProtocolParameters public bondProtocolParameters;
-    GnosisAuctionParameters public gnosisAuctionParameters;
+    FixedExpiryParameters public fixedExpiryParameters;
+    BatchAuctionParameters public batchAuctionParameters;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -110,7 +110,7 @@ contract BondManager is Policy, RolesConsumer {
     /// @notice                 Creates a market on the Bond Protocol contracts to auction off OHM bonds
     /// @param capacity_        The amount of OHM to use in the OHM bonds
     /// @param bondTerm_        How long should the OHM be locked in the bond
-    function createBondProtocolMarket(uint256 capacity_, uint256 bondTerm_)
+    function createFixedExpiryBondMarket(uint256 capacity_, uint48 bondTerm_)
         external
         onlyRole("bondmanager_admin")
         returns (uint256 marketId)
@@ -122,12 +122,12 @@ contract BondManager is Policy, RolesConsumer {
             address(bondCallback), // callbackAddress
             false, // capacityInQuote
             capacity_, // capacity
-            bondProtocolParameters.initialPrice, // formattedInitialPrice
-            bondProtocolParameters.minPrice, // formattedMinimumPrice
-            bondProtocolParameters.debtBuffer, // debtBuffer
-            uint48(block.timestamp + bondTerm_), // vesting
-            uint48(block.timestamp + bondProtocolParameters.auctionTime), // conclusion
-            bondProtocolParameters.depositInterval, // depositInterval
+            fixedExpiryParameters.initialPrice, // formattedInitialPrice
+            fixedExpiryParameters.minPrice, // formattedMinimumPrice
+            fixedExpiryParameters.debtBuffer, // debtBuffer
+            uint48(block.timestamp) + bondTerm_, // vesting
+            uint48(block.timestamp) + fixedExpiryParameters.auctionTime, // conclusion
+            fixedExpiryParameters.depositInterval, // depositInterval
             int8(0)
         );
 
@@ -140,14 +140,14 @@ contract BondManager is Policy, RolesConsumer {
     /// @notice                 Creates a bond token using Bond Protocol and creates a Gnosis Auction to sell it
     /// @param capacity_        The amount of OHM to use in the OHM bonds
     /// @param bondTerm_        How long should the OHM be locked in the bond
-    function createGnosisAuction(uint96 capacity_, uint256 bondTerm_)
+    function createBatchAuction(uint96 capacity_, uint48 bondTerm_)
         external
         onlyRole("bondmanager_admin")
         returns (uint256 auctionId)
     {
         MINTR.mintOhm(address(this), capacity_);
 
-        uint48 expiry = uint48(block.timestamp + bondTerm_);
+        uint48 expiry = uint48(block.timestamp) + bondTerm_;
 
         // Create bond token and pre-mint the necessary bond token amount using OHM
         ohm.increaseAllowance(address(fixedExpiryTeller), capacity_);
@@ -159,12 +159,12 @@ contract BondManager is Policy, RolesConsumer {
         auctionId = gnosisEasyAuction.initiateAuction(
             bondToken, // auctioningToken
             ERC20(address(ohm)), // biddingToken
-            block.timestamp + gnosisAuctionParameters.auctionCancelTime, // last order cancellation time
-            block.timestamp + gnosisAuctionParameters.auctionTime, // auction end time
+            block.timestamp + batchAuctionParameters.auctionCancelTime, // last order cancellation time
+            block.timestamp + batchAuctionParameters.auctionTime, // auction end time
             capacity_, // auctioned amount of bondToken
-            capacity_ / gnosisAuctionParameters.minRatioSold, // minimum tokens bought for auction to be valid
-            gnosisAuctionParameters.minBuyAmount, // minimum purchase size of auctioning token
-            gnosisAuctionParameters.minFundingThreshold, // minimum funding threshold
+            capacity_ / batchAuctionParameters.minRatioSold, // minimum tokens bought for auction to be valid
+            batchAuctionParameters.minBuyAmount, // minimum purchase size of auctioning token
+            batchAuctionParameters.minFundingThreshold, // minimum funding threshold
             false, // is atomic closure allowed
             address(0), // access manager contract
             new bytes(0) // access manager contract data
@@ -175,13 +175,13 @@ contract BondManager is Policy, RolesConsumer {
 
     /// @notice                 Closes the specified bond protocol market to prevent future purchases
     /// @param marketId_        The ID of the Bond Protocol auction
-    function closeBondProtocolMarket(uint256 marketId_) external onlyRole("bondmanager_admin") {
+    function closeFixedExpiryBondMarket(uint256 marketId_) external onlyRole("bondmanager_admin") {
         fixedExpiryAuctioneer.closeMarket(marketId_);
     }
 
     /// @notice                 Settles the Gnosis Auction to find the clearing order and allow users to claim their bond tokens
     /// @param auctionId_       The ID of the Gnosis auction
-    function settleGnosisAuction(uint256 auctionId_) external onlyRole("bondmanager_admin") {
+    function settleBatchAuction(uint256 auctionId_) external onlyRole("bondmanager_admin") {
         gnosisEasyAuction.settleAuction(auctionId_);
     }
 
@@ -192,21 +192,21 @@ contract BondManager is Policy, RolesConsumer {
     /// @notice                     Sets the parameters that will likely be consistent across Bond Protocol market launches
     /// @param initialPrice_        The initial ratio of OHM to OHM bonds that the bonds will sell for
     /// @param minPrice_            The minim ratio of OHM to OHM bonds that the bonds will sell for
-    /// @param debtBuffer_          Variable used to calculate maximum capacity (should generally be set to 100_000)
     /// @param auctionTime_         How long should the auctioning of the bond tokens last (should be less than planned bond terms)
+    /// @param debtBuffer_          Variable used to calculate maximum capacity (should generally be set to 100_000)
     /// @param depositInterval_     Desired frequency of purchases
-    function setBondProtocolParameters(
+    function setFixedExpiryParameters(
         uint256 initialPrice_,
         uint256 minPrice_,
+        uint48 auctionTime_,
         uint32 debtBuffer_,
-        uint256 auctionTime_,
         uint32 depositInterval_
     ) external onlyRole("bondmanager_admin") {
-        bondProtocolParameters = BondProtocolParameters({
+        fixedExpiryParameters = FixedExpiryParameters({
             initialPrice: initialPrice_,
             minPrice: minPrice_,
-            debtBuffer: debtBuffer_,
             auctionTime: auctionTime_,
+            debtBuffer: debtBuffer_,
             depositInterval: depositInterval_
         });
     }
@@ -217,14 +217,14 @@ contract BondManager is Policy, RolesConsumer {
     /// @param minRatioSold_        What capacity/minRatioSold_ amount of bond tokens is the minimum acceptable level
     /// @param minBuyAmount_        Minimum purchase size (in OHM) from a user
     /// @param minFundingThreshold_ Minimum funding threshold
-    function setGnosisAuctionParameters(
-        uint256 auctionCancelTime_,
-        uint256 auctionTime_,
+    function setBatchAuctionParameters(
+        uint48 auctionCancelTime_,
+        uint48 auctionTime_,
         uint96 minRatioSold_,
         uint256 minBuyAmount_,
         uint256 minFundingThreshold_
     ) external onlyRole("bondmanager_admin") {
-        gnosisAuctionParameters = GnosisAuctionParameters({
+        batchAuctionParameters = BatchAuctionParameters({
             auctionCancelTime: auctionCancelTime_,
             auctionTime: auctionTime_,
             minRatioSold: minRatioSold_,
@@ -245,7 +245,7 @@ contract BondManager is Policy, RolesConsumer {
 
     /// @notice                     Blacklists the specified market to prevent the bond callback from minting more OHM on purchases
     /// @param marketId_            The ID of the Bond Protocol auction to shutdown
-    function emergencyShutdownBondProtocolMarket(uint256 marketId_)
+    function emergencyShutdownFixedExpiryMarket(uint256 marketId_)
         external
         onlyRole("bondmanager_admin")
     {
