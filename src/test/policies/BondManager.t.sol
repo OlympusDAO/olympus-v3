@@ -658,114 +658,80 @@ contract BondManagerTest is Test {
 
     // ========= USER PATH TESTS ========= //
 
-    // function _userPathSetup() internal {
-    //     vm.startPrank(policy);
-    //     bondManager.setFixedExpiryParameters(
-    //         INITIAL_PRICE,
-    //         MIN_PRICE,
-    //         DEBT_BUFFER,
-    //         AUCTION_TIME,
-    //         DEPOSIT_INTERVAL
-    //     );
-    //     bondManager.setBatchAuctionParameters(
-    //         AUCTION_CANCEL_TIME,
-    //         AUCTION_TIME,
-    //         MIN_RATIO_SOLD,
-    //         MIN_BUY_AMOUNT,
-    //         MIN_FUNDING_THRESHOLD
-    //     );
-    //     bondManager.setCallback(bondCallback);
-    //     vm.stopPrank();
-    // }
+    function _userPathSetup() internal {
+        vm.startPrank(policy);
+        bondManager.setFixedExpiryParameters(
+            INITIAL_PRICE,
+            MIN_PRICE,
+            AUCTION_TIME,
+            DEBT_BUFFER,
+            DEPOSIT_INTERVAL
+        );
+        bondManager.setBatchAuctionParameters(
+            AUCTION_CANCEL_TIME,
+            AUCTION_TIME,
+            MIN_RATIO_SOLD,
+            MIN_BUY_AMOUNT,
+            MIN_FUNDING_THRESHOLD
+        );
+        bondManager.setCallback(bondCallback);
+        vm.stopPrank();
+    }
 
-    // /// [X]  Can create bond protocol test then Gnosis test
-    // function testCorrectness_createsMultipleMarkets1() public {
-    //     // Setup
-    //     _userPathSetup();
-    //     vm.startPrank(policy);
+    /// [X]  Can create fixed expiry and then batch auction
+    function testCorrectness_createsMultipleMarkets1() public {
+        // Setup
+        _userPathSetup();
+        vm.startPrank(policy);
 
-    //     // Verify initial state
-    //     assertEq(ohm.balanceOf(address(bondManager)), 0);
-    //     assertEq(ohm.balanceOf(address(easyAuction)), 0);
-    //     assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 0);
+        // Verify initial state
+        assertEq(ohm.balanceOf(address(bondManager)), 0);
+        assertEq(ohm.balanceOf(address(easyAuction)), 0);
+        assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 0);
 
-    //     // Create Bond Protocol market
-    //     uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 1 weeks);
+        // Create Bond Protocol market
+        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 1 weeks);
 
-    //     // Create Gnosis market
-    //     bondManager.createBatchAuction(10_000_000_000_000, 1 weeks);
-    //     ERC20 bondToken = ERC20(
-    //         address(
-    //             fixedExpiryTeller.bondTokens(ERC20(address(ohm)), uint48(block.timestamp + 1 weeks))
-    //         )
-    //     );
+        // Create Gnosis market
+        bondManager.createBatchAuction(10_000_000_000_000, 1 weeks);
+        MockERC20 bondToken = fixedExpiryTeller.bondToken();
 
-    //     vm.stopPrank();
+        vm.stopPrank();
 
-    //     // Verify post-launch state
-    //     assertEq(ohm.allowance(address(bondManager), address(fixedExpiryTeller)), 0);
-    //     assertEq(ohm.balanceOf(address(bondManager)), 0);
-    //     assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 10_000_000_000_000);
-    //     assertEq(bondToken.balanceOf(address(easyAuction)), 10_000_000_000_000);
+        // Verify post-launch state
+        assertEq(ohm.allowance(address(bondManager), address(fixedExpiryTeller)), 0);
+        assertEq(ohm.balanceOf(address(bondManager)), 0);
+        assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 10_000_000_000_000);
+        assertEq(bondToken.balanceOf(address(easyAuction)), 10_000_000_000_000);
+    }
 
-    //     // Purchase 1 OHM worth of Bond Protocol bonds
-    //     fixedExpiryTeller.purchase(
-    //         address(this),
-    //         address(bondManager),
-    //         marketId,
-    //         1_000_000_000,
-    //         900_000_000
-    //     );
-    //     assertFalse(ohm.balanceOf(address(fixedExpiryTeller)) == 0);
-    // }
+    /// [X]  Can create batch then fixed expiry then batch
+    function testCorrectness_createsMultipleMarkets2() public {
+        // Setup
+        _userPathSetup();
+        vm.startPrank(policy);
 
-    // /// [X]  Can create Gnosis then Bond then Gnosis
-    // function testCorrectness_createsMultipleMarkets2() public {
-    //     // Setup
-    //     _userPathSetup();
-    //     vm.startPrank(policy);
+        // Verify initial state
+        assertEq(ohm.balanceOf(address(bondManager)), 0);
+        assertEq(ohm.balanceOf(address(easyAuction)), 0);
+        assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 0);
 
-    //     // Verify initial state
-    //     assertEq(ohm.balanceOf(address(bondManager)), 0);
-    //     assertEq(ohm.balanceOf(address(easyAuction)), 0);
-    //     assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 0);
+        // Create Gnosis market 1
+        bondManager.createBatchAuction(10_000_000_000_000, 1 weeks);
+        MockERC20 bondToken = fixedExpiryTeller.bondToken();
 
-    //     // Create Gnosis market 1
-    //     bondManager.createBatchAuction(10_000_000_000_000, 1 weeks);
-    //     ERC20 bondToken1 = ERC20(
-    //         address(
-    //             fixedExpiryTeller.bondTokens(ERC20(address(ohm)), uint48(block.timestamp + 1 weeks))
-    //         )
-    //     );
+        // Create Bond Protocol market
+        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 1 weeks);
 
-    //     // Create Bond Protocol market
-    //     uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 1 weeks);
+        // Create Gnosis market 2
+        bondManager.createBatchAuction(10_000_000_000_000, 2 weeks);
 
-    //     // Create Gnosis market 2
-    //     bondManager.createBatchAuction(10_000_000_000_000, 2 weeks);
-    //     ERC20 bondToken2 = ERC20(
-    //         address(
-    //             fixedExpiryTeller.bondTokens(ERC20(address(ohm)), uint48(block.timestamp + 1 weeks))
-    //         )
-    //     );
+        vm.stopPrank();
 
-    //     vm.stopPrank();
-
-    //     // Verify post-launch state
-    //     assertEq(ohm.allowance(address(bondManager), address(fixedExpiryTeller)), 0);
-    //     assertEq(ohm.balanceOf(address(bondManager)), 0);
-    //     assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 20_000_000_000_000);
-    //     assertEq(bondToken1.balanceOf(address(easyAuction)), 10_000_000_000_000);
-    //     assertEq(bondToken2.balanceOf(address(easyAuction)), 10_000_000_000_000);
-
-    //     // Confirm purchases succeed
-    //     fixedExpiryTeller.purchase(
-    //         address(this),
-    //         address(bondManager),
-    //         marketId,
-    //         1_000_000_000,
-    //         900_000_000
-    //     );
-    //     assertFalse(ohm.balanceOf(address(fixedExpiryTeller)) == 0);
-    // }
+        // Verify post-launch state
+        assertEq(ohm.allowance(address(bondManager), address(fixedExpiryTeller)), 0);
+        assertEq(ohm.balanceOf(address(bondManager)), 0);
+        assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 20_000_000_000_000);
+        assertEq(bondToken.balanceOf(address(easyAuction)), 20_000_000_000_000);
+    }
 }
