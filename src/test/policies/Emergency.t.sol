@@ -120,11 +120,11 @@ contract EmergencyTest is Test {
 
         // Approve minterAdmin for unlimited minting
         vm.prank(minterAdmin);
-        minter.increaseMinterApproval(address(minterAdmin), type(uint256).max);
+        minter.increaseMintApproval(address(minterAdmin), type(uint256).max);
 
         // Approve treasuryAdmin for unlimited withdrawals and debt of reserve token
         vm.prank(treasuryAdmin);
-        treasury.increaseWithdrawerApproval(address(treasuryAdmin), reserve, type(uint256).max);
+        treasury.increaseWithdrawApproval(address(treasuryAdmin), reserve, type(uint256).max);
 
         vm.prank(treasuryAdmin);
         treasury.increaseDebtorApproval(address(treasuryAdmin), reserve, type(uint256).max);

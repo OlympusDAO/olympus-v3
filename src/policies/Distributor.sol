@@ -97,8 +97,8 @@ contract Distributor is Policy, RolesConsumer {
     {
         permissions = new Permissions[](3);
         permissions[0] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
-        permissions[1] = Permissions(MINTR.KEYCODE(), MINTR.increaseMinterApproval.selector);
-        permissions[2] = Permissions(MINTR.KEYCODE(), MINTR.decreaseMinterApproval.selector);
+        permissions[1] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
+        permissions[2] = Permissions(MINTR.KEYCODE(), MINTR.decreaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -127,7 +127,7 @@ contract Distributor is Policy, RolesConsumer {
         if (!unlockRebase) revert Distributor_NotUnlocked();
 
         // Open minter approval by requesting max approval
-        MINTR.increaseMinterApproval(address(this), type(uint256).max);
+        MINTR.increaseMintApproval(address(this), type(uint256).max);
 
         // Mint enough for rebase
         MINTR.mintOhm(staking, nextRewardFor(staking));
@@ -148,7 +148,7 @@ contract Distributor is Policy, RolesConsumer {
         }
 
         // Close the minter approval by removing all approval
-        MINTR.decreaseMinterApproval(address(this), type(uint256).max);
+        MINTR.decreaseMintApproval(address(this), type(uint256).max);
 
         unlockRebase = false;
     }

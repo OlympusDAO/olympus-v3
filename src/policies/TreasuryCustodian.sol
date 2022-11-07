@@ -46,8 +46,8 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
 
         requests = new Permissions[](5);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
-        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawerApproval.selector);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
         requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseDebtorApproval.selector);
         requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseDebtorApproval.selector);
         requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
@@ -63,7 +63,7 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         ERC20 token_,
         uint256 amount_
     ) external onlyRole("custodian") {
-        TRSRY.increaseWithdrawerApproval(for_, token_, amount_);
+        TRSRY.increaseWithdrawApproval(for_, token_, amount_);
     }
 
     /// @notice Lower an address's withdrawer approval
@@ -72,7 +72,7 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         ERC20 token_,
         uint256 amount_
     ) external onlyRole("custodian") {
-        TRSRY.decreaseWithdrawerApproval(for_, token_, amount_);
+        TRSRY.decreaseWithdrawApproval(for_, token_, amount_);
     }
 
     /// @notice Allow an address to incur `amount_` of debt from the treasury
@@ -123,7 +123,7 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         uint256 len = tokens_.length;
         for (uint256 j; j < len; ) {
             uint256 wApproval = TRSRY.withdrawApproval(policy_, tokens_[j]);
-            if (wApproval > 0) TRSRY.decreaseWithdrawerApproval(policy_, tokens_[j], wApproval);
+            if (wApproval > 0) TRSRY.decreaseWithdrawApproval(policy_, tokens_[j], wApproval);
 
             uint256 dApproval = TRSRY.debtApproval(policy_, tokens_[j]);
             if (dApproval > 0) TRSRY.decreaseDebtorApproval(policy_, tokens_[j], dApproval);

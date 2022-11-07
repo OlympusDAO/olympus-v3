@@ -8,8 +8,8 @@ import "src/Kernel.sol";
 abstract contract MINTRv1 is Module {
     // =========  EVENTS ========= //
 
-    event IncreaseMinterApproval(address indexed policy_, uint256 newAmount_);
-    event DecreaseMinterApproval(address indexed policy_, uint256 newAmount_);
+    event IncreaseMintApproval(address indexed policy_, uint256 newAmount_);
+    event DecreaseMintApproval(address indexed policy_, uint256 newAmount_);
     event Mint(address indexed policy_, address indexed to_, uint256 amount_);
     event Burn(address indexed policy_, address indexed from_, uint256 amount_);
 
@@ -45,10 +45,10 @@ abstract contract MINTRv1 is Module {
 
     /// @notice Increase approval for specific withdrawer addresses
     /// @dev    Policies must explicity request how much they want approved before withdrawing.
-    function increaseMinterApproval(address minter_, uint256 amount_) external virtual;
+    function increaseMintApproval(address minter_, uint256 amount_) external virtual;
 
     /// @notice Decrease approval for specific withdrawer addresses
-    function decreaseMinterApproval(address minter_, uint256 amount_) external virtual;
+    function decreaseMintApproval(address minter_, uint256 amount_) external virtual;
 
     /// @notice Emergency shutdown of minting and burning.
     function deactivate() external virtual;

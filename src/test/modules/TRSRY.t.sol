@@ -54,17 +54,17 @@ contract TRSRYTest is Test {
 
     function testCorrectness_IncreaseWithdrawApproval(uint256 amount_) public {
         vm.prank(godmode);
-        TRSRY.increaseWithdrawerApproval(testUser, ngmi, amount_);
+        TRSRY.increaseWithdrawApproval(testUser, ngmi, amount_);
 
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), amount_);
     }
 
     function testCorrectness_DecreaseWithdrawApproval(uint256 amount_) public {
         vm.prank(godmode);
-        TRSRY.increaseWithdrawerApproval(testUser, ngmi, amount_);
+        TRSRY.increaseWithdrawApproval(testUser, ngmi, amount_);
 
         vm.prank(godmode);
-        TRSRY.decreaseWithdrawerApproval(testUser, ngmi, amount_);
+        TRSRY.decreaseWithdrawApproval(testUser, ngmi, amount_);
 
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), 0);
     }
@@ -92,7 +92,7 @@ contract TRSRYTest is Test {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
 
         vm.prank(godmode);
-        TRSRY.increaseWithdrawerApproval(testUser, ngmi, amount_);
+        TRSRY.increaseWithdrawApproval(testUser, ngmi, amount_);
 
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), amount_);
 
@@ -230,7 +230,7 @@ contract TRSRYTest is Test {
 
         // Approve test fixture to withdraw and incurdebt for amount_
         vm.prank(godmode);
-        TRSRY.increaseWithdrawerApproval(godmode, ngmi, amount_);
+        TRSRY.increaseWithdrawApproval(godmode, ngmi, amount_);
 
         vm.prank(godmode);
         TRSRY.increaseDebtorApproval(debtor, ngmi, amount_);

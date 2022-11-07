@@ -37,7 +37,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
     //============================================================================================//
 
     /// @inheritdoc TRSRYv1
-    function increaseWithdrawerApproval(
+    function increaseWithdrawApproval(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
@@ -49,11 +49,11 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
             : approval + amount_;
         withdrawApproval[withdrawer_][token_] = newAmount;
 
-        emit IncreaseWithdrawerApproval(withdrawer_, token_, newAmount);
+        emit IncreaseWithdrawApproval(withdrawer_, token_, newAmount);
     }
 
     /// @inheritdoc TRSRYv1
-    function decreaseWithdrawerApproval(
+    function decreaseWithdrawApproval(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
@@ -63,7 +63,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         uint256 newAmount = approval < amount_ ? 0 : approval - amount_;
         withdrawApproval[withdrawer_][token_] = newAmount;
 
-        emit DecreaseWithdrawerApproval(withdrawer_, token_, newAmount);
+        emit DecreaseWithdrawApproval(withdrawer_, token_, newAmount);
     }
 
     /// @inheritdoc TRSRYv1
