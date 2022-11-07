@@ -9,13 +9,12 @@ import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 import "src/Kernel.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 
 // Import interfaces
 import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
 import {IBondCallback} from "interfaces/IBondCallback.sol";
-import {IBondTeller} from "interfaces/IBondTeller.sol";
+import {IBondFixedExpiryTeller} from "interfaces/IBondFixedExpiryTeller.sol";
 import {IEasyAuction} from "interfaces/IEasyAuction.sol";
 
 /// @title Olympus Bond Manager
@@ -23,8 +22,18 @@ import {IEasyAuction} from "interfaces/IEasyAuction.sol";
 contract BondManager is Policy, RolesConsumer {
     // ========= EVENTS ========= //
 
-    event BondProtocolMarketLaunched(uint256 marketId, uint256 capacity, uint48 bondTerm);
-    event GnosisAuctionLaunched(uint256 marketId, uint96 capacity, uint256 bondTerm);
+    event BondProtocolMarketLaunched(
+        uint256 marketId,
+        address bondToken,
+        uint256 capacity,
+        uint48 bondTerm
+    );
+    event GnosisAuctionLaunched(
+        uint256 marketId,
+        address bondToken,
+        uint96 capacity,
+        uint48 bondTerm
+    );
 
     // ========= DATA STRUCTURES ========= //
 
@@ -55,7 +64,7 @@ contract BondManager is Policy, RolesConsumer {
 
     // External Contracts
     IBondAuctioneer public fixedExpiryAuctioneer;
-    IBondTeller public fixedExpiryTeller;
+    IBondFixedExpiryTeller public fixedExpiryTeller;
     IEasyAuction public gnosisEasyAuction;
 
     // Tokens
@@ -77,7 +86,7 @@ contract BondManager is Policy, RolesConsumer {
         address ohm_
     ) Policy(kernel_) {
         fixedExpiryAuctioneer = IBondAuctioneer(fixedExpiryAuctioneer_);
-        fixedExpiryTeller = IBondTeller(fixedExpiryTeller_);
+        fixedExpiryTeller = IBondFixedExpiryTeller(fixedExpiryTeller_);
         gnosisEasyAuction = IEasyAuction(gnosisEasyAuction_);
         ohm = OlympusERC20Token(ohm_);
     }
@@ -108,7 +117,7 @@ contract BondManager is Policy, RolesConsumer {
     //============================================================================================//
 
     /// @notice                 Creates a market on the Bond Protocol contracts to auction off OHM bonds
-    /// @param capacity_        The amount of OHM to use in the OHM bonds
+    /// @param capacity_        The budget of OHM to payout through OHM bonds
     /// @param bondTerm_        How long should the OHM be locked in the bond
     function createFixedExpiryBondMarket(uint256 capacity_, uint48 bondTerm_)
         external
@@ -134,7 +143,10 @@ contract BondManager is Policy, RolesConsumer {
         marketId = fixedExpiryAuctioneer.createMarket(createMarketParams);
         bondCallback.whitelist(address(fixedExpiryTeller), marketId);
 
-        emit BondProtocolMarketLaunched(marketId, capacity_, bondTerm_);
+        // Get the address of the bond token to emit in the event
+        ERC20 bondToken = fixedExpiryTeller.getBondTokenForMarket(marketId);
+
+        emit BondProtocolMarketLaunched(marketId, address(bondToken), capacity_, bondTerm_);
     }
 
     /// @notice                 Creates a bond token using Bond Protocol and creates a Gnosis Auction to sell it
@@ -147,12 +159,12 @@ contract BondManager is Policy, RolesConsumer {
     {
         MINTR.mintOhm(address(this), capacity_);
 
-        uint48 expiry = uint48(block.timestamp) + bondTerm_;
+        uint48 expiry = uint48(block.timestamp) + batchAuctionParameters.auctionTime + bondTerm_;
 
         // Create bond token and pre-mint the necessary bond token amount using OHM
         ohm.increaseAllowance(address(fixedExpiryTeller), capacity_);
-        fixedExpiryTeller.deploy(ERC20(address(ohm)), expiry);
-        (ERC20 bondToken, ) = fixedExpiryTeller.create(ERC20(address(ohm)), expiry, capacity_);
+        ERC20 bondToken = fixedExpiryTeller.deploy(ERC20(address(ohm)), expiry);
+        fixedExpiryTeller.create(ERC20(address(ohm)), expiry, capacity_);
 
         // Launch Gnosis Auction
         bondToken.approve(address(gnosisEasyAuction), capacity_);
@@ -170,7 +182,7 @@ contract BondManager is Policy, RolesConsumer {
             new bytes(0) // access manager contract data
         );
 
-        emit GnosisAuctionLaunched(auctionId, capacity_, bondTerm_);
+        emit GnosisAuctionLaunched(auctionId, address(bondToken), capacity_, bondTerm_);
     }
 
     /// @notice                 Closes the specified bond protocol market to prevent future purchases
@@ -183,6 +195,8 @@ contract BondManager is Policy, RolesConsumer {
     /// @param auctionId_       The ID of the Gnosis auction
     function settleBatchAuction(uint256 auctionId_) external onlyRole("bondmanager_admin") {
         gnosisEasyAuction.settleAuction(auctionId_);
+        uint256 currentBalance = ohm.balanceOf(address(this));
+        ohm.transfer(address(TRSRY), currentBalance);
     }
 
     //============================================================================================//

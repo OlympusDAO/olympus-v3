@@ -27,4 +27,10 @@ contract MockFixedExpiryTeller {
     function deploy(MockERC20 underlying_, uint48 expiry_) external returns (MockERC20) {
         return bondToken;
     }
+
+    // ========= VIEW ========= //
+
+    function getBondTokenForMarket(uint256 id_) external view returns (MockERC20) {
+        return bondToken;
+    }
 }
