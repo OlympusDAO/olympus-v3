@@ -245,25 +245,7 @@ contract MINTRTest is Test {
         assertEq(MINTR.mintApproval(godmode), 0);
     }
 
-    function testCorrectness_MintAllowanceShouldntDecreaseIfMaxApproval(uint256 amount_) public {
-        vm.assume(amount_ != 0);
-
-        // Approve test fixture to mint max uint256
-        vm.prank(godmode);
-        MINTR.increaseMinterApproval(godmode, type(uint256).max);
-
-        // Check that test fixture has mintApproval of max uint256
-        assertEq(MINTR.mintApproval(godmode), type(uint256).max);
-
-        // Mint amount_ to user0
-        vm.prank(godmode);
-        MINTR.mintOhm(users[0], amount_);
-
-        // Check that test fixture has mintApproval of max uint256
-        assertEq(MINTR.mintApproval(godmode), type(uint256).max);
-    }
-
-    function testRevert_CannotMintorBurnZero() public {
+    function testRevert_CannotMintOrBurnZero() public {
         // Approve test fixture to mint max uint256
         vm.prank(godmode);
         MINTR.increaseMinterApproval(godmode, type(uint256).max);
@@ -316,6 +298,10 @@ contract MINTRTest is Test {
         // Reactivate the system
         vm.prank(godmode);
         MINTR.activate();
+
+        // Approve test fixture to mint max uint256 again (since no infinite approval)
+        vm.prank(godmode);
+        MINTR.increaseMinterApproval(godmode, type(uint256).max);
 
         // Approve MINTR to burn ohm from user0
         vm.prank(users[0]);

@@ -37,11 +37,8 @@ contract OlympusMinter is MINTRv1 {
         uint256 approval = mintApproval[msg.sender];
         if (approval < amount_) revert MINTR_NotApproved();
 
-        // If not infinite approval, decrement approval by amount
-        if (approval != type(uint256).max) {
-            unchecked {
-                mintApproval[msg.sender] = approval - amount_;
-            }
+        unchecked {
+            mintApproval[msg.sender] = approval - amount_;
         }
 
         ohm.mint(to_, amount_);
@@ -70,14 +67,12 @@ contract OlympusMinter is MINTRv1 {
         permissioned
     {
         uint256 approval = mintApproval[policy_];
-        if (approval == type(uint256).max) {
-            return;
-        }
 
         uint256 newAmount = type(uint256).max - approval < amount_
             ? type(uint256).max
             : approval + amount_;
         mintApproval[policy_] = newAmount;
+
         emit IncreaseMinterApproval(policy_, newAmount);
     }
 
@@ -88,12 +83,10 @@ contract OlympusMinter is MINTRv1 {
         permissioned
     {
         uint256 approval = mintApproval[policy_];
-        if (approval == 0) {
-            return;
-        }
 
         uint256 newAmount = approval < amount_ ? 0 : approval - amount_;
         mintApproval[policy_] = newAmount;
+
         emit DecreaseMinterApproval(policy_, newAmount);
     }
 

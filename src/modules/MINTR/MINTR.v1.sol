@@ -44,6 +44,7 @@ abstract contract MINTRv1 is Module {
     function burnOhm(address from_, uint256 amount_) external virtual;
 
     /// @notice Increase approval for specific withdrawer addresses
+    /// @dev    Policies must explicity request how much they want approved before withdrawing.
     function increaseMinterApproval(address minter_, uint256 amount_) external virtual;
 
     /// @notice Decrease approval for specific withdrawer addresses
