@@ -23,6 +23,7 @@ import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Distributor} from "policies/Distributor.sol";
+import {Emergency} from "policies/Emergency.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
@@ -51,6 +52,7 @@ contract OlympusDeploy is Script {
     RolesAdmin public rolesAdmin;
     TreasuryCustodian public treasuryCustodian;
     Distributor public distributor;
+    Emergency public emergency;
 
     /// Construction variables
 
@@ -70,7 +72,7 @@ contract OlympusDeploy is Script {
     /// External contracts
     address public staking;
 
-    function deploy(string memory chain_, address guardian_, address policy_) external {
+    function deploy(string memory chain_, address guardian_, address policy_, address emergency_) external {
         /// Token addresses
         ohm = ERC20(vm.envAddress("OHM_ADDRESS"));
         reserve = ERC20(vm.envAddress("DAI_ADDRESS"));
@@ -157,6 +159,9 @@ contract OlympusDeploy is Script {
         distributor = new Distributor(kernel, address(ohm), staking, vm.envUint("REWARD_RATE"));
         console2.log("Distributor deployed at:", address(distributor));
 
+        emergency = new Emergency(kernel);
+        console2.log("Emergency deployed at:", address(emergency));
+
         /// Execute actions on Kernel
         /// Install modules
         // kernel.executeAction(Actions.InstallModule, address(INSTR));
@@ -174,6 +179,7 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
         kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        kernel.executeAction(Actions.ActivatePolicy, address(emergency));
 
         /// Configure access control for policies
 
@@ -201,6 +207,10 @@ contract OlympusDeploy is Script {
 
         /// Distributor roles
         rolesAdmin.grantRole("distributor_admin", policy_);
+
+        /// Emergency roles
+        rolesAdmin.grantRole("emergency_shutdown", emergency_);
+        rolesAdmin.grantRole("emergency_restart", guardian_);
 
         // /// Transfer executor powers to guardian
         // kernel.executeAction(Actions.ChangeExecutor, guardian_);
@@ -255,6 +265,7 @@ contract OlympusDeploy is Script {
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
         treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
         distributor = Distributor(vm.envAddress("DISTRIBUTOR"));
+        emergency = Emergency(vm.envAddress("EMERGENCY"));
 
         /// Check that Modules are installed
         /// PRICE
@@ -288,7 +299,6 @@ contract OlympusDeploy is Script {
         require(fromKeycode(rolesKeycode) == "ROLES");
 
         /// Policies
-        /// Operator
         require(kernel.isPolicyActive(operator));
         require(kernel.isPolicyActive(heart));
         require(kernel.isPolicyActive(callback));
@@ -296,10 +306,11 @@ contract OlympusDeploy is Script {
         require(kernel.isPolicyActive(rolesAdmin));
         require(kernel.isPolicyActive(treasuryCustodian));
         require(kernel.isPolicyActive(distributor));
+        require(kernel.isPolicyActive(emergency));
     }
 
     /// @dev Should be called by the deployer address after deployment
-    function verifyAndPushAuth(address guardian_, address policy_) external {
+    function verifyAndPushAuth(address guardian_, address policy_, address emergency_) external {
         ROLES = OlympusRoles(vm.envAddress("ROLES"));
         heart = OlympusHeart(vm.envAddress("HEART"));
         callback = BondCallback(vm.envAddress("CALLBACK"));
@@ -331,6 +342,11 @@ contract OlympusDeploy is Script {
 
         /// Distributor Roles
         require(ROLES.hasRole(policy_, "distributor_admin"));
+
+        /// Emergency Roles
+        require(ROLES.hasRole(emergency_, "emergency_shutdown"));
+        require(ROLES.hasRole(guardian_, "emergency_restart"));
+
 
         /// Push rolesAdmin and Executor
         vm.startBroadcast();
@@ -396,6 +412,10 @@ contract OlympusDeploy is Script {
         vm.writeLine(
             file,
             string.concat('"', type(Distributor).name, '": "', vm.toString(address(distributor)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(Emergency).name, '": "', vm.toString(address(emergency)), '",')
         );
         vm.writeLine(file, "}");
     }
