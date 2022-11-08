@@ -8,12 +8,12 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
-import {BondFixedTermCDA} from "test/lib/bonds/BondFixedTermCDA.sol";
+import {BondFixedTermSDA} from "test/lib/bonds/BondFixedTermSDA.sol";
 import {BondAggregator} from "test/lib/bonds/BondAggregator.sol";
 import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority} from "solmate/auth/authorities/RolesAuthority.sol";
 
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {ZuniswapV2Factory} from "test/lib/zuniswapv2/ZuniswapV2Factory.sol";
@@ -23,18 +23,19 @@ import {ZuniswapV2Router} from "test/lib/zuniswapv2/ZuniswapV2Router.sol";
 import {MathLibrary} from "test/lib/zuniswapv2/libraries/Math.sol";
 
 import "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusInstructions} from "modules/INSTR.sol";
-import {OlympusVotes} from "modules/VOTES.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
+import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -94,7 +95,6 @@ library SimIO {
         netflows = abi.decode(res, (Netflow[]));
     }
 
-    // TODO work with R&D to get all the data they need out
     struct Result {
         uint32 epoch;
         bool rebalanced;
@@ -103,6 +103,12 @@ library SimIO {
         uint256 reserves;
         uint256 liqRatio;
         uint256 supply;
+        uint256 lowCapacity;
+        uint256 highCapacity;
+        uint256 lowWall;
+        uint256 highWall;
+        uint256 lowCushion;
+        uint256 highCushion;
     }
 
     function writeResults(
@@ -140,9 +146,24 @@ library SimIO {
                 ', "reserves": ',
                 bytes(vm.toString(results[i].reserves)),
                 ', "liqRatio": ',
-                bytes(vm.toString(results[i].liqRatio)),
+                bytes(vm.toString(results[i].liqRatio))
+            );
+            data = bytes.concat(
+                data,
                 ', "supply": ',
                 bytes(vm.toString(results[i].supply)),
+                ', "lowCapacity": ',
+                bytes(vm.toString(results[i].lowCapacity)),
+                ', "highCapacity": ',
+                bytes(vm.toString(results[i].highCapacity)),
+                ', "lowWall": ',
+                bytes(vm.toString(results[i].lowWall)),
+                ', "highWall": ',
+                bytes(vm.toString(results[i].highWall)),
+                ', "lowCushion": ',
+                bytes(vm.toString(results[i].lowCushion)),
+                ', "highCushion": ',
+                bytes(vm.toString(results[i].highCushion)),
                 "}"
             );
             if (i < len - 1) {
@@ -161,22 +182,25 @@ library SimIO {
 abstract contract RangeSim is Test {
     using FullMath for uint256;
 
-    /* ========== RANGE SYSTEM CONTRACTS ========== */
+    // =========  RANGE SYSTEM CONTRACTS ========= //
 
     Kernel public kernel;
     OlympusPrice public price;
     OlympusRange public range;
     OlympusTreasury public treasury;
     OlympusMinter public minter;
+    OlympusRoles public roles;
+
     Operator public operator;
     BondCallback public callback;
     OlympusHeart public heart;
     OlympusPriceConfig public priceConfig;
+    RolesAdmin public rolesAdmin;
 
     mapping(uint32 => SimIO.Params) internal params; // map of sim keys to sim params
     mapping(uint32 => mapping(uint32 => int256)) internal netflows; // map of sim keys to epochs to netflows
 
-    /* ========== EXTERNAL CONTRACTS  ========== */
+    // =========  EXTERNAL CONTRACTS  ========= //
 
     UserFactory public userCreator;
     address internal market;
@@ -186,7 +210,7 @@ abstract contract RangeSim is Test {
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
     BondFixedTermTeller internal teller;
-    BondFixedTermCDA internal auctioneer;
+    BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
     ZuniswapV2Factory internal lpFactory;
@@ -195,7 +219,7 @@ abstract contract RangeSim is Test {
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal reserveEthPriceFeed;
 
-    /* ========== SIMULATION VARIABLES ========== */
+    // =========  SIMULATION VARIABLES ========= //
 
     /// @notice Determines which data is pulled from the input files and allows writing results to compare against the same seed.
     /// @dev This is set dynamically by the test generator.
@@ -215,6 +239,9 @@ abstract contract RangeSim is Test {
     /// @notice Number of epochs between rebalancing the liquidity pool
     uint32 internal REBALANCE_FREQUENCY;
 
+    /// @notice Max percent of treasury to use for rebalancing liquidity
+    uint32 internal MAX_OUTFLOW_RATE;
+
     /* ========== SETUP ========== */
 
     function setUp() public {
@@ -228,6 +255,7 @@ abstract contract RangeSim is Test {
         EPOCHS = uint32(vm.envUint("EPOCHS"));
         EPOCH_DURATION = uint32(vm.envUint("EPOCH_DURATION"));
         REBALANCE_FREQUENCY = uint32(vm.envUint("REBALANCE_FREQUENCY"));
+        MAX_OUTFLOW_RATE = uint32(vm.envUint("MAX_OUTFLOW_RATE"));
 
         // Create accounts for sim
         userCreator = new UserFactory();
@@ -244,7 +272,7 @@ abstract contract RangeSim is Test {
             // Deploy the bond system
             aggregator = new BondAggregator(guardian, auth);
             teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
-            auctioneer = new BondFixedTermCDA(teller, aggregator, guardian, auth);
+            auctioneer = new BondFixedTermSDA(teller, aggregator, guardian, auth);
 
             // Register auctioneer on the bond system
             vm.prank(guardian);
@@ -322,21 +350,22 @@ abstract contract RangeSim is Test {
             price = new OlympusPrice(
                 kernel,
                 ohmEthPriceFeed,
+                uint48(24 hours),
                 reserveEthPriceFeed,
+                uint48(24 hours),
                 uint48(vm.envUint("EPOCH_DURATION")),
                 uint48(vm.envUint("MA_DURATION"))
             );
             range = new OlympusRange(
                 kernel,
-                [ERC20(ohm), ERC20(reserve)],
-                [
-                    vm.envUint("THRESHOLD_FACTOR"),
-                    uint256(_params.cushionSpread),
-                    uint256(_params.wallSpread)
-                ]
+                ERC20(ohm), ERC20(reserve),
+                vm.envUint("THRESHOLD_FACTOR"),
+                uint256(_params.cushionSpread),
+                uint256(_params.wallSpread)
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
+            roles = new OlympusRoles(kernel);
         }
 
         {
@@ -346,7 +375,7 @@ abstract contract RangeSim is Test {
             /// Deploy operator
             operator = new Operator(
                 kernel,
-                IBondAuctioneer(address(auctioneer)),
+                IBondSDA(address(auctioneer)),
                 callback,
                 [ERC20(ohm), ERC20(reserve)],
                 [
@@ -358,6 +387,7 @@ abstract contract RangeSim is Test {
                     uint32(vm.envUint("REGEN_WAIT")), // regenWait
                     uint32(vm.envUint("REGEN_THRESHOLD")), // regenThreshold
                     uint32(vm.envUint("REGEN_OBSERVE")) // regenObserve
+                    // uint32(vm.envUint("EPOCH_DURATION")) // observationFrequency
                 ]
             );
 
@@ -371,6 +401,9 @@ abstract contract RangeSim is Test {
                 reserve,
                 uint256(0) // no keeper rewards for sim
             );
+
+            /// Deploy RolesAdmin
+            rolesAdmin = new RolesAdmin(kernel);
         }
 
         {
@@ -381,33 +414,35 @@ abstract contract RangeSim is Test {
             kernel.executeAction(Actions.InstallModule, address(range));
             kernel.executeAction(Actions.InstallModule, address(treasury));
             kernel.executeAction(Actions.InstallModule, address(minter));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
             kernel.executeAction(Actions.ActivatePolicy, address(heart));
             kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
             // Configure access control
 
             // Operator roles
-            kernel.grantRole(toRole("operator_operate"), address(heart));
-            kernel.grantRole(toRole("operator_operate"), guardian);
-            kernel.grantRole(toRole("operator_reporter"), address(callback));
-            kernel.grantRole(toRole("operator_policy"), policy);
-            kernel.grantRole(toRole("operator_admin"), guardian);
+            rolesAdmin.grantRole("operator_operate", address(heart));
+            rolesAdmin.grantRole("operator_operate", guardian);
+            rolesAdmin.grantRole("operator_reporter", address(callback));
+            rolesAdmin.grantRole("operator_policy", policy);
+            rolesAdmin.grantRole("operator_admin", guardian);
 
             // Bond callback roles
-            kernel.grantRole(toRole("callback_whitelist"), address(operator));
-            kernel.grantRole(toRole("callback_whitelist"), guardian);
-            kernel.grantRole(toRole("callback_admin"), guardian);
+            rolesAdmin.grantRole("callback_whitelist", address(operator));
+            rolesAdmin.grantRole("callback_whitelist", guardian);
+            rolesAdmin.grantRole("callback_admin", guardian);
 
             // Heart roles
-            kernel.grantRole(toRole("heart_admin"), guardian);
+            rolesAdmin.grantRole("heart_admin", guardian);
 
             // PriceConfig roles
-            kernel.grantRole(toRole("price_admin"), guardian);
+            rolesAdmin.grantRole("price_admin", guardian);
         }
 
         {
@@ -487,7 +522,7 @@ abstract contract RangeSim is Test {
         }
     }
 
-    /* ========== SIMULATION HELPER FUNCTIONS ========== */
+    // =========  SIMULATION HELPER FUNCTIONS ========= //
     /// @notice Returns the rebase percent per epoch based on supply as a percentage with 4 decimals. i.e. 10000 = 1%.
     /// @dev Values are based on the minimum value for each tier as defined in OIP-18.
     function getRebasePercent() internal view returns (uint256) {
@@ -498,7 +533,7 @@ abstract contract RangeSim is Test {
         } else if (supply < 10_000_000 * 1e9) {
             return 1587;
         } else if (supply < 100_000_000 * 1e9) {
-            return 1183;
+            return 1186;
         } else if (supply < 1_000_000_000 * 1e9) {
             return 458;
         } else if (supply < 10_000_000_000 * 1e9) {
@@ -554,7 +589,7 @@ abstract contract RangeSim is Test {
 
         // Mint OHM to the market account
         vm.startPrank(address(minter));
-        ohm.mint(market, (((ohm.balanceOf(market) * 8) / 10) * perc) / 1e6);
+        ohm.mint(market, (ohm.balanceOf(market) * perc) / 1e6);
 
         // Mint OHM to the liquidity pool and sync the balances
         uint256 poolBalance = ohm.balanceOf(address(pool));
@@ -667,8 +702,9 @@ abstract contract RangeSim is Test {
         uint256 reservesInTotal = reservesInTreasury + reservesInLiquidity;
 
         uint32 liquidityRatio = uint32((reservesInLiquidity * 1e4) / reservesInTotal);
+        console2.log("Current Liq Ratio: ", liquidityRatio);
 
-        // Get the target ratio
+        // Cache the target ratio and the max ratio
         uint32 targetRatio = uint32(params[key].maxLiqRatio);
 
         // Compare ratios and calculate swap amount
@@ -679,17 +715,26 @@ abstract contract RangeSim is Test {
         if (liquidityRatio < targetRatio) {
             // Sell reserves into the liquidity pool
             uint256 amountIn = (reservesInTotal * targetRatio) / 1e4 - reservesInLiquidity;
+            uint256 maxIn = reservesInTreasury * MAX_OUTFLOW_RATE / 1e4;
+            amountIn = amountIn > maxIn ? maxIn : amountIn;
             if (amountIn > price.getCurrentPrice() / 1e9) swap(address(treasury), true, amountIn);
-        } else if (liquidityRatio > targetRatio) {
+        } else if (liquidityRatio > params[key].maxLiqRatio) {
             // Buy reserves from the liquidity pool
             uint256 amountOut = reservesInLiquidity - (reservesInTotal * targetRatio) / 1e4;
             if (amountOut > price.getCurrentPrice() / 1e9) swap(address(treasury), false, amountOut);
         }
+
+        reservesInTreasury = reserve.balanceOf(address(treasury));
+        reservesInLiquidity = reserve.balanceOf(address(pool));
+        reservesInTotal = reservesInTreasury + reservesInLiquidity;
+
+        liquidityRatio = uint32((reservesInLiquidity * 1e4) / reservesInTotal);
+        console2.log("New Liq Ratio: ", liquidityRatio);
     }
 
-    function marketAction(uint32 key, uint32 epoch) internal {
+    function marketAction(int256 netflow) internal {
         // Get the net flow for the key and epoch combination
-        int256 netflow = netflows[key][epoch];
+        // int256 netflow = netflows[key][epoch];
 
         if (netflow == int256(0)) return; // If netflow is 0, no action is needed
 
@@ -704,6 +749,7 @@ abstract contract RangeSim is Test {
             uint256 cushionPrice = range.price(false, true);
             uint256 currentPrice = price.getCurrentPrice();
             while (flow > currentPrice / 1e9) { // If below this amount, swaps will yield 0 OHM, which errors on the liquidity pool
+                console2.log("High", flow);
                 // Check if the RBS side is active, if not, swap all flow into the liquidity pool
                 if (range.active(true)) {
                     // Check price against the upper wall and cushion
@@ -724,12 +770,14 @@ abstract contract RangeSim is Test {
                             );
                             vm.prank(market);
                             operator.swap(reserve, capacityInReserve, minAmountOut);
+                            console2.log("  Wall swap", capacityInReserve);
                             flow -= capacityInReserve;
                         } else {
                             // If flow is less than capacity, swap the flow at the wall
                             uint256 minAmountOut = operator.getAmountOut(reserve, flow);
                             vm.prank(market);
                             operator.swap(reserve, flow, minAmountOut);
+                            console2.log("  Wall swap", flow);
                             flow = 0;
                         }
                     } else if (currentPrice >= cushionPrice) {
@@ -737,27 +785,29 @@ abstract contract RangeSim is Test {
                         // We assume there is a cushion here since these actions are taking place right after an epoch update
                         uint256 id = range.market(true);
                         if (id != type(uint256).max) {
-
                             uint256 bondScale = aggregator.marketScale(id);
                             while (
                                 currentPrice >=
-                                aggregator.marketPrice(id).mulDiv(oracleScale, bondScale)
+                                aggregator.marketPrice(id).mulDiv(oracleScale, bondScale * 1e9)
+                                && aggregator.isLive(id)
                             ) {
                                 uint256 maxBond = aggregator.maxAmountAccepted(id, address(treasury));
+                                if (maxBond < 1e18) break;
                                 if (maxBond > flow) {
                                     uint256 minAmountOut = aggregator.payoutFor(
-                                        id,
                                         flow,
+                                        id,
                                         address(treasury)
                                     );
                                     vm.prank(market);
                                     teller.purchase(market, address(treasury), id, flow, minAmountOut);
+                                    console2.log("  Bonding", flow);
                                     flow = 0;
                                     break;
                                 } else {
                                     uint256 minAmountOut = aggregator.payoutFor(
-                                        id,
                                         maxBond,
+                                        id,
                                         address(treasury)
                                     );
                                     vm.prank(market);
@@ -768,6 +818,7 @@ abstract contract RangeSim is Test {
                                         maxBond,
                                         minAmountOut
                                     );
+                                    console2.log("  Bonding", maxBond);
                                     flow -= maxBond;
                                 }
                             }
@@ -780,10 +831,12 @@ abstract contract RangeSim is Test {
                             if (flow > maxReserveIn) {
                                 // Swap the max amount in the liquidity pool
                                 swap(market, true, maxReserveIn);
+                                console2.log("  Swap after bonds", maxReserveIn);
                                 flow -= maxReserveIn;
                             } else {
                                 // Swap the flow in the liquidity pool
                                 swap(market, true, flow);
+                                console2.log("  Swap after bonds", flow);
                                 flow = 0;
                             }
                         }
@@ -794,16 +847,19 @@ abstract contract RangeSim is Test {
                         if (flow > maxReserveIn) {
                             // Swap the max amount in the liquidity pool
                             swap(market, true, maxReserveIn);
+                            console2.log("  Swap in LP", maxReserveIn);
                             flow -= maxReserveIn;
                         } else {
                             // Swap the flow in the liquidity pool
                             swap(market, true, flow);
+                            console2.log("  Swap in LP", flow);
                             flow = 0;
                         }
                     }
                 } else {
                     // If the RBS side is not active, swap all flow into the liquidity pool
                     swap(market, true, flow);
+                    console2.log("  Inactive, Swap in LP", flow);
                     flow = 0;
                 }
             }
@@ -813,11 +869,12 @@ abstract contract RangeSim is Test {
             uint256 cushionPrice = range.price(false, false);
             uint256 currentPrice = price.getCurrentPrice();
             while (flow > currentPrice / 1e9) { // If below this amount, swaps will yield 0 OHM, which errors on the liquidity pool
+                console2.log("Low", flow);
                 // Check if the RBS side is active, if not, swap all flow into the liquidity pool
                 if (range.active(false)) {
                     // Check price against the upper wall and cushion
                     currentPrice = price.getCurrentPrice();
-                    uint256 oracleScale = 10**(price.decimals());
+                    uint256 oracleScale = 10**uint8(price.decimals());
 
                     // If the market price is below the wall price, swap at the wall up to its capacity
                     if (currentPrice <= wallPrice) {
@@ -828,6 +885,7 @@ abstract contract RangeSim is Test {
                             uint256 minAmountOut = operator.getAmountOut(ohm, amountIn);
                             vm.prank(market);
                             operator.swap(ohm, amountIn, minAmountOut);
+                            console2.log("  Wall swap", capacity);
                             flow -= capacity;
                         } else {
                             // If flow is less than capacity, swap the flow at the wall
@@ -835,6 +893,7 @@ abstract contract RangeSim is Test {
                             uint256 minAmountOut = operator.getAmountOut(ohm, amountIn);
                             vm.prank(market);
                             operator.swap(ohm, amountIn, minAmountOut);
+                            console2.log("  Wall swap", flow);
                             flow = 0;
                         }
                     } else if (currentPrice <= cushionPrice) {
@@ -843,18 +902,23 @@ abstract contract RangeSim is Test {
                         uint256 id = range.market(false);
                         if (id != type(uint256).max) {
                             uint256 bondScale = aggregator.marketScale(id);
+                            console2.log("  Current Price", currentPrice);
+                            console2.log("  Bond Price", 10**(price.decimals() * 2) / aggregator.marketPrice(id).mulDiv(oracleScale * 1e9, bondScale));
                             while (
-                                currentPrice >=
+                                currentPrice <=
                                 10**(price.decimals() * 2) /
-                                    aggregator.marketPrice(id).mulDiv(oracleScale, bondScale)
+                                    aggregator.marketPrice(id).mulDiv(oracleScale * 1e9, bondScale)
+                                && aggregator.isLive(id)
                             ) {
-                                (, , , , , uint256 maxPayout) = auctioneer.getMarketInfoForPurchase(id); // in reserve units
+                                uint256 maxBond = aggregator.maxAmountAccepted(id, address(treasury)); // in OHM units
+                                uint256 maxPayout = aggregator.payoutFor(maxBond, id, address(treasury)); // in reserve units
+                                if (maxPayout < 1e18) break;
                                 uint256 bondPrice = aggregator.marketPrice(id);
                                 if (maxPayout > flow) {
                                     uint256 amountIn = flow.mulDiv(bondPrice, bondScale); // convert to OHM units
                                     uint256 minAmountOut = aggregator.payoutFor(
+                                        amountIn,
                                         id,
-                                        flow,
                                         address(treasury)
                                     );
                                     vm.prank(market);
@@ -865,23 +929,25 @@ abstract contract RangeSim is Test {
                                         amountIn,
                                         minAmountOut
                                     );
+                                    console2.log("  Bonding", flow);
                                     flow = 0;
                                     break;
                                 } else {
-                                    uint256 amountIn = maxPayout.mulDiv(bondPrice, bondScale); // convert to OHM units
-                                    uint256 minAmountOut = aggregator.payoutFor(
-                                        id,
-                                        amountIn,
-                                        address(treasury)
-                                    );
+                                    // uint256 amountIn = maxPayout.mulDiv(bondPrice, bondScale); // convert to OHM units
+                                    // uint256 minAmountOut = aggregator.payoutFor(
+                                    //     amountIn,
+                                    //     id,
+                                    //     address(treasury)
+                                    // );
                                     vm.prank(market);
                                     teller.purchase(
                                         market,
                                         address(treasury),
                                         id,
-                                        amountIn,
-                                        minAmountOut
+                                        maxBond,
+                                        maxPayout
                                     );
+                                    console2.log("  Bonding", maxPayout);
                                     flow -= maxPayout;
                                 }
                             }
@@ -895,10 +961,12 @@ abstract contract RangeSim is Test {
                             if (flow > maxReserveOut) {
                                 // Swap the max amount in the liquidity pool
                                 swap(market, false, maxReserveOut);
+                                console2.log("  Swap after bonds", maxReserveOut);
                                 flow -= maxReserveOut;
                             } else {
                                 // Swap the flow in the liquidity pool
                                 swap(market, false, flow);
+                                console2.log("  Swap after bonds", flow);
                                 flow = 0;
                             }
                         }
@@ -910,16 +978,19 @@ abstract contract RangeSim is Test {
                         if (flow > maxReserveOut) {
                             // Swap the max amount in the liquidity pool
                             swap(market, false, maxReserveOut);
+                            console2.log("  Swap in LP", maxReserveOut);
                             flow -= maxReserveOut;
                         } else {
                             // Swap the flow in the liquidity pool
                             swap(market, false, flow);
+                            console2.log("  Swap in LP", flow);
                             flow = 0;
                         }
                     }
                 } else {
                     // If the RBS side is not active, swap all flow into the liquidity pool
                     swap(market, false, flow);
+                    console2.log("  Inactive, Swap in LP", flow);
                     flow = 0;
                 }
             }
@@ -939,6 +1010,7 @@ abstract contract RangeSim is Test {
         uint256 reservesInLiquidity = reserve.balanceOf(address(pool));
         uint256 reservesInTotal = reservesInTreasury + reservesInLiquidity;
         uint256 liquidityRatio = uint256((reservesInLiquidity * 1e4) / reservesInTotal);
+        OlympusRange.Range memory _range = range.range();
 
         // Create result struct
         result = SimIO.Result(
@@ -948,53 +1020,68 @@ abstract contract RangeSim is Test {
             lastPrice,
             reservesInTotal,
             liquidityRatio,
-            supply
+            supply,
+            _range.low.capacity,
+            _range.high.capacity,
+            _range.wall.low.price,
+            _range.wall.high.price,
+            _range.cushion.low.price,
+            _range.cushion.high.price
         );
     }
 
-    /* ========== SIMULATION LOGIC ========== */
+    // =========  SIMULATION LOGIC ========= //
     function simulate(uint32 key) internal {
         // Deploy a RBS clone for the key
         rangeSetup(key);
 
         // Initialize variables for tracking status
-        uint32 lastRebalance = uint32(block.timestamp);
+        
+        uint32 step = 1 hours;
         uint32 epochs = EPOCHS; // cache
         uint32 duration = EPOCH_DURATION; // cache
-        uint32 rebalance_frequency = REBALANCE_FREQUENCY; // cache
+        uint32 rebalance_frequency = REBALANCE_FREQUENCY / duration; // cache
         bool dynamicRR = params[key].dynamicRR; // cache
         SimIO.Result[] memory results = new SimIO.Result[](epochs);
+        int256 netflow;
+        uint32 lastRebalance;
 
+        uint32 steps = duration / step;
+        vm.warp(block.timestamp + duration); // Move forward one epoch to allow beating the heart at the start
+        duration = duration / steps;
         // Run simulation
-        for (uint32 e; e < epochs; ) {
-            // 0. Warp time forward
-            vm.warp(block.timestamp + duration);
+        for (uint32 e; e < epochs; ++e) {
+            console2.log("Epoch", e);
+            // // 0. Warp time forward
+            // vm.warp(block.timestamp + duration);
 
             // 1. Perform rebase
             rebase(dynamicRR);
 
-            // 2. Update price and moving average data from LP pool
-            updatePrice();
-
-            // 3. RBS Operations triggered
-            heart.beat();
-
-            // 4. Implement market actions for net flows
-            marketAction(key, e);
-
-            // 5. Rebalance liquidity if enough epochs have passed
-            // 6. Store results for output
+            // 2. Perform rebalance
             if (e > lastRebalance + rebalance_frequency) {
+                console2.log("Rebalance liquidity");
                 rebalanceLiquidity(key);
                 lastRebalance = e;
-                results[e] = getResult(e, true);
-            } else {
-                results[e] = getResult(e, false);
+            } 
+
+            netflow = netflows[key][e] / int256(uint256(steps));
+            for (uint32 i; i < steps; ++i) {
+                // 3. Update price and moving average data from LP pool
+                updatePrice();
+
+                // 4. RBS Operations triggered only on the epoch
+                if (i == uint32(0)) heart.beat();
+
+                // 5. Implement market actions for net flows
+                marketAction(netflow);
+
+                // Warp time forward
+                vm.warp(block.timestamp + duration);
             }
 
-            unchecked {
-                e++;
-            }
+            // 6. Store results for output
+            results[e] = getResult(e, e == lastRebalance);
         }
 
         // Write results to output file

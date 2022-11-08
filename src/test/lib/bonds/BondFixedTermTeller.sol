@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.15;
+pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
@@ -12,7 +12,7 @@ import {ERC1155} from "./lib/ERC1155.sol";
 
 /// @title Bond Fixed Term Teller
 /// @notice Bond Fixed Term Teller Contract
-/// @dev Bond is a permissionless system to create Olympus-style bond markets
+/// @dev Bond Protocol is a permissionless system to create Olympus-style bond markets
 ///      for any token pair. The markets do not require maintenance and will manage
 ///      bond prices based on activity. Bond issuers create BondMarkets that pay out
 ///      a Payout Token in exchange for deposited Quote Tokens. Users can purchase
@@ -116,10 +116,10 @@ contract BondFixedTermTeller is BondBaseTeller, IBondFixedTermTeller, ERC1155 {
         if (underlying_.balanceOf(address(this)) < oldBalance + amount_)
             revert Teller_UnsupportedToken();
 
-        /// If fee is greater than the create discount, then calculate the fee and store it
-        /// Otherwise, fee is zero.
+        // If fee is greater than the create discount, then calculate the fee and store it
+        // Otherwise, fee is zero.
         if (protocolFee > createFeeDiscount) {
-            /// Calculate fee amount
+            // Calculate fee amount
             uint256 feeAmount = amount_.mulDiv(protocolFee - createFeeDiscount, FEE_DECIMALS);
             rewards[_protocol][underlying_] += feeAmount;
 

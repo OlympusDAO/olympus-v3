@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
-import {BondFixedTermCDA} from "test/lib/bonds/BondFixedTermCDA.sol";
+import {BondFixedTermSDA} from "test/lib/bonds/BondFixedTermSDA.sol";
 import {BondAggregator} from "test/lib/bonds/BondAggregator.sol";
 import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
@@ -14,18 +14,20 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
 
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter, OHM} from "modules/MINTR.sol";
-
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 // solhint-disable-next-line max-states-count
 contract OperatorTest is Test {
@@ -41,7 +43,7 @@ contract OperatorTest is Test {
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
     BondFixedTermTeller internal teller;
-    BondFixedTermCDA internal auctioneer;
+    BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
 
@@ -50,9 +52,11 @@ contract OperatorTest is Test {
     OlympusRange internal range;
     OlympusTreasury internal treasury;
     OlympusMinter internal minter;
+    OlympusRoles internal roles;
 
     Operator internal operator;
     BondCallback internal callback;
+    RolesAdmin internal rolesAdmin;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -70,7 +74,7 @@ contract OperatorTest is Test {
             /// Deploy the bond system
             aggregator = new BondAggregator(guardian, auth);
             teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
-            auctioneer = new BondFixedTermCDA(teller, aggregator, guardian, auth);
+            auctioneer = new BondFixedTermSDA(teller, aggregator, guardian, auth);
 
             /// Register auctioneer on the bond system
             vm.prank(guardian);
@@ -91,16 +95,21 @@ contract OperatorTest is Test {
             price = new MockPrice(kernel, uint48(8 hours));
             range = new OlympusRange(
                 kernel,
-                [ERC20(ohm), ERC20(reserve)],
-                [uint256(100), uint256(1000), uint256(2000)]
+                ERC20(ohm),
+                ERC20(reserve),
+                uint256(100),
+                uint256(1000),
+                uint256(2000)
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
+            roles = new OlympusRoles(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
             price.setLastPrice(100 * 1e18);
             price.setDecimals(18);
+            price.setLastTime(uint48(block.timestamp));
         }
 
         {
@@ -110,7 +119,7 @@ contract OperatorTest is Test {
             /// Deploy operator
             operator = new Operator(
                 kernel,
-                IBondAuctioneer(address(auctioneer)),
+                IBondSDA(address(auctioneer)),
                 callback,
                 [ERC20(ohm), ERC20(reserve)],
                 [
@@ -122,9 +131,12 @@ contract OperatorTest is Test {
                     uint32(1 hours), // regenWait
                     uint32(5), // regenThreshold
                     uint32(7) // regenObserve
+                    // uint32(8 hours) // observationFrequency
                 ]
             );
 
+            /// Deploy roles administrator
+            rolesAdmin = new RolesAdmin(kernel);
             /// Registor operator to create bond markets with a callback
             vm.prank(guardian);
             auctioneer.setCallbackAuthStatus(address(operator), true);
@@ -138,25 +150,26 @@ contract OperatorTest is Test {
             kernel.executeAction(Actions.InstallModule, address(range));
             kernel.executeAction(Actions.InstallModule, address(treasury));
             kernel.executeAction(Actions.InstallModule, address(minter));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
             /// Configure access control
 
             /// Operator roles
-            kernel.grantRole(toRole("operator_operate"), address(heart));
-            kernel.grantRole(toRole("operator_operate"), guardian);
-            kernel.grantRole(toRole("operator_reporter"), address(callback));
-            kernel.grantRole(toRole("operator_policy"), policy);
-            kernel.grantRole(toRole("operator_admin"), guardian);
+            rolesAdmin.grantRole("operator_operate", address(heart));
+            rolesAdmin.grantRole("operator_reporter", address(callback));
+            rolesAdmin.grantRole("operator_policy", policy);
+            rolesAdmin.grantRole("operator_admin", guardian);
 
             /// Bond callback roles
-            kernel.grantRole(toRole("callback_whitelist"), address(operator));
-            kernel.grantRole(toRole("callback_whitelist"), guardian);
-            kernel.grantRole(toRole("callback_admin"), guardian);
+            rolesAdmin.grantRole("callback_whitelist", address(operator));
+            rolesAdmin.grantRole("callback_whitelist", guardian);
+            rolesAdmin.grantRole("callback_admin", guardian);
         }
 
         /// Set operator on the callback
@@ -184,7 +197,7 @@ contract OperatorTest is Test {
         reserve.approve(address(teller), testReserve * 20);
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
     function knockDownWall(bool high_) internal returns (uint256 amountIn, uint256 amountOut) {
         if (high_) {
             /// Get current capacity of the high wall
@@ -213,13 +226,14 @@ contract OperatorTest is Test {
         }
     }
 
-    /* ========== WALL TESTS ========== */
+    // =========  WALL TESTS ========= //
 
     /// DONE
     /// [X] Able to swap when walls are up
     /// [X] Splippage check when swapping
     /// [X] Wall breaks when capacity drops below the configured threshold
     /// [X] Not able to swap at the walls when they are down
+    /// [ ] Not able to swap at the walls when price is stale
 
     function testCorrectness_swapHighWall() public {
         /// Initialize operator
@@ -375,6 +389,48 @@ contract OperatorTest is Test {
         operator.swap(ohm, amountIn, expAmountOut);
     }
 
+    function testCorrectness_cannotSwapHighWallWithStalePrice() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Confirm wall is up
+        assertTrue(range.active(true));
+
+        /// Set timestamp forward so price is stale
+        vm.warp(block.timestamp + 3 * uint256(price.observationFrequency()) + 1);
+
+        /// Try to swap, expect to fail
+        uint256 amountIn = 100 * 1e18;
+        uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * range.price(true, true));
+
+        bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.swap(reserve, amountIn, expAmountOut);
+    }
+
+    function testCorrectness_cannotSwapLowWallWithStalePrice() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Confirm wall is up
+        assertTrue(range.active(false));
+
+        /// Set timestamp forward so price is stale
+        vm.warp(block.timestamp + 3 * uint256(price.observationFrequency()) + 1);
+
+        /// Try to swap, expect to fail
+        uint256 amountIn = 100 * 1e9;
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
+
+        bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.swap(ohm, amountIn, expAmountOut);
+    }
+
     function testCorrectness_swapRevertsOnSlippage() public {
         /// Initialize operator
         vm.prank(guardian);
@@ -435,7 +491,7 @@ contract OperatorTest is Test {
         operator.swap(token, amountIn, minAmountOut);
     }
 
-    /* ========== CUSHION TESTS ========== */
+    // =========  CUSHION TESTS ========= //
 
     /// DONE
     /// [X] Cushions deployed when price set in the range and operate triggered
@@ -455,7 +511,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
@@ -488,7 +544,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
@@ -502,7 +558,7 @@ contract OperatorTest is Test {
         price.setLastPrice(105 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is closed
@@ -524,7 +580,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
@@ -538,7 +594,7 @@ contract OperatorTest is Test {
         price.setLastPrice(130 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is closed
@@ -560,7 +616,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
@@ -588,7 +644,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is not deployed
@@ -607,7 +663,7 @@ contract OperatorTest is Test {
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
@@ -640,7 +696,7 @@ contract OperatorTest is Test {
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
@@ -654,7 +710,7 @@ contract OperatorTest is Test {
         price.setLastPrice(79 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is closed
@@ -676,7 +732,7 @@ contract OperatorTest is Test {
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
@@ -690,7 +746,7 @@ contract OperatorTest is Test {
         price.setLastPrice(91 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is closed
@@ -712,7 +768,7 @@ contract OperatorTest is Test {
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
@@ -740,7 +796,7 @@ contract OperatorTest is Test {
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is not deployed
@@ -760,7 +816,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to almost regenerate the high wall
         for (uint256 i; i < 4; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -771,7 +827,7 @@ contract OperatorTest is Test {
         /// Cause price to spike to trigger high cushion
         uint256 cushionPrice = range.price(false, true);
         price.setLastPrice(cushionPrice + 500);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check market is live
@@ -787,7 +843,7 @@ contract OperatorTest is Test {
         /// Will set the operator market on high side to type(uint256).max
         /// However, the prior market will still be live when it's supposed to be deactivated
         price.setLastPrice(95 * 1e18);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
         /// Get latest market
         uint256 newMarket = range.market(true);
@@ -810,7 +866,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Get current market
@@ -844,7 +900,7 @@ contract OperatorTest is Test {
         price.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
@@ -861,6 +917,17 @@ contract OperatorTest is Test {
 
         /// Check that the side capacity has been reduced by the amount of the payout
         assertEq(range.capacity(true), startCapacity - payout);
+
+        /// Set timestamp forward so that price is stale
+        vm.warp(block.timestamp + uint256(price.observationFrequency()) * 3 + 1);
+
+        /// Try to purchase another bond and expect to revert
+        amountIn = auctioneer.maxAmountAccepted(id, guardian) / 2;
+        minAmountOut = auctioneer.payoutFor(amountIn, id, guardian);
+
+        vm.expectRevert(abi.encodeWithSignature("Operator_Inactive()"));
+        vm.prank(alice);
+        teller.purchase(alice, guardian, id, amountIn, minAmountOut);
     }
 
     function testCorrectness_lowCushionPurchasesReduceCapacity() public {
@@ -875,7 +942,7 @@ contract OperatorTest is Test {
         price.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
@@ -892,9 +959,20 @@ contract OperatorTest is Test {
 
         /// Check that the side capacity has been reduced by the amount of the payout
         assertEq(range.capacity(false), startCapacity - payout);
+
+        /// Set timestamp forward so that price is stale
+        vm.warp(block.timestamp + uint256(price.observationFrequency()) * 3 + 1);
+
+        /// Try to purchase another bond and expect to revert
+        amountIn = auctioneer.maxAmountAccepted(id, guardian) / 2;
+        minAmountOut = auctioneer.payoutFor(amountIn, id, guardian);
+
+        vm.expectRevert(abi.encodeWithSignature("Operator_Inactive()"));
+        vm.prank(alice);
+        teller.purchase(alice, guardian, id, amountIn, minAmountOut);
     }
 
-    /* ========== REGENERATION TESTS ========== */
+    // =========  REGENERATION TESTS ========= //
 
     /// DONE
     /// [X] Wall regenerates when price on other side of MA for enough observations
@@ -932,7 +1010,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -976,7 +1054,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function with negative
         for (uint256 i; i < 8; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -988,7 +1066,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1029,7 +1107,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 4; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1073,7 +1151,7 @@ contract OperatorTest is Test {
         price.setLastPrice(101 * 1e18);
 
         /// Trigger the operator once to get a positive check
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Set price below the moving average to get negative checks
@@ -1081,7 +1159,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function several times with negative checks
         for (uint256 i; i < 3; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1090,7 +1168,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function several times with positive checks
         for (uint256 i; i < 4; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1133,7 +1211,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1154,7 +1232,7 @@ contract OperatorTest is Test {
 
         /// Trigger a cushion
         price.setLastPrice(89 * 1e18);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
@@ -1201,7 +1279,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1245,7 +1323,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function with negative
         for (uint256 i; i < 8; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1257,7 +1335,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1298,7 +1376,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 4; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1342,7 +1420,7 @@ contract OperatorTest is Test {
         price.setLastPrice(98 * 1e18);
 
         /// Trigger the operator once to get a positive check
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Set price above the moving average to get negative checks
@@ -1350,7 +1428,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function several times with negative checks
         for (uint256 i; i < 3; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1359,7 +1437,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function several times with positive checks
         for (uint256 i; i < 4; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1402,7 +1480,7 @@ contract OperatorTest is Test {
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
-            vm.prank(guardian);
+            vm.prank(heart);
             operator.operate();
         }
 
@@ -1423,7 +1501,7 @@ contract OperatorTest is Test {
 
         /// Trigger a cushion
         price.setLastPrice(111 * 1e18);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
@@ -1439,13 +1517,13 @@ contract OperatorTest is Test {
         assertEq(range.market(true), type(uint256).max);
     }
 
-    /* ========== ACCESS CONTROL TESTS ========== */
+    // =========  ACCESS CONTROL TESTS ========= //
 
     /// DONE
-    /// [X] operate only callable by heart or guardian
+    /// [X] operate only callable by heart
     /// [X] admin configuration functions only callable by policy or guardian (negative here, positive in ADMIN TESTS sections)
 
-    function testCorrectness_onlyHeartOrGovernanceCanOperate() public {
+    function testCorrectness_onlyHeartCanOperate() public {
         /// Initialize operator
         vm.prank(guardian);
         operator.initialize();
@@ -1454,14 +1532,10 @@ contract OperatorTest is Test {
         vm.prank(heart);
         operator.operate();
 
-        /// Call operate as governance
-        vm.prank(guardian);
-        operator.operate();
-
         /// Try to call operate as anyone else
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
-            toRole("operator_operate")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_operate")
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -1470,8 +1544,8 @@ contract OperatorTest is Test {
 
     function testCorrectness_cannotOperatorIfNotInitialized() public {
         /// Toggle operator to active manually erroneously (so it will not revert with inactive)
-        vm.prank(guardian);
-        operator.toggleActive();
+        vm.prank(policy);
+        operator.activate();
 
         /// Call operate as heart contract and expect to revert
         bytes memory err = abi.encodeWithSignature("Operator_NotInitialized()");
@@ -1487,8 +1561,8 @@ contract OperatorTest is Test {
 
         /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
-            toRole("operator_policy")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_policy")
         );
         vm.expectRevert(err);
         vm.prank(alice);
@@ -1513,6 +1587,24 @@ contract OperatorTest is Test {
         vm.expectRevert(err);
         vm.prank(alice);
         operator.setRegenParams(uint32(1 days), uint32(8), uint32(11));
+
+        /// Try to set bond contracts as random user, expect revert
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.setBondContracts(IBondSDA(alice), BondCallback(alice));
+
+        /// Try to activate/deactivate the operator as random user, expect revert
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.activate();
+
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.deactivate();
+
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.deactivateCushion(true);
     }
 
     function testCorrectness_nonGuardianCannotCall() public {
@@ -1520,32 +1612,41 @@ contract OperatorTest is Test {
         vm.prank(guardian);
         operator.initialize();
 
-        /// Try to set spreads as random user, expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
-            toRole("operator_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_admin")
         );
-        vm.expectRevert(err);
-        vm.prank(alice);
-        operator.setBondContracts(IBondAuctioneer(alice), BondCallback(alice));
 
         /// Try to initialize as a random user, expect revert
         vm.expectRevert(err);
         vm.prank(alice);
         operator.initialize();
+
+        /// Try to regenerate as a random user, expect revert
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.regenerate(true);
+
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.regenerate(false);
     }
 
-    /* ========== ADMIN TESTS ========== */
+    // =========  ADMIN TESTS ========= //
 
     /// DONE
     /// [X] setSpreads
-    /// [X] setThresholdFactor (in Range.t.sol) TODO
+    /// [X] setThresholdFactor
     /// [X] setCushionFactor
     /// [X] setCushionParams
     /// [X] setReserveFactor
     /// [X] setRegenParams
     /// [X] setBondContracts
     /// [X] initialize
+    /// [X] regenerate
+    /// [X] activate
+    /// [X] deactivate
+    /// [X] deactivateCushion
 
     function testCorrectness_setSpreads() public {
         /// Initialize operator
@@ -1787,22 +1888,32 @@ contract OperatorTest is Test {
         /// Case 2: observe == 0
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setRegenParams(uint32(1 days), uint32(0), uint32(0));
+        operator.setRegenParams(uint32(7 days), uint32(0), uint32(0));
 
-        /// Case 3: observe < threshold
+        /// Case 3: threshold == 0
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setRegenParams(uint32(1 days), uint32(10), uint32(9));
+        operator.setRegenParams(uint32(7 days), uint32(0), uint32(10));
+
+        /// Case 4: observe < threshold
+        vm.expectRevert(err);
+        vm.prank(policy);
+        operator.setRegenParams(uint32(7 days), uint32(10), uint32(9));
+
+        /// Case 5: wait / frequency < observe - threshold
+        vm.expectRevert(err);
+        vm.prank(policy);
+        operator.setRegenParams(uint32(1 days), uint32(10), uint32(15));
 
         /// Set regen params as admin with valid params
         vm.prank(policy);
-        operator.setRegenParams(uint32(1 days), uint32(11), uint32(15));
+        operator.setRegenParams(uint32(7 days), uint32(11), uint32(15));
 
         /// Get new regen params
         Operator.Config memory newConfig = operator.config();
 
         /// Check that the regen params have been set
-        assertEq(newConfig.regenWait, uint256(1 days));
+        assertEq(newConfig.regenWait, uint256(7 days));
         assertEq(newConfig.regenThreshold, 11);
         assertEq(newConfig.regenObserve, 15);
         assertGt(newConfig.regenWait, startConfig.regenWait);
@@ -1829,19 +1940,19 @@ contract OperatorTest is Test {
         /// Attempt to set bond contracts to zero address and expect revert
         bytes memory err = abi.encodeWithSignature("Operator_InvalidParams()");
         vm.expectRevert(err);
-        vm.prank(guardian);
-        operator.setBondContracts(IBondAuctioneer(address(0)), BondCallback(address(0)));
+        vm.prank(policy);
+        operator.setBondContracts(IBondSDA(address(0)), BondCallback(address(0)));
 
         /// Create new bond contracts
-        BondFixedTermCDA newCDA = new BondFixedTermCDA(teller, aggregator, guardian, auth);
+        BondFixedTermSDA newSDA = new BondFixedTermSDA(teller, aggregator, guardian, auth);
         BondCallback newCb = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
         /// Update the bond contracts as guardian
-        vm.prank(guardian);
-        operator.setBondContracts(IBondAuctioneer(address(newCDA)), newCb);
+        vm.prank(policy);
+        operator.setBondContracts(IBondSDA(address(newSDA)), newCb);
 
         /// Check that the bond contracts have been set
-        assertEq(address(operator.auctioneer()), address(newCDA));
+        assertEq(address(operator.auctioneer()), address(newSDA));
         assertEq(address(operator.callback()), address(newCb));
     }
 
@@ -1939,8 +2050,8 @@ contract OperatorTest is Test {
 
         /// Try to call regenerate without being guardian and expect revert
         bytes memory err = abi.encodeWithSelector(
-            Policy_OnlyRole.selector,
-            toRole("operator_admin")
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("operator_admin")
         );
 
         vm.expectRevert(err);
@@ -1985,13 +2096,13 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Toggle the operator to inactive
-        vm.prank(guardian);
-        operator.toggleActive();
+        vm.prank(policy);
+        operator.deactivate();
 
         /// Try to call operator, swap, and bondPurchase, expect reverts
         bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
         vm.expectRevert(err);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         vm.expectRevert(err);
@@ -2005,9 +2116,80 @@ contract OperatorTest is Test {
         vm.expectRevert(err);
         vm.prank(address(callback));
         operator.bondPurchase(0, 1e18);
+
+        // Activate the operator again
+        vm.prank(policy);
+        operator.activate();
+
+        /// Confirm that the operator is active
+        vm.prank(heart);
+        operator.operate();
+
+        vm.prank(alice);
+        operator.swap(ohm, 1e9, 1);
+
+        vm.prank(alice);
+        operator.swap(reserve, 1e18, 1);
     }
 
-    /* ========== VIEW TESTS ========== */
+    function testCorrectness_deactivateShutsdownCushions() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Assert high wall is up
+        assertTrue(range.active(true));
+
+        /// Set price on mock oracle into the high cushion
+        price.setLastPrice(111 * 1e18);
+
+        /// Trigger the operate function manually
+        vm.prank(heart);
+        operator.operate();
+
+        /// Get current market
+        uint256 currentMarket = range.market(true);
+
+        /// Check market has been updated and is live
+        assertTrue(type(uint256).max != currentMarket);
+        assertTrue(auctioneer.isLive(currentMarket));
+
+        /// Deactivate the operator
+        vm.prank(policy);
+        operator.deactivate();
+
+        /// Check market has been updated and is not live
+        assertTrue(!auctioneer.isLive(currentMarket));
+        assertEq(type(uint256).max, range.market(true));
+
+        /// Reactivate the operator
+        vm.prank(policy);
+        operator.activate();
+
+        /// Set price on mock oracle into the low cushion
+        price.setLastPrice(89 * 1e18);
+
+        /// Trigger the operate function manually
+        vm.prank(heart);
+        operator.operate();
+
+        /// Get current market
+        currentMarket = range.market(false);
+
+        /// Check market has been updated and is live
+        assertTrue(type(uint256).max != currentMarket);
+        assertTrue(auctioneer.isLive(currentMarket));
+
+        /// Deactivate the operator
+        vm.prank(policy);
+        operator.deactivate();
+
+        /// Check market has been updated and is not live
+        assertTrue(!auctioneer.isLive(currentMarket));
+        assertEq(type(uint256).max, range.market(false));
+    }
+
+    // =========  VIEW TESTS ========= //
 
     /// DONE
     /// [X] fullCapacity
@@ -2072,7 +2254,7 @@ contract OperatorTest is Test {
         operator.getAmountOut(token, amountIn);
     }
 
-    /* ========== INTERNAL FUNCTION TESTS ========== */
+    // =========  INTERNAL FUNCTION TESTS ========= //
 
     /// DONE
     /// [X] Range updates from new price data when operate is called (triggers _updateRange)
@@ -2087,7 +2269,7 @@ contract OperatorTest is Test {
 
         /// Update moving average upwards and trigger the operator
         price.setMovingAverage(105 * 1e18);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the bands have updated
@@ -2098,7 +2280,7 @@ contract OperatorTest is Test {
 
         /// Update moving average downwards and trigger the operator
         price.setMovingAverage(95 * 1e18);
-        vm.prank(guardian);
+        vm.prank(heart);
         operator.operate();
 
         /// Check that the bands have updated

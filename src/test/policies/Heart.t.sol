@@ -7,6 +7,9 @@ import {console2} from "forge-std/console2.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -14,7 +17,7 @@ import "src/Kernel.sol";
 
 import {OlympusHeart} from "policies/Heart.sol";
 
-import {IOperator, ERC20, IBondAuctioneer, IBondCallback} from "policies/interfaces/IOperator.sol";
+import {IOperator} from "policies/interfaces/IOperator.sol";
 
 /**
  * @notice Mock Operator to test Heart
@@ -27,13 +30,13 @@ contract MockOperator is Policy {
         result = true;
     }
 
-    /* ========== FRAMEWORK CONFIFURATION ========== */
+    // =========  FRAMEWORK CONFIFURATION ========= //
     function configureDependencies() external override returns (Keycode[] memory dependencies) {}
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {}
 
-    /* ========== HEART FUNCTIONS ========== */
-    function operate() external view onlyRole("operator_operate") {
+    // =========  HEART FUNCTIONS ========= //
+    function operate() external view {
         if (!result) revert Operator_CustomError();
     }
 
@@ -48,27 +51,26 @@ contract HeartTest is Test {
     UserFactory public userCreator;
     address internal alice;
     address internal bob;
-    address internal guardian;
     address internal policy;
 
     MockERC20 internal rewardToken;
 
     Kernel internal kernel;
     MockPrice internal price;
+    OlympusRoles internal roles;
 
     MockOperator internal operator;
-
     OlympusHeart internal heart;
+    RolesAdmin internal rolesAdmin;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
         {
-            address[] memory users = userCreator.create(5);
+            address[] memory users = userCreator.create(3);
             alice = users[0];
             bob = users[1];
-            guardian = users[2];
-            policy = users[3];
+            policy = users[2];
         }
         {
             /// Deploy token mocks
@@ -81,6 +83,7 @@ contract HeartTest is Test {
 
             /// Deploy modules (some mocks)
             price = new MockPrice(kernel, uint48(8 hours));
+            roles = new OlympusRoles(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -98,8 +101,10 @@ contract HeartTest is Test {
                 kernel,
                 IOperator(address(operator)),
                 rewardToken,
-                uint256(1e18) // 1 reward token
+                uint256(2e18) // 2 reward tokens
             );
+
+            rolesAdmin = new RolesAdmin(kernel);
         }
 
         {
@@ -107,19 +112,17 @@ contract HeartTest is Test {
 
             /// Install modules
             kernel.executeAction(Actions.InstallModule, address(price));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(heart));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
             /// Configure access control
 
             /// Heart roles
-            kernel.grantRole(toRole("heart_admin"), guardian);
-
-            /// Operator roles
-            kernel.grantRole(toRole("operator_operate"), address(heart));
-            kernel.grantRole(toRole("operator_operate"), guardian);
+            rolesAdmin.grantRole("heart_admin", policy);
         }
 
         {
@@ -128,9 +131,9 @@ contract HeartTest is Test {
         }
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
 
-    /* ========== KEEPER FUNCTIONS ========== */
+    // =========  KEEPER FUNCTIONS ========= //
     /// DONE
     /// [X] beat
     ///     [X] active and frequency has passed
@@ -156,8 +159,8 @@ contract HeartTest is Test {
 
     function testCorrectness_cannotBeatIfInactive() public {
         /// Set the heart to inactive
-        vm.prank(guardian);
-        heart.toggleBeat();
+        vm.prank(policy);
+        heart.deactivate();
 
         /// Try to beat the heart and expect revert
         bytes memory err = abi.encodeWithSignature("Heart_BeatStopped()");
@@ -167,6 +170,25 @@ contract HeartTest is Test {
 
     function testCorrectness_cannotBeatIfTooEarly() public {
         /// Try to beat the heart and expect revert since it hasn't been more than the frequency since the last beat (deployment)
+        bytes memory err = abi.encodeWithSignature("Heart_OutOfCycle()");
+        vm.expectRevert(err);
+        heart.beat();
+    }
+
+    function testCorrectness_cannotBeatRepeatedlyIfSkipped() public {
+        // Warp forward 2 frequencies
+        vm.warp(block.timestamp + heart.frequency() * 2);
+
+        // Check that lastBeat is less than or equal to the current timestamp minus two frequencies
+        assertLe(heart.lastBeat(), block.timestamp - heart.frequency() * 2);
+
+        // Beat the heart
+        heart.beat();
+
+        // Check that lastBeat is greater than block.timestamp minus one frequency
+        assertGt(heart.lastBeat(), block.timestamp - heart.frequency());
+
+        // Try to beat heart again, expect to revert
         bytes memory err = abi.encodeWithSignature("Heart_OutOfCycle()");
         vm.expectRevert(err);
         heart.beat();
@@ -196,7 +218,7 @@ contract HeartTest is Test {
         heart.beat();
     }
 
-    /* ========== VIEW FUNCTIONS ========== */
+    // =========  VIEW FUNCTIONS ========= //
     /// [X] frequency
 
     function testCorrectness_viewFrequency() public {
@@ -207,10 +229,10 @@ contract HeartTest is Test {
         assertEq(frequency, uint256(8 hours));
     }
 
-    /* ========== ADMIN FUNCTIONS ========== */
+    // =========  ADMIN FUNCTIONS ========= //
     /// DONE
     /// [X] resetBeat
-    /// [X] toggleBeat
+    /// [X] activate and deactivate
     /// [X] setRewardTokenAndAmount
     /// [X] withdrawUnspentRewards
     /// [X] cannot call admin functions without permissions
@@ -222,7 +244,7 @@ contract HeartTest is Test {
         heart.beat();
 
         /// Reset the beat so that it can be called without moving the time forward
-        vm.prank(guardian);
+        vm.prank(policy);
         heart.resetBeat();
 
         /// Store this contract's current reward token balance
@@ -236,30 +258,48 @@ contract HeartTest is Test {
         assertEq(endBalance, startBalance + heart.reward());
     }
 
-    function testCorrectness_toggleBeat() public {
+    function testCorrectness_activate_deactivate() public {
         /// Expect the heart to be active to begin with
         assertTrue(heart.active());
 
-        /// Toggle the heart to make it inactive
-        vm.prank(guardian);
-        heart.toggleBeat();
+        uint256 lastBeat = heart.lastBeat();
 
-        /// Expect the heart to be inactive
+        /// Toggle the heart to make it inactive
+        vm.prank(policy);
+        heart.deactivate();
+
+        /// Expect the heart to be inactive and lastBeat to remain the same
         assertTrue(!heart.active());
+        assertEq(heart.lastBeat(), lastBeat);
 
         /// Toggle the heart to make it active again
-        vm.prank(guardian);
-        heart.toggleBeat();
+        vm.prank(policy);
+        heart.activate();
 
-        /// Expect the heart to be active again
+        /// Expect the heart to be active again and lastBeat to be reset
         assertTrue(heart.active());
+        assertEq(heart.lastBeat(), block.timestamp - heart.frequency());
     }
 
     function testCorrectness_setRewardTokenAndAmount() public {
-        /// Set the heart's reward token to a new token and amount to a new amount
+        /// Set timestamp so that a heart beat is available
+        vm.warp(block.timestamp + heart.frequency());
+
+        /// Create new reward token
         MockERC20 newToken = new MockERC20("New Token", "NT", 18);
         uint256 newReward = uint256(2e18);
-        vm.prank(guardian);
+
+        /// Try to set new reward token and amount while a beat is available, expect to fail
+        bytes memory err = abi.encodeWithSignature("Heart_BeatAvailable()");
+        vm.expectRevert(err);
+        vm.prank(policy);
+        heart.setRewardTokenAndAmount(newToken, newReward);
+
+        /// Beat the heart
+        heart.beat();
+
+        /// Set a new reward token and amount from the policy
+        vm.prank(policy);
         heart.setRewardTokenAndAmount(newToken, newReward);
 
         /// Expect the heart's reward token and reward to be updated
@@ -267,7 +307,7 @@ contract HeartTest is Test {
         assertEq(heart.reward(), newReward);
 
         /// Mint some new tokens to the heart to pay rewards
-        newToken.mint(address(heart), uint256(1000 * 1e18));
+        newToken.mint(address(heart), uint256(3 * 1e18));
 
         /// Expect the heart to reward the new token and amount on a beat
         uint256 startBalance = newToken.balanceOf(address(this));
@@ -277,17 +317,37 @@ contract HeartTest is Test {
 
         uint256 endBalance = newToken.balanceOf(address(this));
         assertEq(endBalance, startBalance + heart.reward());
+
+        /// Balance is now less than the reward amount, test the min function
+        startBalance = newToken.balanceOf(address(this));
+        vm.warp(block.timestamp + frequency);
+        heart.beat();
+
+        endBalance = newToken.balanceOf(address(this));
+        assertEq(endBalance, startBalance + 1e18);
     }
 
     function testCorrectness_withdrawUnspentRewards() public {
+        /// Set timestamp so that a heart beat is available
+        vm.warp(block.timestamp + heart.frequency());
+
+        /// Try to call while a beat is available, expect to fail
+        bytes memory err = abi.encodeWithSignature("Heart_BeatAvailable()");
+        vm.expectRevert(err);
+        vm.prank(policy);
+        heart.withdrawUnspentRewards(rewardToken);
+
+        /// Beat the heart
+        heart.beat();
+
         /// Get the balance of the reward token on the contract
-        uint256 startBalance = rewardToken.balanceOf(address(guardian));
+        uint256 startBalance = rewardToken.balanceOf(address(policy));
         uint256 heartBalance = rewardToken.balanceOf(address(heart));
 
         /// Withdraw the heart's unspent rewards
-        vm.prank(guardian);
+        vm.prank(policy);
         heart.withdrawUnspentRewards(rewardToken);
-        uint256 endBalance = rewardToken.balanceOf(address(guardian));
+        uint256 endBalance = rewardToken.balanceOf(address(policy));
 
         /// Expect the heart's reward token balance to be 0
         assertEq(rewardToken.balanceOf(address(heart)), uint256(0));
@@ -297,14 +357,20 @@ contract HeartTest is Test {
     }
 
     function testCorrectness_cannotCallAdminFunctionsWithoutPermissions() public {
-        /// Try to call admin functions on the heart as non-guardian and expect revert
-        bytes memory err = abi.encodeWithSelector(Policy_OnlyRole.selector, toRole("heart_admin"));
+        /// Try to call admin functions on the heart as non-policy and expect revert
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("heart_admin")
+        );
 
         vm.expectRevert(err);
         heart.resetBeat();
 
         vm.expectRevert(err);
-        heart.toggleBeat();
+        heart.deactivate();
+
+        vm.expectRevert(err);
+        heart.activate();
 
         vm.expectRevert(err);
         heart.setRewardTokenAndAmount(rewardToken, uint256(2e18));

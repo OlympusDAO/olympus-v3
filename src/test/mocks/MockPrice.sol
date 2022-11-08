@@ -14,6 +14,7 @@ contract MockPrice is Module {
     uint8 public decimals;
     bool public result;
     uint48 public observationFrequency;
+    uint48 public lastObservationTime;
 
     error Price_CustomError();
 
@@ -22,7 +23,7 @@ contract MockPrice is Module {
         observationFrequency = observationFrequency_;
     }
 
-    /* ========== FRAMEWORK CONFIGURATION ========== */
+    // =========  FRAMEWORK CONFIGURATION ========= //
     function KEYCODE() public pure override returns (Keycode) {
         return toKeycode("PRICE");
     }
@@ -31,7 +32,7 @@ contract MockPrice is Module {
         return (1, 0);
     }
 
-    /* ========== HEART FUNCTIONS ========== */
+    // =========  HEART FUNCTIONS ========= //
     function updateMovingAverage() external view {
         if (!result) revert Price_CustomError();
     }
@@ -40,7 +41,7 @@ contract MockPrice is Module {
         result = result_;
     }
 
-    /* ========== POLICY FUNCTIONS ========== */
+    // =========  POLICY FUNCTIONS ========= //
     function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
         external
     {}
@@ -51,7 +52,7 @@ contract MockPrice is Module {
         observationFrequency = observationFrequency_;
     }
 
-    /* ========== VIEW FUNCTIONS ========== */
+    // =========  VIEW FUNCTIONS ========= //
     function getMovingAverage() external view returns (uint256) {
         return movingAverage;
     }
@@ -64,7 +65,7 @@ contract MockPrice is Module {
         return currentPrice;
     }
 
-    /* ========== TESTING FUNCTIONS ========== */
+    // =========  TESTING FUNCTIONS ========= //
     function setMovingAverage(uint256 movingAverage_) external {
         movingAverage = movingAverage_;
     }
@@ -79,5 +80,9 @@ contract MockPrice is Module {
 
     function setDecimals(uint8 decimals_) external {
         decimals = decimals_;
+    }
+
+    function setLastTime(uint48 lastObservationTime_) external {
+        lastObservationTime = lastObservationTime_;
     }
 }

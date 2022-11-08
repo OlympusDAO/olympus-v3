@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.15;
+pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 
-import {IBondCDA, IBondAuctioneer} from "../interfaces/IBondCDA.sol";
+import {IBondSDA, IBondAuctioneer} from "../interfaces/IBondSDA.sol";
 import {IBondTeller} from "../interfaces/IBondTeller.sol";
 import {IBondCallback} from "../interfaces/IBondCallback.sol";
 import {IBondAggregator} from "../interfaces/IBondAggregator.sol";
@@ -13,9 +13,9 @@ import {IBondAggregator} from "../interfaces/IBondAggregator.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
-/// @title Bond Continuous Dutch Auctioneer (CDA)
-/// @notice Bond Continuous Dutch Auctioneer Base Contract
-/// @dev Bond is a system to create Olympus-style bond markets
+/// @title Bond Sequential Dutch Auctioneer (SDA)
+/// @notice Bond Sequential Dutch Auctioneer Base Contract
+/// @dev Bond Protocol is a system to create Olympus-style bond markets
 ///      for any token pair. The markets do not require maintenance and will manage
 ///      bond prices based on activity. Bond issuers create BondMarkets that pay out
 ///      a Payout Token in exchange for deposited Quote Tokens. Users can purchase
@@ -27,11 +27,11 @@ import {FullMath} from "libraries/FullMath.sol";
 ///      All bond pricing logic and market data is stored in the Auctioneer.
 ///      A Auctioneer is dependent on a Teller to serve external users and
 ///      an Aggregator to register new markets. This implementation of the Auctioneer
-///      uses a Continuous Dutch Auction pricing system to buy a target amount of quote
+///      uses a Sequential Dutch Auction pricing system to buy a target amount of quote
 ///      tokens or sell a target amount of payout tokens over the duration of a market.
 ///
 /// @author Oighty, Zeus, Potted Meat, indigo
-abstract contract BondBaseCDA is IBondCDA, Auth {
+abstract contract BondBaseSDA is IBondSDA, Auth {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
@@ -44,7 +44,7 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
     error Auctioneer_AmountLessThanMinimum();
     error Auctioneer_NotEnoughCapacity();
     error Auctioneer_InvalidCallback();
-    error Auctioneer_BadExpiration();
+    error Auctioneer_BadExpiry();
     error Auctioneer_InvalidParams();
     error Auctioneer_NotAuthorized();
     error Auctioneer_NewMarketsNotAllowed();
@@ -126,7 +126,7 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
     /* ========== MARKET FUNCTIONS ========== */
 
     /// @inheritdoc IBondAuctioneer
-    function createMarket(MarketParams memory params_) external virtual returns (uint256);
+    function createMarket(bytes calldata params_) external virtual returns (uint256);
 
     /// @notice core market creation logic, see IBondAuctioneer.createMarket documentation
     function _createMarket(MarketParams memory params_) internal returns (uint256) {
@@ -272,7 +272,7 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
         //
         // price = control variable * debt / scale
         // therefore, control variable = price * scale / debt
-        uint256 controlVariable = params_.formattedInitialPrice.mulDivUp(scale, targetDebt);
+        uint256 controlVariable = params_.formattedInitialPrice.mulDiv(scale, targetDebt);
 
         terms[marketId] = BondTerms({
             controlVariable: controlVariable,
@@ -294,25 +294,25 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
 
     /// @inheritdoc IBondAuctioneer
     function setIntervals(uint256 id_, uint32[3] calldata intervals_) external override {
-        /// Check that the intervals are non-zero
+        // Check that the intervals are non-zero
         if (intervals_[0] == 0 || intervals_[1] == 0 || intervals_[2] == 0)
             revert Auctioneer_InvalidParams();
 
-        /// Check that tuneInterval >= tuneAdjustmentDelay
+        // Check that tuneInterval >= tuneAdjustmentDelay
         if (intervals_[0] < intervals_[1]) revert Auctioneer_InvalidParams();
 
         BondMetadata storage meta = metadata[id_];
-        /// Check that tuneInterval >= depositInterval
+        // Check that tuneInterval >= depositInterval
         if (intervals_[0] < meta.depositInterval) revert Auctioneer_InvalidParams();
 
-        /// Check that debtDecayInterval >= minDebtDecayInterval
+        // Check that debtDecayInterval >= minDebtDecayInterval
         if (intervals_[2] < minDebtDecayInterval) revert Auctioneer_InvalidParams();
 
-        /// Check that sender is market owner
+        // Check that sender is market owner
         BondMarket memory market = markets[id_];
         if (msg.sender != market.owner) revert Auctioneer_OnlyMarketOwner();
 
-        /// Update intervals
+        // Update intervals
         meta.tuneInterval = intervals_[0];
         meta.tuneIntervalCapacity = market.capacity.mulDiv(
             uint256(intervals_[0]),
@@ -336,7 +336,7 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
 
     /// @inheritdoc IBondAuctioneer
     function setDefaults(uint32[6] memory defaults_) external override requiresAuth {
-        /// Restricted to authorized addresses, initially restricted to policy
+        // Restricted to authorized addresses, initially restricted to policy
         defaultTuneInterval = defaults_[0];
         defaultTuneAdjustment = defaults_[1];
         minDebtDecayInterval = defaults_[2];
@@ -347,13 +347,13 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
 
     /// @inheritdoc IBondAuctioneer
     function setAllowNewMarkets(bool status_) external override requiresAuth {
-        /// Restricted to authorized addresses, initially restricted to guardian
+        // Restricted to authorized addresses, initially restricted to guardian
         allowNewMarkets = status_;
     }
 
     /// @inheritdoc IBondAuctioneer
     function setCallbackAuthStatus(address creator_, bool status_) external override requiresAuth {
-        /// Restricted to authorized addresses, initially restricted to guardian
+        // Restricted to authorized addresses, initially restricted to guardian
         callbackAuthorized[creator_] = status_;
     }
 
@@ -406,7 +406,7 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
             market.capacity -= market.capacityInQuote ? amount_ : payout;
 
             // Incrementing total debt raises the price of the next bond
-            market.totalDebt += payout;
+            market.totalDebt += payout + 1; // add 1 to satisfy price inequality
 
             // Markets keep track of how many quote tokens have been
             // purchased, and how many payout tokens have been sold
@@ -674,9 +674,9 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
         );
     }
 
-    /// @inheritdoc IBondCDA
+    /// @inheritdoc IBondSDA
     function marketPrice(uint256 id_) public view override returns (uint256) {
-        uint256 price = currentControlVariable(id_).mulDiv(currentDebt(id_), markets[id_].scale);
+        uint256 price = currentControlVariable(id_).mulDivUp(currentDebt(id_), markets[id_].scale);
 
         return (price > markets[id_].minPrice) ? price : markets[id_].minPrice;
     }
@@ -692,12 +692,12 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
         uint256 id_,
         address referrer_
     ) public view override returns (uint256) {
-        /// Calculate the payout for the given amount of tokens
+        // Calculate the payout for the given amount of tokens
         uint256 fee = amount_.mulDiv(_teller.getFee(referrer_), 1e5);
         uint256 payout = (amount_ - fee).mulDiv(markets[id_].scale, marketPrice(id_));
 
-        /// Check that the payout is less than or equal to the maximum payout,
-        /// Revert if not, otherwise return the payout
+        // Check that the payout is less than or equal to the maximum payout,
+        // Revert if not, otherwise return the payout
         if (payout > markets[id_].maxPayout) {
             revert Auctioneer_MaxPayoutExceeded();
         } else {
@@ -727,12 +727,12 @@ abstract contract BondBaseCDA is IBondCDA, Auth {
         return amountAccepted + estimatedFee;
     }
 
-    /// @inheritdoc IBondCDA
+    /// @inheritdoc IBondSDA
     function currentDebt(uint256 id_) public view override returns (uint256) {
         return markets[id_].totalDebt - _debtDecay(id_);
     }
 
-    /// @inheritdoc IBondCDA
+    /// @inheritdoc IBondSDA
     function currentControlVariable(uint256 id_) public view override returns (uint256) {
         (uint256 decay, , ) = _controlDecay(id_);
         return terms[id_].controlVariable - decay;

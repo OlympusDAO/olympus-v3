@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.15;
+pragma solidity 0.8.15;
 
-import {BondBaseCDA, IBondAggregator, Authority} from "./bases/BondBaseCDA.sol";
+import {BondBaseSDA, IBondAggregator, Authority} from "./bases/BondBaseSDA.sol";
 import {IBondTeller} from "./interfaces/IBondTeller.sol";
 
-/// @title Bond Fixed-Term Continuous Dutch Auctioneer
-/// @notice Bond Fixed-Term Continuous Dutch Auctioneer Contract
-/// @dev Bond is a permissionless system to create Olympus-style bond markets
+/// @title Bond Fixed-Term Sequential Dutch Auctioneer
+/// @notice Bond Fixed-Term Sequential Dutch Auctioneer Contract
+/// @dev Bond Protocol is a permissionless system to create Olympus-style bond markets
 ///      for any token pair. The markets do not require maintenance and will manage
 ///      bond prices based on activity. Bond issuers create BondMarkets that pay out
 ///      a Payout Token in exchange for deposited Quote Tokens. Users can purchase
@@ -19,18 +19,19 @@ import {IBondTeller} from "./interfaces/IBondTeller.sol";
 ///      purchases vest in a fixed amount of time after purchased (rounded to the day).
 ///
 /// @author Oighty, Zeus, Potted Meat, indigo
-contract BondFixedTermCDA is BondBaseCDA {
+contract BondFixedTermSDA is BondBaseSDA {
     /* ========== CONSTRUCTOR ========== */
     constructor(
         IBondTeller teller_,
         IBondAggregator aggregator_,
         address guardian_,
         Authority authority_
-    ) BondBaseCDA(teller_, aggregator_, guardian_, authority_) {}
+    ) BondBaseSDA(teller_, aggregator_, guardian_, authority_) {}
 
     /* ========== MARKET FUNCTIONS ========== */
-    /// @inheritdoc BondBaseCDA
-    function createMarket(MarketParams memory params_) external override returns (uint256) {
-        return _createMarket(params_);
+    /// @inheritdoc BondBaseSDA
+    function createMarket(bytes calldata params_) external override returns (uint256) {
+        MarketParams memory params = abi.decode(params_, (MarketParams));
+        return _createMarket(params);
     }
 }

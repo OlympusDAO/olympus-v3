@@ -6,23 +6,24 @@ import {Script, console2} from "forge-std/Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
-import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
-import {IWETH9} from "interfaces/IWETH9.sol";
+import {IBondSDA} from "interfaces/IBondSDA.sol";
 
 import "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
-import {OlympusRange} from "modules/RANGE.sol";
-import {OlympusTreasury} from "modules/TRSRY.sol";
-import {OlympusMinter} from "modules/MINTR.sol";
-import {OlympusInstructions} from "modules/INSTR.sol";
-import {OlympusVotes} from "modules/VOTES.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
-import {VoterRegistration} from "policies/VoterRegistration.sol";
-import {OlympusGovernance} from "policies/Governance.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
+import {Distributor} from "policies/Distributor.sol";
+
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
 
@@ -40,55 +41,52 @@ contract OlympusDeploy is Script {
     OlympusTreasury public TRSRY;
     OlympusMinter public MINTR;
     OlympusInstructions public INSTR;
-    OlympusVotes public VOTES;
+    OlympusRoles public ROLES;
 
     /// Policies
     Operator public operator;
     OlympusHeart public heart;
     BondCallback public callback;
     OlympusPriceConfig public priceConfig;
-    VoterRegistration public voterReg;
-    OlympusGovernance public governance;
-    Faucet public faucet;
+    RolesAdmin public rolesAdmin;
+    TreasuryCustodian public treasuryCustodian;
+    Distributor public distributor;
 
     /// Construction variables
 
-    /// Mainnet addresses
-    // ERC20 public constant ohm =
-    //     ERC20(0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5); // OHM mainnet address
-    // ERC20 public constant reserve =
-    //     ERC20(0x6B175474E89094C44Da98b954EedeAC495271d0F); // DAI mainnet address
-    // ERC20 public constant rewardToken =
-    //     ERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // WETH mainnet address
-
-    // IBondAuctioneer public constant bondAuctioneer =
-    //     IBondAuctioneer(address(0));
-    // IBondAggregator public constant bondAggregator =
-    //     IBondAggregator(address(0));
-
-    // AggregatorV2V3Interface public constant ohmEthPriceFeed =
-    //     AggregatorV2V3Interface(0x9a72298ae3886221820B1c878d12D872087D3a23); // OHM/ETH chainlink address
-    // AggregatorV2V3Interface public constant reserveEthPriceFeed =
-    //     AggregatorV2V3Interface(0x773616E4d11A78F511299002da57A0a94577F1f4); // DAI/ETH chainlink address
-
-    /// Goerli testnet addresses
-    ERC20 public constant ohm = ERC20(0x0595328847AF962F951a4f8F8eE9A3Bf261e4f6b); // OHM goerli address
-    ERC20 public constant reserve = ERC20(0x41e38e70a36150D08A8c97aEC194321b5eB545A5); // DAI goerli address
-    ERC20 public constant rewardToken = ERC20(0x0Bb7509324cE409F7bbC4b701f932eAca9736AB7); // WETH goerli address
+    /// Token addresses
+    ERC20 public ohm;
+    ERC20 public reserve;
+    ERC20 public rewardToken;
 
     /// Bond system addresses
-    IBondAuctioneer public constant bondAuctioneer =
-        IBondAuctioneer(0xaE73A94b94F6E7aca37f4c79C4b865F1AF06A68b);
-    IBondAggregator public constant bondAggregator =
-        IBondAggregator(0xB4860B2c12C6B894B64471dFb5a631ff569e220e);
+    IBondSDA public bondAuctioneer;
+    IBondAggregator public bondAggregator;
 
-    /// Mock Price Feed addresses
-    AggregatorV2V3Interface public constant ohmEthPriceFeed =
-        AggregatorV2V3Interface(0x022710a589C9796dce59A0C52cA4E36f0a5e991A); // OHM/ETH
-    AggregatorV2V3Interface public constant reserveEthPriceFeed =
-        AggregatorV2V3Interface(0xdC8E4eD326cFb730a759312B6b1727C6Ef9ca233); // DAI/ETH
+    /// Chainlink price feed addresses
+    AggregatorV2V3Interface public ohmEthPriceFeed;
+    AggregatorV2V3Interface public reserveEthPriceFeed;
+
+    /// External contracts
+    address public staking;
 
     function deploy(address guardian_, address policy_) external {
+        /// Token addresses
+        ohm = ERC20(vm.envAddress("OHM_ADDRESS"));
+        reserve = ERC20(vm.envAddress("DAI_ADDRESS"));
+        rewardToken = ERC20(vm.envAddress("OHM_ADDRESS"));
+
+        /// Bond system addresses
+        bondAuctioneer = IBondSDA(vm.envAddress("BOND_SDA_ADDRESS"));
+        bondAggregator = IBondAggregator(vm.envAddress("BOND_AGGREGATOR_ADDRESS"));
+
+        /// Chainlink price feed addresses
+        ohmEthPriceFeed = AggregatorV2V3Interface(vm.envAddress("OHM_ETH_FEED"));
+        reserveEthPriceFeed = AggregatorV2V3Interface(vm.envAddress("DAI_ETH_FEED"));
+
+        /// External Olympus contract addresses
+        staking = vm.envAddress("STAKING_ADDRESS");
+
         vm.startBroadcast();
 
         /// Deploy kernel first
@@ -96,11 +94,8 @@ contract OlympusDeploy is Script {
         console2.log("Kernel deployed at:", address(kernel));
 
         /// Deploy modules
-        INSTR = new OlympusInstructions(kernel);
-        console2.log("Instructions module deployed at:", address(INSTR));
-
-        VOTES = new OlympusVotes(kernel);
-        console2.log("Votes module deployed at:", address(VOTES));
+        // INSTR = new OlympusInstructions(kernel);
+        // console2.log("Instructions module deployed at:", address(INSTR));
 
         TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury module deployed at:", address(TRSRY));
@@ -111,18 +106,19 @@ contract OlympusDeploy is Script {
         PRICE = new OlympusPrice(
             kernel,
             ohmEthPriceFeed,
+            uint48(24 hours),
             reserveEthPriceFeed,
+            uint48(24 hours),
             uint48(8 hours),
             uint48(30 days)
         );
         console2.log("Price module deployed at:", address(PRICE));
 
-        RANGE = new OlympusRange(
-            kernel,
-            [ohm, reserve],
-            [uint256(100), uint256(1200), uint256(3000)]
-        );
+        RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1500), uint256(2800));
         console2.log("Range module deployed at:", address(RANGE));
+
+        ROLES = new OlympusRoles(kernel);
+        console2.log("Roles module deployed at:", address(ROLES));
 
         /// Deploy policies
         callback = new BondCallback(kernel, bondAggregator, ohm);
@@ -137,87 +133,77 @@ contract OlympusDeploy is Script {
                 uint32(3000), // cushionFactor
                 uint32(3 days), // cushionDuration
                 uint32(100_000), // cushionDebtBuffer
-                uint32(1 hours), // cushionDepositInterval
-                uint32(800), // reserveFactor
-                uint32(1 hours), // regenWait
-                uint32(5), // regenThreshold // 18
-                uint32(7) // regenObserve    // 21
+                uint32(4 hours), // cushionDepositInterval
+                uint32(1000), // reserveFactor
+                uint32(6 days), // regenWait
+                uint32(18), // regenThreshold
+                uint32(21) // regenObserve
             ] // TODO verify initial parameters
         );
         console2.log("Operator deployed at:", address(operator));
 
-        heart = new OlympusHeart(kernel, operator, rewardToken, 0);
+        heart = new OlympusHeart(kernel, operator, rewardToken, 5 * 1e9); // TODO verify initial keeper reward
         console2.log("Heart deployed at:", address(heart));
 
         priceConfig = new OlympusPriceConfig(kernel);
         console2.log("PriceConfig deployed at:", address(priceConfig));
 
-        voterReg = new VoterRegistration(kernel);
-        console2.log("VoterRegistration deployed at:", address(voterReg));
+        rolesAdmin = new RolesAdmin(kernel);
+        console2.log("RolesAdmin deployed at:", address(rolesAdmin));
 
-        governance = new OlympusGovernance(kernel);
-        console2.log("Governance deployed at:", address(governance));
+        treasuryCustodian = new TreasuryCustodian(kernel);
+        console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
 
-        faucet = new Faucet(
-            kernel,
-            ohm,
-            reserve,
-            1 ether,
-            1_000_000 * 1e9,
-            10_000_000 * 1e18,
-            1 hours
-        );
-        console2.log("Faucet deployed at:", address(faucet));
+        distributor = new Distributor(kernel, address(ohm), staking, vm.envUint("REWARD_RATE"));
+        console2.log("Distributor deployed at:", address(distributor));
 
         /// Execute actions on Kernel
         /// Install modules
-        kernel.executeAction(Actions.InstallModule, address(INSTR));
-        kernel.executeAction(Actions.InstallModule, address(VOTES));
+        // kernel.executeAction(Actions.InstallModule, address(INSTR));
         kernel.executeAction(Actions.InstallModule, address(PRICE));
         kernel.executeAction(Actions.InstallModule, address(RANGE));
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
         kernel.executeAction(Actions.InstallModule, address(MINTR));
+        kernel.executeAction(Actions.InstallModule, address(ROLES));
 
         /// Approve policies
         kernel.executeAction(Actions.ActivatePolicy, address(callback));
         kernel.executeAction(Actions.ActivatePolicy, address(operator));
         kernel.executeAction(Actions.ActivatePolicy, address(heart));
         kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
-        kernel.executeAction(Actions.ActivatePolicy, address(voterReg));
-        kernel.executeAction(Actions.ActivatePolicy, address(governance));
-        kernel.executeAction(Actions.ActivatePolicy, address(faucet));
+        kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+        kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
+        kernel.executeAction(Actions.ActivatePolicy, address(distributor));
 
         /// Configure access control for policies
 
         /// Operator roles
-        kernel.grantRole(toRole("operator_operate"), address(heart));
-        kernel.grantRole(toRole("operator_operate"), guardian_);
-        kernel.grantRole(toRole("operator_reporter"), address(callback));
-        kernel.grantRole(toRole("operator_policy"), policy_);
-        kernel.grantRole(toRole("operator_admin"), guardian_);
+        rolesAdmin.grantRole("operator_operate", address(heart));
+        rolesAdmin.grantRole("operator_operate", guardian_);
+        rolesAdmin.grantRole("operator_reporter", address(callback));
+        rolesAdmin.grantRole("operator_policy", policy_);
+        rolesAdmin.grantRole("operator_admin", guardian_);
 
         /// Bond callback roles
-        kernel.grantRole(toRole("callback_whitelist"), address(operator));
-        kernel.grantRole(toRole("callback_whitelist"), guardian_);
-        kernel.grantRole(toRole("callback_admin"), guardian_);
+        rolesAdmin.grantRole("callback_whitelist", address(operator));
+        rolesAdmin.grantRole("callback_whitelist", policy_);
+        rolesAdmin.grantRole("callback_admin", guardian_);
 
         /// Heart roles
-        kernel.grantRole(toRole("heart_admin"), guardian_);
-
-        /// VoterRegistration roles
-        kernel.grantRole(toRole("voter_admin"), guardian_);
+        rolesAdmin.grantRole("heart_admin", policy_);
 
         /// PriceConfig roles
-        kernel.grantRole(toRole("price_admin"), guardian_);
+        rolesAdmin.grantRole("price_admin", guardian_);
+        rolesAdmin.grantRole("price_admin", policy_);
 
         /// TreasuryCustodian roles
-        kernel.grantRole(toRole("custodian"), guardian_);
+        rolesAdmin.grantRole("custodian", guardian_);
 
-        /// Faucet roles
-        kernel.grantRole(toRole("faucet_admin"), guardian_);
+        /// Distributor roles
+        rolesAdmin.grantRole("distributor_admin", policy_);
 
-        // /// Transfer executor powers to INSTR
-        // kernel.executeAction(Actions.ChangeExecutor, address(INSTR));
+        // /// Transfer executor powers to guardian
+        // kernel.executeAction(Actions.ChangeExecutor, guardian_);
 
         vm.stopBroadcast();
     }
@@ -226,8 +212,8 @@ contract OlympusDeploy is Script {
     function initialize() external {
         // Set addresses from deployment
         // priceConfig = OlympusPriceConfig();
-        operator = Operator(0x532AC8804b233846645C1Cd53D3005604F5eC1c3);
-        callback = BondCallback(0xdff3e45D4BE6B354384D770Fd63DDF90eA788d13);
+        operator = Operator(vm.envAddress("OPERATOR"));
+        callback = BondCallback(vm.envAddress("CALLBACK"));
 
         /// Start broadcasting
         vm.startBroadcast();
@@ -242,11 +228,111 @@ contract OlympusDeploy is Script {
         /// Initialize the Operator policy
         operator.initialize();
 
-        // /// Deposit msg.value in WETH contract and deposit in heart
-        // IWETH9(address(rewardToken)).deposit{value: msg.value}();
-        // rewardToken.safeTransfer(address(heart), msg.value);
-
         /// Stop broadcasting
+        vm.stopBroadcast();
+    }
+
+    /// @dev Verifies that the environment variable addresses were set correctly following deployment
+    /// @dev Should be called prior to verifyAndPushAuth()
+    function verifyKernelInstallation() external {
+        kernel = Kernel(vm.envAddress("KERNEL"));
+
+        /// Modules
+        PRICE = OlympusPrice(vm.envAddress("PRICE"));
+        RANGE = OlympusRange(vm.envAddress("RANGE"));
+        TRSRY = OlympusTreasury(vm.envAddress("TRSRY"));
+        MINTR = OlympusMinter(vm.envAddress("MINTR"));
+        ROLES = OlympusRoles(vm.envAddress("ROLES"));
+
+        /// Policies
+        operator = Operator(vm.envAddress("OPERATOR"));
+        heart = OlympusHeart(vm.envAddress("HEART"));
+        callback = BondCallback(vm.envAddress("CALLBACK"));
+        priceConfig = OlympusPriceConfig(vm.envAddress("PRICECONFIG"));
+        rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
+        treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
+        distributor = Distributor(vm.envAddress("DISTRIBUTOR"));
+
+        /// Check that Modules are installed
+        /// PRICE
+        Module priceModule = kernel.getModuleForKeycode(toKeycode("PRICE"));
+        Keycode priceKeycode = kernel.getKeycodeForModule(PRICE);
+        require(priceModule == PRICE);
+        require(fromKeycode(priceKeycode) == "PRICE");
+
+        /// RANGE
+        Module rangeModule = kernel.getModuleForKeycode(toKeycode("RANGE"));
+        Keycode rangeKeycode = kernel.getKeycodeForModule(RANGE);
+        require(rangeModule == RANGE);
+        require(fromKeycode(rangeKeycode) == "RANGE");
+
+        /// TRSRY
+        Module trsryModule = kernel.getModuleForKeycode(toKeycode("TRSRY"));
+        Keycode trsryKeycode = kernel.getKeycodeForModule(TRSRY);
+        require(trsryModule == TRSRY);
+        require(fromKeycode(trsryKeycode) == "TRSRY");
+
+        /// MINTR
+        Module mintrModule = kernel.getModuleForKeycode(toKeycode("MINTR"));
+        Keycode mintrKeycode = kernel.getKeycodeForModule(MINTR);
+        require(mintrModule == MINTR);
+        require(fromKeycode(mintrKeycode) == "MINTR");
+
+        /// ROLES
+        Module rolesModule = kernel.getModuleForKeycode(toKeycode("ROLES"));
+        Keycode rolesKeycode = kernel.getKeycodeForModule(ROLES);
+        require(rolesModule == ROLES);
+        require(fromKeycode(rolesKeycode) == "ROLES");
+
+        /// Policies
+        /// Operator
+        require(kernel.isPolicyActive(operator));
+        require(kernel.isPolicyActive(heart));
+        require(kernel.isPolicyActive(callback));
+        require(kernel.isPolicyActive(priceConfig));
+        require(kernel.isPolicyActive(rolesAdmin));
+        require(kernel.isPolicyActive(treasuryCustodian));
+        require(kernel.isPolicyActive(distributor));
+    }
+
+    /// @dev Should be called by the deployer address after deployment
+    function verifyAndPushAuth(address guardian_, address policy_) external {
+        ROLES = OlympusRoles(vm.envAddress("ROLES"));
+        heart = OlympusHeart(vm.envAddress("HEART"));
+        callback = BondCallback(vm.envAddress("CALLBACK"));
+        operator = Operator(vm.envAddress("OPERATOR"));
+        rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
+        kernel = Kernel(vm.envAddress("KERNEL"));
+
+        /// Operator Roles
+        require(ROLES.hasRole(address(heart), "operator_operate"));
+        require(ROLES.hasRole(guardian_, "operator_operate"));
+        require(ROLES.hasRole(address(callback), "operator_reporter"));
+        require(ROLES.hasRole(policy_, "operator_policy"));
+        require(ROLES.hasRole(guardian_, "operator_admin"));
+
+        /// Callback Roles
+        require(ROLES.hasRole(address(operator), "callback_whitelist"));
+        require(ROLES.hasRole(policy_, "callback_whitelist"));
+        require(ROLES.hasRole(guardian_, "callback_admin"));
+
+        /// Heart Roles
+        require(ROLES.hasRole(policy_, "heart_admin"));
+
+        /// PriceConfig Roles
+        require(ROLES.hasRole(guardian_, "price_admin"));
+        require(ROLES.hasRole(policy_, "price_admin"));
+
+        /// TreasuryCustodian Roles
+        require(ROLES.hasRole(guardian_, "custodian"));
+
+        /// Distributor Roles
+        require(ROLES.hasRole(policy_, "distributor_admin"));
+
+        /// Push rolesAdmin and Executor
+        vm.startBroadcast();
+        rolesAdmin.pushNewAdmin(guardian_);
+        kernel.executeAction(Actions.ChangeExecutor, guardian_);
         vm.stopBroadcast();
     }
 }

@@ -10,9 +10,12 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
-import "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
+import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
+import "src/Kernel.sol";
 
 contract PriceConfigTest is Test {
     using FullMath for uint256;
@@ -30,7 +33,9 @@ contract PriceConfigTest is Test {
 
     Kernel internal kernel;
     OlympusPrice internal price;
+    OlympusRoles internal roles;
     OlympusPriceConfig internal priceConfig;
+    RolesAdmin internal rolesAdmin;
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
 
@@ -65,13 +70,20 @@ contract PriceConfigTest is Test {
             price = new OlympusPrice(
                 kernel,
                 ohmEthPriceFeed, // AggregatorInterface ohmEthPriceFeed_,
+                uint48(24 hours), // uint32 ohmEthUpdateThreshold_,
                 reserveEthPriceFeed, // AggregatorInterface reserveEthPriceFeed_,
+                uint48(24 hours), // uint32 reserveEthUpdateThreshold_,
                 uint48(8 hours), // uint32 observationFrequency_,
                 uint48(7 days) // uint32 movingAverageDuration_,
             );
 
+            roles = new OlympusRoles(kernel);
+
             /// Deploy price config policy
             priceConfig = new OlympusPriceConfig(kernel);
+
+            /// Deploy rolesAdmin
+            rolesAdmin = new RolesAdmin(kernel);
         }
 
         {
@@ -79,16 +91,18 @@ contract PriceConfigTest is Test {
 
             /// Install modules
             kernel.executeAction(Actions.InstallModule, address(price));
+            kernel.executeAction(Actions.InstallModule, address(roles));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
 
         {
             /// Configure access control
 
             /// PriceConfig roles
-            kernel.grantRole(toRole("price_admin"), guardian);
+            rolesAdmin.grantRole("price_admin", guardian);
         }
 
         {
@@ -98,7 +112,7 @@ contract PriceConfigTest is Test {
         }
     }
 
-    /* ========== HELPER FUNCTIONS ========== */
+    // =========  HELPER FUNCTIONS ========= //
     function getObs(uint8 nonce) internal returns (uint256[] memory) {
         /// Assume that the reserveEth price feed is fixed at 0.0005 ETH = 1 Reserve
         reserveEthPriceFeed.setLatestAnswer(int256(5e14));
@@ -136,12 +150,13 @@ contract PriceConfigTest is Test {
         return observations;
     }
 
-    /* ========== ADMIN TESTS ========== */
+    // =========  ADMIN TESTS ========= //
 
     /// DONE
     /// [X] initialize
     /// [X] change moving average duration
     /// [X] change observation frequency
+    /// [X] change price feed update thresholds
     /// [X] only authorized addresses can call admin functions
 
     function testCorrectness_initialize(uint8 nonce) public {
@@ -237,9 +252,49 @@ contract PriceConfigTest is Test {
         assertEq(price.observationFrequency(), uint48(12 hours));
     }
 
+    function testCorrectness_changeUpdateThresholds(uint8 nonce) public {
+        /// Initialize price module
+        uint256[] memory obs = getObs(nonce);
+        vm.prank(guardian);
+        priceConfig.initialize(obs, uint48(block.timestamp));
+
+        /// Check that the price feed errors after the existing update threshold is exceeded
+        uint48 startOhmEthThreshold = price.ohmEthUpdateThreshold();
+        vm.warp(block.timestamp + startOhmEthThreshold + 1);
+        vm.expectRevert(
+            abi.encodeWithSignature("Price_BadFeed(address)", address(ohmEthPriceFeed))
+        );
+        price.getCurrentPrice();
+
+        /// Roll back time
+        vm.warp(block.timestamp - startOhmEthThreshold - 1);
+
+        /// Change update thresholds to a different value (larger than current)
+        vm.prank(guardian);
+        priceConfig.changeUpdateThresholds(uint48(36 hours), uint48(36 hours));
+
+        /// Check that the update thresholds are updated correctly
+        assertEq(price.ohmEthUpdateThreshold(), uint48(36 hours));
+        assertEq(price.reserveEthUpdateThreshold(), uint48(36 hours));
+
+        /// Check that the price feed doesn't error at the old threshold
+        vm.warp(block.timestamp + startOhmEthThreshold + 1);
+        price.getCurrentPrice();
+
+        /// Roll time past new threshold
+        vm.warp(block.timestamp - startOhmEthThreshold + price.ohmEthUpdateThreshold());
+        vm.expectRevert(
+            abi.encodeWithSignature("Price_BadFeed(address)", address(ohmEthPriceFeed))
+        );
+        price.getCurrentPrice();
+    }
+
     function testCorrectness_onlyAuthorizedCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
-        bytes memory err = abi.encodeWithSelector(Policy_OnlyRole.selector, toRole("price_admin"));
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("price_admin")
+        );
 
         /// initialize
         uint256[] memory obs = new uint256[](21);
@@ -254,5 +309,9 @@ contract PriceConfigTest is Test {
         /// changeObservationFrequency
         vm.expectRevert(err);
         priceConfig.changeObservationFrequency(uint48(4 hours));
+
+        /// changeUpdateThresholds
+        vm.expectRevert(err);
+        priceConfig.changeUpdateThresholds(uint48(12 hours), uint48(12 hours));
     }
 }

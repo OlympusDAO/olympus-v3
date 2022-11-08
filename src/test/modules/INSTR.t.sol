@@ -6,20 +6,21 @@ import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import "src/Kernel.sol";
-import "modules/INSTR.sol";
-import {OlympusGovernance} from "policies/Governance.sol";
+import {Parthenon} from "policies/Parthenon.sol";
 import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 import {MockInvalidModule} from "test/mocks/MockInvalidModule.sol";
 import {MockValidModule} from "test/mocks/MockValidModule.sol";
 import {MockValidUpgradedModule} from "test/mocks/MockValidUpgradedModule.sol";
+
+import "modules/INSTR/OlympusInstructions.sol";
+import "src/Kernel.sol";
 
 contract InstructionsTest is Test {
     Kernel internal kernel;
     using ModuleTestFixtureGenerator for OlympusInstructions;
 
     OlympusInstructions internal instr;
-    OlympusGovernance internal governance;
+    Parthenon internal governance;
     address internal writer;
     Module internal invalidModule;
 
@@ -35,7 +36,7 @@ contract InstructionsTest is Test {
 
         /// Deploy policies
         writer = instr.generateGodmodeFixture(type(OlympusInstructions).name);
-        governance = new OlympusGovernance(kernel);
+        governance = new Parthenon(kernel);
 
         /// Install modules
         kernel.executeAction(Actions.InstallModule, address(instr));
@@ -45,7 +46,7 @@ contract InstructionsTest is Test {
     }
 
     function testRevert_InstructionsCannotBeEmpty() public {
-        vm.expectRevert(INSTR_InstructionsCannotBeEmpty.selector);
+        vm.expectRevert(INSTRv1.INSTR_InstructionsCannotBeEmpty.selector);
 
         // create valid instructions
         Instruction[] memory instructions = new Instruction[](0);
@@ -53,13 +54,20 @@ contract InstructionsTest is Test {
         instr.store(instructions);
     }
 
-    function testRevert_InvalidChangeExecutorAction() public {
+    function testRevert_InvalidAction() public {
         // create invalid instructions
         Instruction[] memory instructions = new Instruction[](2);
-        instructions[0] = Instruction(Actions.ChangeExecutor, address(governance));
+        instructions[0] = Instruction(Actions.MigrateKernel, address(governance));
         instructions[1] = Instruction(Actions.ActivatePolicy, address(governance));
 
-        vm.expectRevert(INSTR_InvalidChangeExecutorAction.selector);
+        vm.expectRevert(INSTRv1.INSTR_InvalidAction.selector);
+        vm.prank(writer);
+        instr.store(instructions);
+
+        // Change to first action to MigrateKernel to test if it reverts
+        instructions[0] = Instruction(Actions.MigrateKernel, address(governance));
+
+        vm.expectRevert(INSTRv1.INSTR_InvalidAction.selector);
         vm.prank(writer);
         instr.store(instructions);
     }

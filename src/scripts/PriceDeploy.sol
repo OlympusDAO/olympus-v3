@@ -6,7 +6,7 @@ import {Script, console2} from "forge-std/Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
@@ -29,8 +29,8 @@ contract OlympusPriceDeploy is Script {
     // ERC20 public constant rewardToken =
     //     ERC20(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // WETH mainnet address
 
-    // IBondAuctioneer public constant bondAuctioneer =
-    //     IBondAuctioneer(address(0));
+    // IBondSDA public constant bondAuctioneer =
+    //     IBondSDA(address(0));
     // IBondAggregator public constant bondAggregator =
     //     IBondAggregator(address(0));
 
@@ -57,7 +57,9 @@ contract OlympusPriceDeploy is Script {
         PRICE = new OlympusPrice(
             kernel,
             ohmEthPriceFeed,
+            uint48(24 hours),
             reserveEthPriceFeed,
+            uint48(24 hours),
             uint48(8 hours),
             uint48(30 days)
         );
