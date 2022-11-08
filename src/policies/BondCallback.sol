@@ -77,11 +77,11 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
         requests = new Permissions[](5);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[2] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         requests[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        requests[4] = Permissions(MINTR_KEYCODE, MINTR.increaseMinterApproval.selector);
+        requests[4] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -146,9 +146,9 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         // If payout token is in OHM, request mint approval for the capacity in OHM
         // Otherwise, request withdrawal approval for the capacity from the TRSRY
         if (address(payoutToken) == address(ohm)) {
-            MINTR.increaseMinterApproval(address(this), toApprove);
+            MINTR.increaseMintApproval(address(this), toApprove);
         } else {
-            TRSRY.increaseWithdrawerApproval(address(this), payoutToken, toApprove);
+            TRSRY.increaseWithdrawApproval(address(this), payoutToken, toApprove);
         }
     }
 

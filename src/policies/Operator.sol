@@ -193,12 +193,12 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         requests[3] = Permissions(RANGE_KEYCODE, RANGE.regenerate.selector);
         requests[4] = Permissions(RANGE_KEYCODE, RANGE.setSpreads.selector);
         requests[5] = Permissions(RANGE_KEYCODE, RANGE.setThresholdFactor.selector);
-        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
-        requests[7] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawerApproval.selector);
+        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        requests[7] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
         requests[8] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         requests[9] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        requests[10] = Permissions(MINTR_KEYCODE, MINTR.increaseMinterApproval.selector);
-        requests[11] = Permissions(MINTR_KEYCODE, MINTR.decreaseMinterApproval.selector);
+        requests[10] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        requests[11] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -610,9 +610,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // If current approval is higher thn the capacity, reduce it
             uint256 currentApproval = MINTR.mintApproval(address(this));
             if (currentApproval < capacity) {
-                MINTR.increaseMinterApproval(address(this), capacity - currentApproval);
+                MINTR.increaseMintApproval(address(this), capacity - currentApproval);
             } else if (currentApproval > capacity) {
-                MINTR.decreaseMinterApproval(address(this), currentApproval - capacity);
+                MINTR.decreaseMintApproval(address(this), currentApproval - capacity);
             }
 
             // Regenerate the side with the capacity
@@ -631,17 +631,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // If current approval is higher thn the capacity, reduce it
             uint256 currentApproval = TRSRY.withdrawApproval(address(this), reserve);
             if (currentApproval < capacity) {
-                TRSRY.increaseWithdrawerApproval(
-                    address(this),
-                    reserve,
-                    capacity - currentApproval
-                );
+                TRSRY.increaseWithdrawApproval(address(this), reserve, capacity - currentApproval);
             } else if (currentApproval > capacity) {
-                TRSRY.decreaseWithdrawerApproval(
-                    address(this),
-                    reserve,
-                    currentApproval - capacity
-                );
+                TRSRY.decreaseWithdrawApproval(address(this), reserve, currentApproval - capacity);
             }
 
             // Regenerate the side with the capacity

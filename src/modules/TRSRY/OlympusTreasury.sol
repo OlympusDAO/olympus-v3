@@ -37,27 +37,33 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
     //============================================================================================//
 
     /// @inheritdoc TRSRYv1
-    function increaseWithdrawerApproval(
+    function increaseWithdrawApproval(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
     ) external override permissioned {
-        // TODO discuss if adding the overflow checks as in MINTR makes sense
-        uint256 newAmount = withdrawApproval[withdrawer_][token_] + amount_;
+        uint256 approval = withdrawApproval[withdrawer_][token_];
+
+        uint256 newAmount = type(uint256).max - approval < amount_
+            ? type(uint256).max
+            : approval + amount_;
         withdrawApproval[withdrawer_][token_] = newAmount;
-        emit IncreaseWithdrawerApproval(withdrawer_, token_, newAmount);
+
+        emit IncreaseWithdrawApproval(withdrawer_, token_, newAmount);
     }
 
     /// @inheritdoc TRSRYv1
-    function decreaseWithdrawerApproval(
+    function decreaseWithdrawApproval(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
     ) external override permissioned {
-        // TODO discuss if adding the underflow checks as in MINTR makes sense
-        uint256 newAmount = withdrawApproval[withdrawer_][token_] - amount_;
+        uint256 approval = withdrawApproval[withdrawer_][token_];
+
+        uint256 newAmount = approval < amount_ ? 0 : approval - amount_;
         withdrawApproval[withdrawer_][token_] = newAmount;
-        emit DecreaseWithdrawerApproval(withdrawer_, token_, newAmount);
+
+        emit DecreaseWithdrawApproval(withdrawer_, token_, newAmount);
     }
 
     /// @inheritdoc TRSRYv1
@@ -71,11 +77,8 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         uint256 approval = withdrawApproval[msg.sender][token_];
         if (approval < amount_) revert TRSRY_NotApproved();
 
-        // If not infinite approval, decrement approval by amount
-        if (approval != type(uint256).max) {
-            unchecked {
-                withdrawApproval[msg.sender][token_] = approval - amount_;
-            }
+        unchecked {
+            withdrawApproval[msg.sender][token_] = approval - amount_;
         }
 
         token_.safeTransfer(to_, amount_);

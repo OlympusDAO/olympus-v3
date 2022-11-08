@@ -8,12 +8,12 @@ import "src/Kernel.sol";
 abstract contract TRSRYv1 is Module {
     // =========  EVENTS ========= //
 
-    event IncreaseWithdrawerApproval(
+    event IncreaseWithdrawApproval(
         address indexed withdrawer_,
         ERC20 indexed token_,
         uint256 newAmount_
     );
-    event DecreaseWithdrawerApproval(
+    event DecreaseWithdrawApproval(
         address indexed withdrawer_,
         ERC20 indexed token_,
         uint256 newAmount_
@@ -64,14 +64,14 @@ abstract contract TRSRYv1 is Module {
     }
 
     /// @notice Increase approval for specific withdrawer addresses
-    function increaseWithdrawerApproval(
+    function increaseWithdrawApproval(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
     ) external virtual;
 
     /// @notice Decrease approval for specific withdrawer addresses
-    function decreaseWithdrawerApproval(
+    function decreaseWithdrawApproval(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_

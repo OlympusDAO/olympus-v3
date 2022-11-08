@@ -95,9 +95,10 @@ contract Distributor is Policy, RolesConsumer {
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](2);
+        permissions = new Permissions[](3);
         permissions[0] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
-        permissions[1] = Permissions(MINTR.KEYCODE(), MINTR.increaseMinterApproval.selector);
+        permissions[1] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
+        permissions[2] = Permissions(MINTR.KEYCODE(), MINTR.decreaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -125,11 +126,17 @@ contract Distributor is Policy, RolesConsumer {
         if (msg.sender != staking) revert Distributor_OnlyStaking();
         if (!unlockRebase) revert Distributor_NotUnlocked();
 
+        // Open minter approval by requesting max approval
+        MINTR.increaseMintApproval(address(this), type(uint256).max);
+
+        // Mint enough for rebase
         MINTR.mintOhm(staking, nextRewardFor(staking));
 
+        // Mint OHM for mint&sync pools
         uint256 poolLength = pools.length;
         for (uint256 i; i < poolLength; ) {
             address pool = pools[i];
+
             if (pool != address(0)) {
                 MINTR.mintOhm(pool, nextRewardFor(pool));
                 IUniswapV2Pair(pool).sync();
@@ -139,6 +146,9 @@ contract Distributor is Policy, RolesConsumer {
                 i++;
             }
         }
+
+        // Close the minter approval by removing all approval
+        MINTR.decreaseMintApproval(address(this), type(uint256).max);
 
         unlockRebase = false;
     }
@@ -208,10 +218,5 @@ contract Distributor is Policy, RolesConsumer {
     /// @param newRewardRate_ The new rate to set (9 decimals, i.e. 10_000_000 / 1_000_000_000 = 1%)
     function setRewardRate(uint256 newRewardRate_) external onlyRole("distributor_admin") {
         rewardRate = newRewardRate_;
-    }
-
-    /// @notice Increases the distributor's minting permissions
-    function increaseMinterApproval(uint256 amount_) external onlyRole("distributor_admin") {
-        MINTR.increaseMinterApproval(address(this), amount_);
     }
 }
