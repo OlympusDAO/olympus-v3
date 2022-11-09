@@ -1,0 +1,18 @@
+{
+    "sequence": [
+        {
+            "name": "Kernel"
+        },
+        {
+            "name": "OlympusPrice",
+            "args": {
+                "ohmEthPriceFeed": "0x022710a589C9796dce59A0C52cA4E36f0a5e991A",
+                "ohmEthUpdateThreshold": 86400,
+                "reserveEthPriceFeed": "0xdC8E4eD326cFb730a759312B6b1727C6Ef9ca233",
+                "reserveEthUpdateThreshold": 86400,
+                "observationFrequency": 28800,
+                "movingAverageDuration": 2592000
+            }
+        } 
+    ]
+}
