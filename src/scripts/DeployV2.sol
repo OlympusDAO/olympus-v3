@@ -61,7 +61,6 @@ contract OlympusDeploy is Script {
     /// Token addresses
     ERC20 public ohm;
     ERC20 public reserve;
-    ERC20 public rewardToken;
 
     /// Bond system addresses
     IBondSDA public bondAuctioneer;
@@ -80,24 +79,50 @@ contract OlympusDeploy is Script {
     string[] public deployments;
     // mapping()
 
-    function _setUp() internal {
+    function _setUp(string calldata chain_) internal {
         // Setup contract -> selector mappings
         selectorMap["OlympusPrice"] = this._deployPrice.selector;
-        // selectorMap["OlympusRange"] = this._deployRange.selector;
-        // selectorMap["OlympusTreasury"] = this._deployTreasury.selector;
-        // selectorMap["OlympusMinter"] = this._deployMinter.selector;
-        // selectorMap["OlympusRoles"] = this._deployRoles.selector;
-        // selectorMap["Operator"] = this._deployOperator.selector;
-        // selectorMap["OlympusHeart"] = this._deployHeart.selector;
-        // selectorMap["BondCallback"] = this._deployCallback.selector;
-        // selectorMap["OlympusPriceConfig"] = this._deployPriceConfig.selector;
-        // selectorMap["RolesAdmin"] = this._deployRolesAdmin.selector;
-        // selectorMap["TreasuryCustodian"] = this._deployTreasuryCustodian.selector;
-        // selectorMap["Distributor"] = this._deployDistributor.selector;
-        // selectorMap["Emergency"] = this._deployEmergency.selector;
+        selectorMap["OlympusRange"] = this._deployRange.selector;
+        selectorMap["OlympusTreasury"] = this._deployTreasury.selector;
+        selectorMap["OlympusMinter"] = this._deployMinter.selector;
+        selectorMap["OlympusRoles"] = this._deployRoles.selector;
+        selectorMap["Operator"] = this._deployOperator.selector;
+        selectorMap["OlympusHeart"] = this._deployHeart.selector;
+        selectorMap["BondCallback"] = this._deployBondCallback.selector;
+        selectorMap["OlympusPriceConfig"] = this._deployPriceConfig.selector;
+        selectorMap["RolesAdmin"] = this._deployRolesAdmin.selector;
+        selectorMap["TreasuryCustodian"] = this._deployTreasuryCustodian.selector;
+        selectorMap["Distributor"] = this._deployDistributor.selector;
+        selectorMap["Emergency"] = this._deployEmergency.selector;
 
-        // Load addresses from existing deployment
-        // TODO
+        // Load environment addresses
+        string memory env = vm.readFile("./src/scripts/env.json");
+
+        // Non-bophades contracts
+        ohm = ERC20(env.readAddress(string.concat(chain_, ".olympus.legacy.OHM")));
+        reserve = ERC20(env.readAddress(string.concat(chain_, ".external.tokens.DAI")));
+        bondAuctioneer = IBondSDA(env.readAddress(string.concat(chain_, ".external.bond-protocol.BondFixedTermAuctioneer")));
+        bondAggregator = IBondAggregator(env.readAddress(string.concat(chain_, ".external.bond-protocol.BondAggregator")));
+        ohmEthPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(chain_, ".external.chainlink.ohmEthPriceFeed")));
+        reserveEthPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(chain_, ".external.chainlink.daiEthPriceFeed")));
+        staking = env.readAddress(string.concat(chain_, ".olympus.legacy.Staking"));
+
+        // Bophades contracts
+        kernel = Kernel(env.readAddress(string.concat(chain_, ".olympus.Kernel")));
+        PRICE = OlympusPrice(env.readAddress(string.concat(chain_, ".olympus.modules.OlympusPrice")));
+        RANGE = OlympusRange(env.readAddress(string.concat(chain_, ".olympus.modules.OlympusRange")));
+        TRSRY = OlympusTreasury(env.readAddress(string.concat(chain_, ".olympus.modules.OlympusTreasury")));
+        MINTR = OlympusMinter(env.readAddress(string.concat(chain_, ".olympus.modules.OlympusMinter")));
+        INSTR = OlympusInstructions(env.readAddress(string.concat(chain_, ".olympus.modules.OlympusInstructions")));
+        ROLES = OlympusRoles(env.readAddress(string.concat(chain_, ".olympus.modules.OlympusRoles")));
+        operator = Operator(env.readAddress(string.concat(chain_, ".olympus.policies.Operator")));
+        heart = OlympusHeart(env.readAddress(string.concat(chain_, ".olympus.policies.OlympusHeart")));
+        callback = BondCallback(env.readAddress(string.concat(chain_, ".olympus.policies.BondCallback")));
+        priceConfig = OlympusPriceConfig(env.readAddress(string.concat(chain_, ".olympus.policies.OlympusPriceConfig")));
+        rolesAdmin = RolesAdmin(env.readAddress(string.concat(chain_, ".olympus.policies.RolesAdmin")));
+        treasuryCustodian = TreasuryCustodian(env.readAddress(string.concat(chain_, ".olympus.policies.TreasuryCustodian")));
+        distributor = Distributor(env.readAddress(string.concat(chain_, ".olympus.policies.Distributor")));
+        emergency = Emergency(env.readAddress(string.concat(chain_, ".olympus.policies.Emergency")));
 
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy.json");
@@ -126,9 +151,26 @@ contract OlympusDeploy is Script {
 
     }
 
-    function deploy(string memory chain_, address guardian_, address policy_, address emergency_) external {
+    function _installModule(Module module_) internal {
+        // Check if module is installed on the kernel and determine which type of install to use
+        vm.startBroadcast();
+        if (address(kernel.getModuleForKeycode(module_.KEYCODE())) != address(0)) {
+            kernel.executeAction(Actions.UpgradeModule, address(module_));
+        } else {
+            kernel.executeAction(Actions.InstallModule, address(module_));
+        }
+        vm.stopBroadcast();
+    }
+
+    function _activatePolicy(Policy policy_) internal {
+        // Check if policy is activated on the kernel and determine which type of activation to use
+        vm.broadcast();
+        kernel.executeAction(Actions.ActivatePolicy, address(policy_));
+    }
+
+    function deploy(string calldata chain_, address guardian_, address policy_, address emergency_) external {
         // Setup
-        _setUp();
+        _setUp(chain_);
 
         // Check that deployments is not empty
         uint256 len = deployments.length;
@@ -143,11 +185,13 @@ contract OlympusDeploy is Script {
         }
 
         // Iterate through deployments
+        // TODO should an existing policy be deactivated if a new version of it is deployed?
         for (uint256 i = deployKernel ? 1 : 0; i < len; i++) {
             // Get deploy script selector from contract name
             bytes4 selector = selectorMap[deployments[i]];
             bytes memory args = argsMap[deployments[i]];
-            address(this).call(abi.encodeWithSelector(selector, args));
+            (bool success, ) = address(this).call(abi.encodeWithSelector(selector, args));
+            require(success, string.concat("Failed to deploy ", deployments[i]));
         }
 
         // TODO Give access control permissions for the deployed contracts
@@ -157,41 +201,202 @@ contract OlympusDeploy is Script {
     }
 
     // ========== DEPLOYMENT FUNCTIONS ========== //
+
+    // Module deployment functions
     function _deployPrice(bytes memory args) public {
         // Decode arguments for Price module
         (
-            address ohmEthPriceFeed_,
             uint48 ohmEthUpdateThreshold_,
-            address reserveEthPriceFeed_,
             uint48 reserveEthUpdateThreshold_,
             uint48 observationFrequency_,
             uint48 movingAverageDuration_
-        ) = abi.decode(args, (address, uint48, address, uint48, uint48, uint48));
+        ) = abi.decode(args, (uint48, uint48, uint48, uint48));
 
         // Deploy Price module
-        vm.startBroadcast();
+        vm.broadcast();
         PRICE = new OlympusPrice(
             kernel,
-            AggregatorV2V3Interface(ohmEthPriceFeed_),
+            ohmEthPriceFeed,
             ohmEthUpdateThreshold_,
-            AggregatorV2V3Interface(reserveEthPriceFeed_),
+            reserveEthPriceFeed,
             reserveEthUpdateThreshold_,
             observationFrequency_,
             movingAverageDuration_
         );
         console2.log("Price deployed at:", address(PRICE));
 
-        // Check if module is installed on the kernel and determine which type of install to use
-        if (address(kernel.getModuleForKeycode(PRICE.KEYCODE())) != address(0)) {
-            kernel.executeAction(Actions.UpgradeModule, address(PRICE));
-        } else {
-            kernel.executeAction(Actions.InstallModule, address(PRICE));
-        }
-        vm.stopBroadcast();
+        // Install the module
+        _installModule(PRICE);
     }
 
+    function _deployRange(bytes memory args) public {
+        // Decode arguments for Range module
+        (
+            uint256 thresholdFactor,
+            uint256 cushionSpread,
+            uint256 wallSpread
+        ) = abi.decode(args, (uint256, uint256, uint256));
 
+        // Deploy Range module
+        vm.broadcast();
+        RANGE = new OlympusRange(kernel, ohm, reserve, thresholdFactor, cushionSpread, wallSpread);
+        console2.log("Range deployed at:", address(RANGE));
 
+        // Install the module
+        _installModule(RANGE);
+    }
+
+    function _deployTreasury(bytes memory args) public {
+        // No additional arguments for Treasury module
+
+        // Deploy Treasury module
+        vm.broadcast();
+        TRSRY = new OlympusTreasury(kernel);
+        console2.log("Treasury deployed at:", address(TRSRY));
+
+        // Install the module
+        _installModule(TRSRY);
+    }
+
+    function _deployMinter(bytes memory args) public {
+        // Only args are contracts in the environment
+
+        // Deploy Minter module
+        vm.broadcast();
+        MINTR = new OlympusMinter(kernel, address(ohm));
+        console2.log("Minter deployed at:", address(MINTR));
+
+        // Install the module
+        _installModule(MINTR);
+    }
+
+    function _deployRoles(bytes memory args) public {
+        // No additional arguments for Roles module
+
+        // Deploy Roles module
+        vm.broadcast();
+        ROLES = new OlympusRoles(kernel);
+        console2.log("Roles deployed at:", address(ROLES));
+
+        // Install the module
+        _installModule(ROLES);
+    }
+
+    // Policy deployment functions
+    function _deployOperator(bytes memory args) public {
+        // Decode arguments for Operator policy
+        // Must use a dynamic array to parse correctly since the json lib defaults to this
+        uint32[] memory configParams_ = abi.decode(args, (uint32[]));
+        uint32[8] memory configParams = [
+            configParams_[0],
+            configParams_[1],
+            configParams_[2],
+            configParams_[3],
+            configParams_[4],
+            configParams_[5],
+            configParams_[6],
+            configParams_[7]
+        ];
+
+        // Deploy Operator policy
+        vm.broadcast();
+        operator = new Operator(
+            kernel,
+            bondAuctioneer,
+            callback,
+            [ohm, reserve],
+            configParams
+        );
+        console2.log("Operator deployed at:", address(operator));
+
+        // Activate the policy
+        _activatePolicy(operator);
+    }
+
+    function _deployBondCallback(bytes memory args) public {
+        // No additional arguments for BondCallback policy
+
+        // Deploy BondCallback policy
+        vm.broadcast();
+        callback = new BondCallback(kernel, bondAggregator, ohm);
+        console2.log("BondCallback deployed at:", address(callback));
+
+        // Activate the policy
+        _activatePolicy(callback);
+    }
+
+    function _deployHeart(bytes memory args) public {
+        // Decode arguments for OlympusHeart policy
+        uint256 reward = abi.decode(args, (uint256));
+
+        // Deploy OlympusHeart policy
+        vm.broadcast();
+        heart = new OlympusHeart(kernel, operator, ohm, reward);
+
+        // Activate the policy
+        _activatePolicy(heart);
+    }
+
+    function _deployPriceConfig(bytes memory args) public {
+        // No additional arguments for PriceConfig policy
+
+        // Deploy PriceConfig policy
+        vm.broadcast();
+        priceConfig = new OlympusPriceConfig(kernel);
+        console2.log("PriceConfig deployed at:", address(priceConfig));
+
+        // Activate the policy
+        _activatePolicy(priceConfig);
+    }
+
+    function _deployRolesAdmin(bytes memory args) public {
+        // No additional arguments for RolesAdmin policy
+
+        // Deploy RolesAdmin policy
+        vm.broadcast();
+        rolesAdmin = new RolesAdmin(kernel);
+        console2.log("RolesAdmin deployed at:", address(rolesAdmin));
+
+        // Activate the policy
+        _activatePolicy(rolesAdmin);
+    }
+
+    function _deployTreasuryCustodian(bytes memory args) public {
+        // No additional arguments for TreasuryCustodian policy
+
+        // Deploy TreasuryCustodian policy
+        vm.broadcast();
+        treasuryCustodian = new TreasuryCustodian(kernel);
+        console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
+
+        // Activate the policy
+        _activatePolicy(treasuryCustodian);
+    }
+
+    function _deployDistributor(bytes memory args) public {
+        // Decode arguments for Distributor policy
+        uint256 initialRate = abi.decode(args, (uint256));
+
+        // Deploy Distributor policy
+        vm.broadcast();
+        distributor = new Distributor(kernel, address(ohm), staking, initialRate);
+        console2.log("Distributor deployed at:", address(distributor));
+
+        // Activate the policy
+        _activatePolicy(distributor);
+    }
+
+    function _deployEmergency(bytes memory args) public {
+        // No additional arguments for Emergency policy
+
+        // Deploy Emergency policy
+        vm.broadcast();
+        emergency = new Emergency(kernel);
+        console2.log("Emergency deployed at:", address(emergency));
+
+        // Activate the policy
+        _activatePolicy(emergency);
+    }
 
     // function olddeploy(string memory chain_, address guardian_, address policy_, address emergency_) external {
     //     /// Token addresses
