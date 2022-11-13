@@ -99,7 +99,7 @@ abstract contract Module is KernelAdapter {
 
     /// @notice Modifier to restrict which policies have access to module functions.
     modifier permissioned() {
-        if (!kernel.modulePermissions(KEYCODE(), Policy(msg.sender), msg.sig))
+        if (msg.sender == address(kernel) || !kernel.modulePermissions(KEYCODE(), Policy(msg.sender), msg.sig))
             revert Module_PolicyNotPermitted(msg.sender);
         _;
     }
