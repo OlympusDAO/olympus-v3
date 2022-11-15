@@ -44,7 +44,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
     ) external override permissioned {
         uint256 approval = withdrawApproval[withdrawer_][token_];
 
-        uint256 newAmount = type(uint256).max - approval < amount_
+        uint256 newAmount = type(uint256).max - approval <= amount_
             ? type(uint256).max
             : approval + amount_;
         withdrawApproval[withdrawer_][token_] = newAmount;
@@ -60,7 +60,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
     ) external override permissioned {
         uint256 approval = withdrawApproval[withdrawer_][token_];
 
-        uint256 newAmount = approval < amount_ ? 0 : approval - amount_;
+        uint256 newAmount = approval <= amount_ ? 0 : approval - amount_;
         withdrawApproval[withdrawer_][token_] = newAmount;
 
         emit DecreaseWithdrawApproval(withdrawer_, token_, newAmount);

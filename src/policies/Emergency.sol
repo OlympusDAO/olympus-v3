@@ -66,6 +66,7 @@ contract Emergency is Policy, RolesConsumer {
     function shutdownWithdrawals() external onlyRole("emergency_shutdown") {
         TRSRY.deactivate();
         _reportStatus();
+    }
 
     /// @notice Emergency shutdown of minting
     function shutdownMinting() external onlyRole("emergency_shutdown") {
@@ -92,6 +93,7 @@ contract Emergency is Policy, RolesConsumer {
         _reportStatus();
     }
 
+    /// @notice Emit an event to show the current status of TRSRY and MINTR
     function _reportStatus() internal {
         emit Status(TRSRY.active(), MINTR.active());
     }

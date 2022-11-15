@@ -64,7 +64,7 @@ contract OlympusMinter is MINTRv1 {
     function increaseMintApproval(address policy_, uint256 amount_) external override permissioned {
         uint256 approval = mintApproval[policy_];
 
-        uint256 newAmount = type(uint256).max - approval < amount_
+        uint256 newAmount = type(uint256).max - approval <= amount_
             ? type(uint256).max
             : approval + amount_;
         mintApproval[policy_] = newAmount;
