@@ -33,13 +33,16 @@ contract TRSRYTest is Test {
         ngmi = new MockERC20("not gonna make it", "NGMI", 18);
 
         address[] memory users = (new UserFactory()).create(3);
-        testUser = users[0];
+        //testUser = users[0];
 
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
 
         // Generate test fixture policy addresses with different authorizations
         godmode = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
         kernel.executeAction(Actions.ActivatePolicy, godmode);
+
+        testUser = TRSRY.generateFunctionFixture(TRSRY.withdrawReserves.selector);
+        kernel.executeAction(Actions.ActivatePolicy, testUser);
 
         debtor = TRSRY.generateFunctionFixture(TRSRY.incurDebt.selector);
         kernel.executeAction(Actions.ActivatePolicy, debtor);
@@ -68,21 +71,6 @@ contract TRSRYTest is Test {
 
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), 0);
     }
-
-    /*
-    function testCorrectness_RevokeApprovals() public {
-        TRSRY.approveWithdrawer(testUser, ngmi, INITIAL_TOKEN_AMOUNT);
-        assertEq(TRSRY.withdrawApproval(testUser, ngmi), INITIAL_TOKEN_AMOUNT);
-
-        ERC20[] memory revokeTokens = new ERC20[](2);
-        revokeTokens[0] = ERC20(ngmi);
-
-        kernel.executeAction(Actions.DeactivatePolicy, address(this));
-
-        TRSRY.revokeApprovals(testUser, revokeTokens);
-        assertEq(TRSRY.withdrawApproval(testUser, ngmi), 0);
-    }
-    */
 
     function testCorrectness_GetReserveBalance() public {
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);

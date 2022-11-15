@@ -163,19 +163,20 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        requests = new Permissions[](12);
+        requests = new Permissions[](13);
         requests[0] = Permissions(RANGE_KEYCODE, RANGE.updateCapacity.selector);
         requests[1] = Permissions(RANGE_KEYCODE, RANGE.updateMarket.selector);
         requests[2] = Permissions(RANGE_KEYCODE, RANGE.updatePrices.selector);
         requests[3] = Permissions(RANGE_KEYCODE, RANGE.regenerate.selector);
         requests[4] = Permissions(RANGE_KEYCODE, RANGE.setSpreads.selector);
         requests[5] = Permissions(RANGE_KEYCODE, RANGE.setThresholdFactor.selector);
-        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
-        requests[7] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
-        requests[8] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        requests[9] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        requests[10] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
-        requests[11] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
+        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        requests[7] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        requests[8] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
+        requests[9] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[10] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[11] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        requests[12] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
 
     //============================================================================================//
