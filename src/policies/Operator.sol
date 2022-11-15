@@ -33,29 +33,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
-    // =========  EVENTS ========= //
-
-    event Swap(
-        ERC20 indexed tokenIn_,
-        ERC20 indexed tokenOut_,
-        uint256 amountIn_,
-        uint256 amountOut_
-    );
-    event CushionFactorChanged(uint32 cushionFactor_);
-    event CushionParamsChanged(uint32 duration_, uint32 debtBuffer_, uint32 depositInterval_);
-    event ReserveFactorChanged(uint32 reserveFactor_);
-    event RegenParamsChanged(uint32 wait_, uint32 threshold_, uint32 observe_);
-
-    // =========  ERRORS ========= //
-
-    error Operator_InvalidParams();
-    error Operator_InsufficientCapacity();
-    error Operator_AmountLessThanMinimum(uint256 amountOut, uint256 minAmountOut);
-    error Operator_WallDown();
-    error Operator_AlreadyInitialized();
-    error Operator_NotInitialized();
-    error Operator_Inactive();
-
     // =========  STATE ========= //
 
     // Operator variables, defined in the interface on the external getter functions
