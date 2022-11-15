@@ -136,9 +136,10 @@ contract Distributor is Policy, RolesConsumer {
         uint256 poolLength = pools.length;
         for (uint256 i; i < poolLength; ) {
             address pool = pools[i];
+            uint256 reward = nextRewardFor(pool);
 
-            if (pool != address(0)) {
-                MINTR.mintOhm(pool, nextRewardFor(pool));
+            if (pool != address(0) && reward > 0) {
+                MINTR.mintOhm(pool, reward);
                 IUniswapV2Pair(pool).sync();
             }
 

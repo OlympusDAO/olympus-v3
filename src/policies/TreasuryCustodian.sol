@@ -19,7 +19,6 @@ contract TreasuryCustodian is Policy, RolesConsumer {
     // =========  ERRORS ========= //
 
     error PolicyStillActive();
-    error PolicyNotFound();
 
     // =========  STATE ========= //
 

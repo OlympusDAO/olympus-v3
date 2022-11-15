@@ -607,7 +607,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             uint256 capacity = fullCapacity(true);
 
             // Get approval from MINTR to mint OHM up to the capacity
-            // If current approval is higher thn the capacity, reduce it
+            // If current approval is higher than the capacity, reduce it
             uint256 currentApproval = MINTR.mintApproval(address(this));
             if (currentApproval < capacity) {
                 MINTR.increaseMintApproval(address(this), capacity - currentApproval);
@@ -628,7 +628,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             uint256 capacity = fullCapacity(false);
 
             // Get approval from the TRSRY to withdraw up to the capacity in reserves
-            // If current approval is higher thn the capacity, reduce it
+            // If current approval is higher than the capacity, reduce it
             uint256 currentApproval = TRSRY.withdrawApproval(address(this), reserve);
             if (currentApproval < capacity) {
                 TRSRY.increaseWithdrawApproval(address(this), reserve, capacity - currentApproval);

@@ -16,11 +16,6 @@ contract Emergency is Policy, RolesConsumer {
 
     event Shutdown();
 
-    // =========  ERRORS ========= //
-
-    error PolicyStillActive();
-    error PolicyNotFound();
-
     // =========  STATE ========= //
 
     TRSRYv1 public TRSRY;
@@ -64,16 +59,19 @@ contract Emergency is Policy, RolesConsumer {
     function shutdown() external onlyRole("emergency_shutdown") {
         TRSRY.deactivate();
         MINTR.deactivate();
+        emit Shutdown();
     }
 
     /// @notice Emergency shutdown of treasury withdrawals
     function shutdownWithdrawals() external onlyRole("emergency_shutdown") {
         TRSRY.deactivate();
+        emit Shutdown();
     }
 
     /// @notice Emergency shutdown of minting
     function shutdownMinting() external onlyRole("emergency_shutdown") {
         MINTR.deactivate();
+        emit Shutdown();
     }
 
     /// @notice Restart treasury withdrawals and minting after shutdown
