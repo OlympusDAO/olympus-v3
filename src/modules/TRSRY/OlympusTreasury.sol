@@ -141,7 +141,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         address debtor_,
         ERC20 token_,
         uint256 amount_
-    ) external override nonReentrant {
+    ) external override permissioned nonReentrant {
         if (reserveDebt[token_][debtor_] == 0) revert TRSRY_NoDebtOutstanding();
 
         // Deposit from caller first (to handle nonstandard token transfers)
