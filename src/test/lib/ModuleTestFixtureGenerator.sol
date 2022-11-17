@@ -71,6 +71,22 @@ library ModuleTestFixtureGenerator {
     }
 
     // Generate a test fixture policy authorized for a single module function
+    function generateMultiFunctionFixture(Module module_, bytes4[] calldata funcSelectors_)
+        public
+        returns (address)
+    {
+        uint256 len = funcSelectors_.length;
+        Keycode keycode = module_.KEYCODE();
+
+        Permissions[] memory requests = new Permissions[](len);
+        for (uint256 i; i < len; ++i) {
+            requests[i] = Permissions(keycode, funcSelectors_[i]);
+        }
+
+        return generateFixture(module_, requests);
+    }
+
+    // Generate a test fixture policy authorized for a single module function
     function generateFunctionFixture(Module module_, bytes4 funcSelector_)
         public
         returns (address)

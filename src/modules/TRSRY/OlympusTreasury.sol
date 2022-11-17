@@ -72,14 +72,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         ERC20 token_,
         uint256 amount_
     ) public override permissioned onlyWhileActive {
-        if (amount_ == 0) revert TRSRY_ZeroAmount();
-
-        uint256 approval = withdrawApproval[msg.sender][token_];
-        if (approval < amount_) revert TRSRY_NotApproved();
-
-        unchecked {
-            withdrawApproval[msg.sender][token_] = approval - amount_;
-        }
+        withdrawApproval[msg.sender][token_] -= amount_;
 
         token_.safeTransfer(to_, amount_);
 
@@ -117,15 +110,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         permissioned
         onlyWhileActive
     {
-        uint256 approval = debtApproval[msg.sender][token_];
-        if (approval < amount_) revert TRSRY_NotApproved();
-
-        // If not infinite approval, decrement approval by amount
-        if (approval != type(uint256).max) {
-            unchecked {
-                debtApproval[msg.sender][token_] = approval - amount_;
-            }
-        }
+        debtApproval[msg.sender][token_] -= amount_;
 
         // Add debt to caller
         reserveDebt[token_][msg.sender] += amount_;

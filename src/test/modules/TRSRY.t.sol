@@ -80,9 +80,6 @@ contract TRSRYTest is Test {
 
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), amount_);
 
-        // Test for revert on 0 withdrawal
-        if (amount_ == 0) vm.expectRevert(TRSRYv1.TRSRY_ZeroAmount.selector);
-
         vm.prank(testUser);
         TRSRY.withdrawReserves(address(this), ngmi, amount_);
 
@@ -97,7 +94,7 @@ contract TRSRYTest is Test {
         vm.assume(amount_ > 0);
 
         // Fail when withdrawal using policy without write access
-        vm.expectRevert(TRSRYv1.TRSRY_NotApproved.selector);
+        vm.expectRevert();
         vm.prank(testUser);
         TRSRY.withdrawReserves(address(this), ngmi, amount_);
     }
