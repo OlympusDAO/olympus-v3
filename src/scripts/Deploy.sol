@@ -116,7 +116,7 @@ contract OlympusDeploy is Script {
         );
         console2.log("Price module deployed at:", address(PRICE));
 
-        RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1500), uint256(2800));
+        RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1675), uint256(2950));
         console2.log("Range module deployed at:", address(RANGE));
 
         ROLES = new OlympusRoles(kernel);
@@ -132,15 +132,15 @@ contract OlympusDeploy is Script {
             callback,
             [ohm, reserve],
             [
-                uint32(3000), // cushionFactor
+                uint32(3075), // cushionFactor
                 uint32(3 days), // cushionDuration
                 uint32(100_000), // cushionDebtBuffer
                 uint32(4 hours), // cushionDepositInterval
-                uint32(1000), // reserveFactor
+                uint32(950), // reserveFactor
                 uint32(6 days), // regenWait
                 uint32(18), // regenThreshold
                 uint32(21) // regenObserve
-            ] // TODO verify initial parameters
+            ]
         );
         console2.log("Operator deployed at:", address(operator));
 
