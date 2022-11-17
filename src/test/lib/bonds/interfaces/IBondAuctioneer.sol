@@ -105,7 +105,6 @@ interface IBondAuctioneer {
     /// @return             Price for market in configured decimals
     //
     // if price is below minimum price, minimum price is returned
-    // this is enforced on deposits by manipulating total debt (see _decay())
     function marketPrice(uint256 id_) external view returns (uint256);
 
     /// @notice             Scale value to use when converting between quote token and payout token amounts with marketPrice()

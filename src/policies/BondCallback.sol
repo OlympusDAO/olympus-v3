@@ -156,7 +156,11 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     /// @dev    Shutdown function in case there's an issue with the teller
     /// @param  teller_ Address of the Teller contract which serves the market
     /// @param  id_     ID of the market to remove from whitelist
-    function blacklist(address teller_, uint256 id_) external onlyRole("callback_whitelist") {
+    function blacklist(address teller_, uint256 id_)
+        external
+        override
+        onlyRole("callback_whitelist")
+    {
         // Check that the teller matches the aggregator provided teller for the market ID
         if (teller_ != address(aggregator.getTeller(id_))) revert Callback_InvalidParams();
 
