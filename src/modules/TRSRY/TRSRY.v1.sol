@@ -8,12 +8,12 @@ import "src/Kernel.sol";
 abstract contract TRSRYv1 is Module {
     // =========  EVENTS ========= //
 
-    event IncreaseWithdrawerApproval(
+    event IncreaseWithdrawApproval(
         address indexed withdrawer_,
         ERC20 indexed token_,
         uint256 newAmount_
     );
-    event DecreaseWithdrawerApproval(
+    event DecreaseWithdrawApproval(
         address indexed withdrawer_,
         ERC20 indexed token_,
         uint256 newAmount_
@@ -32,11 +32,13 @@ abstract contract TRSRYv1 is Module {
 
     // =========  ERRORS ========= //
 
-    error TRSRY_ZeroAmount();
-    error TRSRY_NotApproved();
     error TRSRY_NoDebtOutstanding();
+    error TRSRY_NotActive();
 
     // =========  STATE ========= //
+
+    /// @notice Status of the treasury. If false, no withdrawals or debt can be incurred.
+    bool public active;
 
     /// @notice Mapping of who is approved for withdrawal.
     /// @dev    withdrawer -> token -> amount. Infinite approval is max(uint256).
@@ -54,15 +56,20 @@ abstract contract TRSRYv1 is Module {
 
     // =========  FUNCTIONS ========= //
 
+    modifier onlyWhileActive() {
+        if (!active) revert TRSRY_NotActive();
+        _;
+    }
+
     /// @notice Increase approval for specific withdrawer addresses
-    function increaseWithdrawerApproval(
+    function increaseWithdrawApproval(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
     ) external virtual;
 
     /// @notice Decrease approval for specific withdrawer addresses
-    function decreaseWithdrawerApproval(
+    function decreaseWithdrawApproval(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
@@ -111,4 +118,10 @@ abstract contract TRSRYv1 is Module {
 
     /// @notice Get total balance of assets inside the treasury + any debt taken out against those assets.
     function getReserveBalance(ERC20 token_) external view virtual returns (uint256);
+
+    /// @notice Emergency shutdown of withdrawals.
+    function deactivate() external virtual;
+
+    /// @notice Re-activate withdrawals after shutdown.
+    function activate() external virtual;
 }

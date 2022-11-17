@@ -95,8 +95,10 @@ contract Distributor is Policy, RolesConsumer {
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](1);
+        permissions = new Permissions[](3);
         permissions[0] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
+        permissions[1] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
+        permissions[2] = Permissions(MINTR.KEYCODE(), MINTR.decreaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -124,13 +126,20 @@ contract Distributor is Policy, RolesConsumer {
         if (msg.sender != staking) revert Distributor_OnlyStaking();
         if (!unlockRebase) revert Distributor_NotUnlocked();
 
+        // Open minter approval by requesting max approval
+        MINTR.increaseMintApproval(address(this), type(uint256).max);
+
+        // Mint enough for rebase
         MINTR.mintOhm(staking, nextRewardFor(staking));
 
+        // Mint OHM for mint&sync pools
         uint256 poolLength = pools.length;
         for (uint256 i; i < poolLength; ) {
             address pool = pools[i];
-            if (pool != address(0)) {
-                MINTR.mintOhm(pool, nextRewardFor(pool));
+            uint256 reward = nextRewardFor(pool);
+
+            if (pool != address(0) && reward > 0) {
+                MINTR.mintOhm(pool, reward);
                 IUniswapV2Pair(pool).sync();
             }
 
@@ -138,6 +147,9 @@ contract Distributor is Policy, RolesConsumer {
                 i++;
             }
         }
+
+        // Close the minter approval by removing all approval
+        MINTR.decreaseMintApproval(address(this), type(uint256).max);
 
         unlockRebase = false;
     }

@@ -16,10 +16,12 @@ import {Operator} from "policies/Operator.sol";
 import "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
+import {FullMath} from "libraries/FullMath.sol";
 
 /// @title Olympus Bond Callback
 contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     using TransferHelper for ERC20;
+    using FullMath for uint256;
 
     // =========  ERRORS ========= //
 
@@ -74,11 +76,12 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        requests = new Permissions[](4);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
+        requests = new Permissions[](5);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[2] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         requests[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[4] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -91,16 +94,61 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         override
         onlyRole("callback_whitelist")
     {
+        // Check that the teller matches the aggregator provided teller for the market ID
+        if (teller_ != address(aggregator.getTeller(id_))) revert Callback_InvalidParams();
+
+        // Whitelist market for callback
         approvedMarkets[teller_][id_] = true;
 
-        // Get payout tokens for market
-        (, , ERC20 payoutToken, , , ) = aggregator.getAuctioneer(id_).getMarketInfoForPurchase(id_);
+        // Get payout capacity required for market
+        // If the capacity is in the payout token, then we need approval for the capacity amount
+        // If the capacity is in the quote token, then we need approval for capacity / minPrice * scale
+        //     since this is the maximum amount of payout tokens that could be received
+        // TODO determine if this format is better than importing the BaseBondSDA contract and casting the returned Auctioneer
+        (bool success, bytes memory data) = address(aggregator.getAuctioneer(id_)).call(
+            abi.encodeWithSignature("markets(uint256)", id_)
+        );
 
-        /// If payout token is not OHM, request infinite approval from TRSRY for withdrawals
-        if (address(payoutToken) != address(ohm)) {
-            uint256 toApprove = type(uint256).max -
-                TRSRY.withdrawApproval(address(this), payoutToken);
-            TRSRY.increaseWithdrawerApproval(address(this), payoutToken, toApprove);
+        if (!success) revert Callback_InvalidParams();
+        (
+            ,
+            ERC20 payoutToken,
+            ,
+            ,
+            bool capacityInQuote,
+            uint256 capacity,
+            ,
+            uint256 minPrice,
+            ,
+            ,
+            ,
+            uint256 scale
+        ) = abi.decode(
+                data,
+                (
+                    address,
+                    ERC20,
+                    ERC20,
+                    address,
+                    bool,
+                    uint256,
+                    uint256,
+                    uint256,
+                    uint256,
+                    uint256,
+                    uint256,
+                    uint256
+                )
+            );
+
+        uint256 toApprove = capacityInQuote ? capacity.mulDiv(scale, minPrice) : capacity;
+
+        // If payout token is in OHM, request mint approval for the capacity in OHM
+        // Otherwise, request withdrawal approval for the capacity from the TRSRY
+        if (address(payoutToken) == address(ohm)) {
+            MINTR.increaseMintApproval(address(this), toApprove);
+        } else {
+            TRSRY.increaseWithdrawApproval(address(this), payoutToken, toApprove);
         }
     }
 
@@ -109,6 +157,10 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     /// @param  teller_ Address of the Teller contract which serves the market
     /// @param  id_     ID of the market to remove from whitelist
     function blacklist(address teller_, uint256 id_) external onlyRole("callback_whitelist") {
+        // Check that the teller matches the aggregator provided teller for the market ID
+        if (teller_ != address(aggregator.getTeller(id_))) revert Callback_InvalidParams();
+
+        // Remove market from whitelist
         approvedMarkets[teller_][id_] = false;
     }
 
