@@ -4,6 +4,19 @@ pragma solidity >=0.8.0;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 interface IHeart {
+    // =========  EVENTS ========= //
+
+    event Beat(uint256 timestamp_);
+    event RewardIssued(address to_, uint256 rewardAmount_);
+    event RewardUpdated(ERC20 token_, uint256 rewardAmount_);
+
+    // =========  ERRORS ========= //
+
+    error Heart_OutOfCycle();
+    error Heart_BeatStopped();
+    error Heart_InvalidParams();
+    error Heart_BeatAvailable();
+
     // =========  CORE FUNCTIONS ========= //
 
     /// @notice Beats the heart

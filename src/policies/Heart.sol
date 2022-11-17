@@ -23,19 +23,6 @@ import "src/Kernel.sol";
 contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
 
-    // =========  EVENTS ========= //
-
-    event Beat(uint256 timestamp_);
-    event RewardIssued(address to_, uint256 rewardAmount_);
-    event RewardUpdated(ERC20 token_, uint256 rewardAmount_);
-
-    // =========  ERRORS ========= //
-
-    error Heart_OutOfCycle();
-    error Heart_BeatStopped();
-    error Heart_InvalidParams();
-    error Heart_BeatAvailable();
-
     // =========  STATE ========= //
 
     /// @notice Status of the Heart, false = stopped, true = beating

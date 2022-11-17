@@ -45,10 +45,10 @@ abstract contract MINTRv1 is Module {
 
     /// @notice Increase approval for specific withdrawer addresses
     /// @dev    Policies must explicity request how much they want approved before withdrawing.
-    function increaseMintApproval(address minter_, uint256 amount_) external virtual;
+    function increaseMintApproval(address policy_, uint256 amount_) external virtual;
 
     /// @notice Decrease approval for specific withdrawer addresses
-    function decreaseMintApproval(address minter_, uint256 amount_) external virtual;
+    function decreaseMintApproval(address policy_, uint256 amount_) external virtual;
 
     /// @notice Emergency shutdown of minting and burning.
     function deactivate() external virtual;

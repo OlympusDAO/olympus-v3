@@ -19,7 +19,6 @@ contract TreasuryCustodian is Policy, RolesConsumer {
     // =========  ERRORS ========= //
 
     error PolicyStillActive();
-    error PolicyNotFound();
 
     // =========  STATE ========= //
 
@@ -45,12 +44,13 @@ contract TreasuryCustodian is Policy, RolesConsumer {
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
 
-        requests = new Permissions[](5);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
-        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
-        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseDebtorApproval.selector);
-        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseDebtorApproval.selector);
-        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
+        requests = new Permissions[](6);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
+        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.increaseDebtorApproval.selector);
+        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseDebtorApproval.selector);
+        requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
     }
 
     //============================================================================================//
@@ -73,6 +73,16 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         uint256 amount_
     ) external onlyRole("custodian") {
         TRSRY.decreaseWithdrawApproval(for_, token_, amount_);
+    }
+
+    /// @notice Custodian can withdraw reserves to an address.
+    /// @dev    Used for withdrawing assets to a MS or other address in special cases.
+    function withdrawReservesTo(
+        address to_,
+        ERC20 token_,
+        uint256 amount_
+    ) external onlyRole("custodian") {
+        TRSRY.withdrawReserves(to_, token_, amount_);
     }
 
     /// @notice Allow an address to incur `amount_` of debt from the treasury

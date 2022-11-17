@@ -44,7 +44,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
     ) external override permissioned {
         uint256 approval = withdrawApproval[withdrawer_][token_];
 
-        uint256 newAmount = type(uint256).max - approval < amount_
+        uint256 newAmount = type(uint256).max - approval <= amount_
             ? type(uint256).max
             : approval + amount_;
         withdrawApproval[withdrawer_][token_] = newAmount;
@@ -60,7 +60,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
     ) external override permissioned {
         uint256 approval = withdrawApproval[withdrawer_][token_];
 
-        uint256 newAmount = approval < amount_ ? 0 : approval - amount_;
+        uint256 newAmount = approval <= amount_ ? 0 : approval - amount_;
         withdrawApproval[withdrawer_][token_] = newAmount;
 
         emit DecreaseWithdrawApproval(withdrawer_, token_, newAmount);
@@ -71,15 +71,8 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         address to_,
         ERC20 token_,
         uint256 amount_
-    ) public override onlyWhileActive {
-        if (amount_ == 0) revert TRSRY_ZeroAmount();
-
-        uint256 approval = withdrawApproval[msg.sender][token_];
-        if (approval < amount_) revert TRSRY_NotApproved();
-
-        unchecked {
-            withdrawApproval[msg.sender][token_] = approval - amount_;
-        }
+    ) public override permissioned onlyWhileActive {
+        withdrawApproval[msg.sender][token_] -= amount_;
 
         token_.safeTransfer(to_, amount_);
 
@@ -117,15 +110,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         permissioned
         onlyWhileActive
     {
-        uint256 approval = debtApproval[msg.sender][token_];
-        if (approval < amount_) revert TRSRY_NotApproved();
-
-        // If not infinite approval, decrement approval by amount
-        if (approval != type(uint256).max) {
-            unchecked {
-                debtApproval[msg.sender][token_] = approval - amount_;
-            }
-        }
+        debtApproval[msg.sender][token_] -= amount_;
 
         // Add debt to caller
         reserveDebt[token_][msg.sender] += amount_;
@@ -141,7 +126,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         address debtor_,
         ERC20 token_,
         uint256 amount_
-    ) external override nonReentrant {
+    ) external override permissioned nonReentrant {
         if (reserveDebt[token_][debtor_] == 0) revert TRSRY_NoDebtOutstanding();
 
         // Deposit from caller first (to handle nonstandard token transfers)

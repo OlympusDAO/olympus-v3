@@ -14,12 +14,7 @@ import "src/Kernel.sol";
 contract Emergency is Policy, RolesConsumer {
     // =========  EVENTS ========= //
 
-    event Shutdown();
-
-    // =========  ERRORS ========= //
-
-    error PolicyStillActive();
-    error PolicyNotFound();
+    event Status(bool treasury_, bool minter_);
 
     // =========  STATE ========= //
 
@@ -64,31 +59,42 @@ contract Emergency is Policy, RolesConsumer {
     function shutdown() external onlyRole("emergency_shutdown") {
         TRSRY.deactivate();
         MINTR.deactivate();
+        _reportStatus();
     }
 
     /// @notice Emergency shutdown of treasury withdrawals
     function shutdownWithdrawals() external onlyRole("emergency_shutdown") {
         TRSRY.deactivate();
+        _reportStatus();
     }
 
     /// @notice Emergency shutdown of minting
     function shutdownMinting() external onlyRole("emergency_shutdown") {
         MINTR.deactivate();
+        _reportStatus();
     }
 
     /// @notice Restart treasury withdrawals and minting after shutdown
     function restart() external onlyRole("emergency_restart") {
         TRSRY.activate();
         MINTR.activate();
+        _reportStatus();
     }
 
     /// @notice Restart treasury withdrawals after shutdown
     function restartWithdrawals() external onlyRole("emergency_restart") {
         TRSRY.activate();
+        _reportStatus();
     }
 
     /// @notice Restart minting after shutdown
     function restartMinting() external onlyRole("emergency_restart") {
         MINTR.activate();
+        _reportStatus();
+    }
+
+    /// @notice Emit an event to show the current status of TRSRY and MINTR
+    function _reportStatus() internal {
+        emit Status(TRSRY.active(), MINTR.active());
     }
 }
