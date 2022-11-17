@@ -12,10 +12,12 @@ contract OlympusVotes is VOTESv1 {
     //                                      MODULE SETUP                                          //
     //============================================================================================//
 
-    constructor(Kernel kernel_, ERC20 ohm_)
+    constructor(Kernel kernel_, ERC20 gOhm_)
         Module(kernel_)
-        ERC4626(ohm_, "Olympus Votes", "vOHM")
-    {}
+        ERC4626(gOhm_, "Olympus Votes", "vOHM")
+    {
+        gOHM = gOhm_;
+    }
 
     /// @inheritdoc Module
     function KEYCODE() public pure override returns (Keycode) {
