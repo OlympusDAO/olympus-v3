@@ -40,7 +40,7 @@ abstract contract RANGEv1 is Module {
         bool active; // Whether or not the side is active (i.e. the Operator is performing market operations on this side, true = active, false = inactive)
         uint48 lastActive; // Unix timestamp when the side was last active (in seconds)
         uint256 capacity; // Amount of tokens that can be used to defend the side of the range. Specified in OHM tokens on the high side and Reserve tokens on the low side.
-        uint256 threshold; // Amount of tokens under which the side is taken down. Specified in OHM tokens on the high side and Reserve tokens on the low side.
+        uint256 threshold; // Minimum number of tokens required in capacity to maintain an active side. Specified in OHM tokens on the high side and Reserve tokens on the low side.
         uint256 market; // Market ID of the cushion bond market for the side. If no market is active, the market ID is set to max uint256 value.
     }
 
