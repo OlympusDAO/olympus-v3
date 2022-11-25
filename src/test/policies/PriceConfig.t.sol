@@ -74,7 +74,8 @@ contract PriceConfigTest is Test {
                 reserveEthPriceFeed, // AggregatorInterface reserveEthPriceFeed_,
                 uint48(24 hours), // uint32 reserveEthUpdateThreshold_,
                 uint48(8 hours), // uint32 observationFrequency_,
-                uint48(7 days) // uint32 movingAverageDuration_,
+                uint48(7 days), // uint32 movingAverageDuration_,
+                10 * 1e18 // uint256 minimumTargetPrice_
             );
 
             roles = new OlympusRoles(kernel);

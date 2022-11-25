@@ -82,7 +82,7 @@ contract HeartTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             /// Deploy modules (some mocks)
-            price = new MockPrice(kernel, uint48(8 hours));
+            price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
             roles = new OlympusRoles(kernel);
 
             /// Configure mocks
