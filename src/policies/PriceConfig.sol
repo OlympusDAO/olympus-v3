@@ -93,4 +93,14 @@ contract OlympusPriceConfig is Policy, RolesConsumer {
     ) external onlyRole("price_admin") {
         PRICE.changeUpdateThresholds(ohmEthUpdateThreshold_, reserveEthUpdateThreshold_);
     }
+
+    /// @notice   Change the minimum target price
+    /// @param    minimumTargetPrice_ - Minimum target price for the RBS system with 18 decimals, expressed as Reserves per OHM
+    /// @dev      The minimum target price should be set based on liquid backing of OHM.
+    function changeMinimumTargetPrice(uint256 minimumTargetPrice_)
+        external
+        onlyRole("price_admin")
+    {
+        PRICE.changeMinimumTargetPrice(minimumTargetPrice_);
+    }
 }

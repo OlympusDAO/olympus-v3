@@ -61,7 +61,8 @@ contract OlympusPriceDeploy is Script {
             reserveEthPriceFeed,
             uint48(24 hours),
             uint48(8 hours),
-            uint48(30 days)
+            uint48(30 days),
+            10 * 1e18 // placeholder for liquid backing
         );
         console2.log("Price module deployed at:", address(PRICE));
 

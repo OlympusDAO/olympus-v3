@@ -16,6 +16,7 @@ abstract contract PRICEv1 is Module {
     event MovingAverageDurationChanged(uint48 movingAverageDuration_);
     event ObservationFrequencyChanged(uint48 observationFrequency_);
     event UpdateThresholdsChanged(uint48 ohmEthUpdateThreshold_, uint48 reserveEthUpdateThreshold_);
+    event MinimumTargetPriceChanged(uint256 minimumTargetPrice_);
 
     // =========  ERRORS ========= //
 
@@ -71,6 +72,9 @@ abstract contract PRICEv1 is Module {
     /// @notice Number of decimals in the price values provided by the contract.
     uint8 public constant decimals = 18;
 
+    /// @notice Minimum target price for RBS system. Set manually to correspond to the liquid backing of OHM.
+    uint256 public minimumTargetPrice;
+
     // =========  FUNCTIONS ========= //
 
     /// @notice Trigger an update of the moving average. Permissioned.
@@ -110,6 +114,11 @@ abstract contract PRICEv1 is Module {
         uint48 reserveEthUpdateThreshold_
     ) external virtual;
 
+    /// @notice   Change the minimum target price
+    /// @param    minimumTargetPrice_ - Minimum target price for RBS system with 18 decimals, expressed as number of Reserve per OHM
+    /// @dev      The minimum target price should be set based on the liquid backing of OHM.
+    function changeMinimumTargetPrice(uint256 minimumTargetPrice_) external virtual;
+
     /// @notice Get the current price of OHM in the Reserve asset from the price feeds
     function getCurrentPrice() external view virtual returns (uint256);
 
@@ -118,4 +127,7 @@ abstract contract PRICEv1 is Module {
 
     /// @notice Get the moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
     function getMovingAverage() external view virtual returns (uint256);
+
+    /// @notice Get target price of OHM in the Reserve asset for the RBS system
+    function getTargetPrice() external view virtual returns (uint256);
 }
