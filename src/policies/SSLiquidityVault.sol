@@ -12,7 +12,8 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 // Import external dependencies
 import {AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
-// TODO Import Balancer vault
+import {IVault, JoinPoolRequest, ExitPoolRequest} from "src/interfaces/IBalancerVault.sol";
+import {IBasePool} from "src/interfaces/IBasePool.sol";
 
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -33,8 +34,11 @@ contract SSLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
     ERC20 public ohm;
     ERC20 public steth;
 
+    // Balancer Vault
+    IVault public vault;
+
     // Liquidity Pool
-    address public stethOhmPool; // stETH/OHM Balancer pool
+    IBasePool public stethOhmPool; // stETH/OHM Balancer pool
 
     // Price Feeds
     AggregatorV3Interface public ohmEthPriceFeed; // OHM/ETH price feed
@@ -54,6 +58,7 @@ contract SSLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
         Kernel kernel_,
         address ohm_,
         address steth_,
+        address vault_,
         address stethOhmPool_,
         address ohmEthPriceFeed_,
         address ethUsdPriceFeed_,
@@ -73,8 +78,11 @@ contract SSLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
         ohm = ERC20(ohm_);
         steth = ERC20(steth_);
 
+        // Set Balancer vault
+        vault = IVault(vault_);
+
         // Set liquidity pool
-        stethOhmPool = stethOhmPool_;
+        stethOhmPool = IBasePool(stethOhmPool_);
 
         // Set price feeds
         ohmEthPriceFeed = AggregatorV3Interface(ohmEthPriceFeed_);
@@ -116,26 +124,87 @@ contract SSLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
 
     /// @dev    This needs to be nonReentrant since the contract only knows the amount of LP tokens it
     //          receives after an external interaction with the Balancer pool
-    function depositAndLP(uint256 amount_) external nonReentrant returns (uint256) {
+    function depositAndLP(uint256 stethAmount_) external nonReentrant returns (uint256 amountOut) {
         // Calculate how much OHM the user needs to borrow
-        uint256 ohmToBorrow = _valueCollateral(amount_);
+        uint256 ohmToBorrow = _valueCollateral(stethAmount_);
 
         // Update state about user's deposits and borrows
-        stethDeposits[msg.sender] += amount_;
+        stethDeposits[msg.sender] += stethAmount_;
         ohmDebtOutstanding[msg.sender] += ohmToBorrow;
 
         // Take stETH from user
-        steth.transferFrom(msg.sender, address(this), amount_);
+        steth.transferFrom(msg.sender, address(this), stethAmount_);
 
         // Borrow OHM
         LENDR.borrow(ohmToBorrow);
         MINTR.mintOhm(address(this), ohmToBorrow);
 
-        // TODO Deposit stETH into Balancer pool
+        // OHM-stETH BPT Before
+        uint256 bptBefore = ERC20(address(stethOhmPool)).balanceOf(address(this));
 
-        // TODO Update user's LP position
+        address[] memory assets = new address[](2);
+        assets[0] = address(ohm);
+        assets[1] = address(steth);
 
-        // TODO Return amount of LP tokens received
+        uint256[] memory maxAmountsIn = new uint256[](2);
+        maxAmountsIn[0] = ohmToBorrow;
+        maxAmountsIn[1] = stethAmount_;
+
+        // Join Balancer pool
+        JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
+            assets: assets,
+            maxAmountsIn: maxAmountsIn,
+            userData: abi.encode(1, [ohmToBorrow, stethAmount_], 0),
+            fromInternalBalance: false
+        });
+        vault.joinPool(stethOhmPool.getPoolId(), address(this), address(this), joinPoolRequest);
+
+        // OHM-stETH BPT After
+        uint256 bptAfter = ERC20(address(stethOhmPool)).balanceOf(address(this));
+        amountOut = bptAfter - bptBefore;
+
+        lpPositions[msg.sender] += amountOut;
+    }
+
+    function unwindAndRepay(uint256 lpAmount_) external nonReentrant returns (uint256) {
+        lpPositions[msg.sender] -= lpAmount_;
+
+        uint256 expectedOhmAmount; // TODO
+        uint256 expectedStethAmount; // TODO
+
+        // OHM and stETH Before
+        uint256 ohmBefore = ohm.balanceOf(address(this));
+        uint256 stethBefore = steth.balanceOf(address(this));
+
+        address[] memory assets = new address[](2);
+        assets[0] = address(ohm);
+        assets[1] = address(steth);
+
+        uint256[] memory minAmountsOut = new uint256[](2);
+        minAmountsOut[0] = expectedOhmAmount;
+        minAmountsOut[1] = expectedStethAmount;
+
+        // Withdraw stETH from Balancer pool
+        ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
+            assets: assets,
+            minAmountsOut: minAmountsOut,
+            userData: abi.encode(1, lpAmount_),
+            toInternalBalance: false
+        });
+        vault.exitPool(
+            stethOhmPool.getPoolId(),
+            address(this),
+            payable(address(this)),
+            exitPoolRequest
+        );
+
+        uint256 ohmReceived = ohm.balanceOf(address(this)) - ohmBefore;
+        uint256 stethReceived = steth.balanceOf(address(this)) - stethBefore;
+
+        MINTR.burnOhm(address(this), ohmReceived);
+        steth.transfer(msg.sender, stethReceived);
+
+        return stethReceived;
     }
 
     //============================================================================================//
