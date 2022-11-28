@@ -233,7 +233,7 @@ contract OperatorTest is Test {
     /// [X] Splippage check when swapping
     /// [X] Wall breaks when capacity drops below the configured threshold
     /// [X] Not able to swap at the walls when they are down
-    /// [ ] Not able to swap at the walls when price is stale
+    /// [X] Not able to swap at the walls when price is stale
 
     function testCorrectness_swapHighWall() public {
         /// Initialize operator
@@ -2288,5 +2288,24 @@ contract OperatorTest is Test {
         assertLt(range.price(true, false), startRange.wall.low.price);
         assertLt(range.price(false, true), startRange.cushion.high.price);
         assertLt(range.price(true, true), startRange.wall.high.price);
+
+        /// Check that the bands do not get reduced further past the minimum target price
+        price.setMovingAverage(10 * 1e18); // At minimum price to get initial values
+        vm.prank(heart);
+        operator.operate();
+
+        /// Get the current bands
+        OlympusRange.Range memory currentRange = range.range();
+
+        /// Move moving average below minimum target
+        price.setMovingAverage(5 * 1e18);
+        vm.prank(heart);
+        operator.operate();
+
+        /// Check that the bands have not changed
+        assertEq(currentRange.cushion.low.price, range.price(false, false));
+        assertEq(currentRange.wall.low.price, range.price(true, false));
+        assertEq(currentRange.cushion.high.price, range.price(false, true));
+        assertEq(currentRange.wall.high.price, range.price(true, true));
     }
 }

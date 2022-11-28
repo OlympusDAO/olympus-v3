@@ -81,10 +81,12 @@ contract PriceTest is Test {
     // =========  HELPER FUNCTIONS ========= //
     function initializePrice(uint8 nonce) internal {
         /// Assume that the reserveEth price feed is fixed at 0.0005 ETH = 1 Reserve
-        reserveEthPriceFeed.setLatestAnswer(int256(5e14));
+        reserveEthPriceFeed.setLatestAnswer(int256(1e15));
         uint256 reserveEthPrice = uint256(reserveEthPriceFeed.latestAnswer());
 
         /// Set ohmEth price to 0.01 ETH = 1 OHM initially
+        /// This makes the price 10 reserves per OHM, which is the same as our minimum value.
+        /// Random moves up and down will be above or below this.
         int256 ohmEthPrice = int256(1e16);
 
         /// Set scaling value for calculations
@@ -236,6 +238,7 @@ contract PriceTest is Test {
     /// [X] getCurrentPrice
     /// [X] getLastPrice
     /// [X] getMovingAverage
+    /// [X] getTargetPrice
     /// [X] cannot get prices before initialization
 
     function testCorrectness_KEYCODE() public {
@@ -349,6 +352,23 @@ contract PriceTest is Test {
         assertLt(expMovingAverage, movingAverage.mulDiv(1001, 1000));
     }
 
+    function testCorrectness_getTargetPrice(uint8 nonce) public {
+        /// Initialize price module
+        initializePrice(nonce);
+
+        /// Get the target price from the price module
+        uint256 targetPrice = price.getTargetPrice();
+
+        /// Calculate the expected target price
+        uint256 movingAverage = price.getMovingAverage();
+        uint256 minimumPrice = price.minimumTargetPrice();
+        uint256 expTargetPrice = movingAverage > minimumPrice ? movingAverage : minimumPrice;
+
+        /// Check that the target price is correct (use a range since the simpler method missing a little on rounding)
+        assertGt(expTargetPrice, targetPrice.mulDiv(999, 1000));
+        assertLt(expTargetPrice, targetPrice.mulDiv(1001, 1000));
+    }
+
     function testCorrectness_viewsRevertBeforeInitialization() public {
         /// Check that the views revert before initialization
         bytes memory err = abi.encodeWithSignature("Price_NotInitialized()");
@@ -360,6 +380,9 @@ contract PriceTest is Test {
 
         vm.expectRevert(err);
         price.getMovingAverage();
+
+        vm.expectRevert(err);
+        price.getTargetPrice();
     }
 
     // =========  ADMIN TESTS ========= //
@@ -373,7 +396,8 @@ contract PriceTest is Test {
     /// [X] cannot change moving average duration with invalid params
     /// [X] change observation frequency
     /// [X] cannot change observation frequency with invalid params
-    /// [ ] change price feed update thresholds
+    /// [X] change price feed update thresholds
+    /// [ ] change minimum target price
 
     function testCorrectness_initialize(uint8 nonce) public {
         /// Check that the module is not initialized
@@ -562,6 +586,28 @@ contract PriceTest is Test {
         price.getCurrentPrice();
     }
 
+    function testCorrectness_changeMinimumTargetPrice(uint8 nonce) public {
+        /// Initialize price module
+        initializePrice(nonce);
+
+        /// Get minimum target price
+        uint256 minTargetPrice = price.minimumTargetPrice();
+
+        /// Change minimum target price to a different value (larger than current)
+        vm.prank(writer);
+        price.changeMinimumTargetPrice(minTargetPrice + 1e18);
+
+        /// Check that the minimum target price is updated correctly
+        assertEq(price.minimumTargetPrice(), minTargetPrice + 1e18);
+
+        /// Change minimum target price to a different value (smaller than current)
+        vm.prank(writer);
+        price.changeMinimumTargetPrice(minTargetPrice - 1e18);
+
+        /// Check that the minimum target price is updated correctly
+        assertEq(price.minimumTargetPrice(), minTargetPrice - 1e18);
+    }
+
     function testCorrectness_onlyPermittedPoliciesCanCallAdminFunctions() public {
         /// Try to call functions as a non-permitted policy with correct params and expect reverts
         bytes memory err = abi.encodeWithSelector(
@@ -582,5 +628,13 @@ contract PriceTest is Test {
         /// changeObservationFrequency
         vm.expectRevert(err);
         price.changeObservationFrequency(uint48(4 hours));
+
+        /// changeUpdateThresholds
+        vm.expectRevert(err);
+        price.changeUpdateThresholds(uint48(36 hours), uint48(36 hours));
+
+        /// changeMinimumTargetPrice
+        vm.expectRevert(err);
+        price.changeMinimumTargetPrice(1e18);
     }
 }
