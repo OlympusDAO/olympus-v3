@@ -151,6 +151,7 @@ contract OlympusDeploy is Script {
 
     }
 
+    // TODO decide how to handle installs, upgrades, activations, and deactivations since the executor is the multisig
     function _installModule(Module module_) internal {
         // Check if module is installed on the kernel and determine which type of install to use
         vm.startBroadcast();
@@ -185,7 +186,6 @@ contract OlympusDeploy is Script {
         }
 
         // Iterate through deployments
-        // TODO should an existing policy be deactivated if a new version of it is deployed?
         for (uint256 i = deployKernel ? 1 : 0; i < len; i++) {
             // Get deploy script selector from contract name
             bytes4 selector = selectorMap[deployments[i]];
@@ -193,8 +193,6 @@ contract OlympusDeploy is Script {
             (bool success, ) = address(this).call(abi.encodeWithSelector(selector, args));
             require(success, string.concat("Failed to deploy ", deployments[i]));
         }
-
-        // TODO Give access control permissions for the deployed contracts
 
         // Save deployments to file
         _saveDeployment(chain_);
@@ -209,8 +207,9 @@ contract OlympusDeploy is Script {
             uint48 ohmEthUpdateThreshold_,
             uint48 reserveEthUpdateThreshold_,
             uint48 observationFrequency_,
-            uint48 movingAverageDuration_
-        ) = abi.decode(args, (uint48, uint48, uint48, uint48));
+            uint48 movingAverageDuration_,
+            uint256 minimumTargetPrice_
+        ) = abi.decode(args, (uint48, uint48, uint48, uint48, uint256));
 
         // Deploy Price module
         vm.broadcast();
@@ -221,12 +220,13 @@ contract OlympusDeploy is Script {
             reserveEthPriceFeed,
             reserveEthUpdateThreshold_,
             observationFrequency_,
-            movingAverageDuration_
+            movingAverageDuration_,
+            minimumTargetPrice_
         );
         console2.log("Price deployed at:", address(PRICE));
 
-        // Install the module
-        _installModule(PRICE);
+        // // Install the module
+        // _installModule(PRICE);
     }
 
     function _deployRange(bytes memory args) public {
@@ -242,8 +242,8 @@ contract OlympusDeploy is Script {
         RANGE = new OlympusRange(kernel, ohm, reserve, thresholdFactor, cushionSpread, wallSpread);
         console2.log("Range deployed at:", address(RANGE));
 
-        // Install the module
-        _installModule(RANGE);
+        // // Install the module
+        // _installModule(RANGE);
     }
 
     function _deployTreasury(bytes memory args) public {
@@ -254,8 +254,8 @@ contract OlympusDeploy is Script {
         TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury deployed at:", address(TRSRY));
 
-        // Install the module
-        _installModule(TRSRY);
+        // // Install the module
+        // _installModule(TRSRY);
     }
 
     function _deployMinter(bytes memory args) public {
@@ -266,8 +266,8 @@ contract OlympusDeploy is Script {
         MINTR = new OlympusMinter(kernel, address(ohm));
         console2.log("Minter deployed at:", address(MINTR));
 
-        // Install the module
-        _installModule(MINTR);
+        // // Install the module
+        // _installModule(MINTR);
     }
 
     function _deployRoles(bytes memory args) public {
@@ -278,8 +278,8 @@ contract OlympusDeploy is Script {
         ROLES = new OlympusRoles(kernel);
         console2.log("Roles deployed at:", address(ROLES));
 
-        // Install the module
-        _installModule(ROLES);
+        // // Install the module
+        // _installModule(ROLES);
     }
 
     // Policy deployment functions
@@ -309,8 +309,8 @@ contract OlympusDeploy is Script {
         );
         console2.log("Operator deployed at:", address(operator));
 
-        // Activate the policy
-        _activatePolicy(operator);
+        // // Activate the policy
+        // _activatePolicy(operator);
     }
 
     function _deployBondCallback(bytes memory args) public {
@@ -321,8 +321,8 @@ contract OlympusDeploy is Script {
         callback = new BondCallback(kernel, bondAggregator, ohm);
         console2.log("BondCallback deployed at:", address(callback));
 
-        // Activate the policy
-        _activatePolicy(callback);
+        // // Activate the policy
+        // _activatePolicy(callback);
     }
 
     function _deployHeart(bytes memory args) public {
@@ -333,8 +333,8 @@ contract OlympusDeploy is Script {
         vm.broadcast();
         heart = new OlympusHeart(kernel, operator, ohm, reward);
 
-        // Activate the policy
-        _activatePolicy(heart);
+        // // Activate the policy
+        // _activatePolicy(heart);
     }
 
     function _deployPriceConfig(bytes memory args) public {
@@ -345,8 +345,8 @@ contract OlympusDeploy is Script {
         priceConfig = new OlympusPriceConfig(kernel);
         console2.log("PriceConfig deployed at:", address(priceConfig));
 
-        // Activate the policy
-        _activatePolicy(priceConfig);
+        // // Activate the policy
+        // _activatePolicy(priceConfig);
     }
 
     function _deployRolesAdmin(bytes memory args) public {
@@ -357,8 +357,8 @@ contract OlympusDeploy is Script {
         rolesAdmin = new RolesAdmin(kernel);
         console2.log("RolesAdmin deployed at:", address(rolesAdmin));
 
-        // Activate the policy
-        _activatePolicy(rolesAdmin);
+        // // Activate the policy
+        // _activatePolicy(rolesAdmin);
     }
 
     function _deployTreasuryCustodian(bytes memory args) public {
@@ -369,8 +369,8 @@ contract OlympusDeploy is Script {
         treasuryCustodian = new TreasuryCustodian(kernel);
         console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
 
-        // Activate the policy
-        _activatePolicy(treasuryCustodian);
+        // // Activate the policy
+        // _activatePolicy(treasuryCustodian);
     }
 
     function _deployDistributor(bytes memory args) public {
@@ -382,8 +382,8 @@ contract OlympusDeploy is Script {
         distributor = new Distributor(kernel, address(ohm), staking, initialRate);
         console2.log("Distributor deployed at:", address(distributor));
 
-        // Activate the policy
-        _activatePolicy(distributor);
+        // // Activate the policy
+        // _activatePolicy(distributor);
     }
 
     function _deployEmergency(bytes memory args) public {
@@ -394,182 +394,9 @@ contract OlympusDeploy is Script {
         emergency = new Emergency(kernel);
         console2.log("Emergency deployed at:", address(emergency));
 
-        // Activate the policy
-        _activatePolicy(emergency);
+        // // Activate the policy
+        // _activatePolicy(emergency);
     }
-
-    // function olddeploy(string memory chain_, address guardian_, address policy_, address emergency_) external {
-    //     /// Token addresses
-    //     ohm = ERC20(vm.envAddress("OHM_ADDRESS"));
-    //     reserve = ERC20(vm.envAddress("DAI_ADDRESS"));
-    //     rewardToken = ERC20(vm.envAddress("OHM_ADDRESS"));
-
-    //     /// Bond system addresses
-    //     bondAuctioneer = IBondSDA(vm.envAddress("BOND_SDA_ADDRESS"));
-    //     bondAggregator = IBondAggregator(vm.envAddress("BOND_AGGREGATOR_ADDRESS"));
-
-    //     /// Chainlink price feed addresses
-    //     ohmEthPriceFeed = AggregatorV2V3Interface(vm.envAddress("OHM_ETH_FEED"));
-    //     reserveEthPriceFeed = AggregatorV2V3Interface(vm.envAddress("DAI_ETH_FEED"));
-
-    //     /// External Olympus contract addresses
-    //     staking = vm.envAddress("STAKING_ADDRESS");
-
-    //     vm.startBroadcast();
-
-    //     /// Deploy kernel first
-    //     kernel = new Kernel(); // sender will be executor initially
-    //     console2.log("Kernel deployed at:", address(kernel));
-
-    //     /// Deploy modules
-    //     // INSTR = new OlympusInstructions(kernel);
-    //     // console2.log("Instructions module deployed at:", address(INSTR));
-
-    //     TRSRY = new OlympusTreasury(kernel);
-    //     console2.log("Treasury module deployed at:", address(TRSRY));
-
-    //     MINTR = new OlympusMinter(kernel, address(ohm));
-    //     console2.log("Minter module deployed at:", address(MINTR));
-
-    //     PRICE = new OlympusPrice(
-    //         kernel,
-    //         ohmEthPriceFeed,
-    //         uint48(24 hours),
-    //         reserveEthPriceFeed,
-    //         uint48(24 hours),
-    //         uint48(8 hours),
-    //         uint48(30 days)
-    //     );
-    //     console2.log("Price module deployed at:", address(PRICE));
-
-    //     RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1500), uint256(2800));
-    //     console2.log("Range module deployed at:", address(RANGE));
-
-    //     ROLES = new OlympusRoles(kernel);
-    //     console2.log("Roles module deployed at:", address(ROLES));
-
-    //     /// Deploy policies
-    //     callback = new BondCallback(kernel, bondAggregator, ohm);
-    //     console2.log("Bond Callback deployed at:", address(callback));
-
-    //     operator = new Operator(
-    //         kernel,
-    //         bondAuctioneer,
-    //         callback,
-    //         [ohm, reserve],
-    //         [
-    //             uint32(3000), // cushionFactor
-    //             uint32(3 days), // cushionDuration
-    //             uint32(100_000), // cushionDebtBuffer
-    //             uint32(4 hours), // cushionDepositInterval
-    //             uint32(1000), // reserveFactor
-    //             uint32(6 days), // regenWait
-    //             uint32(18), // regenThreshold
-    //             uint32(21) // regenObserve
-    //         ] // TODO verify initial parameters
-    //     );
-    //     console2.log("Operator deployed at:", address(operator));
-
-    //     heart = new OlympusHeart(kernel, operator, rewardToken, 5 * 1e9); // TODO verify initial keeper reward
-    //     console2.log("Heart deployed at:", address(heart));
-
-    //     priceConfig = new OlympusPriceConfig(kernel);
-    //     console2.log("PriceConfig deployed at:", address(priceConfig));
-
-    //     rolesAdmin = new RolesAdmin(kernel);
-    //     console2.log("RolesAdmin deployed at:", address(rolesAdmin));
-
-    //     treasuryCustodian = new TreasuryCustodian(kernel);
-    //     console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
-
-    //     distributor = new Distributor(kernel, address(ohm), staking, vm.envUint("REWARD_RATE"));
-    //     console2.log("Distributor deployed at:", address(distributor));
-
-    //     emergency = new Emergency(kernel);
-    //     console2.log("Emergency deployed at:", address(emergency));
-
-    //     /// Execute actions on Kernel
-    //     /// Install modules
-    //     // kernel.executeAction(Actions.InstallModule, address(INSTR));
-    //     kernel.executeAction(Actions.InstallModule, address(PRICE));
-    //     kernel.executeAction(Actions.InstallModule, address(RANGE));
-    //     kernel.executeAction(Actions.InstallModule, address(TRSRY));
-    //     kernel.executeAction(Actions.InstallModule, address(MINTR));
-    //     kernel.executeAction(Actions.InstallModule, address(ROLES));
-
-    //     /// Approve policies
-    //     kernel.executeAction(Actions.ActivatePolicy, address(callback));
-    //     kernel.executeAction(Actions.ActivatePolicy, address(operator));
-    //     kernel.executeAction(Actions.ActivatePolicy, address(heart));
-    //     kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
-    //     kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-    //     kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
-    //     kernel.executeAction(Actions.ActivatePolicy, address(distributor));
-    //     kernel.executeAction(Actions.ActivatePolicy, address(emergency));
-
-    //     /// Configure access control for policies
-
-    //     /// Operator roles
-    //     rolesAdmin.grantRole("operator_operate", address(heart));
-    //     rolesAdmin.grantRole("operator_operate", guardian_);
-    //     rolesAdmin.grantRole("operator_reporter", address(callback));
-    //     rolesAdmin.grantRole("operator_policy", policy_);
-    //     rolesAdmin.grantRole("operator_admin", guardian_);
-
-    //     /// Bond callback roles
-    //     rolesAdmin.grantRole("callback_whitelist", address(operator));
-    //     rolesAdmin.grantRole("callback_whitelist", policy_);
-    //     rolesAdmin.grantRole("callback_admin", guardian_);
-
-    //     /// Heart roles
-    //     rolesAdmin.grantRole("heart_admin", policy_);
-
-    //     /// PriceConfig roles
-    //     rolesAdmin.grantRole("price_admin", guardian_);
-    //     rolesAdmin.grantRole("price_admin", policy_);
-
-    //     /// TreasuryCustodian roles
-    //     rolesAdmin.grantRole("custodian", guardian_);
-
-    //     /// Distributor roles
-    //     rolesAdmin.grantRole("distributor_admin", policy_);
-
-    //     /// Emergency roles
-    //     rolesAdmin.grantRole("emergency_shutdown", emergency_);
-    //     rolesAdmin.grantRole("emergency_restart", guardian_);
-
-    //     // /// Transfer executor powers to guardian
-    //     // kernel.executeAction(Actions.ChangeExecutor, guardian_);
-
-    //     vm.stopBroadcast();
-
-    //     // Save deployment information for the chain being deployed to
-    //     _saveDeployment(chain_);
-    // }
-
-    // /// @dev should be called by address with the guardian role
-    // function initialize() external {
-    //     // Set addresses from deployment
-    //     // priceConfig = OlympusPriceConfig();
-    //     operator = Operator(vm.envAddress("OPERATOR"));
-    //     callback = BondCallback(vm.envAddress("CALLBACK"));
-
-    //     /// Start broadcasting
-    //     vm.startBroadcast();
-
-    //     /// Initialize the Price oracle
-    //     // DONE MANUALLY VIA ETHERSCAN DUE TO DATA INPUT LIMITATIONS
-    //     // priceConfig.initialize(priceObservations, lastObservationTime);
-
-    //     /// Set the operator address on the BondCallback contract
-    //     callback.setOperator(operator);
-
-    //     /// Initialize the Operator policy
-    //     operator.initialize();
-
-    //     /// Stop broadcasting
-    //     vm.stopBroadcast();
-    // }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
     /// @dev Should be called prior to verifyAndPushAuth()
