@@ -35,11 +35,12 @@ contract OlympusPriceConfig is Policy, RolesConsumer {
     {
         Keycode PRICE_KEYCODE = PRICE.KEYCODE();
 
-        permissions = new Permissions[](4);
+        permissions = new Permissions[](5);
         permissions[0] = Permissions(PRICE_KEYCODE, PRICE.initialize.selector);
         permissions[1] = Permissions(PRICE_KEYCODE, PRICE.changeMovingAverageDuration.selector);
         permissions[2] = Permissions(PRICE_KEYCODE, PRICE.changeObservationFrequency.selector);
         permissions[3] = Permissions(PRICE_KEYCODE, PRICE.changeUpdateThresholds.selector);
+        permissions[4] = Permissions(PRICE_KEYCODE, PRICE.changeMinimumTargetPrice.selector);
     }
 
     //============================================================================================//
