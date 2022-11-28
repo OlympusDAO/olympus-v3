@@ -515,7 +515,7 @@ contract OlympusDeploy is Script {
         for (uint256 i; i < len; ++i) {
             vm.writeLine(
                 file,
-                string.concat('"', deployments[i], '": "', vm.toString(deployedTo[deployments[i]]), '"')
+                string.concat('"', deployments[i], '": "', vm.toString(deployedTo[deployments[i]]), '",')
             );
         }
         vm.writeLine(file, "}");
