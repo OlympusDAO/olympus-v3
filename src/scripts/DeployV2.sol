@@ -77,6 +77,7 @@ contract OlympusDeploy is Script {
     mapping(string => bytes4) public selectorMap;
     mapping(string => bytes) public argsMap;
     string[] public deployments;
+    mapping(string => address) public deployedTo;
 
     function _setUp(string calldata chain_) internal {
         // Setup contract -> selector mappings
@@ -187,11 +188,17 @@ contract OlympusDeploy is Script {
 
         // Iterate through deployments
         for (uint256 i = deployKernel ? 1 : 0; i < len; i++) {
-            // Get deploy script selector from contract name
-            bytes4 selector = selectorMap[deployments[i]];
-            bytes memory args = argsMap[deployments[i]];
-            (bool success, ) = address(this).call(abi.encodeWithSelector(selector, args));
+            // Get deploy script selector and deploy args from contract name
+            string memory name = deployments[i];
+            bytes4 selector = selectorMap[name];
+            bytes memory args = argsMap[name];
+
+            // Call the deploy function for the contract
+            (bool success, bytes memory data) = address(this).call(abi.encodeWithSelector(selector, args));
             require(success, string.concat("Failed to deploy ", deployments[i]));
+
+            // Store the deployed contract address for logging
+            deployedTo[name] = abi.decode(data, (address));
         }
 
         // Save deployments to file
@@ -201,7 +208,7 @@ contract OlympusDeploy is Script {
     // ========== DEPLOYMENT FUNCTIONS ========== //
 
     // Module deployment functions
-    function _deployPrice(bytes memory args) public {
+    function _deployPrice(bytes memory args) public returns (address) {
         // Decode arguments for Price module
         (
             uint48 ohmEthUpdateThreshold_,
@@ -225,11 +232,10 @@ contract OlympusDeploy is Script {
         );
         console2.log("Price deployed at:", address(PRICE));
 
-        // // Install the module
-        // _installModule(PRICE);
+        return address(PRICE);
     }
 
-    function _deployRange(bytes memory args) public {
+    function _deployRange(bytes memory args) public returns (address) {
         // Decode arguments for Range module
         (
             uint256 thresholdFactor,
@@ -242,11 +248,10 @@ contract OlympusDeploy is Script {
         RANGE = new OlympusRange(kernel, ohm, reserve, thresholdFactor, cushionSpread, wallSpread);
         console2.log("Range deployed at:", address(RANGE));
 
-        // // Install the module
-        // _installModule(RANGE);
+        return address(RANGE);
     }
 
-    function _deployTreasury(bytes memory args) public {
+    function _deployTreasury(bytes memory args) public returns (address) {
         // No additional arguments for Treasury module
 
         // Deploy Treasury module
@@ -254,11 +259,10 @@ contract OlympusDeploy is Script {
         TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury deployed at:", address(TRSRY));
 
-        // // Install the module
-        // _installModule(TRSRY);
+        return address(TRSRY);
     }
 
-    function _deployMinter(bytes memory args) public {
+    function _deployMinter(bytes memory args) public returns (address) {
         // Only args are contracts in the environment
 
         // Deploy Minter module
@@ -266,11 +270,10 @@ contract OlympusDeploy is Script {
         MINTR = new OlympusMinter(kernel, address(ohm));
         console2.log("Minter deployed at:", address(MINTR));
 
-        // // Install the module
-        // _installModule(MINTR);
+        return address(MINTR);
     }
 
-    function _deployRoles(bytes memory args) public {
+    function _deployRoles(bytes memory args) public returns (address) {
         // No additional arguments for Roles module
 
         // Deploy Roles module
@@ -278,12 +281,11 @@ contract OlympusDeploy is Script {
         ROLES = new OlympusRoles(kernel);
         console2.log("Roles deployed at:", address(ROLES));
 
-        // // Install the module
-        // _installModule(ROLES);
+        return address(ROLES);
     }
 
     // Policy deployment functions
-    function _deployOperator(bytes memory args) public {
+    function _deployOperator(bytes memory args) public returns (address) {
         // Decode arguments for Operator policy
         // Must use a dynamic array to parse correctly since the json lib defaults to this
         uint32[] memory configParams_ = abi.decode(args, (uint32[]));
@@ -309,11 +311,10 @@ contract OlympusDeploy is Script {
         );
         console2.log("Operator deployed at:", address(operator));
 
-        // // Activate the policy
-        // _activatePolicy(operator);
+        return address(operator);
     }
 
-    function _deployBondCallback(bytes memory args) public {
+    function _deployBondCallback(bytes memory args) public returns (address) {
         // No additional arguments for BondCallback policy
 
         // Deploy BondCallback policy
@@ -321,11 +322,10 @@ contract OlympusDeploy is Script {
         callback = new BondCallback(kernel, bondAggregator, ohm);
         console2.log("BondCallback deployed at:", address(callback));
 
-        // // Activate the policy
-        // _activatePolicy(callback);
+        return address(callback);
     }
 
-    function _deployHeart(bytes memory args) public {
+    function _deployHeart(bytes memory args) public returns (address) {
         // Decode arguments for OlympusHeart policy
         uint256 reward = abi.decode(args, (uint256));
 
@@ -334,11 +334,10 @@ contract OlympusDeploy is Script {
         heart = new OlympusHeart(kernel, operator, ohm, reward);
         console2.log("OlympusHeart deployed at:", address(heart));
 
-        // // Activate the policy
-        // _activatePolicy(heart);
+        return address(heart);
     }
 
-    function _deployPriceConfig(bytes memory args) public {
+    function _deployPriceConfig(bytes memory args) public returns (address) {
         // No additional arguments for PriceConfig policy
 
         // Deploy PriceConfig policy
@@ -346,11 +345,10 @@ contract OlympusDeploy is Script {
         priceConfig = new OlympusPriceConfig(kernel);
         console2.log("PriceConfig deployed at:", address(priceConfig));
 
-        // // Activate the policy
-        // _activatePolicy(priceConfig);
+        return address(priceConfig);
     }
 
-    function _deployRolesAdmin(bytes memory args) public {
+    function _deployRolesAdmin(bytes memory args) public returns (address) {
         // No additional arguments for RolesAdmin policy
 
         // Deploy RolesAdmin policy
@@ -358,11 +356,10 @@ contract OlympusDeploy is Script {
         rolesAdmin = new RolesAdmin(kernel);
         console2.log("RolesAdmin deployed at:", address(rolesAdmin));
 
-        // // Activate the policy
-        // _activatePolicy(rolesAdmin);
+        return address(rolesAdmin);
     }
 
-    function _deployTreasuryCustodian(bytes memory args) public {
+    function _deployTreasuryCustodian(bytes memory args) public returns (address) {
         // No additional arguments for TreasuryCustodian policy
 
         // Deploy TreasuryCustodian policy
@@ -370,11 +367,10 @@ contract OlympusDeploy is Script {
         treasuryCustodian = new TreasuryCustodian(kernel);
         console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
 
-        // // Activate the policy
-        // _activatePolicy(treasuryCustodian);
+        return address(treasuryCustodian);
     }
 
-    function _deployDistributor(bytes memory args) public {
+    function _deployDistributor(bytes memory args) public returns (address) {
         // Decode arguments for Distributor policy
         uint256 initialRate = abi.decode(args, (uint256));
 
@@ -383,11 +379,10 @@ contract OlympusDeploy is Script {
         distributor = new Distributor(kernel, address(ohm), staking, initialRate);
         console2.log("Distributor deployed at:", address(distributor));
 
-        // // Activate the policy
-        // _activatePolicy(distributor);
+        return address(distributor);
     }
 
-    function _deployEmergency(bytes memory args) public {
+    function _deployEmergency(bytes memory args) public returns (address) {
         // No additional arguments for Emergency policy
 
         // Deploy Emergency policy
@@ -395,8 +390,7 @@ contract OlympusDeploy is Script {
         emergency = new Emergency(kernel);
         console2.log("Emergency deployed at:", address(emergency));
 
-        // // Activate the policy
-        // _activatePolicy(emergency);
+        return address(emergency);
     }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
@@ -515,62 +509,15 @@ contract OlympusDeploy is Script {
 
         // Write deployment info to file in JSON format
         vm.writeLine(file, "{");
-        vm.writeLine(
-            file,
-            string.concat('"', type(Kernel).name, '": "', vm.toString(address(kernel)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(OlympusPrice).name, '": "', vm.toString(address(PRICE)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(OlympusTreasury).name, '": "', vm.toString(address(TRSRY)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(OlympusMinter).name, '": "', vm.toString(address(MINTR)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(OlympusRange).name, '": "', vm.toString(address(RANGE)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(OlympusRoles).name, '": "', vm.toString(address(ROLES)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(Operator).name, '": "', vm.toString(address(operator)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(OlympusHeart).name, '": "', vm.toString(address(heart)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(BondCallback).name, '": "', vm.toString(address(callback)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(OlympusPriceConfig).name, '": "', vm.toString(address(priceConfig)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(RolesAdmin).name, '": "', vm.toString(address(rolesAdmin)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(TreasuryCustodian).name, '": "', vm.toString(address(treasuryCustodian)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(Distributor).name, '": "', vm.toString(address(distributor)), '",')
-        );
-        vm.writeLine(
-            file,
-            string.concat('"', type(Emergency).name, '": "', vm.toString(address(emergency)), '",')
-        );
+        
+        // Iterate through the contracts that were deployed and write their addresses to the file
+        uint256 len = deployments.length;
+        for (uint256 i; i < len; ++i) {
+            vm.writeLine(
+                file,
+                string.concat('"', deployments[i], '": "', vm.toString(deployedTo[deployments[i]]), '"')
+            );
+        }
         vm.writeLine(file, "}");
     }
 }
