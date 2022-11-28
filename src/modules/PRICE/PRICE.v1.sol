@@ -129,5 +129,6 @@ abstract contract PRICEv1 is Module {
     function getMovingAverage() external view virtual returns (uint256);
 
     /// @notice Get target price of OHM in the Reserve asset for the RBS system
+    /// @dev    Returns the maximum of the moving average and the minimum target price
     function getTargetPrice() external view virtual returns (uint256);
 }

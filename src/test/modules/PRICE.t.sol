@@ -80,7 +80,7 @@ contract PriceTest is Test {
 
     // =========  HELPER FUNCTIONS ========= //
     function initializePrice(uint8 nonce) internal {
-        /// Assume that the reserveEth price feed is fixed at 0.0005 ETH = 1 Reserve
+        /// Assume that the reserveEth price feed is fixed at 0.001 ETH = 1 Reserve
         reserveEthPriceFeed.setLatestAnswer(int256(1e15));
         uint256 reserveEthPrice = uint256(reserveEthPriceFeed.latestAnswer());
 
@@ -397,7 +397,7 @@ contract PriceTest is Test {
     /// [X] change observation frequency
     /// [X] cannot change observation frequency with invalid params
     /// [X] change price feed update thresholds
-    /// [ ] change minimum target price
+    /// [X] change minimum target price
 
     function testCorrectness_initialize(uint8 nonce) public {
         /// Check that the module is not initialized
