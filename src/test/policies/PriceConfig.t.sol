@@ -290,28 +290,18 @@ contract PriceConfigTest is Test {
         price.getCurrentPrice();
     }
 
-    function testCorrectness_changeMinimumTargetPrice(uint8 nonce) public {
+    function testCorrectness_changeMinimumTargetPrice(uint8 nonce, uint256 newValue) public {
         /// Initialize price module
         uint256[] memory obs = getObs(nonce);
         vm.prank(guardian);
         priceConfig.initialize(obs, uint48(block.timestamp));
 
-        /// Get current minimum target price
-        uint256 startMinTargetPrice = price.minimumTargetPrice();
-
         /// Change minimum target price to a different value (larger than current)
         vm.prank(guardian);
-        priceConfig.changeMinimumTargetPrice(startMinTargetPrice + 1e18);
+        priceConfig.changeMinimumTargetPrice(newValue);
 
         /// Check that the minimum target price is updated correctly
-        assertEq(price.minimumTargetPrice(), startMinTargetPrice + 1e18);
-
-        /// Change minimum target price to a different value (smaller than current)
-        vm.prank(guardian);
-        priceConfig.changeMinimumTargetPrice(startMinTargetPrice - 1e18);
-
-        /// Check that the minimum target price is updated correctly
-        assertEq(price.minimumTargetPrice(), startMinTargetPrice - 1e18);
+        assertEq(price.minimumTargetPrice(), newValue);
     }
 
     function testCorrectness_onlyAuthorizedCanCallAdminFunctions() public {

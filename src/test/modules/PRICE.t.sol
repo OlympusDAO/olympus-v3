@@ -586,26 +586,16 @@ contract PriceTest is Test {
         price.getCurrentPrice();
     }
 
-    function testCorrectness_changeMinimumTargetPrice(uint8 nonce) public {
+    function testCorrectness_changeMinimumTargetPrice(uint8 nonce, uint256 newValue) public {
         /// Initialize price module
         initializePrice(nonce);
 
-        /// Get minimum target price
-        uint256 minTargetPrice = price.minimumTargetPrice();
-
-        /// Change minimum target price to a different value (larger than current)
+        /// Change minimum target price to a different value
         vm.prank(writer);
-        price.changeMinimumTargetPrice(minTargetPrice + 1e18);
+        price.changeMinimumTargetPrice(newValue);
 
         /// Check that the minimum target price is updated correctly
-        assertEq(price.minimumTargetPrice(), minTargetPrice + 1e18);
-
-        /// Change minimum target price to a different value (smaller than current)
-        vm.prank(writer);
-        price.changeMinimumTargetPrice(minTargetPrice - 1e18);
-
-        /// Check that the minimum target price is updated correctly
-        assertEq(price.minimumTargetPrice(), minTargetPrice - 1e18);
+        assertEq(price.minimumTargetPrice(), newValue);
     }
 
     function testCorrectness_onlyPermittedPoliciesCanCallAdminFunctions() public {
