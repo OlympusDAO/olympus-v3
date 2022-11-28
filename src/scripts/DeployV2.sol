@@ -77,7 +77,6 @@ contract OlympusDeploy is Script {
     mapping(string => bytes4) public selectorMap;
     mapping(string => bytes) public argsMap;
     string[] public deployments;
-    // mapping()
 
     function _setUp(string calldata chain_) internal {
         // Setup contract -> selector mappings
@@ -151,23 +150,24 @@ contract OlympusDeploy is Script {
 
     }
 
-    // TODO decide how to handle installs, upgrades, activations, and deactivations since the executor is the multisig
-    function _installModule(Module module_) internal {
-        // Check if module is installed on the kernel and determine which type of install to use
-        vm.startBroadcast();
-        if (address(kernel.getModuleForKeycode(module_.KEYCODE())) != address(0)) {
-            kernel.executeAction(Actions.UpgradeModule, address(module_));
-        } else {
-            kernel.executeAction(Actions.InstallModule, address(module_));
-        }
-        vm.stopBroadcast();
-    }
+    /// @dev Installs, upgrades, activations, and deactivations as well as access control settings must be done via olymsig batches since DAO MS is multisig executor on mainnet
+    /// @dev If we can get multisig batch functionality in foundry, then we can add to these scripts
+    // function _installModule(Module module_) internal {
+    //     // Check if module is installed on the kernel and determine which type of install to use
+    //     vm.startBroadcast();
+    //     if (address(kernel.getModuleForKeycode(module_.KEYCODE())) != address(0)) {
+    //         kernel.executeAction(Actions.UpgradeModule, address(module_));
+    //     } else {
+    //         kernel.executeAction(Actions.InstallModule, address(module_));
+    //     }
+    //     vm.stopBroadcast();
+    // }
 
-    function _activatePolicy(Policy policy_) internal {
-        // Check if policy is activated on the kernel and determine which type of activation to use
-        vm.broadcast();
-        kernel.executeAction(Actions.ActivatePolicy, address(policy_));
-    }
+    // function _activatePolicy(Policy policy_) internal {
+    //     // Check if policy is activated on the kernel and determine which type of activation to use
+    //     vm.broadcast();
+    //     kernel.executeAction(Actions.ActivatePolicy, address(policy_));
+    // }
 
     function deploy(string calldata chain_, address guardian_, address policy_, address emergency_) external {
         // Setup
