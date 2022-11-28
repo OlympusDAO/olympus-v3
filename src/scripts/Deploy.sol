@@ -13,7 +13,6 @@ import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 import {Operator} from "policies/Operator.sol";
@@ -41,7 +40,6 @@ contract OlympusDeploy is Script {
     OlympusRange public RANGE;
     OlympusTreasury public TRSRY;
     OlympusMinter public MINTR;
-    OlympusInstructions public INSTR;
     OlympusRoles public ROLES;
 
     /// Policies
@@ -96,9 +94,6 @@ contract OlympusDeploy is Script {
         console2.log("Kernel deployed at:", address(kernel));
 
         /// Deploy modules
-        // INSTR = new OlympusInstructions(kernel);
-        // console2.log("Instructions module deployed at:", address(INSTR));
-
         TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury module deployed at:", address(TRSRY));
 
@@ -212,9 +207,6 @@ contract OlympusDeploy is Script {
         /// Emergency roles
         rolesAdmin.grantRole("emergency_shutdown", emergency_);
         rolesAdmin.grantRole("emergency_restart", guardian_);
-
-        // /// Transfer executor powers to guardian
-        // kernel.executeAction(Actions.ChangeExecutor, guardian_);
 
         vm.stopBroadcast();
 
