@@ -150,13 +150,16 @@ contract SSLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
         maxAmountsIn[0] = ohmToBorrow;
         maxAmountsIn[1] = stethAmount_;
 
-        // Join Balancer pool
         JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
             assets: assets,
             maxAmountsIn: maxAmountsIn,
             userData: abi.encode(1, [ohmToBorrow, stethAmount_], 0),
             fromInternalBalance: false
         });
+
+        // Join Balancer pool
+        ohm.approve(address(vault), ohmToBorrow);
+        steth.approve(address(vault), stethAmount_);
         vault.joinPool(stethOhmPool.getPoolId(), address(this), address(this), joinPoolRequest);
 
         // OHM-stETH BPT After
@@ -184,13 +187,15 @@ contract SSLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
         minAmountsOut[0] = expectedOhmAmount;
         minAmountsOut[1] = expectedStethAmount;
 
-        // Withdraw stETH from Balancer pool
         ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
             assets: assets,
             minAmountsOut: minAmountsOut,
             userData: abi.encode(1, lpAmount_),
             toInternalBalance: false
         });
+
+        // Exit Balancer pool
+        ERC20(address(stethOhmPool)).approve(address(vault), lpAmount_);
         vault.exitPool(
             stethOhmPool.getPoolId(),
             address(this),
@@ -201,6 +206,14 @@ contract SSLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
         uint256 ohmReceived = ohm.balanceOf(address(this)) - ohmBefore;
         uint256 stethReceived = steth.balanceOf(address(this)) - stethBefore;
 
+        // Reduce debt and deposit values
+        uint256 userDebt = ohmDebtOutstanding[msg.sender];
+        uint256 userDeposit = stethDeposits[msg.sender];
+        ohmDebtOutstanding[msg.sender] -= ohmReceived > userDebt ? userDebt : ohmReceived;
+        stethDeposits[msg.sender] -= stethReceived > userDeposit ? userDeposit : stethReceived;
+        LENDR.repay(ohmReceived > userDebt ? userDebt : ohmReceived);
+
+        // Return assets
         MINTR.burnOhm(address(this), ohmReceived);
         steth.transfer(msg.sender, stethReceived);
 
@@ -218,6 +231,6 @@ contract SSLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
 
         uint256 ohmUsd = uint256((ohmPrice_ * ethPrice_) / 1e18);
 
-        return (amount_ * uint256(stethPrice_)) / ohmUsd;
+        return (amount_ * ohmUsd) / uint256(stethPrice_);
     }
 }
