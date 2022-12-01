@@ -1,24 +1,19 @@
-# Olympus Bophades
+# Olympus V3
 
-Use yarn build to refresh deps.
+Olympus V3, aka Bophades, is the latest iteration of the Olympus protocol. It is a foundation for the future of the protocol, utilizing the (Default Framework)[https://github.com/fullyallocated/Default] to allow extensibility at the base layer via fully onchain governance mechanisms. 
 
-Set up a foundry config in foundry.toml.
+## Build
 
-## SRC Directory Structure
+For JS dependencies, build with yarn:
 
-```ml
-├─ external - "External contracts needed for core functionality"
-├─ interfaces - "Standard interfaces"
-├─ libraries - "Libraries"
-├─ modules - "Default framework modules"
-│  ├─ AUTHR
-│  ├─ INSTR
-│  ├─ MINTR
-│  ├─ PRICE
-│  ├─ RANGE
-│  ├─ TRSRY
-├─ policies - "Default framework policies"
-├─ test - "General test utilities and mocks/larps"
+```
+$ yarn
+```
+
+To build contracts, build using Forge:
+
+```
+$ forge build
 ```
 
 ## Deployments
