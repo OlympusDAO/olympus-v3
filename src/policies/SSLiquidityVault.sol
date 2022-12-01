@@ -169,11 +169,12 @@ contract SSLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
         lpPositions[msg.sender] += amountOut;
     }
 
-    function unwindAndRepay(uint256 lpAmount_) external nonReentrant returns (uint256) {
+    function unwindAndRepay(
+        uint256 lpAmount_,
+        uint256 expectedOhmAmount_,
+        uint256 expectedStethAmount_
+    ) external nonReentrant returns (uint256) {
         lpPositions[msg.sender] -= lpAmount_;
-
-        uint256 expectedOhmAmount; // TODO
-        uint256 expectedStethAmount; // TODO
 
         // OHM and stETH Before
         uint256 ohmBefore = ohm.balanceOf(address(this));
@@ -184,8 +185,8 @@ contract SSLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
         assets[1] = address(steth);
 
         uint256[] memory minAmountsOut = new uint256[](2);
-        minAmountsOut[0] = expectedOhmAmount;
-        minAmountsOut[1] = expectedStethAmount;
+        minAmountsOut[0] = expectedOhmAmount_;
+        minAmountsOut[1] = expectedStethAmount_;
 
         ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
             assets: assets,
@@ -231,6 +232,6 @@ contract SSLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
 
         uint256 ohmUsd = uint256((ohmPrice_ * ethPrice_) / 1e18);
 
-        return (amount_ * ohmUsd) / uint256(stethPrice_);
+        return (amount_ * ohmUsd) / (uint256(stethPrice_) * 1e9);
     }
 }

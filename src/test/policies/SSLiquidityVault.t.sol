@@ -172,7 +172,7 @@ contract SSLiquidityVaultTest is Test {
         }
     }
 
-    /// []  depositAndLP
+    /// [X]  depositAndLP
     ///     [X]  Can be accessed by anyone
     ///     [X]  Increases user's stETH deposit
     ///     [X]  Increases user's OHM debt
@@ -180,7 +180,7 @@ contract SSLiquidityVaultTest is Test {
     ///     [X]  Values stETH correctly
     ///     [X]  Takes stETH from user
     ///     [X]  Deposits stETH and OHM into Balancer LP
-    ///     []  Increases user's tracked LP position
+    ///     [X]  Increases user's tracked LP position
 
     function testCorrectness_anyoneCanDepositAndLP(address user_) public {
         vm.assume(user_ != address(0));
@@ -191,76 +191,178 @@ contract SSLiquidityVaultTest is Test {
         vm.stopPrank();
     }
 
-    function testCorrectness_depositAndLPIncreasesUserStETHDeposit(uint256 stethAmount_) public {
-        vm.assume(stethAmount_ <= 1e18 && stethAmount_ > 100); // 100 is the minimum amount to avoid truncation
-
+    function testCorrectness_depositAndLPIncreasesUserStETHDeposit() public {
         vm.prank(alice);
-        sslv.depositAndLP(stethAmount_);
+        sslv.depositAndLP(STETH_AMOUNT);
 
-        assertEq(sslv.stethDeposits(alice), stethAmount_);
+        assertEq(sslv.stethDeposits(alice), STETH_AMOUNT);
     }
 
-    function testCorrectness_depositAndLPIncreasesUserOhmDebt(uint256 stethAmount_) public {
-        vm.assume(stethAmount_ <= 1e18 && stethAmount_ > 100); // 100 is the minimum amount to avoid truncation
-
+    function testCorrectness_depositAndLPIncreasesUserOhmDebt() public {
         vm.prank(alice);
-        sslv.depositAndLP(stethAmount_);
+        sslv.depositAndLP(STETH_AMOUNT);
 
-        assertTrue(sslv.ohmDebtOutstanding(alice) > 0);
+        assertEq(sslv.ohmDebtOutstanding(alice), STETH_AMOUNT / 1e11);
     }
 
-    function testCorrectness_depositAndLPIncreasesContractDebt(uint256 stethAmount_) public {
-        vm.assume(stethAmount_ <= 1e18 && stethAmount_ > 100); // 100 is the minimum amount to avoid truncation
-
+    function testCorrectness_depositAndLPIncreasesContractDebt() public {
         vm.prank(alice);
-        sslv.depositAndLP(stethAmount_);
+        sslv.depositAndLP(STETH_AMOUNT);
 
-        assertTrue(lender.marketDebtOutstanding(address(sslv)) > 0);
+        assertEq(lender.marketDebtOutstanding(address(sslv)), STETH_AMOUNT / 1e11);
     }
 
     function testCorrectness_depositAndLPValuesStETHCorrectly() public {
         vm.prank(alice);
-        sslv.depositAndLP(100);
+        sslv.depositAndLP(1e11);
 
         assertEq(sslv.ohmDebtOutstanding(alice), 1);
         assertEq(ohm.balanceOf(address(vault)), 1);
     }
 
-    function testCorrectness_depositAndLPTakesStETHFromUser(uint256 stethAmount_) public {
-        vm.assume(stethAmount_ <= 1e18 && stethAmount_ > 100); // 100 is the minimum amount to avoid truncation
-
+    function testCorrectness_depositAndLPTakesStETHFromUser() public {
         vm.prank(alice);
-        sslv.depositAndLP(stethAmount_);
+        sslv.depositAndLP(STETH_AMOUNT);
 
-        assertEq(steth.balanceOf(alice), STETH_AMOUNT - stethAmount_);
+        assertEq(steth.balanceOf(alice), 0);
     }
 
-    function testCorrectness_depositAndLPDepositsStETHAndOhmToVault(uint256 stethAmount_) public {
-        vm.assume(stethAmount_ <= 1e18 && stethAmount_ > 100); // 100 is the minimum amount to avoid truncation
-
+    function testCorrectness_depositAndLPDepositsStETHAndOhmToVault() public {
         vm.prank(alice);
-        sslv.depositAndLP(stethAmount_);
+        sslv.depositAndLP(STETH_AMOUNT);
 
-        assertEq(steth.balanceOf(address(vault)), stethAmount_);
+        assertEq(steth.balanceOf(address(vault)), STETH_AMOUNT);
         assertEq(ohm.balanceOf(address(vault)), sslv.ohmDebtOutstanding(alice));
     }
 
-    function testCorrectness_depositAndLPIncreasesUserLPPosition(uint256 stethAmount_) public {
-        vm.assume(stethAmount_ <= 1e18 && stethAmount_ > 100); // 100 is the minimum amount to avoid truncation
-
+    function testCorrectness_depositAndLPIncreasesUserLPPosition() public {
         vm.prank(alice);
-        sslv.depositAndLP(stethAmount_);
+        sslv.depositAndLP(STETH_AMOUNT);
 
         assertTrue(sslv.lpPositions(alice) > 0);
     }
 
-    /// []  unwindAndRepay
-    ///     []  Can be accessed by anyone
-    ///     []  Decreases user's tracked LP position
-    ///     []  Decreases remove's stETH and OHM from Balancer LP
-    ///     []  Decreases user's OHM debt
-    ///     []  Decreases users's stETH deposit
-    ///     []  Decreases SSLV's debt in LENDR module
-    ///     []  Burns received OHM
-    ///     []  Returns stETH to user
+    /// [X]  unwindAndRepay
+    ///     [X]  Can be accessed by anyone
+    ///     [X]  Decreases user's tracked LP position
+    ///     [X]  Removes stETH and OHM from Balancer LP
+    ///     [X]  Decreases user's OHM debt
+    ///     [X]  Decreases users's stETH deposit
+    ///     [X]  Decreases SSLV's debt in LENDR module
+    ///     [X]  Burns received OHM
+    ///     [X]  Returns stETH to user
+
+    function _setupUnwindAndRepay() internal returns (uint256) {
+        vm.prank(alice);
+        uint256 lpAmount = sslv.depositAndLP(1e18);
+        return lpAmount;
+    }
+
+    function testCorrectness_anyoneCanUnwindAndRepay(address user_) public {
+        vm.assume(user_ != address(0));
+
+        // Setup
+        steth.mint(user_, STETH_AMOUNT);
+        vm.startPrank(user_);
+        steth.approve(address(sslv), STETH_AMOUNT);
+        uint256 lpAmount = sslv.depositAndLP(STETH_AMOUNT);
+
+        // Withdraw and unwind
+        sslv.unwindAndRepay(lpAmount, 1e7, 1e18);
+        vm.stopPrank();
+    }
+
+    function testCorrectness_unwindAndRepayDecreasesLpPosition() public {
+        uint256 lpAmount = _setupUnwindAndRepay();
+
+        // Verify initial state
+        assertEq(sslv.lpPositions(alice), lpAmount);
+
+        vm.startPrank(alice);
+        vault.bpt().approve(address(sslv), lpAmount);
+        sslv.unwindAndRepay(lpAmount, 1e7, 1e18);
+
+        // Verify final state
+        assertEq(sslv.lpPositions(alice), 0);
+    }
+
+    function testCorrectness_unwindAndRepayRemovesOhmAndStethFromBalancer() public {
+        uint256 lpAmount = _setupUnwindAndRepay();
+
+        // Verify initial state
+        assertEq(steth.balanceOf(address(vault)), 1e18);
+        assertEq(ohm.balanceOf(address(vault)), 1e7);
+
+        vm.startPrank(alice);
+        vault.bpt().approve(address(sslv), lpAmount);
+        sslv.unwindAndRepay(lpAmount, 1e7, 1e18);
+
+        // Verify final state
+        assertEq(steth.balanceOf(address(vault)), 0);
+        assertEq(ohm.balanceOf(address(vault)), 0);
+    }
+
+    function testCorrectness_unwindAndRepayDecreasesOhmDebt() public {
+        uint256 lpAmount = _setupUnwindAndRepay();
+
+        // Verify initial state
+        assertEq(sslv.ohmDebtOutstanding(alice), 1e7);
+
+        vm.startPrank(alice);
+        vault.bpt().approve(address(sslv), lpAmount);
+        sslv.unwindAndRepay(lpAmount, 1e7, 1e18);
+
+        // Verify final state
+        assertEq(sslv.ohmDebtOutstanding(alice), 0);
+    }
+
+    function testCorrectness_unwindAndRepayDecreasesStethDeposit() public {
+        uint256 lpAmount = _setupUnwindAndRepay();
+
+        // Verify initial state
+        assertEq(sslv.stethDeposits(alice), 1e18);
+
+        vm.startPrank(alice);
+        vault.bpt().approve(address(sslv), lpAmount);
+        sslv.unwindAndRepay(lpAmount, 1e7, 1e18);
+
+        // Verify final state
+        assertEq(sslv.stethDeposits(alice), 0);
+    }
+
+    function testCorrectness_unwindAndRepayDecreasesLenderDebt() public {
+        uint256 lpAmount = _setupUnwindAndRepay();
+
+        // Verify initial state
+        assertEq(lender.marketDebtOutstanding(address(sslv)), 1e7);
+
+        vm.startPrank(alice);
+        vault.bpt().approve(address(sslv), lpAmount);
+        sslv.unwindAndRepay(lpAmount, 1e7, 1e18);
+
+        // Verify final state
+        assertEq(lender.marketDebtOutstanding(address(sslv)), 0);
+    }
+
+    function testCorrectness_unwindAndRepayBurnsOhm() public {
+        uint256 lpAmount = _setupUnwindAndRepay();
+
+        vm.startPrank(alice);
+        vault.bpt().approve(address(sslv), lpAmount);
+        sslv.unwindAndRepay(lpAmount, 1e7, 1e18);
+
+        // Verify final state
+        assertEq(ohm.balanceOf(address(sslv)), 0);
+    }
+
+    function testCorrectness_unwindAndRepayReturnsStethToUser() public {
+        uint256 lpAmount = _setupUnwindAndRepay();
+
+        vm.startPrank(alice);
+        vault.bpt().approve(address(sslv), lpAmount);
+        sslv.unwindAndRepay(lpAmount, 1e7, 1e18);
+
+        // Verify final state
+        assertEq(steth.balanceOf(alice), 1e18);
+    }
 }
