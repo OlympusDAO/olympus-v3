@@ -1,0 +1,20 @@
+[profile.default]
+ffi = true
+remappings = [
+    'ds-test/=lib/ds-test/src/',
+    'solmate/=lib/solmate/src/',
+    'forge-std/=lib/forge-std/src/',
+    'balancer-v2/=lib/balancer-v2/',
+
+    'interfaces/=src/interfaces',
+    'modules/=src/modules',
+    'policies/=src/policies',
+    'libraries/=src/libraries',
+]
+fs_permissions = [{access = "write", path = "./src/test/sim/out/"}, {access = "write", path = "./deployments/"}]
+solc_version = "0.8.15"
+optimizer = true
+optimizer_runs = 10
+
+[fuzz]
+runs = 4096
