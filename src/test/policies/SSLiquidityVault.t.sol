@@ -17,7 +17,7 @@ import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusLender} from "modules/LENDR/OlympusLender.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {SSLiquidityVault} from "policies/SSLiquidityVault.sol";
+import {SSLiquidityVault} from "policies/LiquidityAMOs/SSLiquidityVault.sol";
 
 import "src/Kernel.sol";
 
@@ -195,7 +195,7 @@ contract SSLiquidityVaultTest is Test {
         vm.prank(alice);
         sslv.depositAndLP(STETH_AMOUNT);
 
-        assertEq(sslv.stethDeposits(alice), STETH_AMOUNT);
+        assertEq(sslv.pairTokenDeposits(alice), STETH_AMOUNT);
     }
 
     function testCorrectness_depositAndLPIncreasesUserOhmDebt() public {
@@ -320,14 +320,14 @@ contract SSLiquidityVaultTest is Test {
         uint256 lpAmount = _setupUnwindAndRepay();
 
         // Verify initial state
-        assertEq(sslv.stethDeposits(alice), 1e18);
+        assertEq(sslv.pairTokenDeposits(alice), 1e18);
 
         vm.startPrank(alice);
         vault.bpt().approve(address(sslv), lpAmount);
         sslv.unwindAndRepay(lpAmount, 1e7, 1e18);
 
         // Verify final state
-        assertEq(sslv.stethDeposits(alice), 0);
+        assertEq(sslv.pairTokenDeposits(alice), 0);
     }
 
     function testCorrectness_unwindAndRepayDecreasesLenderDebt() public {
