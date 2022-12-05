@@ -765,7 +765,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function regenerate(bool high_) external onlyRole("operator_admin") {
+    function regenerate(bool high_) external onlyRole("operator_policy") {
         // Regenerate side
         _regenerate(high_);
     }
