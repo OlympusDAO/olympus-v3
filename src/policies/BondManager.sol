@@ -107,9 +107,11 @@ contract BondManager is Policy, RolesConsumer {
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        requests = new Permissions[](2);
+        requests = new Permissions[](4);
         requests[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         requests[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        requests[3] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -251,6 +253,20 @@ contract BondManager is Policy, RolesConsumer {
     /// @param newCallback_         The bond callback address to set
     function setCallback(IBondCallback newCallback_) external onlyRole("bondmanager_admin") {
         bondCallback = newCallback_;
+    }
+
+    /// @notice                     Increases the contract's OHM minting limit by the passed amount
+    /// @param amount_              The amount to increase the limit by
+    /// @dev                        This should be set to the next several months worth of OHM minting
+    function increaseMintLimit(uint256 amount_) external onlyRole("bondmanager_admin") {
+        MINTR.increaseMintApproval(address(this), amount_);
+    }
+
+    /// @notice                     Reduces the contract's OHM minting limit
+    /// @param amount_              The amount to decrease the limit by
+    /// @dev                        This can be used to reduce risk in either the event of contract deprecation or a bug
+    function decreaseMintLimit(uint256 amount_) external onlyRole("bondmanager_admin") {
+        MINTR.decreaseMintApproval(address(this), amount_);
     }
 
     //============================================================================================//

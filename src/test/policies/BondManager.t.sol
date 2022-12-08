@@ -87,7 +87,7 @@ contract BondManagerTest is Test {
         {
             fixedExpiryTeller = new MockFixedExpiryTeller();
             fixedExpirySDA = new MockFixedExpirySDA();
-            aggregator = new MockAggregator(address(fixedExpirySDA));
+            aggregator = new MockAggregator(address(fixedExpirySDA), address(fixedExpiryTeller));
             easyAuction = new MockEasyAuction();
         }
 
@@ -135,7 +135,7 @@ contract BondManagerTest is Test {
             kernel.executeAction(Actions.ActivatePolicy, address(bondManager));
         }
 
-        // Configure roles
+        // Configuration
         {
             // Bond Manager roles
             rolesAdmin.grantRole("bondmanager_admin", policy);
@@ -143,8 +143,6 @@ contract BondManagerTest is Test {
             // Bond Callback roles
             rolesAdmin.grantRole("callback_whitelist", policy);
             rolesAdmin.grantRole("callback_whitelist", address(bondManager));
-            rolesAdmin.grantRole("callback_blacklist", policy);
-            rolesAdmin.grantRole("callback_blacklist", address(bondManager));
             rolesAdmin.grantRole("callback_admin", guardian);
 
             // OHM Authority Vault
@@ -156,6 +154,10 @@ contract BondManagerTest is Test {
 
             // Approve teller to spend OHM
             ohm.increaseAllowance(address(fixedExpiryTeller), 100_000_000_000_000);
+
+            // Set Bond Manager mint limit
+            vm.prank(policy);
+            bondManager.increaseMintLimit(100_000_000_000_000);
         }
     }
 
