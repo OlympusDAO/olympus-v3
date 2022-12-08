@@ -31,17 +31,16 @@ contract TRSRYTest is Test {
         kernel = new Kernel();
         TRSRY = new OlympusTreasury(kernel);
         ngmi = new MockERC20("not gonna make it", "NGMI", 18);
-
-        address[] memory users = (new UserFactory()).create(3);
-        testUser = users[0];
-
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
 
         // Generate test fixture policy addresses with different authorizations
         godmode = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
         kernel.executeAction(Actions.ActivatePolicy, godmode);
 
-        debtor = TRSRY.generateFunctionFixture(TRSRY.incurDebt.selector);
+        testUser = TRSRY.generateFunctionFixture(TRSRY.withdrawReserves.selector);
+        kernel.executeAction(Actions.ActivatePolicy, testUser);
+
+        debtor = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
         kernel.executeAction(Actions.ActivatePolicy, debtor);
 
         // Give TRSRY some tokens
@@ -54,35 +53,20 @@ contract TRSRYTest is Test {
 
     function testCorrectness_IncreaseWithdrawApproval(uint256 amount_) public {
         vm.prank(godmode);
-        TRSRY.increaseWithdrawerApproval(testUser, ngmi, amount_);
+        TRSRY.increaseWithdrawApproval(testUser, ngmi, amount_);
 
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), amount_);
     }
 
     function testCorrectness_DecreaseWithdrawApproval(uint256 amount_) public {
         vm.prank(godmode);
-        TRSRY.increaseWithdrawerApproval(testUser, ngmi, amount_);
+        TRSRY.increaseWithdrawApproval(testUser, ngmi, amount_);
 
         vm.prank(godmode);
-        TRSRY.decreaseWithdrawerApproval(testUser, ngmi, amount_);
+        TRSRY.decreaseWithdrawApproval(testUser, ngmi, amount_);
 
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), 0);
     }
-
-    /*
-    function testCorrectness_RevokeApprovals() public {
-        TRSRY.approveWithdrawer(testUser, ngmi, INITIAL_TOKEN_AMOUNT);
-        assertEq(TRSRY.withdrawApproval(testUser, ngmi), INITIAL_TOKEN_AMOUNT);
-
-        ERC20[] memory revokeTokens = new ERC20[](2);
-        revokeTokens[0] = ERC20(ngmi);
-
-        kernel.executeAction(Actions.DeactivatePolicy, address(this));
-
-        TRSRY.revokeApprovals(testUser, revokeTokens);
-        assertEq(TRSRY.withdrawApproval(testUser, ngmi), 0);
-    }
-    */
 
     function testCorrectness_GetReserveBalance() public {
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
@@ -92,12 +76,9 @@ contract TRSRYTest is Test {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
 
         vm.prank(godmode);
-        TRSRY.increaseWithdrawerApproval(testUser, ngmi, amount_);
+        TRSRY.increaseWithdrawApproval(testUser, ngmi, amount_);
 
         assertEq(TRSRY.withdrawApproval(testUser, ngmi), amount_);
-
-        // Test for revert on 0 withdrawal
-        if (amount_ == 0) vm.expectRevert(TRSRYv1.TRSRY_ZeroAmount.selector);
 
         vm.prank(testUser);
         TRSRY.withdrawReserves(address(this), ngmi, amount_);
@@ -113,7 +94,7 @@ contract TRSRYTest is Test {
         vm.assume(amount_ > 0);
 
         // Fail when withdrawal using policy without write access
-        vm.expectRevert(TRSRYv1.TRSRY_NotApproved.selector);
+        vm.expectRevert();
         vm.prank(testUser);
         TRSRY.withdrawReserves(address(this), ngmi, amount_);
     }
@@ -136,7 +117,7 @@ contract TRSRYTest is Test {
         assertEq(TRSRY.getReserveBalance(ngmi), INITIAL_TOKEN_AMOUNT);
     }
 
-    function testRevert_UnauthorizedCannotincurDebt(uint256 amount_) public {
+    function testRevert_UnauthorizedCannotIncurDebt(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
         vm.assume(amount_ > 0);
 
@@ -197,13 +178,13 @@ contract TRSRYTest is Test {
         vm.prank(debtor);
         TRSRY.incurDebt(ngmi, INITIAL_TOKEN_AMOUNT);
 
-        // Fail when calling setDebt from debtor (policy without setDebt permissions)
+        // Fail when calling setDebt from testUser (policy without setDebt permissions)
         bytes memory err = abi.encodeWithSelector(
             Module.Module_PolicyNotPermitted.selector,
-            debtor
+            testUser
         );
         vm.expectRevert(err);
-        vm.prank(debtor);
+        vm.prank(testUser);
         TRSRY.setDebt(debtor, ngmi, INITIAL_TOKEN_AMOUNT / 2);
     }
 
@@ -222,5 +203,110 @@ contract TRSRYTest is Test {
 
         assertEq(TRSRY.reserveDebt(ngmi, debtor), 0);
         assertEq(TRSRY.totalDebt(ngmi), 0);
+    }
+
+    function testCorrectness_Shutdown(uint256 amount_) public {
+        vm.assume(amount_ != 0);
+        vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
+
+        // Approve test fixture to withdraw and incurdebt for amount_
+        vm.prank(godmode);
+        TRSRY.increaseWithdrawApproval(godmode, ngmi, amount_);
+
+        vm.prank(godmode);
+        TRSRY.increaseDebtorApproval(debtor, ngmi, amount_);
+
+        // Shutdown the TRSRY
+        vm.prank(godmode);
+        TRSRY.deactivate();
+
+        // Try to withdraw amount_ and expect revert
+        bytes memory err = abi.encodeWithSignature("TRSRY_NotActive()");
+        vm.expectRevert(err);
+        vm.prank(godmode);
+        TRSRY.withdrawReserves(godmode, ngmi, amount_);
+
+        // Try to incur debt and expect revert
+        vm.expectRevert(err);
+        vm.prank(debtor);
+        TRSRY.incurDebt(ngmi, amount_);
+
+        assertEq(ngmi.balanceOf(godmode), 0);
+        assertEq(TRSRY.reserveDebt(ngmi, debtor), 0);
+        assertEq(ngmi.balanceOf(debtor), 0);
+
+        // Reactivate the system
+        vm.prank(godmode);
+        TRSRY.activate();
+
+        // Withdraw amount_
+        vm.prank(godmode);
+        TRSRY.withdrawReserves(godmode, ngmi, amount_);
+        assertEq(ngmi.balanceOf(godmode), amount_);
+
+        // Transfer tokens back to TRSRY and incur debt
+        vm.prank(godmode);
+        ngmi.transfer(address(TRSRY), amount_);
+
+        vm.prank(debtor);
+        TRSRY.incurDebt(ngmi, amount_);
+        assertEq(ngmi.balanceOf(debtor), amount_);
+        assertEq(TRSRY.reserveDebt(ngmi, debtor), amount_);
+
+        // Repay loan
+        vm.prank(debtor);
+        ngmi.approve(address(TRSRY), amount_);
+        vm.prank(debtor);
+        TRSRY.repayDebt(debtor, ngmi, amount_);
+
+        assertEq(ngmi.balanceOf(debtor), 0);
+        assertEq(TRSRY.reserveDebt(ngmi, debtor), 0);
+    }
+
+    function testRevert_AddressWithPermCannotShutdownOrRestart() public {
+        // Check status of TRSRY
+        assertEq(TRSRY.active(), true);
+
+        // Try to deactivate with non-approved user
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
+            testUser
+        );
+        vm.expectRevert(err);
+        vm.prank(testUser);
+        TRSRY.deactivate();
+
+        assertEq(TRSRY.active(), true);
+
+        // Deactivate with approved user
+        vm.prank(godmode);
+        TRSRY.deactivate();
+
+        assertEq(TRSRY.active(), false);
+
+        // Call deactivate again and expect nothing to happen since it's already deactivated
+        vm.prank(godmode);
+        TRSRY.deactivate();
+
+        assertEq(TRSRY.active(), false);
+
+        // Try to reactivate with non-approved user
+        vm.expectRevert(err);
+        vm.prank(testUser);
+        TRSRY.activate();
+
+        assertEq(TRSRY.active(), false);
+
+        // Reactivate with approved user
+        vm.prank(godmode);
+        TRSRY.activate();
+
+        assertEq(TRSRY.active(), true);
+
+        // Call activate again and expect nothing to happen since it's already activated
+        vm.prank(godmode);
+        TRSRY.activate();
+
+        assertEq(TRSRY.active(), true);
     }
 }

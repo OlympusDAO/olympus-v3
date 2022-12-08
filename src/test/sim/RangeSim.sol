@@ -23,7 +23,8 @@ import {ZuniswapV2Router} from "test/lib/zuniswapv2/ZuniswapV2Router.sol";
 import {MathLibrary} from "test/lib/zuniswapv2/libraries/Math.sol";
 
 import "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";

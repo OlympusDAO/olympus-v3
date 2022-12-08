@@ -31,13 +31,18 @@ interface IBondTeller {
     /// @param fee_     Protocol fee in basis points (3 decimal places)
     function setProtocolFee(uint48 fee_) external;
 
+    /// @notice          Set the discount for creating bond tokens from the base protocol fee
+    /// @dev             The discount is subtracted from the protocol fee to determine the fee
+    ///                  when using create() to mint bond tokens without using an Auctioneer
+    /// @param discount_ Create Fee Discount in basis points (3 decimal places)
+    function setCreateFeeDiscount(uint48 discount_) external;
+
     /// @notice         Set your fee as a referrer to the protocol
     /// @notice         Fee is set for sending address
     /// @param fee_     Referrer fee in basis points (3 decimal places)
     function setReferrerFee(uint48 fee_) external;
 
-    /// @notice         Claim fees accrued for input tokens and sends to protocol
-    /// @notice         Must be guardian
+    /// @notice         Claim fees accrued by sender in the input tokens and sends them to the provided address
     /// @param tokens_  Array of tokens to claim fees for
     /// @param to_      Address to send fees to
     function claimFees(ERC20[] memory tokens_, address to_) external;

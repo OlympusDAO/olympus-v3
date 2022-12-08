@@ -83,7 +83,13 @@ interface IBondAggregator {
 
     /// @notice             Returns an array of all active market IDs for a given owner
     /// @param owner_       Address of owner to query by
-    function liveMarketsBy(address owner_) external view returns (uint256[] memory);
+    /// @param firstIndex_  Market ID to start at
+    /// @param lastIndex_   Market ID to end at (non-inclusive)
+    function liveMarketsBy(
+        address owner_,
+        uint256 firstIndex_,
+        uint256 lastIndex_
+    ) external view returns (uint256[] memory);
 
     /// @notice             Returns an array of all active market IDs for a given payout and quote token
     /// @param payout_      Address of payout token

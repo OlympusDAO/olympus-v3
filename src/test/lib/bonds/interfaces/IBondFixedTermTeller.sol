@@ -7,7 +7,8 @@ interface IBondFixedTermTeller {
     // Info for bond token
     struct TokenMetadata {
         bool active;
-        ERC20 payoutToken;
+        ERC20 underlying;
+        uint8 decimals;
         uint48 expiry;
         uint256 supply;
     }
@@ -24,9 +25,9 @@ interface IBondFixedTermTeller {
         uint256 amount_
     ) external returns (uint256, uint256);
 
-    /// @notice             "Deploy" a new ERC1155 bond token for an (underlying, expiry) pair and return its address
+    /// @notice             "Deploy" a new ERC1155 bond token for an (underlying, expiry) pair and return its token ID
     /// @dev                ERC1155 used for fixed-term
-    /// @dev                If a bond token exists for the (underlying, expiry) pair, it returns that address
+    /// @dev                If a bond token exists for the (underlying, expiry) pair, it returns that token ID
     /// @param underlying_  ERC20 token redeemable when the bond token vests
     /// @param expiry_      Timestamp at which the bond token can be redeemed for the underlying token
     /// @return             ID of the ERC1155 bond token being created

@@ -49,16 +49,16 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
 
     /* ========== STATE VARIABLES ========== */
 
-    /// @notice Fee paid to a front end operator. Set by the referrer, must be less than or equal to 5e4.
+    /// @notice Fee paid to a front end operator in basis points (3 decimals). Set by the referrer, must be less than or equal to 5% (5e3).
     /// @dev There are some situations where the fees may round down to zero if quantity of baseToken
     ///      is < 1e5 wei (can happen with big price differences on small decimal tokens). This is purely
     ///      a theoretical edge case, as the bond amount would not be practical.
     mapping(address => uint48) public referrerFees;
 
-    /// @notice Fee paid to protocol. Configurable by policy, must be greater than 30 bps.
+    /// @notice Fee paid to protocol in basis points (3 decimal places).
     uint48 public protocolFee;
 
-    /// @notice 'Create' function fee discount. Amount standard fee is reduced by for partners who just want to use the 'create' function to issue bond tokens. Configurable by policy.
+    /// @notice 'Create' function fee discount in basis points (3 decimal places). Amount standard fee is reduced by for partners who just want to use the 'create' function to issue bond tokens.
     uint48 public createFeeDiscount;
 
     uint48 public constant FEE_DECIMALS = 1e5; // one percent equals 1000.
@@ -81,29 +81,40 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
         _protocol = protocol_;
         _aggregator = aggregator_;
 
+        // Explicitly setting these values to zero to document
         protocolFee = 0;
+        createFeeDiscount = 0;
     }
 
     /// @inheritdoc IBondTeller
-    function setReferrerFee(uint48 fee_) external override {
-        if (fee_ > 5e4) revert Teller_InvalidParams();
+    function setReferrerFee(uint48 fee_) external override nonReentrant {
+        if (fee_ > 5e3) revert Teller_InvalidParams();
         referrerFees[msg.sender] = fee_;
     }
 
     /// @inheritdoc IBondTeller
     function setProtocolFee(uint48 fee_) external override requiresAuth {
+        if (fee_ > 5e3) revert Teller_InvalidParams();
         protocolFee = fee_;
     }
 
     /// @inheritdoc IBondTeller
-    function claimFees(ERC20[] memory tokens_, address to_) external override {
+    function setCreateFeeDiscount(uint48 discount_) external override requiresAuth {
+        if (discount_ > protocolFee) revert Teller_InvalidParams();
+        createFeeDiscount = discount_;
+    }
+
+    /// @inheritdoc IBondTeller
+    function claimFees(ERC20[] memory tokens_, address to_) external override nonReentrant {
         uint256 len = tokens_.length;
         for (uint256 i; i < len; ++i) {
             ERC20 token = tokens_[i];
             uint256 send = rewards[msg.sender][token];
 
-            rewards[msg.sender][token] = 0;
-            token.safeTransfer(to_, send);
+            if (send != 0) {
+                rewards[msg.sender][token] = 0;
+                token.safeTransfer(to_, send);
+            }
         }
     }
 
@@ -151,7 +162,7 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
         rewards[referrer_][quoteToken] += toReferrer;
         rewards[_protocol][quoteToken] += toProtocol;
 
-        // Ensure enough payout tokens are available
+        // Transfer quote tokens from sender and ensure enough payout tokens are available
         _handleTransfers(id_, amount_, payout, toReferrer + toProtocol);
 
         // Handle payout to user (either transfer tokens if instant swap or issue bond token)
@@ -185,16 +196,17 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
         if (quoteToken.balanceOf(address(this)) < quoteBalance + amount_)
             revert Teller_UnsupportedToken();
 
-        // If callback address supplied, transfer tokens from user to callback, then execute callback function,
+        // If callback address supplied, transfer tokens from teller to callback, then execute callback function,
         // and ensure proper amount of tokens transferred in.
         if (callbackAddr != address(0)) {
-            // Send quote token to callback transferred in first to allow use during callback
+            // Send quote token to callback (transferred in first to allow use during callback)
             quoteToken.safeTransfer(callbackAddr, amountLessFee);
 
             // Call the callback function to receive payout tokens for payout
             uint256 payoutBalance = payoutToken.balanceOf(address(this));
             IBondCallback(callbackAddr).callback(id_, amountLessFee, payout_);
 
+            // Check to ensure that the callback sent the requested amount of payout tokens back to the teller
             if (payoutToken.balanceOf(address(this)) < (payoutBalance + payout_))
                 revert Teller_InvalidCallback();
         } else {

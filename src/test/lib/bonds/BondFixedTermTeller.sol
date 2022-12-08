@@ -31,11 +31,7 @@ contract BondFixedTermTeller is BondBaseTeller, IBondFixedTermTeller, ERC1155 {
     using FullMath for uint256;
 
     /* ========== EVENTS ========== */
-    event ERC1155BondTokenCreated(
-        uint256 tokenId,
-        ERC20 indexed payoutToken,
-        uint48 indexed expiry
-    );
+    event ERC1155BondTokenCreated(uint256 tokenId, ERC20 indexed underlying, uint48 indexed expiry);
 
     /* ========== STATE VARIABLES ========== */
 
@@ -103,16 +99,23 @@ contract BondFixedTermTeller is BondBaseTeller, IBondFixedTermTeller, ERC1155 {
         uint48 expiry_,
         uint256 amount_
     ) external override nonReentrant returns (uint256, uint256) {
-        uint256 tokenId = getTokenId(underlying_, expiry_);
+        // Expiry is rounded to the nearest day at 0000 UTC (in seconds) since bond tokens
+        // are only unique to a day, not a specific timestamp.
+        uint48 expiry = uint48(expiry_ / 1 days) * 1 days;
+
+        // Revert if expiry is in the past
+        if (expiry < block.timestamp) revert Teller_InvalidParams();
+
+        uint256 tokenId = getTokenId(underlying_, expiry);
 
         // Revert if no token exists, must call deploy first
-        if (!tokenMetadata[tokenId].active) revert Teller_TokenDoesNotExist(underlying_, expiry_);
+        if (!tokenMetadata[tokenId].active) revert Teller_TokenDoesNotExist(underlying_, expiry);
 
         // Transfer in underlying
         // Check that amount received is not less than amount expected
         // Handles edge cases like fee-on-transfer tokens (which are not supported)
         uint256 oldBalance = underlying_.balanceOf(address(this));
-        underlying_.transferFrom(msg.sender, address(this), amount_);
+        underlying_.safeTransferFrom(msg.sender, address(this), amount_);
         if (underlying_.balanceOf(address(this)) < oldBalance + amount_)
             revert Teller_UnsupportedToken();
 
@@ -138,12 +141,18 @@ contract BondFixedTermTeller is BondBaseTeller, IBondFixedTermTeller, ERC1155 {
     /* ========== REDEEM ========== */
 
     function _redeem(uint256 tokenId_, uint256 amount_) internal {
+        // Check that the tokenId is active
+        if (!tokenMetadata[tokenId_].active) revert Teller_InvalidParams();
+
+        // Cache token metadata
         TokenMetadata memory meta = tokenMetadata[tokenId_];
 
+        // Check that the token has matured
         if (block.timestamp < meta.expiry) revert Teller_TokenNotMatured(meta.expiry);
 
+        // Burn bond token and transfer underlying to sender
         _burnToken(msg.sender, tokenId_, amount_);
-        meta.payoutToken.safeTransfer(msg.sender, amount_);
+        meta.underlying.safeTransfer(msg.sender, amount_);
     }
 
     /// @inheritdoc IBondFixedTermTeller
@@ -158,6 +167,7 @@ contract BondFixedTermTeller is BondBaseTeller, IBondFixedTermTeller, ERC1155 {
         nonReentrant
     {
         uint256 len = tokenIds_.length;
+        if (len != amounts_.length) revert Teller_InvalidParams();
         for (uint256 i; i < len; ++i) {
             _redeem(tokenIds_[i], amounts_[i]);
         }
@@ -184,15 +194,29 @@ contract BondFixedTermTeller is BondBaseTeller, IBondFixedTermTeller, ERC1155 {
     /// @dev                ERC1155 tokens used for fixed term bonds
     /// @param tokenId_     Calculated ID of new bond token (from getTokenId)
     /// @param underlying_  Underlying token to be paid out when the bond token vests
-    /// @param expiry_      Timestamp that the token will vest at
+    /// @param expiry_      Timestamp that the token will vest at, will be rounded to the nearest day
     function _deploy(
         uint256 tokenId_,
         ERC20 underlying_,
         uint48 expiry_
     ) internal {
-        tokenMetadata[tokenId_] = TokenMetadata(true, underlying_, expiry_, 0);
+        // Expiry is rounded to the nearest day at 0000 UTC (in seconds) since bond tokens
+        // are only unique to a day, not a specific timestamp.
+        uint48 expiry = uint48(expiry_ / 1 days) * 1 days;
 
-        emit ERC1155BondTokenCreated(tokenId_, underlying_, expiry_);
+        // Revert if expiry is in the past
+        if (uint256(expiry) < block.timestamp) revert Teller_InvalidParams();
+
+        // Store token metadata
+        tokenMetadata[tokenId_] = TokenMetadata(
+            true,
+            underlying_,
+            uint8(underlying_.decimals()),
+            expiry,
+            0
+        );
+
+        emit ERC1155BondTokenCreated(tokenId_, underlying_, expiry);
     }
 
     /// @notice             Mint bond token and update supply
@@ -204,8 +228,8 @@ contract BondFixedTermTeller is BondBaseTeller, IBondFixedTermTeller, ERC1155 {
         uint256 tokenId_,
         uint256 amount_
     ) internal {
-        _mint(to_, tokenId_, amount_, bytes(""));
         tokenMetadata[tokenId_].supply += amount_;
+        _mint(to_, tokenId_, amount_, bytes(""));
     }
 
     /// @notice             Burn bond token and update supply
@@ -217,15 +241,15 @@ contract BondFixedTermTeller is BondBaseTeller, IBondFixedTermTeller, ERC1155 {
         uint256 tokenId_,
         uint256 amount_
     ) internal {
-        _burn(from_, tokenId_, amount_);
         tokenMetadata[tokenId_].supply -= amount_;
+        _burn(from_, tokenId_, amount_);
     }
 
     /* ========== TOKEN NAMING ========== */
 
     /// @inheritdoc IBondFixedTermTeller
     function getTokenId(ERC20 underlying_, uint48 expiry_) public pure override returns (uint256) {
-        // Vesting is divided by 1 day (in seconds) since bond tokens are only unique
+        // Expiry is divided by 1 day (in seconds) since bond tokens are only unique
         // to a day, not a specific timestamp.
         uint256 tokenId = uint256(
             keccak256(abi.encodePacked(underlying_, expiry_ / uint48(1 days)))
@@ -242,7 +266,7 @@ contract BondFixedTermTeller is BondBaseTeller, IBondFixedTermTeller, ERC1155 {
     {
         TokenMetadata memory meta = tokenMetadata[tokenId_];
         (string memory name, string memory symbol) = _getNameAndSymbol(
-            meta.payoutToken,
+            meta.underlying,
             meta.expiry
         );
         return (name, symbol);

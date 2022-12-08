@@ -17,7 +17,6 @@ contract Parthenon is Policy {
     // =========  EVENTS ========= //
 
     event ProposalSubmitted(uint256 proposalId, string title, string proposalURI);
-    event ProposalRegistered(uint256 proposalId, address voter, uint256 amount);
     event ProposalActivated(uint256 proposalId, uint256 timestamp);
     event VotesCast(uint256 proposalId, address voter, bool approve, uint256 userVotes);
     event ProposalExecuted(uint256 proposalId);
@@ -31,6 +30,8 @@ contract Parthenon is Policy {
 
     error WarmupNotCompleted();
     error UserAlreadyVoted();
+    error UserHasNoVotes();
+
     error ProposalIsNotActive();
     error DepositedAfterActivation();
     error PastVotingPeriod();
@@ -74,7 +75,7 @@ contract Parthenon is Policy {
     /// @notice Amount of time a submitted proposal must exist before triggering activation.
     uint256 public constant ACTIVATION_TIMELOCK = 1 minutes; // 2 days;
 
-    /// @notice Amount of time a submitted proposal must exist before triggering activation.
+    /// @notice Amount of time a submitted proposal can exist before activation can no longer be triggered.
     uint256 public constant ACTIVATION_DEADLINE = 3 minutes; // 3 days;
 
     /// @notice Net votes required to execute a proposal on chain as a percentage of total registered votes.
@@ -113,13 +114,7 @@ contract Parthenon is Policy {
         VOTES = VOTESv1(getModuleAddress(dependencies[1]));
     }
 
-    function requestPermissions()
-        external
-        view
-        override
-        onlyKernel
-        returns (Permissions[] memory requests)
-    {
+    function requestPermissions() external view override returns (Permissions[] memory requests) {
         requests = new Permissions[](4);
         requests[0] = Permissions(toKeycode("INSTR"), INSTR.store.selector);
         requests[1] = Permissions(toKeycode("VOTES"), VOTES.resetActionTimestamp.selector);
@@ -208,6 +203,10 @@ contract Parthenon is Policy {
             revert UserAlreadyVoted();
         }
 
+        if (userVotes == 0) {
+            revert UserHasNoVotes();
+        }
+
         if (block.timestamp > proposal.activationTimestamp + VOTING_PERIOD) {
             revert PastVotingPeriod();
         }
@@ -252,6 +251,8 @@ contract Parthenon is Policy {
             revert ExecutionWindowExpired();
         }
 
+        proposal.isExecuted = true;
+
         Instruction[] memory instructions = INSTR.getInstructions(proposalId_);
         uint256 totalInstructions = instructions.length;
 
@@ -261,8 +262,6 @@ contract Parthenon is Policy {
                 ++step;
             }
         }
-
-        proposal.isExecuted = true;
 
         VOTES.resetActionTimestamp(msg.sender);
 

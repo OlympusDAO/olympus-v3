@@ -14,7 +14,7 @@ interface IBondSDA is IBondAuctioneer {
         bool capacityInQuote; // capacity limit is in payment token (true) or in payout (false, default)
         uint256 capacity; // capacity remaining
         uint256 totalDebt; // total payout token debt from market
-        uint256 minPrice; // minimum price (debt will stop decaying to maintain this)
+        uint256 minPrice; // minimum price (hard floor for the market)
         uint256 maxPayout; // max payout tokens out in one order
         uint256 sold; // payout tokens out
         uint256 purchased; // quote tokens in
@@ -30,7 +30,7 @@ interface IBondSDA is IBondAuctioneer {
     }
 
     /// @notice Data needed for tuning bond market
-    /// @dev Has timestamps in uint32 (not int32), so is not subject to Y2K38 overflow
+    /// @dev Durations are stored in uint32 (not int32) and timestamps are stored in uint48, so is not subject to Y2K38 overflow
     struct BondMetadata {
         uint48 lastTune; // last timestamp when control variable was tuned
         uint48 lastDecay; // last timestamp when market was created and debt was decayed
@@ -79,6 +79,9 @@ interface IBondSDA is IBondAuctioneer {
     /// @dev                       Minimum is the greater of 10% or initial max payout as a percentage of capacity.
     /// @dev                       If the value is too small, the market will not be able function normally and close prematurely.
     /// @dev                       If the value is too large, the market will not circuit break when intended. The value must be > 10% but can exceed 100% if desired.
+    /// @dev                       A good heuristic to calculate a debtBuffer with is to determine the amount of capacity that you think is reasonable to be expended
+    /// @dev                       in a short duration as a percent, e.g. 25%. Then a reasonable debtBuffer would be: 0.25 * 1e3 * decayInterval / marketDuration
+    /// @dev                       where decayInterval = max(3 days, 5 * depositInterval) and marketDuration = conclusion - creation time.
     /// @dev                    8. Is fixed term ? Vesting length (seconds) : Vesting expiry (timestamp).
     /// @dev                        A 'vesting' param longer than 50 years is considered a timestamp for fixed expiry.
     /// @dev                    9. Conclusion (timestamp)
