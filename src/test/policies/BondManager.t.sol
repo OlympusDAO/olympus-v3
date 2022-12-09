@@ -66,7 +66,7 @@ contract BondManagerTest is Test {
 
     // Gnosis Parameters
     uint48 internal AUCTION_CANCEL_TIME = 6 * 24 * 60 * 60;
-    uint96 internal MIN_RATIO_SOLD = 2;
+    uint96 internal MIN_PCT_SOLD = 50;
     uint256 internal MIN_BUY_AMOUNT = 1000000000;
     uint256 internal MIN_FUNDING_THRESHOLD = 1000000000000;
 
@@ -240,7 +240,7 @@ contract BondManagerTest is Test {
         bondManager.setBatchAuctionParameters(
             AUCTION_CANCEL_TIME,
             AUCTION_TIME,
-            MIN_RATIO_SOLD,
+            MIN_PCT_SOLD,
             MIN_BUY_AMOUNT,
             MIN_FUNDING_THRESHOLD
         );
@@ -251,13 +251,13 @@ contract BondManagerTest is Test {
         (
             uint256 auctionCancelTime,
             uint256 auctionTime,
-            uint96 minRatioSold,
+            uint96 minPctSold,
             uint256 minBuyAmount,
             uint256 minFundingThreshold
         ) = bondManager.batchAuctionParameters();
         assertEq(auctionCancelTime, 0);
         assertEq(auctionTime, 0);
-        assertEq(minRatioSold, 0);
+        assertEq(minPctSold, 0);
         assertEq(minBuyAmount, 0);
         assertEq(minFundingThreshold, 0);
 
@@ -266,7 +266,7 @@ contract BondManagerTest is Test {
         bondManager.setBatchAuctionParameters(
             AUCTION_CANCEL_TIME,
             AUCTION_TIME,
-            MIN_RATIO_SOLD,
+            MIN_PCT_SOLD,
             MIN_BUY_AMOUNT,
             MIN_FUNDING_THRESHOLD
         );
@@ -275,13 +275,13 @@ contract BondManagerTest is Test {
         (
             auctionCancelTime,
             auctionTime,
-            minRatioSold,
+            minPctSold,
             minBuyAmount,
             minFundingThreshold
         ) = bondManager.batchAuctionParameters();
         assertEq(auctionCancelTime, AUCTION_CANCEL_TIME);
         assertEq(auctionTime, AUCTION_TIME);
-        assertEq(minRatioSold, MIN_RATIO_SOLD);
+        assertEq(minPctSold, MIN_PCT_SOLD);
         assertEq(minBuyAmount, MIN_BUY_AMOUNT);
         assertEq(minFundingThreshold, MIN_FUNDING_THRESHOLD);
     }
@@ -433,7 +433,7 @@ contract BondManagerTest is Test {
         bondManager.setBatchAuctionParameters(
             AUCTION_CANCEL_TIME,
             AUCTION_TIME,
-            MIN_RATIO_SOLD,
+            MIN_PCT_SOLD,
             MIN_BUY_AMOUNT,
             MIN_FUNDING_THRESHOLD
         );
@@ -487,7 +487,7 @@ contract BondManagerTest is Test {
         bondManager.setBatchAuctionParameters(
             AUCTION_CANCEL_TIME,
             AUCTION_TIME,
-            MIN_RATIO_SOLD,
+            MIN_PCT_SOLD,
             MIN_BUY_AMOUNT,
             MIN_FUNDING_THRESHOLD
         );
@@ -672,7 +672,7 @@ contract BondManagerTest is Test {
         bondManager.setBatchAuctionParameters(
             AUCTION_CANCEL_TIME,
             AUCTION_TIME,
-            MIN_RATIO_SOLD,
+            MIN_PCT_SOLD,
             MIN_BUY_AMOUNT,
             MIN_FUNDING_THRESHOLD
         );

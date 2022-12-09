@@ -48,7 +48,7 @@ contract BondManager is Policy, RolesConsumer {
     struct BatchAuctionParameters {
         uint48 auctionCancelTime;
         uint48 auctionTime;
-        uint96 minRatioSold;
+        uint96 minPctSold;
         uint256 minBuyAmount;
         uint256 minFundingThreshold;
     }
@@ -176,7 +176,7 @@ contract BondManager is Policy, RolesConsumer {
             block.timestamp + batchAuctionParameters.auctionCancelTime, // last order cancellation time
             block.timestamp + batchAuctionParameters.auctionTime, // auction end time
             capacity_, // auctioned amount of bondToken
-            capacity_ / batchAuctionParameters.minRatioSold, // minimum tokens bought for auction to be valid
+            (capacity_ * batchAuctionParameters.minPctSold) / 100, // minimum tokens bought for auction to be valid
             batchAuctionParameters.minBuyAmount, // minimum purchase size of auctioning token
             batchAuctionParameters.minFundingThreshold, // minimum funding threshold
             false, // is atomic closure allowed
@@ -230,20 +230,20 @@ contract BondManager is Policy, RolesConsumer {
     /// @notice                     Sets the parameters that will likely be consistent across Gnosis Auction launches
     /// @param auctionCancelTime_   How long should users have to cancel their bids (should be less than auctionTime_)
     /// @param auctionTime_         How long should the auctioning of the bond tokens last (should be less than planned bond terms)
-    /// @param minRatioSold_        What capacity/minRatioSold_ amount of bond tokens is the minimum acceptable level
+    /// @param minPctSold_          What percent of capacity is the minimum acceptable level to sell (2 decimals, i.e. 50 = 50%)
     /// @param minBuyAmount_        Minimum purchase size (in OHM) from a user
     /// @param minFundingThreshold_ Minimum funding threshold
     function setBatchAuctionParameters(
         uint48 auctionCancelTime_,
         uint48 auctionTime_,
-        uint96 minRatioSold_,
+        uint96 minPctSold_,
         uint256 minBuyAmount_,
         uint256 minFundingThreshold_
     ) external onlyRole("bondmanager_admin") {
         batchAuctionParameters = BatchAuctionParameters({
             auctionCancelTime: auctionCancelTime_,
             auctionTime: auctionTime_,
-            minRatioSold: minRatioSold_,
+            minPctSold: minPctSold_,
             minBuyAmount: minBuyAmount_,
             minFundingThreshold: minFundingThreshold_
         });
