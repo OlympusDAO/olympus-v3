@@ -8,6 +8,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
+import {IBondTeller} from "interfaces/IBondTeller.sol";
 
 import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
@@ -25,6 +26,7 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Distributor} from "policies/Distributor.sol";
 import {Emergency} from "policies/Emergency.sol";
+import {BondManager} from "policies/BondManager.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
@@ -55,6 +57,7 @@ contract OlympusDeploy is Script {
     TreasuryCustodian public treasuryCustodian;
     Distributor public distributor;
     Emergency public emergency;
+    BondManager public bondManager;
 
     /// Construction variables
 
@@ -64,6 +67,8 @@ contract OlympusDeploy is Script {
 
     /// Bond system addresses
     IBondSDA public bondAuctioneer;
+    IBondSDA public bondFixedExpiryAuctioneer;
+    IBondTeller public bondFixedExpiryTeller;
     IBondAggregator public bondAggregator;
 
     /// Chainlink price feed addresses
@@ -94,6 +99,7 @@ contract OlympusDeploy is Script {
         selectorMap["TreasuryCustodian"] = this._deployTreasuryCustodian.selector;
         selectorMap["Distributor"] = this._deployDistributor.selector;
         selectorMap["Emergency"] = this._deployEmergency.selector;
+        selectorMap["BondManager"] = this._deployBondManager.selector;
 
         // Load environment addresses
         string memory env = vm.readFile("./src/scripts/env.json");
@@ -102,6 +108,8 @@ contract OlympusDeploy is Script {
         ohm = ERC20(env.readAddress(string.concat(chain_, ".olympus.legacy.OHM")));
         reserve = ERC20(env.readAddress(string.concat(chain_, ".external.tokens.DAI")));
         bondAuctioneer = IBondSDA(env.readAddress(string.concat(chain_, ".external.bond-protocol.BondFixedTermAuctioneer")));
+        bondFixedExpiryAuctioneer = IBondSDA(env.readAddress(string.concat(chain_, ".external.bond-protocol.BondFixedExpiryAuctioneer")));
+        bondFixedExpiryTeller = IBondTeller(env.readAddress(string.concat(chain_, ".external.bond-protocol.BondFixedExpiryTeller")));
         bondAggregator = IBondAggregator(env.readAddress(string.concat(chain_, ".external.bond-protocol.BondAggregator")));
         ohmEthPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(chain_, ".external.chainlink.ohmEthPriceFeed")));
         reserveEthPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(chain_, ".external.chainlink.daiEthPriceFeed")));
@@ -391,6 +399,18 @@ contract OlympusDeploy is Script {
         console2.log("Emergency deployed at:", address(emergency));
 
         return address(emergency);
+    }
+
+    function _deployBondManager(bytes memory args) public returns(address) {
+        // Decode arguments for BondManager policy
+        address gnosisAuction = abi.decode(args, (address));
+
+        // Deploy BondManager policy
+        vm.broadcast();
+        bondManager = new BondManager(kernel, address(bondFixedExpiryAuctioneer), address(bondFixedExpiryTeller), gnosisAuction, address(ohm));
+        console2.log("BondManager deployed at:", address(bondManager));
+
+        return address(bondManager);
     }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
