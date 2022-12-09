@@ -74,7 +74,8 @@ contract PriceConfigTest is Test {
                 reserveEthPriceFeed, // AggregatorInterface reserveEthPriceFeed_,
                 uint48(24 hours), // uint32 reserveEthUpdateThreshold_,
                 uint48(8 hours), // uint32 observationFrequency_,
-                uint48(7 days) // uint32 movingAverageDuration_,
+                uint48(7 days), // uint32 movingAverageDuration_,
+                10 * 1e18 // uint256 minimumTargetPrice_
             );
 
             roles = new OlympusRoles(kernel);
@@ -287,6 +288,20 @@ contract PriceConfigTest is Test {
             abi.encodeWithSignature("Price_BadFeed(address)", address(ohmEthPriceFeed))
         );
         price.getCurrentPrice();
+    }
+
+    function testCorrectness_changeMinimumTargetPrice(uint8 nonce, uint256 newValue) public {
+        /// Initialize price module
+        uint256[] memory obs = getObs(nonce);
+        vm.prank(guardian);
+        priceConfig.initialize(obs, uint48(block.timestamp));
+
+        /// Change minimum target price to a different value (larger than current)
+        vm.prank(guardian);
+        priceConfig.changeMinimumTargetPrice(newValue);
+
+        /// Check that the minimum target price is updated correctly
+        assertEq(price.minimumTargetPrice(), newValue);
     }
 
     function testCorrectness_onlyAuthorizedCanCallAdminFunctions() public {

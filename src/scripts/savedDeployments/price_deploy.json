@@ -1,0 +1,39 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusPrice",
+            "args": {
+                "ohmEthUpdateThreshold": 86400,
+                "reserveEthUpdateThreshold": 86400,
+                "observationFrequency": 28800,
+                "movingAverageDuration": 2592000,
+                "minimumTargetPrice": 10000000000000000000
+            }
+        },
+        {
+            "name": "Operator",
+            "args": {
+                "configParams": [
+                    3000,
+                    259200,
+                    100000,
+                    14400,
+                    1000,
+                    518400,
+                    18,
+                    21
+                ]
+            }
+        },
+        {
+            "name": "OlympusHeart",
+            "args": {
+                "reward": 5000000000
+            }
+        },
+        {
+            "name": "OlympusPriceConfig",
+            "args": {}
+        }
+    ]
+}
