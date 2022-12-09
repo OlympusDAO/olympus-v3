@@ -31,16 +31,16 @@ Set up a foundry config in foundry.toml.
 
 -   TRSRY - [0xa8687A15D4BE32CC8F0a8a7B9704a4C3993D9613](https://etherscan.io/address/0xa8687A15D4BE32CC8F0a8a7B9704a4C3993D9613)
 -   MINTR - [0xa90bFe53217da78D900749eb6Ef513ee5b6a491e](https://etherscan.io/address/0xa90bFe53217da78D900749eb6Ef513ee5b6a491e)
--   PRICE - [0x9Ded6A8B099c57BBEb9F81b76400a5a9C63a6880](https://etherscan.io/address/0x9Ded6A8B099c57BBEb9F81b76400a5a9C63a6880)
+-   PRICE - [0xd6C4D723fdadCf0D171eF9A2a3Bfa870675b282f](https://etherscan.io/address/0xd6C4D723fdadCf0D171eF9A2a3Bfa870675b282f)
 -   RANGE - [0xb212D9584cfc56EFf1117F412Fe0bBdc53673954](https://etherscan.io/address/0xb212D9584cfc56EFf1117F412Fe0bBdc53673954)
 -   ROLES - [0x6CAfd730Dc199Df73C16420C4fCAb18E3afbfA59](https://etherscan.io/address/0x6CAfd730Dc199Df73C16420C4fCAb18E3afbfA59)
 
 #### Policies
 
 -   BondCallback - [0xbf2B6E99B0E8D4c96b946c182132f5752eAa55C6](https://etherscan.io/address/0xbf2B6E99B0E8D4c96b946c182132f5752eAa55C6)
--   Operator - [0xbb47C3FFf4eF85703907d3ffca30de278b85df3f](https://etherscan.io/address/0xbb47C3FFf4eF85703907d3ffca30de278b85df3f)
--   Heart - [0xeaf46BD21dd9b263F28EEd7260a269fFba9ace6E](https://etherscan.io/address/0xeaf46BD21dd9b263F28EEd7260a269fFba9ace6E)
--   PriceConfig - [0x3019ff96bd8308D1B66846b795E0AeeFbDf14ba5](https://etherscan.io/address/0x3019ff96bd8308D1B66846b795E0AeeFbDf14ba5)
+-   Operator - [0x1Ce568DbB34B2631aCDB5B453c3195EA0070EC65](https://etherscan.io/address/0x1Ce568DbB34B2631aCDB5B453c3195EA0070EC65)
+-   Heart - [0x1652b503E0F1CF38b6246Ed3b91CB3786Bb11656](https://etherscan.io/address/0x1652b503E0F1CF38b6246Ed3b91CB3786Bb11656)
+-   PriceConfig - [0xf6D5d06A4e8e6904E4360108749C177692F59E90](https://etherscan.io/address/0xf6D5d06A4e8e6904E4360108749C177692F59E90)
 -   RolesAdmin - [0xb216d714d91eeC4F7120a732c11428857C659eC8](https://etherscan.io/address/0xb216d714d91eeC4F7120a732c11428857C659eC8)
 -   TreasuryCustodian - [0xC9518AC915e46D707585116451Dc19c164513Ccf](https://etherscan.io/address/0xC9518AC915e46D707585116451Dc19c164513Ccf)
 -   Distributor - [0x27e606fdb5C922F8213dC588A434BF7583697866](https://etherscan.io/address/0x27e606fdb5C922F8213dC588A434BF7583697866)
@@ -54,16 +54,16 @@ Set up a foundry config in foundry.toml.
 
 -   TRSRY - [0xD8C59cFe5afbDB83D904E56D379028a2f6A07a2D](https://goerli.etherscan.io/address/0xD8C59cFe5afbDB83D904E56D379028a2f6A07a2D)
 -   MINTR - [0xa192fFBF73858831a137DD098a706139Ca96AbD5](https://goerli.etherscan.io/address/0xa192fFBF73858831a137DD098a706139Ca96AbD5)
--   PRICE - [0x9cdb21200774E6C94B71653da213DcE6c1a31F72](https://goerli.etherscan.io/address/0x9cdb21200774E6C94B71653da213DcE6c1a31F72)
+-   PRICE - [0xD9ace3Be2d80006EF4D90A2D35D861a5C9F98252](https://goerli.etherscan.io/address/0xD9ace3Be2d80006EF4D90A2D35D861a5C9F98252)
 -   RANGE - [0x446f06f8Df7d5f627B073c6349b948B95c1f9185](https://goerli.etherscan.io/address/0x446f06f8Df7d5f627B073c6349b948B95c1f9185)
 -   ROLES - [0xe9a9d80CE3eE32FFf7279dce4c2962eC8098f71B](https://goerli.etherscan.io/address/0xe9a9d80CE3eE32FFf7279dce4c2962eC8098f71B)
 
 #### Policies
 
 -   BondCallback - [0xC1545804Fb804fdC7756e8e40c91B7581b2a2856](https://goerli.etherscan.io/address/0xC1545804Fb804fdC7756e8e40c91B7581b2a2856)
--   Heart - [0xf3B2Df0F05C344DAc837e104fd20e77168DAc556](https://goerli.etherscan.io/address/0xf3B2Df0F05C344DAc837e104fd20e77168DAc556)
--   Operator - [0x8C9Dc385790ee7a20289B7ED98CdaC499D3aef9D](https://goerli.etherscan.io/address/0x8C9Dc385790ee7a20289B7ED98CdaC499D3aef9D)
--   PriceConfig - [0x58f06599748155bCd7aE2d1e28e09A5a841a0D82](https://goerli.etherscan.io/address/0x58f06599748155bCd7aE2d1e28e09A5a841a0D82)
+-   Heart - [0x384c7AeFB9f7aF276CF717905A696F85E2dD8845](https://goerli.etherscan.io/address/0x384c7AeFB9f7aF276CF717905A696F85E2dD8845)
+-   Operator - [0x61B79d10ebC48166F7495Fce5E0c352B61777460](https://goerli.etherscan.io/address/0x61B79d10ebC48166F7495Fce5E0c352B61777460)
+-   PriceConfig - [0x15915Be9d272B353BA06FA5Ce3918ae7D27F5463](https://goerli.etherscan.io/address/0x15915Be9d272B353BA06FA5Ce3918ae7D27F5463)
 -   TreasuryCustodian - [0x3DAE418f8B6382b3d3d0cb9008924BA83D2e0E87](https://goerli.etherscan.io/address/0x3DAE418f8B6382b3d3d0cb9008924BA83D2e0E87)
 -   Distributor - [0x2716a1451BDE2B011f0D10ad6599e411d54Ec491](https://goerli.etherscan.io/address/0x2716a1451BDE2B011f0D10ad6599e411d54Ec491)
 -   RolesAdmin - [0x54FfCA586cD1B01E96a5682DF93a55d7Ef91EFF0](https://goerli.etherscan.io/address/0x54FfCA586cD1B01E96a5682DF93a55d7Ef91EFF0)
