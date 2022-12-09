@@ -7,7 +7,7 @@
                 "reserveEthUpdateThreshold": 86400,
                 "observationFrequency": 28800,
                 "movingAverageDuration": 2592000,
-                "minimumTargetPrice": 10000000000000000000
+                "minimumTargetPrice": 10410000000000000000
             }
         },
         {
