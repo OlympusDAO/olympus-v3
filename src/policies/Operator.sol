@@ -517,17 +517,17 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice Update the prices on the RANGE module
     function _updateRangePrices() internal {
-        // Get latest moving average from the price module
-        uint256 movingAverage = PRICE.getMovingAverage();
+        // Get latest target price from the price module
+        uint256 target = PRICE.getTargetPrice();
 
         // Update the prices on the range module
-        RANGE.updatePrices(movingAverage);
+        RANGE.updatePrices(target);
     }
 
     /// @notice Add an observation to the regeneration status variables for each side
     function _addObservation() internal {
-        // Get latest moving average from the price module
-        uint256 movingAverage = PRICE.getMovingAverage();
+        // Get latest target price from the price module
+        uint256 target = PRICE.getTargetPrice();
 
         // Get price from latest update
         uint256 currentPrice = PRICE.getLastPrice();
@@ -538,7 +538,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Observation is positive if the current price is greater than the MA
         uint32 observe = _config.regenObserve;
         Regen memory regen = _status.low;
-        if (currentPrice >= movingAverage) {
+        if (currentPrice >= target) {
             if (!regen.observations[regen.nextObservation]) {
                 _status.low.observations[regen.nextObservation] = true;
                 _status.low.count++;
@@ -554,7 +554,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Update high side regen status with a new observation
         // Observation is positive if the current price is less than the MA
         regen = _status.high;
-        if (currentPrice <= movingAverage) {
+        if (currentPrice <= target) {
             if (!regen.observations[regen.nextObservation]) {
                 _status.high.observations[regen.nextObservation] = true;
                 _status.high.count++;
@@ -765,7 +765,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function regenerate(bool high_) external onlyRole("operator_admin") {
+    function regenerate(bool high_) external onlyRole("operator_policy") {
         // Regenerate side
         _regenerate(high_);
     }

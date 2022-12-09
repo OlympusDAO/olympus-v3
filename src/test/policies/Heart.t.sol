@@ -82,7 +82,7 @@ contract HeartTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             /// Deploy modules (some mocks)
-            price = new MockPrice(kernel, uint48(8 hours));
+            price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
             roles = new OlympusRoles(kernel);
 
             /// Configure mocks
@@ -233,6 +233,7 @@ contract HeartTest is Test {
     /// DONE
     /// [X] resetBeat
     /// [X] activate and deactivate
+    /// [X] setOperator
     /// [X] setRewardTokenAndAmount
     /// [X] withdrawUnspentRewards
     /// [X] cannot call admin functions without permissions
@@ -279,6 +280,15 @@ contract HeartTest is Test {
         /// Expect the heart to be active again and lastBeat to be reset
         assertTrue(heart.active());
         assertEq(heart.lastBeat(), block.timestamp - heart.frequency());
+    }
+
+    function testCorrectnes_setOperator(address newOperator) public {
+        /// Set the operator using the provided address
+        vm.prank(policy);
+        heart.setOperator(newOperator);
+
+        /// Check that the operator has been updated
+        assertEq(address(heart.operator()), newOperator);
     }
 
     function testCorrectness_setRewardTokenAndAmount() public {
