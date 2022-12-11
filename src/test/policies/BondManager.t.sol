@@ -154,10 +154,6 @@ contract BondManagerTest is Test {
 
             // Approve teller to spend OHM
             ohm.increaseAllowance(address(fixedExpiryTeller), 100_000_000_000_000);
-
-            // Set Bond Manager mint limit
-            vm.prank(policy);
-            bondManager.increaseMintLimit(100_000_000_000_000);
         }
     }
 
@@ -184,7 +180,8 @@ contract BondManagerTest is Test {
             MIN_PRICE,
             AUCTION_TIME,
             DEBT_BUFFER,
-            DEPOSIT_INTERVAL
+            DEPOSIT_INTERVAL,
+            false
         );
     }
 
@@ -195,13 +192,15 @@ contract BondManagerTest is Test {
             uint256 minPrice,
             uint48 auctionTime,
             uint32 debtBuffer,
-            uint32 depositInterval
+            uint32 depositInterval,
+            bool capacityInQuote
         ) = bondManager.fixedExpiryParameters();
         assertEq(initialPrice, 0);
         assertEq(minPrice, 0);
         assertEq(auctionTime, 0);
         assertEq(debtBuffer, 0);
         assertEq(depositInterval, 0);
+        assertEq(capacityInQuote, false);
 
         // Set parameters
         vm.prank(policy);
@@ -210,17 +209,25 @@ contract BondManagerTest is Test {
             MIN_PRICE,
             AUCTION_TIME,
             DEBT_BUFFER,
-            DEPOSIT_INTERVAL
+            DEPOSIT_INTERVAL,
+            true
         );
 
         // Verify end state
-        (initialPrice, minPrice, auctionTime, debtBuffer, depositInterval) = bondManager
-            .fixedExpiryParameters();
+        (
+            initialPrice,
+            minPrice,
+            auctionTime,
+            debtBuffer,
+            depositInterval,
+            capacityInQuote
+        ) = bondManager.fixedExpiryParameters();
         assertEq(initialPrice, INITIAL_PRICE);
         assertEq(minPrice, MIN_PRICE);
         assertEq(auctionTime, AUCTION_TIME);
         assertEq(debtBuffer, DEBT_BUFFER);
         assertEq(depositInterval, DEPOSIT_INTERVAL);
+        assertEq(capacityInQuote, true);
     }
 
     /// [X]  setBatchAuctionParameters()
@@ -330,7 +337,8 @@ contract BondManagerTest is Test {
             MIN_PRICE,
             AUCTION_TIME,
             DEBT_BUFFER,
-            DEPOSIT_INTERVAL
+            DEPOSIT_INTERVAL,
+            false
         );
         bondManager.setCallback(bondCallback);
         vm.stopPrank();
@@ -346,7 +354,7 @@ contract BondManagerTest is Test {
         vm.expectRevert(err);
 
         vm.prank(user_);
-        bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 1 weeks);
+        bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
     }
 
     function testCorrectness_createFixedExpiryLaunchesMarket() public {
@@ -354,7 +362,7 @@ contract BondManagerTest is Test {
 
         // Launch market
         vm.prank(policy);
-        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 1 weeks);
+        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
 
         // Verify market state
         (
@@ -391,10 +399,11 @@ contract BondManagerTest is Test {
             MIN_PRICE,
             AUCTION_TIME,
             DEBT_BUFFER,
-            DEPOSIT_INTERVAL
+            DEPOSIT_INTERVAL,
+            false
         );
         bondManager.setCallback(bondCallback);
-        bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 1 weeks);
+        bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
         vm.stopPrank();
     }
 
@@ -552,10 +561,11 @@ contract BondManagerTest is Test {
             MIN_PRICE,
             AUCTION_TIME,
             DEBT_BUFFER,
-            DEPOSIT_INTERVAL
+            DEPOSIT_INTERVAL,
+            false
         );
         bondManager.setCallback(bondCallback);
-        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 1 weeks);
+        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
 
         // Verify market
         assertTrue(fixedExpirySDA.isLive(marketId));
@@ -576,10 +586,11 @@ contract BondManagerTest is Test {
             MIN_PRICE,
             AUCTION_TIME,
             DEBT_BUFFER,
-            DEPOSIT_INTERVAL
+            DEPOSIT_INTERVAL,
+            false
         );
         bondManager.setCallback(bondCallback);
-        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 1 weeks);
+        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
 
         // Verify on callback
         assertTrue(bondCallback.approvedMarkets(address(fixedExpiryTeller), marketId));
@@ -667,7 +678,8 @@ contract BondManagerTest is Test {
             MIN_PRICE,
             AUCTION_TIME,
             DEBT_BUFFER,
-            DEPOSIT_INTERVAL
+            DEPOSIT_INTERVAL,
+            false
         );
         bondManager.setBatchAuctionParameters(
             AUCTION_CANCEL_TIME,
@@ -692,7 +704,7 @@ contract BondManagerTest is Test {
         assertEq(ohm.balanceOf(address(fixedExpiryTeller)), 0);
 
         // Create Bond Protocol market
-        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 1 weeks);
+        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
 
         // Create Gnosis market
         bondManager.createBatchAuction(10_000_000_000_000, 1 weeks);
@@ -723,7 +735,7 @@ contract BondManagerTest is Test {
         MockERC20 bondToken = fixedExpiryTeller.bondToken();
 
         // Create Bond Protocol market
-        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 1 weeks);
+        uint256 marketId = bondManager.createFixedExpiryBondMarket(10_000_000_000_000, 2 weeks);
 
         // Create Gnosis market 2
         bondManager.createBatchAuction(10_000_000_000_000, 2 weeks);

@@ -4,26 +4,6 @@ pragma solidity >=0.8.0;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 interface IBondTeller {
-    /// @notice             Deploy a new ERC20 bond token for an (underlying, expiry) pair and return its address
-    /// @dev                ERC20 used for fixed-expiry
-    /// @dev                If a bond token exists for the (underlying, expiry) pair, it returns that address
-    /// @param underlying_  ERC20 token redeemable when the bond token vests
-    /// @param expiry_      Timestamp at which the bond token can be redeemed for the underlying token
-    /// @return             Address of the ERC20 bond token being created
-    function deploy(ERC20 underlying_, uint48 expiry_) external returns (ERC20);
-
-    /// @notice              Deposit an ERC20 token and mint a future-dated ERC20 bond token
-    /// @param underlying_   ERC20 token redeemable when the bond token vests
-    /// @param expiry_       Timestamp at which the bond token can be redeemed for the underlying token
-    /// @param amount_       Amount of underlying tokens to deposit
-    /// @return              Address of the ERC20 bond token received
-    /// @return              Amount of the ERC20 bond token received
-    function create(
-        ERC20 underlying_,
-        uint48 expiry_,
-        uint256 amount_
-    ) external returns (ERC20, uint256);
-
     /// @notice                 Exchange quote tokens for a bond in a specified market
     /// @param recipient_       Address of recipient of bond. Allows deposits for other addresses
     /// @param referrer_        Address of referrer who will receive referral fee. For frontends to fill.

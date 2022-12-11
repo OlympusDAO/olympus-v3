@@ -20,6 +20,17 @@ import {IEasyAuction} from "interfaces/IEasyAuction.sol";
 /// @title Olympus Bond Manager
 /// @notice Olympus Bond Manager (Policy) Contract
 contract BondManager is Policy, RolesConsumer {
+    // ========= ERRORS ========= //
+
+    error BondManager_TermTooShort();
+    error BondManager_InitialPriceTooLow();
+    error BondManager_DebtBufferTooLow();
+    error BondManager_AuctionTimeTooShort();
+    error BondManager_DepositIntervalTooShort();
+    error BondManager_DepositIntervalTooLong();
+    error BondManager_CancelTimeTooLong();
+    error BondManager_MinPctSoldTooLow();
+
     // ========= EVENTS ========= //
 
     event BondProtocolMarketLaunched(
@@ -43,6 +54,7 @@ contract BondManager is Policy, RolesConsumer {
         uint48 auctionTime;
         uint32 debtBuffer;
         uint32 depositInterval;
+        bool capacityInQuote;
     }
 
     struct BatchAuctionParameters {
@@ -126,12 +138,24 @@ contract BondManager is Policy, RolesConsumer {
         onlyRole("bondmanager_admin")
         returns (uint256 marketId)
     {
+        // Validate parameters
+        if (bondTerm_ < fixedExpiryParameters.auctionTime + 1 days)
+            revert BondManager_TermTooShort();
+        if (fixedExpiryParameters.initialPrice < fixedExpiryParameters.minPrice)
+            revert BondManager_InitialPriceTooLow();
+        if (fixedExpiryParameters.debtBuffer < 10_000) revert BondManager_DebtBufferTooLow();
+        if (fixedExpiryParameters.auctionTime < 1 days) revert BondManager_AuctionTimeTooShort();
+        if (fixedExpiryParameters.depositInterval < 1 hours)
+            revert BondManager_DepositIntervalTooShort();
+        if (fixedExpiryParameters.depositInterval > fixedExpiryParameters.auctionTime)
+            revert BondManager_DepositIntervalTooLong();
+
         // Encodes the information needed for creating a bond market on Bond Protocol
         bytes memory createMarketParams = abi.encode(
             ERC20(address(ohm)), // payoutToken
             ERC20(address(ohm)), // quoteToken
             address(bondCallback), // callbackAddress
-            false, // capacityInQuote
+            fixedExpiryParameters.capacityInQuote, // capacityInQuote
             capacity_, // capacity
             fixedExpiryParameters.initialPrice, // formattedInitialPrice
             fixedExpiryParameters.minPrice, // formattedMinimumPrice
@@ -159,6 +183,14 @@ contract BondManager is Policy, RolesConsumer {
         onlyRole("bondmanager_admin")
         returns (uint256 auctionId)
     {
+        // Validate parameters
+        if (bondTerm_ < batchAuctionParameters.auctionTime) revert BondManager_TermTooShort();
+        if (batchAuctionParameters.auctionCancelTime > batchAuctionParameters.auctionTime)
+            revert BondManager_CancelTimeTooLong();
+        if (batchAuctionParameters.minPctSold == 0) revert BondManager_MinPctSoldTooLow();
+
+        // Pre-mint OHM for the auction
+        MINTR.increaseMintApproval(address(this), capacity_);
         MINTR.mintOhm(address(this), capacity_);
 
         uint48 expiry = uint48(block.timestamp) + batchAuctionParameters.auctionTime + bondTerm_;
@@ -216,14 +248,16 @@ contract BondManager is Policy, RolesConsumer {
         uint256 minPrice_,
         uint48 auctionTime_,
         uint32 debtBuffer_,
-        uint32 depositInterval_
+        uint32 depositInterval_,
+        bool capacityInQuote_
     ) external onlyRole("bondmanager_admin") {
         fixedExpiryParameters = FixedExpiryParameters({
             initialPrice: initialPrice_,
             minPrice: minPrice_,
             auctionTime: auctionTime_,
             debtBuffer: debtBuffer_,
-            depositInterval: depositInterval_
+            depositInterval: depositInterval_,
+            capacityInQuote: capacityInQuote_
         });
     }
 
@@ -253,20 +287,6 @@ contract BondManager is Policy, RolesConsumer {
     /// @param newCallback_         The bond callback address to set
     function setCallback(IBondCallback newCallback_) external onlyRole("bondmanager_admin") {
         bondCallback = newCallback_;
-    }
-
-    /// @notice                     Increases the contract's OHM minting limit by the passed amount
-    /// @param amount_              The amount to increase the limit by
-    /// @dev                        This should be set to the next several months worth of OHM minting
-    function increaseMintLimit(uint256 amount_) external onlyRole("bondmanager_admin") {
-        MINTR.increaseMintApproval(address(this), amount_);
-    }
-
-    /// @notice                     Reduces the contract's OHM minting limit
-    /// @param amount_              The amount to decrease the limit by
-    /// @dev                        This can be used to reduce risk in either the event of contract deprecation or a bug
-    function decreaseMintLimit(uint256 amount_) external onlyRole("bondmanager_admin") {
-        MINTR.decreaseMintApproval(address(this), amount_);
     }
 
     //============================================================================================//

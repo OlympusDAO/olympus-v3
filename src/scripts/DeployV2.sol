@@ -77,6 +77,7 @@ contract OlympusDeploy is Script {
 
     /// External contracts
     address public staking;
+    address public gnosisEasyAuction;
 
     // Deploy system storage
     mapping(string => bytes4) public selectorMap;
@@ -114,6 +115,7 @@ contract OlympusDeploy is Script {
         ohmEthPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(chain_, ".external.chainlink.ohmEthPriceFeed")));
         reserveEthPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(chain_, ".external.chainlink.daiEthPriceFeed")));
         staking = env.readAddress(string.concat(chain_, ".olympus.legacy.Staking"));
+        gnosisEasyAuction = env.readAddress(string.concat(chain_, ".external.gnosis.EasyAuction"));
 
         // Bophades contracts
         kernel = Kernel(env.readAddress(string.concat(chain_, ".olympus.Kernel")));
@@ -402,12 +404,10 @@ contract OlympusDeploy is Script {
     }
 
     function _deployBondManager(bytes memory args) public returns(address) {
-        // Decode arguments for BondManager policy
-        address gnosisAuction = abi.decode(args, (address));
 
         // Deploy BondManager policy
         vm.broadcast();
-        bondManager = new BondManager(kernel, address(bondFixedExpiryAuctioneer), address(bondFixedExpiryTeller), gnosisAuction, address(ohm));
+        bondManager = new BondManager(kernel, address(bondFixedExpiryAuctioneer), address(bondFixedExpiryTeller), gnosisEasyAuction, address(ohm));
         console2.log("BondManager deployed at:", address(bondManager));
 
         return address(bondManager);
