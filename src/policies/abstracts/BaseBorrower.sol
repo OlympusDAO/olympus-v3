@@ -89,6 +89,7 @@ contract BaseBorrower is Policy, RolesConsumer {
     function _borrow(uint256 amount_) internal {
         debtOutstanding[msg.sender] += amount_;
         LENDR.borrow(amount_);
+        MINTR.increaseMintApproval(address(this), amount_);
         MINTR.mintOhm(address(this), amount_);
     }
 
