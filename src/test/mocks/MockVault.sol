@@ -30,7 +30,13 @@ contract MockVault {
     ) external {
         (, uint256 bptAmount) = abi.decode(request.userData, (uint256, uint256));
         bpt.burn(sender, bptAmount);
-        ERC20(request.assets[0]).transfer(recipient, request.minAmountsOut[0]);
-        ERC20(request.assets[1]).transfer(recipient, request.minAmountsOut[1]);
+        ERC20(request.assets[0]).transfer(
+            recipient,
+            ERC20(request.assets[0]).balanceOf(address(this))
+        );
+        ERC20(request.assets[1]).transfer(
+            recipient,
+            ERC20(request.assets[1]).balanceOf(address(this))
+        );
     }
 }

@@ -27,9 +27,9 @@ contract BaseBorrower is Policy, RolesConsumer {
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](3);
-        dependencies[0] = LENDR.KEYCODE();
-        dependencies[1] = MINTR.KEYCODE();
-        dependencies[2] = ROLES.KEYCODE();
+        dependencies[0] = toKeycode("LENDR");
+        dependencies[1] = toKeycode("MINTR");
+        dependencies[2] = toKeycode("ROLES");
 
         LENDR = LENDRv1(getModuleAddress(dependencies[0]));
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
@@ -57,11 +57,11 @@ contract BaseBorrower is Policy, RolesConsumer {
 
     /// @notice         Borrow and deposit OHM into the system this policy is responsible for
     /// @param amount_  The amount of OHM to borrow and deposit
-    function deposit(uint256 amount_) external virtual {}
+    function deposit(uint256 amount_) external virtual returns (uint256) {}
 
     /// @notice         Withdraw and repay OHM from the system this policy is responsible for
     /// @param amount_  The amount of OHM to withdraw and repay
-    function withdraw(uint256 amount_) external virtual {}
+    function withdraw(uint256 amount_) external virtual returns (uint256) {}
 
     /// @notice         Update the policy's state. Harvests yield, and manages amount of OHM deployed
     function update() external virtual {}

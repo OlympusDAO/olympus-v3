@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 // Import system dependencies
 import "src/Kernel.sol";
-import {BaseLiquidityAMO} from "policies/LiquidityAMOs/abstracts/BaseLiquidityAMO.sol";
+import {BaseLiquidityAMO} from "policies/AMOs/abstracts/BaseLiquidityAMO.sol";
 
 // Import external dependencies
 import {AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";

@@ -2,10 +2,8 @@
 pragma solidity 0.8.15;
 
 // Import system dependencies
-import {LENDRv1} from "src/modules/LENDR/LENDR.v1.sol";
-import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
-import {ROLESv1, RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
-import "src/Kernel.sol";
+import {BaseBorrower} from "policies/abstracts/BaseBorrower.sol";
+import {Kernel} from "src/Kernel.sol";
 
 // Import internal dependencies
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
@@ -18,12 +16,8 @@ import {IBasePool} from "src/interfaces/IBasePool.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @title Olympus Base Liquidity AMO
-contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
+contract BaseLiquidityAMO is BaseBorrower, ReentrancyGuard {
     // ========= STATE ========= //
-
-    // Modules
-    LENDRv1 public LENDR;
-    MINTRv1 public MINTR;
 
     // Tokens
     ERC20 public ohm;
@@ -37,7 +31,6 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     // User State
     mapping(address => uint256) public pairTokenDeposits; // User pair token deposits
-    mapping(address => uint256) public ohmDebtOutstanding; // OHM debt outstanding
     mapping(address => uint256) public lpPositions; // User LP positions
 
     //============================================================================================//
@@ -50,7 +43,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         address pairToken_,
         address vault_,
         address balancerPool_
-    ) Policy(kernel_) {
+    ) BaseBorrower(kernel_) {
         // Set tokens
         ohm = ERC20(ohm_);
         pairToken = ERC20(pairToken_);
@@ -60,58 +53,22 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         balancerPool = balancerPool_;
     }
 
-    /// @inheritdoc Policy
-    function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
-        dependencies[0] = toKeycode("LENDR");
-        dependencies[1] = toKeycode("MINTR");
-        dependencies[2] = toKeycode("ROLES");
-
-        LENDR = LENDRv1(getModuleAddress(dependencies[0]));
-        MINTR = MINTRv1(getModuleAddress(dependencies[1]));
-        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
-    }
-
-    /// @inheritdoc Policy
-    function requestPermissions()
-        external
-        view
-        override
-        returns (Permissions[] memory permissions)
-    {
-        permissions = new Permissions[](6);
-        permissions[0] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
-        permissions[1] = Permissions(MINTR.KEYCODE(), MINTR.burnOhm.selector);
-        permissions[2] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
-        permissions[3] = Permissions(MINTR.KEYCODE(), MINTR.decreaseMintApproval.selector);
-        permissions[4] = Permissions(LENDR.KEYCODE(), LENDR.borrow.selector);
-        permissions[5] = Permissions(LENDR.KEYCODE(), LENDR.repay.selector);
-    }
-
     //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
     /// @dev    This needs to be non-reentrant since the contract only knows the amount of LP tokens it
     ///         receives after an external interaction with the Balancer pool
-    function depositAndLP(uint256 pairTokenAmount_)
-        external
-        nonReentrant
-        returns (uint256 lpAmountOut)
-    {
-        // Calculate how much OHM the user needs to borrow
-        uint256 ohmToBorrow = _valueCollateral(pairTokenAmount_);
-
+    function deposit(uint256 amount_) external override nonReentrant returns (uint256 lpAmountOut) {
         // Update state about user's deposits and borrows
-        pairTokenDeposits[msg.sender] += pairTokenAmount_;
-        ohmDebtOutstanding[msg.sender] += ohmToBorrow;
+        pairTokenDeposits[msg.sender] += amount_;
 
         // Take pair token from user
-        pairToken.transferFrom(msg.sender, address(this), pairTokenAmount_);
+        pairToken.transferFrom(msg.sender, address(this), amount_);
 
         // Borrow OHM
-        LENDR.borrow(ohmToBorrow);
-        MINTR.mintOhm(address(this), ohmToBorrow);
+        uint256 ohmToBorrow = _valueCollateral(amount_);
+        _borrow(ohmToBorrow);
 
         // OHM-PAIR BPT before
         uint256 bptBefore = ERC20(address(balancerPool)).balanceOf(address(this));
@@ -123,7 +80,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
         uint256[] memory maxAmountsIn = new uint256[](2);
         maxAmountsIn[0] = ohmToBorrow;
-        maxAmountsIn[1] = pairTokenAmount_;
+        maxAmountsIn[1] = amount_;
 
         JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
             assets: assets,
@@ -134,7 +91,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
         // Join Balancer pool
         ohm.approve(address(vault), ohmToBorrow);
-        pairToken.approve(address(vault), pairTokenAmount_);
+        pairToken.approve(address(vault), amount_);
         vault.joinPool(
             IBasePool(balancerPool).getPoolId(),
             address(this),
@@ -151,11 +108,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     /// @dev    This needs to be non-reentrant since the contract only knows the amount of OHM and
     ///         pair tokens it receives after an external call to withdraw liquidity from Balancer
-    function unwindAndRepay(
-        uint256 lpAmount_,
-        uint256 expectedOhmAmount_,
-        uint256 expectedPairTokenAmount_
-    ) external nonReentrant returns (uint256) {
+    function withdraw(uint256 lpAmount_) external override nonReentrant returns (uint256) {
         lpPositions[msg.sender] -= lpAmount_;
 
         // OHM and pair token amounts before
@@ -168,8 +121,8 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         assets[1] = address(pairToken);
 
         uint256[] memory minAmountsOut = new uint256[](2);
-        minAmountsOut[0] = expectedOhmAmount_;
-        minAmountsOut[1] = expectedPairTokenAmount_;
+        minAmountsOut[0] = 0; // TODO: find way to calculate without adding function args
+        minAmountsOut[1] = 0; // TODO: find way to calculate without adding function args
 
         ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
             assets: assets,
@@ -192,16 +145,15 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         uint256 pairTokenReceived = pairToken.balanceOf(address(this)) - pairTokenBefore;
 
         // Reduce debt and deposit values
-        uint256 userDebt = ohmDebtOutstanding[msg.sender];
+        uint256 userDebt = debtOutstanding[msg.sender];
         uint256 userDeposit = pairTokenDeposits[msg.sender];
-        ohmDebtOutstanding[msg.sender] -= ohmReceived > userDebt ? userDebt : ohmReceived;
+        uint256 ohmToRepay = ohmReceived > userDebt ? userDebt : ohmReceived;
         pairTokenDeposits[msg.sender] -= pairTokenReceived > userDeposit
             ? userDeposit
             : pairTokenReceived;
-        LENDR.repay(ohmReceived > userDebt ? userDebt : ohmReceived);
 
         // Return assets
-        MINTR.burnOhm(address(this), ohmReceived);
+        _repay(ohmToRepay);
         pairToken.transfer(msg.sender, pairTokenReceived);
 
         return pairTokenReceived;
