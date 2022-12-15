@@ -261,7 +261,7 @@ contract OlympusDeploy is Script {
         treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
         distributor = Distributor(vm.envAddress("DISTRIBUTOR"));
         emergency = Emergency(vm.envAddress("EMERGENCY"));
-        // bondManager = BondManager(vm.envAddress("BONDMANAGER"));
+        bondManager = BondManager(vm.envAddress("BONDMANAGER"));
 
         /// Check that Modules are installed
         /// PRICE

@@ -133,6 +133,7 @@ contract OlympusDeploy is Script {
         treasuryCustodian = TreasuryCustodian(env.readAddress(string.concat(chain_, ".olympus.policies.TreasuryCustodian")));
         distributor = Distributor(env.readAddress(string.concat(chain_, ".olympus.policies.Distributor")));
         emergency = Emergency(env.readAddress(string.concat(chain_, ".olympus.policies.Emergency")));
+        bondManager = BondManager(env.readAddress(string.concat(chain_, ".olympus.policies.BondManager")));
 
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy.json");
@@ -531,6 +532,7 @@ contract OlympusDeploy is Script {
         operator = Operator(vm.envAddress("OPERATOR"));
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
         kernel = Kernel(vm.envAddress("KERNEL"));
+        bondManager = BondManager(vm.envAddress("BONDMANAGER"));
 
         /// Operator Roles
         require(ROLES.hasRole(address(heart), "operator_operate"));
@@ -560,6 +562,9 @@ contract OlympusDeploy is Script {
         /// Emergency Roles
         require(ROLES.hasRole(emergency_, "emergency_shutdown"));
         require(ROLES.hasRole(guardian_, "emergency_restart"));
+
+        /// BondManager Roles
+        require(ROLES.hasRole(policy_, "bondmanager_admin"));
     }
 
     function _saveDeployment(string memory chain_) internal {
