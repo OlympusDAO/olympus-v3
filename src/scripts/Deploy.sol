@@ -13,7 +13,6 @@ import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 import {Operator} from "policies/Operator.sol";
@@ -23,6 +22,7 @@ import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Distributor} from "policies/Distributor.sol";
+import {Emergency} from "policies/Emergency.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
@@ -40,7 +40,6 @@ contract OlympusDeploy is Script {
     OlympusRange public RANGE;
     OlympusTreasury public TRSRY;
     OlympusMinter public MINTR;
-    OlympusInstructions public INSTR;
     OlympusRoles public ROLES;
 
     /// Policies
@@ -51,6 +50,7 @@ contract OlympusDeploy is Script {
     RolesAdmin public rolesAdmin;
     TreasuryCustodian public treasuryCustodian;
     Distributor public distributor;
+    Emergency public emergency;
 
     /// Construction variables
 
@@ -70,7 +70,7 @@ contract OlympusDeploy is Script {
     /// External contracts
     address public staking;
 
-    function deploy(address guardian_, address policy_) external {
+    function deploy(string memory chain_, address guardian_, address policy_, address emergency_) external {
         /// Token addresses
         ohm = ERC20(vm.envAddress("OHM_ADDRESS"));
         reserve = ERC20(vm.envAddress("DAI_ADDRESS"));
@@ -94,9 +94,6 @@ contract OlympusDeploy is Script {
         console2.log("Kernel deployed at:", address(kernel));
 
         /// Deploy modules
-        // INSTR = new OlympusInstructions(kernel);
-        // console2.log("Instructions module deployed at:", address(INSTR));
-
         TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury module deployed at:", address(TRSRY));
 
@@ -110,11 +107,12 @@ contract OlympusDeploy is Script {
             reserveEthPriceFeed,
             uint48(24 hours),
             uint48(8 hours),
-            uint48(30 days)
+            uint48(30 days),
+            10 * 1e18 // TODO placeholder for liquid backing
         );
         console2.log("Price module deployed at:", address(PRICE));
 
-        RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1500), uint256(2800));
+        RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1675), uint256(2950));
         console2.log("Range module deployed at:", address(RANGE));
 
         ROLES = new OlympusRoles(kernel);
@@ -130,15 +128,15 @@ contract OlympusDeploy is Script {
             callback,
             [ohm, reserve],
             [
-                uint32(3000), // cushionFactor
+                uint32(3075), // cushionFactor
                 uint32(3 days), // cushionDuration
                 uint32(100_000), // cushionDebtBuffer
                 uint32(4 hours), // cushionDepositInterval
-                uint32(1000), // reserveFactor
+                uint32(950), // reserveFactor
                 uint32(6 days), // regenWait
                 uint32(18), // regenThreshold
                 uint32(21) // regenObserve
-            ] // TODO verify initial parameters
+            ]
         );
         console2.log("Operator deployed at:", address(operator));
 
@@ -157,6 +155,9 @@ contract OlympusDeploy is Script {
         distributor = new Distributor(kernel, address(ohm), staking, vm.envUint("REWARD_RATE"));
         console2.log("Distributor deployed at:", address(distributor));
 
+        emergency = new Emergency(kernel);
+        console2.log("Emergency deployed at:", address(emergency));
+
         /// Execute actions on Kernel
         /// Install modules
         // kernel.executeAction(Actions.InstallModule, address(INSTR));
@@ -174,6 +175,7 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
         kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        kernel.executeAction(Actions.ActivatePolicy, address(emergency));
 
         /// Configure access control for policies
 
@@ -202,10 +204,14 @@ contract OlympusDeploy is Script {
         /// Distributor roles
         rolesAdmin.grantRole("distributor_admin", policy_);
 
-        // /// Transfer executor powers to guardian
-        // kernel.executeAction(Actions.ChangeExecutor, guardian_);
+        /// Emergency roles
+        rolesAdmin.grantRole("emergency_shutdown", emergency_);
+        rolesAdmin.grantRole("emergency_restart", guardian_);
 
         vm.stopBroadcast();
+
+        // Save deployment information for the chain being deployed to
+        _saveDeployment(chain_);
     }
 
     /// @dev should be called by address with the guardian role
@@ -252,6 +258,7 @@ contract OlympusDeploy is Script {
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
         treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
         distributor = Distributor(vm.envAddress("DISTRIBUTOR"));
+        emergency = Emergency(vm.envAddress("EMERGENCY"));
 
         /// Check that Modules are installed
         /// PRICE
@@ -285,7 +292,6 @@ contract OlympusDeploy is Script {
         require(fromKeycode(rolesKeycode) == "ROLES");
 
         /// Policies
-        /// Operator
         require(kernel.isPolicyActive(operator));
         require(kernel.isPolicyActive(heart));
         require(kernel.isPolicyActive(callback));
@@ -293,10 +299,11 @@ contract OlympusDeploy is Script {
         require(kernel.isPolicyActive(rolesAdmin));
         require(kernel.isPolicyActive(treasuryCustodian));
         require(kernel.isPolicyActive(distributor));
+        require(kernel.isPolicyActive(emergency));
     }
 
     /// @dev Should be called by the deployer address after deployment
-    function verifyAndPushAuth(address guardian_, address policy_) external {
+    function verifyAndPushAuth(address guardian_, address policy_, address emergency_) external {
         ROLES = OlympusRoles(vm.envAddress("ROLES"));
         heart = OlympusHeart(vm.envAddress("HEART"));
         callback = BondCallback(vm.envAddress("CALLBACK"));
@@ -329,11 +336,81 @@ contract OlympusDeploy is Script {
         /// Distributor Roles
         require(ROLES.hasRole(policy_, "distributor_admin"));
 
+        /// Emergency Roles
+        require(ROLES.hasRole(emergency_, "emergency_shutdown"));
+        require(ROLES.hasRole(guardian_, "emergency_restart"));
+
+
         /// Push rolesAdmin and Executor
         vm.startBroadcast();
         rolesAdmin.pushNewAdmin(guardian_);
         kernel.executeAction(Actions.ChangeExecutor, guardian_);
         vm.stopBroadcast();
+    }
+
+    function _saveDeployment(string memory chain_) internal {
+        // Create file path
+        string memory file = string.concat("./deployments/", chain_, "-", vm.toString(block.timestamp), ".json");
+
+        // Write deployment info to file in JSON format
+        vm.writeLine(file, "{");
+        vm.writeLine(
+            file,
+            string.concat('"', type(Kernel).name, '": "', vm.toString(address(kernel)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(OlympusPrice).name, '": "', vm.toString(address(PRICE)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(OlympusTreasury).name, '": "', vm.toString(address(TRSRY)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(OlympusMinter).name, '": "', vm.toString(address(MINTR)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(OlympusRange).name, '": "', vm.toString(address(RANGE)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(OlympusRoles).name, '": "', vm.toString(address(ROLES)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(Operator).name, '": "', vm.toString(address(operator)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(OlympusHeart).name, '": "', vm.toString(address(heart)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(BondCallback).name, '": "', vm.toString(address(callback)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(OlympusPriceConfig).name, '": "', vm.toString(address(priceConfig)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(RolesAdmin).name, '": "', vm.toString(address(rolesAdmin)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(TreasuryCustodian).name, '": "', vm.toString(address(treasuryCustodian)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(Distributor).name, '": "', vm.toString(address(distributor)), '",')
+        );
+        vm.writeLine(
+            file,
+            string.concat('"', type(Emergency).name, '": "', vm.toString(address(emergency)), '",')
+        );
+        vm.writeLine(file, "}");
     }
 }
 

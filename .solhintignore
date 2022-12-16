@@ -1,2 +1,4 @@
 src/test/lib/larping.sol
 src/test/sim/RangeSim.sol
+src/scripts/Deploy.sol
+src/scripts/DeployV2.sol

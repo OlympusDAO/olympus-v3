@@ -96,6 +96,8 @@ contract DistributorTest is Test {
         {
             /// Mint Tokens
             vm.startPrank(address(distributor));
+            mintr.increaseMintApproval(address(distributor), type(uint256).max);
+
             /// Mint OHM to deployer and staking contract
             mintr.mintOhm(address(staking), 100000 gwei);
             mintr.mintOhm(address(this), 100000 gwei);

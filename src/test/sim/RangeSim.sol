@@ -23,7 +23,8 @@ import {ZuniswapV2Router} from "test/lib/zuniswapv2/ZuniswapV2Router.sol";
 import {MathLibrary} from "test/lib/zuniswapv2/libraries/Math.sol";
 
 import "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
+import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
@@ -354,7 +355,8 @@ abstract contract RangeSim is Test {
                 reserveEthPriceFeed,
                 uint48(24 hours),
                 uint48(vm.envUint("EPOCH_DURATION")),
-                uint48(vm.envUint("MA_DURATION"))
+                uint48(vm.envUint("MA_DURATION")),
+                10 * 1e18 // TODO placeholder for liquid backing
             );
             range = new OlympusRange(
                 kernel,

@@ -17,7 +17,9 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
     //                                      MODULE SETUP                                          //
     //============================================================================================//
 
-    constructor(Kernel kernel_) Module(kernel_) {}
+    constructor(Kernel kernel_) Module(kernel_) {
+        active = true;
+    }
 
     /// @inheritdoc Module
     function KEYCODE() public pure override returns (Keycode) {
@@ -35,25 +37,33 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
     //============================================================================================//
 
     /// @inheritdoc TRSRYv1
-    function increaseWithdrawerApproval(
+    function increaseWithdrawApproval(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
     ) external override permissioned {
-        uint256 newAmount = withdrawApproval[withdrawer_][token_] + amount_;
+        uint256 approval = withdrawApproval[withdrawer_][token_];
+
+        uint256 newAmount = type(uint256).max - approval <= amount_
+            ? type(uint256).max
+            : approval + amount_;
         withdrawApproval[withdrawer_][token_] = newAmount;
-        emit IncreaseWithdrawerApproval(withdrawer_, token_, newAmount);
+
+        emit IncreaseWithdrawApproval(withdrawer_, token_, newAmount);
     }
 
     /// @inheritdoc TRSRYv1
-    function decreaseWithdrawerApproval(
+    function decreaseWithdrawApproval(
         address withdrawer_,
         ERC20 token_,
         uint256 amount_
     ) external override permissioned {
-        uint256 newAmount = withdrawApproval[withdrawer_][token_] - amount_;
+        uint256 approval = withdrawApproval[withdrawer_][token_];
+
+        uint256 newAmount = approval <= amount_ ? 0 : approval - amount_;
         withdrawApproval[withdrawer_][token_] = newAmount;
-        emit DecreaseWithdrawerApproval(withdrawer_, token_, newAmount);
+
+        emit DecreaseWithdrawApproval(withdrawer_, token_, newAmount);
     }
 
     /// @inheritdoc TRSRYv1
@@ -61,18 +71,8 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         address to_,
         ERC20 token_,
         uint256 amount_
-    ) public override {
-        if (amount_ == 0) revert TRSRY_ZeroAmount();
-
-        uint256 approval = withdrawApproval[msg.sender][token_];
-        if (approval < amount_) revert TRSRY_NotApproved();
-
-        // If not infinite approval, decrement approval by amount
-        if (approval != type(uint256).max) {
-            unchecked {
-                withdrawApproval[msg.sender][token_] = approval - amount_;
-            }
-        }
+    ) public override permissioned onlyWhileActive {
+        withdrawApproval[msg.sender][token_] -= amount_;
 
         token_.safeTransfer(to_, amount_);
 
@@ -104,16 +104,13 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1
-    function incurDebt(ERC20 token_, uint256 amount_) external override permissioned {
-        uint256 approval = debtApproval[msg.sender][token_];
-        if (approval < amount_) revert TRSRY_NotApproved();
-
-        // If not infinite approval, decrement approval by amount
-        if (approval != type(uint256).max) {
-            unchecked {
-                debtApproval[msg.sender][token_] = approval - amount_;
-            }
-        }
+    function incurDebt(ERC20 token_, uint256 amount_)
+        external
+        override
+        permissioned
+        onlyWhileActive
+    {
+        debtApproval[msg.sender][token_] -= amount_;
 
         // Add debt to caller
         reserveDebt[token_][msg.sender] += amount_;
@@ -129,7 +126,7 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         address debtor_,
         ERC20 token_,
         uint256 amount_
-    ) external override nonReentrant {
+    ) external override permissioned nonReentrant {
         if (reserveDebt[token_][debtor_] == 0) revert TRSRY_NoDebtOutstanding();
 
         // Deposit from caller first (to handle nonstandard token transfers)
@@ -162,6 +159,16 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
         else totalDebt[token_] -= oldDebt - amount_;
 
         emit DebtSet(token_, debtor_, amount_);
+    }
+
+    /// @inheritdoc TRSRYv1
+    function deactivate() external override permissioned {
+        active = false;
+    }
+
+    /// @inheritdoc TRSRYv1
+    function activate() external override permissioned {
+        active = true;
     }
 
     //============================================================================================//

@@ -32,6 +32,8 @@ contract BondAggregator is IBondAggregator, Auth {
 
     /* ========== ERRORS ========== */
     error Aggregator_OnlyAuctioneer();
+    error Aggregator_AlreadyRegistered(address auctioneer_);
+    error Aggregator_InvalidParams();
 
     /* ========== STATE VARIABLES ========== */
 
@@ -58,7 +60,13 @@ contract BondAggregator is IBondAggregator, Auth {
 
     /// @inheritdoc IBondAggregator
     function registerAuctioneer(IBondAuctioneer auctioneer_) external requiresAuth {
-        /// Restricted to authorized addresses, initially restricted to guardian
+        // Restricted to authorized addresses
+
+        // Check that the auctioneer is not already registered
+        if (_whitelist[address(auctioneer_)])
+            revert Aggregator_AlreadyRegistered(address(auctioneer_));
+
+        // Add the auctioneer to the whitelist
         auctioneers.push(auctioneer_);
         _whitelist[address(auctioneer_)] = true;
     }
@@ -70,6 +78,8 @@ contract BondAggregator is IBondAggregator, Auth {
         returns (uint256 marketId)
     {
         if (!_whitelist[msg.sender]) revert Aggregator_OnlyAuctioneer();
+        if (address(payoutToken_) == address(0) || address(quoteToken_) == address(0))
+            revert Aggregator_InvalidParams();
         marketId = marketCounter;
         marketsToAuctioneers[marketId] = IBondAuctioneer(msg.sender);
         marketsForPayout[address(payoutToken_)].push(marketId);
@@ -217,7 +227,7 @@ contract BondAggregator is IBondAggregator, Auth {
     ) external view returns (uint256) {
         uint256[] memory ids = marketsFor(payout_, quote_);
         uint256 len = ids.length;
-        uint256[] memory payouts = new uint256[](len);
+        // uint256[] memory payouts = new uint256[](len);
 
         uint256 highestOut;
         uint256 id = type(uint256).max; // set to max so an empty set doesn't return 0, the first index
@@ -231,13 +241,17 @@ contract BondAggregator is IBondAggregator, Auth {
             uint256 expiry = (vesting <= MAX_FIXED_TERM) ? block.timestamp + vesting : vesting;
 
             if (expiry <= maxExpiry_) {
-                payouts[i] = minAmountOut_ <= maxPayout
-                    ? payoutFor(amountIn_, ids[i], address(0))
-                    : 0;
-
-                if (payouts[i] > highestOut) {
-                    highestOut = payouts[i];
-                    id = ids[i];
+                if (minAmountOut_ <= maxPayout) {
+                    try auctioneer.payoutFor(amountIn_, ids[i], address(0)) returns (
+                        uint256 payout
+                    ) {
+                        if (payout > highestOut && payout >= minAmountOut_) {
+                            highestOut = payout;
+                            id = ids[i];
+                        }
+                    } catch {
+                        // fail silently and try the next market
+                    }
                 }
             }
         }
@@ -246,10 +260,14 @@ contract BondAggregator is IBondAggregator, Auth {
     }
 
     /// @inheritdoc IBondAggregator
-    function liveMarketsBy(address owner_) external view returns (uint256[] memory) {
+    function liveMarketsBy(
+        address owner_,
+        uint256 firstIndex_,
+        uint256 lastIndex_
+    ) external view returns (uint256[] memory) {
         uint256 count;
         IBondAuctioneer auctioneer;
-        for (uint256 i; i < marketCounter; ++i) {
+        for (uint256 i = firstIndex_; i < lastIndex_; ++i) {
             auctioneer = marketsToAuctioneers[i];
             if (auctioneer.isLive(i) && auctioneer.ownerOf(i) == owner_) {
                 ++count;
@@ -258,10 +276,10 @@ contract BondAggregator is IBondAggregator, Auth {
 
         uint256[] memory ids = new uint256[](count);
         count = 0;
-        for (uint256 i; i < marketCounter; ++i) {
-            auctioneer = marketsToAuctioneers[i];
-            if (auctioneer.isLive(i) && auctioneer.ownerOf(i) == owner_) {
-                ids[count] = i;
+        for (uint256 j = firstIndex_; j < lastIndex_; ++j) {
+            auctioneer = marketsToAuctioneers[j];
+            if (auctioneer.isLive(j) && auctioneer.ownerOf(j) == owner_) {
+                ids[count] = j;
                 ++count;
             }
         }

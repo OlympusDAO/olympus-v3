@@ -29,6 +29,12 @@ interface IBondCallback {
     /// @param id_      ID of the market
     function whitelist(address teller_, uint256 id_) external;
 
+    /// @notice Remove a market ID on a teller from the whitelist
+    /// @dev    Shutdown function in case there's an issue with the teller
+    /// @param  teller_ Address of the Teller contract which serves the market
+    /// @param  id_     ID of the market to remove from whitelist
+    function blacklist(address teller_, uint256 id_) external;
+
     /// @notice         Withdraw tokens from the callback and update balances
     /// @notice         Only callback owner
     /// @param to_      Address of the recipient

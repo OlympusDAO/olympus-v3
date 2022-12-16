@@ -92,7 +92,7 @@ contract OperatorTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             /// Deploy modules (some mocks)
-            price = new MockPrice(kernel, uint48(8 hours));
+            price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
             range = new OlympusRange(
                 kernel,
                 ERC20(ohm),
@@ -233,7 +233,7 @@ contract OperatorTest is Test {
     /// [X] Splippage check when swapping
     /// [X] Wall breaks when capacity drops below the configured threshold
     /// [X] Not able to swap at the walls when they are down
-    /// [ ] Not able to swap at the walls when price is stale
+    /// [X] Not able to swap at the walls when price is stale
 
     function testCorrectness_swapHighWall() public {
         /// Initialize operator
@@ -1240,7 +1240,7 @@ contract OperatorTest is Test {
         assertEq(range.market(false), 0);
 
         /// Regenerate the wall manually, expect market to close
-        vm.prank(guardian);
+        vm.prank(policy);
         operator.regenerate(false);
 
         /// Check that the market is closed
@@ -1509,7 +1509,7 @@ contract OperatorTest is Test {
         assertEq(range.market(true), 0);
 
         /// Regenerate the wall manually, expect market to close
-        vm.prank(guardian);
+        vm.prank(policy);
         operator.regenerate(true);
 
         /// Check that the market is closed
@@ -1605,6 +1605,15 @@ contract OperatorTest is Test {
         vm.expectRevert(err);
         vm.prank(alice);
         operator.deactivateCushion(true);
+
+        /// Try to regenerate as a random user, expect revert
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.regenerate(true);
+
+        vm.expectRevert(err);
+        vm.prank(alice);
+        operator.regenerate(false);
     }
 
     function testCorrectness_nonGuardianCannotCall() public {
@@ -1621,15 +1630,6 @@ contract OperatorTest is Test {
         vm.expectRevert(err);
         vm.prank(alice);
         operator.initialize();
-
-        /// Try to regenerate as a random user, expect revert
-        vm.expectRevert(err);
-        vm.prank(alice);
-        operator.regenerate(true);
-
-        vm.expectRevert(err);
-        vm.prank(alice);
-        operator.regenerate(false);
     }
 
     // =========  ADMIN TESTS ========= //
@@ -1979,7 +1979,7 @@ contract OperatorTest is Test {
         assertTrue(operator.active());
         assertTrue(range.active(true));
         assertTrue(range.active(false));
-        assertEq(treasury.withdrawApproval(address(operator), reserve), type(uint256).max);
+        assertEq(treasury.withdrawApproval(address(operator), reserve), range.capacity(false));
         assertGt(range.price(false, false), 0);
         assertGt(range.price(true, false), 0);
         assertGt(range.price(false, true), 0);
@@ -2051,7 +2051,7 @@ contract OperatorTest is Test {
         /// Try to call regenerate without being guardian and expect revert
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
-            bytes32("operator_admin")
+            bytes32("operator_policy")
         );
 
         vm.expectRevert(err);
@@ -2071,11 +2071,11 @@ contract OperatorTest is Test {
         assertTrue(!range.active(true));
         assertTrue(!range.active(false));
 
-        /// Call regenerate as guardian and confirm each side is updated
-        vm.prank(guardian);
+        /// Call regenerate as policy and confirm each side is updated
+        vm.prank(policy);
         operator.regenerate(true);
 
-        vm.prank(guardian);
+        vm.prank(policy);
         operator.regenerate(false);
 
         /// Confirm that the sides have regenerated and the Regen structs are reset
@@ -2288,5 +2288,24 @@ contract OperatorTest is Test {
         assertLt(range.price(true, false), startRange.wall.low.price);
         assertLt(range.price(false, true), startRange.cushion.high.price);
         assertLt(range.price(true, true), startRange.wall.high.price);
+
+        /// Check that the bands do not get reduced further past the minimum target price
+        price.setMovingAverage(10 * 1e18); // At minimum price to get initial values
+        vm.prank(heart);
+        operator.operate();
+
+        /// Get the current bands
+        OlympusRange.Range memory currentRange = range.range();
+
+        /// Move moving average below minimum target
+        price.setMovingAverage(5 * 1e18);
+        vm.prank(heart);
+        operator.operate();
+
+        /// Check that the bands have not changed
+        assertEq(currentRange.cushion.low.price, range.price(false, false));
+        assertEq(currentRange.wall.low.price, range.price(true, false));
+        assertEq(currentRange.cushion.high.price, range.price(false, true));
+        assertEq(currentRange.wall.high.price, range.price(true, true));
     }
 }

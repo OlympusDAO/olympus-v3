@@ -33,29 +33,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
-    // =========  EVENTS ========= //
-
-    event Swap(
-        ERC20 indexed tokenIn_,
-        ERC20 indexed tokenOut_,
-        uint256 amountIn_,
-        uint256 amountOut_
-    );
-    event CushionFactorChanged(uint32 cushionFactor_);
-    event CushionParamsChanged(uint32 duration_, uint32 debtBuffer_, uint32 depositInterval_);
-    event ReserveFactorChanged(uint32 reserveFactor_);
-    event RegenParamsChanged(uint32 wait_, uint32 threshold_, uint32 observe_);
-
-    // =========  ERRORS ========= //
-
-    error Operator_InvalidParams();
-    error Operator_InsufficientCapacity();
-    error Operator_AmountLessThanMinimum(uint256 amountOut, uint256 minAmountOut);
-    error Operator_WallDown();
-    error Operator_AlreadyInitialized();
-    error Operator_NotInitialized();
-    error Operator_Inactive();
-
     // =========  STATE ========= //
 
     // Operator variables, defined in the interface on the external getter functions
@@ -186,16 +163,20 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        requests = new Permissions[](9);
+        requests = new Permissions[](13);
         requests[0] = Permissions(RANGE_KEYCODE, RANGE.updateCapacity.selector);
         requests[1] = Permissions(RANGE_KEYCODE, RANGE.updateMarket.selector);
         requests[2] = Permissions(RANGE_KEYCODE, RANGE.updatePrices.selector);
         requests[3] = Permissions(RANGE_KEYCODE, RANGE.regenerate.selector);
         requests[4] = Permissions(RANGE_KEYCODE, RANGE.setSpreads.selector);
         requests[5] = Permissions(RANGE_KEYCODE, RANGE.setThresholdFactor.selector);
-        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawerApproval.selector);
-        requests[7] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        requests[8] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        requests[7] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        requests[8] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
+        requests[9] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[10] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[11] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        requests[12] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -536,17 +517,17 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice Update the prices on the RANGE module
     function _updateRangePrices() internal {
-        // Get latest moving average from the price module
-        uint256 movingAverage = PRICE.getMovingAverage();
+        // Get latest target price from the price module
+        uint256 target = PRICE.getTargetPrice();
 
         // Update the prices on the range module
-        RANGE.updatePrices(movingAverage);
+        RANGE.updatePrices(target);
     }
 
     /// @notice Add an observation to the regeneration status variables for each side
     function _addObservation() internal {
-        // Get latest moving average from the price module
-        uint256 movingAverage = PRICE.getMovingAverage();
+        // Get latest target price from the price module
+        uint256 target = PRICE.getTargetPrice();
 
         // Get price from latest update
         uint256 currentPrice = PRICE.getLastPrice();
@@ -557,7 +538,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Observation is positive if the current price is greater than the MA
         uint32 observe = _config.regenObserve;
         Regen memory regen = _status.low;
-        if (currentPrice >= movingAverage) {
+        if (currentPrice >= target) {
             if (!regen.observations[regen.nextObservation]) {
                 _status.low.observations[regen.nextObservation] = true;
                 _status.low.count++;
@@ -573,7 +554,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Update high side regen status with a new observation
         // Observation is positive if the current price is less than the MA
         regen = _status.high;
-        if (currentPrice <= movingAverage) {
+        if (currentPrice <= target) {
             if (!regen.observations[regen.nextObservation]) {
                 _status.high.observations[regen.nextObservation] = true;
                 _status.high.count++;
@@ -603,6 +584,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Calculate capacity
             uint256 capacity = fullCapacity(true);
 
+            // Get approval from MINTR to mint OHM up to the capacity
+            // If current approval is higher than the capacity, reduce it
+            uint256 currentApproval = MINTR.mintApproval(address(this));
+            if (currentApproval < capacity) {
+                MINTR.increaseMintApproval(address(this), capacity - currentApproval);
+            } else if (currentApproval > capacity) {
+                MINTR.decreaseMintApproval(address(this), currentApproval - capacity);
+            }
+
             // Regenerate the side with the capacity
             RANGE.regenerate(true, capacity);
         } else {
@@ -614,6 +604,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
             // Calculate capacity
             uint256 capacity = fullCapacity(false);
+
+            // Get approval from the TRSRY to withdraw up to the capacity in reserves
+            // If current approval is higher than the capacity, reduce it
+            uint256 currentApproval = TRSRY.withdrawApproval(address(this), reserve);
+            if (currentApproval < capacity) {
+                TRSRY.increaseWithdrawApproval(address(this), reserve, capacity - currentApproval);
+            } else if (currentApproval > capacity) {
+                TRSRY.decreaseWithdrawApproval(address(this), reserve, currentApproval - capacity);
+            }
 
             // Regenerate the side with the capacity
             RANGE.regenerate(false, capacity);
@@ -753,9 +752,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Can only call once
         if (initialized) revert Operator_AlreadyInitialized();
 
-        // Request approval for reserves from TRSRY
-        TRSRY.increaseWithdrawerApproval(address(this), reserve, type(uint256).max);
-
         // Update range prices (wall and cushion)
         _updateRangePrices();
 
@@ -769,7 +765,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
-    function regenerate(bool high_) external onlyRole("operator_admin") {
+    function regenerate(bool high_) external onlyRole("operator_policy") {
         // Regenerate side
         _regenerate(high_);
     }

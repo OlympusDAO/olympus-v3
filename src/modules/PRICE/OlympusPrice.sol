@@ -24,7 +24,8 @@ contract OlympusPrice is PRICEv1 {
         AggregatorV2V3Interface reserveEthPriceFeed_,
         uint48 reserveEthUpdateThreshold_,
         uint48 observationFrequency_,
-        uint48 movingAverageDuration_
+        uint48 movingAverageDuration_,
+        uint256 minimumTargetPrice_
     ) Module(kernel_) {
         /// @dev Moving Average Duration should be divisible by Observation Frequency to get a whole number of observations
         if (movingAverageDuration_ == 0 || movingAverageDuration_ % observationFrequency_ != 0)
@@ -53,9 +54,13 @@ contract OlympusPrice is PRICEv1 {
         observations = new uint256[](numObservations);
         // nextObsIndex is initialized to 0
 
+        // Set minimum target price
+        minimumTargetPrice = minimumTargetPrice_;
+
         emit MovingAverageDurationChanged(movingAverageDuration_);
         emit ObservationFrequencyChanged(observationFrequency_);
         emit UpdateThresholdsChanged(ohmEthUpdateThreshold_, reserveEthUpdateThreshold_);
+        emit MinimumTargetPriceChanged(minimumTargetPrice_);
     }
 
     /// @inheritdoc Module
@@ -66,7 +71,7 @@ contract OlympusPrice is PRICEv1 {
     /// @inheritdoc Module
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
         major = 1;
-        minor = 0;
+        minor = 1;
     }
 
     //============================================================================================//
@@ -199,6 +204,12 @@ contract OlympusPrice is PRICEv1 {
         emit UpdateThresholdsChanged(ohmEthUpdateThreshold_, reserveEthUpdateThreshold_);
     }
 
+    function changeMinimumTargetPrice(uint256 minimumTargetPrice_) external override permissioned {
+        minimumTargetPrice = minimumTargetPrice_;
+
+        emit MinimumTargetPriceChanged(minimumTargetPrice_);
+    }
+
     //============================================================================================//
     //                                      VIEW FUNCTIONS                                        //
     //============================================================================================//
@@ -258,5 +269,11 @@ contract OlympusPrice is PRICEv1 {
     function getMovingAverage() public view override returns (uint256) {
         if (!initialized) revert Price_NotInitialized();
         return cumulativeObs / numObservations;
+    }
+
+    /// @inheritdoc PRICEv1
+    function getTargetPrice() external view override returns (uint256) {
+        uint256 movingAverage = getMovingAverage();
+        return movingAverage > minimumTargetPrice ? movingAverage : minimumTargetPrice;
     }
 }
