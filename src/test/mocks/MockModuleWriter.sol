@@ -10,11 +10,7 @@ contract MockModuleWriter is Policy {
     Module internal _module;
     Permissions[] internal _requests;
 
-    constructor(
-        Kernel kernel_,
-        Module module_,
-        Permissions[] memory requests_
-    ) Policy(kernel_) {
+    constructor(Kernel kernel_, Module module_, Permissions[] memory requests_) Policy(kernel_) {
         _module = module_;
         uint256 len = requests_.length;
         for (uint256 i; i < len; i++) {
@@ -25,7 +21,12 @@ contract MockModuleWriter is Policy {
     // =========  FRAMEWORK CONFIFURATION ========= //
     function configureDependencies() external override returns (Keycode[] memory dependencies) {}
 
-    function requestPermissions() external view override returns (Permissions[] memory requests) {
+    function requestPermissions()
+        external
+        view
+        override
+        returns (Permissions[] memory requests)
+    {
         uint256 len = _requests.length;
         requests = new Permissions[](len);
         for (uint256 i; i < len; i++) {
@@ -35,7 +36,7 @@ contract MockModuleWriter is Policy {
 
     // =========  DELEGATE TO MODULE ========= //
     // solhint-disable-next-line no-complex-fallback, payable-fallback
-    fallback() external {
+    fallback(bytes calldata input) external returns (bytes memory) {
         (bool success, bytes memory output) = address(_module).call(input);
         if (!success) {
             if (output.length == 0) revert();
