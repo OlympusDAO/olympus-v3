@@ -15,12 +15,18 @@ contract MockPrice is Module {
     bool public result;
     uint48 public observationFrequency;
     uint48 public lastObservationTime;
+    uint256 public minimumTargetPrice;
 
     error Price_CustomError();
 
-    constructor(Kernel kernel_, uint48 observationFrequency_) Module(kernel_) {
+    constructor(
+        Kernel kernel_,
+        uint48 observationFrequency_,
+        uint256 minimumTargetPrice_
+    ) Module(kernel_) {
         result = true;
         observationFrequency = observationFrequency_;
+        minimumTargetPrice = minimumTargetPrice_;
     }
 
     // =========  FRAMEWORK CONFIGURATION ========= //
@@ -55,6 +61,10 @@ contract MockPrice is Module {
     // =========  VIEW FUNCTIONS ========= //
     function getMovingAverage() external view returns (uint256) {
         return movingAverage;
+    }
+
+    function getTargetPrice() external view returns (uint256) {
+        return movingAverage > minimumTargetPrice ? movingAverage : minimumTargetPrice;
     }
 
     function getLastPrice() external view returns (uint256) {

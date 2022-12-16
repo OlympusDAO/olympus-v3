@@ -41,6 +41,11 @@ interface IHeart {
     /// @dev    Emergency stop function for the heart
     function deactivate() external;
 
+    /// @notice Updates the Operator contract address that the Heart calls on a beat
+    /// @notice Access restricted
+    /// @param  operator_ The address of the new Operator contract
+    function setOperator(address operator_) external;
+
     /// @notice Sets the reward token and amount for the beat function
     /// @notice Access restricted
     /// @param  token_ - New reward token address
