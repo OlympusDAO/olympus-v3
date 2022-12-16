@@ -7,16 +7,18 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1, RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import "src/Kernel.sol";
 
-/// @title Olympus Base Borrower Contract
-contract BaseBorrower is Policy, RolesConsumer {
+/// @title Olympus Base External Lending Protocol AMO Contract
+contract BaseExternalAMO is Policy, RolesConsumer {
     // ========= STATE ========= //
 
     // Modules
     LENDRv1 public LENDR;
     MINTRv1 public MINTR;
 
-    // User State
-    mapping(address => uint256) public debtOutstanding; // Debt outstanding
+    // Debt State
+
+    /// @notice OHM deployed into an external protocol. This includes idle and borrowed OHM
+    uint256 public deployedOHM;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -57,11 +59,21 @@ contract BaseBorrower is Policy, RolesConsumer {
 
     /// @notice         Borrow and deposit OHM into the system this policy is responsible for
     /// @param amount_  The amount of OHM to borrow and deposit
-    function deposit(uint256 amount_) external virtual returns (uint256) {}
+    function deposit(uint256 amount_)
+        external
+        virtual
+        onlyRole("externalamo_admin")
+        returns (uint256)
+    {}
 
     /// @notice         Withdraw and repay OHM from the system this policy is responsible for
     /// @param amount_  The amount of OHM to withdraw and repay
-    function withdraw(uint256 amount_) external virtual returns (uint256) {}
+    function withdraw(uint256 amount_)
+        external
+        virtual
+        onlyRole("externalamo_admin")
+        returns (uint256)
+    {}
 
     /// @notice         Update the policy's state. Harvests yield, and manages amount of OHM deployed
     function update() external virtual {}
@@ -74,7 +86,9 @@ contract BaseBorrower is Policy, RolesConsumer {
     //============================================================================================//
 
     /// @notice         Returns the amount of OHM that is currently deployed (idle + borrowed) by this policy
-    function getDeployedSupply() external view virtual returns (uint256) {}
+    function getDeployedSupply() external view returns (uint256) {
+        return deployedOHM;
+    }
 
     /// @notice         Returns the amount of OHM that should be deployed to achieve a target interest rate
     function getTargetDeployedSupply() external view virtual returns (uint256) {}
@@ -87,14 +101,14 @@ contract BaseBorrower is Policy, RolesConsumer {
     //============================================================================================//
 
     function _borrow(uint256 amount_) internal {
-        debtOutstanding[msg.sender] += amount_;
+        debtOutstanding += amount_;
         LENDR.borrow(amount_);
         MINTR.increaseMintApproval(address(this), amount_);
         MINTR.mintOhm(address(this), amount_);
     }
 
     function _repay(uint256 amount_) internal {
-        debtOutstanding[msg.sender] -= amount_;
+        debtOutstanding -= amount_;
         MINTR.burnOhm(address(this), amount_);
         LENDR.repay(amount_);
     }

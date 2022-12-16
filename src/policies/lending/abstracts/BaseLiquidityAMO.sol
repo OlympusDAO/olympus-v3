@@ -2,15 +2,13 @@
 pragma solidity 0.8.15;
 
 // Import system dependencies
-import {BaseBorrower} from "policies/abstracts/BaseBorrower.sol";
+import {LENDRv1} from "src/modules/LENDR/LENDR.v1.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
+import {ROLESv1, RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import {Kernel} from "src/Kernel.sol";
 
 // Import internal dependencies
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-
-// Import external dependencies
-import {IVault, JoinPoolRequest, ExitPoolRequest} from "src/interfaces/IBalancerVault.sol";
-import {IBasePool} from "src/interfaces/IBasePool.sol";
 
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -23,12 +21,6 @@ contract BaseLiquidityAMO is BaseBorrower, ReentrancyGuard {
     ERC20 public ohm;
     ERC20 public pairToken;
 
-    // Balancer Vault
-    IVault public vault;
-
-    // Liquidity Pool
-    address public balancerPool; // Pair token/OHM Balancer pool
-
     // User State
     mapping(address => uint256) public pairTokenDeposits; // User pair token deposits
     mapping(address => uint256) public lpPositions; // User LP positions
@@ -40,17 +32,11 @@ contract BaseLiquidityAMO is BaseBorrower, ReentrancyGuard {
     constructor(
         Kernel kernel_,
         address ohm_,
-        address pairToken_,
-        address vault_,
-        address balancerPool_
+        address pairToken_
     ) BaseBorrower(kernel_) {
         // Set tokens
         ohm = ERC20(ohm_);
         pairToken = ERC20(pairToken_);
-
-        // Set Balancer addresses
-        vault = IVault(vault_);
-        balancerPool = balancerPool_;
     }
 
     //============================================================================================//
@@ -164,4 +150,8 @@ contract BaseLiquidityAMO is BaseBorrower, ReentrancyGuard {
     //============================================================================================//
 
     function _valueCollateral(uint256 amount_) internal view virtual returns (uint256) {}
+
+    function _deposit(uint256 amount_) internal virtual {
+        // Update state
+    }
 }
