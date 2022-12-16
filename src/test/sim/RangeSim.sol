@@ -355,7 +355,8 @@ abstract contract RangeSim is Test {
                 reserveEthPriceFeed,
                 uint48(24 hours),
                 uint48(vm.envUint("EPOCH_DURATION")),
-                uint48(vm.envUint("MA_DURATION"))
+                uint48(vm.envUint("MA_DURATION")),
+                10 * 1e18 // TODO placeholder for liquid backing
             );
             range = new OlympusRange(
                 kernel,
