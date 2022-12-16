@@ -360,8 +360,7 @@ abstract contract RangeSim is Test {
             );
             range = new OlympusRange(
                 kernel,
-                ERC20(ohm),
-                ERC20(reserve),
+                ERC20(ohm), ERC20(reserve),
                 vm.envUint("THRESHOLD_FACTOR"),
                 uint256(_params.cushionSpread),
                 uint256(_params.wallSpread)
@@ -559,7 +558,7 @@ abstract contract RangeSim is Test {
         uint256 highCushionPrice = range.price(false, true);
         uint256 lowWallPrice = range.price(true, false);
         uint256 lowCushionPrice = range.price(false, false);
-        uint256 backingPrice = (reserve.balanceOf(address(treasury)) * 1e9) / ohm.totalSupply();
+        uint256 backingPrice = reserve.balanceOf(address(treasury)) * 1e9 / ohm.totalSupply();
         uint256 threeXPremiumPrice = backingPrice * 3;
 
         // Determine rebase adjustment based on price
@@ -585,7 +584,7 @@ abstract contract RangeSim is Test {
         uint256 perc = getRebasePercent();
 
         // Adjust rebase percent if dynamic reward rate is used
-        if (dynamicRR) perc = (perc * getRebaseAdjustment()) / 1e6;
+        if (dynamicRR) perc = perc * getRebaseAdjustment() / 1e6;
 
         // If percent is zero, do nothing
         if (perc == 0) return;
@@ -695,7 +694,7 @@ abstract contract RangeSim is Test {
         }
 
         // Compute amount to swap in to reach target price (account for LP fee)
-        amountIn = ((newBal - currentBal) * 1000) / 997;
+        amountIn = (newBal - currentBal) * 1000 / 997;
     }
 
     function rebalanceLiquidity(uint32 key) internal {
@@ -718,14 +717,13 @@ abstract contract RangeSim is Test {
         if (liquidityRatio < targetRatio) {
             // Sell reserves into the liquidity pool
             uint256 amountIn = (reservesInTotal * targetRatio) / 1e4 - reservesInLiquidity;
-            uint256 maxIn = (reservesInTreasury * MAX_OUTFLOW_RATE) / 1e4;
+            uint256 maxIn = reservesInTreasury * MAX_OUTFLOW_RATE / 1e4;
             amountIn = amountIn > maxIn ? maxIn : amountIn;
             if (amountIn > price.getCurrentPrice() / 1e9) swap(address(treasury), true, amountIn);
         } else if (liquidityRatio > params[key].maxLiqRatio) {
             // Buy reserves from the liquidity pool
             uint256 amountOut = reservesInLiquidity - (reservesInTotal * targetRatio) / 1e4;
-            if (amountOut > price.getCurrentPrice() / 1e9)
-                swap(address(treasury), false, amountOut);
+            if (amountOut > price.getCurrentPrice() / 1e9) swap(address(treasury), false, amountOut);
         }
 
         reservesInTreasury = reserve.balanceOf(address(treasury));
@@ -752,8 +750,7 @@ abstract contract RangeSim is Test {
             uint256 wallPrice = range.price(true, true);
             uint256 cushionPrice = range.price(false, true);
             uint256 currentPrice = price.getCurrentPrice();
-            while (flow > currentPrice / 1e9) {
-                // If below this amount, swaps will yield 0 OHM, which errors on the liquidity pool
+            while (flow > currentPrice / 1e9) { // If below this amount, swaps will yield 0 OHM, which errors on the liquidity pool
                 console2.log("High", flow);
                 // Check if the RBS side is active, if not, swap all flow into the liquidity pool
                 if (range.active(true)) {
@@ -793,13 +790,10 @@ abstract contract RangeSim is Test {
                             uint256 bondScale = aggregator.marketScale(id);
                             while (
                                 currentPrice >=
-                                aggregator.marketPrice(id).mulDiv(oracleScale, bondScale * 1e9) &&
-                                aggregator.isLive(id)
+                                aggregator.marketPrice(id).mulDiv(oracleScale, bondScale * 1e9)
+                                && aggregator.isLive(id)
                             ) {
-                                uint256 maxBond = aggregator.maxAmountAccepted(
-                                    id,
-                                    address(treasury)
-                                );
+                                uint256 maxBond = aggregator.maxAmountAccepted(id, address(treasury));
                                 if (maxBond < 1e18) break;
                                 if (maxBond > flow) {
                                     uint256 minAmountOut = aggregator.payoutFor(
@@ -808,13 +802,7 @@ abstract contract RangeSim is Test {
                                         address(treasury)
                                     );
                                     vm.prank(market);
-                                    teller.purchase(
-                                        market,
-                                        address(treasury),
-                                        id,
-                                        flow,
-                                        minAmountOut
-                                    );
+                                    teller.purchase(market, address(treasury), id, flow, minAmountOut);
                                     console2.log("  Bonding", flow);
                                     flow = 0;
                                     break;
@@ -882,8 +870,7 @@ abstract contract RangeSim is Test {
             uint256 wallPrice = range.price(true, false);
             uint256 cushionPrice = range.price(false, false);
             uint256 currentPrice = price.getCurrentPrice();
-            while (flow > currentPrice / 1e9) {
-                // If below this amount, swaps will yield 0 OHM, which errors on the liquidity pool
+            while (flow > currentPrice / 1e9) { // If below this amount, swaps will yield 0 OHM, which errors on the liquidity pool
                 console2.log("Low", flow);
                 // Check if the RBS side is active, if not, swap all flow into the liquidity pool
                 if (range.active(false)) {
@@ -918,29 +905,15 @@ abstract contract RangeSim is Test {
                         if (id != type(uint256).max) {
                             uint256 bondScale = aggregator.marketScale(id);
                             console2.log("  Current Price", currentPrice);
-                            console2.log(
-                                "  Bond Price",
-                                10**(price.decimals() * 2) /
-                                    aggregator.marketPrice(id).mulDiv(oracleScale * 1e9, bondScale)
-                            );
+                            console2.log("  Bond Price", 10**(price.decimals() * 2) / aggregator.marketPrice(id).mulDiv(oracleScale * 1e9, bondScale));
                             while (
                                 currentPrice <=
                                 10**(price.decimals() * 2) /
-                                    aggregator.marketPrice(id).mulDiv(
-                                        oracleScale * 1e9,
-                                        bondScale
-                                    ) &&
-                                aggregator.isLive(id)
+                                    aggregator.marketPrice(id).mulDiv(oracleScale * 1e9, bondScale)
+                                && aggregator.isLive(id)
                             ) {
-                                uint256 maxBond = aggregator.maxAmountAccepted(
-                                    id,
-                                    address(treasury)
-                                ); // in OHM units
-                                uint256 maxPayout = aggregator.payoutFor(
-                                    maxBond,
-                                    id,
-                                    address(treasury)
-                                ); // in reserve units
+                                uint256 maxBond = aggregator.maxAmountAccepted(id, address(treasury)); // in OHM units
+                                uint256 maxPayout = aggregator.payoutFor(maxBond, id, address(treasury)); // in reserve units
                                 if (maxPayout < 1e18) break;
                                 uint256 bondPrice = aggregator.marketPrice(id);
                                 if (maxPayout > flow) {
@@ -986,10 +959,7 @@ abstract contract RangeSim is Test {
                         if (flow > currentPrice / 1e9) {
                             // Get amount that can swapped in the liquidity pool to push price to wall price
                             uint256 maxOhmIn = amountToTargetPrice(ohm, wallPrice);
-                            uint256 maxReserveOut = maxOhmIn.mulDiv(
-                                wallPrice * 1e18,
-                                oracleScale * 1e9
-                            ); // convert to reserve units
+                            uint256 maxReserveOut = maxOhmIn.mulDiv(wallPrice * 1e18, oracleScale * 1e9); // convert to reserve units
                             if (flow > maxReserveOut) {
                                 // Swap the max amount in the liquidity pool
                                 swap(market, false, maxReserveOut);
@@ -1006,10 +976,7 @@ abstract contract RangeSim is Test {
                         // If the market price is below the cushion price, swap into the liquidity pool up to the wall price
                         // Get amount that can swapped in the liquidity pool to push price to wall price
                         uint256 maxOhmIn = amountToTargetPrice(ohm, wallPrice);
-                        uint256 maxReserveOut = maxOhmIn.mulDiv(
-                            wallPrice * 1e18,
-                            oracleScale * 1e9
-                        ); // convert to reserve units
+                        uint256 maxReserveOut = maxOhmIn.mulDiv(wallPrice * 1e18, oracleScale * 1e9); // convert to reserve units
                         if (flow > maxReserveOut) {
                             // Swap the max amount in the liquidity pool
                             swap(market, false, maxReserveOut);
@@ -1071,7 +1038,7 @@ abstract contract RangeSim is Test {
         rangeSetup(key);
 
         // Initialize variables for tracking status
-
+        
         uint32 step = 1 hours;
         uint32 epochs = EPOCHS; // cache
         uint32 duration = EPOCH_DURATION; // cache
@@ -1098,7 +1065,7 @@ abstract contract RangeSim is Test {
                 console2.log("Rebalance liquidity");
                 rebalanceLiquidity(key);
                 lastRebalance = e;
-            }
+            } 
 
             netflow = netflows[key][e] / int256(uint256(steps));
             for (uint32 i; i < steps; ++i) {
