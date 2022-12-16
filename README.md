@@ -1,6 +1,6 @@
 # Olympus V3
 
-Olympus V3, aka Bophades, is the latest iteration of the Olympus protocol. It is a foundation for the future of the protocol, utilizing the (Default Framework)[https://github.com/fullyallocated/Default] to allow extensibility at the base layer via fully onchain governance mechanisms. 
+Olympus V3, aka Bophades, is the latest iteration of the Olympus protocol. It is a foundation for the future of the protocol, utilizing the [Default Framework](https://github.com/fullyallocated/Default) to allow extensibility at the base layer via fully onchain governance mechanisms. 
 
 ## Build
 
