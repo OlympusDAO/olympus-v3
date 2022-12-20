@@ -8,6 +8,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
+import {IBondTeller} from "interfaces/IBondTeller.sol";
 
 import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
@@ -25,6 +26,7 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Distributor} from "policies/Distributor.sol";
 import {Emergency} from "policies/Emergency.sol";
+import {BondManager} from "policies/BondManager.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
@@ -55,6 +57,7 @@ contract OlympusDeploy is Script {
     TreasuryCustodian public treasuryCustodian;
     Distributor public distributor;
     Emergency public emergency;
+    BondManager public bondManager;
 
     /// Construction variables
 
@@ -64,6 +67,8 @@ contract OlympusDeploy is Script {
 
     /// Bond system addresses
     IBondSDA public bondAuctioneer;
+    IBondSDA public bondFixedExpiryAuctioneer;
+    IBondTeller public bondFixedExpiryTeller;
     IBondAggregator public bondAggregator;
 
     /// Chainlink price feed addresses
@@ -72,6 +77,7 @@ contract OlympusDeploy is Script {
 
     /// External contracts
     address public staking;
+    address public gnosisEasyAuction;
 
     // Deploy system storage
     mapping(string => bytes4) public selectorMap;
@@ -94,6 +100,7 @@ contract OlympusDeploy is Script {
         selectorMap["TreasuryCustodian"] = this._deployTreasuryCustodian.selector;
         selectorMap["Distributor"] = this._deployDistributor.selector;
         selectorMap["Emergency"] = this._deployEmergency.selector;
+        selectorMap["BondManager"] = this._deployBondManager.selector;
 
         // Load environment addresses
         string memory env = vm.readFile("./src/scripts/env.json");
@@ -102,10 +109,13 @@ contract OlympusDeploy is Script {
         ohm = ERC20(env.readAddress(string.concat(chain_, ".olympus.legacy.OHM")));
         reserve = ERC20(env.readAddress(string.concat(chain_, ".external.tokens.DAI")));
         bondAuctioneer = IBondSDA(env.readAddress(string.concat(chain_, ".external.bond-protocol.BondFixedTermAuctioneer")));
+        bondFixedExpiryAuctioneer = IBondSDA(env.readAddress(string.concat(chain_, ".external.bond-protocol.BondFixedExpiryAuctioneer")));
+        bondFixedExpiryTeller = IBondTeller(env.readAddress(string.concat(chain_, ".external.bond-protocol.BondFixedExpiryTeller")));
         bondAggregator = IBondAggregator(env.readAddress(string.concat(chain_, ".external.bond-protocol.BondAggregator")));
         ohmEthPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(chain_, ".external.chainlink.ohmEthPriceFeed")));
         reserveEthPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(chain_, ".external.chainlink.daiEthPriceFeed")));
         staking = env.readAddress(string.concat(chain_, ".olympus.legacy.Staking"));
+        gnosisEasyAuction = env.readAddress(string.concat(chain_, ".external.gnosis.EasyAuction"));
 
         // Bophades contracts
         kernel = Kernel(env.readAddress(string.concat(chain_, ".olympus.Kernel")));
@@ -123,6 +133,7 @@ contract OlympusDeploy is Script {
         treasuryCustodian = TreasuryCustodian(env.readAddress(string.concat(chain_, ".olympus.policies.TreasuryCustodian")));
         distributor = Distributor(env.readAddress(string.concat(chain_, ".olympus.policies.Distributor")));
         emergency = Emergency(env.readAddress(string.concat(chain_, ".olympus.policies.Emergency")));
+        bondManager = BondManager(env.readAddress(string.concat(chain_, ".olympus.policies.BondManager")));
 
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy.json");
@@ -393,6 +404,16 @@ contract OlympusDeploy is Script {
         return address(emergency);
     }
 
+    function _deployBondManager(bytes memory args) public returns(address) {
+
+        // Deploy BondManager policy
+        vm.broadcast();
+        bondManager = new BondManager(kernel, address(bondFixedExpiryAuctioneer), address(bondFixedExpiryTeller), gnosisEasyAuction, address(ohm));
+        console2.log("BondManager deployed at:", address(bondManager));
+
+        return address(bondManager);
+    }
+
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
     /// @dev Should be called prior to verifyAndPushAuth()
     function verifyKernelInstallation() external {
@@ -511,6 +532,7 @@ contract OlympusDeploy is Script {
         operator = Operator(vm.envAddress("OPERATOR"));
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
         kernel = Kernel(vm.envAddress("KERNEL"));
+        bondManager = BondManager(vm.envAddress("BONDMANAGER"));
 
         /// Operator Roles
         require(ROLES.hasRole(address(heart), "operator_operate"));
@@ -540,6 +562,9 @@ contract OlympusDeploy is Script {
         /// Emergency Roles
         require(ROLES.hasRole(emergency_, "emergency_shutdown"));
         require(ROLES.hasRole(guardian_, "emergency_restart"));
+
+        /// BondManager Roles
+        require(ROLES.hasRole(policy_, "bondmanager_admin"));
     }
 
     function _saveDeployment(string memory chain_) internal {
