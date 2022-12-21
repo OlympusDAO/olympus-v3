@@ -15,7 +15,18 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @title Olympus Base Liquidity AMO
 contract BaseLiquidityAMO is BaseBorrower, ReentrancyGuard {
+    // ========= DATA STRUCTURES ========= //
+
+    struct UserDeposit {
+        uint256 lpAmount;
+        uint256 accumulatedRewards;
+    }
+
     // ========= STATE ========= //
+
+    // Modules
+    MINTRv1 public MINTR;
+    LENDRv1 public LENDR;
 
     // Tokens
     ERC20 public ohm;
@@ -23,7 +34,11 @@ contract BaseLiquidityAMO is BaseBorrower, ReentrancyGuard {
 
     // User State
     mapping(address => uint256) public pairTokenDeposits; // User pair token deposits
-    mapping(address => uint256) public lpPositions; // User LP positions
+    mapping(address => UserDeposit) public userPositions; // User LP positions
+
+    // Reward Token State
+    address[] public rewardTokens;
+    mapping(address => uint256) rewardsPerSecond;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -46,6 +61,8 @@ contract BaseLiquidityAMO is BaseBorrower, ReentrancyGuard {
     /// @dev    This needs to be non-reentrant since the contract only knows the amount of LP tokens it
     ///         receives after an external interaction with the Balancer pool
     function deposit(uint256 amount_) external override nonReentrant returns (uint256 lpAmountOut) {
+        UserDeposit memory currentDeposit = userPositions[msg.sender];
+
         // Update state about user's deposits and borrows
         pairTokenDeposits[msg.sender] += amount_;
 
@@ -56,93 +73,58 @@ contract BaseLiquidityAMO is BaseBorrower, ReentrancyGuard {
         uint256 ohmToBorrow = _valueCollateral(amount_);
         _borrow(ohmToBorrow);
 
-        // OHM-PAIR BPT before
-        uint256 bptBefore = ERC20(address(balancerPool)).balanceOf(address(this));
-
-        // Build join pool request
-        address[] memory assets = new address[](2);
-        assets[0] = address(ohm);
-        assets[1] = address(pairToken);
-
-        uint256[] memory maxAmountsIn = new uint256[](2);
-        maxAmountsIn[0] = ohmToBorrow;
-        maxAmountsIn[1] = amount_;
-
-        JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
-            assets: assets,
-            maxAmountsIn: maxAmountsIn,
-            userData: abi.encode(1, maxAmountsIn, 0), // need to change last parameter based on estimate of LP received
-            fromInternalBalance: false
-        });
-
-        // Join Balancer pool
-        ohm.approve(address(vault), ohmToBorrow);
-        pairToken.approve(address(vault), amount_);
-        vault.joinPool(
-            IBasePool(balancerPool).getPoolId(),
-            address(this),
-            address(this),
-            joinPoolRequest
-        );
-
-        // OHM-PAIR BPT after
-        lpAmountOut = ERC20(address(balancerPool)).balanceOf(address(this)) - bptBefore;
+        uint256 lpReceived = _deposit(ohmToBorrow, amount_);
 
         // Update user's LP position
-        lpPositions[msg.sender] += lpAmountOut;
+        userPositions[msg.sender].lpAmount += lpReceived;
     }
 
     /// @dev    This needs to be non-reentrant since the contract only knows the amount of OHM and
     ///         pair tokens it receives after an external call to withdraw liquidity from Balancer
     function withdraw(uint256 lpAmount_) external override nonReentrant returns (uint256) {
-        lpPositions[msg.sender] -= lpAmount_;
+        // TODO: Check pool vs oracle price
 
-        // OHM and pair token amounts before
-        uint256 ohmBefore = ohm.balanceOf(address(this));
-        uint256 pairTokenBefore = pairToken.balanceOf(address(this));
+        userPositions[msg.sender].lpAmount -= lpAmount_;
 
-        // Build exit pool request
-        address[] memory assets = new address[](2);
-        assets[0] = address(ohm);
-        assets[1] = address(pairToken);
+        (uint256 ohmReceived, uint256 pairTokenReceived) = _withdraw(lpAmount_);
 
-        uint256[] memory minAmountsOut = new uint256[](2);
-        minAmountsOut[0] = 0; // TODO: find way to calculate without adding function args
-        minAmountsOut[1] = 0; // TODO: find way to calculate without adding function args
-
-        ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
-            assets: assets,
-            minAmountsOut: minAmountsOut,
-            userData: abi.encode(1, lpAmount_),
-            toInternalBalance: false
-        });
-
-        // Exit Balancer pool
-        ERC20(address(balancerPool)).approve(address(vault), lpAmount_);
-        vault.exitPool(
-            IBasePool(balancerPool).getPoolId(),
-            address(this),
-            payable(address(this)),
-            exitPoolRequest
-        );
-
-        // OHM and pair token amounts received
-        uint256 ohmReceived = ohm.balanceOf(address(this)) - ohmBefore;
-        uint256 pairTokenReceived = pairToken.balanceOf(address(this)) - pairTokenBefore;
-
-        // Reduce debt and deposit values
-        uint256 userDebt = debtOutstanding[msg.sender];
+        // Reduce deposit values
         uint256 userDeposit = pairTokenDeposits[msg.sender];
-        uint256 ohmToRepay = ohmReceived > userDebt ? userDebt : ohmReceived;
         pairTokenDeposits[msg.sender] -= pairTokenReceived > userDeposit
             ? userDeposit
             : pairTokenReceived;
 
         // Return assets
-        _repay(ohmToRepay);
+        _repay(ohmReceived);
         pairToken.transfer(msg.sender, pairTokenReceived);
 
         return pairTokenReceived;
+    }
+
+    function withdrawAndClaim(uint256 lpAmount_) external override nonReentrant returns (uint256) {
+        // TODO: Check pool vs oracle price
+
+        _claimRewards();
+
+        userPositions[msg.sender].lpAmount -= lpAmount_;
+
+        (uint256 ohmReceived, uint256 pairTokenReceived) = _withdraw(lpAmount_);
+
+        // Reduce deposit values
+        uint256 userDeposit = pairTokenDeposits[msg.sender];
+        pairTokenDeposits[msg.sender] -= pairTokenReceived > userDeposit
+            ? userDeposit
+            : pairTokenReceived;
+
+        // Return assets
+        _repay(ohmReceived);
+        pairToken.transfer(msg.sender, pairTokenReceived);
+
+        return pairTokenReceived;
+    }
+
+    function claimRewards() external returns (uint256) {
+        _claimRewards();
     }
 
     //============================================================================================//
@@ -151,7 +133,23 @@ contract BaseLiquidityAMO is BaseBorrower, ReentrancyGuard {
 
     function _valueCollateral(uint256 amount_) internal view virtual returns (uint256) {}
 
-    function _deposit(uint256 amount_) internal virtual {
-        // Update state
+    function _deposit(uint256 amount_) internal virtual {}
+
+    function _withdraw(uint256 lpAmount_) internal virtual {}
+
+    function _claimRewards() internal returns (uint256) {
+        // TODO
+    }
+
+    function _borrow(uint256 amount_) internal {
+        LENDR.borrow(amount_);
+        MINTR.increaseMintApproval(address(this), amount_);
+        MINTR.mintOhm(address(this), amount_);
+    }
+
+    // TODO: Need a way to report net minted amount
+    function _repay(uint256 amount_) internal {
+        MINTR.burnOhm(address(this), amount_);
+        LENDR.repay(amount_);
     }
 }
