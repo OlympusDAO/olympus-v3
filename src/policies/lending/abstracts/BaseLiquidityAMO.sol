@@ -17,9 +17,11 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 contract BaseLiquidityAMO is Policy, ReentrancyGuard {
     // ========= DATA STRUCTURES ========= //
 
-    struct UserDeposit {
-        uint256 lpAmount;
-        uint256 accumulatedRewards;
+    struct RewardToken {
+        address token;
+        uint256 rewardsPerSecond;
+        uint256 lastRewardTime;
+        uint256 accumulatedRewardsPerShare;
     }
 
     // ========= STATE ========= //
@@ -34,11 +36,16 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
 
     // User State
     mapping(address => uint256) public pairTokenDeposits; // User pair token deposits
-    mapping(address => UserDeposit) public userPositions; // User LP positions
+    mapping(address => uint256) public lpPositions; // User LP positions
+    mapping(address => mapping(address => uint256)) public userRewardDebts; // User reward debts (masterchef math)
 
     // Reward Token State
-    address[] public rewardTokens;
-    mapping(address => uint256) rewardsPerSecond;
+    RewardToken[] public rewardTokens;
+
+    // Configuration values
+    uint256 public THRESHOLD;
+    uint256 public FEE;
+    uint256 public constant PRECISION = 1000;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -91,7 +98,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
     /// @dev    This needs to be non-reentrant since the contract only knows the amount of LP tokens it
     ///         receives after an external interaction with the Balancer pool
     function deposit(uint256 amount_) external nonReentrant returns (uint256 lpAmountOut) {
-        UserDeposit memory currentDeposit = userPositions[msg.sender];
+        uint256 numRewardTokens = rewardTokens.length;
 
         // Update state about user's deposits and borrows
         pairTokenDeposits[msg.sender] += amount_;
@@ -106,7 +113,9 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
         uint256 lpReceived = _deposit(ohmToBorrow, amount_);
 
         // Update user's LP position
-        userPositions[msg.sender].lpAmount += lpReceived;
+        lpPositions[msg.sender] += lpReceived;
+        
+        _updateRewardDebts();
     }
 
     /// @dev    This needs to be non-reentrant since the contract only knows the amount of OHM and
@@ -114,7 +123,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
     function withdraw(uint256 lpAmount_) external nonReentrant returns (uint256) {
         // TODO: Check pool vs oracle price
 
-        userPositions[msg.sender].lpAmount -= lpAmount_;
+        lpPositions[msg.sender] -= lpAmount_;
 
         (uint256 ohmReceived, uint256 pairTokenReceived) = _withdraw(lpAmount_);
 
@@ -124,6 +133,8 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
             ? userDeposit
             : pairTokenReceived;
 
+        _updateRewardDebts();
+
         // Return assets
         _repay(ohmReceived);
         pairToken.transfer(msg.sender, pairTokenReceived);
@@ -132,8 +143,6 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
     }
 
     function withdrawAndClaim(uint256 lpAmount_) external nonReentrant returns (uint256) {
-        // TODO: Check pool vs oracle price
-
         _claimRewards();
 
         userPositions[msg.sender].lpAmount -= lpAmount_;
@@ -145,6 +154,8 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
         pairTokenDeposits[msg.sender] -= pairTokenReceived > userDeposit
             ? userDeposit
             : pairTokenReceived;
+
+        _updateRewardDebts();
 
         // Return assets
         _repay(ohmReceived);
@@ -158,17 +169,60 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
     }
 
     //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
+
+    function rewardsForToken(uint256 id_, address user_) public view returns (uint256) {
+        RewardToken memory rewardToken = rewardTokens[id_];
+        uint256 accumulatedRewardsPerShare = rewardToken.accumulatedRewardsPerShare;
+        uint256 totalLP = ERC20(rewardToken.token).balanceOf(address(this));
+        return lpPositions[user_] * accumulatedRewardsPerShare - userRewardDebts[user_][rewardToken.token];
+    }
+
+
+    //============================================================================================//
     //                                     INTERNAL FUNCTIONS                                     //
     //============================================================================================//
 
     function _valueCollateral(uint256 amount_) internal view virtual returns (uint256) {}
 
+    function _getPoolPrice() internal view virtual returns (uint256) {}
+
+    function _isPoolSafe() internal view returns (bool) {
+        uint256 poolPrice = _getPoolPrice();
+        uint256 oraclePrice = _valueCollateral(1e18);
+    }
+
     function _deposit(uint256 ohmAmount_, uint256 pairAmount_) internal virtual returns (uint256) {}
 
     function _withdraw(uint256 lpAmount_) internal virtual returns (uint256, uint256) {}
 
+    function _updateRewardDebts() internal {
+        // Update user's reward debts
+        uint256 numRewardTokens = rewardTokens.length;
+        for (uint256 i; i < numRewardTokens; ) {
+            // TODO: Determine if I need to divide by any precision
+            userRewardDebts[msg.sender][rewardTokens[i].token] = pairTokenDeposits[msg.sender] * rewardTokens[i].accumulatedRewardsPerShare;
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     function _claimRewards() internal returns (uint256) {
-        // TODO
+        uint256 numRewardTokens = rewardTokens.length;
+        for (uint256 i; i < numRewardTokens; ) {
+            RewardToken memory rewardToken = rewardTokens[i];
+            uint256 reward = rewardsForToken(i, msg.sender);
+            if (reward > 0) {
+                rewardToken.token.transfer(msg.sender, reward);
+            }
+
+            unchecked {
+                ++i;
+            }
+        }   
     }
 
     function _borrow(uint256 amount_) internal {
@@ -181,5 +235,34 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
     function _repay(uint256 amount_) internal {
         MINTR.burnOhm(address(this), amount_);
         LENDR.repay(amount_);
+    }
+
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
+
+    function addRewardToken(
+        address token_,
+        uint256 rewardsPerSecond_,
+        uint256 startTimestamp_,
+    ) external onlyRole("liquidityamo_admin") {
+        RewardToken memory newRewardToken = RewardToken({
+            token: token_,
+            rewardsPerSecond: rewardsPerSecond_,
+            lastRewardTime: block.timestamp > startTimestamp_
+                ? block.timestamp
+                : startTimestamp_,
+            accumulatedRewardsPerShare: 0
+        });
+
+        rewardTokens.push(newRewardToken);
+    }
+    
+    function setThreshold(uint256 threshold_) external onlyRole("liquidityamo_admin) {
+        THRESHOLD = threshold_;
+    }
+
+    function setFee(uint256 fee_) external onlyRole("liquidityamo_admin) {
+        FEE = fee_;
     }
 }
