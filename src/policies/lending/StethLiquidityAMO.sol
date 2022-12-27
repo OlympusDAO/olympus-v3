@@ -7,6 +7,8 @@ import {BaseLiquidityAMO} from "policies/lending/abstracts/BaseLiquidityAMO.sol"
 
 // Import external dependencies
 import {AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {JoinPoolRequest, ExitPoolRequest, IVault} from "src/interfaces/IBalancerVault.sol";
+import {IBasePool} from "src/interfaces/IBasePool.sol";
 
 /// @title Olympus Single-Sided stETH Liquidity AMO
 contract StethLiquidityAMO is BaseLiquidityAMO {
@@ -14,7 +16,7 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
 
     // Balancer Contracts
     IVault public vault;
-    IPool public liquidityPool;
+    IBasePool public liquidityPool;
 
     // Price Feeds
     AggregatorV3Interface public ohmEthPriceFeed; // OHM/ETH price feed
@@ -37,7 +39,7 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
     ) BaseLiquidityAMO(kernel_, ohm_, steth_) {
         // Set Balancer contracts
         vault = IVault(vault_);
-        liquidityPool = IPool(liquidityPool_);
+        liquidityPool = IBasePool(liquidityPool_);
 
         // Set price feeds
         ohmEthPriceFeed = AggregatorV3Interface(ohmEthPriceFeed_);
@@ -59,9 +61,15 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         return (amount_ * ohmUsd) / (uint256(stethPrice_) * 1e9);
     }
 
+    function _getPoolPrice() internal view override returns (uint256) {
+        (, uint256[] memory balances_, ) = vault.getPoolTokens(liquidityPool.getPoolId());
+
+        return (balances_[1] * 1e18) / balances_[0];
+    }
+
     function _deposit(uint256 ohmAmount_, uint256 pairAmount_) internal override returns (uint256) {
         // OHM-stETH BPT before
-        uint256 bptBefore = ERC20(address(liquidityPool)).balanceOf(address(this));
+        uint256 bptBefore = liquidityPool.balanceOf(address(this));
 
         // Build join pool request
         address[] memory assets = new address[](2);
@@ -82,19 +90,15 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         // Join Balancer pool
         ohm.approve(address(vault), ohmAmount_);
         pairToken.approve(address(vault), pairAmount_);
-        vault.joinPool(
-            IBasePool(liquidityPool).getPoolId(),
-            address(this),
-            address(this),
-            joinPoolRequest
-        );
+        vault.joinPool(liquidityPool.getPoolId(), address(this), address(this), joinPoolRequest);
+
         // OHM-PAIR BPT after
-        lpAmountOut = ERC20(address(liquidityPool)).balanceOf(address(this)) - bptBefore;
+        uint256 lpAmountOut = liquidityPool.balanceOf(address(this)) - bptBefore;
 
         return lpAmountOut;
     }
 
-    function _withdraw(uint256 lpAmount_) internal overrider returns (uint256, uint256) {
+    function _withdraw(uint256 lpAmount_) internal override returns (uint256, uint256) {
         // OHM and pair token amounts before
         uint256 ohmBefore = ohm.balanceOf(address(this));
         uint256 pairTokenBefore = pairToken.balanceOf(address(this));
@@ -116,9 +120,9 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         });
 
         // Exit Balancer pool
-        ERC20(address(liquidityPool)).approve(address(vault), lpAmount_);
+        liquidityPool.approve(address(vault), lpAmount_);
         vault.exitPool(
-            IBasePool(liquidityPool).getPoolId(),
+            liquidityPool.getPoolId(),
             address(this),
             payable(address(this)),
             exitPoolRequest

@@ -14,7 +14,11 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @title Olympus Base Liquidity AMO
-contract BaseLiquidityAMO is Policy, ReentrancyGuard {
+contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
+    // ========= ERRORS ========= //
+
+    error LiquidityAMO_PoolImbalanced();
+
     // ========= DATA STRUCTURES ========= //
 
     struct RewardToken {
@@ -80,8 +84,8 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
         override
         returns (Permissions[] memory permissions)
     {
-        Keycode memory mintrKeycode = MINTR.KEYCODE();
-        Keycode memory lendrKeycode = LENDR.KEYCODE();
+        Keycode mintrKeycode = MINTR.KEYCODE();
+        Keycode lendrKeycode = LENDR.KEYCODE();
 
         permissions = new Permissions[](5);
         permissions[0] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
@@ -114,14 +118,14 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
 
         // Update user's LP position
         lpPositions[msg.sender] += lpReceived;
-        
+
         _updateRewardDebts();
     }
 
     /// @dev    This needs to be non-reentrant since the contract only knows the amount of OHM and
     ///         pair tokens it receives after an external call to withdraw liquidity from Balancer
     function withdraw(uint256 lpAmount_) external nonReentrant returns (uint256) {
-        // TODO: Check pool vs oracle price
+        if (!_isPoolSafe()) revert LiquidityAMO_PoolImbalanced();
 
         lpPositions[msg.sender] -= lpAmount_;
 
@@ -143,9 +147,11 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
     }
 
     function withdrawAndClaim(uint256 lpAmount_) external nonReentrant returns (uint256) {
+        if (!_isPoolSafe()) revert LiquidityAMO_PoolImbalanced();
+
         _claimRewards();
 
-        userPositions[msg.sender].lpAmount -= lpAmount_;
+        lpPositions[msg.sender] -= lpAmount_;
 
         (uint256 ohmReceived, uint256 pairTokenReceived) = _withdraw(lpAmount_);
 
@@ -176,9 +182,11 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
         RewardToken memory rewardToken = rewardTokens[id_];
         uint256 accumulatedRewardsPerShare = rewardToken.accumulatedRewardsPerShare;
         uint256 totalLP = ERC20(rewardToken.token).balanceOf(address(this));
-        return lpPositions[user_] * accumulatedRewardsPerShare - userRewardDebts[user_][rewardToken.token];
+        return
+            lpPositions[user_] *
+            accumulatedRewardsPerShare -
+            userRewardDebts[user_][rewardToken.token];
     }
-
 
     //============================================================================================//
     //                                     INTERNAL FUNCTIONS                                     //
@@ -190,7 +198,12 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
 
     function _isPoolSafe() internal view returns (bool) {
         uint256 poolPrice = _getPoolPrice();
-        uint256 oraclePrice = _valueCollateral(1e18);
+        uint256 oraclePrice = _valueCollateral(1e18); // TODO: Switch this so it pulls token decimals from the pair token
+
+        uint256 lowerBound = (oraclePrice * (PRECISION - THRESHOLD)) / PRECISION;
+        uint256 upperBound = (oraclePrice * (PRECISION + THRESHOLD)) / PRECISION;
+
+        return poolPrice >= lowerBound && poolPrice <= upperBound;
     }
 
     function _deposit(uint256 ohmAmount_, uint256 pairAmount_) internal virtual returns (uint256) {}
@@ -202,7 +215,9 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
         uint256 numRewardTokens = rewardTokens.length;
         for (uint256 i; i < numRewardTokens; ) {
             // TODO: Determine if I need to divide by any precision
-            userRewardDebts[msg.sender][rewardTokens[i].token] = pairTokenDeposits[msg.sender] * rewardTokens[i].accumulatedRewardsPerShare;
+            userRewardDebts[msg.sender][rewardTokens[i].token] =
+                lpPositions[msg.sender] *
+                rewardTokens[i].accumulatedRewardsPerShare;
 
             unchecked {
                 ++i;
@@ -216,13 +231,13 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
             RewardToken memory rewardToken = rewardTokens[i];
             uint256 reward = rewardsForToken(i, msg.sender);
             if (reward > 0) {
-                rewardToken.token.transfer(msg.sender, reward);
+                ERC20(rewardToken.token).transfer(msg.sender, reward);
             }
 
             unchecked {
                 ++i;
             }
-        }   
+        }
     }
 
     function _borrow(uint256 amount_) internal {
@@ -244,25 +259,23 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard {
     function addRewardToken(
         address token_,
         uint256 rewardsPerSecond_,
-        uint256 startTimestamp_,
+        uint256 startTimestamp_
     ) external onlyRole("liquidityamo_admin") {
         RewardToken memory newRewardToken = RewardToken({
             token: token_,
             rewardsPerSecond: rewardsPerSecond_,
-            lastRewardTime: block.timestamp > startTimestamp_
-                ? block.timestamp
-                : startTimestamp_,
+            lastRewardTime: block.timestamp > startTimestamp_ ? block.timestamp : startTimestamp_,
             accumulatedRewardsPerShare: 0
         });
 
         rewardTokens.push(newRewardToken);
     }
-    
-    function setThreshold(uint256 threshold_) external onlyRole("liquidityamo_admin) {
+
+    function setThreshold(uint256 threshold_) external onlyRole("liquidityamo_admin") {
         THRESHOLD = threshold_;
     }
 
-    function setFee(uint256 fee_) external onlyRole("liquidityamo_admin) {
+    function setFee(uint256 fee_) external onlyRole("liquidityamo_admin") {
         FEE = fee_;
     }
 }

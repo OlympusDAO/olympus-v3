@@ -101,14 +101,14 @@ contract BaseExternalAMO is Policy, RolesConsumer {
     //============================================================================================//
 
     function _borrow(uint256 amount_) internal {
-        debtOutstanding += amount_;
+        deployedOHM += amount_;
         LENDR.borrow(amount_);
         MINTR.increaseMintApproval(address(this), amount_);
         MINTR.mintOhm(address(this), amount_);
     }
 
     function _repay(uint256 amount_) internal {
-        debtOutstanding -= amount_;
+        deployedOHM -= amount_;
         MINTR.burnOhm(address(this), amount_);
         LENDR.repay(amount_);
     }
