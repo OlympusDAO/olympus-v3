@@ -102,8 +102,6 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     /// @dev    This needs to be non-reentrant since the contract only knows the amount of LP tokens it
     ///         receives after an external interaction with the Balancer pool
     function deposit(uint256 amount_) external nonReentrant returns (uint256 lpAmountOut) {
-        uint256 numRewardTokens = rewardTokens.length;
-
         // Update state about user's deposits and borrows
         pairTokenDeposits[msg.sender] += amount_;
 
