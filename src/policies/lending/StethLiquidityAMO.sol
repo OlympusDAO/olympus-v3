@@ -64,7 +64,7 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
     function _getPoolPrice() internal view override returns (uint256) {
         (, uint256[] memory balances_, ) = vault.getPoolTokens(liquidityPool.getPoolId());
 
-        return (balances_[1] * 1e18) / balances_[0];
+        return (balances_[0] * 1e18) / balances_[1];
     }
 
     function _deposit(uint256 ohmAmount_, uint256 pairAmount_) internal override returns (uint256) {

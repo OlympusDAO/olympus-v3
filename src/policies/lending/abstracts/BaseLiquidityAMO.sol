@@ -120,6 +120,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         _updateRewardDebts();
     }
 
+    /// TODO: Decide if we even want this, it foregoes rewards
     /// @dev    This needs to be non-reentrant since the contract only knows the amount of OHM and
     ///         pair tokens it receives after an external call to withdraw liquidity from Balancer
     function withdraw(uint256 lpAmount_) external nonReentrant returns (uint256) {
@@ -238,12 +239,14 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         }
     }
 
+    // TODO: Decide if we want to use the LENDR for this or not
     function _borrow(uint256 amount_) internal {
         LENDR.borrow(amount_);
         MINTR.increaseMintApproval(address(this), amount_);
         MINTR.mintOhm(address(this), amount_);
     }
 
+    // TODO: Decide if we want to use the LENDR for this or not
     // TODO: Need a way to report net minted amount
     function _repay(uint256 amount_) internal {
         MINTR.burnOhm(address(this), amount_);

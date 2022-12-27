@@ -6,9 +6,19 @@ import {JoinPoolRequest, ExitPoolRequest} from "src/interfaces/IBalancerVault.so
 
 contract MockVault {
     MockERC20 public bpt;
+    address public token0;
+    address public token1;
+    uint256 public token0Amount;
+    uint256 public token1Amount;
 
-    constructor(address bpt_) {
+    constructor(
+        address bpt_,
+        address token0_,
+        address token1_
+    ) {
         bpt = MockERC20(bpt_);
+        token0 = token0_;
+        token1 = token1_;
     }
 
     function joinPool(
@@ -38,5 +48,30 @@ contract MockVault {
             recipient,
             ERC20(request.assets[1]).balanceOf(address(this))
         );
+    }
+
+    function getPoolTokens(bytes32 poolId)
+        external
+        view
+        returns (
+            address[] memory,
+            uint256[] memory,
+            uint256
+        )
+    {
+        address[] memory tokens = new address[](2);
+        tokens[0] = token0;
+        tokens[1] = token1;
+
+        uint256[] memory balances = new uint256[](2);
+        balances[0] = token0Amount;
+        balances[1] = token1Amount;
+
+        return (tokens, balances, block.timestamp);
+    }
+
+    function setPoolAmounts(uint256 token0Amount_, uint256 token1Amount_) external {
+        token0Amount = token0Amount_;
+        token1Amount = token1Amount_;
     }
 }
