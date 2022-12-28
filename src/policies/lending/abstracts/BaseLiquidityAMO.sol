@@ -13,6 +13,8 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+import {console2} from "forge-std/Script.sol";
+
 /// @title Olympus Base Liquidity AMO
 contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     // ========= ERRORS ========= //
@@ -37,6 +39,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     // Tokens
     ERC20 public ohm;
     ERC20 public pairToken;
+    ERC20 public lpToken;
 
     // User State
     mapping(address => uint256) public pairTokenDeposits; // User pair token deposits
@@ -58,11 +61,13 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     constructor(
         Kernel kernel_,
         address ohm_,
-        address pairToken_
+        address pairToken_,
+        address lpToken_
     ) Policy(kernel_) {
         // Set tokens
         ohm = ERC20(ohm_);
         pairToken = ERC20(pairToken_);
+        lpToken = ERC20(lpToken_);
     }
 
     /// @inheritdoc Policy
@@ -102,6 +107,8 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     /// @dev    This needs to be non-reentrant since the contract only knows the amount of LP tokens it
     ///         receives after an external interaction with the Balancer pool
     function deposit(uint256 amount_) external nonReentrant returns (uint256 lpAmountOut) {
+        _updateRewardState();
+
         // Update state about user's deposits and borrows
         pairTokenDeposits[msg.sender] += amount_;
 
@@ -117,7 +124,18 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         // Update user's LP position
         lpPositions[msg.sender] += lpReceived;
 
-        _updateRewardDebts();
+        // Update user's reward debt
+        uint256 numRewardTokens = rewardTokens.length;
+        for (uint256 i; i < numRewardTokens; ) {
+            address rewardToken = rewardTokens[i].token;
+            userRewardDebts[msg.sender][rewardToken] +=
+                (lpReceived * rewardTokens[i].accumulatedRewardsPerShare) /
+                1e18;
+
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     /// TODO: Decide if we even want this, it foregoes rewards
@@ -125,8 +143,22 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     ///         pair tokens it receives after an external call to withdraw liquidity from Balancer
     function withdraw(uint256 lpAmount_) external nonReentrant returns (uint256) {
         if (!_isPoolSafe()) revert LiquidityAMO_PoolImbalanced();
+        _updateRewardState();
 
         lpPositions[msg.sender] -= lpAmount_;
+
+        // Update user's reward debt
+        uint256 numRewardTokens = rewardTokens.length;
+        for (uint256 i; i < numRewardTokens; ) {
+            address rewardToken = rewardTokens[i].token;
+            userRewardDebts[msg.sender][rewardToken] -=
+                (lpAmount_ * rewardTokens[i].accumulatedRewardsPerShare) /
+                1e18;
+
+            unchecked {
+                ++i;
+            }
+        }
 
         (uint256 ohmReceived, uint256 pairTokenReceived) = _withdraw(lpAmount_);
 
@@ -135,8 +167,6 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         pairTokenDeposits[msg.sender] -= pairTokenReceived > userDeposit
             ? userDeposit
             : pairTokenReceived;
-
-        _updateRewardDebts();
 
         // Return assets
         _repay(ohmReceived);
@@ -147,11 +177,29 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     function withdrawAndClaim(uint256 lpAmount_) external nonReentrant returns (uint256) {
         if (!_isPoolSafe()) revert LiquidityAMO_PoolImbalanced();
-
+        _updateRewardState();
         _claimRewards();
+
+        // Update user's reward debt
+        uint256 numRewardTokens = rewardTokens.length;
+        for (uint256 i; i < numRewardTokens; ) {
+            address rewardToken = rewardTokens[i].token;
+
+            // TODO: Fix this to fit the true masterchef implementation
+            userRewardDebts[msg.sender][rewardToken] =
+                (lpPositions[msg.sender] *
+                    rewardTokens[i].accumulatedRewardsPerShare *
+                    (lpAmount_ * rewardTokens[i].accumulatedRewardsPerShare)) /
+                1e36;
+
+            unchecked {
+                ++i;
+            }
+        }
 
         lpPositions[msg.sender] -= lpAmount_;
 
+        // Withdraw OHM and stETH from LP
         (uint256 ohmReceived, uint256 pairTokenReceived) = _withdraw(lpAmount_);
 
         // Reduce deposit values
@@ -159,8 +207,6 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         pairTokenDeposits[msg.sender] -= pairTokenReceived > userDeposit
             ? userDeposit
             : pairTokenReceived;
-
-        _updateRewardDebts();
 
         // Return assets
         _repay(ohmReceived);
@@ -180,10 +226,16 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     function rewardsForToken(uint256 id_, address user_) public view returns (uint256) {
         RewardToken memory rewardToken = rewardTokens[id_];
         uint256 accumulatedRewardsPerShare = rewardToken.accumulatedRewardsPerShare;
-        uint256 totalLP = ERC20(rewardToken.token).balanceOf(address(this));
+        uint256 totalLP = lpToken.balanceOf(address(this));
+
+        if (block.timestamp > rewardToken.lastRewardTime && totalLP != 0) {
+            uint256 timeDiff = block.timestamp - rewardToken.lastRewardTime;
+            uint256 totalRewards = (timeDiff * rewardToken.rewardsPerSecond);
+            accumulatedRewardsPerShare += (totalRewards * 1e18) / totalLP;
+        }
+
         return
-            lpPositions[user_] *
-            accumulatedRewardsPerShare -
+            ((lpPositions[user_] * accumulatedRewardsPerShare) / 1e18) -
             userRewardDebts[user_][rewardToken.token];
     }
 
@@ -209,14 +261,22 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     function _withdraw(uint256 lpAmount_) internal virtual returns (uint256, uint256) {}
 
-    function _updateRewardDebts() internal {
-        // Update user's reward debts
+    function _updateRewardState() internal {
+        // Update reward state and user's reward debts
         uint256 numRewardTokens = rewardTokens.length;
+        uint256 totalLP = ERC20(lpToken).balanceOf(address(this));
+
         for (uint256 i; i < numRewardTokens; ) {
-            // TODO: Determine if I need to divide by any precision
-            userRewardDebts[msg.sender][rewardTokens[i].token] =
-                lpPositions[msg.sender] *
-                rewardTokens[i].accumulatedRewardsPerShare;
+            RewardToken storage rewardToken = rewardTokens[i];
+
+            // Update reward state
+            if (block.timestamp > rewardToken.lastRewardTime && totalLP != 0) {
+                uint256 timeDiff = block.timestamp - rewardToken.lastRewardTime;
+                uint256 totalRewards = timeDiff * rewardToken.rewardsPerSecond;
+
+                rewardToken.accumulatedRewardsPerShare += (totalRewards * 1e18) / totalLP;
+                rewardToken.lastRewardTime = block.timestamp;
+            }
 
             unchecked {
                 ++i;

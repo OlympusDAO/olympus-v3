@@ -36,7 +36,7 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         address ohmEthPriceFeed_,
         address ethUsdPriceFeed_,
         address stethUsdPriceFeed_
-    ) BaseLiquidityAMO(kernel_, ohm_, steth_) {
+    ) BaseLiquidityAMO(kernel_, ohm_, steth_, liquidityPool_) {
         // Set Balancer contracts
         vault = IVault(vault_);
         liquidityPool = IBasePool(liquidityPool_);

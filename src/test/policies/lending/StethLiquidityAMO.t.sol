@@ -161,6 +161,8 @@ contract StethLiquidityAMOTest is Test {
 
             // Add reward token
             liquidityAMO.addRewardToken(address(reward), 1e18, block.timestamp); // 1 REWARD token per second
+
+            reward.mint(address(liquidityAMO), 1e23);
         }
 
         {
@@ -391,6 +393,203 @@ contract StethLiquidityAMOTest is Test {
         // Withdraw
         vm.prank(alice);
         liquidityAMO.withdraw(1e18);
+
+        // Verify end state
+        assertEq(steth.balanceOf(alice), 1e18);
+    }
+
+    /// [X]  withdrawAndClaim
+    ///     [X]  Can be accessed by anyone
+    ///     [X]  Fails if pool and oracle prices differ substantially
+    ///     [X]  Claims rewards
+    ///     [X]  Returns correct rewards with multiple users
+    ///     [X]  Fails if user has no LP positions
+    ///     [X]  Removes stETH and OHM from Balancer LP
+    ///     [X]  Decreases user's stETH deposit value
+    ///     [X]  Updates user's reward debts for reward tokens
+    ///     [X]  Burns received OHM
+    ///     [X]  Decreases AMO's debt in LENDR module
+    ///     [X]  Transfers stETH to user
+
+    function _withdrawAndClaimSetUp() internal {
+        _withdrawSetUp();
+        vm.warp(block.timestamp + 10); // Increase time 10 seconds so there are rewards
+    }
+
+    function testCorrectness_withdrawAndClaimCanBeCalledByAnyone(address user_) public {
+        vm.assume(user_ != address(0));
+        steth.mint(user_, 1e18);
+
+        // Setup with deposit
+        vm.startPrank(user_);
+        steth.approve(address(liquidityAMO), 1e18);
+        liquidityAMO.deposit(1e18);
+
+        // Withdraw and claim
+        liquidityAMO.withdrawAndClaim(1e18);
+        vm.stopPrank();
+    }
+
+    function testCorrectness_withdrawAndClaimFailsIfPricesDiffer() public {
+        // Setup
+        _withdrawAndClaimSetUp();
+
+        // Set pool price
+        vault.setPoolAmounts(1e9, 1000e18);
+
+        bytes memory err = abi.encodeWithSignature("LiquidityAMO_PoolImbalanced()");
+        vm.expectRevert(err);
+
+        // Attempt withdrawal
+        vm.prank(alice);
+        liquidityAMO.withdrawAndClaim(1e18);
+
+        // Set pool price
+        vault.setPoolAmounts(1e9, 10e18);
+
+        // Expect revert again
+        vm.expectRevert(err);
+
+        // Attempt withdrawal
+        vm.prank(alice);
+        liquidityAMO.withdrawAndClaim(1e18);
+    }
+
+    function testCorrectness_withdrawAndClaimClaimsRewards() public {
+        // Setup
+        _withdrawAndClaimSetUp();
+
+        // Verify initial state
+        assertEq(reward.balanceOf(alice), 0);
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityAMO.withdrawAndClaim(1e18);
+
+        // Verify end state
+        assertEq(reward.balanceOf(alice), 10e18);
+    }
+
+    function testCorrectness_withdrawAndClaimsReturnsCorrectRewardsMultiUser(address user_) public {
+        vm.assume(user_ != address(0) && user_ != alice);
+
+        // Setup
+        _withdrawAndClaimSetUp();
+
+        // Add second depositor
+        vm.startPrank(user_);
+        steth.mint(user_, 1e18);
+        steth.approve(address(liquidityAMO), 1e18);
+        liquidityAMO.deposit(1e18);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 10); // Increase time by 10 seconds
+
+        // Alice's rewards should be 15 REWARD tokens
+        // 10 for the first 10 blocks and 5 for the second 10 blocks
+        // Verify initial state
+        assertEq(reward.balanceOf(alice), 0);
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityAMO.withdrawAndClaim(1e18);
+
+        // Verify end state
+        assertEq(reward.balanceOf(alice), 15e18);
+    }
+
+    function testCorrectness_withdrawAndClaimFailsIfUserHasNoLpPosition() public {
+        // Expect revert
+        vm.expectRevert(stdError.arithmeticError);
+
+        // Attempt withdrawal
+        vm.prank(alice);
+        liquidityAMO.withdrawAndClaim(1e18);
+    }
+
+    function testCorrectness_withdrawAndClaimRemovesStethAndOhmFromVault() public {
+        // Setup
+        _withdrawAndClaimSetUp();
+
+        // Verify initial state
+        assertEq(steth.balanceOf(address(vault)), STETH_AMOUNT);
+        assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e11);
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityAMO.withdrawAndClaim(1e18);
+
+        // Verify end state
+        assertEq(steth.balanceOf(address(vault)), 0);
+        assertEq(ohm.balanceOf(address(vault)), 0);
+    }
+
+    function testCorrectness_withdrawAndClaimDecreasesUserStethDeposit() public {
+        // Setup
+        _withdrawAndClaimSetUp();
+
+        // Verify initial state
+        assertEq(liquidityAMO.pairTokenDeposits(alice), STETH_AMOUNT);
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityAMO.withdrawAndClaim(1e18);
+
+        // Verify end state
+        assertEq(liquidityAMO.pairTokenDeposits(alice), 0);
+    }
+
+    function testCorrectness_withdrawAndClaimUpdatesRewardDebt() public {
+        // Setup
+        _withdrawAndClaimSetUp();
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityAMO.withdrawAndClaim(1e18);
+
+        // Verify end state
+        assertEq(liquidityAMO.userRewardDebts(alice, address(reward)), 0);
+    }
+
+    function testCorrectness_withdrawAndClaimBurnsOhm() public {
+        // Setup
+        _withdrawAndClaimSetUp();
+
+        // Verify initial state
+        assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e11);
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityAMO.withdrawAndClaim(1e18);
+
+        // Verify end state
+        assertEq(ohm.balanceOf(address(liquidityAMO)), 0);
+    }
+
+    function testCorrectness_withdrawAndClaimDecreasesLendrDebt() public {
+        // Setup
+        _withdrawAndClaimSetUp();
+
+        // Verify initial state
+        assertEq(lender.marketDebtOutstanding(address(liquidityAMO)), STETH_AMOUNT / 1e11);
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityAMO.withdrawAndClaim(1e18);
+
+        // Verify end state
+        assertEq(lender.marketDebtOutstanding(address(liquidityAMO)), 0);
+    }
+
+    function testCorrectness_withdrawAndClaimTransfersStethToUser() public {
+        // Setup
+        _withdrawAndClaimSetUp();
+
+        // Verify initial state
+        assertEq(steth.balanceOf(alice), 0);
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityAMO.withdrawAndClaim(1e18);
 
         // Verify end state
         assertEq(steth.balanceOf(alice), 1e18);
