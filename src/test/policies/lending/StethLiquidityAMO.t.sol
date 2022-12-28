@@ -696,4 +696,116 @@ contract StethLiquidityAMOTest is Test {
         assertEq(liquidityAMO.rewardsForToken(0, user_), 5e18);
         assertEq(liquidityAMO.rewardsForToken(1, user_), 5e18);
     }
+
+    // ========= VIEW TESTS ========= //
+
+    /// []  rewardsForToken
+
+    function testCorrectness_rewardsForToken(address user_) public {
+        vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityAMO));
+
+        // Setup
+        _withdrawAndClaimSetUp();
+        _claimRewardsAddToken();
+
+        // Add second depositor
+        vm.startPrank(user_);
+        steth.mint(user_, 1e18);
+        steth.approve(address(liquidityAMO), 1e18);
+        liquidityAMO.deposit(1e18);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 10); // Increase time by 10 seconds
+
+        // Alice's rewards should be 15 REWARD tokens and 5 REWARD2 token
+        // User's rewards should be 5 REWARD tokens and 5 REWARD2 tokens
+        assertEq(liquidityAMO.rewardsForToken(0, alice), 15e18);
+        assertEq(liquidityAMO.rewardsForToken(1, alice), 5e18);
+        assertEq(liquidityAMO.rewardsForToken(0, user_), 5e18);
+        assertEq(liquidityAMO.rewardsForToken(1, user_), 5e18);
+    }
+
+    // ========= ADMIN TESTS ========= //
+
+    /// [X]  addRewardToken
+    ///     [X]  Can only be called by admin
+    ///     [X]  Adds reward token correctly
+
+    function testCorrectness_addRewardTokenCanOnlyBeCalledByAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("liquidityamo_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        liquidityAMO.addRewardToken(address(reward), 1e18, block.timestamp);
+    }
+
+    function testCorrectness_addRewardTokenCorrectlyAddsToken() public {
+        // Add reward token
+        liquidityAMO.addRewardToken(address(reward2), 1e18, block.timestamp); // 1 REWARD2 token per second
+
+        // Verify state
+        (
+            address token,
+            uint256 rewardsPerSecond,
+            ,
+            uint256 accumulatedRewardsPerShare
+        ) = liquidityAMO.rewardTokens(1);
+        assertEq(token, address(reward2));
+        assertEq(rewardsPerSecond, 1e18);
+        assertEq(accumulatedRewardsPerShare, 0);
+    }
+
+    /// [X]  setThreshold
+    ///     [X]  Can only be called by admin
+    ///     [X]  Sets threshold correctly
+
+    function testCorrectness_setThresholdCanOnlyBeCalledByAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("liquidityamo_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        liquidityAMO.setThreshold(200);
+    }
+
+    function testCorrectness_setThresholdCorrectlySetsThreshold() public {
+        // Set threshold
+        liquidityAMO.setThreshold(200);
+
+        // Verify state
+        assertEq(liquidityAMO.THRESHOLD(), 200);
+    }
+
+    /// [X]  setFee
+    ///     [X]  Can only be called by admin
+    ///     [X]  Sets fee correctly
+
+    function testCorrectness_setFeeCanOnlyBeCalledByAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("liquidityamo_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        liquidityAMO.setFee(10);
+    }
+
+    function testCorrectness_setFeeCorrectlySetsFee() public {
+        // Set fee
+        liquidityAMO.setFee(10);
+
+        // Verify state
+        assertEq(liquidityAMO.FEE(), 10);
+    }
 }
