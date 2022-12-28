@@ -49,6 +49,7 @@ contract StethLiquidityAMOTest is Test {
     MockOhm internal ohm;
     MockERC20 internal steth;
     MockERC20 internal reward;
+    MockERC20 internal reward2;
 
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal ethUsdPriceFeed;
@@ -80,6 +81,7 @@ contract StethLiquidityAMOTest is Test {
             ohm = new MockOhm("Olympus", "OHM", 9);
             steth = new MockERC20("Staked ETH", "stETH", 18);
             reward = new MockERC20("Reward Token", "REWARD", 18);
+            reward2 = new MockERC20("Reward Token 2", "REWARD2", 18);
         }
 
         {
@@ -593,5 +595,105 @@ contract StethLiquidityAMOTest is Test {
 
         // Verify end state
         assertEq(steth.balanceOf(alice), 1e18);
+    }
+
+    /// [X]  claimRewards
+    ///     [X]  Can be accessed by anyone
+    ///     [X]  Returns correct amount of rewards for one token and one user
+    ///     [X]  Returns correct amount of rewards for one token and multiple users
+    ///     [X]  Returns correct amount of rewards for multiple tokens and multiple users
+
+    function _claimRewardsAddToken() internal {
+        // Add reward token
+        liquidityAMO.addRewardToken(address(reward2), 1e18, block.timestamp); // 1 REWARD2 token per second
+        reward2.mint(address(liquidityAMO), 1e23);
+    }
+
+    function testCorrectness_claimRewardsCanBeAccessedByAnyone() public {
+        // Setup
+        _withdrawAndClaimSetUp();
+
+        // Claim rewards
+        vm.prank(alice);
+        liquidityAMO.claimRewards();
+    }
+
+    function testCorrectness_claimRewardsOneTokenOneUser() public {
+        // Setup
+        _withdrawAndClaimSetUp();
+
+        // Verify initial state
+        assertEq(reward.balanceOf(alice), 0);
+
+        // Claim rewards
+        vm.prank(alice);
+        liquidityAMO.claimRewards();
+
+        // Verify end state
+        assertEq(reward.balanceOf(alice), 10e18);
+    }
+
+    function testCorrectness_claimRewardsOneTokenMultipleUsers(address user_) public {
+        vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityAMO));
+
+        // Setup
+        _withdrawAndClaimSetUp();
+
+        // Add second depositor
+        vm.startPrank(user_);
+        steth.mint(user_, 1e18);
+        steth.approve(address(liquidityAMO), 1e18);
+        liquidityAMO.deposit(1e18);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 10); // Increase time by 10 seconds
+
+        // Alice's rewards should be 15 REWARD tokens
+        // 10 for the first 10 blocks and 5 for the second 10 blocks
+        // User's rewards should be 5 REWARD tokens
+        // Verify initial state
+        assertEq(reward.balanceOf(alice), 0);
+        assertEq(reward.balanceOf(user_), 0);
+
+        // Claim Alice's rewards
+        vm.prank(alice);
+        liquidityAMO.claimRewards();
+
+        // Verify end state
+        assertEq(reward.balanceOf(alice), 15e18);
+        assertEq(liquidityAMO.rewardsForToken(0, user_), 5e18);
+    }
+
+    function testCorrectness_claimRewardsMultipleTokensMultipleUsers(address user_) public {
+        vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityAMO));
+
+        // Setup
+        _withdrawAndClaimSetUp();
+        _claimRewardsAddToken();
+
+        // Add second depositor
+        vm.startPrank(user_);
+        steth.mint(user_, 1e18);
+        steth.approve(address(liquidityAMO), 1e18);
+        liquidityAMO.deposit(1e18);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 10); // Increase time by 10 seconds
+
+        // Alice's rewards should be 15 REWARD tokens and 5 REWARD2 token
+        // User's rewards should be 5 REWARD tokens and 5 REWARD2 tokens
+        // Verify initial state
+        assertEq(reward.balanceOf(alice), 0);
+        assertEq(reward2.balanceOf(alice), 0);
+        assertEq(reward.balanceOf(user_), 0);
+        assertEq(reward2.balanceOf(user_), 0);
+
+        // Claim Alice's rewards
+        vm.prank(alice);
+        liquidityAMO.claimRewards();
+
+        // Verify end state
+        assertEq(reward.balanceOf(alice), 15e18);
+        assertEq(reward2.balanceOf(alice), 5e18);
+        assertEq(liquidityAMO.rewardsForToken(0, user_), 5e18);
+        assertEq(liquidityAMO.rewardsForToken(1, user_), 5e18);
     }
 }

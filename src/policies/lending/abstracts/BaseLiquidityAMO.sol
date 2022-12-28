@@ -185,12 +185,11 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         for (uint256 i; i < numRewardTokens; ) {
             address rewardToken = rewardTokens[i].token;
 
-            // TODO: Fix this to fit the true masterchef implementation
             userRewardDebts[msg.sender][rewardToken] =
                 (lpPositions[msg.sender] *
-                    rewardTokens[i].accumulatedRewardsPerShare *
+                    rewardTokens[i].accumulatedRewardsPerShare -
                     (lpAmount_ * rewardTokens[i].accumulatedRewardsPerShare)) /
-                1e36;
+                1e18;
 
             unchecked {
                 ++i;
