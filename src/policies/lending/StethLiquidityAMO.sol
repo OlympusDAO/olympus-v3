@@ -16,7 +16,6 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
 
     // Balancer Contracts
     IVault public vault;
-    IBasePool public liquidityPool;
 
     // Price Feeds
     AggregatorV3Interface public ohmEthPriceFeed; // OHM/ETH price feed
@@ -37,9 +36,8 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         address ethUsdPriceFeed_,
         address stethUsdPriceFeed_
     ) BaseLiquidityAMO(kernel_, ohm_, steth_, liquidityPool_) {
-        // Set Balancer contracts
+        // Set Balancer vault
         vault = IVault(vault_);
-        liquidityPool = IBasePool(liquidityPool_);
 
         // Set price feeds
         ohmEthPriceFeed = AggregatorV3Interface(ohmEthPriceFeed_);
@@ -62,14 +60,23 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
     }
 
     function _getPoolPrice() internal view override returns (uint256) {
-        (, uint256[] memory balances_, ) = vault.getPoolTokens(liquidityPool.getPoolId());
+        (, uint256[] memory balances_, ) = vault.getPoolTokens(
+            IBasePool(liquidityPool).getPoolId()
+        );
 
         return (balances_[0] * 1e18) / balances_[1];
     }
 
-    function _deposit(uint256 ohmAmount_, uint256 pairAmount_) internal override returns (uint256) {
+    function _deposit(
+        uint256 ohmAmount_,
+        uint256 pairAmount_,
+        uint256 minLpAmount_
+    ) internal override returns (uint256) {
+        // Cast pool adress from abstract to Balancer Base Pool
+        IBasePool pool = IBasePool(liquidityPool);
+
         // OHM-stETH BPT before
-        uint256 bptBefore = liquidityPool.balanceOf(address(this));
+        uint256 bptBefore = pool.balanceOf(address(this));
 
         // Build join pool request
         address[] memory assets = new address[](2);
@@ -83,22 +90,29 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
             assets: assets,
             maxAmountsIn: maxAmountsIn,
-            userData: abi.encode(1, maxAmountsIn, 0), // need to change last parameter based on estimate of LP received
+            userData: abi.encode(1, maxAmountsIn, minLpAmount_),
             fromInternalBalance: false
         });
 
         // Join Balancer pool
         ohm.approve(address(vault), ohmAmount_);
         pairToken.approve(address(vault), pairAmount_);
-        vault.joinPool(liquidityPool.getPoolId(), address(this), address(this), joinPoolRequest);
+        vault.joinPool(pool.getPoolId(), address(this), address(this), joinPoolRequest);
 
         // OHM-PAIR BPT after
-        uint256 lpAmountOut = liquidityPool.balanceOf(address(this)) - bptBefore;
+        uint256 lpAmountOut = pool.balanceOf(address(this)) - bptBefore;
 
         return lpAmountOut;
     }
 
-    function _withdraw(uint256 lpAmount_) internal override returns (uint256, uint256) {
+    function _withdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
+        internal
+        override
+        returns (uint256, uint256)
+    {
+        // Cast pool adress from abstract to Balancer Base Pool
+        IBasePool pool = IBasePool(liquidityPool);
+
         // OHM and pair token amounts before
         uint256 ohmBefore = ohm.balanceOf(address(this));
         uint256 pairTokenBefore = pairToken.balanceOf(address(this));
@@ -108,25 +122,17 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         assets[0] = address(ohm);
         assets[1] = address(pairToken);
 
-        uint256[] memory minAmountsOut = new uint256[](2);
-        minAmountsOut[0] = 0; // TODO: find way to calculate without adding function args
-        minAmountsOut[1] = 0; // TODO: find way to calculate without adding function args
-
         ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
             assets: assets,
-            minAmountsOut: minAmountsOut,
+            minAmountsOut: minTokenAmounts_,
             userData: abi.encode(1, lpAmount_),
             toInternalBalance: false
         });
 
         // Exit Balancer pool
-        liquidityPool.approve(address(vault), lpAmount_);
-        vault.exitPool(
-            liquidityPool.getPoolId(),
-            address(this),
-            payable(address(this)),
-            exitPoolRequest
-        );
+        pool.approve(address(vault), lpAmount_);
+        vault.exitPool(pool.getPoolId(), address(this), payable(address(this)), exitPoolRequest);
+
         // OHM and pair token amounts received
         uint256 ohmReceived = ohm.balanceOf(address(this)) - ohmBefore;
         uint256 pairTokenReceived = pairToken.balanceOf(address(this)) - pairTokenBefore;
