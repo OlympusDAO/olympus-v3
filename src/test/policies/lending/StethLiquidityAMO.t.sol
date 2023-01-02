@@ -640,7 +640,7 @@ contract StethLiquidityAMOTest is Test {
     // ========= VIEW TESTS ========= //
 
     /// [X]  rewardsForToken
-    /// []  getOhmEmissions
+    /// [X]  getOhmEmissions
 
     function testCorrectness_rewardsForToken(address user_) public {
         vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityAMO));
