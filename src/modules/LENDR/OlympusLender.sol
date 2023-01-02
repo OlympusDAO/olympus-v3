@@ -86,13 +86,29 @@ contract OlympusLender is LENDRv1 {
     }
 
     /// @inheritdoc LENDRv1
-    function setApproval(address market_, bool approval_) external override permissioned {
-        isMarketApproved[market_] = approval_;
+    function approveMarket(address market_) external override permissioned {
+        if (isMarketApproved[market_]) revert LENDR_MarketAlreadyApproved();
 
-        if (approval_) {
-            emit MarketApproved(market_);
-        } else {
-            emit MarketRemoved(market_);
-        }
+        isMarketApproved[market_] = true;
+        approvedMarkets.push(market_);
+        ++approvedMarketsCount;
+
+        emit MarketApproved(market_);
+    }
+
+    /// @inheritdoc LENDRv1
+    function removeMarket(uint256 index_, address market_) external override permissioned {
+        // Sanity check to ensure the market is approved and the index is correct
+        if (!isMarketApproved[market_] || approvedMarkets[index_] != market_)
+            revert LENDR_InvalidMarketRemoval();
+
+        isMarketApproved[market_] = false;
+
+        // Delete market from array by swapping with last element and popping
+        approvedMarkets[index_] = approvedMarkets[approvedMarketsCount - 1];
+        approvedMarkets.pop();
+        --approvedMarketsCount;
+
+        emit MarketRemoved(market_);
     }
 }

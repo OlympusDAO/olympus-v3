@@ -23,6 +23,8 @@ abstract contract LENDRv1 is Module {
 
     error LENDR_GlobalLimitViolation();
     error LENDR_MarketLimitViolation();
+    error LENDR_MarketAlreadyApproved();
+    error LENDR_InvalidMarketRemoval();
     error LENDR_UnapprovedMarket();
     error LENDR_InvalidParams();
 
@@ -33,6 +35,16 @@ abstract contract LENDRv1 is Module {
 
     /// @notice Current level of total debt in the system
     uint256 public globalDebtOutstanding;
+
+    /// @notice approvedMarketsCount
+    /// @dev    This is a useless variable in contracts but useful for any frontends or
+    ///         off-chain requests where the array is not easily accessible.
+    uint256 public approvedMarketsCount;
+
+    /// @notice List of approved lending markets
+    /// @dev    This is redundant with isMarketApproved, but is used to iterate over all markets
+    ///         for future reportin use cases
+    address[] public approvedMarkets;
 
     /// @notice Tracks whether an address is an approved lending market
     mapping(address => bool) public isMarketApproved;
@@ -81,8 +93,12 @@ abstract contract LENDRv1 is Module {
     /// @param shouldUnwind_    Should the market be reducing debt as quickly as possible
     function setUnwind(address market_, bool shouldUnwind_) external virtual;
 
-    /// @notice                 Sets whether a market is approved for borrowing OHM or not
-    /// @param market_          The market to change the approval status for
-    /// @param approval_        Whether the market is approved or not
-    function setApproval(address market_, bool approval_) external virtual;
+    /// @notice                 Approves a market for borrowing
+    /// @param market_          The market to approve
+    function approveMarket(address market_) external virtual;
+
+    /// @notice                 Revokes a market's borrowing privileges
+    /// @param index_           The index of the market in the list of approved markets to remove
+    /// @param market_          The address of the market to remove
+    function removeMarket(uint256 index_, address market_) external virtual;
 }

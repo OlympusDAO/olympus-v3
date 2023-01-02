@@ -1,20 +1,16 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
-import {larping} from "test/lib/larping.sol";
 
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import "modules/LENDR/OlympusLender.sol";
 import "src/Kernel.sol";
 
-import {console2} from "forge-std/Script.sol";
-
 contract LENDRTest is Test {
     using ModuleTestFixtureGenerator for OlympusLender;
-    using larping for *;
 
     UserFactory public userCreator;
     address internal alice;
@@ -69,12 +65,12 @@ contract LENDRTest is Test {
         assertEq(minor, 0);
     }
 
-    /// []  borrow()
-    ///     []  Unapproved market cannot borrow
-    ///     []  Approved market cannot borrow in excess of its limit
-    ///     []  Approved market cannot push global debt beyond limit
-    ///     []  Approved market can borrow up to its limit
-    ///     []  Borrowing increases market debt and global debt
+    /// [X]  borrow()
+    ///     [X]  Unapproved market cannot borrow
+    ///     [X]  Approved market cannot borrow in excess of its limit
+    ///     [X]  Approved market cannot push global debt beyond limit
+    ///     [X]  Approved market can borrow up to its limit
+    ///     [X]  Borrowing increases market debt and global debt
 
     function _setupBorrow() internal {
         vm.startPrank(godmode);
@@ -157,11 +153,11 @@ contract LENDRTest is Test {
         assertEq(LENDR.marketDebtOutstanding(godmode), amount_);
     }
 
-    /// []  repay()
-    ///     []  Unapproved market cannot repay
-    ///     []  Approved market can repay
-    ///     []  Repay reduces market and global debt
-    ///     []  Repay above market debt max repays
+    /// [X]  repay()
+    ///     [X]  Unapproved market cannot repay
+    ///     [X]  Approved market can repay
+    ///     [X]  Repay reduces market and global debt
+    ///     [X]  Repay above market debt max repays
 
     function _setupRepay() internal {
         vm.startPrank(godmode);
@@ -227,10 +223,10 @@ contract LENDRTest is Test {
         assertEq(LENDR.marketDebtOutstanding(godmode), 0);
     }
 
-    /// []  setGlobalLimit()
-    ///     []  Unapproved policy cannot change global limit
-    ///     []  Approved policy cannot set limit below current global debt
-    ///     []  Correctly sets new limit
+    /// [X]  setGlobalLimit()
+    ///     [X]  Unapproved policy cannot change global limit
+    ///     [X]  Approved policy cannot set limit below current global debt
+    ///     [X]  Correctly sets new limit
 
     function testCorrectness_unapprovedPolicyCannotChangeGlobalLimit(address user_, uint256 amount_)
         public
@@ -279,10 +275,10 @@ contract LENDRTest is Test {
         assertEq(LENDR.globalDebtLimit(), amount_);
     }
 
-    /// []  setMarketLimit()
-    ///     []  Unapproved policy cannot change market limit
-    ///     []  Approved policy cannot set limit below current market debt
-    ///     []  Correctly sets new limit
+    /// [X]  setMarketLimit()
+    ///     [X]  Unapproved policy cannot change market limit
+    ///     [X]  Approved policy cannot set limit below current market debt
+    ///     [X]  Correctly sets new limit
 
     function testCorrectness_unapprovedPolicyCannotChangeMarketLimit(address user_, uint256 amount_)
         public
@@ -331,9 +327,9 @@ contract LENDRTest is Test {
         assertEq(LENDR.marketDebtLimit(godmode), amount_);
     }
 
-    /// []  setMarketTargetRate()
-    ///     []  Unapproved policy cannot change market target rate
-    ///     []  Approved policy can correctly set new target rate
+    /// [X]  setMarketTargetRate()
+    ///     [X]  Unapproved policy cannot change market target rate
+    ///     [X]  Approved policy can correctly set new target rate
 
     function testCorrectness_unapprovedPolicyCantChangeTargetRate(address user_, uint32 newRate_)
         public
@@ -361,9 +357,9 @@ contract LENDRTest is Test {
         assertEq(LENDR.marketTargetRate(godmode), newRate_);
     }
 
-    /// []  setUnwind()
-    ///     []  Unapproved policy cannot change market's unwind status
-    ///     []  Approved policy correctly changes market's unwind status
+    /// [X]  setUnwind()
+    ///     [X]  Unapproved policy cannot change market's unwind status
+    ///     [X]  Approved policy correctly changes market's unwind status
 
     function testCorrectness_unapprovedPolicyCantChangeUnwindStatus(address user_, bool unwind_)
         public
@@ -391,33 +387,110 @@ contract LENDRTest is Test {
         assertEq(LENDR.shouldUnwind(godmode), unwind_);
     }
 
-    /// []  setApproval()
-    ///     []  Unapproved policy cannot set approval status for a market
-    ///     []  Approved policy correctly sets market's approval status
+    /// [X]  approveMarket()
+    ///     [X]  Unapproved policy cannot approve a market
+    ///     [X]  Cannot approve a market that is already approved
+    ///     [X]  Market is approved correctly
 
-    function testCorrectness_unapprovedPolicyCantSetMarketApproval(address user_, bool approval_)
-        public
-    {
+    function testCorrectness_unapprovedPolicyCannotApproveMarket(address user_) public {
         vm.assume(user_ != godmode);
 
         // Expected error
         bytes memory err = abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, user_);
         vm.expectRevert(err);
 
-        // Try to set market's approval status
+        // Try to approve market
         vm.prank(user_);
-        LENDR.setApproval(godmode, approval_);
+        LENDR.approveMarket(godmode);
     }
 
-    function testCorrectness_correctlySetsMarketApproval(bool approval_) public {
+    function testCorrectness_cannotApproveAlreadyApprovedMarket() public {
+        // Setup
+        vm.prank(godmode);
+        LENDR.approveMarket(godmode);
+
+        // Expected error
+        bytes memory err = abi.encodeWithSelector(LENDRv1.LENDR_MarketAlreadyApproved.selector);
+        vm.expectRevert(err);
+
+        // Try to approve market
+        vm.prank(godmode);
+        LENDR.approveMarket(godmode);
+    }
+
+    function testCorrectness_approvesMarketCorrectly() public {
         // Verify initial state
+        assertEq(LENDR.approvedMarketsCount(), 0);
         assertFalse(LENDR.isMarketApproved(godmode));
 
-        // Set godmode's approval status
+        // Approve market
         vm.prank(godmode);
-        LENDR.setApproval(godmode, approval_);
+        LENDR.approveMarket(godmode);
 
         // Verify end state
-        assertEq(LENDR.isMarketApproved(godmode), approval_);
+        assertEq(LENDR.approvedMarketsCount(), 1);
+        assertEq(LENDR.approvedMarkets(0), godmode);
+        assertTrue(LENDR.isMarketApproved(godmode));
+    }
+
+    /// [X]  removeMarket()
+    ///     [X]  Unapproved policy cannot remove a market
+    ///     [X]  Cannot remove a market that is not approved
+    ///     [X]  Cannot remove market if index doesn't match
+    ///     [X]  Market is removed correctly
+
+    function testCorrectness_unapprovedPolicyCannotRemoveMarket(address user_) public {
+        vm.assume(user_ != godmode);
+
+        // Expected error
+        bytes memory err = abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, user_);
+        vm.expectRevert(err);
+
+        // Try to remove market
+        vm.prank(user_);
+        LENDR.removeMarket(0, godmode);
+    }
+
+    function testCorrectness_cannotRemoveUnapprovedMarket() public {
+        // Expected error
+        bytes memory err = abi.encodeWithSelector(LENDRv1.LENDR_InvalidMarketRemoval.selector);
+        vm.expectRevert(err);
+
+        // Try to remove market
+        vm.prank(godmode);
+        LENDR.removeMarket(0, godmode);
+    }
+
+    function testCorrectness_cannotRemoveMarketIfIndexDoesntMatch() public {
+        // Setup
+        vm.prank(godmode);
+        LENDR.approveMarket(godmode);
+
+        // Expected error
+        bytes memory err = abi.encodeWithSelector(LENDRv1.LENDR_InvalidMarketRemoval.selector);
+        vm.expectRevert(err);
+
+        // Try to remove market
+        vm.prank(godmode);
+        LENDR.removeMarket(0, address(0));
+    }
+
+    function testCorrectness_removesMarketCorrectly() public {
+        // Setup
+        vm.prank(godmode);
+        LENDR.approveMarket(godmode);
+
+        // Verify initial state
+        assertEq(LENDR.approvedMarketsCount(), 1);
+        assertEq(LENDR.approvedMarkets(0), godmode);
+        assertTrue(LENDR.isMarketApproved(godmode));
+
+        // Remove market
+        vm.prank(godmode);
+        LENDR.removeMarket(0, godmode);
+
+        // Verify end state
+        assertEq(LENDR.approvedMarketsCount(), 0);
+        assertFalse(LENDR.isMarketApproved(godmode));
     }
 }
