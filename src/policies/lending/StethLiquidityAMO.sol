@@ -75,7 +75,8 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         uint256 bptBalance = pool.balanceOf(address(this));
         uint256 bptTotalSupply = pool.totalSupply();
 
-        return (balances_[0] * bptBalance) / bptTotalSupply;
+        if (bptBalance == 0) return 0;
+        else return (balances_[0] * bptBalance) / bptTotalSupply;
     }
 
     function _deposit(

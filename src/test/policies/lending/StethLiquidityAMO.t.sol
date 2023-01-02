@@ -100,7 +100,7 @@ contract StethLiquidityAMOTest is Test {
             // Deploy mock Balancer contracts
             liquidityPool = new MockBalancerPool();
             vault = new MockVault(address(liquidityPool), address(ohm), address(steth));
-            vault.setPoolAmounts(1e9, 100e18);
+            vault.setPoolAmounts(1e7, 1e18);
         }
 
         {
@@ -253,7 +253,7 @@ contract StethLiquidityAMOTest is Test {
         _withdrawSetUp();
 
         // Set pool price
-        vault.setPoolAmounts(1e9, 1000e18);
+        vault.setPoolAmounts(1e7, 10e18);
 
         bytes memory err = abi.encodeWithSignature("LiquidityAMO_PoolImbalanced()");
         vm.expectRevert(err);
@@ -392,7 +392,7 @@ contract StethLiquidityAMOTest is Test {
         _withdrawAndClaimSetUp();
 
         // Set pool price
-        vault.setPoolAmounts(1e9, 1000e18);
+        vault.setPoolAmounts(1e7, 10e18);
 
         bytes memory err = abi.encodeWithSignature("LiquidityAMO_PoolImbalanced()");
         vm.expectRevert(err);
@@ -639,7 +639,8 @@ contract StethLiquidityAMOTest is Test {
 
     // ========= VIEW TESTS ========= //
 
-    /// []  rewardsForToken
+    /// [X]  rewardsForToken
+    /// []  getOhmEmissions
 
     function testCorrectness_rewardsForToken(address user_) public {
         vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityAMO));
@@ -662,6 +663,25 @@ contract StethLiquidityAMOTest is Test {
         assertEq(liquidityAMO.rewardsForToken(1, alice), 5e18);
         assertEq(liquidityAMO.rewardsForToken(0, user_), 5e18);
         assertEq(liquidityAMO.rewardsForToken(1, user_), 5e18);
+    }
+
+    function testCorrectness_getOhmEmissions() public {
+        // Setup
+        _withdrawSetUp();
+
+        // Verify initial state
+        (uint256 emissions, uint256 removals) = liquidityAMO.getOhmEmissions();
+        assertEq(emissions, 0);
+        assertEq(removals, 0);
+
+        // Pools change in price
+        vault.setPoolAmounts(2e7, 1e18);
+        ohmEthPriceFeed.setLatestAnswer(2e16);
+
+        // Verify end state
+        (emissions, removals) = liquidityAMO.getOhmEmissions();
+        assertEq(emissions, 0);
+        assertEq(removals, 1e7);
     }
 
     // ========= ADMIN TESTS ========= //
