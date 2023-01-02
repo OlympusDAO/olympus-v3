@@ -59,21 +59,11 @@ contract BaseExternalAMO is Policy, RolesConsumer {
 
     /// @notice         Borrow and deposit OHM into the system this policy is responsible for
     /// @param amount_  The amount of OHM to borrow and deposit
-    function deposit(uint256 amount_)
-        external
-        virtual
-        onlyRole("externalamo_admin")
-        returns (uint256)
-    {}
+    function deposit(uint256 amount_) external virtual {}
 
     /// @notice         Withdraw and repay OHM from the system this policy is responsible for
     /// @param amount_  The amount of OHM to withdraw and repay
-    function withdraw(uint256 amount_)
-        external
-        virtual
-        onlyRole("externalamo_admin")
-        returns (uint256)
-    {}
+    function withdraw(uint256 amount_) external virtual {}
 
     /// @notice         Update the policy's state. Harvests yield, and manages amount of OHM deployed
     function update() external virtual {}

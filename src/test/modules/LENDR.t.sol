@@ -3,7 +3,6 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
-
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import "modules/LENDR/OlympusLender.sol";
