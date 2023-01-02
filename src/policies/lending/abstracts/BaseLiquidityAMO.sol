@@ -2,7 +2,6 @@
 pragma solidity 0.8.15;
 
 // Import system dependencies
-import {LENDRv1} from "src/modules/LENDR/LENDR.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1, RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import "src/Kernel.sol";
@@ -34,7 +33,6 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     // Modules
     MINTRv1 public MINTR;
-    LENDRv1 public LENDR;
 
     // Tokens
     ERC20 public ohm;
@@ -42,6 +40,10 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     // Pool
     address public liquidityPool;
+
+    // Aggregate Contract State
+    uint256 public ohmMinted; // Total OHM minted over time
+    uint256 public ohmBurned; // Total OHM withdrawn and burnt over time
 
     // User State
     mapping(address => uint256) public pairTokenDeposits; // User pair token deposits
@@ -76,14 +78,12 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
-        dependencies[0] = toKeycode("LENDR");
-        dependencies[1] = toKeycode("MINTR");
-        dependencies[2] = toKeycode("ROLES");
+        dependencies = new Keycode[](2);
+        dependencies[0] = toKeycode("MINTR");
+        dependencies[1] = toKeycode("ROLES");
 
-        LENDR = LENDRv1(getModuleAddress(dependencies[0]));
-        MINTR = MINTRv1(getModuleAddress(dependencies[1]));
-        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
+        MINTR = MINTRv1(getModuleAddress(dependencies[0]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
     }
 
     /// @inheritdoc Policy
@@ -94,14 +94,11 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         returns (Permissions[] memory permissions)
     {
         Keycode mintrKeycode = MINTR.KEYCODE();
-        Keycode lendrKeycode = LENDR.KEYCODE();
 
-        permissions = new Permissions[](5);
+        permissions = new Permissions[](3);
         permissions[0] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.burnOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
-        permissions[3] = Permissions(lendrKeycode, LENDR.borrow.selector);
-        permissions[4] = Permissions(lendrKeycode, LENDR.repay.selector);
     }
 
     //============================================================================================//
@@ -128,13 +125,14 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         }
 
         // Update state about user's deposits and borrows
+        uint256 ohmToBorrow = _valueCollateral(amount_);
         pairTokenDeposits[msg.sender] += amount_;
+        ohmMinted += ohmToBorrow;
 
         // Take pair token from user
         pairToken.transferFrom(msg.sender, address(this), amount_);
 
         // Borrow OHM
-        uint256 ohmToBorrow = _valueCollateral(amount_);
         _borrow(ohmToBorrow);
 
         uint256 lpReceived = _deposit(ohmToBorrow, amount_, minLpAmount_);
@@ -190,6 +188,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         pairTokenDeposits[msg.sender] -= pairTokenReceived > userDeposit
             ? userDeposit
             : pairTokenReceived;
+        ohmBurned += ohmReceived;
 
         // Return assets
         _repay(ohmReceived);
@@ -234,6 +233,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         pairTokenDeposits[msg.sender] -= pairTokenReceived > userDeposit
             ? userDeposit
             : pairTokenReceived;
+        ohmBurned += ohmReceived;
 
         // Return assets
         _repay(ohmReceived);
@@ -273,6 +273,17 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
             userRewardDebts[user_][rewardToken.token];
     }
 
+    function getOhmEmissions() external view returns (uint256 emitted, uint256 removed) {
+        uint256 currentPoolOhmShare = _getPoolOhmShare();
+        uint256 burnedAndOutstanding = currentPoolOhmShare + ohmBurned;
+
+        if (burnedAndOutstanding > ohmMinted) {
+            removed = burnedAndOutstanding - ohmMinted;
+        } else {
+            emitted = ohmMinted - burnedAndOutstanding;
+        }
+    }
+
     //============================================================================================//
     //                                     INTERNAL FUNCTIONS                                     //
     //============================================================================================//
@@ -280,6 +291,8 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     function _valueCollateral(uint256 amount_) internal view virtual returns (uint256) {}
 
     function _getPoolPrice() internal view virtual returns (uint256) {}
+
+    function _getPoolOhmShare() internal view virtual returns (uint256) {}
 
     function _isPoolSafe() internal view returns (bool) {
         uint256 pairTokenDecimals = pairToken.decimals();
@@ -323,18 +336,14 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         if (reward > 0) ERC20(rewardToken.token).transfer(msg.sender, reward);
     }
 
-    // TODO: Decide if we want to use the LENDR for this or not
     function _borrow(uint256 amount_) internal {
-        LENDR.borrow(amount_);
         MINTR.increaseMintApproval(address(this), amount_);
         MINTR.mintOhm(address(this), amount_);
     }
 
-    // TODO: Decide if we want to use the LENDR for this or not
     // TODO: Need a way to report net minted amount
     function _repay(uint256 amount_) internal {
         MINTR.burnOhm(address(this), amount_);
-        LENDR.repay(amount_);
     }
 
     //============================================================================================//

@@ -4,7 +4,6 @@ pragma solidity 0.8.15;
 import {Test, stdError} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -15,7 +14,6 @@ import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 
 import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
-import {OlympusLender} from "modules/LENDR/OlympusLender.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {StethLiquidityAMO} from "policies/lending/StethLiquidityAMO.sol";
 
@@ -39,7 +37,6 @@ contract MockOhm is ERC20 {
 
 // solhint-disable-next-line max-states-count
 contract StethLiquidityAMOTest is Test {
-    using ModuleTestFixtureGenerator for OlympusLender;
     using FullMath for uint256;
 
     UserFactory public userCreator;
@@ -61,7 +58,6 @@ contract StethLiquidityAMOTest is Test {
     Kernel internal kernel;
     OlympusMinter internal minter;
     OlympusRoles internal roles;
-    OlympusLender internal lender;
 
     RolesAdmin internal rolesAdmin;
     StethLiquidityAMO internal liquidityAMO;
@@ -114,12 +110,6 @@ contract StethLiquidityAMOTest is Test {
             // Deploy modules
             minter = new OlympusMinter(kernel, address(ohm));
             roles = new OlympusRoles(kernel);
-            lender = new OlympusLender(kernel);
-        }
-
-        {
-            // Generate fixtures
-            godmode = lender.generateGodmodeFixture(type(OlympusLender).name);
         }
 
         {
@@ -145,12 +135,10 @@ contract StethLiquidityAMOTest is Test {
             // Initialize modules
             kernel.executeAction(Actions.InstallModule, address(minter));
             kernel.executeAction(Actions.InstallModule, address(roles));
-            kernel.executeAction(Actions.InstallModule, address(lender));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
             kernel.executeAction(Actions.ActivatePolicy, address(liquidityAMO));
-            kernel.executeAction(Actions.ActivatePolicy, godmode);
         }
 
         {
@@ -169,15 +157,6 @@ contract StethLiquidityAMOTest is Test {
         }
 
         {
-            // Set LENDR limits
-            vm.startPrank(godmode);
-            lender.setApproval(address(liquidityAMO), true);
-            lender.setGlobalLimit(1e22);
-            lender.setMarketLimit(address(liquidityAMO), 1e22);
-            vm.stopPrank();
-        }
-
-        {
             // Mint stETH to alice
             steth.mint(alice, STETH_AMOUNT);
 
@@ -191,7 +170,6 @@ contract StethLiquidityAMOTest is Test {
     ///     [X]  Can be accessed by anyone
     ///     [X]  Increases user's stETH deposit
     ///     [X]  Correctly values stETH in terms of OHM
-    ///     [X]  Increases AMO's debt in LENDR module
     ///     [X]  Transfers stETH from user
     ///     [X]  Deposits stETH and OHM into Balancer LP
     ///     [X]  Updates user's tracked LP position
@@ -217,13 +195,6 @@ contract StethLiquidityAMOTest is Test {
         liquidityAMO.deposit(1e11, 1e18);
 
         assertEq(ohm.balanceOf(address(vault)), 1);
-    }
-
-    function testCorrectness_depositIncreasesAmoDebtInLendr() public {
-        vm.prank(alice);
-        liquidityAMO.deposit(STETH_AMOUNT, 1e18);
-
-        assertEq(lender.marketDebtOutstanding(address(liquidityAMO)), STETH_AMOUNT / 1e11);
     }
 
     function testCorrectness_depositTransfersStethFromUser() public {
@@ -256,7 +227,6 @@ contract StethLiquidityAMOTest is Test {
     ///     [X]  Decreases user's stETH deposit value
     ///     [X]  Updates user's reward debts for reward tokens
     ///     [X]  Burns received OHM
-    ///     [X]  Decreases AMO's debt in LENDR module
     ///     [X]  Transfers stETH to user
 
     function _withdrawSetUp() internal {
@@ -371,21 +341,6 @@ contract StethLiquidityAMOTest is Test {
         assertEq(ohm.balanceOf(address(liquidityAMO)), 0);
     }
 
-    function testCorrectness_withdrawReducesDebtInLendr() public {
-        // Setup
-        _withdrawSetUp();
-
-        // Verify initial state
-        assertEq(lender.marketDebtOutstanding(address(liquidityAMO)), STETH_AMOUNT / 1e11);
-
-        // Withdraw
-        vm.prank(alice);
-        liquidityAMO.withdraw(1e18, minTokenAmounts_);
-
-        // Verify end state
-        assertEq(lender.marketDebtOutstanding(address(liquidityAMO)), 0);
-    }
-
     function testCorrectness_withdrawReturnsStethToUser() public {
         // Setup
         _withdrawSetUp();
@@ -411,7 +366,6 @@ contract StethLiquidityAMOTest is Test {
     ///     [X]  Decreases user's stETH deposit value
     ///     [X]  Updates user's reward debts for reward tokens
     ///     [X]  Burns received OHM
-    ///     [X]  Decreases AMO's debt in LENDR module
     ///     [X]  Transfers stETH to user
 
     function _withdrawAndClaimSetUp() internal {
@@ -566,21 +520,6 @@ contract StethLiquidityAMOTest is Test {
 
         // Verify end state
         assertEq(ohm.balanceOf(address(liquidityAMO)), 0);
-    }
-
-    function testCorrectness_withdrawAndClaimDecreasesLendrDebt() public {
-        // Setup
-        _withdrawAndClaimSetUp();
-
-        // Verify initial state
-        assertEq(lender.marketDebtOutstanding(address(liquidityAMO)), STETH_AMOUNT / 1e11);
-
-        // Withdraw and claim
-        vm.prank(alice);
-        liquidityAMO.withdrawAndClaim(1e18, minTokenAmounts_);
-
-        // Verify end state
-        assertEq(lender.marketDebtOutstanding(address(liquidityAMO)), 0);
     }
 
     function testCorrectness_withdrawAndClaimTransfersStethToUser() public {
