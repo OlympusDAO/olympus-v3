@@ -67,12 +67,23 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         return (balances_[0] * 1e18) / balances_[1];
     }
 
+    function _getPoolOhmShare() internal view override returns (uint256) {
+        // Cast pool address from abstract to Balancer Base Pool
+        IBasePool pool = IBasePool(liquidityPool);
+
+        (, uint256[] memory balances_, ) = vault.getPoolTokens(pool.getPoolId());
+        uint256 bptBalance = pool.balanceOf(address(this));
+        uint256 bptTotalSupply = pool.totalSupply();
+
+        return (balances_[0] * bptBalance) / bptTotalSupply;
+    }
+
     function _deposit(
         uint256 ohmAmount_,
         uint256 pairAmount_,
         uint256 minLpAmount_
     ) internal override returns (uint256) {
-        // Cast pool adress from abstract to Balancer Base Pool
+        // Cast pool address from abstract to Balancer Base Pool
         IBasePool pool = IBasePool(liquidityPool);
 
         // OHM-stETH BPT before
