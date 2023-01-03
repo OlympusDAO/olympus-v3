@@ -147,6 +147,9 @@ contract StethLiquidityAMOTest is Test {
         }
 
         {
+            // Set limit
+            liquidityAMO.setLimit(1e8); // 0.1 OHM
+
             // Set price variation threshold to 10%
             liquidityAMO.setThreshold(100);
 
@@ -168,6 +171,7 @@ contract StethLiquidityAMOTest is Test {
 
     /// [X]  deposit
     ///     [X]  Can be accessed by anyone
+    ///     [X]  Cannot be called beyond limit
     ///     [X]  Increases user's stETH deposit
     ///     [X]  Correctly values stETH in terms of OHM
     ///     [X]  Transfers stETH from user
@@ -180,6 +184,20 @@ contract StethLiquidityAMOTest is Test {
         vm.startPrank(user_);
         steth.approve(address(liquidityAMO), 1e18);
         liquidityAMO.deposit(1e18, 1e18);
+        vm.stopPrank();
+    }
+
+    function testCorrectness_depositCannotBeCalledBeyondLimit() public {
+        steth.mint(alice, 1e19);
+
+        vm.startPrank(alice);
+        steth.approve(address(liquidityAMO), 2e19);
+        liquidityAMO.deposit(1e19, 1e18); // Should mint 0.1 OHM which is up to the limit
+
+        bytes memory err = abi.encodeWithSignature("LiquidityAMO_LimitViolation()");
+        vm.expectRevert(err);
+
+        liquidityAMO.deposit(1e18, 1e18); // Should try to push mint beyond limit
         vm.stopPrank();
     }
 

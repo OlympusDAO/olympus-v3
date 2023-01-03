@@ -18,6 +18,7 @@ import {console2} from "forge-std/Script.sol";
 contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     // ========= ERRORS ========= //
 
+    error LiquidityAMO_LimitViolation();
     error LiquidityAMO_PoolImbalanced();
 
     // ========= DATA STRUCTURES ========= //
@@ -54,6 +55,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     RewardToken[] public rewardTokens;
 
     // Configuration values
+    uint256 public LIMIT;
     uint256 public THRESHOLD;
     uint256 public FEE;
     uint256 public constant PRECISION = 1000;
@@ -112,6 +114,9 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         nonReentrant
         returns (uint256 lpAmountOut)
     {
+        uint256 ohmToBorrow = _valueCollateral(amount_);
+        if (!_canDeposit(ohmToBorrow)) revert LiquidityAMO_LimitViolation();
+
         // Update reward state
         // This has to be done before the contract receives any LP tokens which is why it's not baked into the
         // for loop for updating reward debts like in both withdrawal functions
@@ -125,7 +130,6 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         }
 
         // Update state about user's deposits and borrows
-        uint256 ohmToBorrow = _valueCollateral(amount_);
         pairTokenDeposits[msg.sender] += amount_;
         ohmMinted += ohmToBorrow;
 
@@ -294,6 +298,12 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     function _getPoolOhmShare() internal view virtual returns (uint256) {}
 
+    function _canDeposit(uint256 amount_) internal view virtual returns (bool) {
+        if (ohmBurned > ohmMinted + amount_) return true;
+        else if (ohmMinted + amount_ - ohmBurned <= LIMIT) return true;
+        else return false;
+    }
+
     function _isPoolSafe() internal view returns (bool) {
         uint256 pairTokenDecimals = pairToken.decimals();
         uint256 poolPrice = _getPoolPrice();
@@ -363,6 +373,10 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         });
 
         rewardTokens.push(newRewardToken);
+    }
+
+    function setLimit(uint256 limit_) external onlyRole("liquidityamo_admin") {
+        LIMIT = limit_;
     }
 
     function setThreshold(uint256 threshold_) external onlyRole("liquidityamo_admin") {
