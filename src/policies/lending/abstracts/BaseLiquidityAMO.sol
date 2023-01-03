@@ -107,8 +107,12 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @dev    This needs to be non-reentrant since the contract only knows the amount of LP tokens it
-    ///         receives after an external interaction with the Balancer pool
+    /// @notice                 Deposits pair tokens, mints OHM against the deposited pair tokens, and deposits the
+    ///                         pair token and OHM into a liquidity pool and receives LP tokens in return
+    /// @param  amount_         The amount of pair tokens to deposit
+    /// @param  minLpAmount_    The minimum amount of LP tokens to receive
+    /// @dev                    This needs to be non-reentrant since the contract only knows the amount of LP tokens it
+    ///                         receives after an external interaction with the liquidity pool
     function deposit(uint256 amount_, uint256 minLpAmount_)
         external
         nonReentrant
@@ -157,10 +161,14 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         }
     }
 
-    /// @dev    This needs to be non-reentrant since the contract only knows the amount of OHM and
-    ///         pair tokens it receives after an external call to withdraw liquidity from Balancer.
-    ///         This also should only be used in case of emergency where a user needs to withdraw their tokens
-    ///         but for some reason rewards have not been topped up.
+    /// @notice                     Withdraws pair tokens and OHM from a liquidity pool, returns any received pair tokens to the
+    ///                             user, and burns any received OHM
+    /// @param  lpAmount_           The amount of LP tokens to withdraw
+    /// @param  minTokenAmounts_    The minimum amounts of pair tokens and OHM to receive
+    /// @dev                        This needs to be non-reentrant since the contract only knows the amount of OHM and
+    ///                             pair tokens it receives after an external call to withdraw liquidity
+    ///                             This also should only be used in case of emergency where a user needs to withdraw their tokens
+    ///                             but for some reason rewards have not been topped up
     function withdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
         external
         nonReentrant
@@ -201,6 +209,12 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         return pairTokenReceived;
     }
 
+    /// @notice                     Withdraws pair tokens and OHM from a liquidity pool, returns any received pair tokens to the
+    ///                             user, and burns any received OHM
+    /// @param  lpAmount_           The amount of LP tokens to withdraw
+    /// @param  minTokenAmounts_    The minimum amounts of pair tokens and OHM to receive
+    /// @dev                        This needs to be non-reentrant since the contract only knows the amount of OHM and
+    ///                             pair tokens it receives after an external call to withdraw liquidity
     function withdrawAndClaim(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
         external
         nonReentrant
@@ -246,6 +260,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         return pairTokenReceived;
     }
 
+    /// @notice                     Claims user's rewards for all reward tokens
     function claimRewards() external returns (uint256) {
         uint256 numRewardTokens = rewardTokens.length;
         for (uint256 i; i < numRewardTokens; ) {
@@ -261,6 +276,9 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
 
+    /// @notice                     Returns the amount of rewards a user has earned for a given reward token
+    /// @param  id_                 The ID of the reward token
+    /// @param  user_               The user's address to check rewards for
     function rewardsForToken(uint256 id_, address user_) public view returns (uint256) {
         RewardToken memory rewardToken = rewardTokens[id_];
         uint256 accumulatedRewardsPerShare = rewardToken.accumulatedRewardsPerShare;
@@ -277,6 +295,8 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
             userRewardDebts[user_][rewardToken.token];
     }
 
+    /// @notice                     Calculates the net amount of OHM that this contract has emitted to or removed from the broader market
+    /// @dev                        This is based on a point-in-time snapshot of the liquidity pool's current OHM balance
     function getOhmEmissions() external view returns (uint256 emitted, uint256 removed) {
         uint256 currentPoolOhmShare = _getPoolOhmShare();
         uint256 burnedAndOutstanding = currentPoolOhmShare + ohmBurned;
@@ -360,6 +380,10 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     //                                      ADMIN FUNCTIONS                                       //
     //============================================================================================//
 
+    /// @notice                    Adds a new reward token to the contract
+    /// @param  token_             The address of the reward token
+    /// @param  rewardsPerSecond_  The amount of reward tokens to distribute per second
+    /// @param  startTimestamp_    The timestamp at which to start distributing rewards
     function addRewardToken(
         address token_,
         uint256 rewardsPerSecond_,
@@ -375,14 +399,20 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         rewardTokens.push(newRewardToken);
     }
 
+    /// @notice                    Updates the maximum amount of OHM that can be minted by this contract
+    /// @param  limit_             The new limit
     function setLimit(uint256 limit_) external onlyRole("liquidityamo_admin") {
         LIMIT = limit_;
     }
 
+    /// @notice                    Updates the threshold for the price deviation from the oracle price that is acceptable
+    /// @param  threshold_         The new threshold (out of 1000)
     function setThreshold(uint256 threshold_) external onlyRole("liquidityamo_admin") {
         THRESHOLD = threshold_;
     }
 
+    /// @notice                    Updates the fee charged on rewards
+    /// @param  fee_               The new fee (out of 1000)
     function setFee(uint256 fee_) external onlyRole("liquidityamo_admin") {
         FEE = fee_;
     }
