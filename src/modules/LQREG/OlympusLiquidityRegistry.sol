@@ -50,21 +50,4 @@ contract OlympusLiquidityRegistry is LQREGv1 {
         activeAMOs.pop();
         --activeAMOCount;
     }
-
-    /// Actually, is this necessary at all? We can just use the AMO's own getOhmEmissions() function
-    /// @inheritdoc LQREGv1
-    function reportEmissions() external view override returns (AMOEmissions[] memory) {
-        AMOEmissions[] memory amoEmissions = new AMOEmissions[](activeAMOCount);
-        for (uint256 i; i < activeAMOCount; ) {
-            (uint256 emissions, uint256 removals) = BaseLiquidityAMO(activeAMOs[i])
-                .getOhmEmissions();
-            amoEmissions[i] = AMOEmissions(activeAMOs[i], emissions, removals);
-
-            unchecked {
-                ++i;
-            }
-        }
-
-        return amoEmissions;
-    }
 }

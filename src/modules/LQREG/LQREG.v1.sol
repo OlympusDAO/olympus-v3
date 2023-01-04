@@ -18,23 +18,15 @@ abstract contract LQREGv1 is Module {
 
     error LQREG_RemovalMismatch();
 
-    // ========= DATA STRUCTURES ========= //
-
-    struct AMOEmissions {
-        address amo;
-        uint256 emissions;
-        uint256 removals;
-    }
-
     // ========= STATE ========= //
-
-    /// @notice Tracks all active AMOs
-    address[] public activeAMOs;
 
     /// @notice Count of active AMOs
     /// @dev    This is a useless variable in contracts but useful for any frontends or
     ///         off-chain requests where the array is not easily accessible.
     uint256 public activeAMOCount;
+
+    /// @notice Tracks all active AMOs
+    address[] public activeAMOs;
 
     // ========= FUNCTIONS ========= //
 
@@ -45,7 +37,4 @@ abstract contract LQREGv1 is Module {
     /// @notice Removes an AMO from the registry
     /// @param amo_ The address of the AMO to remove
     function removeAMO(uint256 index_, address amo_) external virtual;
-
-    /// @notice Returns the current emissions values of the AMO
-    function reportEmissions() external view virtual returns (AMOEmissions[] memory);
 }
