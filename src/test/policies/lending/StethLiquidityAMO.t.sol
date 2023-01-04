@@ -66,6 +66,8 @@ contract StethLiquidityAMOTest is Test {
     uint256[] internal minTokenAmounts_ = [1e7, 1e18];
 
     function setUp() public {
+        vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
+
         {
             // Deploy mock users
             userCreator = new UserFactory();
@@ -125,7 +127,10 @@ contract StethLiquidityAMOTest is Test {
                 address(liquidityPool),
                 address(ohmEthPriceFeed),
                 address(ethUsdPriceFeed),
-                address(stethUsdPriceFeed)
+                address(stethUsdPriceFeed),
+                uint48(1 days),
+                uint48(1 days),
+                uint48(1 days)
             );
         }
 
@@ -157,6 +162,13 @@ contract StethLiquidityAMOTest is Test {
             liquidityAMO.addRewardToken(address(reward), 1e18, block.timestamp); // 1 REWARD token per second
 
             reward.mint(address(liquidityAMO), 1e23);
+        }
+
+        {
+            /// Initialize timestamps on mock price feeds
+            ohmEthPriceFeed.setTimestamp(block.timestamp);
+            ethUsdPriceFeed.setTimestamp(block.timestamp);
+            stethUsdPriceFeed.setTimestamp(block.timestamp);
         }
 
         {

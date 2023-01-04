@@ -22,6 +22,11 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
     AggregatorV3Interface public ethUsdPriceFeed; // ETH/USD price feed
     AggregatorV3Interface public stethUsdPriceFeed; // stETH/USD price feed
 
+    // Price Feed Update Thresholds
+    uint48 public ohmEthPriceFeedUpdateThreshold;
+    uint48 public ethUsdPriceFeedUpdateThreshold;
+    uint48 public stethUsdPriceFeedUpdateThreshold;
+
     //============================================================================================//
     //                                      POLICY SETUP                                          //
     //============================================================================================//
@@ -34,7 +39,10 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         address liquidityPool_,
         address ohmEthPriceFeed_,
         address ethUsdPriceFeed_,
-        address stethUsdPriceFeed_
+        address stethUsdPriceFeed_,
+        uint48 ohmEthPriceFeedUpdateThreshold_,
+        uint48 ethUsdPriceFeedUpdateThreshold_,
+        uint48 stethUsdPriceFeedUpdateThreshold_
     ) BaseLiquidityAMO(kernel_, ohm_, steth_, liquidityPool_) {
         // Set Balancer vault
         vault = IVault(vault_);
@@ -43,6 +51,25 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         ohmEthPriceFeed = AggregatorV3Interface(ohmEthPriceFeed_);
         ethUsdPriceFeed = AggregatorV3Interface(ethUsdPriceFeed_);
         stethUsdPriceFeed = AggregatorV3Interface(stethUsdPriceFeed_);
+
+        // Set price feed update thresholds
+        ohmEthPriceFeedUpdateThreshold = ohmEthPriceFeedUpdateThreshold_;
+        ethUsdPriceFeedUpdateThreshold = ethUsdPriceFeedUpdateThreshold_;
+        stethUsdPriceFeedUpdateThreshold = stethUsdPriceFeedUpdateThreshold_;
+    }
+
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
+
+    function changeUpdateThresholds(
+        uint48 ohmEthPriceFeedUpdateThreshold_,
+        uint48 ethUsdPriceFeedUpdateThreshold_,
+        uint48 stethUsdPriceFeedUpdateThreshold_
+    ) external onlyRole("liquidityamo_admin") {
+        ohmEthPriceFeedUpdateThreshold = ohmEthPriceFeedUpdateThreshold_;
+        ethUsdPriceFeedUpdateThreshold = ethUsdPriceFeedUpdateThreshold_;
+        stethUsdPriceFeedUpdateThreshold = stethUsdPriceFeedUpdateThreshold_;
     }
 
     //============================================================================================//
@@ -50,13 +77,22 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
     //============================================================================================//
 
     function _valueCollateral(uint256 amount_) internal view override returns (uint256) {
-        (, int256 stethPrice_, , , ) = stethUsdPriceFeed.latestRoundData();
-        (, int256 ohmPrice_, , , ) = ohmEthPriceFeed.latestRoundData();
-        (, int256 ethPrice_, , , ) = ethUsdPriceFeed.latestRoundData();
+        uint256 ohmPrice = _validatePrice(
+            address(ohmEthPriceFeed),
+            uint256(ohmEthPriceFeedUpdateThreshold)
+        );
+        uint256 ethPrice = _validatePrice(
+            address(ethUsdPriceFeed),
+            uint256(ethUsdPriceFeedUpdateThreshold)
+        );
+        uint256 stethPrice = _validatePrice(
+            address(stethUsdPriceFeed),
+            uint256(stethUsdPriceFeedUpdateThreshold)
+        );
 
-        uint256 ohmUsd = uint256((ohmPrice_ * ethPrice_) / 1e18);
+        uint256 ohmUsd = uint256((ohmPrice * ethPrice) / 1e18);
 
-        return (amount_ * ohmUsd) / (uint256(stethPrice_) * 1e9);
+        return (amount_ * ohmUsd) / (uint256(stethPrice) * 1e9);
     }
 
     function _getPoolPrice() internal view override returns (uint256) {

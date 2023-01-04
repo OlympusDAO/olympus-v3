@@ -6,13 +6,14 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1, RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import "src/Kernel.sol";
 
+// Import external dependencies
+import {AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+
 // Import internal dependencies
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";
-
-import {console2} from "forge-std/Script.sol";
 
 /// @title Olympus Base Liquidity AMO
 contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
@@ -20,6 +21,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     error LiquidityAMO_LimitViolation();
     error LiquidityAMO_PoolImbalanced();
+    error LiquidityAMO_BadPriceFeed();
 
     // ========= DATA STRUCTURES ========= //
 
@@ -312,6 +314,32 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     //============================================================================================//
     //                                     INTERNAL FUNCTIONS                                     //
     //============================================================================================//
+
+    function _validatePrice(address priceFeed_, uint256 updateThreshold_)
+        internal
+        view
+        returns (uint256)
+    {
+        (
+            uint80 roundId,
+            int256 priceInt,
+            ,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        ) = AggregatorV3Interface(priceFeed_).latestRoundData();
+
+        // Validate chainlink price feed data
+        // 1. Price should be greater than 0
+        // 2. Updated at timestamp should be within the update threshold
+        // 3. Answered in round ID should be the same as round ID
+        if (
+            priceInt <= 0 ||
+            updatedAt < block.timestamp - updateThreshold_ ||
+            answeredInRound != roundId
+        ) revert LiquidityAMO_BadPriceFeed();
+
+        return uint256(priceInt);
+    }
 
     function _valueCollateral(uint256 amount_) internal view virtual returns (uint256) {}
 

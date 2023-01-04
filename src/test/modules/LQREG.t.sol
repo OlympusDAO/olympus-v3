@@ -107,7 +107,10 @@ contract LQREGTest is Test {
                 address(liquidityPool1),
                 address(ohmEthPriceFeed),
                 address(ethUsdPriceFeed),
-                address(stethUsdPriceFeed)
+                address(stethUsdPriceFeed),
+                uint48(1 days),
+                uint48(1 days),
+                uint48(1 days)
             );
             liquidityAMO2 = new StethLiquidityAMO(
                 kernel,
@@ -117,7 +120,10 @@ contract LQREGTest is Test {
                 address(liquidityPool2),
                 address(ohmEthPriceFeed),
                 address(ethUsdPriceFeed),
-                address(stethUsdPriceFeed)
+                address(stethUsdPriceFeed),
+                uint48(1 days),
+                uint48(1 days),
+                uint48(1 days)
             );
         }
 
