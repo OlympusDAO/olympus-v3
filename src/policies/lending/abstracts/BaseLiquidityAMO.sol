@@ -45,6 +45,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     // Aggregate Contract State
     uint256 public ohmMinted; // Total OHM minted over time
     uint256 public ohmBurned; // Total OHM withdrawn and burnt over time
+    mapping(address => uint256) public accumulatedFees; // Total fees accumulated over time
 
     // User State
     mapping(address => uint256) public pairTokenDeposits; // User pair token deposits
@@ -363,7 +364,11 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     function _claimRewards(uint256 id_) internal returns (uint256) {
         RewardToken memory rewardToken = rewardTokens[id_];
         uint256 reward = rewardsForToken(id_, msg.sender);
-        if (reward > 0) ERC20(rewardToken.token).transfer(msg.sender, reward);
+        uint256 fee = (reward * FEE) / PRECISION;
+
+        accumulatedFees[rewardToken.token] += fee;
+
+        if (reward > 0) ERC20(rewardToken.token).transfer(msg.sender, reward - fee);
     }
 
     function _borrow(uint256 amount_) internal {
@@ -397,6 +402,19 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         });
 
         rewardTokens.push(newRewardToken);
+    }
+
+    /// @notice                    Transfers accumulated fees on reward tokens to the admin
+    function claimFees() external onlyRole("liquidityamo_admin") {
+        uint256 rewardTokenCount = rewardTokens.length;
+        for (uint256 i; i < rewardTokenCount; ) {
+            RewardToken memory rewardToken = rewardTokens[i];
+            uint256 feeToSend = accumulatedFees[rewardToken.token];
+
+            accumulatedFees[rewardToken.token] = 0;
+
+            ERC20(rewardToken.token).transfer(msg.sender, feeToSend);
+        }
     }
 
     /// @notice                    Updates the maximum amount of OHM that can be minted by this contract
