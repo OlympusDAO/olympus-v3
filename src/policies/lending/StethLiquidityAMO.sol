@@ -17,25 +17,31 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @title Olympus Single-Sided stETH Liquidity AMO
 contract StethLiquidityAMO is BaseLiquidityAMO {
+    // ========= DATA STRUCTURES ========= //
+
+    struct OracleFeed {
+        AggregatorV3Interface feed;
+        uint48 updateThreshold;
+    }
+
+    struct AuraPool {
+        uint256 pid;
+        IAuraBooster booster;
+        IAuraRewardPool rewardsPool;
+    }
+
     // ========= STATE ========= //
 
     // Balancer Contracts
     IVault public vault;
 
     // Aura Pool Info
-    uint256 public auraPid;
-    IAuraBooster public auraBooster;
-    IAuraRewardPool public auraRewardsPool;
+    AuraPool public auraPool;
 
     // Price Feeds
-    AggregatorV3Interface public ohmEthPriceFeed; // OHM/ETH price feed
-    AggregatorV3Interface public ethUsdPriceFeed; // ETH/USD price feed
-    AggregatorV3Interface public stethUsdPriceFeed; // stETH/USD price feed
-
-    // Price Feed Update Thresholds
-    uint48 public ohmEthPriceFeedUpdateThreshold;
-    uint48 public ethUsdPriceFeedUpdateThreshold;
-    uint48 public stethUsdPriceFeedUpdateThreshold;
+    OracleFeed public ohmEthPriceFeed;
+    OracleFeed public ethUsdPriceFeed;
+    OracleFeed public stethUsdPriceFeed;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -47,25 +53,21 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         address steth_,
         address vault_,
         address liquidityPool_,
-        address ohmEthPriceFeed_,
-        address ethUsdPriceFeed_,
-        address stethUsdPriceFeed_,
-        uint48 ohmEthPriceFeedUpdateThreshold_,
-        uint48 ethUsdPriceFeedUpdateThreshold_,
-        uint48 stethUsdPriceFeedUpdateThreshold_
+        OracleFeed memory ohmEthPriceFeed_,
+        OracleFeed memory ethUsdPriceFeed_,
+        OracleFeed memory stethUsdPriceFeed_,
+        AuraPool memory auraPool_
     ) BaseLiquidityAMO(kernel_, ohm_, steth_, liquidityPool_) {
         // Set Balancer vault
         vault = IVault(vault_);
 
         // Set price feeds
-        ohmEthPriceFeed = AggregatorV3Interface(ohmEthPriceFeed_);
-        ethUsdPriceFeed = AggregatorV3Interface(ethUsdPriceFeed_);
-        stethUsdPriceFeed = AggregatorV3Interface(stethUsdPriceFeed_);
+        ohmEthPriceFeed = ohmEthPriceFeed_;
+        ethUsdPriceFeed = ethUsdPriceFeed_;
+        stethUsdPriceFeed = stethUsdPriceFeed_;
 
-        // Set price feed update thresholds
-        ohmEthPriceFeedUpdateThreshold = ohmEthPriceFeedUpdateThreshold_;
-        ethUsdPriceFeedUpdateThreshold = ethUsdPriceFeedUpdateThreshold_;
-        stethUsdPriceFeedUpdateThreshold = stethUsdPriceFeedUpdateThreshold_;
+        // Set Aura pool info
+        auraPool = auraPool_;
     }
 
     //============================================================================================//
@@ -77,9 +79,9 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         uint48 ethUsdPriceFeedUpdateThreshold_,
         uint48 stethUsdPriceFeedUpdateThreshold_
     ) external onlyRole("liquidityamo_admin") {
-        ohmEthPriceFeedUpdateThreshold = ohmEthPriceFeedUpdateThreshold_;
-        ethUsdPriceFeedUpdateThreshold = ethUsdPriceFeedUpdateThreshold_;
-        stethUsdPriceFeedUpdateThreshold = stethUsdPriceFeedUpdateThreshold_;
+        ohmEthPriceFeed.updateThreshold = ohmEthPriceFeedUpdateThreshold_;
+        ethUsdPriceFeed.updateThreshold = ethUsdPriceFeedUpdateThreshold_;
+        stethUsdPriceFeed.updateThreshold = stethUsdPriceFeedUpdateThreshold_;
     }
 
     //============================================================================================//
@@ -88,16 +90,16 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
 
     function _valueCollateral(uint256 amount_) internal view override returns (uint256) {
         uint256 ohmPrice = _validatePrice(
-            address(ohmEthPriceFeed),
-            uint256(ohmEthPriceFeedUpdateThreshold)
+            address(ohmEthPriceFeed.feed),
+            uint256(ohmEthPriceFeed.updateThreshold)
         );
         uint256 ethPrice = _validatePrice(
-            address(ethUsdPriceFeed),
-            uint256(ethUsdPriceFeedUpdateThreshold)
+            address(ethUsdPriceFeed.feed),
+            uint256(ethUsdPriceFeed.updateThreshold)
         );
         uint256 stethPrice = _validatePrice(
-            address(stethUsdPriceFeed),
-            uint256(stethUsdPriceFeedUpdateThreshold)
+            address(stethUsdPriceFeed.feed),
+            uint256(stethUsdPriceFeed.updateThreshold)
         );
 
         uint256 ohmUsd = uint256((ohmPrice * ethPrice) / 1e18);
@@ -161,8 +163,8 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         uint256 lpAmountOut = pool.balanceOf(address(this)) - bptBefore;
 
         // Stake into Aura
-        pool.approve(address(auraBooster), lpAmountOut);
-        auraBooster.deposit(auraPid, lpAmountOut, true);
+        pool.approve(address(auraPool.booster), lpAmountOut);
+        auraPool.booster.deposit(auraPool.pid, lpAmountOut, true);
 
         return lpAmountOut;
     }
@@ -192,7 +194,7 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         });
 
         // Unstake from Aura
-        auraRewardsPool.withdrawAndUnwrap(lpAmount_, false);
+        auraPool.rewardsPool.withdrawAndUnwrap(lpAmount_, false);
 
         // Exit Balancer pool
         pool.approve(address(vault), lpAmount_);
@@ -205,7 +207,7 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         return (ohmReceived, pairTokenReceived);
     }
 
-    function _harvestExternalRewards() internal override returns (uint256[] memory) {
+    function _accumulateExternalRewards() internal override returns (uint256[] memory) {
         uint256 numExternalRewards = externalRewardTokens.length;
         uint256[] memory balancesBefore = new uint256[](numExternalRewards);
         for (uint256 i; i < numExternalRewards; ) {
@@ -216,7 +218,7 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
             }
         }
 
-        auraRewardsPool.getReward(address(this), true);
+        auraPool.rewardsPool.getReward(address(this), true);
 
         uint256[] memory rewards = new uint256[](numExternalRewards);
         for (uint256 i; i < numExternalRewards; ) {

@@ -11,6 +11,10 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockVault} from "test/mocks/MockVault.sol";
 import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
+import {MockAuraBooster, MockAuraRewardPool} from "test/mocks/AuraMocks.sol";
+
+import {IAuraBooster} from "src/policies/lending/interfaces/IAuraBooster.sol";
+import {IAuraRewardPool} from "src/policies/lending/interfaces/IAuraRewardPool.sol";
 
 import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
@@ -54,6 +58,9 @@ contract StethLiquidityAMOTest is Test {
 
     MockVault internal vault;
     MockBalancerPool internal liquidityPool;
+
+    MockAuraBooster internal booster;
+    MockAuraRewardPool internal auraPool;
 
     Kernel internal kernel;
     OlympusMinter internal minter;
@@ -106,6 +113,12 @@ contract StethLiquidityAMOTest is Test {
         }
 
         {
+            // Deploy mock Aura contracts
+            auraPool = new MockAuraRewardPool(address(vault.bpt()), address(reward));
+            booster = new MockAuraBooster(address(vault.bpt()), address(auraPool));
+        }
+
+        {
             // Deploy kernel
             kernel = new Kernel();
 
@@ -118,6 +131,25 @@ contract StethLiquidityAMOTest is Test {
             // Deploy roles admin
             rolesAdmin = new RolesAdmin(kernel);
 
+            StethLiquidityAMO.OracleFeed memory ohmEthFeedStruct = StethLiquidityAMO.OracleFeed({
+                feed: ohmEthPriceFeed,
+                updateThreshold: 1 days
+            });
+            StethLiquidityAMO.OracleFeed memory ethUsdFeedStruct = StethLiquidityAMO.OracleFeed({
+                feed: ethUsdPriceFeed,
+                updateThreshold: 1 days
+            });
+            StethLiquidityAMO.OracleFeed memory stethUsdFeedStruct = StethLiquidityAMO.OracleFeed({
+                feed: stethUsdPriceFeed,
+                updateThreshold: 1 days
+            });
+
+            StethLiquidityAMO.AuraPool memory auraPoolStruct = StethLiquidityAMO.AuraPool({
+                pid: 0,
+                booster: IAuraBooster(booster),
+                rewardsPool: IAuraRewardPool(auraPool)
+            });
+
             // Deploy stETH Single Sided Liquidity Vault
             liquidityAMO = new StethLiquidityAMO(
                 kernel,
@@ -125,12 +157,10 @@ contract StethLiquidityAMOTest is Test {
                 address(steth),
                 address(vault),
                 address(liquidityPool),
-                address(ohmEthPriceFeed),
-                address(ethUsdPriceFeed),
-                address(stethUsdPriceFeed),
-                uint48(1 days),
-                uint48(1 days),
-                uint48(1 days)
+                ohmEthFeedStruct,
+                ethUsdFeedStruct,
+                stethUsdFeedStruct,
+                auraPoolStruct
             );
         }
 
@@ -160,6 +190,7 @@ contract StethLiquidityAMOTest is Test {
 
             // Add reward token
             liquidityAMO.addRewardToken(address(reward), 1e18, block.timestamp); // 1 REWARD token per second
+            liquidityAMO.addExternalRewardToken(address(reward));
 
             reward.mint(address(liquidityAMO), 1e23);
         }
@@ -252,143 +283,6 @@ contract StethLiquidityAMOTest is Test {
     /// [X]  withdraw
     ///     [X]  Can be accessed by anyone
     ///     [X]  Fails if pool and oracle prices differ substantially
-    ///     [X]  Fails if user has no LP position
-    ///     [X]  Removes stETH and OHM from Balancer LP
-    ///     [X]  Decreases user's stETH deposit value
-    ///     [X]  Updates user's reward debts for reward tokens
-    ///     [X]  Burns received OHM
-    ///     [X]  Transfers stETH to user
-
-    function _withdrawSetUp() internal {
-        vm.prank(alice);
-        liquidityAMO.deposit(STETH_AMOUNT, 1e18);
-    }
-
-    function testCorrectness_withdrawCanBeCalledByAnyone(address user_) public {
-        vm.assume(user_ != address(0));
-        steth.mint(user_, 1e18);
-
-        // Setup with deposit
-        vm.startPrank(user_);
-        steth.approve(address(liquidityAMO), 1e18);
-        liquidityAMO.deposit(1e18, 1e18);
-
-        // Withdraw
-        liquidityAMO.withdraw(1e18, minTokenAmounts_);
-        vm.stopPrank();
-    }
-
-    function testCorrectness_withdrawFailsIfPricesDiffer() public {
-        // Setup
-        _withdrawSetUp();
-
-        // Set pool price
-        vault.setPoolAmounts(1e7, 10e18);
-
-        bytes memory err = abi.encodeWithSignature("LiquidityAMO_PoolImbalanced()");
-        vm.expectRevert(err);
-
-        // Attempt withdrawal
-        vm.prank(alice);
-        liquidityAMO.withdraw(1e18, minTokenAmounts_);
-
-        // Set pool price
-        vault.setPoolAmounts(1e9, 10e18);
-
-        // Expect revert again
-        vm.expectRevert(err);
-
-        // Attempt withdrawal
-        vm.prank(alice);
-        liquidityAMO.withdraw(1e18, minTokenAmounts_);
-    }
-
-    function testCorrectness_withdrawFailsIfUserHasNoLpPosition() public {
-        // Expect revert
-        vm.expectRevert(stdError.arithmeticError);
-
-        // Attempt withdrawal
-        vm.prank(alice);
-        liquidityAMO.withdraw(1e18, minTokenAmounts_);
-    }
-
-    function testCorrectness_withdrawRemovesStethAndOhmFromVault() public {
-        // Setup
-        _withdrawSetUp();
-
-        // Verify initial state
-        assertEq(steth.balanceOf(address(vault)), STETH_AMOUNT);
-        assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e11);
-
-        // Withdraw
-        vm.prank(alice);
-        liquidityAMO.withdraw(1e18, minTokenAmounts_);
-
-        // Verify end state
-        assertEq(steth.balanceOf(address(vault)), 0);
-        assertEq(ohm.balanceOf(address(vault)), 0);
-    }
-
-    function testCorrectness_withdrawDecreasesUserStethDeposit() public {
-        // Setup
-        _withdrawSetUp();
-
-        // Verify initial state
-        assertEq(liquidityAMO.pairTokenDeposits(alice), STETH_AMOUNT);
-
-        // Withdraw
-        vm.prank(alice);
-        liquidityAMO.withdraw(1e18, minTokenAmounts_);
-
-        // Verify end state
-        assertEq(liquidityAMO.pairTokenDeposits(alice), 0);
-    }
-
-    function testCorrectness_withdrawUpdatesRewardDebt() public {
-        // Setup
-        _withdrawSetUp();
-
-        // Withdraw
-        vm.prank(alice);
-        liquidityAMO.withdraw(1e18, minTokenAmounts_);
-
-        // Verify end state
-        assertEq(liquidityAMO.userRewardDebts(alice, address(reward)), 0);
-    }
-
-    function testCorrectness_withdrawBurnsOhm() public {
-        // Setup
-        _withdrawSetUp();
-
-        // Verify initial state
-        assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e11);
-
-        // Withdraw
-        vm.prank(alice);
-        liquidityAMO.withdraw(1e18, minTokenAmounts_);
-
-        // Verify end state
-        assertEq(ohm.balanceOf(address(liquidityAMO)), 0);
-    }
-
-    function testCorrectness_withdrawReturnsStethToUser() public {
-        // Setup
-        _withdrawSetUp();
-
-        // Verify initial state
-        assertEq(steth.balanceOf(alice), 0);
-
-        // Withdraw
-        vm.prank(alice);
-        liquidityAMO.withdraw(1e18, minTokenAmounts_);
-
-        // Verify end state
-        assertEq(steth.balanceOf(alice), 1e18);
-    }
-
-    /// [X]  withdrawAndClaim
-    ///     [X]  Can be accessed by anyone
-    ///     [X]  Fails if pool and oracle prices differ substantially
     ///     [X]  Claims rewards
     ///     [X]  Returns correct rewards with multiple users
     ///     [X]  Fails if user has no LP positions
@@ -399,7 +293,7 @@ contract StethLiquidityAMOTest is Test {
     ///     [X]  Transfers stETH to user
 
     function _withdrawAndClaimSetUp() internal {
-        _withdrawSetUp();
+        _withdrawAndClaimSetUp();
         vm.warp(block.timestamp + 10); // Increase time 10 seconds so there are rewards
     }
 
@@ -413,7 +307,7 @@ contract StethLiquidityAMOTest is Test {
         liquidityAMO.deposit(1e18, 1e18);
 
         // Withdraw and claim
-        liquidityAMO.withdrawAndClaim(1e18, minTokenAmounts_);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, true);
         vm.stopPrank();
     }
 
@@ -429,7 +323,7 @@ contract StethLiquidityAMOTest is Test {
 
         // Attempt withdrawal
         vm.prank(alice);
-        liquidityAMO.withdrawAndClaim(1e18, minTokenAmounts_);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, true);
 
         // Set pool price
         vault.setPoolAmounts(1e9, 10e18);
@@ -439,7 +333,7 @@ contract StethLiquidityAMOTest is Test {
 
         // Attempt withdrawal
         vm.prank(alice);
-        liquidityAMO.withdrawAndClaim(1e18, minTokenAmounts_);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, true);
     }
 
     function testCorrectness_withdrawAndClaimClaimsRewards() public {
@@ -451,7 +345,7 @@ contract StethLiquidityAMOTest is Test {
 
         // Withdraw and claim
         vm.prank(alice);
-        liquidityAMO.withdrawAndClaim(1e18, minTokenAmounts_);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, true);
 
         // Verify end state
         assertEq(reward.balanceOf(alice), 10e18);
@@ -478,7 +372,7 @@ contract StethLiquidityAMOTest is Test {
 
         // Withdraw and claim
         vm.prank(alice);
-        liquidityAMO.withdrawAndClaim(1e18, minTokenAmounts_);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, true);
 
         // Verify end state
         assertEq(reward.balanceOf(alice), 15e18);
@@ -490,7 +384,7 @@ contract StethLiquidityAMOTest is Test {
 
         // Attempt withdrawal
         vm.prank(alice);
-        liquidityAMO.withdrawAndClaim(1e18, minTokenAmounts_);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, true);
     }
 
     function testCorrectness_withdrawAndClaimRemovesStethAndOhmFromVault() public {
@@ -503,7 +397,7 @@ contract StethLiquidityAMOTest is Test {
 
         // Withdraw and claim
         vm.prank(alice);
-        liquidityAMO.withdrawAndClaim(1e18, minTokenAmounts_);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, true);
 
         // Verify end state
         assertEq(steth.balanceOf(address(vault)), 0);
@@ -519,7 +413,7 @@ contract StethLiquidityAMOTest is Test {
 
         // Withdraw and claim
         vm.prank(alice);
-        liquidityAMO.withdrawAndClaim(1e18, minTokenAmounts_);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, true);
 
         // Verify end state
         assertEq(liquidityAMO.pairTokenDeposits(alice), 0);
@@ -531,7 +425,7 @@ contract StethLiquidityAMOTest is Test {
 
         // Withdraw and claim
         vm.prank(alice);
-        liquidityAMO.withdrawAndClaim(1e18, minTokenAmounts_);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, true);
 
         // Verify end state
         assertEq(liquidityAMO.userRewardDebts(alice, address(reward)), 0);
@@ -546,7 +440,7 @@ contract StethLiquidityAMOTest is Test {
 
         // Withdraw and claim
         vm.prank(alice);
-        liquidityAMO.withdrawAndClaim(1e18, minTokenAmounts_);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, true);
 
         // Verify end state
         assertEq(ohm.balanceOf(address(liquidityAMO)), 0);
@@ -561,7 +455,7 @@ contract StethLiquidityAMOTest is Test {
 
         // Withdraw and claim
         vm.prank(alice);
-        liquidityAMO.withdrawAndClaim(1e18, minTokenAmounts_);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, true);
 
         // Verify end state
         assertEq(steth.balanceOf(alice), 1e18);
@@ -697,7 +591,7 @@ contract StethLiquidityAMOTest is Test {
 
     function testCorrectness_getOhmEmissions() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawAndClaimSetUp();
 
         // Verify initial state
         (uint256 emissions, uint256 removals) = liquidityAMO.getOhmEmissions();
