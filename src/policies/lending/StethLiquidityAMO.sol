@@ -9,6 +9,11 @@ import {BaseLiquidityAMO} from "policies/lending/abstracts/BaseLiquidityAMO.sol"
 import {AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {JoinPoolRequest, ExitPoolRequest, IVault} from "src/interfaces/IBalancerVault.sol";
 import {IBasePool} from "src/interfaces/IBasePool.sol";
+import {IAuraBooster} from "src/policies/lending/interfaces/IAuraBooster.sol";
+import {IAuraRewardPool} from "src/policies/lending/interfaces/IAuraRewardPool.sol";
+
+// Import types
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @title Olympus Single-Sided stETH Liquidity AMO
 contract StethLiquidityAMO is BaseLiquidityAMO {
@@ -16,6 +21,11 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
 
     // Balancer Contracts
     IVault public vault;
+
+    // Aura Pool Info
+    uint256 public auraPid;
+    IAuraBooster public auraBooster;
+    IAuraRewardPool public auraRewardsPool;
 
     // Price Feeds
     AggregatorV3Interface public ohmEthPriceFeed; // OHM/ETH price feed
@@ -150,6 +160,10 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         // OHM-PAIR BPT after
         uint256 lpAmountOut = pool.balanceOf(address(this)) - bptBefore;
 
+        // Stake into Aura
+        pool.approve(address(auraBooster), lpAmountOut);
+        auraBooster.deposit(auraPid, lpAmountOut, true);
+
         return lpAmountOut;
     }
 
@@ -177,6 +191,9 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
             toInternalBalance: false
         });
 
+        // Unstake from Aura
+        auraRewardsPool.withdrawAndUnwrap(lpAmount_, false);
+
         // Exit Balancer pool
         pool.approve(address(vault), lpAmount_);
         vault.exitPool(pool.getPoolId(), address(this), payable(address(this)), exitPoolRequest);
@@ -186,5 +203,31 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         uint256 pairTokenReceived = pairToken.balanceOf(address(this)) - pairTokenBefore;
 
         return (ohmReceived, pairTokenReceived);
+    }
+
+    function _harvestExternalRewards() internal override returns (uint256[] memory) {
+        uint256 numExternalRewards = externalRewardTokens.length;
+        uint256[] memory balancesBefore = new uint256[](numExternalRewards);
+        for (uint256 i; i < numExternalRewards; ) {
+            balancesBefore[i] = ERC20(externalRewardTokens[i].token).balanceOf(address(this));
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        auraRewardsPool.getReward(address(this), true);
+
+        uint256[] memory rewards = new uint256[](numExternalRewards);
+        for (uint256 i; i < numExternalRewards; ) {
+            rewards[i] =
+                ERC20(externalRewardTokens[i].token).balanceOf(address(this)) -
+                balancesBefore[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+        return rewards;
     }
 }
