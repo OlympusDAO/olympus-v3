@@ -41,7 +41,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     PRICEv1 internal PRICE;
 
     // Policies
-    IOperator internal _operator;
+    IOperator public operator;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -53,7 +53,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         ERC20 rewardToken_,
         uint256 reward_
     ) Policy(kernel_) {
-        _operator = operator_;
+        operator = operator_;
 
         active = true;
         lastBeat = block.timestamp;
@@ -95,7 +95,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         PRICE.updateMovingAverage();
 
         // Trigger price range update and market operations
-        _operator.operate();
+        operator.operate();
 
         // Update the last beat timestamp
         // Ensure that update frequency doesn't change, but do not allow multiple beats if one is skipped
@@ -137,6 +137,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IHeart
     function deactivate() external onlyRole("heart_admin") {
         active = false;
+    }
+
+    /// @inheritdoc IHeart
+    function setOperator(address operator_) external onlyRole("heart_admin") {
+        operator = IOperator(operator_);
     }
 
     modifier notWhileBeatAvailable() {

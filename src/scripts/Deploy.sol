@@ -13,7 +13,6 @@ import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 import {Operator} from "policies/Operator.sol";
@@ -24,6 +23,7 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Distributor} from "policies/Distributor.sol";
 import {Emergency} from "policies/Emergency.sol";
+import {BondManager} from "policies/BondManager.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
@@ -41,7 +41,6 @@ contract OlympusDeploy is Script {
     OlympusRange public RANGE;
     OlympusTreasury public TRSRY;
     OlympusMinter public MINTR;
-    OlympusInstructions public INSTR;
     OlympusRoles public ROLES;
 
     /// Policies
@@ -53,6 +52,7 @@ contract OlympusDeploy is Script {
     TreasuryCustodian public treasuryCustodian;
     Distributor public distributor;
     Emergency public emergency;
+    BondManager public bondManager;
 
     /// Construction variables
 
@@ -96,9 +96,6 @@ contract OlympusDeploy is Script {
         console2.log("Kernel deployed at:", address(kernel));
 
         /// Deploy modules
-        // INSTR = new OlympusInstructions(kernel);
-        // console2.log("Instructions module deployed at:", address(INSTR));
-
         TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury module deployed at:", address(TRSRY));
 
@@ -112,7 +109,8 @@ contract OlympusDeploy is Script {
             reserveEthPriceFeed,
             uint48(24 hours),
             uint48(8 hours),
-            uint48(30 days)
+            uint48(30 days),
+            10 * 1e18 // TODO placeholder for liquid backing
         );
         console2.log("Price module deployed at:", address(PRICE));
 
@@ -212,9 +210,6 @@ contract OlympusDeploy is Script {
         rolesAdmin.grantRole("emergency_shutdown", emergency_);
         rolesAdmin.grantRole("emergency_restart", guardian_);
 
-        // /// Transfer executor powers to guardian
-        // kernel.executeAction(Actions.ChangeExecutor, guardian_);
-
         vm.stopBroadcast();
 
         // Save deployment information for the chain being deployed to
@@ -266,6 +261,7 @@ contract OlympusDeploy is Script {
         treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
         distributor = Distributor(vm.envAddress("DISTRIBUTOR"));
         emergency = Emergency(vm.envAddress("EMERGENCY"));
+        bondManager = BondManager(vm.envAddress("BONDMANAGER"));
 
         /// Check that Modules are installed
         /// PRICE
@@ -307,6 +303,7 @@ contract OlympusDeploy is Script {
         require(kernel.isPolicyActive(treasuryCustodian));
         require(kernel.isPolicyActive(distributor));
         require(kernel.isPolicyActive(emergency));
+        require(kernel.isPolicyActive(bondManager));
     }
 
     /// @dev Should be called by the deployer address after deployment
@@ -346,6 +343,9 @@ contract OlympusDeploy is Script {
         /// Emergency Roles
         require(ROLES.hasRole(emergency_, "emergency_shutdown"));
         require(ROLES.hasRole(guardian_, "emergency_restart"));
+
+        /// BondManager Roles
+        require(ROLES.hasRole(policy_, "bondmanager_admin"));
 
 
         /// Push rolesAdmin and Executor
