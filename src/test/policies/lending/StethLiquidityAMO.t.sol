@@ -9,12 +9,10 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockVault} from "test/mocks/MockVault.sol";
-import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
+import {MockVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
 import {MockAuraBooster, MockAuraRewardPool} from "test/mocks/AuraMocks.sol";
 
-import {IAuraBooster} from "src/policies/lending/interfaces/IAuraBooster.sol";
-import {IAuraRewardPool} from "src/policies/lending/interfaces/IAuraRewardPool.sol";
+import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.sol";
 
 import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";

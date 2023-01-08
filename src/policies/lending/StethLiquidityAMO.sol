@@ -7,10 +7,8 @@ import {BaseLiquidityAMO} from "policies/lending/abstracts/BaseLiquidityAMO.sol"
 
 // Import external dependencies
 import {AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
-import {JoinPoolRequest, ExitPoolRequest, IVault} from "src/interfaces/IBalancerVault.sol";
-import {IBasePool} from "src/interfaces/IBasePool.sol";
-import {IAuraBooster} from "src/policies/lending/interfaces/IAuraBooster.sol";
-import {IAuraRewardPool} from "src/policies/lending/interfaces/IAuraRewardPool.sol";
+import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool} from "policies/lending/interfaces/IBalancer.sol";
+import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.sol";
 
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";

@@ -2,8 +2,9 @@
 pragma solidity >=0.8.0;
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {JoinPoolRequest, ExitPoolRequest} from "src/interfaces/IBalancerVault.sol";
+import {JoinPoolRequest, ExitPoolRequest} from "policies/lending/interfaces/IBalancer.sol";
 
+// Define Mock Balancer Vault
 contract MockVault {
     MockERC20 public bpt;
     address public token0;
@@ -73,5 +74,14 @@ contract MockVault {
     function setPoolAmounts(uint256 token0Amount_, uint256 token1Amount_) external {
         token0Amount = token0Amount_;
         token1Amount = token1Amount_;
+    }
+}
+
+// Define Mock Balancer Pool
+contract MockBalancerPool is MockERC20 {
+    constructor() MockERC20("Mock Balancer Pool", "BPT", 18) {}
+
+    function getPoolId() external pure returns (bytes32) {
+        return bytes32(0);
     }
 }
