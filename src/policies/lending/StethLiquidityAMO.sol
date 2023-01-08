@@ -120,11 +120,10 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         IBasePool pool = IBasePool(liquidityPool);
 
         (, uint256[] memory balances_, ) = vault.getPoolTokens(pool.getPoolId());
-        uint256 bptBalance = pool.balanceOf(address(this));
         uint256 bptTotalSupply = pool.totalSupply();
 
-        if (bptBalance == 0) return 0;
-        else return (balances_[0] * bptBalance) / bptTotalSupply;
+        if (totalLP == 0) return 0;
+        else return (balances_[0] * totalLP) / bptTotalSupply;
     }
 
     function _deposit(

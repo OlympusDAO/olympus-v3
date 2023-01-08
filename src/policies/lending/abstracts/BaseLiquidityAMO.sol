@@ -50,6 +50,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     address public liquidityPool;
 
     // Aggregate Contract State
+    uint256 public totalLP; // Current LP positions
     uint256 public ohmMinted; // Total OHM minted over time
     uint256 public ohmBurned; // Total OHM withdrawn and burnt over time
     mapping(address => uint256) public accumulatedFees; // Total fees accumulated over time
@@ -57,7 +58,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     // User State
     mapping(address => uint256) public pairTokenDeposits; // User pair token deposits
     mapping(address => uint256) public lpPositions; // User LP positions
-    mapping(address => mapping(address => uint256)) public userRewardDebts; // User reward debts
+    mapping(address => mapping(address => int256)) public userRewardDebts; // User reward debts
 
     // Reward Token State
     InternalRewardToken[] public rewardTokens;
@@ -143,6 +144,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         _borrow(ohmToBorrow);
 
         uint256 lpReceived = _deposit(ohmToBorrow, amount_, minLpAmount_);
+        totalLP += lpReceived;
 
         // Update user's LP position
         lpPositions[msg.sender] += lpReceived;
@@ -164,8 +166,9 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     ) external nonReentrant returns (uint256) {
         if (!_isPoolSafe()) revert LiquidityAMO_PoolImbalanced();
 
-        _withdrawUpdateRewardState(lpAmount_, true);
+        _withdrawUpdateRewardState(lpAmount_, claim_);
 
+        totalLP -= lpAmount_;
         lpPositions[msg.sender] -= lpAmount_;
 
         // Withdraw OHM and stETH from LP
@@ -191,7 +194,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         uint256 numRewardTokens = rewardTokens.length;
 
         for (uint256 i; i < numExternalRewardTokens; ) {
-            _claimExternalRewards(i, 0);
+            _claimExternalRewards(i);
 
             unchecked {
                 ++i;
@@ -214,10 +217,9 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     /// @notice                     Returns the amount of rewards a user has earned for a given reward token
     /// @param  id_                 The ID of the reward token
     /// @param  user_               The user's address to check rewards for
-    function rewardsForToken(uint256 id_, address user_) public view returns (uint256) {
+    function rewardsForToken(uint256 id_, address user_) public view returns (int256) {
         InternalRewardToken memory rewardToken = rewardTokens[id_];
         uint256 accumulatedRewardsPerShare = rewardToken.accumulatedRewardsPerShare;
-        uint256 totalLP = ERC20(liquidityPool).balanceOf(address(this));
 
         if (block.timestamp > rewardToken.lastRewardTime && totalLP != 0) {
             uint256 timeDiff = block.timestamp - rewardToken.lastRewardTime;
@@ -226,25 +228,16 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         }
 
         return
-            ((lpPositions[user_] * accumulatedRewardsPerShare) / 1e18) -
+            int256((lpPositions[user_] * accumulatedRewardsPerShare) / 1e18) -
             userRewardDebts[user_][rewardToken.token];
     }
 
-    function externalRewardsForToken(
-        uint256 id_,
-        address user_,
-        uint256 rewardsReceived_
-    ) public view returns (uint256) {
+    function externalRewardsForToken(uint256 id_, address user_) public view returns (int256) {
         ExternalRewardToken memory rewardToken = externalRewardTokens[id_];
         uint256 accumulatedRewardsPerShare = rewardToken.accumulatedRewardsPerShare;
-        uint256 totalLP = ERC20(liquidityPool).balanceOf(address(this));
-
-        if (totalLP != 0) {
-            accumulatedRewardsPerShare += rewardsReceived_ / totalLP;
-        }
 
         return
-            ((lpPositions[user_] * accumulatedRewardsPerShare) / 1e18) -
+            int256((lpPositions[user_] * accumulatedRewardsPerShare) / 1e18) -
             userRewardDebts[user_][rewardToken.token];
     }
 
@@ -317,9 +310,9 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
         for (uint256 i; i < numRewardTokens; ) {
             address rewardToken = rewardTokens[i].token;
-            userRewardDebts[msg.sender][rewardToken] +=
-                (lpReceived_ * rewardTokens[i].accumulatedRewardsPerShare) /
-                1e18;
+            userRewardDebts[msg.sender][rewardToken] += int256(
+                (lpReceived_ * rewardTokens[i].accumulatedRewardsPerShare) / 1e18
+            );
 
             unchecked {
                 ++i;
@@ -328,9 +321,9 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
         for (uint256 i; i < numExternalRewardTokens; ) {
             address rewardToken = externalRewardTokens[i].token;
-            userRewardDebts[msg.sender][rewardToken] +=
-                (lpReceived_ * externalRewardTokens[i].accumulatedRewardsPerShare) /
-                1e18;
+            userRewardDebts[msg.sender][rewardToken] += int256(
+                (lpReceived_ * externalRewardTokens[i].accumulatedRewardsPerShare) / 1e18
+            );
 
             unchecked {
                 ++i;
@@ -348,12 +341,12 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
         for (uint256 i; i < numExternalRewardTokens; ) {
             _updateExternalRewardState(i, accumulatedExternalRewards[i]);
-            if (claim_) _claimExternalRewards(i, accumulatedExternalRewards[i]);
+            if (claim_) _claimExternalRewards(i);
 
             ExternalRewardToken memory rewardToken = externalRewardTokens[i];
-            userRewardDebts[msg.sender][rewardToken.token] -=
-                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) /
-                1e18;
+            userRewardDebts[msg.sender][rewardToken.token] -= int256(
+                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) / 1e18
+            );
 
             unchecked {
                 ++i;
@@ -364,10 +357,11 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
             _updateInternalRewardState(i, accumulatedInternalRewards[i]);
             if (claim_) _claimRewards(i);
 
+            // TODO FIX THIS UNDERFLOW WHEN NO CLAIM
             InternalRewardToken memory rewardToken = rewardTokens[i];
-            userRewardDebts[msg.sender][rewardToken.token] -=
-                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) /
-                1e18;
+            userRewardDebts[msg.sender][rewardToken.token] -= int256(
+                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) / 1e18
+            );
 
             unchecked {
                 ++i;
@@ -442,7 +436,6 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     function _updateInternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
         InternalRewardToken storage rewardToken = rewardTokens[id_];
-        uint256 totalLP = ERC20(liquidityPool).balanceOf(address(this));
 
         if (totalLP != 0) {
             rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
@@ -452,7 +445,6 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     function _updateExternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
         ExternalRewardToken storage rewardToken = externalRewardTokens[id_];
-        uint256 totalLP = ERC20(liquidityPool).balanceOf(address(this));
 
         if (totalLP != 0) {
             rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
@@ -461,30 +453,26 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     function _accumulateExternalRewards() internal virtual returns (uint256[] memory) {}
 
-    function _claimExternalRewards(uint256 id_, uint256 rewardsReceived_)
-        internal
-        virtual
-        returns (uint256)
-    {
+    function _claimExternalRewards(uint256 id_) internal virtual returns (uint256) {
         ExternalRewardToken memory rewardToken = externalRewardTokens[id_];
-        uint256 reward = externalRewardsForToken(id_, msg.sender, rewardsReceived_);
-        uint256 fee = (reward * FEE) / PRECISION;
+        int256 reward = externalRewardsForToken(id_, msg.sender);
+        uint256 fee = (uint256(reward) * FEE) / PRECISION;
 
         userRewardDebts[msg.sender][rewardToken.token] += reward;
         accumulatedFees[rewardToken.token] += fee;
 
-        if (reward > 0) ERC20(rewardToken.token).transfer(msg.sender, reward - fee);
+        if (reward > 0) ERC20(rewardToken.token).transfer(msg.sender, uint256(reward) - fee);
     }
 
     function _claimRewards(uint256 id_) internal returns (uint256) {
         InternalRewardToken memory rewardToken = rewardTokens[id_];
-        uint256 reward = rewardsForToken(id_, msg.sender);
-        uint256 fee = (reward * FEE) / PRECISION;
+        int256 reward = rewardsForToken(id_, msg.sender);
+        uint256 fee = (uint256(reward) * FEE) / PRECISION;
 
         userRewardDebts[msg.sender][rewardToken.token] += reward;
         accumulatedFees[rewardToken.token] += fee;
 
-        if (reward > 0) ERC20(rewardToken.token).transfer(msg.sender, reward - fee);
+        if (reward > 0) ERC20(rewardToken.token).transfer(msg.sender, uint256(reward) - fee);
     }
 
     function _borrow(uint256 amount_) internal {
