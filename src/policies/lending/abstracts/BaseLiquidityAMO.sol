@@ -258,6 +258,64 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     //                                     INTERNAL FUNCTIONS                                     //
     //============================================================================================//
 
+    // ========= CHECKS AND SAFETY ========= //
+
+    function _canDeposit(uint256 amount_) internal view virtual returns (bool) {
+        if (ohmBurned > ohmMinted + amount_) return true;
+        else if (ohmMinted + amount_ - ohmBurned <= LIMIT) return true;
+        else return false;
+    }
+
+    function _isPoolSafe() internal view returns (bool) {
+        uint256 pairTokenDecimals = pairToken.decimals();
+        uint256 poolPrice = _getPoolPrice();
+        uint256 oraclePrice = _valueCollateral(10**pairTokenDecimals); // 1 pair token in OHM
+
+        uint256 lowerBound = (oraclePrice * (PRECISION - THRESHOLD)) / PRECISION;
+        uint256 upperBound = (oraclePrice * (PRECISION + THRESHOLD)) / PRECISION;
+
+        return poolPrice >= lowerBound && poolPrice <= upperBound;
+    }
+
+    function _validatePrice(address priceFeed_, uint256 updateThreshold_)
+        internal
+        view
+        returns (uint256)
+    {
+        (
+            uint80 roundId,
+            int256 priceInt,
+            ,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        ) = AggregatorV3Interface(priceFeed_).latestRoundData();
+
+        // Validate chainlink price feed data
+        // 1. Price should be greater than 0
+        // 2. Updated at timestamp should be within the update threshold
+        // 3. Answered in round ID should be the same as round ID
+        if (
+            priceInt <= 0 ||
+            updatedAt < block.timestamp - updateThreshold_ ||
+            answeredInRound != roundId
+        ) revert LiquidityAMO_BadPriceFeed();
+
+        return uint256(priceInt);
+    }
+
+    // ========= OHM MANAGEMENT ========= //
+
+    function _borrow(uint256 amount_) internal {
+        MINTR.increaseMintApproval(address(this), amount_);
+        MINTR.mintOhm(address(this), amount_);
+    }
+
+    function _repay(uint256 amount_) internal {
+        MINTR.burnOhm(address(this), amount_);
+    }
+
+    // ========= REWARDS CALCULATIONS ========= //
+
     function _accumulateInternalRewards() internal returns (uint256[] memory) {
         uint256 numRewardTokens = rewardTokens.length;
         uint256[] memory accumulatedInternalRewards = new uint256[](rewardTokens.length);
@@ -275,6 +333,27 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
         return accumulatedInternalRewards;
     }
+
+    // ========= ACCUMULATED REWARDS STATE MANAGEMENT ========= //
+
+    function _updateInternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
+        InternalRewardToken storage rewardToken = rewardTokens[id_];
+
+        if (totalLP != 0) {
+            rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
+            rewardToken.lastRewardTime = block.timestamp;
+        }
+    }
+
+    function _updateExternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
+        ExternalRewardToken storage rewardToken = externalRewardTokens[id_];
+
+        if (totalLP != 0) {
+            rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
+        }
+    }
+
+    // ========= PRE/POST ACTION HOOKS ========= //
 
     function _depositUpdateRewardState() internal {
         // Track reward accumulation
@@ -369,89 +448,7 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         }
     }
 
-    //============================================================================================//
-    //                                     VIRTUAL FUNCTIONS                                      //
-    //============================================================================================//
-
-    function _validatePrice(address priceFeed_, uint256 updateThreshold_)
-        internal
-        view
-        returns (uint256)
-    {
-        (
-            uint80 roundId,
-            int256 priceInt,
-            ,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        ) = AggregatorV3Interface(priceFeed_).latestRoundData();
-
-        // Validate chainlink price feed data
-        // 1. Price should be greater than 0
-        // 2. Updated at timestamp should be within the update threshold
-        // 3. Answered in round ID should be the same as round ID
-        if (
-            priceInt <= 0 ||
-            updatedAt < block.timestamp - updateThreshold_ ||
-            answeredInRound != roundId
-        ) revert LiquidityAMO_BadPriceFeed();
-
-        return uint256(priceInt);
-    }
-
-    function _valueCollateral(uint256 amount_) internal view virtual returns (uint256) {}
-
-    function _getPoolPrice() internal view virtual returns (uint256) {}
-
-    function _getPoolOhmShare() internal view virtual returns (uint256) {}
-
-    function _canDeposit(uint256 amount_) internal view virtual returns (bool) {
-        if (ohmBurned > ohmMinted + amount_) return true;
-        else if (ohmMinted + amount_ - ohmBurned <= LIMIT) return true;
-        else return false;
-    }
-
-    function _isPoolSafe() internal view returns (bool) {
-        uint256 pairTokenDecimals = pairToken.decimals();
-        uint256 poolPrice = _getPoolPrice();
-        uint256 oraclePrice = _valueCollateral(10**pairTokenDecimals); // 1 pair token in OHM
-
-        uint256 lowerBound = (oraclePrice * (PRECISION - THRESHOLD)) / PRECISION;
-        uint256 upperBound = (oraclePrice * (PRECISION + THRESHOLD)) / PRECISION;
-
-        return poolPrice >= lowerBound && poolPrice <= upperBound;
-    }
-
-    function _deposit(
-        uint256 ohmAmount_,
-        uint256 pairAmount_,
-        uint256 minLpAmount_
-    ) internal virtual returns (uint256) {}
-
-    function _withdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
-        internal
-        virtual
-        returns (uint256, uint256)
-    {}
-
-    function _updateInternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
-        InternalRewardToken storage rewardToken = rewardTokens[id_];
-
-        if (totalLP != 0) {
-            rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
-            rewardToken.lastRewardTime = block.timestamp;
-        }
-    }
-
-    function _updateExternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
-        ExternalRewardToken storage rewardToken = externalRewardTokens[id_];
-
-        if (totalLP != 0) {
-            rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
-        }
-    }
-
-    function _accumulateExternalRewards() internal virtual returns (uint256[] memory) {}
+    // ========= REWARDS CLAIMING ========= //
 
     function _claimExternalRewards(uint256 id_) internal virtual returns (uint256) {
         ExternalRewardToken memory rewardToken = externalRewardTokens[id_];
@@ -475,15 +472,29 @@ contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         if (reward > 0) ERC20(rewardToken.token).transfer(msg.sender, uint256(reward) - fee);
     }
 
-    function _borrow(uint256 amount_) internal {
-        MINTR.increaseMintApproval(address(this), amount_);
-        MINTR.mintOhm(address(this), amount_);
-    }
+    //============================================================================================//
+    //                                     VIRTUAL FUNCTIONS                                      //
+    //============================================================================================//
 
-    // TODO: Need a way to report net minted amount
-    function _repay(uint256 amount_) internal {
-        MINTR.burnOhm(address(this), amount_);
-    }
+    function _valueCollateral(uint256 amount_) internal view virtual returns (uint256) {}
+
+    function _getPoolPrice() internal view virtual returns (uint256) {}
+
+    function _getPoolOhmShare() internal view virtual returns (uint256) {}
+
+    function _deposit(
+        uint256 ohmAmount_,
+        uint256 pairAmount_,
+        uint256 minLpAmount_
+    ) internal virtual returns (uint256) {}
+
+    function _withdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
+        internal
+        virtual
+        returns (uint256, uint256)
+    {}
+
+    function _accumulateExternalRewards() internal virtual returns (uint256[] memory) {}
 
     //============================================================================================//
     //                                      ADMIN FUNCTIONS                                       //
