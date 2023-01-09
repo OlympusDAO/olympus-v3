@@ -2,9 +2,12 @@
 pragma solidity 0.8.15;
 
 //import {ILayerZeroReceiver} from './interfaces/external/ILayerZeroReciever.sol';
-import {ILayerZeroEndpoint} from "./interfaces/external/ILayerZeroEndpoint.sol";
+//import {ILayerZeroEndpoint} from "./interfaces/external/ILayerZeroEndpoint.sol";
+
+import {NonblockingLzApp, ILayerZeroEndpoint} from "layer-zero/lzApp/NonblockingLzApp.sol";
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
@@ -16,30 +19,28 @@ import "src/Kernel.sol";
 
 /// @notice Message bus defining interface for cross-chain communications.
 /// @dev Uses LayerZero as communication protocol.
-contract OlympusTransmitter is Policy {
+contract OlympusTransmitter is Policy, RolesConsumer, NonblockingLzApp {
+    error InsufficientAmount();
+    error CallerMustBeLZEndpoint();
 
-    struct ChainInfo {
-        uint256 chainId;
-        address busAddr;
-    }
+    // Modules
+    MINTRv1 public MINTR;
 
-    /// @notice LayerZero endpoint
-    ILayerZeroEndpoint immutable endpoint;
+    mapping(uint256 => bool) public validChains;
 
-    /// @notice Address to send gas refunds to. Initialized to deployer.
-    address payable public refundAddress;
-
-    ChainInfo[] public chains;
+    ERC20 ohm;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
     //============================================================================================//
 
-    constructor(Kernel kernel_, ILayerZeroEndpoint endpoint_, address payable refundAddr_) Policy(kernel_) {
-        endpoint = endpoint_;
-        refundAddress = refundAddr_;
+    constructor(
+        Kernel kernel_,
+        ERC20 ohm_,
+        address endpoint_
+    ) Policy(kernel_) NonblockingLzApp(endpoint_) {
+        ohm = ohm_;
     }
-
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -58,65 +59,59 @@ contract OlympusTransmitter is Policy {
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](3);
+        permissions = new Permissions[](4);
         permissions[0] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
         permissions[1] = Permissions(MINTR.KEYCODE(), MINTR.burnOhm.selector);
         permissions[2] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
+        permissions[3] = Permissions(MINTR.KEYCODE(), MINTR.decreaseMintApproval.selector);
     }
+
     //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    function setRefundAddress(address payable newRefundAddr_) external {
-        refundAddress = newRefundAddr_;
+    function setChainStatus(uint256 chainId_, bool isValid_) external onlyRole("bridge_admin") {
+        validChains[chainId_] = isValid_;
     }
-
-    function addChain(uint256 chainId_, address busAddr_) external {
-        chains.push(ChainInfo({chainId: chainId_, busAddr: busAddr_}));
-    }
-
-    /// @notice Send gons information to all other chains after rebase
-    function transmitGons(uint256 gons_) external payable override {
-        bytes memory payload = abi.encode(MessageType.GONS, abi.encode(gons_));
-
-        for (uint256 i; i < chains.length; ++i) {
-            ChainInfo memory chain = chains[i];
-
-            endpoint.send(
-                uint16(chain.chainId),
-                abi.encode(chain.busAddr),
-                payload,
-                refundAddress,
-                address(0),
-                bytes("")
-            );
-        }
-    }
-
-    // TODO
-    function transmitGlobalSupply() external payable override {}
 
     // TODO Send information needed to mint OHM on another chain
-    function transmitTokenTransfer() external payable override {}
+    function sendOhm(address to_, uint256 amount_, uint16 dstChainId_) external payable {
+        if (ohm.balanceOf(msg.sender) < amount_) revert InsufficientAmount();
 
-    /// @notice Define messages that can be received from other chains.
-    function lzReceive(
+        bytes memory payload = abi.encode(to_, amount_);
+
+        MINTR.burnOhm(msg.sender, amount_);
+
+        _lzSend(
+            dstChainId_,
+            payload,
+            payable(msg.sender),
+            address(0x0),
+            bytes("")
+        )
+
+        emit OffchainTransferred(msg.sender, amount_, dstChainId_)
+    }
+
+    // TODO receives info to mint to a user's wallet
+//    function lzReceive(
+//        uint16 srcChainId_,
+//        bytes calldata srcAddress_,
+//        uint64 nonce_,
+//        bytes calldata payload_
+//    ) external override {
+    function _nonblockingLzReceive(
         uint16 srcChainId_,
-        bytes calldata srcAddress_,
+        bytes memory srcAddress_,
         uint64 nonce_,
-        bytes calldata payload_
-    ) external override {
+        bytes memory payload_
+    ) internal override {
         if (msg.sender != address(endpoint)) revert CallerMustBeLZEndpoint();
 
-        (MessageType msgType, bytes memory payload) = abi.decode(payload_, (MessageType, bytes));
-
-        if (srcChainId_ == 1) {
-            // Proxy logic
-        } else {
-            // Master logic
-            if (msgType == MessageType.TRANSFER) {
-                // TODO execute x-chain transfer
-            } else if (msgType == MessageType.GONS) {}
-        }
+        //(MessageType msgType, bytes memory payload) = abi.decode(payload_, (MessageType, bytes));
+        (address to, uint256 amount) = abi.decode(payload_, (address, uint256));
+        MINTR.mintOhm(to, amount);
+        
+        emit OffchainReceived()
     }
 }
