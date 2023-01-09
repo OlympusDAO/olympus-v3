@@ -16,7 +16,7 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @title Olympus Base Liquidity AMO
-contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
+abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     // ========= ERRORS ========= //
 
     error LiquidityAMO_LimitViolation();
