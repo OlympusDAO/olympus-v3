@@ -53,15 +53,15 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     address public liquidityPool;
 
     // Aggregate Contract State
-    uint256 public totalLP; // Current LP positions
-    uint256 public ohmMinted; // Total OHM minted over time
-    uint256 public ohmBurned; // Total OHM withdrawn and burnt over time
-    mapping(address => uint256) public accumulatedFees; // Total fees accumulated over time
+    uint256 public totalLP;
+    uint256 public ohmMinted;
+    uint256 public ohmBurned;
+    mapping(address => uint256) public accumulatedFees;
 
     // User State
-    mapping(address => uint256) public pairTokenDeposits; // User pair token deposits
-    mapping(address => uint256) public lpPositions; // User LP positions
-    mapping(address => mapping(address => int256)) public userRewardDebts; // User reward debts
+    mapping(address => uint256) public pairTokenDeposits;
+    mapping(address => uint256) public lpPositions;
+    mapping(address => mapping(address => int256)) public userRewardDebts; // Rewards accumulated prior to user's joining (MasterChef V2 math)
 
     // Reward Token State
     InternalRewardToken[] public rewardTokens;
@@ -145,10 +145,8 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         pairTokenDeposits[msg.sender] += amount_;
         ohmMinted += ohmToBorrow;
 
-        // Take pair token from user
+        // Gather tokens for deposit
         pairToken.transferFrom(msg.sender, address(this), amount_);
-
-        // Borrow OHM
         _borrow(ohmToBorrow);
 
         uint256 lpReceived = _deposit(ohmToBorrow, amount_, minLpAmount_);
@@ -197,7 +195,7 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     }
 
     /// @notice                     Claims user's rewards for all reward tokens
-    function claimRewards() external returns (uint256) {
+    function claimRewards() external returns () {
         uint256 numExternalRewardTokens = externalRewardTokens.length;
         uint256 numRewardTokens = rewardTokens.length;
 
@@ -225,6 +223,7 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     /// @notice                     Returns the amount of rewards a user has earned for a given reward token
     /// @param  id_                 The ID of the reward token
     /// @param  user_               The user's address to check rewards for
+    /// @return int256              The amount of rewards the user has earned
     function rewardsForToken(uint256 id_, address user_) public view returns (int256) {
         InternalRewardToken memory rewardToken = rewardTokens[id_];
         uint256 accumulatedRewardsPerShare = rewardToken.accumulatedRewardsPerShare;
@@ -240,6 +239,10 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
             userRewardDebts[user_][rewardToken.token];
     }
 
+    /// @notice                     Returns the amount of rewards a user has earned for a given external reward token
+    /// @param  id_                 The ID of the external reward token
+    /// @param  user_               The user's address to check rewards for
+    /// @return int256              The amount of rewards the user has earned
     function externalRewardsForToken(uint256 id_, address user_) public view returns (int256) {
         ExternalRewardToken memory rewardToken = externalRewardTokens[id_];
         uint256 accumulatedRewardsPerShare = rewardToken.accumulatedRewardsPerShare;
@@ -250,6 +253,8 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     }
 
     /// @notice                     Calculates the net amount of OHM that this contract has emitted to or removed from the broader market
+    /// @return emitted             The amount of OHM that this contract has emitted to the broader market
+    /// @return removed             The amount of OHM that this contract has removed from the broader market
     /// @dev                        This is based on a point-in-time snapshot of the liquidity pool's current OHM balance
     function getOhmEmissions() external view returns (uint256 emitted, uint256 removed) {
         uint256 currentPoolOhmShare = _getPoolOhmShare();
@@ -484,34 +489,59 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     //                                     VIRTUAL FUNCTIONS                                      //
     //============================================================================================//
 
+    /// @notice                 Calculates the equivalent OHM amount for a given amount of partner tokens
+    /// @param amount_          The amount of partner tokens to calculate the OHM value of
+    /// @return uint256         The OHM value of the given amount of partner tokens
     function _valueCollateral(uint256 amount_) internal view virtual returns (uint256) {}
 
+    /// @notice                 Calculates the current price of the liquidity pool in OHM/TKN
+    /// @return uint256         The current price of the liquidity pool in OHM/TKN
     function _getPoolPrice() internal view virtual returns (uint256) {}
 
+    /// @notice                 Calculates the contract's current share of OHM in the liquidity pool
+    /// @return uint256         The contract's current share of OHM in the liquidity pool
     function _getPoolOhmShare() internal view virtual returns (uint256) {}
 
+    /// @notice                 Deposits OHM and partner tokens into the liquidity pool
+    /// @param ohmAmount_       The amount of OHM to deposit
+    /// @param pairAmount_      The amount of partner tokens to deposit
+    /// @param minLpAmount_     The minimum amount of liquidity pool tokens to receive
+    /// @return uint256         The amount of liquidity pool tokens received
+    /// @dev                    This function should also handle deposits into any external staking pools like Aura or Convex
     function _deposit(
         uint256 ohmAmount_,
         uint256 pairAmount_,
         uint256 minLpAmount_
     ) internal virtual returns (uint256) {}
 
+    /// @notice                 Withdraws OHM and partner tokens from the liquidity pool
+    /// @param lpAmount_        The amount of liquidity pool tokens to withdraw
+    /// @param minTokenAmounts_ The minimum amounts of OHM and partner tokens to receive
+    /// @return uint256         The amount of OHM received
+    /// @return uint256         The amount of partner tokens received
+    /// @dev                    This function should also handle withdrawals from any external staking pools like Aura or Convex
     function _withdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
         internal
         virtual
         returns (uint256, uint256)
     {}
 
+    /// @notice                 Harvests any external rewards from sources like Aura or Convex
+    /// @return uint256[]       The amounts of each external reward token harvested
     function _accumulateExternalRewards() internal virtual returns (uint256[] memory) {}
 
     //============================================================================================//
     //                                      ADMIN FUNCTIONS                                       //
     //============================================================================================//
 
+    /// @notice                 Registers the AMO in the LQREG contract
+    /// @dev                    This function can only be accessed by the liquidityamo_admin role
     function activate() external onlyRole("liquidityamo_admin") {
         LQREG.addAMO(address(this));
     }
 
+    /// @notice                 Unregisters the AMO in the LQREG contract and sets the borrowable limit to 0
+    /// @dev                    This function can only be accessed by the liquidityamo_admin role
     function deactivate(uint256 id_) external onlyRole("liquidityamo_admin") {
         LIMIT = 0;
         LQREG.removeAMO(id_, address(this));
@@ -521,6 +551,7 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     /// @param  token_             The address of the reward token
     /// @param  rewardsPerSecond_  The amount of reward tokens to distribute per second
     /// @param  startTimestamp_    The timestamp at which to start distributing rewards
+    /// @dev                       This function can only be accessed by the liquidityamo_admin role
     function addRewardToken(
         address token_,
         uint256 rewardsPerSecond_,
@@ -536,6 +567,10 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         rewardTokens.push(newRewardToken);
     }
 
+    /// @notice                 Removes a reward token from the contract
+    /// @param  id_             The index of the reward token to remove
+    /// @param  token_          The address of the reward token to remove
+    /// @dev                    This function can only be accessed by the liquidityamo_admin role
     function removeRewardToken(uint256 id_, address token_)
         external
         onlyRole("liquidityamo_admin")
@@ -547,6 +582,9 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         rewardTokens.pop();
     }
 
+    /// @notice                 Adds a new external reward token to the contract
+    /// @param  token_          The address of the reward token
+    /// @dev                    This function can only be accessed by the liquidityamo_admin role
     function addExternalRewardToken(address token_) external onlyRole("liquidityamo_admin") {
         ExternalRewardToken memory newRewardToken = ExternalRewardToken({
             token: token_,
@@ -556,6 +594,10 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         externalRewardTokens.push(newRewardToken);
     }
 
+    /// @notice                 Removes an external reward token from the contract
+    /// @param  id_             The index of the reward token to remove
+    /// @param  token_          The address of the reward token to remove
+    /// @dev                    This function can only be accessed by the liquidityamo_admin role
     function removeExternalRewardToken(uint256 id_, address token_)
         external
         onlyRole("liquidityamo_admin")
@@ -568,6 +610,7 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     }
 
     /// @notice                    Transfers accumulated fees on reward tokens to the admin
+    /// @dev                       This function can only be accessed by the liquidityamo_admin role
     function claimFees() external onlyRole("liquidityamo_admin") {
         uint256 rewardTokenCount = rewardTokens.length;
         for (uint256 i; i < rewardTokenCount; ) {
@@ -586,18 +629,21 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     /// @notice                    Updates the maximum amount of OHM that can be minted by this contract
     /// @param  limit_             The new limit
+    /// @dev                       This function can only be accessed by the liquidityamo_admin role
     function setLimit(uint256 limit_) external onlyRole("liquidityamo_admin") {
         LIMIT = limit_;
     }
 
     /// @notice                    Updates the threshold for the price deviation from the oracle price that is acceptable
     /// @param  threshold_         The new threshold (out of 1000)
+    /// @dev                       This function can only be accessed by the liquidityamo_admin role
     function setThreshold(uint256 threshold_) external onlyRole("liquidityamo_admin") {
         THRESHOLD = threshold_;
     }
 
     /// @notice                    Updates the fee charged on rewards
     /// @param  fee_               The new fee (out of 1000)
+    /// @dev                       This function can only be accessed by the liquidityamo_admin role
     function setFee(uint256 fee_) external onlyRole("liquidityamo_admin") {
         FEE = fee_;
     }
