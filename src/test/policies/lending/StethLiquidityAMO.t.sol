@@ -15,6 +15,7 @@ import {MockAuraBooster, MockAuraRewardPool} from "test/mocks/AuraMocks.sol";
 import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.sol";
 
 import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusLiquidityRegistry} from "modules/LQREG/OlympusLiquidityRegistry.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {StethLiquidityAMO} from "policies/lending/StethLiquidityAMO.sol";
@@ -63,6 +64,7 @@ contract StethLiquidityAMOTest is Test {
 
     Kernel internal kernel;
     OlympusMinter internal minter;
+    OlympusLiquidityRegistry internal lqreg;
     OlympusRoles internal roles;
 
     RolesAdmin internal rolesAdmin;
@@ -124,6 +126,7 @@ contract StethLiquidityAMOTest is Test {
 
             // Deploy modules
             minter = new OlympusMinter(kernel, address(ohm));
+            lqreg = new OlympusLiquidityRegistry(kernel);
             roles = new OlympusRoles(kernel);
         }
 
@@ -169,6 +172,7 @@ contract StethLiquidityAMOTest is Test {
 
             // Initialize modules
             kernel.executeAction(Actions.InstallModule, address(minter));
+            kernel.executeAction(Actions.InstallModule, address(lqreg));
             kernel.executeAction(Actions.InstallModule, address(roles));
 
             // Approve policies
@@ -300,7 +304,7 @@ contract StethLiquidityAMOTest is Test {
     /// [X]  withdraw
     ///     [X]  Can be accessed by anyone
     ///     [X]  Fails if pool and oracle prices differ substantially
-    ///     []  Foregoes rewards if called with claim as false
+    ///     [X]  Foregoes rewards if called with claim as false
     ///     [X]  Claims rewards
     ///     [X]  Claims external rewards
     ///     [X]  Returns correct rewards with multiple users
@@ -688,6 +692,67 @@ contract StethLiquidityAMOTest is Test {
 
     // ========= ADMIN TESTS ========= //
 
+    /// [X]  activate
+    ///     [X]  Can only be called by admin
+    ///     [X]  Adds AMO to LQREG
+
+    function testCorrectness_activateCanOnlyBeCalledByAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("liquidityamo_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        liquidityAMO.activate();
+    }
+
+    function testCorrectness_activateCorrectlyAddsAMOToLQREG() public {
+        // Verify initial state
+        assertEq(lqreg.activeAMOCount(), 0);
+
+        // Activate AMO
+        liquidityAMO.activate();
+
+        // Verify end state
+        assertEq(lqreg.activeAMOCount(), 1);
+        assertEq(lqreg.activeAMOs(0), address(liquidityAMO));
+    }
+
+    /// [X]  deactivate
+    ///     [X]  Can only be called by admin
+    ///     [X]  Removes AMO from LQREG
+
+    function testCorrectness_deactivateCanOnlyBeCalledByAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("liquidityamo_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        liquidityAMO.deactivate(0);
+    }
+
+    function testCorrectness_deactivateCorrectlyRemovesAMOFromLQREG() public {
+        // Activate AMO
+        liquidityAMO.activate();
+
+        // Verify initial state
+        assertEq(lqreg.activeAMOCount(), 1);
+        assertEq(lqreg.activeAMOs(0), address(liquidityAMO));
+
+        // Deactivate AMO
+        liquidityAMO.deactivate(0);
+
+        // Verify end state
+        assertEq(lqreg.activeAMOCount(), 0);
+    }
+
     /// [X]  addRewardToken
     ///     [X]  Can only be called by admin
     ///     [X]  Adds reward token correctly
@@ -719,6 +784,131 @@ contract StethLiquidityAMOTest is Test {
         assertEq(token, address(reward2));
         assertEq(rewardsPerSecond, 1e18);
         assertEq(accumulatedRewardsPerShare, 0);
+    }
+
+    /// [X]  removeRewardToken
+    ///     [X]  Can only be called by admin
+    ///     [X]  Fails on sanity check
+    ///     [X]  Removes reward token correctly
+
+    function testCorrectness_removeRewardTokenCanOnlyBeCalledByAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("liquidityamo_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        liquidityAMO.removeRewardToken(0, address(reward2));
+    }
+
+    function testCorrectness_removeRewardTokenFailsOnSanityCheck() public {
+        // Add reward token
+        liquidityAMO.addRewardToken(address(reward2), 1e18, block.timestamp); // 1 REWARD2 token per second
+
+        bytes memory err = abi.encodeWithSignature("LiquidityAMO_InvalidRemoval()");
+        vm.expectRevert(err);
+
+        // Remove reward token with wrong index
+        liquidityAMO.removeRewardToken(0, address(reward2));
+    }
+
+    function testCorrectness_removeRewardTokenCorrectlyRemovesToken() public {
+        // Add reward token
+        liquidityAMO.addRewardToken(address(reward2), 1e18, block.timestamp); // 1 REWARD2 token per second
+
+        // Verify initial state
+        (
+            address token,
+            uint256 rewardsPerSecond,
+            ,
+            uint256 accumulatedRewardsPerShare
+        ) = liquidityAMO.rewardTokens(1);
+        assertEq(token, address(reward2));
+        assertEq(rewardsPerSecond, 1e18);
+        assertEq(accumulatedRewardsPerShare, 0);
+
+        // Remove reward token
+        liquidityAMO.removeRewardToken(1, address(reward2));
+
+        // Verify end state
+        vm.expectRevert();
+        (token, rewardsPerSecond, , accumulatedRewardsPerShare) = liquidityAMO.rewardTokens(1);
+    }
+
+    /// [X]  addExternalRewardToken
+    ///     [X]  Can only be called by admin
+    ///     [X]  Adds external reward token correctly
+
+    function testCorrectness_addExternalRewardTokenCanOnlyBeCalledByAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("liquidityamo_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        liquidityAMO.addExternalRewardToken(address(externalReward));
+    }
+
+    function testCorrectness_addExternalRewardTokenCorrectlyAddsToken() public {
+        // Add external reward token
+        liquidityAMO.addExternalRewardToken(address(externalReward));
+
+        // Verify state
+        (address token, uint256 accumulatedRewardsPerShare) = liquidityAMO.externalRewardTokens(1);
+        assertEq(token, address(externalReward));
+        assertEq(accumulatedRewardsPerShare, 0);
+    }
+
+    /// [X]  removeExternalRewardToken
+    ///     [X]  Can only be called by admin
+    ///     [X]  Fails on sanity check
+    ///     [X]  Removes external reward token correctly
+
+    function testCorrectness_removeExternalRewardTokenCanOnlyBeCalledByAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("liquidityamo_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        liquidityAMO.removeExternalRewardToken(0, address(externalReward));
+    }
+
+    function testCorrectness_removeExternalRewardTokenFailsOnSanityCheck() public {
+        // Add external reward token
+        liquidityAMO.addExternalRewardToken(address(reward2));
+
+        bytes memory err = abi.encodeWithSignature("LiquidityAMO_InvalidRemoval()");
+        vm.expectRevert(err);
+
+        // Remove external reward token with wrong index
+        liquidityAMO.removeExternalRewardToken(0, address(reward2));
+    }
+
+    function testCorrectness_removeExternalRewardTokenCorrectlyRemovesToken() public {
+        // Add external reward token
+        liquidityAMO.addExternalRewardToken(address(externalReward));
+
+        // Verify initial state
+        (address token, uint256 accumulatedRewardsPerShare) = liquidityAMO.externalRewardTokens(1);
+        assertEq(token, address(externalReward));
+        assertEq(accumulatedRewardsPerShare, 0);
+
+        // Remove external reward token
+        liquidityAMO.removeExternalRewardToken(1, address(externalReward));
+
+        // Verify end state
+        vm.expectRevert();
+        (token, accumulatedRewardsPerShare) = liquidityAMO.externalRewardTokens(1);
     }
 
     /// [X]  setThreshold

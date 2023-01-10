@@ -3,6 +3,7 @@ pragma solidity 0.8.15;
 
 // Import system dependencies
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
+import {LQREGv1} from "src/modules/LQREG/LQREG.v1.sol";
 import {ROLESv1, RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import "src/Kernel.sol";
 
@@ -22,6 +23,7 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     error LiquidityAMO_LimitViolation();
     error LiquidityAMO_PoolImbalanced();
     error LiquidityAMO_BadPriceFeed();
+    error LiquidityAMO_InvalidRemoval();
 
     // ========= DATA STRUCTURES ========= //
 
@@ -41,6 +43,7 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     // Modules
     MINTRv1 public MINTR;
+    LQREGv1 public LQREG;
 
     // Tokens
     ERC20 public ohm;
@@ -90,12 +93,14 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
+        dependencies = new Keycode[](3);
         dependencies[0] = toKeycode("MINTR");
-        dependencies[1] = toKeycode("ROLES");
+        dependencies[1] = toKeycode("LQREG");
+        dependencies[2] = toKeycode("ROLES");
 
         MINTR = MINTRv1(getModuleAddress(dependencies[0]));
-        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+        LQREG = LQREGv1(getModuleAddress(dependencies[1]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
     }
 
     /// @inheritdoc Policy
@@ -106,11 +111,14 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         returns (Permissions[] memory permissions)
     {
         Keycode mintrKeycode = MINTR.KEYCODE();
+        Keycode lqregKeycode = LQREG.KEYCODE();
 
-        permissions = new Permissions[](3);
+        permissions = new Permissions[](5);
         permissions[0] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.burnOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
+        permissions[3] = Permissions(lqregKeycode, LQREG.addAMO.selector);
+        permissions[4] = Permissions(lqregKeycode, LQREG.removeAMO.selector);
     }
 
     //============================================================================================//
@@ -500,6 +508,15 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     //                                      ADMIN FUNCTIONS                                       //
     //============================================================================================//
 
+    function activate() external onlyRole("liquidityamo_admin") {
+        LQREG.addAMO(address(this));
+    }
+
+    function deactivate(uint256 id_) external onlyRole("liquidityamo_admin") {
+        LIMIT = 0;
+        LQREG.removeAMO(id_, address(this));
+    }
+
     /// @notice                    Adds a new reward token to the contract
     /// @param  token_             The address of the reward token
     /// @param  rewardsPerSecond_  The amount of reward tokens to distribute per second
@@ -519,6 +536,17 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         rewardTokens.push(newRewardToken);
     }
 
+    function removeRewardToken(uint256 id_, address token_)
+        external
+        onlyRole("liquidityamo_admin")
+    {
+        if (rewardTokens[id_].token != token_) revert LiquidityAMO_InvalidRemoval();
+
+        // Delete reward token from array by swapping with the last element and popping
+        rewardTokens[id_] = rewardTokens[rewardTokens.length - 1];
+        rewardTokens.pop();
+    }
+
     function addExternalRewardToken(address token_) external onlyRole("liquidityamo_admin") {
         ExternalRewardToken memory newRewardToken = ExternalRewardToken({
             token: token_,
@@ -526,6 +554,17 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         });
 
         externalRewardTokens.push(newRewardToken);
+    }
+
+    function removeExternalRewardToken(uint256 id_, address token_)
+        external
+        onlyRole("liquidityamo_admin")
+    {
+        if (externalRewardTokens[id_].token != token_) revert LiquidityAMO_InvalidRemoval();
+
+        // Delete reward token from array by swapping with the last element and popping
+        externalRewardTokens[id_] = externalRewardTokens[externalRewardTokens.length - 1];
+        externalRewardTokens.pop();
     }
 
     /// @notice                    Transfers accumulated fees on reward tokens to the admin
