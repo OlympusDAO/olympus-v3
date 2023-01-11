@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-//import {ILayerZeroReceiver} from './interfaces/external/ILayerZeroReciever.sol';
-//import {ILayerZeroEndpoint} from "./interfaces/external/ILayerZeroEndpoint.sol";
-
 import {NonblockingLzApp, ILayerZeroEndpoint} from "layer-zero/lzApp/NonblockingLzApp.sol";
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
@@ -23,10 +20,14 @@ contract OlympusTransmitter is Policy, RolesConsumer, NonblockingLzApp {
     error InsufficientAmount();
     error CallerMustBeLZEndpoint();
 
+    event OffchainTransferred(address sender_, uint256 amount_, uint16 dstChain_);
+    event OffchainReceived(address receiver_, uint256 amount_, uint16 srcChain_);
+    event ChainStatusUpdated(uint16 chainId_, bool isValid_);
+
     // Modules
     MINTRv1 public MINTR;
 
-    mapping(uint256 => bool) public validChains;
+    mapping(uint16 => bool) public validChains;
 
     ERC20 ohm;
 
@@ -70,8 +71,10 @@ contract OlympusTransmitter is Policy, RolesConsumer, NonblockingLzApp {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    function setChainStatus(uint256 chainId_, bool isValid_) external onlyRole("bridge_admin") {
+    function setChainStatus(uint16 chainId_, bool isValid_) external onlyRole("bridge_admin") {
         validChains[chainId_] = isValid_;
+
+        emit ChainStatusUpdated(chainId_, isValid_);
     }
 
     // TODO Send information needed to mint OHM on another chain
@@ -82,36 +85,35 @@ contract OlympusTransmitter is Policy, RolesConsumer, NonblockingLzApp {
 
         MINTR.burnOhm(msg.sender, amount_);
 
+        //uint256 gasFee = lzEndpoint.estimateFees()
+
         _lzSend(
             dstChainId_,
             payload,
             payable(msg.sender),
             address(0x0),
-            bytes("")
-        )
+            bytes(""),
+            msg.value
+        );
 
-        emit OffchainTransferred(msg.sender, amount_, dstChainId_)
+        emit OffchainTransferred(msg.sender, amount_, dstChainId_);
     }
 
     // TODO receives info to mint to a user's wallet
-//    function lzReceive(
-//        uint16 srcChainId_,
-//        bytes calldata srcAddress_,
-//        uint64 nonce_,
-//        bytes calldata payload_
-//    ) external override {
     function _nonblockingLzReceive(
         uint16 srcChainId_,
         bytes memory srcAddress_,
         uint64 nonce_,
         bytes memory payload_
     ) internal override {
-        if (msg.sender != address(endpoint)) revert CallerMustBeLZEndpoint();
+        if (msg.sender != address(lzEndpoint)) revert CallerMustBeLZEndpoint();
 
         //(MessageType msgType, bytes memory payload) = abi.decode(payload_, (MessageType, bytes));
         (address to, uint256 amount) = abi.decode(payload_, (address, uint256));
+
+        MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);
         
-        emit OffchainReceived()
+        emit OffchainReceived(to, amount, srcChainId_);
     }
 }
