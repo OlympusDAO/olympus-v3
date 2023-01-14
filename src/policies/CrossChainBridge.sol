@@ -14,9 +14,16 @@ import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
 import "src/Kernel.sol";
 
-/// @notice Message bus defining interface for cross-chain communications.
+/*
+NOTES:
+- How to set Owner to the bridge_admin role?
+*/
+
+/// @notice Message bridge for cross-chain OHM transfers.
 /// @dev Uses LayerZero as communication protocol.
-contract OlympusTransmitter is Policy, RolesConsumer, NonblockingLzApp {
+/// @dev Each chain needs to `setTrustedRemoteAddress` for each remote address
+///      it intends to receive from.
+contract CrossChainBridge is Policy, RolesConsumer, NonblockingLzApp {
     error InsufficientAmount();
     error CallerMustBeLZEndpoint();
 
@@ -37,11 +44,8 @@ contract OlympusTransmitter is Policy, RolesConsumer, NonblockingLzApp {
 
     constructor(
         Kernel kernel_,
-        ERC20 ohm_,
         address endpoint_
-    ) Policy(kernel_) NonblockingLzApp(endpoint_) {
-        ohm = ohm_;
-    }
+    ) Policy(kernel_) NonblockingLzApp(endpoint_) {}
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -51,6 +55,8 @@ contract OlympusTransmitter is Policy, RolesConsumer, NonblockingLzApp {
 
         MINTR = MINTRv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+
+        ohm = ERC20(address(MINTR.ohm()));
     }
 
     /// @inheritdoc Policy
@@ -71,11 +77,7 @@ contract OlympusTransmitter is Policy, RolesConsumer, NonblockingLzApp {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    function setChainStatus(uint16 chainId_, bool isValid_) external onlyRole("bridge_admin") {
-        validChains[chainId_] = isValid_;
-
-        emit ChainStatusUpdated(chainId_, isValid_);
-    }
+    // TODO can replace nonblockingLzApp by forking only what is necessary into this contract
 
     // TODO Send information needed to mint OHM on another chain
     function sendOhm(address to_, uint256 amount_, uint16 dstChainId_) external payable {
@@ -84,8 +86,6 @@ contract OlympusTransmitter is Policy, RolesConsumer, NonblockingLzApp {
         bytes memory payload = abi.encode(to_, amount_);
 
         MINTR.burnOhm(msg.sender, amount_);
-
-        //uint256 gasFee = lzEndpoint.estimateFees()
 
         _lzSend(
             dstChainId_,
@@ -108,12 +108,16 @@ contract OlympusTransmitter is Policy, RolesConsumer, NonblockingLzApp {
     ) internal override {
         if (msg.sender != address(lzEndpoint)) revert CallerMustBeLZEndpoint();
 
-        //(MessageType msgType, bytes memory payload) = abi.decode(payload_, (MessageType, bytes));
         (address to, uint256 amount) = abi.decode(payload_, (address, uint256));
 
         MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);
         
         emit OffchainReceived(to, amount, srcChainId_);
+    }
+
+    // TODO must be called by a `bridge_admin` to be able to set lzApp configuration
+    function becomeOwner() external onlyRole("bridge_admin") {
+        _transferOwnership(msg.sender);
     }
 }
