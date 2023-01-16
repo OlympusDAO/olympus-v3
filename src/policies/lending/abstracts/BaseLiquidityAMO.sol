@@ -169,8 +169,6 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         _borrow(ohmToBorrow);
 
         uint256 lpReceived = _deposit(ohmToBorrow, amount_, minLpAmount_);
-        totalLP += lpReceived;
-        lpPositions[msg.sender] += lpReceived;
 
         // Calculate amount of pair tokens and OHM unused in deposit
         uint256 unusedPairToken = pairToken.balanceOf(address(this)) - pairTokenBalanceBefore;
@@ -182,14 +180,19 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         // Burn unused OHM
         if (unusedOhm > 0) _repay(unusedOhm);
 
-        // Update state about user's deposits and borrows
-        pairTokenDeposits[msg.sender] += amount_ - unusedPairToken;
-        ohmMinted += ohmToBorrow - unusedOhm;
+        uint256 pairTokenUsed = amount_ - unusedPairToken;
+        uint256 ohmUsed = ohmToBorrow - unusedOhm;
+
+        ohmMinted += ohmUsed;
+        totalLP += lpReceived;
+
+        pairTokenDeposits[msg.sender] += pairTokenUsed;
+        lpPositions[msg.sender] += lpReceived;
 
         // Update user's reward debts
         _depositUpdateRewardDebts(lpReceived);
 
-        emit Deposit(msg.sender, amount_, ohmToBorrow);
+        emit Deposit(msg.sender, pairTokenUsed, ohmUsed);
     }
 
     /// @notice                     Withdraws pair tokens and OHM from a liquidity pool, returns any received pair tokens to the
@@ -261,10 +264,11 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     /// @return int256              The amount of rewards the user has earned
     function internalRewardsForToken(uint256 id_, address user_) public view returns (uint256) {
         InternalRewardToken memory rewardToken = internalRewardTokens[id_];
+        uint256 lastRewardTime = rewardToken.lastRewardTime;
         uint256 accumulatedRewardsPerShare = rewardToken.accumulatedRewardsPerShare;
 
-        if (block.timestamp > rewardToken.lastRewardTime && totalLP != 0) {
-            uint256 timeDiff = block.timestamp - rewardToken.lastRewardTime;
+        if (block.timestamp > lastRewardTime && totalLP != 0) {
+            uint256 timeDiff = block.timestamp - lastRewardTime;
             uint256 totalRewards = timeDiff * rewardToken.rewardsPerSecond;
             accumulatedRewardsPerShare += (totalRewards * 1e18) / totalLP;
         }
@@ -384,7 +388,7 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         uint256[] memory accumulatedInternalRewards = new uint256[](numInternalRewardTokens);
 
         for (uint256 i; i < numInternalRewardTokens; ) {
-            InternalRewardToken storage rewardToken = internalRewardTokens[i];
+            InternalRewardToken memory rewardToken = internalRewardTokens[i];
             uint256 timeDiff = block.timestamp - rewardToken.lastRewardTime;
             uint256 totalRewards = (timeDiff * rewardToken.rewardsPerSecond);
             accumulatedInternalRewards[i] = totalRewards;
@@ -450,9 +454,9 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         uint256 numExternalRewardTokens = externalRewardTokens.length;
 
         for (uint256 i; i < numInternalRewardTokens; ) {
-            address rewardToken = internalRewardTokens[i].token;
-            userRewardDebts[msg.sender][rewardToken] += int256(
-                (lpReceived_ * internalRewardTokens[i].accumulatedRewardsPerShare) / 1e18
+            InternalRewardToken memory rewardToken = internalRewardTokens[i];
+            userRewardDebts[msg.sender][rewardToken.token] += int256(
+                (lpReceived_ * rewardToken.accumulatedRewardsPerShare) / 1e18
             );
 
             unchecked {
@@ -461,9 +465,9 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         }
 
         for (uint256 i; i < numExternalRewardTokens; ) {
-            address rewardToken = externalRewardTokens[i].token;
-            userRewardDebts[msg.sender][rewardToken] += int256(
-                (lpReceived_ * externalRewardTokens[i].accumulatedRewardsPerShare) / 1e18
+            ExternalRewardToken memory rewardToken = externalRewardTokens[i];
+            userRewardDebts[msg.sender][rewardToken.token] += int256(
+                (lpReceived_ * rewardToken.accumulatedRewardsPerShare) / 1e18
             );
 
             unchecked {
@@ -664,13 +668,11 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     /// @notice                    Transfers accumulated fees on reward tokens to the admin
     /// @dev                       This function can only be accessed by the liquidityamo_admin role
     function claimFees() external onlyRole("liquidityamo_admin") {
-        address rewardToken;
-
         uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256 numExternalRewardTokens = externalRewardTokens.length;
 
         for (uint256 i; i < numInternalRewardTokens; ) {
-            rewardToken = internalRewardTokens[i].token;
+            address rewardToken = internalRewardTokens[i].token;
             uint256 feeToSend = accumulatedFees[rewardToken];
 
             accumulatedFees[rewardToken] = 0;
@@ -683,7 +685,7 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         }
 
         for (uint256 i; i < numExternalRewardTokens; ) {
-            rewardToken = externalRewardTokens[i].token;
+            address rewardToken = externalRewardTokens[i].token;
             uint256 feeToSend = accumulatedFees[rewardToken];
 
             accumulatedFees[rewardToken] = 0;
