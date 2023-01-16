@@ -38,6 +38,8 @@ contract OlympusLiquidityRegistry is LQREGv1 {
     function addAMO(address amo_) external override permissioned {
         activeAMOs.push(amo_);
         ++activeAMOCount;
+
+        emit AmoAdded(amo_);
     }
 
     /// @inheritdoc LQREGv1
@@ -49,5 +51,7 @@ contract OlympusLiquidityRegistry is LQREGv1 {
         activeAMOs[index_] = activeAMOs[activeAMOs.length - 1];
         activeAMOs.pop();
         --activeAMOCount;
+
+        emit AmoRemoved(amo_);
     }
 }

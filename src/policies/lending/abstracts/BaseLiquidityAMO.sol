@@ -16,8 +16,16 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+import {console2} from "forge-std/console2.sol";
+
 /// @title Olympus Base Liquidity AMO
 abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
+    // ========= EVENTS ========= //
+
+    event Deposit(address indexed user, uint256 pairAmount, uint256 ohmMinted);
+    event Withdraw(address indexed user, uint256 pairAmount, uint256 ohmBurned);
+    event RewardsClaimed(address indexed user, address indexed token, uint256 amount);
+
     // ========= ERRORS ========= //
 
     error LiquidityAMO_LimitViolation();
@@ -64,7 +72,13 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     mapping(address => mapping(address => int256)) public userRewardDebts; // Rewards accumulated prior to user's joining (MasterChef V2 math)
 
     // Reward Token State
-    InternalRewardToken[] public rewardTokens;
+    /// @notice An internal reward token is a token where the AMO is the only source of rewards and the
+    ///         AMO handles all accounting around how many reward tokens to distribute over time
+    InternalRewardToken[] public internalRewardTokens;
+
+    /// @notice An external reward token is a token where the primary accrual of reward tokens occurs outside
+    ///         the scope of this contract in a system like Convex or Aura. The AMO is responsible for harvesting
+    ///         rewards back to the AMO and then distributing them proportionally to users
     ExternalRewardToken[] public externalRewardTokens;
 
     // Configuration values
@@ -137,13 +151,18 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         returns (uint256 lpAmountOut)
     {
         uint256 ohmToBorrow = _valueCollateral(amount_);
+
+        // Cache pair token and OHM balance before deposit
+        uint256 pairTokenBalanceBefore = pairToken.balanceOf(address(this));
+        uint256 ohmBalanceBefore = ohm.balanceOf(address(this));
+
+        // The pool being imbalanced is less of a concern here on deposit than on withdrawal,
+        // but in the event the frontend miscalculates the expected LP amount to receive, we want
+        // to reduce the risk of entering a manipulated pool at a bad price
+        if (!_isPoolSafe()) revert LiquidityAMO_PoolImbalanced();
         if (!_canDeposit(ohmToBorrow)) revert LiquidityAMO_LimitViolation();
 
         _depositUpdateRewardState();
-
-        // Update state about user's deposits and borrows
-        pairTokenDeposits[msg.sender] += amount_;
-        ohmMinted += ohmToBorrow;
 
         // Gather tokens for deposit
         pairToken.transferFrom(msg.sender, address(this), amount_);
@@ -151,12 +170,26 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
         uint256 lpReceived = _deposit(ohmToBorrow, amount_, minLpAmount_);
         totalLP += lpReceived;
-
-        // Update user's LP position
         lpPositions[msg.sender] += lpReceived;
+
+        // Calculate amount of pair tokens and OHM unused in deposit
+        uint256 unusedPairToken = pairToken.balanceOf(address(this)) - pairTokenBalanceBefore;
+        uint256 unusedOhm = ohm.balanceOf(address(this)) - ohmBalanceBefore;
+
+        // Return unused pair tokens to user
+        if (unusedPairToken > 0) pairToken.transfer(msg.sender, unusedPairToken);
+
+        // Burn unused OHM
+        if (unusedOhm > 0) _repay(unusedOhm);
+
+        // Update state about user's deposits and borrows
+        pairTokenDeposits[msg.sender] += amount_ - unusedPairToken;
+        ohmMinted += ohmToBorrow - unusedOhm;
 
         // Update user's reward debts
         _depositUpdateRewardDebts(lpReceived);
+
+        emit Deposit(msg.sender, amount_, ohmToBorrow);
     }
 
     /// @notice                     Withdraws pair tokens and OHM from a liquidity pool, returns any received pair tokens to the
@@ -192,23 +225,25 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         pairToken.transfer(msg.sender, pairTokenReceived);
 
         return pairTokenReceived;
+
+        emit Withdraw(msg.sender, pairTokenReceived, ohmReceived);
     }
 
     /// @notice                     Claims user's rewards for all reward tokens
-    function claimRewards() external returns () {
+    function claimRewards() external {
+        uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256 numExternalRewardTokens = externalRewardTokens.length;
-        uint256 numRewardTokens = rewardTokens.length;
 
-        for (uint256 i; i < numExternalRewardTokens; ) {
-            _claimExternalRewards(i);
+        for (uint256 i; i < numInternalRewardTokens; ) {
+            _claimInternalRewards(i);
 
             unchecked {
                 ++i;
             }
         }
 
-        for (uint256 i; i < numRewardTokens; ) {
-            _claimRewards(i);
+        for (uint256 i; i < numExternalRewardTokens; ) {
+            _claimExternalRewards(i);
 
             unchecked {
                 ++i;
@@ -224,32 +259,35 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     /// @param  id_                 The ID of the reward token
     /// @param  user_               The user's address to check rewards for
     /// @return int256              The amount of rewards the user has earned
-    function rewardsForToken(uint256 id_, address user_) public view returns (int256) {
-        InternalRewardToken memory rewardToken = rewardTokens[id_];
+    function internalRewardsForToken(uint256 id_, address user_) public view returns (uint256) {
+        InternalRewardToken memory rewardToken = internalRewardTokens[id_];
         uint256 accumulatedRewardsPerShare = rewardToken.accumulatedRewardsPerShare;
 
         if (block.timestamp > rewardToken.lastRewardTime && totalLP != 0) {
             uint256 timeDiff = block.timestamp - rewardToken.lastRewardTime;
-            uint256 totalRewards = (timeDiff * rewardToken.rewardsPerSecond);
+            uint256 totalRewards = timeDiff * rewardToken.rewardsPerSecond;
             accumulatedRewardsPerShare += (totalRewards * 1e18) / totalLP;
         }
 
         return
-            int256((lpPositions[user_] * accumulatedRewardsPerShare) / 1e18) -
-            userRewardDebts[user_][rewardToken.token];
+            uint256(
+                int256((lpPositions[user_] * accumulatedRewardsPerShare) / 1e18) -
+                    userRewardDebts[user_][rewardToken.token]
+            );
     }
 
     /// @notice                     Returns the amount of rewards a user has earned for a given external reward token
     /// @param  id_                 The ID of the external reward token
     /// @param  user_               The user's address to check rewards for
     /// @return int256              The amount of rewards the user has earned
-    function externalRewardsForToken(uint256 id_, address user_) public view returns (int256) {
+    function externalRewardsForToken(uint256 id_, address user_) public view returns (uint256) {
         ExternalRewardToken memory rewardToken = externalRewardTokens[id_];
-        uint256 accumulatedRewardsPerShare = rewardToken.accumulatedRewardsPerShare;
 
         return
-            int256((lpPositions[user_] * accumulatedRewardsPerShare) / 1e18) -
-            userRewardDebts[user_][rewardToken.token];
+            uint256(
+                int256((lpPositions[user_] * rewardToken.accumulatedRewardsPerShare) / 1e18) -
+                    userRewardDebts[user_][rewardToken.token]
+            );
     }
 
     /// @notice                     Calculates the net amount of OHM that this contract has emitted to or removed from the broader market
@@ -273,10 +311,22 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     // ========= CHECKS AND SAFETY ========= //
 
+    /// @dev                        Math is: (currentOhmInPoolMintedByThisContract + currentNetOhmEmittedToMarket + amountToDeposit) <= LIMIT
     function _canDeposit(uint256 amount_) internal view virtual returns (bool) {
-        if (ohmBurned > ohmMinted + amount_) return true;
-        else if (ohmMinted + amount_ - ohmBurned <= LIMIT) return true;
-        else return false;
+        uint256 currentPoolOhmShare = _getPoolOhmShare();
+        uint256 burnedAndOutstanding = currentPoolOhmShare + ohmBurned;
+
+        if (burnedAndOutstanding > ohmMinted) {
+            uint256 removed = burnedAndOutstanding - ohmMinted;
+            uint256 activeOhm = currentPoolOhmShare - removed;
+            if (activeOhm + amount_ > LIMIT) return false;
+        } else {
+            uint256 emitted = ohmMinted - burnedAndOutstanding;
+            uint256 activeOhm = currentPoolOhmShare + emitted;
+            if (activeOhm + amount_ > LIMIT) return false;
+        }
+
+        return true;
     }
 
     function _isPoolSafe() internal view returns (bool) {
@@ -330,11 +380,11 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     // ========= REWARDS CALCULATIONS ========= //
 
     function _accumulateInternalRewards() internal returns (uint256[] memory) {
-        uint256 numRewardTokens = rewardTokens.length;
-        uint256[] memory accumulatedInternalRewards = new uint256[](rewardTokens.length);
+        uint256 numInternalRewardTokens = internalRewardTokens.length;
+        uint256[] memory accumulatedInternalRewards = new uint256[](numInternalRewardTokens);
 
-        for (uint256 i; i < numRewardTokens; ) {
-            InternalRewardToken storage rewardToken = rewardTokens[i];
+        for (uint256 i; i < numInternalRewardTokens; ) {
+            InternalRewardToken storage rewardToken = internalRewardTokens[i];
             uint256 timeDiff = block.timestamp - rewardToken.lastRewardTime;
             uint256 totalRewards = (timeDiff * rewardToken.rewardsPerSecond);
             accumulatedInternalRewards[i] = totalRewards;
@@ -350,18 +400,16 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     // ========= ACCUMULATED REWARDS STATE MANAGEMENT ========= //
 
     function _updateInternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
-        InternalRewardToken storage rewardToken = rewardTokens[id_];
-
         if (totalLP != 0) {
+            InternalRewardToken storage rewardToken = internalRewardTokens[id_];
             rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
             rewardToken.lastRewardTime = block.timestamp;
         }
     }
 
     function _updateExternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
-        ExternalRewardToken storage rewardToken = externalRewardTokens[id_];
-
         if (totalLP != 0) {
+            ExternalRewardToken storage rewardToken = externalRewardTokens[id_];
             rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
         }
     }
@@ -373,11 +421,13 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         uint256[] memory accumulatedExternalRewards = _accumulateExternalRewards();
         uint256[] memory accumulatedInternalRewards = _accumulateInternalRewards();
 
+        uint256 numInternalRewardTokens = internalRewardTokens.length;
+        uint256 numExternalRewardTokens = externalRewardTokens.length;
+
         // Update internal reward token state
         // This has to be done before the contract receives any LP tokens which is why it's not baked into the
         // for loop for updating reward debts like in both withdrawal functions
-        uint256 numRewardTokens = rewardTokens.length;
-        for (uint256 i; i < numRewardTokens; ) {
+        for (uint256 i; i < numInternalRewardTokens; ) {
             _updateInternalRewardState(i, accumulatedInternalRewards[i]);
 
             unchecked {
@@ -386,7 +436,6 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         }
 
         // Update external reward token state
-        uint256 numExternalRewardTokens = externalRewardTokens.length;
         for (uint256 i; i < numExternalRewardTokens; ) {
             _updateExternalRewardState(i, accumulatedExternalRewards[i]);
 
@@ -397,13 +446,13 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     }
 
     function _depositUpdateRewardDebts(uint256 lpReceived_) internal {
-        uint256 numRewardTokens = rewardTokens.length;
+        uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256 numExternalRewardTokens = externalRewardTokens.length;
 
-        for (uint256 i; i < numRewardTokens; ) {
-            address rewardToken = rewardTokens[i].token;
+        for (uint256 i; i < numInternalRewardTokens; ) {
+            address rewardToken = internalRewardTokens[i].token;
             userRewardDebts[msg.sender][rewardToken] += int256(
-                (lpReceived_ * rewardTokens[i].accumulatedRewardsPerShare) / 1e18
+                (lpReceived_ * internalRewardTokens[i].accumulatedRewardsPerShare) / 1e18
             );
 
             unchecked {
@@ -425,11 +474,25 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     function _withdrawUpdateRewardState(uint256 lpAmount_, bool claim_) internal {
         // Cache reward token counts
-        uint256 numRewardTokens = rewardTokens.length;
+        uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256 numExternalRewardTokens = externalRewardTokens.length;
 
-        uint256[] memory accumulatedExternalRewards = _accumulateExternalRewards();
         uint256[] memory accumulatedInternalRewards = _accumulateInternalRewards();
+        uint256[] memory accumulatedExternalRewards = _accumulateExternalRewards();
+
+        for (uint256 i; i < numInternalRewardTokens; ) {
+            _updateInternalRewardState(i, accumulatedInternalRewards[i]);
+            if (claim_) _claimInternalRewards(i);
+
+            InternalRewardToken memory rewardToken = internalRewardTokens[i];
+            userRewardDebts[msg.sender][rewardToken.token] -= int256(
+                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) / 1e18
+            );
+
+            unchecked {
+                ++i;
+            }
+        }
 
         for (uint256 i; i < numExternalRewardTokens; ) {
             _updateExternalRewardState(i, accumulatedExternalRewards[i]);
@@ -444,45 +507,34 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
                 ++i;
             }
         }
-
-        for (uint256 i; i < numRewardTokens; ) {
-            _updateInternalRewardState(i, accumulatedInternalRewards[i]);
-            if (claim_) _claimRewards(i);
-
-            // TODO FIX THIS UNDERFLOW WHEN NO CLAIM
-            InternalRewardToken memory rewardToken = rewardTokens[i];
-            userRewardDebts[msg.sender][rewardToken.token] -= int256(
-                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) / 1e18
-            );
-
-            unchecked {
-                ++i;
-            }
-        }
     }
 
     // ========= REWARDS CLAIMING ========= //
 
     function _claimExternalRewards(uint256 id_) internal virtual returns (uint256) {
-        ExternalRewardToken memory rewardToken = externalRewardTokens[id_];
-        int256 reward = externalRewardsForToken(id_, msg.sender);
-        uint256 fee = (uint256(reward) * FEE) / PRECISION;
+        address rewardToken = externalRewardTokens[id_].token;
+        uint256 reward = externalRewardsForToken(id_, msg.sender);
+        uint256 fee = (reward * FEE) / PRECISION;
 
-        userRewardDebts[msg.sender][rewardToken.token] += reward;
-        accumulatedFees[rewardToken.token] += fee;
+        userRewardDebts[msg.sender][rewardToken] += int256(reward);
+        accumulatedFees[rewardToken] += fee;
 
-        if (reward > 0) ERC20(rewardToken.token).transfer(msg.sender, uint256(reward) - fee);
+        if (reward > 0) ERC20(rewardToken).transfer(msg.sender, reward - fee);
+
+        emit RewardsClaimed(msg.sender, rewardToken, reward - fee);
     }
 
-    function _claimRewards(uint256 id_) internal returns (uint256) {
-        InternalRewardToken memory rewardToken = rewardTokens[id_];
-        int256 reward = rewardsForToken(id_, msg.sender);
-        uint256 fee = (uint256(reward) * FEE) / PRECISION;
+    function _claimInternalRewards(uint256 id_) internal returns (uint256) {
+        address rewardToken = internalRewardTokens[id_].token;
+        uint256 reward = internalRewardsForToken(id_, msg.sender);
+        uint256 fee = (reward * FEE) / PRECISION;
 
-        userRewardDebts[msg.sender][rewardToken.token] += reward;
-        accumulatedFees[rewardToken.token] += fee;
+        userRewardDebts[msg.sender][rewardToken] += int256(reward);
+        accumulatedFees[rewardToken] += fee;
 
-        if (reward > 0) ERC20(rewardToken.token).transfer(msg.sender, uint256(reward) - fee);
+        if (reward > 0) ERC20(rewardToken).transfer(msg.sender, reward - fee);
+
+        emit RewardsClaimed(msg.sender, rewardToken, reward - fee);
     }
 
     //============================================================================================//
@@ -547,39 +599,39 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         LQREG.removeAMO(id_, address(this));
     }
 
-    /// @notice                    Adds a new reward token to the contract
+    /// @notice                    Adds a new internal reward token to the contract
     /// @param  token_             The address of the reward token
     /// @param  rewardsPerSecond_  The amount of reward tokens to distribute per second
     /// @param  startTimestamp_    The timestamp at which to start distributing rewards
     /// @dev                       This function can only be accessed by the liquidityamo_admin role
-    function addRewardToken(
+    function addInternalRewardToken(
         address token_,
         uint256 rewardsPerSecond_,
         uint256 startTimestamp_
     ) external onlyRole("liquidityamo_admin") {
-        InternalRewardToken memory newRewardToken = InternalRewardToken({
+        InternalRewardToken memory newInternalRewardToken = InternalRewardToken({
             token: token_,
             rewardsPerSecond: rewardsPerSecond_,
             lastRewardTime: block.timestamp > startTimestamp_ ? block.timestamp : startTimestamp_,
             accumulatedRewardsPerShare: 0
         });
 
-        rewardTokens.push(newRewardToken);
+        internalRewardTokens.push(newInternalRewardToken);
     }
 
-    /// @notice                 Removes a reward token from the contract
+    /// @notice                 Removes an internal reward token from the contract
     /// @param  id_             The index of the reward token to remove
     /// @param  token_          The address of the reward token to remove
     /// @dev                    This function can only be accessed by the liquidityamo_admin role
-    function removeRewardToken(uint256 id_, address token_)
+    function removeInternalRewardToken(uint256 id_, address token_)
         external
         onlyRole("liquidityamo_admin")
     {
-        if (rewardTokens[id_].token != token_) revert LiquidityAMO_InvalidRemoval();
+        if (internalRewardTokens[id_].token != token_) revert LiquidityAMO_InvalidRemoval();
 
         // Delete reward token from array by swapping with the last element and popping
-        rewardTokens[id_] = rewardTokens[rewardTokens.length - 1];
-        rewardTokens.pop();
+        internalRewardTokens[id_] = internalRewardTokens[internalRewardTokens.length - 1];
+        internalRewardTokens.pop();
     }
 
     /// @notice                 Adds a new external reward token to the contract
@@ -612,14 +664,31 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     /// @notice                    Transfers accumulated fees on reward tokens to the admin
     /// @dev                       This function can only be accessed by the liquidityamo_admin role
     function claimFees() external onlyRole("liquidityamo_admin") {
-        uint256 rewardTokenCount = rewardTokens.length;
-        for (uint256 i; i < rewardTokenCount; ) {
-            InternalRewardToken memory rewardToken = rewardTokens[i];
-            uint256 feeToSend = accumulatedFees[rewardToken.token];
+        address rewardToken;
 
-            accumulatedFees[rewardToken.token] = 0;
+        uint256 numInternalRewardTokens = internalRewardTokens.length;
+        uint256 numExternalRewardTokens = externalRewardTokens.length;
 
-            ERC20(rewardToken.token).transfer(msg.sender, feeToSend);
+        for (uint256 i; i < numInternalRewardTokens; ) {
+            rewardToken = internalRewardTokens[i].token;
+            uint256 feeToSend = accumulatedFees[rewardToken];
+
+            accumulatedFees[rewardToken] = 0;
+
+            ERC20(rewardToken).transfer(msg.sender, feeToSend);
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        for (uint256 i; i < numExternalRewardTokens; ) {
+            rewardToken = externalRewardTokens[i].token;
+            uint256 feeToSend = accumulatedFees[rewardToken];
+
+            accumulatedFees[rewardToken] = 0;
+
+            ERC20(rewardToken).transfer(msg.sender, feeToSend);
 
             unchecked {
                 ++i;

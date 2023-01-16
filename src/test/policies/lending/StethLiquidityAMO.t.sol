@@ -193,7 +193,7 @@ contract StethLiquidityAMOTest is Test {
             liquidityAMO.setThreshold(100);
 
             // Add reward token
-            liquidityAMO.addRewardToken(address(reward), 1e18, block.timestamp); // 1 REWARD token per second
+            liquidityAMO.addInternalRewardToken(address(reward), 1e18, block.timestamp); // 1 REWARD token per second
             liquidityAMO.addExternalRewardToken(address(externalReward));
 
             reward.mint(address(liquidityAMO), 1e23);
@@ -228,7 +228,7 @@ contract StethLiquidityAMOTest is Test {
     ///     [X]  Updates tracked total LP amount
 
     function testCorrectness_depositCanBeCalledByAnyone(address user_) public {
-        vm.assume(user_ != address(0));
+        vm.assume(user_ != address(0) && user_ != address(liquidityAMO));
         steth.mint(user_, 1e18);
         vm.startPrank(user_);
         steth.approve(address(liquidityAMO), 1e18);
@@ -323,7 +323,7 @@ contract StethLiquidityAMOTest is Test {
     }
 
     function testCorrectness_withdrawCanBeCalledByAnyone(address user_) public {
-        vm.assume(user_ != address(0));
+        vm.assume(user_ != address(0) && user_ != address(liquidityAMO));
         steth.mint(user_, 1e18);
 
         // Setup with deposit
@@ -407,7 +407,7 @@ contract StethLiquidityAMOTest is Test {
     }
 
     function testCorrectness_withdrawReturnsCorrectRewardsMultiUser(address user_) public {
-        vm.assume(user_ != address(0) && user_ != alice);
+        vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityAMO));
 
         // Setup
         _withdrawSetUp();
@@ -434,7 +434,7 @@ contract StethLiquidityAMOTest is Test {
     }
 
     function testCorrectness_withdrawReturnsCorrectExternalRewardsMultiUser(address user_) public {
-        vm.assume(user_ != address(0) && user_ != alice);
+        vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityAMO));
 
         // Setup
         _withdrawSetUp();
@@ -551,7 +551,7 @@ contract StethLiquidityAMOTest is Test {
 
     function _claimRewardsAddToken() internal {
         // Add reward token
-        liquidityAMO.addRewardToken(address(reward2), 1e18, block.timestamp); // 1 REWARD2 token per second
+        liquidityAMO.addInternalRewardToken(address(reward2), 1e18, block.timestamp); // 1 REWARD2 token per second
         reward2.mint(address(liquidityAMO), 1e23);
     }
 
@@ -606,7 +606,7 @@ contract StethLiquidityAMOTest is Test {
 
         // Verify end state
         assertEq(reward.balanceOf(alice), 15e18);
-        assertEq(liquidityAMO.rewardsForToken(0, user_), 5e18);
+        assertEq(liquidityAMO.internalRewardsForToken(0, user_), 5e18);
     }
 
     function testCorrectness_claimRewardsMultipleTokensMultipleUsers(address user_) public {
@@ -639,16 +639,17 @@ contract StethLiquidityAMOTest is Test {
         // Verify end state
         assertEq(reward.balanceOf(alice), 15e18);
         assertEq(reward2.balanceOf(alice), 5e18);
-        assertEq(liquidityAMO.rewardsForToken(0, user_), 5e18);
-        assertEq(liquidityAMO.rewardsForToken(1, user_), 5e18);
+        assertEq(liquidityAMO.internalRewardsForToken(0, user_), 5e18);
+        assertEq(liquidityAMO.internalRewardsForToken(1, user_), 5e18);
     }
 
     // ========= VIEW TESTS ========= //
 
-    /// [X]  rewardsForToken
+    /// [X]  internalRewardsForToken
+    /// []  externalRewardsForToken
     /// [X]  getOhmEmissions
 
-    function testCorrectness_rewardsForToken(address user_) public {
+    function testCorrectness_internalRewardsForToken(address user_) public {
         vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityAMO));
 
         // Setup
@@ -665,10 +666,34 @@ contract StethLiquidityAMOTest is Test {
 
         // Alice's rewards should be 15 REWARD tokens and 5 REWARD2 token
         // User's rewards should be 5 REWARD tokens and 5 REWARD2 tokens
-        assertEq(liquidityAMO.rewardsForToken(0, alice), 15e18);
-        assertEq(liquidityAMO.rewardsForToken(1, alice), 5e18);
-        assertEq(liquidityAMO.rewardsForToken(0, user_), 5e18);
-        assertEq(liquidityAMO.rewardsForToken(1, user_), 5e18);
+        assertEq(liquidityAMO.internalRewardsForToken(0, alice), 15e18);
+        assertEq(liquidityAMO.internalRewardsForToken(1, alice), 5e18);
+        assertEq(liquidityAMO.internalRewardsForToken(0, user_), 5e18);
+        assertEq(liquidityAMO.internalRewardsForToken(1, user_), 5e18);
+    }
+
+    function testCorrectness_externalRewardsForToken(address user_) public {
+        vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityAMO));
+
+        // Setup
+        _withdrawSetUp();
+
+        // Add second depositor
+        vm.startPrank(user_);
+        steth.mint(user_, 1e18);
+        steth.approve(address(liquidityAMO), 1e18);
+        liquidityAMO.deposit(1e18, 1e18);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 10); // Increase time by 10 seconds
+
+        // Trigger external rewards accumulation
+        vm.prank(alice);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, false);
+
+        // Alice's rewards should be 1.5 external tokens
+        // User's rewards should be 0.5 external tokens
+        assertEq(liquidityAMO.externalRewardsForToken(0, alice), 15e17);
+        assertEq(liquidityAMO.externalRewardsForToken(0, user_), 5e17);
     }
 
     function testCorrectness_getOhmEmissions() public {
@@ -753,11 +778,11 @@ contract StethLiquidityAMOTest is Test {
         assertEq(lqreg.activeAMOCount(), 0);
     }
 
-    /// [X]  addRewardToken
+    /// [X]  addInternalRewardToken
     ///     [X]  Can only be called by admin
     ///     [X]  Adds reward token correctly
 
-    function testCorrectness_addRewardTokenCanOnlyBeCalledByAdmin(address user_) public {
+    function testCorrectness_addInternalRewardTokenCanOnlyBeCalledByAdmin(address user_) public {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
@@ -767,12 +792,12 @@ contract StethLiquidityAMOTest is Test {
         vm.expectRevert(err);
 
         vm.prank(user_);
-        liquidityAMO.addRewardToken(address(reward), 1e18, block.timestamp);
+        liquidityAMO.addInternalRewardToken(address(reward), 1e18, block.timestamp);
     }
 
-    function testCorrectness_addRewardTokenCorrectlyAddsToken() public {
+    function testCorrectness_addInternalRewardTokenCorrectlyAddsToken() public {
         // Add reward token
-        liquidityAMO.addRewardToken(address(reward2), 1e18, block.timestamp); // 1 REWARD2 token per second
+        liquidityAMO.addInternalRewardToken(address(reward2), 1e18, block.timestamp); // 1 REWARD2 token per second
 
         // Verify state
         (
@@ -780,18 +805,18 @@ contract StethLiquidityAMOTest is Test {
             uint256 rewardsPerSecond,
             ,
             uint256 accumulatedRewardsPerShare
-        ) = liquidityAMO.rewardTokens(1);
+        ) = liquidityAMO.internalRewardTokens(1);
         assertEq(token, address(reward2));
         assertEq(rewardsPerSecond, 1e18);
         assertEq(accumulatedRewardsPerShare, 0);
     }
 
-    /// [X]  removeRewardToken
+    /// [X]  removeInternalRewardToken
     ///     [X]  Can only be called by admin
     ///     [X]  Fails on sanity check
     ///     [X]  Removes reward token correctly
 
-    function testCorrectness_removeRewardTokenCanOnlyBeCalledByAdmin(address user_) public {
+    function testCorrectness_removeInternalRewardTokenCanOnlyBeCalledByAdmin(address user_) public {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
@@ -801,23 +826,23 @@ contract StethLiquidityAMOTest is Test {
         vm.expectRevert(err);
 
         vm.prank(user_);
-        liquidityAMO.removeRewardToken(0, address(reward2));
+        liquidityAMO.removeInternalRewardToken(0, address(reward2));
     }
 
-    function testCorrectness_removeRewardTokenFailsOnSanityCheck() public {
+    function testCorrectness_removeInternalRewardTokenFailsOnSanityCheck() public {
         // Add reward token
-        liquidityAMO.addRewardToken(address(reward2), 1e18, block.timestamp); // 1 REWARD2 token per second
+        liquidityAMO.addInternalRewardToken(address(reward2), 1e18, block.timestamp); // 1 REWARD2 token per second
 
         bytes memory err = abi.encodeWithSignature("LiquidityAMO_InvalidRemoval()");
         vm.expectRevert(err);
 
         // Remove reward token with wrong index
-        liquidityAMO.removeRewardToken(0, address(reward2));
+        liquidityAMO.removeInternalRewardToken(0, address(reward2));
     }
 
     function testCorrectness_removeRewardTokenCorrectlyRemovesToken() public {
         // Add reward token
-        liquidityAMO.addRewardToken(address(reward2), 1e18, block.timestamp); // 1 REWARD2 token per second
+        liquidityAMO.addInternalRewardToken(address(reward2), 1e18, block.timestamp); // 1 REWARD2 token per second
 
         // Verify initial state
         (
@@ -825,17 +850,19 @@ contract StethLiquidityAMOTest is Test {
             uint256 rewardsPerSecond,
             ,
             uint256 accumulatedRewardsPerShare
-        ) = liquidityAMO.rewardTokens(1);
+        ) = liquidityAMO.internalRewardTokens(1);
         assertEq(token, address(reward2));
         assertEq(rewardsPerSecond, 1e18);
         assertEq(accumulatedRewardsPerShare, 0);
 
         // Remove reward token
-        liquidityAMO.removeRewardToken(1, address(reward2));
+        liquidityAMO.removeInternalRewardToken(1, address(reward2));
 
         // Verify end state
         vm.expectRevert();
-        (token, rewardsPerSecond, , accumulatedRewardsPerShare) = liquidityAMO.rewardTokens(1);
+        (token, rewardsPerSecond, , accumulatedRewardsPerShare) = liquidityAMO.internalRewardTokens(
+            1
+        );
     }
 
     /// [X]  addExternalRewardToken
