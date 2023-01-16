@@ -646,7 +646,7 @@ contract StethLiquidityAMOTest is Test {
     // ========= VIEW TESTS ========= //
 
     /// [X]  internalRewardsForToken
-    /// []  externalRewardsForToken
+    /// [X]  externalRewardsForToken
     /// [X]  getOhmEmissions
 
     function testCorrectness_internalRewardsForToken(address user_) public {
