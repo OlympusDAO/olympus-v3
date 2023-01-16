@@ -103,7 +103,7 @@ contract CrossChainBridge is Policy, RolesConsumer, NonblockingLzApp {
     function _nonblockingLzReceive(
         uint16 srcChainId_,
         bytes memory srcAddress_,
-        uint64 nonce_,
+        uint64,
         bytes memory payload_
     ) internal override {
         if (msg.sender != address(lzEndpoint)) revert CallerMustBeLZEndpoint();
