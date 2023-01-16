@@ -938,9 +938,9 @@ contract StethLiquidityAMOTest is Test {
         (token, accumulatedRewardsPerShare) = liquidityAMO.externalRewardTokens(1);
     }
 
-    // []   claimFees
-    ///     []  Can only be called by admin
-    ///     []  Claims fees correctly
+    // [X]   claimFees
+    ///     [X]  Can only be called by admin
+    ///     [X]  Claims fees correctly
 
     function testCorrectness_claimFeesCanOnlyBeCalledByAdmin(address user_) public {
         vm.assume(user_ != address(this));

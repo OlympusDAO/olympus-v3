@@ -69,64 +69,16 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
     }
 
     //============================================================================================//
-    //                                      ADMIN FUNCTIONS                                       //
+    //                                   BASE OVERRIDE FUNCTIONS                                  //
     //============================================================================================//
 
-    function changeUpdateThresholds(
-        uint48 ohmEthPriceFeedUpdateThreshold_,
-        uint48 ethUsdPriceFeedUpdateThreshold_,
-        uint48 stethUsdPriceFeedUpdateThreshold_
-    ) external onlyRole("liquidityamo_admin") {
-        ohmEthPriceFeed.updateThreshold = ohmEthPriceFeedUpdateThreshold_;
-        ethUsdPriceFeed.updateThreshold = ethUsdPriceFeedUpdateThreshold_;
-        stethUsdPriceFeed.updateThreshold = stethUsdPriceFeedUpdateThreshold_;
-    }
+    // ========= CORE FUNCTIONS ========= //
 
-    //============================================================================================//
-    //                                     INTERNAL FUNCTIONS                                     //
-    //============================================================================================//
-
-    function _valueCollateral(uint256 amount_) internal view override returns (uint256) {
-        uint256 ohmPrice = _validatePrice(
-            address(ohmEthPriceFeed.feed),
-            uint256(ohmEthPriceFeed.updateThreshold)
-        );
-        uint256 ethPrice = _validatePrice(
-            address(ethUsdPriceFeed.feed),
-            uint256(ethUsdPriceFeed.updateThreshold)
-        );
-        uint256 stethPrice = _validatePrice(
-            address(stethUsdPriceFeed.feed),
-            uint256(stethUsdPriceFeed.updateThreshold)
-        );
-
-        uint256 ohmUsd = uint256((ohmPrice * ethPrice) / 1e18);
-
-        return (amount_ * ohmUsd) / (uint256(stethPrice) * 1e9);
-    }
-
-    function _getPoolPrice() internal view override returns (uint256) {
-        (, uint256[] memory balances_, ) = vault.getPoolTokens(
-            IBasePool(liquidityPool).getPoolId()
-        );
-
-        // In Balancer pools the tokens are listed in alphabetical order (numbers before letters)
-        // OHM is listed first, stETH is listed second so this calculates OHM/stETH which is then
-        // used to compare against the oracle calculation OHM/stETH price
-        return (balances_[0] * 1e18) / balances_[1];
-    }
-
-    function _getPoolOhmShare() internal view override returns (uint256) {
-        // Cast pool address from abstract to Balancer Base Pool
-        IBasePool pool = IBasePool(liquidityPool);
-
-        (, uint256[] memory balances_, ) = vault.getPoolTokens(pool.getPoolId());
-        uint256 bptTotalSupply = pool.totalSupply();
-
-        if (totalLP == 0) return 0;
-        else return (balances_[0] * totalLP) / bptTotalSupply;
-    }
-
+    /// @notice                 Deposits OHM and stETH into the Balancer pool. Deposits the received BPT into Aura to accrue rewards
+    /// @param ohmAmount_       Amount of OHM to deposit
+    /// @param pairAmount_      Amount of stETH to deposit
+    /// @param minLpAmount_     Minimum amount of BPT to receive (prior to staking into Aura)
+    /// @return uint256         Amount of BPT received
     function _deposit(
         uint256 ohmAmount_,
         uint256 pairAmount_,
@@ -169,6 +121,11 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         return lpAmountOut;
     }
 
+    /// @notice                 Withdraws BPT from Aura. Exchanges BPT for OHM and stETH to leave the Balancer pool
+    /// @param lpAmount_        Amount of BPT to withdraw
+    /// @param minTokenAmounts_ Minimum amounts of OHM and stETH to receive ([OHM, stETH])
+    /// @return uint256         Amount of OHM received
+    /// @return uint256         Amount of stETH received
     function _withdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
         internal
         override
@@ -207,6 +164,10 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         return (ohmReceived, pairTokenReceived);
     }
 
+    // ========= REWARDS FUNCTIONS ========= //
+
+    /// @notice                 Harvests rewards from Aura
+    /// @return uint256[]       Amounts of each reward token harvested
     function _accumulateExternalRewards() internal override returns (uint256[] memory) {
         uint256 numExternalRewards = externalRewardTokens.length;
         uint256[] memory balancesBefore = new uint256[](numExternalRewards);
@@ -231,5 +192,70 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
             }
         }
         return rewards;
+    }
+
+    // ========= UTILITY FUNCTIONS ========= //
+
+    /// @notice                 Calculates the OHM equivalent quantity for the stETH deposit
+    /// @param amount_          Amount of stETH to calculate OHM equivalent for
+    /// @return uint256         OHM equivalent quantity
+    function _valueCollateral(uint256 amount_) internal view override returns (uint256) {
+        uint256 ohmPrice = _validatePrice(
+            address(ohmEthPriceFeed.feed),
+            uint256(ohmEthPriceFeed.updateThreshold)
+        );
+        uint256 ethPrice = _validatePrice(
+            address(ethUsdPriceFeed.feed),
+            uint256(ethUsdPriceFeed.updateThreshold)
+        );
+        uint256 stethPrice = _validatePrice(
+            address(stethUsdPriceFeed.feed),
+            uint256(stethUsdPriceFeed.updateThreshold)
+        );
+
+        uint256 ohmUsd = uint256((ohmPrice * ethPrice) / 1e18);
+
+        return (amount_ * ohmUsd) / (uint256(stethPrice) * 1e9);
+    }
+
+    /// @notice                 Calculates the prevailing OHM/stETH ratio of the Balancer pool
+    /// @return uint256         OHM/stETH ratio
+    function _getPoolPrice() internal view override returns (uint256) {
+        (, uint256[] memory balances_, ) = vault.getPoolTokens(
+            IBasePool(liquidityPool).getPoolId()
+        );
+
+        // In Balancer pools the tokens are listed in alphabetical order (numbers before letters)
+        // OHM is listed first, stETH is listed second so this calculates OHM/stETH which is then
+        // used to compare against the oracle calculation OHM/stETH price
+        return (balances_[0] * 1e18) / balances_[1];
+    }
+
+    /// @notice                 Calculates the AMO's claim on OHM in the Balancer pool
+    /// @return uint256         OHM claim
+    function _getPoolOhmShare() internal view override returns (uint256) {
+        // Cast pool address from abstract to Balancer Base Pool
+        IBasePool pool = IBasePool(liquidityPool);
+
+        (, uint256[] memory balances_, ) = vault.getPoolTokens(pool.getPoolId());
+        uint256 bptTotalSupply = pool.totalSupply();
+
+        if (totalLP == 0) return 0;
+        else return (balances_[0] * totalLP) / bptTotalSupply;
+    }
+
+    //============================================================================================//
+    //                                      ADMIN FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// @notice Updates the minimum update frequency for each price feed needed for it to not be considered stale
+    function changeUpdateThresholds(
+        uint48 ohmEthPriceFeedUpdateThreshold_,
+        uint48 ethUsdPriceFeedUpdateThreshold_,
+        uint48 stethUsdPriceFeedUpdateThreshold_
+    ) external onlyRole("liquidityamo_admin") {
+        ohmEthPriceFeed.updateThreshold = ohmEthPriceFeedUpdateThreshold_;
+        ethUsdPriceFeed.updateThreshold = ethUsdPriceFeedUpdateThreshold_;
+        stethUsdPriceFeed.updateThreshold = stethUsdPriceFeedUpdateThreshold_;
     }
 }

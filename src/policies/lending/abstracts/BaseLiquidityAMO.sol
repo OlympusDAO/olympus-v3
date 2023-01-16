@@ -20,18 +20,18 @@ import {console2} from "forge-std/console2.sol";
 
 /// @title Olympus Base Liquidity AMO
 abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
-    // ========= EVENTS ========= //
-
-    event Deposit(address indexed user, uint256 pairAmount, uint256 ohmMinted);
-    event Withdraw(address indexed user, uint256 pairAmount, uint256 ohmBurned);
-    event RewardsClaimed(address indexed user, address indexed token, uint256 amount);
-
     // ========= ERRORS ========= //
 
     error LiquidityAMO_LimitViolation();
     error LiquidityAMO_PoolImbalanced();
     error LiquidityAMO_BadPriceFeed();
     error LiquidityAMO_InvalidRemoval();
+
+    // ========= EVENTS ========= //
+
+    event Deposit(address indexed user, uint256 pairAmount, uint256 ohmMinted);
+    event Withdraw(address indexed user, uint256 pairAmount, uint256 ohmBurned);
+    event RewardsClaimed(address indexed user, address indexed token, uint256 amount);
 
     // ========= DATA STRUCTURES ========= //
 
@@ -338,6 +338,7 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         uint256 poolPrice = _getPoolPrice();
         uint256 oraclePrice = _valueCollateral(10**pairTokenDecimals); // 1 pair token in OHM
 
+        // Pool price should fall within a threshold of the oracle price
         uint256 lowerBound = (oraclePrice * (PRECISION - THRESHOLD)) / PRECISION;
         uint256 upperBound = (oraclePrice * (PRECISION + THRESHOLD)) / PRECISION;
 
@@ -389,8 +390,10 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
         for (uint256 i; i < numInternalRewardTokens; ) {
             InternalRewardToken memory rewardToken = internalRewardTokens[i];
+
             uint256 timeDiff = block.timestamp - rewardToken.lastRewardTime;
             uint256 totalRewards = (timeDiff * rewardToken.rewardsPerSecond);
+
             accumulatedInternalRewards[i] = totalRewards;
 
             unchecked {
@@ -412,21 +415,21 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     }
 
     function _updateExternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
-        if (totalLP != 0) {
-            ExternalRewardToken storage rewardToken = externalRewardTokens[id_];
-            rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
-        }
+        if (totalLP != 0)
+            externalRewardTokens[id_].accumulatedRewardsPerShare +=
+                (amountAccumulated_ * 1e18) /
+                totalLP;
     }
 
     // ========= PRE/POST ACTION HOOKS ========= //
 
     function _depositUpdateRewardState() internal {
-        // Track reward accumulation
-        uint256[] memory accumulatedInternalRewards = _accumulateInternalRewards();
-        uint256[] memory accumulatedExternalRewards = _accumulateExternalRewards();
-
         uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256 numExternalRewardTokens = externalRewardTokens.length;
+
+        // Handles accounting logic for internal and external rewards, harvests external rewards
+        uint256[] memory accumulatedInternalRewards = _accumulateInternalRewards();
+        uint256[] memory accumulatedExternalRewards = _accumulateExternalRewards();
 
         // Update internal reward token state
         // This has to be done before the contract receives any LP tokens which is why it's not baked into the
@@ -454,6 +457,8 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         uint256 numExternalRewardTokens = externalRewardTokens.length;
 
         for (uint256 i; i < numInternalRewardTokens; ) {
+            // Reward debts for this deposit should be equal to the rewards accrued for a given value
+            // of LP tokens prior to the user joining the pool with the given value of LP tokens
             InternalRewardToken memory rewardToken = internalRewardTokens[i];
             userRewardDebts[msg.sender][rewardToken.token] += int256(
                 (lpReceived_ * rewardToken.accumulatedRewardsPerShare) / 1e18
@@ -465,6 +470,8 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         }
 
         for (uint256 i; i < numExternalRewardTokens; ) {
+            // Reward debts for this deposit should be equal to the rewards accrued for a given value
+            // of LP tokens prior to the user joining the pool with the given value of LP tokens
             ExternalRewardToken memory rewardToken = externalRewardTokens[i];
             userRewardDebts[msg.sender][rewardToken.token] += int256(
                 (lpReceived_ * rewardToken.accumulatedRewardsPerShare) / 1e18
@@ -477,10 +484,10 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     }
 
     function _withdrawUpdateRewardState(uint256 lpAmount_, bool claim_) internal {
-        // Cache reward token counts
         uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256 numExternalRewardTokens = externalRewardTokens.length;
 
+        // Handles accounting logic for internal and external rewards, harvests external rewards
         uint256[] memory accumulatedInternalRewards = _accumulateInternalRewards();
         uint256[] memory accumulatedExternalRewards = _accumulateExternalRewards();
 
@@ -488,6 +495,8 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
             _updateInternalRewardState(i, accumulatedInternalRewards[i]);
             if (claim_) _claimInternalRewards(i);
 
+            // Update reward debts so as to not understate the amount of rewards owed to the user, and push
+            // any unclaimed rewards to the user's reward debt so that they can be claimed later
             InternalRewardToken memory rewardToken = internalRewardTokens[i];
             userRewardDebts[msg.sender][rewardToken.token] -= int256(
                 (lpAmount_ * rewardToken.accumulatedRewardsPerShare) / 1e18
@@ -502,6 +511,8 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
             _updateExternalRewardState(i, accumulatedExternalRewards[i]);
             if (claim_) _claimExternalRewards(i);
 
+            // Update reward debts so as to not understate the amount of rewards owed to the user, and push
+            // any unclaimed rewards to the user's reward debt so that they can be claimed later
             ExternalRewardToken memory rewardToken = externalRewardTokens[i];
             userRewardDebts[msg.sender][rewardToken.token] -= int256(
                 (lpAmount_ * rewardToken.accumulatedRewardsPerShare) / 1e18
@@ -540,51 +551,6 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
         emit RewardsClaimed(msg.sender, rewardToken, reward - fee);
     }
-
-    //============================================================================================//
-    //                                     VIRTUAL FUNCTIONS                                      //
-    //============================================================================================//
-
-    /// @notice                 Calculates the equivalent OHM amount for a given amount of partner tokens
-    /// @param amount_          The amount of partner tokens to calculate the OHM value of
-    /// @return uint256         The OHM value of the given amount of partner tokens
-    function _valueCollateral(uint256 amount_) internal view virtual returns (uint256) {}
-
-    /// @notice                 Calculates the current price of the liquidity pool in OHM/TKN
-    /// @return uint256         The current price of the liquidity pool in OHM/TKN
-    function _getPoolPrice() internal view virtual returns (uint256) {}
-
-    /// @notice                 Calculates the contract's current share of OHM in the liquidity pool
-    /// @return uint256         The contract's current share of OHM in the liquidity pool
-    function _getPoolOhmShare() internal view virtual returns (uint256) {}
-
-    /// @notice                 Deposits OHM and partner tokens into the liquidity pool
-    /// @param ohmAmount_       The amount of OHM to deposit
-    /// @param pairAmount_      The amount of partner tokens to deposit
-    /// @param minLpAmount_     The minimum amount of liquidity pool tokens to receive
-    /// @return uint256         The amount of liquidity pool tokens received
-    /// @dev                    This function should also handle deposits into any external staking pools like Aura or Convex
-    function _deposit(
-        uint256 ohmAmount_,
-        uint256 pairAmount_,
-        uint256 minLpAmount_
-    ) internal virtual returns (uint256) {}
-
-    /// @notice                 Withdraws OHM and partner tokens from the liquidity pool
-    /// @param lpAmount_        The amount of liquidity pool tokens to withdraw
-    /// @param minTokenAmounts_ The minimum amounts of OHM and partner tokens to receive
-    /// @return uint256         The amount of OHM received
-    /// @return uint256         The amount of partner tokens received
-    /// @dev                    This function should also handle withdrawals from any external staking pools like Aura or Convex
-    function _withdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
-        internal
-        virtual
-        returns (uint256, uint256)
-    {}
-
-    /// @notice                 Harvests any external rewards from sources like Aura or Convex
-    /// @return uint256[]       The amounts of each external reward token harvested
-    function _accumulateExternalRewards() internal virtual returns (uint256[] memory) {}
 
     //============================================================================================//
     //                                      ADMIN FUNCTIONS                                       //
@@ -718,4 +684,49 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     function setFee(uint256 fee_) external onlyRole("liquidityamo_admin") {
         FEE = fee_;
     }
+
+    //============================================================================================//
+    //                                     VIRTUAL FUNCTIONS                                      //
+    //============================================================================================//
+
+    /// @notice                 Calculates the equivalent OHM amount for a given amount of partner tokens
+    /// @param amount_          The amount of partner tokens to calculate the OHM value of
+    /// @return uint256         The OHM value of the given amount of partner tokens
+    function _valueCollateral(uint256 amount_) internal view virtual returns (uint256) {}
+
+    /// @notice                 Calculates the current price of the liquidity pool in OHM/TKN
+    /// @return uint256         The current price of the liquidity pool in OHM/TKN
+    function _getPoolPrice() internal view virtual returns (uint256) {}
+
+    /// @notice                 Calculates the contract's current share of OHM in the liquidity pool
+    /// @return uint256         The contract's current share of OHM in the liquidity pool
+    function _getPoolOhmShare() internal view virtual returns (uint256) {}
+
+    /// @notice                 Deposits OHM and partner tokens into the liquidity pool
+    /// @param ohmAmount_       The amount of OHM to deposit
+    /// @param pairAmount_      The amount of partner tokens to deposit
+    /// @param minLpAmount_     The minimum amount of liquidity pool tokens to receive
+    /// @return uint256         The amount of liquidity pool tokens received
+    /// @dev                    This function should also handle deposits into any external staking pools like Aura or Convex
+    function _deposit(
+        uint256 ohmAmount_,
+        uint256 pairAmount_,
+        uint256 minLpAmount_
+    ) internal virtual returns (uint256) {}
+
+    /// @notice                 Withdraws OHM and partner tokens from the liquidity pool
+    /// @param lpAmount_        The amount of liquidity pool tokens to withdraw
+    /// @param minTokenAmounts_ The minimum amounts of OHM and partner tokens to receive
+    /// @return uint256         The amount of OHM received
+    /// @return uint256         The amount of partner tokens received
+    /// @dev                    This function should also handle withdrawals from any external staking pools like Aura or Convex
+    function _withdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
+        internal
+        virtual
+        returns (uint256, uint256)
+    {}
+
+    /// @notice                 Harvests any external rewards from sources like Aura or Convex
+    /// @return uint256[]       The amounts of each external reward token harvested
+    function _accumulateExternalRewards() internal virtual returns (uint256[] memory) {}
 }
