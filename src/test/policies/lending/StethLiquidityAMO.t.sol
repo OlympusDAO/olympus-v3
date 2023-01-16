@@ -938,6 +938,46 @@ contract StethLiquidityAMOTest is Test {
         (token, accumulatedRewardsPerShare) = liquidityAMO.externalRewardTokens(1);
     }
 
+    // []   claimFees
+    ///     []  Can only be called by admin
+    ///     []  Claims fees correctly
+
+    function testCorrectness_claimFeesCanOnlyBeCalledByAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("liquidityamo_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        liquidityAMO.claimFees();
+    }
+
+    function testCorrectness_claimFeesCorrectlyClaimsFees() public {
+        // Set FEE to 10%
+        liquidityAMO.setFee(100);
+
+        // Setup
+        _withdrawSetUp();
+
+        // Trigger fee accumulation
+        vm.prank(alice);
+        liquidityAMO.withdraw(1e18, minTokenAmounts_, true);
+
+        // Accumulated fees should be 1e18 REWARD and 1e17 externalReward
+        assertEq(liquidityAMO.accumulatedFees(address(reward)), 1e18);
+        assertEq(liquidityAMO.accumulatedFees(address(externalReward)), 1e17);
+
+        // Claim fees
+        liquidityAMO.claimFees();
+
+        // Admin should have balances
+        assertEq(reward.balanceOf(address(this)), 1e18);
+        assertEq(externalReward.balanceOf(address(this)), 1e17);
+    }
+
     /// [X]  setThreshold
     ///     [X]  Can only be called by admin
     ///     [X]  Sets threshold correctly

@@ -422,8 +422,8 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     function _depositUpdateRewardState() internal {
         // Track reward accumulation
-        uint256[] memory accumulatedExternalRewards = _accumulateExternalRewards();
         uint256[] memory accumulatedInternalRewards = _accumulateInternalRewards();
+        uint256[] memory accumulatedExternalRewards = _accumulateExternalRewards();
 
         uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256 numExternalRewardTokens = externalRewardTokens.length;
@@ -515,9 +515,9 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     // ========= REWARDS CLAIMING ========= //
 
-    function _claimExternalRewards(uint256 id_) internal virtual returns (uint256) {
-        address rewardToken = externalRewardTokens[id_].token;
-        uint256 reward = externalRewardsForToken(id_, msg.sender);
+    function _claimInternalRewards(uint256 id_) internal returns (uint256) {
+        address rewardToken = internalRewardTokens[id_].token;
+        uint256 reward = internalRewardsForToken(id_, msg.sender);
         uint256 fee = (reward * FEE) / PRECISION;
 
         userRewardDebts[msg.sender][rewardToken] += int256(reward);
@@ -528,9 +528,9 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         emit RewardsClaimed(msg.sender, rewardToken, reward - fee);
     }
 
-    function _claimInternalRewards(uint256 id_) internal returns (uint256) {
-        address rewardToken = internalRewardTokens[id_].token;
-        uint256 reward = internalRewardsForToken(id_, msg.sender);
+    function _claimExternalRewards(uint256 id_) internal virtual returns (uint256) {
+        address rewardToken = externalRewardTokens[id_].token;
+        uint256 reward = externalRewardsForToken(id_, msg.sender);
         uint256 fee = (reward * FEE) / PRECISION;
 
         userRewardDebts[msg.sender][rewardToken] += int256(reward);
