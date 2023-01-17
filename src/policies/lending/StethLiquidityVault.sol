@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 // Import system dependencies
 import "src/Kernel.sol";
-import {BaseLiquidityAMO} from "policies/lending/abstracts/BaseLiquidityAMO.sol";
+import {SingleSidedLiquidityVault} from "policies/lending/abstracts/SingleSidedLiquidityVault.sol";
 
 // Import external dependencies
 import {AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
@@ -13,8 +13,8 @@ import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.s
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-/// @title Olympus Single-Sided stETH Liquidity AMO
-contract StethLiquidityAMO is BaseLiquidityAMO {
+/// @title Olympus stETH Single-Sided Liquidity Vault
+contract StethLiquidityVault is SingleSidedLiquidityVault {
     // ========= DATA STRUCTURES ========= //
 
     struct OracleFeed {
@@ -55,7 +55,7 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         OracleFeed memory ethUsdPriceFeed_,
         OracleFeed memory stethUsdPriceFeed_,
         AuraPool memory auraPool_
-    ) BaseLiquidityAMO(kernel_, ohm_, steth_, liquidityPool_) {
+    ) SingleSidedLiquidityVault(kernel_, ohm_, steth_, liquidityPool_) {
         // Set Balancer vault
         vault = IVault(vault_);
 
@@ -231,7 +231,7 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         return (balances_[0] * 1e18) / balances_[1];
     }
 
-    /// @notice                 Calculates the AMO's claim on OHM in the Balancer pool
+    /// @notice                 Calculates the vault's claim on OHM in the Balancer pool
     /// @return uint256         OHM claim
     function _getPoolOhmShare() internal view override returns (uint256) {
         // Cast pool address from abstract to Balancer Base Pool
@@ -253,7 +253,7 @@ contract StethLiquidityAMO is BaseLiquidityAMO {
         uint48 ohmEthPriceFeedUpdateThreshold_,
         uint48 ethUsdPriceFeedUpdateThreshold_,
         uint48 stethUsdPriceFeedUpdateThreshold_
-    ) external onlyRole("liquidityamo_admin") {
+    ) external onlyRole("liquidityvault_admin") {
         ohmEthPriceFeed.updateThreshold = ohmEthPriceFeedUpdateThreshold_;
         ethUsdPriceFeed.updateThreshold = ethUsdPriceFeedUpdateThreshold_;
         stethUsdPriceFeed.updateThreshold = stethUsdPriceFeedUpdateThreshold_;

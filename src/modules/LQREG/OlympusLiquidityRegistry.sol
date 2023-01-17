@@ -2,14 +2,13 @@
 pragma solidity 0.8.15;
 
 import {LQREGv1} from "src/modules/LQREG/LQREG.v1.sol";
-import {BaseLiquidityAMO} from "src/policies/lending/abstracts/BaseLiquidityAMO.sol";
 import "src/Kernel.sol";
 
 import {console2} from "forge-std/console2.sol";
 
-/// @title  Olympus Liquidity AMO Registry
-/// @notice Olympus Liquidity AMO Registry (Module) Contract
-/// @dev    The Olympus Liquidity AMO Registry Module tracks the single-sided liquidity AMOs
+/// @title  Olympus Liquidity Vault Registry
+/// @notice Olympus Liquidity Vault Registry (Module) Contract
+/// @dev    The Olympus Liquidity Vault Registry Module tracks the single-sided liquidity vaults
 ///         that are approved to be used by the Olympus protocol. This allows for a single-soure
 ///         of truth for reporting purposes around total OHM deployed and net emissions.
 contract OlympusLiquidityRegistry is LQREGv1 {
@@ -35,23 +34,23 @@ contract OlympusLiquidityRegistry is LQREGv1 {
     //============================================================================================//
 
     /// @inheritdoc LQREGv1
-    function addAMO(address amo_) external override permissioned {
-        activeAMOs.push(amo_);
-        ++activeAMOCount;
+    function addVault(address vault_) external override permissioned {
+        activeVaults.push(vault_);
+        ++activeVaultCount;
 
-        emit AmoAdded(amo_);
+        emit VaultAdded(vault_);
     }
 
     /// @inheritdoc LQREGv1
-    function removeAMO(uint256 index_, address amo_) external override permissioned {
-        // Sanity check that the AMO at index_ is the same as amo_
-        if (activeAMOs[index_] != amo_) revert LQREG_RemovalMismatch();
+    function removeVault(uint256 index_, address vault_) external override permissioned {
+        // Sanity check that the vault at index_ is the same as vault_
+        if (activeVaults[index_] != vault_) revert LQREG_RemovalMismatch();
 
-        // Delete AMO from array by swapping with last element and popping
-        activeAMOs[index_] = activeAMOs[activeAMOs.length - 1];
-        activeAMOs.pop();
-        --activeAMOCount;
+        // Delete vault from array by swapping with last element and popping
+        activeVaults[index_] = activeVaults[activeVaults.length - 1];
+        activeVaults.pop();
+        --activeVaultCount;
 
-        emit AmoRemoved(amo_);
+        emit VaultRemoved(vault_);
     }
 }

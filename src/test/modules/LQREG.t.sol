@@ -49,85 +49,85 @@ contract LQREGTest is Test {
         assertEq(minor, 0);
     }
 
-    /// [X]  addAMO
+    /// [X]  addVault
     ///     [X]  Unapproved address cannot call
-    ///     [X]  Approved address can add AMO
+    ///     [X]  Approved address can add vault
 
-    function testCorrectness_unapprovedAddressCannotAddAMO(address user_) public {
+    function testCorrectness_unapprovedAddressCannotAddVault(address user_) public {
         vm.assume(user_ != godmode);
 
         // Expected error
         bytes memory err = abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, user_);
         vm.expectRevert(err);
 
-        // Try to add AMO as unapproved user
+        // Try to add vault as unapproved user
         vm.prank(user_);
-        lqreg.addAMO(address(0));
+        lqreg.addVault(address(0));
     }
 
-    function testCorrectness_approvedAddressCanAddAMO() public {
+    function testCorrectness_approvedAddressCanAddVault() public {
         // Verify initial state
-        assertEq(lqreg.activeAMOCount(), 0);
+        assertEq(lqreg.activeVaultCount(), 0);
 
         vm.prank(godmode);
-        lqreg.addAMO(address(0));
+        lqreg.addVault(address(0));
 
-        // Verify AMO was added
-        assertEq(lqreg.activeAMOCount(), 1);
-        assertEq(lqreg.activeAMOs(0), address(0));
+        // Verify vault was added
+        assertEq(lqreg.activeVaultCount(), 1);
+        assertEq(lqreg.activeVaults(0), address(0));
     }
 
-    /// [X]  removeAMO
+    /// [X]  removeVault
     ///     [X]  Unapproved address cannot call
-    ///     [X]  Fails if AMO at passed index doesn't match passed AMO
-    ///     [X]  Approved address can remove AMO
+    ///     [X]  Fails if vault at passed index doesn't match passed vault
+    ///     [X]  Approved address can remove vault
 
-    function _removeAMOSetup() internal {
+    function _removeVaultSetup() internal {
         vm.prank(godmode);
-        lqreg.addAMO(address(0));
+        lqreg.addVault(address(0));
     }
 
-    function testCorrectness_unapprovedAddressCannotRemoveAMO(address user_) public {
+    function testCorrectness_unapprovedAddressCannotRemoveVault(address user_) public {
         vm.assume(user_ != godmode);
 
         // Expected error
         bytes memory err = abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, user_);
         vm.expectRevert(err);
 
-        // Try to add AMO as unapproved user
+        // Try to add vault as unapproved user
         vm.prank(user_);
-        lqreg.removeAMO(0, address(0));
+        lqreg.removeVault(0, address(0));
     }
 
-    function testCorrectness_removeAMOFailsWithSanityCheck() public {
-        _removeAMOSetup();
+    function testCorrectness_removeVaultFailsWithSanityCheck() public {
+        _removeVaultSetup();
 
         // Expected error
         bytes memory err = abi.encodeWithSignature("LQREG_RemovalMismatch()");
         vm.expectRevert(err);
 
-        // Try to remove AMO with mismatched address
+        // Try to remove vault with mismatched address
         vm.prank(godmode);
-        lqreg.removeAMO(0, address(1));
+        lqreg.removeVault(0, address(1));
     }
 
-    function testCorrectness_approvedAddressCanRemoveAMO() public {
-        _removeAMOSetup();
+    function testCorrectness_approvedAddressCanRemoveVault() public {
+        _removeVaultSetup();
 
-        // Add second AMO
+        // Add second vault
         vm.prank(godmode);
-        lqreg.addAMO(address(1));
+        lqreg.addVault(address(1));
 
         // Verify initial state
-        assertEq(lqreg.activeAMOCount(), 2);
-        assertEq(lqreg.activeAMOs(0), address(0));
-        assertEq(lqreg.activeAMOs(1), address(1));
+        assertEq(lqreg.activeVaultCount(), 2);
+        assertEq(lqreg.activeVaults(0), address(0));
+        assertEq(lqreg.activeVaults(1), address(1));
 
         vm.prank(godmode);
-        lqreg.removeAMO(0, address(0));
+        lqreg.removeVault(0, address(0));
 
-        // Verify AMO was removed
-        assertEq(lqreg.activeAMOCount(), 1);
-        assertEq(lqreg.activeAMOs(0), address(1));
+        // Verify vault was removed
+        assertEq(lqreg.activeVaultCount(), 1);
+        assertEq(lqreg.activeVaults(0), address(1));
     }
 }

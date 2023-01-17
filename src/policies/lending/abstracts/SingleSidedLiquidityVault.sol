@@ -18,14 +18,14 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {console2} from "forge-std/console2.sol";
 
-/// @title Olympus Base Liquidity AMO
-abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
+/// @title Olympus Base Single Sided Liquidity Vault Contract
+abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
     // ========= ERRORS ========= //
 
-    error LiquidityAMO_LimitViolation();
-    error LiquidityAMO_PoolImbalanced();
-    error LiquidityAMO_BadPriceFeed();
-    error LiquidityAMO_InvalidRemoval();
+    error LiquidityVault_LimitViolation();
+    error LiquidityVault_PoolImbalanced();
+    error LiquidityVault_BadPriceFeed();
+    error LiquidityVault_InvalidRemoval();
 
     // ========= EVENTS ========= //
 
@@ -72,13 +72,13 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     mapping(address => mapping(address => int256)) public userRewardDebts; // Rewards accumulated prior to user's joining (MasterChef V2 math)
 
     // Reward Token State
-    /// @notice An internal reward token is a token where the AMO is the only source of rewards and the
-    ///         AMO handles all accounting around how many reward tokens to distribute over time
+    /// @notice An internal reward token is a token where the vault is the only source of rewards and the
+    ///         vault handles all accounting around how many reward tokens to distribute over time
     InternalRewardToken[] public internalRewardTokens;
 
     /// @notice An external reward token is a token where the primary accrual of reward tokens occurs outside
-    ///         the scope of this contract in a system like Convex or Aura. The AMO is responsible for harvesting
-    ///         rewards back to the AMO and then distributing them proportionally to users
+    ///         the scope of this contract in a system like Convex or Aura. The vault is responsible for harvesting
+    ///         rewards back to the vault and then distributing them proportionally to users
     ExternalRewardToken[] public externalRewardTokens;
 
     // Configuration values
@@ -131,8 +131,8 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         permissions[0] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.burnOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
-        permissions[3] = Permissions(lqregKeycode, LQREG.addAMO.selector);
-        permissions[4] = Permissions(lqregKeycode, LQREG.removeAMO.selector);
+        permissions[3] = Permissions(lqregKeycode, LQREG.addVault.selector);
+        permissions[4] = Permissions(lqregKeycode, LQREG.removeVault.selector);
     }
 
     //============================================================================================//
@@ -159,8 +159,8 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         // The pool being imbalanced is less of a concern here on deposit than on withdrawal,
         // but in the event the frontend miscalculates the expected LP amount to receive, we want
         // to reduce the risk of entering a manipulated pool at a bad price
-        if (!_isPoolSafe()) revert LiquidityAMO_PoolImbalanced();
-        if (!_canDeposit(ohmToBorrow)) revert LiquidityAMO_LimitViolation();
+        if (!_isPoolSafe()) revert LiquidityVault_PoolImbalanced();
+        if (!_canDeposit(ohmToBorrow)) revert LiquidityVault_LimitViolation();
 
         _depositUpdateRewardState();
 
@@ -206,7 +206,7 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
         uint256[] calldata minTokenAmounts_,
         bool claim_
     ) external nonReentrant returns (uint256) {
-        if (!_isPoolSafe()) revert LiquidityAMO_PoolImbalanced();
+        if (!_isPoolSafe()) revert LiquidityVault_PoolImbalanced();
 
         _withdrawUpdateRewardState(lpAmount_, claim_);
 
@@ -366,7 +366,7 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
             priceInt <= 0 ||
             updatedAt < block.timestamp - updateThreshold_ ||
             answeredInRound != roundId
-        ) revert LiquidityAMO_BadPriceFeed();
+        ) revert LiquidityVault_BadPriceFeed();
 
         return uint256(priceInt);
     }
@@ -556,29 +556,29 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     //                                      ADMIN FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @notice                 Registers the AMO in the LQREG contract
-    /// @dev                    This function can only be accessed by the liquidityamo_admin role
-    function activate() external onlyRole("liquidityamo_admin") {
-        LQREG.addAMO(address(this));
+    /// @notice                 Registers the vault in the LQREG contract
+    /// @dev                    This function can only be accessed by the liquidityvault_admin role
+    function activate() external onlyRole("liquidityvault_admin") {
+        LQREG.addVault(address(this));
     }
 
-    /// @notice                 Unregisters the AMO in the LQREG contract and sets the borrowable limit to 0
-    /// @dev                    This function can only be accessed by the liquidityamo_admin role
-    function deactivate(uint256 id_) external onlyRole("liquidityamo_admin") {
+    /// @notice                 Unregisters the vault in the LQREG contract and sets the borrowable limit to 0
+    /// @dev                    This function can only be accessed by the liquidityvault_admin role
+    function deactivate(uint256 id_) external onlyRole("liquidityvault_admin") {
         LIMIT = 0;
-        LQREG.removeAMO(id_, address(this));
+        LQREG.removeVault(id_, address(this));
     }
 
     /// @notice                    Adds a new internal reward token to the contract
     /// @param  token_             The address of the reward token
     /// @param  rewardsPerSecond_  The amount of reward tokens to distribute per second
     /// @param  startTimestamp_    The timestamp at which to start distributing rewards
-    /// @dev                       This function can only be accessed by the liquidityamo_admin role
+    /// @dev                       This function can only be accessed by the liquidityvault_admin role
     function addInternalRewardToken(
         address token_,
         uint256 rewardsPerSecond_,
         uint256 startTimestamp_
-    ) external onlyRole("liquidityamo_admin") {
+    ) external onlyRole("liquidityvault_admin") {
         InternalRewardToken memory newInternalRewardToken = InternalRewardToken({
             token: token_,
             rewardsPerSecond: rewardsPerSecond_,
@@ -592,12 +592,12 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     /// @notice                 Removes an internal reward token from the contract
     /// @param  id_             The index of the reward token to remove
     /// @param  token_          The address of the reward token to remove
-    /// @dev                    This function can only be accessed by the liquidityamo_admin role
+    /// @dev                    This function can only be accessed by the liquidityvault_admin role
     function removeInternalRewardToken(uint256 id_, address token_)
         external
-        onlyRole("liquidityamo_admin")
+        onlyRole("liquidityvault_admin")
     {
-        if (internalRewardTokens[id_].token != token_) revert LiquidityAMO_InvalidRemoval();
+        if (internalRewardTokens[id_].token != token_) revert LiquidityVault_InvalidRemoval();
 
         // Delete reward token from array by swapping with the last element and popping
         internalRewardTokens[id_] = internalRewardTokens[internalRewardTokens.length - 1];
@@ -606,8 +606,8 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     /// @notice                 Adds a new external reward token to the contract
     /// @param  token_          The address of the reward token
-    /// @dev                    This function can only be accessed by the liquidityamo_admin role
-    function addExternalRewardToken(address token_) external onlyRole("liquidityamo_admin") {
+    /// @dev                    This function can only be accessed by the liquidityvault_admin role
+    function addExternalRewardToken(address token_) external onlyRole("liquidityvault_admin") {
         ExternalRewardToken memory newRewardToken = ExternalRewardToken({
             token: token_,
             accumulatedRewardsPerShare: 0
@@ -619,12 +619,12 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     /// @notice                 Removes an external reward token from the contract
     /// @param  id_             The index of the reward token to remove
     /// @param  token_          The address of the reward token to remove
-    /// @dev                    This function can only be accessed by the liquidityamo_admin role
+    /// @dev                    This function can only be accessed by the liquidityvault_admin role
     function removeExternalRewardToken(uint256 id_, address token_)
         external
-        onlyRole("liquidityamo_admin")
+        onlyRole("liquidityvault_admin")
     {
-        if (externalRewardTokens[id_].token != token_) revert LiquidityAMO_InvalidRemoval();
+        if (externalRewardTokens[id_].token != token_) revert LiquidityVault_InvalidRemoval();
 
         // Delete reward token from array by swapping with the last element and popping
         externalRewardTokens[id_] = externalRewardTokens[externalRewardTokens.length - 1];
@@ -632,8 +632,8 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
     }
 
     /// @notice                    Transfers accumulated fees on reward tokens to the admin
-    /// @dev                       This function can only be accessed by the liquidityamo_admin role
-    function claimFees() external onlyRole("liquidityamo_admin") {
+    /// @dev                       This function can only be accessed by the liquidityvault_admin role
+    function claimFees() external onlyRole("liquidityvault_admin") {
         uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256 numExternalRewardTokens = externalRewardTokens.length;
 
@@ -666,22 +666,22 @@ abstract contract BaseLiquidityAMO is Policy, ReentrancyGuard, RolesConsumer {
 
     /// @notice                    Updates the maximum amount of OHM that can be minted by this contract
     /// @param  limit_             The new limit
-    /// @dev                       This function can only be accessed by the liquidityamo_admin role
-    function setLimit(uint256 limit_) external onlyRole("liquidityamo_admin") {
+    /// @dev                       This function can only be accessed by the liquidityvault_admin role
+    function setLimit(uint256 limit_) external onlyRole("liquidityvault_admin") {
         LIMIT = limit_;
     }
 
     /// @notice                    Updates the threshold for the price deviation from the oracle price that is acceptable
     /// @param  threshold_         The new threshold (out of 1000)
-    /// @dev                       This function can only be accessed by the liquidityamo_admin role
-    function setThreshold(uint256 threshold_) external onlyRole("liquidityamo_admin") {
+    /// @dev                       This function can only be accessed by the liquidityvault_admin role
+    function setThreshold(uint256 threshold_) external onlyRole("liquidityvault_admin") {
         THRESHOLD = threshold_;
     }
 
     /// @notice                    Updates the fee charged on rewards
     /// @param  fee_               The new fee (out of 1000)
-    /// @dev                       This function can only be accessed by the liquidityamo_admin role
-    function setFee(uint256 fee_) external onlyRole("liquidityamo_admin") {
+    /// @dev                       This function can only be accessed by the liquidityvault_admin role
+    function setFee(uint256 fee_) external onlyRole("liquidityvault_admin") {
         FEE = fee_;
     }
 
