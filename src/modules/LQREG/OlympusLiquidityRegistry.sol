@@ -4,8 +4,6 @@ pragma solidity 0.8.15;
 import {LQREGv1} from "src/modules/LQREG/LQREG.v1.sol";
 import "src/Kernel.sol";
 
-import {console2} from "forge-std/console2.sol";
-
 /// @title  Olympus Liquidity Vault Registry
 /// @notice Olympus Liquidity Vault Registry (Module) Contract
 /// @dev    The Olympus Liquidity Vault Registry Module tracks the single-sided liquidity vaults

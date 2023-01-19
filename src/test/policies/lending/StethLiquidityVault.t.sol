@@ -2,7 +2,6 @@
 pragma solidity 0.8.15;
 
 import {Test, stdError} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
@@ -71,7 +70,7 @@ contract StethLiquidityVaultTest is Test {
     StethLiquidityVault internal liquidityVault;
 
     uint256 internal constant STETH_AMOUNT = 1e18;
-    uint256[] internal minTokenAmounts_ = [1e7, 1e18];
+    uint256[] internal minTokenAmounts_ = [100e9, 1e18];
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -99,19 +98,19 @@ contract StethLiquidityVaultTest is Test {
             stethUsdPriceFeed = new MockPriceFeed();
 
             ohmEthPriceFeed.setDecimals(18);
-            ethUsdPriceFeed.setDecimals(18);
+            ethUsdPriceFeed.setDecimals(8);
             stethUsdPriceFeed.setDecimals(18);
 
             ohmEthPriceFeed.setLatestAnswer(1e16); // 0.01 ETH
-            ethUsdPriceFeed.setLatestAnswer(1e21); // 1000 USD
-            stethUsdPriceFeed.setLatestAnswer(1e21); // 1000 USD
+            ethUsdPriceFeed.setLatestAnswer(1000e8); // 1000 USD
+            stethUsdPriceFeed.setLatestAnswer(1000e18); // 1000 USD
         }
 
         {
             // Deploy mock Balancer contracts
             liquidityPool = new MockBalancerPool();
             vault = new MockVault(address(liquidityPool), address(ohm), address(steth));
-            vault.setPoolAmounts(1e7, 1e18);
+            vault.setPoolAmounts(100e9, 1e18);
         }
 
         {
@@ -181,7 +180,7 @@ contract StethLiquidityVaultTest is Test {
 
         {
             // Set limit
-            liquidityVault.setLimit(1e8); // 0.1 OHM
+            liquidityVault.setLimit(1000e9); // 1000 OHM
 
             // Set price variation threshold to 10%
             liquidityVault.setThreshold(100);
@@ -212,6 +211,7 @@ contract StethLiquidityVaultTest is Test {
 
     /// [X]  deposit
     ///     [X]  Can be accessed by anyone
+    ///     [X]  Fails if pool is imbalanced
     ///     [X]  Cannot be called beyond limit
     ///     [X]  Increases user's stETH deposit
     ///     [X]  Correctly values stETH in terms of OHM
@@ -235,13 +235,35 @@ contract StethLiquidityVaultTest is Test {
 
         vm.startPrank(alice);
         steth.approve(address(liquidityVault), 2e19);
-        liquidityVault.deposit(1e19, 1e18); // Should mint 0.1 OHM which is up to the limit
+        liquidityVault.deposit(1e19, 1e18); // Should mint 1000 OHM which is up to the limit
 
         bytes memory err = abi.encodeWithSignature("LiquidityVault_LimitViolation()");
         vm.expectRevert(err);
 
         liquidityVault.deposit(1e18, 1e18); // Should try to push mint beyond limit
         vm.stopPrank();
+    }
+
+    function testCorrectness_depositFailsIfPricesDiffer() public {
+        // Set pool price
+        vault.setPoolAmounts(1e7, 10e18);
+
+        bytes memory err = abi.encodeWithSignature("LiquidityVault_PoolImbalanced()");
+        vm.expectRevert(err);
+
+        // Attempt withdrawal
+        vm.prank(alice);
+        liquidityVault.deposit(1e18, 1e18);
+
+        // Set pool price
+        vault.setPoolAmounts(1000e9, 1e18);
+
+        // Expect revert again
+        vm.expectRevert(err);
+
+        // Attempt withdrawal
+        vm.prank(alice);
+        liquidityVault.deposit(1e18, 1e18);
     }
 
     function testCorrectness_depositIncreasesUserStethDeposit() public {
@@ -253,9 +275,9 @@ contract StethLiquidityVaultTest is Test {
 
     function testCorrectness_depositCorrectlyValuesSteth() public {
         vm.prank(alice);
-        liquidityVault.deposit(1e11, 1e18);
+        liquidityVault.deposit(1e18, 1e18);
 
-        assertEq(ohm.balanceOf(address(vault)), 1);
+        assertEq(ohm.balanceOf(address(vault)), 100e9);
     }
 
     function testCorrectness_depositTransfersStethFromUser() public {
@@ -270,7 +292,7 @@ contract StethLiquidityVaultTest is Test {
         liquidityVault.deposit(STETH_AMOUNT, 1e18);
 
         assertEq(steth.balanceOf(address(vault)), STETH_AMOUNT);
-        assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e11);
+        assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e7);
     }
 
     function testCorrectness_depositDepositsBptToAura() public {
@@ -345,7 +367,7 @@ contract StethLiquidityVaultTest is Test {
         liquidityVault.withdraw(1e18, minTokenAmounts_, true);
 
         // Set pool price
-        vault.setPoolAmounts(1e9, 10e18);
+        vault.setPoolAmounts(1000e9, 1e18);
 
         // Expect revert again
         vm.expectRevert(err);
@@ -469,7 +491,7 @@ contract StethLiquidityVaultTest is Test {
 
         // Verify initial state
         assertEq(steth.balanceOf(address(vault)), STETH_AMOUNT);
-        assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e11);
+        assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e7);
 
         // Withdraw and claim
         vm.prank(alice);
@@ -512,7 +534,7 @@ contract StethLiquidityVaultTest is Test {
         _withdrawSetUp();
 
         // Verify initial state
-        assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e11);
+        assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e7);
 
         // Withdraw and claim
         vm.prank(alice);
@@ -700,13 +722,12 @@ contract StethLiquidityVaultTest is Test {
         assertEq(removals, 0);
 
         // Pools change in price
-        vault.setPoolAmounts(2e7, 1e18);
-        ohmEthPriceFeed.setLatestAnswer(2e16);
+        vault.setPoolAmounts(200e9, 1e18);
 
         // Verify end state
         (emissions, removals) = liquidityVault.getOhmEmissions();
         assertEq(emissions, 0);
-        assertEq(removals, 1e7);
+        assertEq(removals, 100e9);
     }
 
     // ========= ADMIN TESTS ========= //

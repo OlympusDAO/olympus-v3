@@ -16,8 +16,6 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {console2} from "forge-std/console2.sol";
-
 /// @title Olympus Base Single Sided Liquidity Vault Contract
 abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
     // ========= ERRORS ========= //

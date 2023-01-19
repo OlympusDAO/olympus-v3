@@ -200,22 +200,37 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
     /// @param amount_          Amount of stETH to calculate OHM equivalent for
     /// @return uint256         OHM equivalent quantity
     function _valueCollateral(uint256 amount_) internal view override returns (uint256) {
-        uint256 ohmPrice = _validatePrice(
+        // This is returned in 18 decimals and represents ETH per OHM
+        uint256 ohmEth = _validatePrice(
             address(ohmEthPriceFeed.feed),
             uint256(ohmEthPriceFeed.updateThreshold)
         );
-        uint256 ethPrice = _validatePrice(
+
+        // This is returned in 8 decimals and represents USD per ETH
+        uint256 ethUsd = _validatePrice(
             address(ethUsdPriceFeed.feed),
             uint256(ethUsdPriceFeed.updateThreshold)
         );
-        uint256 stethPrice = _validatePrice(
+
+        // This is returned in 18 decimals and represents USD per stETH
+        uint256 stethUsd = _validatePrice(
             address(stethUsdPriceFeed.feed),
             uint256(stethUsdPriceFeed.updateThreshold)
         );
 
-        uint256 ohmUsd = uint256((ohmPrice * ethPrice) / 1e18);
+        // Get decimals for the denominator of the OHM per stETH calculation
+        // Should be 26 decimals
+        uint256 usdPerOhmDecimals = uint256(
+            ohmEthPriceFeed.feed.decimals() + ethUsdPriceFeed.feed.decimals()
+        );
 
-        return (amount_ * ohmUsd) / (uint256(stethPrice) * 1e9);
+        // ohmEth * ethUsd = USD per OHM in 18 + 8 = 26 decimals
+        // steth * 1e26 / (ohmEth * ethUsd) = OHM per stETH in 18 decimals
+        uint256 ohmPerSteth = (stethUsd * 10**usdPerOhmDecimals) / (ohmEth * ethUsd);
+
+        // amount_ is a stETH value which should have 18 decimals
+        // This should give the OHM equivalent (9 decimals)
+        return (amount_ * ohmPerSteth) / 1e27;
     }
 
     /// @notice                 Calculates the prevailing OHM/stETH ratio of the Balancer pool
