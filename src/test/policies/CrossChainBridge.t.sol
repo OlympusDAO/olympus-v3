@@ -6,7 +6,8 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
 import {Bytes32AddressLib} from "solmate/utils/Bytes32AddressLib.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+//import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockOhm} from "test/mocks/MockOhm.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
@@ -25,15 +26,17 @@ contract CrossChainBridgeTest is Test {
     using Bytes32AddressLib for address;
 
     address internal user;
-    address internal receiver;
+    address internal user2;
     address internal guardian;
-    MockERC20 internal ohm;
+    MockOhm internal ohm;
 
     LZEndpointMock internal endpoint;
     LZEndpointMock internal endpoint_l2;
 
     uint16 internal constant MAINNET_CHAIN_ID = 1;
     uint16 internal constant L2_CHAIN_ID = 101;
+
+    uint256 internal constant INITIAL_AMOUNT = 100000e9;
 
     // Mainnet contracts
     Kernel internal kernel;
@@ -52,10 +55,12 @@ contract CrossChainBridgeTest is Test {
     function setUp() public {
         address[] memory users = (new UserFactory()).create(3);
         user = users[0];
-        receiver = users[1];
+        user2 = users[1];
         guardian = users[2];
 
-        ohm = new MockERC20("OHM", "OHM", 9);
+        vm.deal(user, 100 ether);
+
+        ohm = new MockOhm("OHM", "OHM", 9);
 
         // NOTE: Simplified test setup: Both endpoints are on the same chain in this test, but
         // will test the functionality of a message being sent by having the endpoint lookup
@@ -64,8 +69,6 @@ contract CrossChainBridgeTest is Test {
         // Create mock endpoint for mainnet and arbitrum
         endpoint = new LZEndpointMock(1);
         endpoint_l2 = new LZEndpointMock(101);
-
-        //ethEndpoint.setDestLzEndpoint(address(arbEndpoint)); // TODO
 
         // Setup mainnet system
         {
@@ -107,25 +110,27 @@ contract CrossChainBridgeTest is Test {
         rolesAdmin.grantRole("bridge_admin", guardian);
         rolesAdmin_l2.grantRole("bridge_admin", guardian);
 
-
         // Set guardian to the bridge owner for both endpoints and set trusted remote addresses
         vm.startPrank(guardian);
 
-        // mainnet setup 
+        // Mainnet setup 
         bridge.becomeOwner();
-        bytes memory otherBridge = abi.encode(address(bridge_l2));
-        bridge.setTrustedRemoteAddress(L2_CHAIN_ID, abi.encode(address(bridge_l2)));
+        bytes memory path1 = abi.encodePacked(address(bridge_l2), address(bridge));
+        bridge.setTrustedRemote(L2_CHAIN_ID, path1);
+        endpoint.setDestLzEndpoint(address(bridge_l2), address(endpoint_l2));
 
-        // l2 setup
+        // L2 setup
         bridge_l2.becomeOwner();
-        bridge.setTrustedRemoteAddress(MAINNET_CHAIN_ID, abi.encode(address(bridge)));
+        bytes memory path2 = abi.encodePacked(address(bridge), address(bridge_l2));
+        bridge_l2.setTrustedRemote(MAINNET_CHAIN_ID, path2);
+        endpoint_l2.setDestLzEndpoint(address(bridge), address(endpoint));
 
         vm.stopPrank();
 
         // Setup user wallet on mainnet
         vm.startPrank(address(bridge)); // Bridge has mintOhm permissions
         MINTR.increaseMintApproval(address(bridge), type(uint256).max);
-        MINTR.mintOhm(user, 100000e9); // Give user 100k OHM
+        MINTR.mintOhm(user, INITIAL_AMOUNT); // Give user 100k OHM
         vm.stopPrank();
     }
 
@@ -133,41 +138,45 @@ contract CrossChainBridgeTest is Test {
 
     // TODO
     // [ ] sendOhm
-    //     [ ] confirm ohm is sent to other chain
-    //     [ ] revert on insufficient funds
+    //     [x] confirm ohm is sent to other chain
+    //     [x] revert on insufficient funds
     //     [ ] revert if endpoint is down
     //     [ ] reproduce fail and retry, confirm balances
 
     function testCorrectness_SendOhm(uint256 amount_) public {
-        vm.assume(amount_ <= ohm.balanceOf(user));
+        vm.assume(amount_ > 0);
+        vm.assume(amount_ < ohm.balanceOf(user));
 
-        // Send 10 ohm to myself on arbitrum
+        // Send ohm to user2 on L2
         vm.startPrank(user);
-        //bridge.sendOhm(user, amount_, 101);
-
-        // Send 20 ohm to someone else
+        ohm.approve(address(bridge), amount_);
+        bridge.sendOhm{value: 1e17}(user2, amount_, L2_CHAIN_ID);
 
         // Verify ohm balance is correct
+        assertEq(ohm.balanceOf(user2), amount_);
     }
 
     function testRevert_InsufficientAmountOnSend(uint256 amount_) public {
         vm.assume(amount_ > ohm.balanceOf(user));
 
-        //vm.startPrank(user);
-        //bridge.sendOhm()
+        vm.startPrank(user);
+        ohm.approve(address(bridge), amount_);
 
+        vm.expectRevert(CrossChainBridge.InsufficientAmount.selector);
+        bridge.sendOhm{value: 1e17}(user2, amount_, L2_CHAIN_ID);
     }
 
-    function testRevert_EndpointDown() public {}
-    function testCorrectness_RetryMessage() public {}
-
-    // TODO
-    // [ ] lzRecieve
-    //     [ ] confirm ohm is recieved from other chain
-    function testCorrectness_ReceiveOhm() public {}
+    //function testCorrectness_RetryMessage() public {} // TODO
 
     // [ ] becomeOwner - Make sure owners are passed properly
-    function testCorrectness_RoleCanBecomeOwner() public {}
+    function testCorrectness_RoleCanBecomeOwner() public {
+        rolesAdmin.grantRole("bridge_admin", user2);
+
+        vm.prank(user2);
+        bridge.becomeOwner();
+
+        assertEq(user2, bridge.owner());
+    }
 
     // TODO Use pigeon to simulate messages between forks
     // https://github.com/exp-table/pigeon

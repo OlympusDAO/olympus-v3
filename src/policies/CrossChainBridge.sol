@@ -25,16 +25,12 @@ NOTES:
 ///      it intends to receive from.
 contract CrossChainBridge is Policy, RolesConsumer, NonblockingLzApp {
     error InsufficientAmount();
-    error CallerMustBeLZEndpoint();
 
-    event OffchainTransferred(address sender_, uint256 amount_, uint16 dstChain_);
-    event OffchainReceived(address receiver_, uint256 amount_, uint16 srcChain_);
-    event ChainStatusUpdated(uint16 chainId_, bool isValid_);
+    event BridgeTransferred(address sender_, uint256 amount_, uint16 dstChain_);
+    event BridgeReceived(address receiver_, uint256 amount_, uint16 srcChain_);
 
     // Modules
     MINTRv1 public MINTR;
-
-    mapping(uint16 => bool) public validChains;
 
     ERC20 ohm;
 
@@ -96,24 +92,22 @@ contract CrossChainBridge is Policy, RolesConsumer, NonblockingLzApp {
             msg.value
         );
 
-        emit OffchainTransferred(msg.sender, amount_, dstChainId_);
+        emit BridgeTransferred(msg.sender, amount_, dstChainId_);
     }
 
     // TODO receives info to mint to a user's wallet
     function _nonblockingLzReceive(
         uint16 srcChainId_,
-        bytes memory srcAddress_,
+        bytes memory,
         uint64,
         bytes memory payload_
     ) internal override {
-        if (msg.sender != address(lzEndpoint)) revert CallerMustBeLZEndpoint();
-
         (address to, uint256 amount) = abi.decode(payload_, (address, uint256));
 
         MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);
         
-        emit OffchainReceived(to, amount, srcChainId_);
+        emit BridgeReceived(to, amount, srcChainId_);
     }
 
     // TODO must be called by a `bridge_admin` to be able to set lzApp configuration
