@@ -66,6 +66,9 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
 
         // Set Aura pool info
         auraPool = auraPool_;
+
+        // Set exchange name
+        EXCHANGE = "Balancer";
     }
 
     //============================================================================================//
@@ -77,12 +80,12 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
     /// @notice                 Deposits OHM and stETH into the Balancer pool. Deposits the received BPT into Aura to accrue rewards
     /// @param ohmAmount_       Amount of OHM to deposit
     /// @param pairAmount_      Amount of stETH to deposit
-    /// @param minLpAmount_     Minimum amount of BPT to receive (prior to staking into Aura)
+    /// @param slippageParam_   Minimum amount of BPT to receive (prior to staking into Aura)
     /// @return uint256         Amount of BPT received
     function _deposit(
         uint256 ohmAmount_,
         uint256 pairAmount_,
-        uint256 minLpAmount_
+        uint256 slippageParam_
     ) internal override returns (uint256) {
         // Cast pool address from abstract to Balancer Base Pool
         IBasePool pool = IBasePool(liquidityPool);
@@ -102,7 +105,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
             assets: assets,
             maxAmountsIn: maxAmountsIn,
-            userData: abi.encode(1, maxAmountsIn, minLpAmount_),
+            userData: abi.encode(1, maxAmountsIn, slippageParam_),
             fromInternalBalance: false
         });
 
@@ -218,19 +221,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
             uint256(stethUsdPriceFeed.updateThreshold)
         );
 
-        // Get decimals for the denominator of the OHM per stETH calculation
-        // Should be 26 decimals
-        uint256 usdPerOhmDecimals = uint256(
-            ohmEthPriceFeed.feed.decimals() + ethUsdPriceFeed.feed.decimals()
-        );
-
-        // ohmEth * ethUsd = USD per OHM in 18 + 8 = 26 decimals
-        // steth * 1e26 / (ohmEth * ethUsd) = OHM per stETH in 18 decimals
-        uint256 ohmPerSteth = (stethUsd * 10**usdPerOhmDecimals) / (ohmEth * ethUsd);
-
-        // amount_ is a stETH value which should have 18 decimals
-        // This should give the OHM equivalent (9 decimals)
-        return (amount_ * ohmPerSteth) / 1e27;
+        return (amount_ * stethUsd * 1e9) / (ohmEth * ethUsd);
     }
 
     /// @notice                 Calculates the prevailing OHM/stETH ratio of the Balancer pool
@@ -257,6 +248,24 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
 
         if (totalLP == 0) return 0;
         else return (balances_[0] * totalLP) / bptTotalSupply;
+    }
+
+    //============================================================================================//
+    //                                      VIEW FUNCTIONS                                        //
+    //============================================================================================//
+
+    function getUserStethShare(address user_) internal view returns (uint256) {
+        // Cast pool address from abstract to Balancer Base pool
+        IBasePool pool = IBasePool(liquidityPool);
+
+        // Get user's LP balance
+        uint256 userLpBalance = lpPositions[user_];
+
+        (, uint256[] memory balances_, ) = vault.getPoolTokens(pool.getPoolId());
+        uint256 bptTotalSupply = pool.totalSupply();
+
+        if (userLpBalance == 0) return 0;
+        else return (balances_[1] * userLpBalance) / bptTotalSupply;
     }
 
     //============================================================================================//

@@ -79,6 +79,9 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     ///         rewards back to the vault and then distributing them proportionally to users
     ExternalRewardToken[] public externalRewardTokens;
 
+    // Exchange Name (used by frontend)
+    string public EXCHANGE;
+
     // Configuration values
     uint256 public LIMIT;
     uint256 public THRESHOLD;
@@ -140,10 +143,13 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     /// @notice                 Deposits pair tokens, mints OHM against the deposited pair tokens, and deposits the
     ///                         pair token and OHM into a liquidity pool and receives LP tokens in return
     /// @param  amount_         The amount of pair tokens to deposit
-    /// @param  minLpAmount_    The minimum amount of LP tokens to receive
+    /// @param  slippageParam_  Represents the slippage on joining the liquidity pool. Can either be the minimum LP token
+    ///                         amount to receive in the cases of Balancer or Curve, or can be a value (in thousandths) which
+    ///                         will be used to calculate the minimum amount of OHM and pair tokens to use in the case of Uniswap,
+    ///                         Sushiswap, Fraxswap, etc.
     /// @dev                    This needs to be non-reentrant since the contract only knows the amount of LP tokens it
     ///                         receives after an external interaction with the liquidity pool
-    function deposit(uint256 amount_, uint256 minLpAmount_)
+    function deposit(uint256 amount_, uint256 slippageParam_)
         external
         nonReentrant
         returns (uint256 lpAmountOut)
@@ -166,7 +172,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         pairToken.transferFrom(msg.sender, address(this), amount_);
         _borrow(ohmToBorrow);
 
-        uint256 lpReceived = _deposit(ohmToBorrow, amount_, minLpAmount_);
+        uint256 lpReceived = _deposit(ohmToBorrow, amount_, slippageParam_);
 
         // Calculate amount of pair tokens and OHM unused in deposit
         uint256 unusedPairToken = pairToken.balanceOf(address(this)) - pairTokenBalanceBefore;
@@ -255,6 +261,14 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     //============================================================================================//
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
+
+    function getInternalRewardTokens() public view returns (InternalRewardToken[] memory) {
+        return internalRewardTokens;
+    }
+
+    function getExternalRewardTokens() public view returns (ExternalRewardToken[] memory) {
+        return externalRewardTokens;
+    }
 
     /// @notice                     Returns the amount of rewards a user has earned for a given reward token
     /// @param  id_                 The ID of the reward token

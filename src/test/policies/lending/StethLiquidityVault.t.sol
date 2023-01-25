@@ -99,11 +99,11 @@ contract StethLiquidityVaultTest is Test {
 
             ohmEthPriceFeed.setDecimals(18);
             ethUsdPriceFeed.setDecimals(8);
-            stethUsdPriceFeed.setDecimals(18);
+            stethUsdPriceFeed.setDecimals(8);
 
             ohmEthPriceFeed.setLatestAnswer(1e16); // 0.01 ETH
             ethUsdPriceFeed.setLatestAnswer(1000e8); // 1000 USD
-            stethUsdPriceFeed.setLatestAnswer(1000e18); // 1000 USD
+            stethUsdPriceFeed.setLatestAnswer(1000e8); // 1000 USD
         }
 
         {
