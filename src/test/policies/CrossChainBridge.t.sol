@@ -166,9 +166,35 @@ contract CrossChainBridgeTest is Test {
         bridge.sendOhm{value: 1e17}(user2, amount_, L2_CHAIN_ID);
     }
 
-    //function testCorrectness_RetryMessage() public {} // TODO
+    // TODO don't think this is needed. Cannot make bridge fail
+    // if a message has been received already
+    /*
+    function testCorrectness_RetryMessage() public {
+        uint256 amount = 100;
 
-    // [ ] becomeOwner - Make sure owners are passed properly
+        // Block next message, then attempt sending OHM crosschain
+        endpoint_l2.blockNextMsg();
+
+        vm.startPrank(user);
+        ohm.approve(address(bridge), amount);
+        bridge.sendOhm{value: 1e17}(user2, amount, L2_CHAIN_ID);
+
+        assertEq(ohm.balanceOf(user2), 0);
+
+        // Retry blocked message on L2
+        bytes memory payload = abi.encode(user2, amount);
+
+        endpoint_l2.retryPayload(
+            MAINNET_CHAIN_ID,
+            abi.encode(address(bridge)),
+            payload
+        );
+
+        assertEq(ohm.balanceOf(user2), amount);
+    }
+    */
+
+    // [x] becomeOwner - Make sure owners are passed properly
     function testCorrectness_RoleCanBecomeOwner() public {
         rolesAdmin.grantRole("bridge_admin", user2);
 
