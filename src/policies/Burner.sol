@@ -24,11 +24,9 @@ contract Burner is Policy, RolesConsumer {
     // Olympus contract dependencies
     ERC20 public immutable ohm; // OHM Token
 
-    //============================================================================================//
-    //                                      POLICY SETUP                                          //
-    //============================================================================================//
+    // ========= POLICY SETUP ========= //
 
-    constructor(address kernel_, ERC20 ohm_) Policy(kernel_) {
+    constructor(Kernel kernel_, ERC20 ohm_) Policy(kernel_) {
         ohm = ohm_;
     }
 
@@ -57,9 +55,7 @@ contract Burner is Policy, RolesConsumer {
         requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
     }
 
-    //============================================================================================//
-    //                                       CORE FUNCTIONS                                       //
-    //============================================================================================//
+    // ========= BURN FUNCTIONS ========= //
 
     /// @notice Burn OHM from the treasury
     /// @param amount_ Amount of OHM to burn
