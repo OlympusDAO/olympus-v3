@@ -77,7 +77,8 @@ contract CrossChainBridgeTest is Test {
             MINTR = new OlympusMinter(kernel, address(ohm));
             ROLES = new OlympusRoles(kernel);
 
-            bridge = new CrossChainBridge(kernel, address(endpoint));
+            // Enable counter
+            bridge = new CrossChainBridge(kernel, address(endpoint), true);
             rolesAdmin = new RolesAdmin(kernel);
 
             kernel.executeAction(Actions.InstallModule, address(MINTR));
@@ -95,7 +96,8 @@ contract CrossChainBridgeTest is Test {
             MINTR_l2 = new OlympusMinter(kernel_l2, address(ohm));
             ROLES_l2 = new OlympusRoles(kernel_l2);
 
-            bridge_l2 = new CrossChainBridge(kernel_l2, address(endpoint_l2));
+            // No counter necessary since this is L2
+            bridge_l2 = new CrossChainBridge(kernel_l2, address(endpoint_l2), false);
             rolesAdmin_l2 = new RolesAdmin(kernel_l2);
 
             kernel_l2.executeAction(Actions.InstallModule, address(MINTR_l2));
@@ -142,6 +144,7 @@ contract CrossChainBridgeTest is Test {
     //     [x] revert on insufficient funds
     //     [ ] revert if endpoint is down
     //     [ ] reproduce fail and retry, confirm balances
+    //     [ ] make sure offchain ohm count is accurate
 
     function testCorrectness_SendOhm(uint256 amount_) public {
         vm.assume(amount_ > 0);
@@ -202,6 +205,27 @@ contract CrossChainBridgeTest is Test {
         bridge.becomeOwner();
 
         assertEq(user2, bridge.owner());
+    }
+
+    function testCorrectness_OffchainOhmCountAccurate(uint256 amount_) public {
+        vm.assume(amount_ > 0);
+        vm.assume(amount_ < ohm.balanceOf(user) / 3);
+
+        uint256 count;
+
+        // Do 3 transfers then check for accuracy
+        vm.startPrank(user);
+        for (uint i=0; i < 3; ++i) {
+            ohm.approve(address(bridge), amount_);
+            bridge.sendOhm{value: 1e17}(user2, amount_, L2_CHAIN_ID);
+            count += amount_;
+        }
+
+        // Mainnet bridge should have a count
+        assertEq(count, bridge.offchainOhmCounter());
+
+        // L2 bridge should not be counting
+        assertEq(0, bridge_l2.offchainOhmCounter());
     }
 
     // TODO Use pigeon to simulate messages between forks

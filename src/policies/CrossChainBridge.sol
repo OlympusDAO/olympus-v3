@@ -29,19 +29,30 @@ contract CrossChainBridge is Policy, RolesConsumer, NonblockingLzApp {
     event BridgeTransferred(address sender_, uint256 amount_, uint16 dstChain_);
     event BridgeReceived(address receiver_, uint256 amount_, uint16 srcChain_);
 
+    uint16 constant public MAINNET_CHAIN_ID = 1;
+
     // Modules
     MINTRv1 public MINTR;
 
     ERC20 ohm;
 
+    // Currently only used on mainnet
+    bool public counterEnabled;
+
+    // Count of how much OHM has been bridged offchain
+    uint256 public offchainOhmCounter;
+
     //============================================================================================//
-    //                                      POLICY SETUP                                          //
+    //                                        POLICY SETUP                                        //
     //============================================================================================//
 
     constructor(
         Kernel kernel_,
-        address endpoint_
-    ) Policy(kernel_) NonblockingLzApp(endpoint_) {}
+        address endpoint_,
+        bool enableCounter_
+    ) Policy(kernel_) NonblockingLzApp(endpoint_) {
+        counterEnabled = enableCounter_;
+    }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -79,6 +90,9 @@ contract CrossChainBridge is Policy, RolesConsumer, NonblockingLzApp {
     function sendOhm(address to_, uint256 amount_, uint16 dstChainId_) external payable {
         if (ohm.balanceOf(msg.sender) < amount_) revert InsufficientAmount();
 
+        if (counterEnabled)
+            offchainOhmCounter += amount_;
+
         bytes memory payload = abi.encode(to_, amount_);
 
         MINTR.burnOhm(msg.sender, amount_);
@@ -106,6 +120,9 @@ contract CrossChainBridge is Policy, RolesConsumer, NonblockingLzApp {
 
         MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);
+        
+        if (counterEnabled)
+            offchainOhmCounter -= amount;
         
         emit BridgeReceived(to, amount, srcChainId_);
     }

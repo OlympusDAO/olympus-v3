@@ -31,13 +31,13 @@ contract BridgeDeploy is Script {
     OlympusERC20Token public ohm;
 
     // Deploy to new testnet
-    function deploy(address lzEndpoint_) external {
+    function deploy(address lzEndpoint_, bool isMainnet_) external {
         vm.startBroadcast();
 
         // Arb goerli endpoint
         //address lzEndpoint = 0x6aB5Ae6822647046626e83ee6dB8187151E1d5ab;
 
-        auth = new OlympusAuthority(address(this), address(this), address(this), address(this));
+        auth = new OlympusAuthority(msg.sender, msg.sender, msg.sender, msg.sender);
         ohm = new OlympusERC20Token(address(auth));
 
         // Set addresses for dependencies
@@ -56,9 +56,6 @@ contract BridgeDeploy is Script {
         rolesAdmin = new RolesAdmin(kernel);
         console2.log("RolesAdmin deployed at:", address(rolesAdmin));
 
-        // Deploy and activate bridge
-        deployBridge(address(kernel), lzEndpoint_);
-
         // Execute actions on Kernel
 
         // Install Modules
@@ -66,32 +63,34 @@ contract BridgeDeploy is Script {
         kernel.executeAction(Actions.InstallModule, address(ROLES));
 
         // Approve policies
-        //kernel.executeAction(Actions.ActivatePolicy, address(bridge));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+        _deployBridge(address(kernel), lzEndpoint_, isMainnet_); // Deploy and activate bridge
 
         // Grant roles
         auth.pushVault(address(MINTR), true);
         rolesAdmin.grantRole("bridge_admin", msg.sender);
 
-        //setupBridgePath(address(bridge), remoteBridge_, remoteChainId_)
-
         vm.stopBroadcast();
     }
 
+    // To allow calling this separately
+    function deployBridge(address kernel_, address lzEndpoint_, bool enableCounter_) public {
+        vm.broadcast();
+        _deployBridge(kernel_, lzEndpoint_, enableCounter_);
+    }
 
-    function deployBridge(address kernel_, address lzEndpoint_) public {
-        vm.startBroadcast();
-
-        bridge = new CrossChainBridge(Kernel(kernel_), lzEndpoint_);
+    function _deployBridge(address kernel_, address lzEndpoint_, bool enableCounter_) public {
+        bridge = new CrossChainBridge(Kernel(kernel_), lzEndpoint_, enableCounter_);
         console2.log("Bridge deployed at:", address(bridge));
 
         kernel.executeAction(Actions.ActivatePolicy, address(bridge));
-
-        vm.stopBroadcast();
     }
 
-    function setupTrustedRemote(address localBridge_, address remoteBridge_, uint16 remoteChainId_) public {
+    // Caller must have "bridge_admin" role
+    function setupBridge(address localBridge_, address remoteBridge_, uint16 remoteChainId_) public {
         vm.startBroadcast();
+
+        rolesAdmin.grantRole("bridge_admin", msg.sender);
 
         // Begin bridge setup
         bridge.becomeOwner();
@@ -100,4 +99,10 @@ contract BridgeDeploy is Script {
 
         vm.stopBroadcast();
     }
+
+    function grantBridgeAdminRole(address rolesAdmin_, address to_) public {
+        vm.broadcast();
+        RolesAdmin(rolesAdmin).grantRole("bridge_admin", to_);
+    }
+
 }
