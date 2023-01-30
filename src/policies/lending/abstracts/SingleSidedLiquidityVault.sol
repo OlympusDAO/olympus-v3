@@ -61,7 +61,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     // Aggregate Contract State
     uint256 public totalLP;
     uint256 public ohmMinted;
-    uint256 public ohmBurned;
+    uint256 public ohmRemoved;
     mapping(address => uint256) public accumulatedFees;
 
     // User State
@@ -225,7 +225,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         pairTokenDeposits[msg.sender] -= pairTokenReceived > userDeposit
             ? userDeposit
             : pairTokenReceived;
-        ohmBurned += ohmReceived;
+        ohmMinted -= ohmReceived > ohmMinted ? ohmMinted : ohmReceived;
+        ohmRemoved += ohmReceived > ohmMinted ? ohmReceived - ohmMinted : 0;
 
         // Return assets
         _repay(ohmReceived);
@@ -312,13 +313,10 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     /// @dev                        This is based on a point-in-time snapshot of the liquidity pool's current OHM balance
     function getOhmEmissions() external view returns (uint256 emitted, uint256 removed) {
         uint256 currentPoolOhmShare = _getPoolOhmShare();
-        uint256 burnedAndOutstanding = currentPoolOhmShare + ohmBurned;
 
-        if (burnedAndOutstanding > ohmMinted) {
-            removed = burnedAndOutstanding - ohmMinted;
-        } else {
-            emitted = ohmMinted - burnedAndOutstanding;
-        }
+        if (ohmMinted > currentPoolOhmShare + ohmRemoved)
+            emitted = ohmMinted - currentPoolOhmShare - ohmRemoved;
+        else removed = currentPoolOhmShare + ohmRemoved - ohmMinted;
     }
 
     //============================================================================================//
@@ -327,21 +325,14 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     // ========= CHECKS AND SAFETY ========= //
 
-    /// @dev                        Math is: (currentOhmInPoolMintedByThisContract + currentNetOhmEmittedToMarket + amountToDeposit) <= LIMIT
+    /// @dev                        TODO
     function _canDeposit(uint256 amount_) internal view virtual returns (bool) {
         uint256 currentPoolOhmShare = _getPoolOhmShare();
-        uint256 burnedAndOutstanding = currentPoolOhmShare + ohmBurned;
+        uint256 emitted;
 
-        if (burnedAndOutstanding > ohmMinted) {
-            uint256 removed = burnedAndOutstanding - ohmMinted;
-            uint256 activeOhm = currentPoolOhmShare - removed;
-            if (activeOhm + amount_ > LIMIT) return false;
-        } else {
-            uint256 emitted = ohmMinted - burnedAndOutstanding;
-            uint256 activeOhm = currentPoolOhmShare + emitted;
-            if (activeOhm + amount_ > LIMIT) return false;
-        }
-
+        if (ohmMinted > currentPoolOhmShare) emitted = ohmMinted - currentPoolOhmShare;
+        if (amount_ + ohmMinted + emitted > LIMIT + ohmRemoved)
+            revert LiquidityVault_LimitViolation();
         return true;
     }
 

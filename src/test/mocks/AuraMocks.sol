@@ -18,7 +18,11 @@ contract MockAuraBooster is IAuraBooster {
         uint256 amount_,
         bool stake_
     ) external {
-        MockERC20(token).transferFrom(msg.sender, pools[0], amount_);
+        MockERC20(token).transferFrom(msg.sender, pools[pid_], amount_);
+    }
+
+    function addPool(address pool_) external {
+        pools.push(pool_);
     }
 }
 
