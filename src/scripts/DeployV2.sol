@@ -27,6 +27,7 @@ import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Distributor} from "policies/Distributor.sol";
 import {Emergency} from "policies/Emergency.sol";
 import {BondManager} from "policies/BondManager.sol";
+import {Burner} from "policies/Burner.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
@@ -58,6 +59,7 @@ contract OlympusDeploy is Script {
     Distributor public distributor;
     Emergency public emergency;
     BondManager public bondManager;
+    Burner public burner;
 
     /// Construction variables
 
@@ -101,6 +103,7 @@ contract OlympusDeploy is Script {
         selectorMap["Distributor"] = this._deployDistributor.selector;
         selectorMap["Emergency"] = this._deployEmergency.selector;
         selectorMap["BondManager"] = this._deployBondManager.selector;
+        selectorMap["Burner"] = this._deployBurner.selector;
 
         // Load environment addresses
         string memory env = vm.readFile("./src/scripts/env.json");
@@ -134,6 +137,7 @@ contract OlympusDeploy is Script {
         distributor = Distributor(env.readAddress(string.concat(chain_, ".olympus.policies.Distributor")));
         emergency = Emergency(env.readAddress(string.concat(chain_, ".olympus.policies.Emergency")));
         bondManager = BondManager(env.readAddress(string.concat(chain_, ".olympus.policies.BondManager")));
+        burner = Burner(env.readAddress(string.concat(chain_, ".olympus.policies.Burner")));
 
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy.json");
@@ -414,6 +418,17 @@ contract OlympusDeploy is Script {
         return address(bondManager);
     }
 
+    function _deployBurner(bytes memory args) public returns (address) {
+        // No additional arguments for Burner policy
+
+        // Deploy Burner policy
+        vm.broadcast();
+        burner = new Burner(kernel, ohm);
+        console2.log("Burner deployed at:", address(burner));
+
+        return address(burner);
+    }
+
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
     /// @dev Should be called prior to verifyAndPushAuth()
     function verifyKernelInstallation() external {
@@ -533,6 +548,7 @@ contract OlympusDeploy is Script {
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
         kernel = Kernel(vm.envAddress("KERNEL"));
         bondManager = BondManager(vm.envAddress("BONDMANAGER"));
+        burner = Burner(vm.envAddress("BURNER"));
 
         /// Operator Roles
         require(ROLES.hasRole(address(heart), "operator_operate"));
@@ -565,6 +581,9 @@ contract OlympusDeploy is Script {
 
         /// BondManager Roles
         require(ROLES.hasRole(policy_, "bondmanager_admin"));
+
+        /// Burner Roles
+        require(ROLES.hasRole(guardian_, "burner_admin"));
     }
 
     function _saveDeployment(string memory chain_) internal {
