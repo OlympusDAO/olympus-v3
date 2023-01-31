@@ -90,8 +90,7 @@ contract CrossChainBridge is Policy, RolesConsumer, NonblockingLzApp {
     function sendOhm(address to_, uint256 amount_, uint16 dstChainId_) external payable {
         if (ohm.balanceOf(msg.sender) < amount_) revert InsufficientAmount();
 
-        if (counterEnabled)
-            offchainOhmCounter += amount_;
+        if (counterEnabled) offchainOhmCounter += amount_;
 
         bytes memory payload = abi.encode(to_, amount_);
 
@@ -118,12 +117,11 @@ contract CrossChainBridge is Policy, RolesConsumer, NonblockingLzApp {
     ) internal override {
         (address to, uint256 amount) = abi.decode(payload_, (address, uint256));
 
+        if (counterEnabled) offchainOhmCounter -= amount;
+
         MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);
-        
-        if (counterEnabled)
-            offchainOhmCounter -= amount;
-        
+
         emit BridgeReceived(to, amount, srcChainId_);
     }
 
