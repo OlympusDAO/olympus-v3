@@ -69,6 +69,7 @@ Set up a foundry config in foundry.toml.
 -   RolesAdmin - [0x54FfCA586cD1B01E96a5682DF93a55d7Ef91EFF0](https://goerli.etherscan.io/address/0x54FfCA586cD1B01E96a5682DF93a55d7Ef91EFF0)
 -   Emergency - [0x196a59fB453da942f062Be4407D923129c759435](https://goerli.etherscan.io/address/0x196a59fB453da942f062Be4407D923129c759435)
 -   Faucet (Testnet only) - [0xA247156a39169c0FAFf979F57361CC734e82e3d0](https://goerli.etherscan.io/address/0xA247156a39169c0FAFf979F57361CC734e82e3d0)
+-   Burner - [0x0cA928E9E75BE317E8C83FbD8397AdcFa06B4853](https://goerli.etherscan.io/address/0x0cA928E9E75BE317E8C83FbD8397AdcFa06B4853)
 
 #### Dependencies
 
