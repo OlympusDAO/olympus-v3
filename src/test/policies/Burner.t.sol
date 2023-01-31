@@ -385,4 +385,17 @@ contract BurnerTest is Test {
         vm.prank(guardian);
         burner.removeCategory("INVALID_CATEGORY");
     }
+
+    // ========== VIEW FUNCTION TESTS ========= //
+
+    // [X] Get Categories
+
+    function test_getCategories() public {
+        bytes32[] memory categories = burner.getCategories();
+
+        assertEq(categories.length, 3);
+        assertEq(categories[0], "TEST_CATEGORY_1");
+        assertEq(categories[1], "TEST_CATEGORY_2");
+        assertEq(categories[2], "TEST_CATEGORY_3");
+    }
 }

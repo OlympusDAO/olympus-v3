@@ -162,4 +162,11 @@ contract Burner is Policy, RolesConsumer {
 
         emit CategoryRemoved(category_);
     }
+
+    // ========== VIEW FUNCTIONS ========== //
+
+    /// @notice Get the list of approved burn categories
+    function getCategories() external view returns (bytes32[] memory) {
+        return categories;
+    }
 }
