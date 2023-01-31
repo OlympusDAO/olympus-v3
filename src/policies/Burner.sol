@@ -15,14 +15,33 @@ import "src/Kernel.sol";
 contract Burner is Policy, RolesConsumer {
     using TransferHelper for ERC20;
 
-    // ========= STATE ========= //
+    // ========== ERRORS ========== //
+
+    error Burner_CategoryNotApproved();
+    error Burner_CategoryApproved();
+
+    // ========== EVENTS ========== //
+
+    event Burn(address indexed from, bytes32 indexed category, uint256 amount);
+    event CategoryAdded(bytes32 category);
+    event CategoryRemoved(bytes32 category);
+
+    // ========== STATE ========== //
 
     // Modules
-    TRSRYv1 public TRSRY;
-    MINTRv1 public MINTR;
+    TRSRYv1 internal TRSRY;
+    MINTRv1 internal MINTR;
 
     // Olympus contract dependencies
-    ERC20 public immutable ohm; // OHM Token
+    /// @notice OHM token
+    ERC20 public immutable ohm;
+
+    // Burn metadata
+    /// @notice List of approved categories for logging OHM burns
+    bytes32[] public categories;
+    /// @notice Whether a category is approved for logging
+    /// @dev This is used to prevent logging of burn events that are not consistent with standardized names
+    mapping(bytes32 => bool) public categoryApproved;
 
     // ========= POLICY SETUP ========= //
 
@@ -49,7 +68,7 @@ contract Burner is Policy, RolesConsumer {
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
 
-        requests = new Permissions[](4);
+        requests = new Permissions[](3);
         requests[0] = Permissions(MINTR.KEYCODE(), MINTR.burnOhm.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
@@ -57,15 +76,27 @@ contract Burner is Policy, RolesConsumer {
 
     // ========= BURN FUNCTIONS ========= //
 
+    modifier onlyApproved(bytes32 category_) {
+        if (!categoryApproved[category_]) revert Burner_CategoryNotApproved();
+        _;
+    }
+
     /// @notice Burn OHM from the treasury
     /// @param amount_ Amount of OHM to burn
-    function burnFromTreasury(uint256 amount_) external onlyRole("burner_admin") {
+    function burnFromTreasury(uint256 amount_, bytes32 category_)
+        external
+        onlyRole("burner_admin")
+        onlyApproved(category_)
+    {
         // Withdraw OHM from the treasury
         TRSRY.increaseWithdrawApproval(address(this), ohm, amount_);
         TRSRY.withdrawReserves(address(this), ohm, amount_);
 
         // Burn the OHM
         MINTR.burnOhm(address(this), amount_);
+
+        // Emit a burn event
+        emit Burn(address(TRSRY), category_, amount_);
     }
 
     /// @notice Burn OHM from an address
@@ -74,18 +105,61 @@ contract Burner is Policy, RolesConsumer {
     /// @dev Burning OHM from an address requires it to have approved the MINTR for their OHM.
     ///      Here, we transfer from the user and burn from this address to avoid approving a
     ///      a different contract.
-    function burnFrom(address from_, uint256 amount_) external onlyRole("burner_admin") {
+    function burnFrom(
+        address from_,
+        uint256 amount_,
+        bytes32 category_
+    ) external onlyRole("burner_admin") onlyApproved(category_) {
         // Transfer OHM from the user to this contract
         ohm.safeTransferFrom(from_, address(this), amount_);
 
         // Burn the OHM
         MINTR.burnOhm(address(this), amount_);
+
+        // Emit a burn event
+        emit Burn(from_, category_, amount_);
     }
 
     /// @notice Burn OHM in this contract
     /// @param amount_ Amount of OHM to burn
-    function burn(uint256 amount_) external onlyRole("burner_admin") {
+    function burn(uint256 amount_, bytes32 category_)
+        external
+        onlyRole("burner_admin")
+        onlyApproved(category_)
+    {
         // Burn the OHM
         MINTR.burnOhm(address(this), amount_);
+
+        // Emit a burn event
+        emit Burn(address(this), category_, amount_);
+    }
+
+    // ========== ADMIN FUNCTIONS ========== //
+
+    /// @notice Add a category to the list of approved burn categories
+    /// @param category_ Category to add
+    function addCategory(bytes32 category_) external onlyRole("burner_admin") {
+        if (categoryApproved[category_]) revert Burner_CategoryApproved();
+        categories.push(category_);
+        categoryApproved[category_] = true;
+
+        emit CategoryAdded(category_);
+    }
+
+    /// @notice Remove a category from the list of approved burn categories
+    /// @param category_ Category to remove
+    function removeCategory(bytes32 category_) external onlyRole("burner_admin") {
+        if (!categoryApproved[category_]) revert Burner_CategoryNotApproved();
+        uint256 len = categories.length;
+        for (uint256 i; i < len; ++i) {
+            if (categories[i] == category_) {
+                categories[i] = categories[len - 1];
+                categories.pop();
+                break;
+            }
+        }
+        categoryApproved[category_] = false;
+
+        emit CategoryRemoved(category_);
     }
 }
