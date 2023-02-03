@@ -144,7 +144,7 @@ contract CrossChainBridgeTest is Test {
     //     [x] revert on insufficient funds
     //     [ ] revert if endpoint is down
     //     [ ] reproduce fail and retry, confirm balances
-    //     [ ] make sure offchain ohm count is accurate
+    //     [x] make sure offchain ohm count is accurate
 
     function testCorrectness_SendOhm(uint256 amount_) public {
         vm.assume(amount_ > 0);
@@ -197,7 +197,6 @@ contract CrossChainBridgeTest is Test {
     }
     */
 
-    // [x] becomeOwner - Make sure owners are passed properly
     function testCorrectness_RoleCanBecomeOwner() public {
         rolesAdmin.grantRole("bridge_admin", user2);
 
