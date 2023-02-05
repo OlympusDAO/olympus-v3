@@ -107,7 +107,7 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    // TODO Send information needed to mint OHM on another chain
+    /// @notice Send OHM to an eligible chain
     function sendOhm(address to_, uint256 amount_, uint16 dstChainId_) external payable {
         if (ohm.balanceOf(msg.sender) < amount_) revert Bridge_InsufficientAmount();
 
@@ -179,6 +179,7 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
         }
     }
 
+    /// @notice Retry a failed receive message
     function retryMessage(uint16 _srcChainId, bytes calldata _srcAddress, uint64 _nonce, bytes calldata _payload) public payable virtual {
         // Assert there is message to retry
         bytes32 payloadHash = failedMessages[_srcChainId][_srcAddress][_nonce];
