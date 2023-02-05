@@ -93,7 +93,7 @@ contract BridgeDeploy is Script {
         rolesAdmin.grantRole("bridge_admin", msg.sender);
 
         // Begin bridge setup
-        bridge.becomeOwner();
+        //bridge.becomeOwner();
         bytes memory path1 = abi.encodePacked(remoteBridge_, localBridge_);
         bridge.setTrustedRemote(remoteChainId_, path1);
 
@@ -102,7 +102,7 @@ contract BridgeDeploy is Script {
 
     function grantBridgeAdminRole(address rolesAdmin_, address to_) public {
         vm.broadcast();
-        RolesAdmin(rolesAdmin).grantRole("bridge_admin", to_);
+        RolesAdmin(rolesAdmin_).grantRole("bridge_admin", to_);
     }
 
 }

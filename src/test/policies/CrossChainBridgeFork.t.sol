@@ -129,7 +129,7 @@ contract CrossChainBridgeForkTest is Test {
         // Mainnet setup 
         vm.selectFork(L1_FORK_ID);
         vm.startPrank(guardian1);
-        bridge.becomeOwner();
+        //bridge.becomeOwner();
         bytes memory path1 = abi.encodePacked(address(bridge_l2), address(bridge));
         bridge.setTrustedRemote(L2_ID, path1);
         vm.stopPrank();
@@ -137,7 +137,7 @@ contract CrossChainBridgeForkTest is Test {
         // L2 setup
         vm.selectFork(L2_FORK_ID);
         vm.startPrank(guardian2);
-        bridge_l2.becomeOwner();
+        //bridge_l2.becomeOwner();
         bytes memory path2 = abi.encodePacked(address(bridge), address(bridge_l2));
         bridge_l2.setTrustedRemote(L1_ID, path2);
         vm.stopPrank();
@@ -165,6 +165,33 @@ contract CrossChainBridgeForkTest is Test {
         vm.selectFork(L2_FORK_ID);
         assertEq(ohm2.balanceOf(user2), amount_);
     }
+
+    /*
+    function testCorrectness_RetryMessage() public {
+        uint256 amount = 100;
+
+        // Block next message, then attempt sending OHM crosschain
+        vm.selectFork(L2_FORK_ID);
+        endpoint_l2.blockNextMsg();
+
+        vm.startPrank(user);
+        ohm.approve(address(bridge), amount);
+        bridge.sendOhm{value: 1e17}(user2, amount, L2_CHAIN_ID);
+
+        assertEq(ohm.balanceOf(user2), 0);
+
+        // Retry blocked message on L2
+        bytes memory payload = abi.encode(user2, amount);
+
+        endpoint_l2.retryPayload(
+            MAINNET_CHAIN_ID,
+            abi.encode(address(bridge)),
+            payload
+        );
+
+        assertEq(ohm.balanceOf(user2), amount);
+    }
+    */
 
     function testCorrectness_OffchainOhmCountAccurate(uint256 amount_) public {
         vm.assume(amount_ > 0);
@@ -196,4 +223,5 @@ contract CrossChainBridgeForkTest is Test {
         vm.selectFork(L2_FORK_ID);
         assertEq(0, bridge_l2.offchainOhmCounter());
     }
+
 }

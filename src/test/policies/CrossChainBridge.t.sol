@@ -116,13 +116,11 @@ contract CrossChainBridgeTest is Test {
         vm.startPrank(guardian);
 
         // Mainnet setup 
-        bridge.becomeOwner();
         bytes memory path1 = abi.encodePacked(address(bridge_l2), address(bridge));
         bridge.setTrustedRemote(L2_CHAIN_ID, path1);
         endpoint.setDestLzEndpoint(address(bridge_l2), address(endpoint_l2));
 
         // L2 setup
-        bridge_l2.becomeOwner();
         bytes memory path2 = abi.encodePacked(address(bridge), address(bridge_l2));
         bridge_l2.setTrustedRemote(MAINNET_CHAIN_ID, path2);
         endpoint_l2.setDestLzEndpoint(address(bridge), address(endpoint));
@@ -165,7 +163,7 @@ contract CrossChainBridgeTest is Test {
         vm.startPrank(user);
         ohm.approve(address(bridge), amount_);
 
-        vm.expectRevert(CrossChainBridge.InsufficientAmount.selector);
+        vm.expectRevert(CrossChainBridge.Bridge_InsufficientAmount.selector);
         bridge.sendOhm{value: 1e17}(user2, amount_, L2_CHAIN_ID);
     }
 
@@ -197,14 +195,12 @@ contract CrossChainBridgeTest is Test {
     }
     */
 
-    function testCorrectness_RoleCanBecomeOwner() public {
-        rolesAdmin.grantRole("bridge_admin", user2);
-
-        vm.prank(user2);
-        bridge.becomeOwner();
-
-        assertEq(user2, bridge.owner());
-    }
+    //function testCorrectness_RoleCanBecomeOwner() public {
+    //    rolesAdmin.grantRole("bridge_admin", user2);
+    //    vm.prank(user2);
+    //    bridge.becomeOwner();
+    //    assertEq(user2, bridge.owner());
+    //}
 
     function testCorrectness_OffchainOhmCountAccurate(uint256 amount_) public {
         vm.assume(amount_ > 0);
