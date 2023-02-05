@@ -39,12 +39,12 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
     event BridgeReceived(address receiver_, uint256 amount_, uint16 srcChain_);
 
     // LZ app events
-    event MessageFailed(uint16 _srcChainId, bytes _srcAddress, uint64 _nonce, bytes _payload, bytes _reason);
-    event RetryMessageSuccess(uint16 _srcChainId, bytes _srcAddress, uint64 _nonce, bytes32 _payloadHash);
+    event MessageFailed(uint16 srcChainId_, bytes srcAddress_, uint64 nonce_, bytes payload_, bytes _reason);
+    event RetryMessageSuccess(uint16 srcChainId_, bytes srcAddress_, uint64 nonce_, bytes32 _payloadHash);
     event SetPrecrime(address precrime);
-    event SetTrustedRemote(uint16 _remoteChainId, bytes _path);
-    event SetTrustedRemoteAddress(uint16 _remoteChainId, bytes _remoteAddress);
-    event SetMinDstGas(uint16 _dstChainId, uint16 _type, uint _minDstGas);
+    event SetTrustedRemote(uint16 remoteChainId_, bytes path_);
+    event SetTrustedRemoteAddress(uint16 remoteChainId_, bytes remoteAddress_);
+    event SetMinDstGas(uint16 dstChainId_, uint16 type_, uint _minDstGas);
 
     // Modules
     MINTRv1 public MINTR;
@@ -156,137 +156,137 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
     // ========= LZ Receive Functions ========= //
 
     /// @notice Function to be called by LZ endpoint when message is received.
-    function lzReceive(uint16 _srcChainId, bytes calldata _srcAddress, uint64 _nonce, bytes calldata _payload) public virtual override {
+    function lzReceive(uint16 srcChainId_, bytes calldata srcAddress_, uint64 nonce_, bytes calldata payload_) public virtual override {
         // lzReceive must be called by the endpoint for security
         if (msg.sender != address(lzEndpoint)) revert Bridge_InvalidCaller();
 
         // Will still block the message pathway from (srcChainId, srcAddress).
         // Should not receive messages from untrusted remote.
-        bytes memory trustedRemote = trustedRemoteLookup[_srcChainId];
+        bytes memory trustedRemote = trustedRemoteLookup[srcChainId_];
         if (trustedRemote.length == 0 ||
-            _srcAddress.length != trustedRemote.length ||
-            keccak256(_srcAddress) != keccak256(trustedRemote)
+            srcAddress_.length != trustedRemote.length ||
+            keccak256(srcAddress_) != keccak256(trustedRemote)
         ) revert Bridge_InvalidMessageSource();
 
         // NOTE: Use low-level call to handle any errors. We trust the underlying receive
         // impl, so we are doing a regular call vs using ExcessivelySafeCall
-        (bool success, bytes memory reason) = address(this).call(abi.encodeWithSelector(this._receiveMessage.selector, _srcChainId, _srcAddress, _nonce, _payload));
+        (bool success, bytes memory reason) = address(this).call(abi.encodeWithSelector(this._receiveMessage.selector, srcChainId_, srcAddress_, nonce_, payload_));
         
         // If message fails, store message for retry
         if (!success) {
-            failedMessages[_srcChainId][_srcAddress][_nonce] = keccak256(_payload);
-            emit MessageFailed(_srcChainId, _srcAddress, _nonce, _payload, reason);
+            failedMessages[srcChainId_][srcAddress_][nonce_] = keccak256(payload_);
+            emit MessageFailed(srcChainId_, srcAddress_, nonce_, payload_, reason);
         }
     }
 
     /// @notice Retry a failed receive message
-    function retryMessage(uint16 _srcChainId, bytes calldata _srcAddress, uint64 _nonce, bytes calldata _payload) public payable virtual {
+    function retryMessage(uint16 srcChainId_, bytes calldata srcAddress_, uint64 nonce_, bytes calldata payload_) public payable virtual {
         // Assert there is message to retry
-        bytes32 payloadHash = failedMessages[_srcChainId][_srcAddress][_nonce];
+        bytes32 payloadHash = failedMessages[srcChainId_][srcAddress_][nonce_];
         if (payloadHash == bytes32(0)) revert Bridge_NoStoredMessage();
-        if (keccak256(_payload) != payloadHash) revert Bridge_InvalidPayload();
+        if (keccak256(payload_) != payloadHash) revert Bridge_InvalidPayload();
 
         // Clear the stored message
-        failedMessages[_srcChainId][_srcAddress][_nonce] = bytes32(0);
+        failedMessages[srcChainId_][srcAddress_][nonce_] = bytes32(0);
 
         // Execute the message. revert if it fails again
-        _receiveMessage(_srcChainId, _srcAddress, _nonce, _payload);
+        _receiveMessage(srcChainId_, srcAddress_, nonce_, payload_);
 
-        emit RetryMessageSuccess(_srcChainId, _srcAddress, _nonce, payloadHash);
+        emit RetryMessageSuccess(srcChainId_, srcAddress_, nonce_, payloadHash);
     }
 
     // ========= LZ Send Functions ========= //
 
-    function _sendMessage(uint16 _dstChainId, bytes memory _payload, address payable _refundAddress, address _zroPaymentAddress, bytes memory _adapterParams, uint _nativeFee) internal virtual {
-        bytes memory trustedRemote = trustedRemoteLookup[_dstChainId];
+    function _sendMessage(uint16 dstChainId_, bytes memory payload_, address payable refundAddress_, address zroPaymentAddress_, bytes memory adapterParams_, uint _nativeFee) internal virtual {
+        bytes memory trustedRemote = trustedRemoteLookup[dstChainId_];
         if (trustedRemote.length == 0) revert Bridge_DestinationNotTrusted();
 
         lzEndpoint.send{value: _nativeFee}(
-            _dstChainId,
+            dstChainId_,
             trustedRemote,
-            _payload,
-            _refundAddress,
-            _zroPaymentAddress,
-            _adapterParams
+            payload_,
+            refundAddress_,
+            zroPaymentAddress_,
+            adapterParams_
         );
     }
 
-    function _checkGasLimit(uint16 _dstChainId, uint16 _type, bytes memory _adapterParams, uint _extraGas) internal view virtual {
-        uint providedGasLimit = _getGasLimit(_adapterParams);
-        uint minGasLimit = minDstGasLookup[_dstChainId][_type] + _extraGas;
+    function _checkGasLimit(uint16 dstChainId_, uint16 type_, bytes memory adapterParams_, uint extraGas_) internal view virtual {
+        uint providedGasLimit = _getGasLimit(adapterParams_);
+        uint minGasLimit = minDstGasLookup[dstChainId_][type_] + extraGas_;
         if (minGasLimit == 0) revert Bridge_MinGasLimitNotSet();
         if (providedGasLimit < minGasLimit) revert Bridge_GasLimitTooLow();
     }
 
-    function _getGasLimit(bytes memory _adapterParams) internal pure virtual returns (uint gasLimit) {
-        if (_adapterParams.length < 34) revert Bridge_InvalidAdapterParams();
+    function _getGasLimit(bytes memory adapterParams_) internal pure virtual returns (uint gasLimit) {
+        if (adapterParams_.length < 34) revert Bridge_InvalidAdapterParams();
         assembly {
-            gasLimit := mload(add(_adapterParams, 34))
+            gasLimit := mload(add(adapterParams_, 34))
         }
     }
 
     // ========= LZ UserApplication config ========= //
 
     /// @notice Generic config for LayerZero User Application
-    function setConfig(uint16 _version, uint16 _chainId, uint _configType, bytes calldata _config) external override onlyRole("bridge_admin") {
-        lzEndpoint.setConfig(_version, _chainId, _configType, _config);
+    function setConfig(uint16 version_, uint16 chainId_, uint configType_, bytes calldata config_) external override onlyRole("bridge_admin") {
+        lzEndpoint.setConfig(version_, chainId_, configType_, config_);
     }
 
     /// @notice Set send version of endpoint to be used by LayerZero User Application
-    function setSendVersion(uint16 _version) external override onlyRole("bridge_admin") {
-        lzEndpoint.setSendVersion(_version);
+    function setSendVersion(uint16 version_) external override onlyRole("bridge_admin") {
+        lzEndpoint.setSendVersion(version_);
     }
 
     /// @notice Set receive version of endpoint to be used by LayerZero User Application
-    function setReceiveVersion(uint16 _version) external override onlyRole("bridge_admin") {
-        lzEndpoint.setReceiveVersion(_version);
+    function setReceiveVersion(uint16 version_) external override onlyRole("bridge_admin") {
+        lzEndpoint.setReceiveVersion(version_);
     }
 
     // TODO IDK
-    function forceResumeReceive(uint16 _srcChainId, bytes calldata _srcAddress) external override onlyRole("bridge_admin") {
-        lzEndpoint.forceResumeReceive(_srcChainId, _srcAddress);
+    function forceResumeReceive(uint16 srcChainId_, bytes calldata srcAddress_) external override onlyRole("bridge_admin") {
+        lzEndpoint.forceResumeReceive(srcChainId_, srcAddress_);
     }
 
     /// @notice Sets the trusted path for the cross-chain communication
-    /// @dev    _path = abi.encodePacked(remoteAddress, localAddress)
-    function setTrustedRemote(uint16 _srcChainId, bytes calldata _path) external onlyRole("bridge_admin") {
-        trustedRemoteLookup[_srcChainId] = _path;
-        emit SetTrustedRemote(_srcChainId, _path);
+    /// @dev    path_ = abi.encodePacked(remoteAddress, localAddress)
+    function setTrustedRemote(uint16 srcChainId_, bytes calldata path_) external onlyRole("bridge_admin") {
+        trustedRemoteLookup[srcChainId_] = path_;
+        emit SetTrustedRemote(srcChainId_, path_);
     }
 
     /// @notice Convenience function for setting trusted paths between EVM addresses
-    function setTrustedRemoteAddress(uint16 _remoteChainId, bytes calldata _remoteAddress) external onlyRole("bridge_admin") {
-        trustedRemoteLookup[_remoteChainId] = abi.encodePacked(_remoteAddress, address(this));
-        emit SetTrustedRemoteAddress(_remoteChainId, _remoteAddress);
+    function setTrustedRemoteAddress(uint16 remoteChainId_, bytes calldata remoteAddress_) external onlyRole("bridge_admin") {
+        trustedRemoteLookup[remoteChainId_] = abi.encodePacked(remoteAddress_, address(this));
+        emit SetTrustedRemoteAddress(remoteChainId_, remoteAddress_);
     }
 
     /// @notice Sets precrime address
-    function setPrecrime(address _precrime) external onlyRole("bridge_admin") {
-        precrime = _precrime;
-        emit SetPrecrime(_precrime);
+    function setPrecrime(address precrime_) external onlyRole("bridge_admin") {
+        precrime = precrime_;
+        emit SetPrecrime(precrime_);
     }
 
     /// @notice Sets the minimum gas needed for a particular destination chain
-    function setMinDstGas(uint16 _dstChainId, uint16 _packetType, uint _minGas) external onlyRole("bridge_admin") {
-        if (_minGas == 0) revert Bridge_InvalidMinGas();
-        minDstGasLookup[_dstChainId][_packetType] = _minGas;
-        emit SetMinDstGas(_dstChainId, _packetType, _minGas);
+    function setMinDstGas(uint16 dstChainId_, uint16 packetType_, uint minGas_) external onlyRole("bridge_admin") {
+        if (minGas_ == 0) revert Bridge_InvalidMinGas();
+        minDstGasLookup[dstChainId_][packetType_] = minGas_;
+        emit SetMinDstGas(dstChainId_, packetType_, minGas_);
     }
 
     // ========= View Functions ========= //
 
-    function getConfig(uint16 _version, uint16 _chainId, address, uint _configType) external view returns (bytes memory) {
-        return lzEndpoint.getConfig(_version, _chainId, address(this), _configType);
+    function getConfig(uint16 version_, uint16 chainId_, address, uint configType_) external view returns (bytes memory) {
+        return lzEndpoint.getConfig(version_, chainId_, address(this), configType_);
     }
 
-    function getTrustedRemoteAddress(uint16 _remoteChainId) external view returns (bytes memory) {
-        bytes memory path = trustedRemoteLookup[_remoteChainId];
+    function getTrustedRemoteAddress(uint16 remoteChainId_) external view returns (bytes memory) {
+        bytes memory path = trustedRemoteLookup[remoteChainId_];
         if (path.length == 0) revert Bridge_NoTrustedPath(); //, "LzApp: no trusted path record");
         return path.slice(0, path.length - 20); // the last 20 bytes should be address(this)
     }
 
-    function isTrustedRemote(uint16 _srcChainId, bytes calldata _srcAddress) external view returns (bool) {
-        bytes memory trustedSource = trustedRemoteLookup[_srcChainId];
-        return keccak256(trustedSource) == keccak256(_srcAddress);
+    function isTrustedRemote(uint16 srcChainId_, bytes calldata srcAddress_) external view returns (bool) {
+        bytes memory trustedSource = trustedRemoteLookup[srcChainId_];
+        return keccak256(trustedSource) == keccak256(srcAddress_);
     }
 }
