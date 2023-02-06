@@ -16,8 +16,13 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+// Import utilities
+import {TransferHelper} from "libraries/TransferHelper.sol";
+
 /// @title Olympus Base Single Sided Liquidity Vault Contract
 abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
+    using TransferHelper for ERC20;
+
     // ========= ERRORS ========= //
 
     error LiquidityVault_LimitViolation();
@@ -169,7 +174,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         _depositUpdateRewardState();
 
         // Gather tokens for deposit
-        pairToken.transferFrom(msg.sender, address(this), amount_);
+        pairToken.safeTransferFrom(msg.sender, address(this), amount_);
         _borrow(ohmToBorrow);
 
         uint256 lpReceived = _deposit(ohmToBorrow, amount_, slippageParam_);
@@ -179,7 +184,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         uint256 unusedOhm = ohm.balanceOf(address(this)) - ohmBalanceBefore;
 
         // Return unused pair tokens to user
-        if (unusedPairToken > 0) pairToken.transfer(msg.sender, unusedPairToken);
+        if (unusedPairToken > 0) pairToken.safeTransfer(msg.sender, unusedPairToken);
 
         // Burn unused OHM
         if (unusedOhm > 0) _repay(unusedOhm);
@@ -230,7 +235,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
         // Return assets
         _repay(ohmReceived);
-        pairToken.transfer(msg.sender, pairTokenReceived);
+        pairToken.safeTransfer(msg.sender, pairTokenReceived);
 
         return pairTokenReceived;
 
@@ -537,7 +542,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         userRewardDebts[msg.sender][rewardToken] += int256(reward);
         accumulatedFees[rewardToken] += fee;
 
-        if (reward > 0) ERC20(rewardToken).transfer(msg.sender, reward - fee);
+        if (reward > 0) ERC20(rewardToken).safeTransfer(msg.sender, reward - fee);
 
         emit RewardsClaimed(msg.sender, rewardToken, reward - fee);
     }
@@ -550,7 +555,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         userRewardDebts[msg.sender][rewardToken] += int256(reward);
         accumulatedFees[rewardToken] += fee;
 
-        if (reward > 0) ERC20(rewardToken).transfer(msg.sender, reward - fee);
+        if (reward > 0) ERC20(rewardToken).safeTransfer(msg.sender, reward - fee);
 
         emit RewardsClaimed(msg.sender, rewardToken, reward - fee);
     }
@@ -646,7 +651,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
             accumulatedFees[rewardToken] = 0;
 
-            ERC20(rewardToken).transfer(msg.sender, feeToSend);
+            ERC20(rewardToken).safeTransfer(msg.sender, feeToSend);
 
             unchecked {
                 ++i;
@@ -659,7 +664,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
             accumulatedFees[rewardToken] = 0;
 
-            ERC20(rewardToken).transfer(msg.sender, feeToSend);
+            ERC20(rewardToken).safeTransfer(msg.sender, feeToSend);
 
             unchecked {
                 ++i;
