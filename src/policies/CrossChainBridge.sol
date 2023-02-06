@@ -153,7 +153,7 @@ contract CrossChainBridge is
         uint64,
         bytes memory payload_
     ) public {
-        // Needed f
+        // Needed to restrict access to low-level call from `lzReceive`
         if (msg.sender != address(this)) revert Bridge_InvalidCaller();
 
         (address to, uint256 amount) = abi.decode(payload_, (address, uint256));
