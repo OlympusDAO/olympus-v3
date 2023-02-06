@@ -208,20 +208,27 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
             address(ohmEthPriceFeed.feed),
             uint256(ohmEthPriceFeed.updateThreshold)
         );
+        uint256 ohmEthDecimals = ohmEthPriceFeed.feed.decimals();
 
         // This is returned in 8 decimals and represents USD per ETH
         uint256 ethUsd = _validatePrice(
             address(ethUsdPriceFeed.feed),
             uint256(ethUsdPriceFeed.updateThreshold)
         );
+        uint256 ethUsdDecimals = ethUsdPriceFeed.feed.decimals();
 
         // This is returned in 18 decimals and represents USD per stETH
         uint256 stethUsd = _validatePrice(
             address(stethUsdPriceFeed.feed),
             uint256(stethUsdPriceFeed.updateThreshold)
         );
+        uint256 stethUsdDecimals = stethUsdPriceFeed.feed.decimals();
 
-        return (amount_ * stethUsd * 1e9) / (ohmEth * ethUsd);
+        // Amount is 18 decimals in the case of stETH and OHM has 9 decimals so to get a result with 9
+        // decimals we need to use this decimal adjustment
+        uint256 decimalAdjustment = 10**(ohmEthDecimals + ethUsdDecimals - stethUsdDecimals - 9);
+
+        return (amount_ * stethUsd * decimalAdjustment) / (ohmEth * ethUsd);
     }
 
     /// @notice                 Calculates the prevailing OHM/stETH ratio of the Balancer pool
