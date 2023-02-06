@@ -243,7 +243,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     }
 
     /// @notice                     Claims user's rewards for all reward tokens
-    function claimRewards() external {
+    function claimRewards() external nonReentrant {
         uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256 numExternalRewardTokens = externalRewardTokens.length;
 
