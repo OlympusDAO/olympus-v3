@@ -392,7 +392,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     // ========= REWARDS CALCULATIONS ========= //
 
-    function _accumulateInternalRewards() internal returns (uint256[] memory) {
+    function _accumulateInternalRewards() internal view returns (uint256[] memory) {
         uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256[] memory accumulatedInternalRewards = new uint256[](numInternalRewardTokens);
 
