@@ -15,6 +15,3 @@
 	path = lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
 	branch = v4.8.0
-[submodule "lib/pigeon"]
-	path = lib/pigeon
-	url = https://github.com/exp-table/pigeon
