@@ -29,6 +29,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     error LiquidityVault_PoolImbalanced();
     error LiquidityVault_BadPriceFeed();
     error LiquidityVault_InvalidRemoval();
+    error LiquidityVault_InvalidParams();
 
     // ========= EVENTS ========= //
 
@@ -676,6 +677,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     /// @param  limit_             The new limit
     /// @dev                       This function can only be accessed by the liquidityvault_admin role
     function setLimit(uint256 limit_) external onlyRole("liquidityvault_admin") {
+        if (limit_ < ohmMinted) revert LiquidityVault_InvalidParams();
         LIMIT = limit_;
     }
 
@@ -683,6 +685,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     /// @param  threshold_         The new threshold (out of 1000)
     /// @dev                       This function can only be accessed by the liquidityvault_admin role
     function setThreshold(uint256 threshold_) external onlyRole("liquidityvault_admin") {
+        if (threshold_ > PRECISION) revert LiquidityVault_InvalidParams();
         THRESHOLD = threshold_;
     }
 
@@ -690,6 +693,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     /// @param  fee_               The new fee (out of 1000)
     /// @dev                       This function can only be accessed by the liquidityvault_admin role
     function setFee(uint256 fee_) external onlyRole("liquidityvault_admin") {
+        if (fee_ > PRECISION) revert LiquidityVault_InvalidParams();
         FEE = fee_;
     }
 
