@@ -534,7 +534,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     // ========= REWARDS CLAIMING ========= //
 
-    function _claimInternalRewards(uint256 id_) internal returns (uint256) {
+    function _claimInternalRewards(uint256 id_) internal {
         address rewardToken = internalRewardTokens[id_].token;
         uint256 reward = internalRewardsForToken(id_, msg.sender);
         uint256 fee = (reward * FEE) / PRECISION;
@@ -547,7 +547,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         emit RewardsClaimed(msg.sender, rewardToken, reward - fee);
     }
 
-    function _claimExternalRewards(uint256 id_) internal virtual returns (uint256) {
+    function _claimExternalRewards(uint256 id_) internal {
         address rewardToken = externalRewardTokens[id_].token;
         uint256 reward = externalRewardsForToken(id_, msg.sender);
         uint256 fee = (reward * FEE) / PRECISION;
