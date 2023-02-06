@@ -86,7 +86,6 @@ contract CrossChainBridgeTest is Test {
 
             kernel.executeAction(Actions.ActivatePolicy, address(bridge));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-
         }
 
         // Setup L2 system
@@ -107,7 +106,6 @@ contract CrossChainBridgeTest is Test {
             kernel_l2.executeAction(Actions.ActivatePolicy, address(rolesAdmin_l2));
         }
 
-
         // Configure access control
         rolesAdmin.grantRole("bridge_admin", guardian);
         rolesAdmin_l2.grantRole("bridge_admin", guardian);
@@ -115,7 +113,7 @@ contract CrossChainBridgeTest is Test {
         // Set guardian to the bridge owner for both endpoints and set trusted remote addresses
         vm.startPrank(guardian);
 
-        // Mainnet setup 
+        // Mainnet setup
         bytes memory path1 = abi.encodePacked(address(bridge_l2), address(bridge));
         bridge.setTrustedRemote(L2_CHAIN_ID, path1);
         endpoint.setDestLzEndpoint(address(bridge_l2), address(endpoint_l2));
@@ -210,7 +208,7 @@ contract CrossChainBridgeTest is Test {
 
         // Do 3 transfers then check for accuracy
         vm.startPrank(user);
-        for (uint i=0; i < 3; ++i) {
+        for (uint256 i = 0; i < 3; ++i) {
             ohm.approve(address(bridge), amount_);
             bridge.sendOhm{value: 1e17}(user2, amount_, L2_CHAIN_ID);
             count += amount_;

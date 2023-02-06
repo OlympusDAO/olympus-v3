@@ -74,12 +74,20 @@ contract BridgeDeploy is Script {
     }
 
     // To allow calling this separately
-    function deployBridge(address kernel_, address lzEndpoint_, bool enableCounter_) public {
+    function deployBridge(
+        address kernel_,
+        address lzEndpoint_,
+        bool enableCounter_
+    ) public {
         vm.broadcast();
         _deployBridge(kernel_, lzEndpoint_, enableCounter_);
     }
 
-    function _deployBridge(address kernel_, address lzEndpoint_, bool enableCounter_) public {
+    function _deployBridge(
+        address kernel_,
+        address lzEndpoint_,
+        bool enableCounter_
+    ) public {
         bridge = new CrossChainBridge(Kernel(kernel_), lzEndpoint_, enableCounter_);
         console2.log("Bridge deployed at:", address(bridge));
 
@@ -87,7 +95,11 @@ contract BridgeDeploy is Script {
     }
 
     // Caller must have "bridge_admin" role
-    function setupBridge(address localBridge_, address remoteBridge_, uint16 remoteChainId_) public {
+    function setupBridge(
+        address localBridge_,
+        address remoteBridge_,
+        uint16 remoteChainId_
+    ) public {
         vm.startBroadcast();
 
         rolesAdmin.grantRole("bridge_admin", msg.sender);
@@ -104,5 +116,4 @@ contract BridgeDeploy is Script {
         vm.broadcast();
         RolesAdmin(rolesAdmin_).grantRole("bridge_admin", to_);
     }
-
 }

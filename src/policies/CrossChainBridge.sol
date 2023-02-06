@@ -18,7 +18,12 @@ import "src/Kernel.sol";
 /// @dev Uses LayerZero as communication protocol.
 /// @dev Each chain needs to `setTrustedRemoteAddress` for each remote address
 ///      it intends to receive from.
-contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZeroUserApplicationConfig {
+contract CrossChainBridge is
+    Policy,
+    RolesConsumer,
+    ILayerZeroReceiver,
+    ILayerZeroUserApplicationConfig
+{
     using BytesLib for bytes;
 
     // Bridge errors
@@ -39,12 +44,23 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
     event BridgeReceived(address receiver_, uint256 amount_, uint16 srcChain_);
 
     // LZ app events
-    event MessageFailed(uint16 srcChainId_, bytes srcAddress_, uint64 nonce_, bytes payload_, bytes _reason);
-    event RetryMessageSuccess(uint16 srcChainId_, bytes srcAddress_, uint64 nonce_, bytes32 _payloadHash);
+    event MessageFailed(
+        uint16 srcChainId_,
+        bytes srcAddress_,
+        uint64 nonce_,
+        bytes payload_,
+        bytes _reason
+    );
+    event RetryMessageSuccess(
+        uint16 srcChainId_,
+        bytes srcAddress_,
+        uint64 nonce_,
+        bytes32 _payloadHash
+    );
     event SetPrecrime(address precrime);
     event SetTrustedRemote(uint16 remoteChainId_, bytes path_);
     event SetTrustedRemoteAddress(uint16 remoteChainId_, bytes remoteAddress_);
-    event SetMinDstGas(uint16 dstChainId_, uint16 type_, uint _minDstGas);
+    event SetMinDstGas(uint16 dstChainId_, uint16 type_, uint256 _minDstGas);
 
     // Modules
     MINTRv1 public MINTR;
@@ -60,7 +76,7 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
 
     // LZ app state
     mapping(uint16 => mapping(bytes => mapping(uint64 => bytes32))) public failedMessages;
-    mapping(uint16 => mapping(uint16 => uint)) public minDstGasLookup;
+    mapping(uint16 => mapping(uint16 => uint256)) public minDstGasLookup;
     mapping(uint16 => bytes) public trustedRemoteLookup;
     address public precrime;
 
@@ -108,25 +124,22 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
     //============================================================================================//
 
     /// @notice Send OHM to an eligible chain
-    function sendOhm(address to_, uint256 amount_, uint16 dstChainId_) external payable {
+    function sendOhm(
+        address to_,
+        uint256 amount_,
+        uint16 dstChainId_
+    ) external payable {
         if (ohm.balanceOf(msg.sender) < amount_) revert Bridge_InsufficientAmount();
 
         if (counterEnabled) offchainOhmCounter += amount_;
         // TODO check then set gas here?
-        // TODO uint256 gas = _checkGasLimit(dstChainId_, 
+        // TODO uint256 gas = _checkGasLimit(dstChainId_,
 
         bytes memory payload = abi.encode(to_, amount_);
 
         MINTR.burnOhm(msg.sender, amount_);
 
-        _sendMessage(
-            dstChainId_,
-            payload,
-            payable(msg.sender),
-            address(0x0),
-            bytes(""),
-            msg.value
-        );
+        _sendMessage(dstChainId_, payload, payable(msg.sender), address(0x0), bytes(""), msg.value);
 
         emit BridgeTransferred(msg.sender, amount_, dstChainId_);
     }
@@ -156,22 +169,36 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
     // ========= LZ Receive Functions ========= //
 
     /// @notice Function to be called by LZ endpoint when message is received.
-    function lzReceive(uint16 srcChainId_, bytes calldata srcAddress_, uint64 nonce_, bytes calldata payload_) public virtual override {
+    function lzReceive(
+        uint16 srcChainId_,
+        bytes calldata srcAddress_,
+        uint64 nonce_,
+        bytes calldata payload_
+    ) public virtual override {
         // lzReceive must be called by the endpoint for security
         if (msg.sender != address(lzEndpoint)) revert Bridge_InvalidCaller();
 
         // Will still block the message pathway from (srcChainId, srcAddress).
         // Should not receive messages from untrusted remote.
         bytes memory trustedRemote = trustedRemoteLookup[srcChainId_];
-        if (trustedRemote.length == 0 ||
+        if (
+            trustedRemote.length == 0 ||
             srcAddress_.length != trustedRemote.length ||
             keccak256(srcAddress_) != keccak256(trustedRemote)
         ) revert Bridge_InvalidMessageSource();
 
         // NOTE: Use low-level call to handle any errors. We trust the underlying receive
         // impl, so we are doing a regular call vs using ExcessivelySafeCall
-        (bool success, bytes memory reason) = address(this).call(abi.encodeWithSelector(this._receiveMessage.selector, srcChainId_, srcAddress_, nonce_, payload_));
-        
+        (bool success, bytes memory reason) = address(this).call(
+            abi.encodeWithSelector(
+                this._receiveMessage.selector,
+                srcChainId_,
+                srcAddress_,
+                nonce_,
+                payload_
+            )
+        );
+
         // If message fails, store message for retry
         if (!success) {
             failedMessages[srcChainId_][srcAddress_][nonce_] = keccak256(payload_);
@@ -180,7 +207,12 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
     }
 
     /// @notice Retry a failed receive message
-    function retryMessage(uint16 srcChainId_, bytes calldata srcAddress_, uint64 nonce_, bytes calldata payload_) public payable virtual {
+    function retryMessage(
+        uint16 srcChainId_,
+        bytes calldata srcAddress_,
+        uint64 nonce_,
+        bytes calldata payload_
+    ) public payable virtual {
         // Assert there is message to retry
         bytes32 payloadHash = failedMessages[srcChainId_][srcAddress_][nonce_];
         if (payloadHash == bytes32(0)) revert Bridge_NoStoredMessage();
@@ -197,7 +229,14 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
 
     // ========= LZ Send Functions ========= //
 
-    function _sendMessage(uint16 dstChainId_, bytes memory payload_, address payable refundAddress_, address zroPaymentAddress_, bytes memory adapterParams_, uint _nativeFee) internal virtual {
+    function _sendMessage(
+        uint16 dstChainId_,
+        bytes memory payload_,
+        address payable refundAddress_,
+        address zroPaymentAddress_,
+        bytes memory adapterParams_,
+        uint256 _nativeFee
+    ) internal virtual {
         bytes memory trustedRemote = trustedRemoteLookup[dstChainId_];
         if (trustedRemote.length == 0) revert Bridge_DestinationNotTrusted();
 
@@ -211,14 +250,24 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
         );
     }
 
-    function _checkGasLimit(uint16 dstChainId_, uint16 type_, bytes memory adapterParams_, uint extraGas_) internal view virtual {
-        uint providedGasLimit = _getGasLimit(adapterParams_);
-        uint minGasLimit = minDstGasLookup[dstChainId_][type_] + extraGas_;
+    function _checkGasLimit(
+        uint16 dstChainId_,
+        uint16 type_,
+        bytes memory adapterParams_,
+        uint256 extraGas_
+    ) internal view virtual {
+        uint256 providedGasLimit = _getGasLimit(adapterParams_);
+        uint256 minGasLimit = minDstGasLookup[dstChainId_][type_] + extraGas_;
         if (minGasLimit == 0) revert Bridge_MinGasLimitNotSet();
         if (providedGasLimit < minGasLimit) revert Bridge_GasLimitTooLow();
     }
 
-    function _getGasLimit(bytes memory adapterParams_) internal pure virtual returns (uint gasLimit) {
+    function _getGasLimit(bytes memory adapterParams_)
+        internal
+        pure
+        virtual
+        returns (uint256 gasLimit)
+    {
         if (adapterParams_.length < 34) revert Bridge_InvalidAdapterParams();
         assembly {
             gasLimit := mload(add(adapterParams_, 34))
@@ -228,7 +277,12 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
     // ========= LZ UserApplication config ========= //
 
     /// @notice Generic config for LayerZero User Application
-    function setConfig(uint16 version_, uint16 chainId_, uint configType_, bytes calldata config_) external override onlyRole("bridge_admin") {
+    function setConfig(
+        uint16 version_,
+        uint16 chainId_,
+        uint256 configType_,
+        bytes calldata config_
+    ) external override onlyRole("bridge_admin") {
         lzEndpoint.setConfig(version_, chainId_, configType_, config_);
     }
 
@@ -243,19 +297,29 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
     }
 
     // TODO IDK
-    function forceResumeReceive(uint16 srcChainId_, bytes calldata srcAddress_) external override onlyRole("bridge_admin") {
+    function forceResumeReceive(uint16 srcChainId_, bytes calldata srcAddress_)
+        external
+        override
+        onlyRole("bridge_admin")
+    {
         lzEndpoint.forceResumeReceive(srcChainId_, srcAddress_);
     }
 
     /// @notice Sets the trusted path for the cross-chain communication
     /// @dev    path_ = abi.encodePacked(remoteAddress, localAddress)
-    function setTrustedRemote(uint16 srcChainId_, bytes calldata path_) external onlyRole("bridge_admin") {
+    function setTrustedRemote(uint16 srcChainId_, bytes calldata path_)
+        external
+        onlyRole("bridge_admin")
+    {
         trustedRemoteLookup[srcChainId_] = path_;
         emit SetTrustedRemote(srcChainId_, path_);
     }
 
     /// @notice Convenience function for setting trusted paths between EVM addresses
-    function setTrustedRemoteAddress(uint16 remoteChainId_, bytes calldata remoteAddress_) external onlyRole("bridge_admin") {
+    function setTrustedRemoteAddress(uint16 remoteChainId_, bytes calldata remoteAddress_)
+        external
+        onlyRole("bridge_admin")
+    {
         trustedRemoteLookup[remoteChainId_] = abi.encodePacked(remoteAddress_, address(this));
         emit SetTrustedRemoteAddress(remoteChainId_, remoteAddress_);
     }
@@ -267,7 +331,11 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
     }
 
     /// @notice Sets the minimum gas needed for a particular destination chain
-    function setMinDstGas(uint16 dstChainId_, uint16 packetType_, uint minGas_) external onlyRole("bridge_admin") {
+    function setMinDstGas(
+        uint16 dstChainId_,
+        uint16 packetType_,
+        uint256 minGas_
+    ) external onlyRole("bridge_admin") {
         if (minGas_ == 0) revert Bridge_InvalidMinGas();
         minDstGasLookup[dstChainId_][packetType_] = minGas_;
         emit SetMinDstGas(dstChainId_, packetType_, minGas_);
@@ -275,7 +343,12 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
 
     // ========= View Functions ========= //
 
-    function getConfig(uint16 version_, uint16 chainId_, address, uint configType_) external view returns (bytes memory) {
+    function getConfig(
+        uint16 version_,
+        uint16 chainId_,
+        address,
+        uint256 configType_
+    ) external view returns (bytes memory) {
         return lzEndpoint.getConfig(version_, chainId_, address(this), configType_);
     }
 
@@ -287,7 +360,11 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
         return path.slice(0, path.length - 20);
     }
 
-    function isTrustedRemote(uint16 srcChainId_, bytes calldata srcAddress_) external view returns (bool) {
+    function isTrustedRemote(uint16 srcChainId_, bytes calldata srcAddress_)
+        external
+        view
+        returns (bool)
+    {
         bytes memory trustedSource = trustedRemoteLookup[srcChainId_];
         return keccak256(trustedSource) == keccak256(srcAddress_);
     }

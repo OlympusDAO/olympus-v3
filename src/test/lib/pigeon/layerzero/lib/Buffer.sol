@@ -51,11 +51,13 @@ library Buffer {
      * @param len The number of bytes to copy.
      * @return The original buffer, for chaining.
      */
-    function writeRawBytes(buffer memory buf, uint256 off, bytes memory rawData, uint256 offData, uint256 len)
-        internal
-        pure
-        returns (buffer memory)
-    {
+    function writeRawBytes(
+        buffer memory buf,
+        uint256 off,
+        bytes memory rawData,
+        uint256 offData,
+        uint256 len
+    ) internal pure returns (buffer memory) {
         if (off + len > buf.capacity) {
             resize(buf, max(buf.capacity, len + off) * 2);
         }
@@ -70,7 +72,9 @@ library Buffer {
             // Start address = buffer address + offset + sizeof(buffer length)
             dest := add(add(bufptr, 32), off)
             // Update buffer length if we're extending it
-            if gt(add(len, off), buflen) { mstore(bufptr, add(len, off)) }
+            if gt(add(len, off), buflen) {
+                mstore(bufptr, add(len, off))
+            }
             src := add(rawData, offData)
         }
 
@@ -84,7 +88,7 @@ library Buffer {
         }
 
         // Copy remaining bytes
-        uint256 mask = 256 ** (32 - len) - 1;
+        uint256 mask = 256**(32 - len) - 1;
         assembly {
             let srcpart := and(mload(src), not(mask))
             let destpart := and(mload(dest), mask)
@@ -103,11 +107,12 @@ library Buffer {
      * @param len The number of bytes to copy.
      * @return The original buffer, for chaining.
      */
-    function write(buffer memory buf, uint256 off, bytes memory data, uint256 len)
-        internal
-        pure
-        returns (buffer memory)
-    {
+    function write(
+        buffer memory buf,
+        uint256 off,
+        bytes memory data,
+        uint256 len
+    ) internal pure returns (buffer memory) {
         require(len <= data.length);
 
         if (off + len > buf.capacity) {
@@ -124,7 +129,9 @@ library Buffer {
             // Start address = buffer address + offset + sizeof(buffer length)
             dest := add(add(bufptr, 32), off)
             // Update buffer length if we're extending it
-            if gt(add(len, off), buflen) { mstore(bufptr, add(len, off)) }
+            if gt(add(len, off), buflen) {
+                mstore(bufptr, add(len, off))
+            }
             src := add(data, 32)
         }
 
@@ -138,7 +145,7 @@ library Buffer {
         }
 
         // Copy remaining bytes
-        uint256 mask = 256 ** (32 - len) - 1;
+        uint256 mask = 256**(32 - len) - 1;
         assembly {
             let srcpart := and(mload(src), not(mask))
             let destpart := and(mload(dest), mask)

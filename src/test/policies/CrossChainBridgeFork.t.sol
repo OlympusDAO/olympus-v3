@@ -126,7 +126,7 @@ contract CrossChainBridgeForkTest is Test {
             rolesAdmin_l2.grantRole("bridge_admin", guardian2);
         }
 
-        // Mainnet setup 
+        // Mainnet setup
         vm.selectFork(L1_FORK_ID);
         vm.startPrank(guardian1);
         //bridge.becomeOwner();
@@ -156,7 +156,7 @@ contract CrossChainBridgeForkTest is Test {
         ohm1.approve(address(bridge), amount_);
         bridge.sendOhm{value: 1e17}(user2, amount_, L2_ID);
         vm.stopPrank();
-        
+
         // pigeon stuff
         Vm.Log[] memory logs = vm.getRecordedLogs();
         lzHelper.help(L2_lzEndpoint, 1e17, L2_FORK_ID, logs);
@@ -204,7 +204,7 @@ contract CrossChainBridgeForkTest is Test {
 
         // Do 3 transfers then check for accuracy
         vm.startPrank(user1);
-        for (uint i=0; i<3; ++i) {
+        for (uint256 i = 0; i < 3; ++i) {
             ohm1.approve(address(bridge), amount_);
             bridge.sendOhm{value: 1e17}(user2, amount_, L2_ID);
             count += amount_;
@@ -223,5 +223,4 @@ contract CrossChainBridgeForkTest is Test {
         vm.selectFork(L2_FORK_ID);
         assertEq(0, bridge_l2.offchainOhmCounter());
     }
-
 }

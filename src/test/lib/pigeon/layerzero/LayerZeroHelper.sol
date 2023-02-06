@@ -27,7 +27,12 @@ interface ILayerZeroEndpoint {
 
 contract LayerZeroHelper is Test {
     // hardcoded defaultLibrary on ETH and Packet event selector
-    function help(address endpoint, uint256 gasToSend, uint256 forkId, Vm.Log[] calldata logs) external {
+    function help(
+        address endpoint,
+        uint256 gasToSend,
+        uint256 forkId,
+        Vm.Log[] calldata logs
+    ) external {
         _help(
             endpoint,
             0x4D73AdB72bC3DD368966edD0f0b2148401A178E2,
@@ -51,7 +56,12 @@ contract LayerZeroHelper is Test {
     }
 
     // hardcoded defaultLibrary on ETH and Packet event selector
-    function helpWithEstimates(address endpoint, uint256 gasToSend, uint256 forkId, Vm.Log[] calldata logs) external {
+    function helpWithEstimates(
+        address endpoint,
+        uint256 gasToSend,
+        uint256 forkId,
+        Vm.Log[] calldata logs
+    ) external {
         bool enableEstimates = vm.envOr("ENABLE_ESTIMATES", false);
         _help(
             endpoint,
@@ -92,7 +102,10 @@ contract LayerZeroHelper is Test {
         for (uint256 i; i < logs.length; i++) {
             Vm.Log memory log = logs[i];
             // unsure if the default library always emits the event
-            if ( /*log.emitter == defaultLibrary &&*/ log.topics[0] == eventSelector) {
+            if (
+                /*log.emitter == defaultLibrary &&*/
+                log.topics[0] == eventSelector
+            ) {
                 bytes memory payload = abi.decode(log.data, (bytes));
                 LayerZeroPacket.Packet memory packet = LayerZeroPacket.getPacket(payload);
 
@@ -111,8 +124,13 @@ contract LayerZeroHelper is Test {
         bool payInZRO,
         bytes memory adapterParam
     ) internal returns (uint256 gasEstimate) {
-        (uint256 nativeGas,) =
-            ILayerZeroEndpoint(endpoint).estimateFees(destination, userApplication, payload, payInZRO, adapterParam);
+        (uint256 nativeGas, ) = ILayerZeroEndpoint(endpoint).estimateFees(
+            destination,
+            userApplication,
+            payload,
+            payInZRO,
+            adapterParam
+        );
         return nativeGas;
     }
 
@@ -125,17 +143,33 @@ contract LayerZeroHelper is Test {
         bytes memory path = abi.encodePacked(packet.srcAddress, packet.dstAddress);
         vm.store(
             address(endpoint),
-            keccak256(abi.encodePacked(path, keccak256(abi.encodePacked(uint256(packet.srcChainId), uint256(5))))),
+            keccak256(
+                abi.encodePacked(
+                    path,
+                    keccak256(abi.encodePacked(uint256(packet.srcChainId), uint256(5)))
+                )
+            ),
             bytes32(uint256(packet.nonce))
         );
 
         ILayerZeroEndpoint(endpoint).receivePayload(
-            packet.srcChainId, path, packet.dstAddress, packet.nonce + 1, gasToSend, packet.payload
+            packet.srcChainId,
+            path,
+            packet.dstAddress,
+            packet.nonce + 1,
+            gasToSend,
+            packet.payload
         );
 
         if (enableEstimates) {
-            uint256 gasEstimate =
-                _estimateGas(endpoint, packet.dstChainId, packet.dstAddress, packet.payload, false, "");
+            uint256 gasEstimate = _estimateGas(
+                endpoint,
+                packet.dstChainId,
+                packet.dstAddress,
+                packet.payload,
+                false,
+                ""
+            );
             emit log_named_uint("gasEstimate", gasEstimate);
         }
     }
