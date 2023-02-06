@@ -46,8 +46,8 @@ contract CrossChainBridgeForkTest is Test {
 
     uint256 internal constant INITIAL_AMOUNT = 100000e9;
 
-    string RPC_ETH_MAINNET = vm.envString("ETH_MAINNET_RPC_URL");
-    string RPC_POLYGON_MAINNET = vm.envString("POLYGON_MAINNET_RPC_URL");
+    string RPC_ETH_MAINNET = "https://eth.llamarpc.com";
+    string RPC_POLYGON_MAINNET = "https://polygon.llamarpc.com";
 
     // Mainnet contracts
     Kernel internal kernel;
