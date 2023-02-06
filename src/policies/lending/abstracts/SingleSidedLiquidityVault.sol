@@ -238,9 +238,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         _repay(ohmReceived);
         pairToken.safeTransfer(msg.sender, pairTokenReceived);
 
-        return pairTokenReceived;
-
         emit Withdraw(msg.sender, pairTokenReceived, ohmReceived);
+        return pairTokenReceived;
     }
 
     /// @notice                     Claims user's rewards for all reward tokens
