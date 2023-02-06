@@ -281,8 +281,10 @@ contract CrossChainBridge is Policy, RolesConsumer, ILayerZeroReceiver, ILayerZe
 
     function getTrustedRemoteAddress(uint16 remoteChainId_) external view returns (bytes memory) {
         bytes memory path = trustedRemoteLookup[remoteChainId_];
-        if (path.length == 0) revert Bridge_NoTrustedPath(); //, "LzApp: no trusted path record");
-        return path.slice(0, path.length - 20); // the last 20 bytes should be address(this)
+        if (path.length == 0) revert Bridge_NoTrustedPath();
+
+        // The last 20 bytes should be address(this)
+        return path.slice(0, path.length - 20);
     }
 
     function isTrustedRemote(uint16 srcChainId_, bytes calldata srcAddress_) external view returns (bool) {
