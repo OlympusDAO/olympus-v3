@@ -241,6 +241,8 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         // In Balancer pools the tokens are listed in alphabetical order (numbers before letters)
         // OHM is listed first, stETH is listed second so this calculates OHM/stETH which is then
         // used to compare against the oracle calculation OHM/stETH price
+        // Hard coding decimals is fine here because it is a specific implementation and we know the
+        // decimals of the tokens in the pool
         return (balances_[0] * 1e18) / balances_[1];
     }
 

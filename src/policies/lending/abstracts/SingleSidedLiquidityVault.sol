@@ -41,6 +41,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     struct InternalRewardToken {
         address token;
+        uint256 decimalsAdjustment;
         uint256 rewardsPerSecond;
         uint256 lastRewardTime;
         uint256 accumulatedRewardsPerShare;
@@ -48,6 +49,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     struct ExternalRewardToken {
         address token;
+        uint256 decimalsAdjustment;
         uint256 accumulatedRewardsPerShare;
     }
 
@@ -288,9 +290,12 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         if (block.timestamp > lastRewardTime && totalLP != 0) {
             uint256 timeDiff = block.timestamp - lastRewardTime;
             uint256 totalRewards = timeDiff * rewardToken.rewardsPerSecond;
+
+            // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
             accumulatedRewardsPerShare += (totalRewards * 1e18) / totalLP;
         }
 
+        // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
         return
             uint256(
                 int256((lpPositions[user_] * accumulatedRewardsPerShare) / 1e18) -
@@ -305,6 +310,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     function externalRewardsForToken(uint256 id_, address user_) public view returns (uint256) {
         ExternalRewardToken memory rewardToken = externalRewardTokens[id_];
 
+        // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
         return
             uint256(
                 int256((lpPositions[user_] * rewardToken.accumulatedRewardsPerShare) / 1e18) -
@@ -415,6 +421,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     // ========= ACCUMULATED REWARDS STATE MANAGEMENT ========= //
 
     function _updateInternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
+        // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
         if (totalLP != 0) {
             InternalRewardToken storage rewardToken = internalRewardTokens[id_];
             rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
@@ -423,6 +430,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     }
 
     function _updateExternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
+        // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
         if (totalLP != 0)
             externalRewardTokens[id_].accumulatedRewardsPerShare +=
                 (amountAccumulated_ * 1e18) /
@@ -469,7 +477,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // of LP tokens prior to the user joining the pool with the given value of LP tokens
             InternalRewardToken memory rewardToken = internalRewardTokens[i];
             userRewardDebts[msg.sender][rewardToken.token] += int256(
-                (lpReceived_ * rewardToken.accumulatedRewardsPerShare) / 1e18
+                (lpReceived_ * rewardToken.accumulatedRewardsPerShare) /
+                    rewardToken.decimalsAdjustment
             );
 
             unchecked {
@@ -482,7 +491,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // of LP tokens prior to the user joining the pool with the given value of LP tokens
             ExternalRewardToken memory rewardToken = externalRewardTokens[i];
             userRewardDebts[msg.sender][rewardToken.token] += int256(
-                (lpReceived_ * rewardToken.accumulatedRewardsPerShare) / 1e18
+                (lpReceived_ * rewardToken.accumulatedRewardsPerShare) /
+                    rewardToken.decimalsAdjustment
             );
 
             unchecked {
@@ -507,7 +517,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // any unclaimed rewards to the user's reward debt so that they can be claimed later
             InternalRewardToken memory rewardToken = internalRewardTokens[i];
             userRewardDebts[msg.sender][rewardToken.token] -= int256(
-                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) / 1e18
+                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) /
+                    rewardToken.decimalsAdjustment
             );
 
             unchecked {
@@ -523,7 +534,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // any unclaimed rewards to the user's reward debt so that they can be claimed later
             ExternalRewardToken memory rewardToken = externalRewardTokens[i];
             userRewardDebts[msg.sender][rewardToken.token] -= int256(
-                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) / 1e18
+                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) /
+                    rewardToken.decimalsAdjustment
             );
 
             unchecked {
@@ -589,6 +601,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     ) external onlyRole("liquidityvault_admin") {
         InternalRewardToken memory newInternalRewardToken = InternalRewardToken({
             token: token_,
+            decimalsAdjustment: 10**ERC20(token_).decimals(),
             rewardsPerSecond: rewardsPerSecond_,
             lastRewardTime: block.timestamp > startTimestamp_ ? block.timestamp : startTimestamp_,
             accumulatedRewardsPerShare: 0
@@ -618,6 +631,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     function addExternalRewardToken(address token_) external onlyRole("liquidityvault_admin") {
         ExternalRewardToken memory newRewardToken = ExternalRewardToken({
             token: token_,
+            decimalsAdjustment: 10**ERC20(token_).decimals(),
             accumulatedRewardsPerShare: 0
         });
 
