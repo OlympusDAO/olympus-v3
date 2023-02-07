@@ -51,6 +51,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         address token;
         uint256 decimalsAdjustment;
         uint256 accumulatedRewardsPerShare;
+        uint256 lastBalance;
     }
 
     // ========= STATE ========= //
@@ -218,7 +219,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         uint256[] calldata minTokenAmounts_,
         bool claim_
     ) external nonReentrant returns (uint256) {
-        if (lpAmount_ == 0 || minTokenAmounts[0] == 0 || minTokenAmounts[1] == 0)
+        if (lpAmount_ == 0 || minTokenAmounts_[0] == 0 || minTokenAmounts_[1] == 0)
             revert LiquidityVault_InvalidParams();
         if (!_isPoolSafe()) revert LiquidityVault_PoolImbalanced();
 
@@ -251,6 +252,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256 numExternalRewardTokens = externalRewardTokens.length;
 
+        uint256[] memory accumulatedRewards = _accumulateExternalRewards();
+
         for (uint256 i; i < numInternalRewardTokens; ) {
             _claimInternalRewards(i);
 
@@ -260,6 +263,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         }
 
         for (uint256 i; i < numExternalRewardTokens; ) {
+            _updateExternalRewardState(i, accumulatedRewards[i]);
             _claimExternalRewards(i);
 
             unchecked {
@@ -634,7 +638,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         ExternalRewardToken memory newRewardToken = ExternalRewardToken({
             token: token_,
             decimalsAdjustment: 10**ERC20(token_).decimals(),
-            accumulatedRewardsPerShare: 0
+            accumulatedRewardsPerShare: 0,
+            lastBalance: 0
         });
 
         externalRewardTokens.push(newRewardToken);

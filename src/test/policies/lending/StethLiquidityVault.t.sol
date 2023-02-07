@@ -905,11 +905,16 @@ contract StethLiquidityVaultTest is Test {
         liquidityVault.addExternalRewardToken(address(externalReward));
 
         // Verify state
-        (address token, uint256 decimals, uint256 accumulatedRewardsPerShare) = liquidityVault
-            .externalRewardTokens(1);
+        (
+            address token,
+            uint256 decimals,
+            uint256 accumulatedRewardsPerShare,
+            uint256 lastBalance
+        ) = liquidityVault.externalRewardTokens(1);
         assertEq(token, address(externalReward));
         assertEq(decimals, 1e18);
         assertEq(accumulatedRewardsPerShare, 0);
+        assertEq(lastBalance, 0);
     }
 
     /// [X]  removeExternalRewardToken
@@ -946,18 +951,24 @@ contract StethLiquidityVaultTest is Test {
         liquidityVault.addExternalRewardToken(address(externalReward));
 
         // Verify initial state
-        (address token, uint256 decimals, uint256 accumulatedRewardsPerShare) = liquidityVault
-            .externalRewardTokens(1);
+        (
+            address token,
+            uint256 decimals,
+            uint256 accumulatedRewardsPerShare,
+            uint256 lastBalance
+        ) = liquidityVault.externalRewardTokens(1);
         assertEq(token, address(externalReward));
         assertEq(decimals, 1e18);
         assertEq(accumulatedRewardsPerShare, 0);
+        assertEq(lastBalance, 0);
 
         // Remove external reward token
         liquidityVault.removeExternalRewardToken(1, address(externalReward));
 
         // Verify end state
         vm.expectRevert();
-        (token, decimals, accumulatedRewardsPerShare) = liquidityVault.externalRewardTokens(1);
+        (token, decimals, accumulatedRewardsPerShare, lastBalance) = liquidityVault
+            .externalRewardTokens(1);
     }
 
     // [X]   claimFees

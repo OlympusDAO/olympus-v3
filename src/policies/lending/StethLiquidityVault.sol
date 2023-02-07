@@ -173,22 +173,16 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
     /// @return uint256[]       Amounts of each reward token harvested
     function _accumulateExternalRewards() internal override returns (uint256[] memory) {
         uint256 numExternalRewards = externalRewardTokens.length;
-        uint256[] memory balancesBefore = new uint256[](numExternalRewards);
-        for (uint256 i; i < numExternalRewards; ) {
-            balancesBefore[i] = ERC20(externalRewardTokens[i].token).balanceOf(address(this));
-
-            unchecked {
-                ++i;
-            }
-        }
 
         auraPool.rewardsPool.getReward(address(this), true);
 
         uint256[] memory rewards = new uint256[](numExternalRewards);
         for (uint256 i; i < numExternalRewards; ) {
-            rewards[i] =
-                ERC20(externalRewardTokens[i].token).balanceOf(address(this)) -
-                balancesBefore[i];
+            ExternalRewardToken storage rewardToken = externalRewardTokens[i];
+            uint256 newBalance = ERC20(rewardToken.token).balanceOf(address(this));
+
+            rewards[i] = newBalance - rewardToken.lastBalance;
+            rewardToken.lastBalance = newBalance;
 
             unchecked {
                 ++i;
