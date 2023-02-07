@@ -146,7 +146,7 @@ contract KebabsecTest is Test {
 
     uint256 internal constant STETH_AMOUNT = 1e18;
     uint256[] internal minTokenAmounts_ = [100e9, 1e18];
-    uint256[] internal kebabAmounts_ = [0];
+    uint256[] internal kebabAmounts_ = [1, 1];
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)

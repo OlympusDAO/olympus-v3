@@ -19,6 +19,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 // Import utilities
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
+import {console2} from "forge-std/console2.sol";
+
 /// @title Olympus Base Single Sided Liquidity Vault Contract
 abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
     using TransferHelper for ERC20;
@@ -76,7 +78,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     // User State
     mapping(address => uint256) public pairTokenDeposits;
     mapping(address => uint256) public lpPositions;
-    mapping(address => mapping(address => int256)) public userRewardDebts; // Rewards accumulated prior to user's joining (MasterChef V2 math)
+    mapping(address => mapping(address => uint256)) public userRewardDebts; // Rewards accumulated prior to user's joining (MasterChef V2 math)
+    mapping(address => mapping(address => uint256)) public cachedUserRewards;
 
     // Reward Token State
     /// @notice An internal reward token is a token where the vault is the only source of rewards and the
@@ -287,7 +290,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     /// @notice                     Returns the amount of rewards a user has earned for a given reward token
     /// @param  id_                 The ID of the reward token
     /// @param  user_               The user's address to check rewards for
-    /// @return int256              The amount of rewards the user has earned
+    /// @return uint256              The amount of rewards the user has earned
     function internalRewardsForToken(uint256 id_, address user_) public view returns (uint256) {
         InternalRewardToken memory rewardToken = internalRewardTokens[id_];
         uint256 lastRewardTime = rewardToken.lastRewardTime;
@@ -301,27 +304,33 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             accumulatedRewardsPerShare += (totalRewards * 1e18) / totalLP;
         }
 
+        console2.log("lpPositions[user_]", lpPositions[user_]);
+        console2.log("accumulatedRewardsPerShare", accumulatedRewardsPerShare);
+        console2.log(
+            "userRewardDebts[user_][rewardToken.token]",
+            userRewardDebts[user_][rewardToken.token]
+        );
+
         // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
-        return
-            uint256(
-                int256((lpPositions[user_] * accumulatedRewardsPerShare) / 1e18) -
-                    userRewardDebts[user_][rewardToken.token]
-            );
+        uint256 totalAccumulatedRewards = ((lpPositions[user_] * accumulatedRewardsPerShare) -
+            userRewardDebts[user_][rewardToken.token]) / 1e18;
+
+        return cachedUserRewards[user_][rewardToken.token] + totalAccumulatedRewards;
     }
 
     /// @notice                     Returns the amount of rewards a user has earned for a given external reward token
     /// @param  id_                 The ID of the external reward token
     /// @param  user_               The user's address to check rewards for
-    /// @return int256              The amount of rewards the user has earned
+    /// @return uint256              The amount of rewards the user has earned
     function externalRewardsForToken(uint256 id_, address user_) public view returns (uint256) {
         ExternalRewardToken memory rewardToken = externalRewardTokens[id_];
 
         // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
-        return
-            uint256(
-                int256((lpPositions[user_] * rewardToken.accumulatedRewardsPerShare) / 1e18) -
-                    userRewardDebts[user_][rewardToken.token]
-            );
+        uint256 totalAccumulatedRewards = ((lpPositions[user_] *
+            rewardToken.accumulatedRewardsPerShare) - userRewardDebts[user_][rewardToken.token]) /
+            1e18;
+
+        return cachedUserRewards[user_][rewardToken.token] + totalAccumulatedRewards;
     }
 
     /// @notice                     Calculates the net amount of OHM that this contract has emitted to or removed from the broader market
@@ -482,10 +491,9 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // Reward debts for this deposit should be equal to the rewards accrued for a given value
             // of LP tokens prior to the user joining the pool with the given value of LP tokens
             InternalRewardToken memory rewardToken = internalRewardTokens[i];
-            userRewardDebts[msg.sender][rewardToken.token] += int256(
-                (lpReceived_ * rewardToken.accumulatedRewardsPerShare) /
-                    rewardToken.decimalsAdjustment
-            );
+            userRewardDebts[msg.sender][rewardToken.token] +=
+                lpReceived_ *
+                rewardToken.accumulatedRewardsPerShare;
 
             unchecked {
                 ++i;
@@ -496,10 +504,9 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // Reward debts for this deposit should be equal to the rewards accrued for a given value
             // of LP tokens prior to the user joining the pool with the given value of LP tokens
             ExternalRewardToken memory rewardToken = externalRewardTokens[i];
-            userRewardDebts[msg.sender][rewardToken.token] += int256(
-                (lpReceived_ * rewardToken.accumulatedRewardsPerShare) /
-                    rewardToken.decimalsAdjustment
-            );
+            userRewardDebts[msg.sender][rewardToken.token] +=
+                lpReceived_ *
+                rewardToken.accumulatedRewardsPerShare;
 
             unchecked {
                 ++i;
@@ -522,10 +529,14 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // Update reward debts so as to not understate the amount of rewards owed to the user, and push
             // any unclaimed rewards to the user's reward debt so that they can be claimed later
             InternalRewardToken memory rewardToken = internalRewardTokens[i];
-            userRewardDebts[msg.sender][rewardToken.token] -= int256(
-                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) /
-                    rewardToken.decimalsAdjustment
-            );
+            uint256 rewardDebtDiff = lpAmount_ * rewardToken.accumulatedRewardsPerShare;
+
+            if (rewardDebtDiff > userRewardDebts[msg.sender][rewardToken.token]) {
+                userRewardDebts[msg.sender][rewardToken.token] = 0;
+                cachedUserRewards[msg.sender][rewardToken.token] += rewardDebtDiff;
+            } else {
+                userRewardDebts[msg.sender][rewardToken.token] -= rewardDebtDiff;
+            }
 
             unchecked {
                 ++i;
@@ -539,10 +550,14 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // Update reward debts so as to not understate the amount of rewards owed to the user, and push
             // any unclaimed rewards to the user's reward debt so that they can be claimed later
             ExternalRewardToken memory rewardToken = externalRewardTokens[i];
-            userRewardDebts[msg.sender][rewardToken.token] -= int256(
-                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) /
-                    rewardToken.decimalsAdjustment
-            );
+            uint256 rewardDebtDiff = (lpAmount_ * rewardToken.accumulatedRewardsPerShare) / 1e18;
+
+            if (rewardDebtDiff > userRewardDebts[msg.sender][rewardToken.token]) {
+                userRewardDebts[msg.sender][rewardToken.token] = 0;
+                cachedUserRewards[msg.sender][rewardToken.token] += rewardDebtDiff;
+            } else {
+                userRewardDebts[msg.sender][rewardToken.token] -= rewardDebtDiff;
+            }
 
             unchecked {
                 ++i;
@@ -557,7 +572,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         uint256 reward = internalRewardsForToken(id_, msg.sender);
         uint256 fee = (reward * FEE) / PRECISION;
 
-        userRewardDebts[msg.sender][rewardToken] += int256(reward);
+        userRewardDebts[msg.sender][rewardToken] += reward;
         accumulatedFees[rewardToken] += fee;
 
         if (reward > 0) ERC20(rewardToken).safeTransfer(msg.sender, reward - fee);
@@ -570,7 +585,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         uint256 reward = externalRewardsForToken(id_, msg.sender);
         uint256 fee = (reward * FEE) / PRECISION;
 
-        userRewardDebts[msg.sender][rewardToken] += int256(reward);
+        userRewardDebts[msg.sender][rewardToken] += reward;
         accumulatedFees[rewardToken] += fee;
 
         if (reward > 0) ERC20(rewardToken).safeTransfer(msg.sender, reward - fee);
