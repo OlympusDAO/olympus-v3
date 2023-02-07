@@ -218,6 +218,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         uint256[] calldata minTokenAmounts_,
         bool claim_
     ) external nonReentrant returns (uint256) {
+        if (lpAmount_ == 0 || minTokenAmounts[0] == 0 || minTokenAmounts[1] == 0)
+            revert LiquidityVault_InvalidParams();
         if (!_isPoolSafe()) revert LiquidityVault_PoolImbalanced();
 
         _withdrawUpdateRewardState(lpAmount_, claim_);
