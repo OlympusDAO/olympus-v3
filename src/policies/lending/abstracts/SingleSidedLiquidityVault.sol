@@ -19,8 +19,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 // Import utilities
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
-import {console2} from "forge-std/console2.sol";
-
 /// @title Olympus Base Single Sided Liquidity Vault Contract
 abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
     using TransferHelper for ERC20;
@@ -303,13 +301,6 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
             accumulatedRewardsPerShare += (totalRewards * 1e18) / totalLP;
         }
-
-        console2.log("lpPositions[user_]", lpPositions[user_]);
-        console2.log("accumulatedRewardsPerShare", accumulatedRewardsPerShare);
-        console2.log(
-            "userRewardDebts[user_][rewardToken.token]",
-            userRewardDebts[user_][rewardToken.token]
-        );
 
         // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
         uint256 totalAccumulatedRewards = ((lpPositions[user_] * accumulatedRewardsPerShare) -
