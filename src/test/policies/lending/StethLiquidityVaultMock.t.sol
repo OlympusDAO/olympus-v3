@@ -3,17 +3,20 @@ pragma solidity 0.8.15;
 
 import {Test, stdError} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
+import {larping} from "test/lib/larping.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
+import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
 import {MockAuraBooster, MockAuraRewardPool} from "test/mocks/AuraMocks.sol";
 
+import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.sol";
 
-import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusLiquidityRegistry} from "modules/LQREG/OlympusLiquidityRegistry.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -21,32 +24,39 @@ import {StethLiquidityVault} from "policies/lending/StethLiquidityVault.sol";
 
 import "src/Kernel.sol";
 
-contract MockOhm is ERC20 {
+import {console2} from "forge-std/console2.sol";
+
+contract MockWsteth is ERC20 {
     constructor(
         string memory _name,
         string memory _symbol,
         uint8 _decimals
     ) ERC20(_name, _symbol, _decimals) {}
 
-    function mint(address to, uint256 value) public virtual {
+    function mint(address to, uint256 value) public {
         _mint(to, value);
     }
 
-    function burnFrom(address from, uint256 value) public virtual {
+    function burnFrom(address from, uint256 value) public {
         _burn(from, value);
+    }
+
+    function stEthPerToken() public pure returns (uint256) {
+        return 1e18;
     }
 }
 
 // solhint-disable-next-line max-states-count
 contract StethLiquidityVaultTest is Test {
     using FullMath for uint256;
+    using larping for *;
 
     UserFactory public userCreator;
     address internal alice;
     address public godmode;
 
-    MockOhm internal ohm;
-    MockERC20 internal steth;
+    OlympusERC20Token internal ohm;
+    MockWsteth internal wsteth;
     MockERC20 internal reward;
     MockERC20 internal reward2;
     MockERC20 internal externalReward;
@@ -69,6 +79,8 @@ contract StethLiquidityVaultTest is Test {
     RolesAdmin internal rolesAdmin;
     StethLiquidityVault internal liquidityVault;
 
+    IOlympusAuthority internal auth;
+
     uint256 internal constant STETH_AMOUNT = 1e18;
     uint256[] internal minTokenAmounts_ = [100e9, 1e18];
 
@@ -83,9 +95,14 @@ contract StethLiquidityVaultTest is Test {
         }
 
         {
+            // Deploy auth
+            auth = new MockLegacyAuthority(address(0x0));
+        }
+
+        {
             // Deploy mock tokens
-            ohm = new MockOhm("Olympus", "OHM", 9);
-            steth = new MockERC20("Staked ETH", "stETH", 18);
+            ohm = new OlympusERC20Token(address(auth));
+            wsteth = new MockWsteth("Wrapped Staked ETH", "wstETH", 18);
             reward = new MockERC20("Reward Token", "REWARD", 18);
             reward2 = new MockERC20("Reward Token 2", "REWARD2", 18);
             externalReward = new MockERC20("External Reward Token", "EXTREWARD", 18);
@@ -109,7 +126,7 @@ contract StethLiquidityVaultTest is Test {
         {
             // Deploy mock Balancer contracts
             liquidityPool = new MockBalancerPool();
-            vault = new MockVault(address(liquidityPool), address(ohm), address(steth));
+            vault = new MockVault(address(liquidityPool), address(ohm), address(wsteth));
             vault.setPoolAmounts(100e9, 1e18);
         }
 
@@ -127,6 +144,9 @@ contract StethLiquidityVaultTest is Test {
             minter = new OlympusMinter(kernel, address(ohm));
             lqreg = new OlympusLiquidityRegistry(kernel);
             roles = new OlympusRoles(kernel);
+
+            // Set vault in auth to MINTR
+            auth.vault.larp(address(minter));
         }
 
         {
@@ -146,11 +166,11 @@ contract StethLiquidityVaultTest is Test {
                 rewardsPool: IAuraRewardPool(auraPool)
             });
 
-            // Deploy stETH Single Sided Liquidity Vault
+            // Deploy wstETH Single Sided Liquidity Vault
             liquidityVault = new StethLiquidityVault(
                 kernel,
                 address(ohm),
-                address(steth),
+                address(wsteth),
                 address(vault),
                 address(liquidityPool),
                 ohmEthFeedStruct,
@@ -200,41 +220,56 @@ contract StethLiquidityVaultTest is Test {
         }
 
         {
-            // Mint stETH to alice
-            steth.mint(alice, STETH_AMOUNT);
+            // Mint wstETH to alice
+            wsteth.mint(alice, STETH_AMOUNT);
 
-            // Approve vault to spend alice's stETH
+            // Approve vault to spend alice's wstETH
             vm.prank(alice);
-            steth.approve(address(liquidityVault), STETH_AMOUNT);
+            wsteth.approve(address(liquidityVault), STETH_AMOUNT);
         }
     }
 
     /// [X]  deposit
     ///     [X]  Can be accessed by anyone
+    ///     [X]  Can handle any amount up to the limit
     ///     [X]  Fails if pool is imbalanced
     ///     [X]  Cannot be called beyond limit
-    ///     [X]  Increases user's stETH deposit
+    ///     [X]  Increases user's wstETH deposit
     ///     [X]  Correctly values stETH in terms of OHM
-    ///     [X]  Transfers stETH from user
-    ///     [X]  Deposits stETH and OHM into Balancer LP
+    ///     [X]  Transfers wstETH from user
+    ///     [X]  Deposits wstETH and OHM into Balancer LP
     ///     [X]  Deposits Balancer LP into Aura
     ///     [X]  Updates user's tracked LP position
     ///     [X]  Updates tracked total LP amount
 
-    function testCorrectness_depositCanBeCalledByAnyone(address user_) public {
+    function testCorrectness_depositUserAndAmountFuzz(address user_) public {
         vm.assume(user_ != address(0) && user_ != address(liquidityVault));
-        steth.mint(user_, 1e18);
+
+        wsteth.mint(user_, 1e18);
+
         vm.startPrank(user_);
-        steth.approve(address(liquidityVault), 1e18);
+        wsteth.approve(address(liquidityVault), 1e18);
         liquidityVault.deposit(1e18, 1e18);
         vm.stopPrank();
     }
 
-    function testCorrectness_depositCannotBeCalledBeyondLimit() public {
-        steth.mint(alice, 1e19);
+    function testCorrectness_depositCanHandleAnyAmountUpToLimit(uint256 amount_) public {
+        vm.assume(amount_ >= 1e7 && amount_ <= 1_000_000_000e18);
+
+        wsteth.mint(alice, amount_);
+        liquidityVault.setLimit(type(uint256).max);
 
         vm.startPrank(alice);
-        steth.approve(address(liquidityVault), 2e19);
+        wsteth.approve(address(liquidityVault), amount_);
+        liquidityVault.deposit(amount_, 0);
+        vm.stopPrank();
+    }
+
+    function testCorrectness_depositCannotBeCalledBeyondLimit() public {
+        wsteth.mint(alice, 1e19);
+
+        vm.startPrank(alice);
+        wsteth.approve(address(liquidityVault), 2e19);
         liquidityVault.deposit(1e19, 1e18); // Should mint 1000 OHM which is up to the limit
 
         bytes memory err = abi.encodeWithSignature("LiquidityVault_LimitViolation()");
@@ -266,32 +301,32 @@ contract StethLiquidityVaultTest is Test {
         liquidityVault.deposit(1e18, 1e18);
     }
 
-    function testCorrectness_depositIncreasesUserStethDeposit() public {
+    function testCorrectness_depositIncreasesUserWstethDeposit() public {
         vm.prank(alice);
         liquidityVault.deposit(STETH_AMOUNT, 1e18);
 
         assertEq(liquidityVault.pairTokenDeposits(alice), STETH_AMOUNT);
     }
 
-    function testCorrectness_depositCorrectlyValuesSteth() public {
+    function testCorrectness_depositCorrectlyValuesWsteth() public {
         vm.prank(alice);
         liquidityVault.deposit(1e18, 1e18);
 
         assertEq(ohm.balanceOf(address(vault)), 100e9);
     }
 
-    function testCorrectness_depositTransfersStethFromUser() public {
+    function testCorrectness_depositTransfersWstethFromUser() public {
         vm.prank(alice);
         liquidityVault.deposit(STETH_AMOUNT, 1e18);
 
-        assertEq(steth.balanceOf(alice), 0);
+        assertEq(wsteth.balanceOf(alice), 0);
     }
 
-    function testCorrectness_depositDepositsStethAndOhmToVault() public {
+    function testCorrectness_depositDepositsWstethAndOhmToVault() public {
         vm.prank(alice);
         liquidityVault.deposit(STETH_AMOUNT, 1e18);
 
-        assertEq(steth.balanceOf(address(vault)), STETH_AMOUNT);
+        assertEq(wsteth.balanceOf(address(vault)), STETH_AMOUNT);
         assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e7);
     }
 
@@ -317,8 +352,192 @@ contract StethLiquidityVaultTest is Test {
         assertEq(liquidityVault.totalLP(), 1e18);
     }
 
-    /// [X]  withdraw
+    /// [X]  withdraw (no time has passed)
+    ///     [X]  Withdraw anyone can deposit
+    ///     [X]  Withdraw can be called with any amount up to the limit
+    ///     [X]  Fails if pool and oracle prices differ substantially
+    ///     [X]  Rewards are 0
+    ///     [X]  Fails if user has no LP positions
+    ///     [X]  Removes stETH and OHM from Balancer LP
+    ///     [X]  Decreases user's stETH deposit value
+    ///     [X]  Burns received OHM
+    ///     [X]  Transfers stETH to user
+
+    function _withdrawSetUp() internal {
+        vm.prank(alice);
+        liquidityVault.deposit(STETH_AMOUNT, 0);
+    }
+
+    function testCorrectness__withdrawAnyoneCanWithdraw_noTimeChange(address user_) public {
+        vm.assume(user_ != address(0) && user_ != address(liquidityVault));
+
+        // Mint wstETH
+        wsteth.mint(user_, 1e18);
+
+        // Deposit
+        vm.startPrank(user_);
+        wsteth.approve(address(liquidityVault), 1e18);
+        liquidityVault.deposit(1e18, 1e18);
+
+        // Get user lp position
+        uint256 userLpPosition = liquidityVault.lpPositions(user_);
+
+        // Withdraw and claim
+        liquidityVault.withdraw(userLpPosition, minTokenAmounts_, false);
+        vm.stopPrank();
+    }
+
+    function testCorrectness_withdrawCanBeCalledWithAnyAmountUpToTheLimit_noTimeChange(
+        uint256 amount_
+    ) public {
+        vm.assume(amount_ >= 1e7 && amount_ <= 1_000_000_000e18);
+
+        // Mint wstETH
+        wsteth.mint(alice, amount_);
+        liquidityVault.setLimit(type(uint256).max);
+
+        // Deposit
+        vm.startPrank(alice);
+        wsteth.approve(address(liquidityVault), amount_);
+        liquidityVault.deposit(amount_, 0);
+
+        // Get alice lp position
+        uint256 aliceLpPosition = liquidityVault.lpPositions(alice);
+
+        // Withdraw
+        liquidityVault.withdraw(aliceLpPosition, minTokenAmounts_, false);
+        vm.stopPrank();
+    }
+
+    function testCorrectness_withdrawFailsIfPricesDiffer_noTimeChange() public {
+        // Setup
+        _withdrawSetUp();
+
+        // Get alice lp position
+        uint256 aliceLpPosition = liquidityVault.lpPositions(alice);
+
+        // Set pool price
+        vault.setPoolAmounts(1e7, 10e18);
+
+        bytes memory err = abi.encodeWithSignature("LiquidityVault_PoolImbalanced()");
+        vm.expectRevert(err);
+
+        // Attempt withdrawal
+        vm.prank(alice);
+        liquidityVault.withdraw(aliceLpPosition, minTokenAmounts_, false);
+
+        // Set pool price
+        vault.setPoolAmounts(1000e9, 1e18);
+
+        // Expect revert again
+        vm.expectRevert(err);
+
+        // Attempt withdrawal
+        vm.prank(alice);
+        liquidityVault.withdraw(aliceLpPosition, minTokenAmounts_, true);
+    }
+
+    function testCorrectness_withdrawHasNoRewards_noTimeChange() public {
+        // Setup
+        _withdrawSetUp();
+
+        // Verify initial state
+        assertEq(reward.balanceOf(alice), 0);
+
+        // Get alice lp position
+        uint256 aliceLpPosition = liquidityVault.lpPositions(alice);
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityVault.withdraw(aliceLpPosition, minTokenAmounts_, true);
+
+        // Verify end state
+        assertEq(reward.balanceOf(alice), 0);
+    }
+
+    function testCorrectness_withdrawFailsIfUserHasNoLpPosition_noTimeChange() public {
+        // Expect revert
+        vm.expectRevert(stdError.arithmeticError);
+
+        // Attempt withdrawal
+        vm.prank(alice);
+        liquidityVault.withdraw(1e18, minTokenAmounts_, false);
+    }
+
+    function testCorrectness_withdrawRemovesStethAndOhmFromVault_noTimeChange() public {
+        // Setup
+        _withdrawSetUp();
+
+        // Verify initial state
+        assertEq(wsteth.balanceOf(address(vault)), STETH_AMOUNT);
+        assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e7);
+
+        // Get alice lp position
+        uint256 aliceLpPosition = liquidityVault.lpPositions(alice);
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityVault.withdraw(aliceLpPosition, minTokenAmounts_, false);
+
+        // Verify end state
+        assertEq(wsteth.balanceOf(address(vault)), 0);
+        assertEq(ohm.balanceOf(address(vault)), 0);
+    }
+
+    function testCorrectness_withdrawDecreasesUserStethDeposit_noTimeChange() public {
+        // Setup
+        _withdrawSetUp();
+
+        // Verify initial state
+        assertEq(liquidityVault.pairTokenDeposits(alice), STETH_AMOUNT);
+
+        // Get alice lp position
+        uint256 aliceLpPosition = liquidityVault.lpPositions(alice);
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityVault.withdraw(aliceLpPosition, minTokenAmounts_, false);
+
+        // Verify end state
+        assertEq(liquidityVault.pairTokenDeposits(alice), 0);
+    }
+
+    function testCorrectness_withdrawBurnsOhm_noTimeChange() public {
+        // Setup
+        _withdrawSetUp();
+
+        // Verify initial state
+        assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e7);
+
+        // Get alice lp position
+        uint256 aliceLpPosition = liquidityVault.lpPositions(alice);
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityVault.withdraw(aliceLpPosition, minTokenAmounts_, false);
+
+        // Verify end state
+        assertEq(ohm.balanceOf(address(liquidityVault)), 0);
+    }
+
+    function testCorrectness_withdrawTransfersStethToUser_noTimeChange() public {
+        // Setup
+        _withdrawSetUp();
+
+        // Get alice lp position
+        uint256 aliceLpPosition = liquidityVault.lpPositions(alice);
+
+        // Withdraw and claim
+        vm.prank(alice);
+        liquidityVault.withdraw(aliceLpPosition, minTokenAmounts_, false);
+
+        // Verify end state
+        assertEq(wsteth.balanceOf(alice), STETH_AMOUNT);
+    }
+
+    /// [X]  withdraw (time has passed)
     ///     [X]  Can be accessed by anyone
+    ///     [X]  Withdraw can be called with any amount up to the limit
     ///     [X]  Fails if pool and oracle prices differ substantially
     ///     [X]  Foregoes rewards if called with claim as false
     ///     [X]  Claims rewards
@@ -326,35 +545,61 @@ contract StethLiquidityVaultTest is Test {
     ///     [X]  Returns correct rewards with multiple users
     ///     [X]  Returns correct external rewards with multiple users
     ///     [X]  Fails if user has no LP positions
-    ///     [X]  Removes stETH and OHM from Balancer LP
-    ///     [X]  Decreases user's stETH deposit value
+    ///     [X]  Removes wstETH and OHM from Balancer LP
+    ///     [X]  Decreases user's wstETH deposit value
     ///     [X]  Updates user's reward debts for reward tokens
     ///     [X]  Burns received OHM
-    ///     [X]  Transfers stETH to user
+    ///     [X]  Transfers wstETH to user
 
-    function _withdrawSetUp() internal {
+    function _withdrawTimeSetUp() internal {
         vm.prank(alice);
         liquidityVault.deposit(STETH_AMOUNT, 1e18);
         vm.warp(block.timestamp + 10); // Increase time 10 seconds so there are rewards
     }
 
-    function testCorrectness_withdrawCanBeCalledByAnyone(address user_) public {
+    function testCorrectness_withdrawUserFuzz_timeChange(address user_) public {
         vm.assume(user_ != address(0) && user_ != address(liquidityVault));
-        steth.mint(user_, 1e18);
+
+        wsteth.mint(user_, 1e18);
 
         // Setup with deposit
         vm.startPrank(user_);
-        steth.approve(address(liquidityVault), 1e18);
+        wsteth.approve(address(liquidityVault), 1e18);
         liquidityVault.deposit(1e18, 1e18);
 
+        // Get user lp position
+        uint256 userLpPosition = liquidityVault.lpPositions(user_);
+
         // Withdraw and claim
-        liquidityVault.withdraw(1e18, minTokenAmounts_, true);
+        liquidityVault.withdraw(userLpPosition, minTokenAmounts_, true);
         vm.stopPrank();
     }
 
-    function testCorrectness_withdrawFailsIfPricesDiffer() public {
+    function testCorrectness_withdrawCanBeCalledWithAnyAmountUpToTheLimit_timeChange(
+        uint256 amount_
+    ) public {
+        vm.assume(amount_ >= 1e7 && amount_ <= 1_000_000_000e18);
+
+        // Mint wstETH
+        wsteth.mint(alice, amount_);
+        liquidityVault.setLimit(type(uint256).max);
+
+        // Deposit
+        vm.startPrank(alice);
+        wsteth.approve(address(liquidityVault), amount_);
+        liquidityVault.deposit(amount_, 0);
+
+        // Get alice lp position
+        uint256 aliceLpPosition = liquidityVault.lpPositions(alice);
+
+        // Withdraw
+        liquidityVault.withdraw(aliceLpPosition, minTokenAmounts_, false);
+        vm.stopPrank();
+    }
+
+    function testCorrectness_withdrawFailsIfPricesDiffer_timeChange() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Set pool price
         vault.setPoolAmounts(1e7, 10e18);
@@ -377,9 +622,9 @@ contract StethLiquidityVaultTest is Test {
         liquidityVault.withdraw(1e18, minTokenAmounts_, true);
     }
 
-    function testCorrectness_withdrawForegoesRewardsIfCalledWithoutClaim() public {
+    function testCorrectness_withdrawForegoesRewardsIfCalledWithoutClaim_timeChange() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Verify initial state
         assertEq(reward.balanceOf(alice), 0);
@@ -392,9 +637,9 @@ contract StethLiquidityVaultTest is Test {
         assertEq(reward.balanceOf(alice), 0);
     }
 
-    function testCorrectness_withdrawClaimsRewards() public {
+    function testCorrectness_withdrawClaimsRewards_timeChange() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Verify initial state
         assertEq(reward.balanceOf(alice), 0);
@@ -407,9 +652,9 @@ contract StethLiquidityVaultTest is Test {
         assertEq(reward.balanceOf(alice), 10e18);
     }
 
-    function testCorrectness_withdrawClaimsExternalRewards() public {
+    function testCorrectness_withdrawClaimsExternalRewards_timeChange() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Verify initial state
         assertEq(externalReward.balanceOf(alice), 0);
@@ -422,16 +667,18 @@ contract StethLiquidityVaultTest is Test {
         assertEq(externalReward.balanceOf(alice), 1e18);
     }
 
-    function testCorrectness_withdrawReturnsCorrectRewardsMultiUser(address user_) public {
+    function testCorrectness_withdrawReturnsCorrectRewardsMultiUser_timeChange(address user_)
+        public
+    {
         vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityVault));
 
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Add second depositor
         vm.startPrank(user_);
-        steth.mint(user_, 1e18);
-        steth.approve(address(liquidityVault), 1e18);
+        wsteth.mint(user_, 1e18);
+        wsteth.approve(address(liquidityVault), 1e18);
         liquidityVault.deposit(1e18, 1e18);
         vm.stopPrank();
         vm.warp(block.timestamp + 10); // Increase time by 10 seconds
@@ -449,16 +696,18 @@ contract StethLiquidityVaultTest is Test {
         assertEq(reward.balanceOf(alice), 15e18);
     }
 
-    function testCorrectness_withdrawReturnsCorrectExternalRewardsMultiUser(address user_) public {
+    function testCorrectness_withdrawReturnsCorrectExternalRewardsMultiUser_timeChange(
+        address user_
+    ) public {
         vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityVault));
 
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Add second depositor
         vm.startPrank(user_);
-        steth.mint(user_, 1e18);
-        steth.approve(address(liquidityVault), 1e18);
+        wsteth.mint(user_, 1e18);
+        wsteth.approve(address(liquidityVault), 1e18);
         liquidityVault.deposit(1e18, 1e18);
         vm.stopPrank();
         vm.warp(block.timestamp + 10); // Increase time by 10 seconds
@@ -476,7 +725,7 @@ contract StethLiquidityVaultTest is Test {
         assertEq(externalReward.balanceOf(alice), 15e17);
     }
 
-    function testCorrectness_withdrawFailsIfUserHasNoLpPosition() public {
+    function testCorrectness_withdrawFailsIfUserHasNoLpPosition_timeChange() public {
         // Expect revert
         vm.expectRevert(stdError.arithmeticError);
 
@@ -485,12 +734,12 @@ contract StethLiquidityVaultTest is Test {
         liquidityVault.withdraw(1e18, minTokenAmounts_, true);
     }
 
-    function testCorrectness_withdrawRemovesStethAndOhmFromVault() public {
+    function testCorrectness_withdrawRemovesWstethAndOhmFromVault_timeChange() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Verify initial state
-        assertEq(steth.balanceOf(address(vault)), STETH_AMOUNT);
+        assertEq(wsteth.balanceOf(address(vault)), STETH_AMOUNT);
         assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e7);
 
         // Withdraw and claim
@@ -498,13 +747,13 @@ contract StethLiquidityVaultTest is Test {
         liquidityVault.withdraw(1e18, minTokenAmounts_, true);
 
         // Verify end state
-        assertEq(steth.balanceOf(address(vault)), 0);
+        assertEq(wsteth.balanceOf(address(vault)), 0);
         assertEq(ohm.balanceOf(address(vault)), 0);
     }
 
-    function testCorrectness_withdrawDecreasesUserStethDeposit() public {
+    function testCorrectness_withdrawDecreasesUserWstethDeposit_timeChange() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Verify initial state
         assertEq(liquidityVault.pairTokenDeposits(alice), STETH_AMOUNT);
@@ -517,9 +766,9 @@ contract StethLiquidityVaultTest is Test {
         assertEq(liquidityVault.pairTokenDeposits(alice), 0);
     }
 
-    function testCorrectness_withdrawUpdatesRewardDebt() public {
+    function testCorrectness_withdrawUpdatesRewardDebt_timeChange() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Withdraw and claim
         vm.prank(alice);
@@ -529,9 +778,9 @@ contract StethLiquidityVaultTest is Test {
         assertEq(liquidityVault.userRewardDebts(alice, address(reward)), 0);
     }
 
-    function testCorrectness_withdrawBurnsOhm() public {
+    function testCorrectness_withdrawBurnsOhm_timeChange() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Verify initial state
         assertEq(ohm.balanceOf(address(vault)), STETH_AMOUNT / 1e7);
@@ -544,19 +793,19 @@ contract StethLiquidityVaultTest is Test {
         assertEq(ohm.balanceOf(address(liquidityVault)), 0);
     }
 
-    function testCorrectness_withdrawTransfersStethToUser() public {
+    function testCorrectness_withdrawTransfersStethToUser_timeChange() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Verify initial state
-        assertEq(steth.balanceOf(alice), 0);
+        assertEq(wsteth.balanceOf(alice), 0);
 
         // Withdraw and claim
         vm.prank(alice);
         liquidityVault.withdraw(1e18, minTokenAmounts_, true);
 
         // Verify end state
-        assertEq(steth.balanceOf(alice), 1e18);
+        assertEq(wsteth.balanceOf(alice), 1e18);
     }
 
     /// [X]  claimRewards
@@ -573,7 +822,7 @@ contract StethLiquidityVaultTest is Test {
 
     function testCorrectness_claimRewardsCanBeAccessedByAnyone() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Claim rewards
         vm.prank(alice);
@@ -582,7 +831,7 @@ contract StethLiquidityVaultTest is Test {
 
     function testCorrectness_claimRewardsOneTokenOneUser() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Verify initial state
         assertEq(reward.balanceOf(alice), 0);
@@ -599,12 +848,12 @@ contract StethLiquidityVaultTest is Test {
         vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityVault));
 
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Add second depositor
         vm.startPrank(user_);
-        steth.mint(user_, 1e18);
-        steth.approve(address(liquidityVault), 1e18);
+        wsteth.mint(user_, 1e18);
+        wsteth.approve(address(liquidityVault), 1e18);
         liquidityVault.deposit(1e18, 1e18);
         vm.stopPrank();
         vm.warp(block.timestamp + 10); // Increase time by 10 seconds
@@ -629,13 +878,13 @@ contract StethLiquidityVaultTest is Test {
         vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityVault));
 
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
         _claimRewardsAddToken();
 
         // Add second depositor
         vm.startPrank(user_);
-        steth.mint(user_, 1e18);
-        steth.approve(address(liquidityVault), 1e18);
+        wsteth.mint(user_, 1e18);
+        wsteth.approve(address(liquidityVault), 1e18);
         liquidityVault.deposit(1e18, 1e18);
         vm.stopPrank();
         vm.warp(block.timestamp + 10); // Increase time by 10 seconds
@@ -669,13 +918,13 @@ contract StethLiquidityVaultTest is Test {
         vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityVault));
 
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
         _claimRewardsAddToken();
 
         // Add second depositor
         vm.startPrank(user_);
-        steth.mint(user_, 1e18);
-        steth.approve(address(liquidityVault), 1e18);
+        wsteth.mint(user_, 1e18);
+        wsteth.approve(address(liquidityVault), 1e18);
         liquidityVault.deposit(1e18, 1e18);
         vm.stopPrank();
         vm.warp(block.timestamp + 10); // Increase time by 10 seconds
@@ -692,12 +941,12 @@ contract StethLiquidityVaultTest is Test {
         vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityVault));
 
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Add second depositor
         vm.startPrank(user_);
-        steth.mint(user_, 1e18);
-        steth.approve(address(liquidityVault), 1e18);
+        wsteth.mint(user_, 1e18);
+        wsteth.approve(address(liquidityVault), 1e18);
         liquidityVault.deposit(1e18, 1e18);
         vm.stopPrank();
         vm.warp(block.timestamp + 10); // Increase time by 10 seconds
@@ -714,7 +963,7 @@ contract StethLiquidityVaultTest is Test {
 
     function testCorrectness_getOhmEmissions() public {
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Verify initial state
         (uint256 emissions, uint256 removals) = liquidityVault.getOhmEmissions();
@@ -993,7 +1242,7 @@ contract StethLiquidityVaultTest is Test {
         liquidityVault.setFee(100);
 
         // Setup
-        _withdrawSetUp();
+        _withdrawTimeSetUp();
 
         // Trigger fee accumulation
         vm.prank(alice);
@@ -1011,9 +1260,67 @@ contract StethLiquidityVaultTest is Test {
         assertEq(externalReward.balanceOf(address(this)), 1e17);
     }
 
+    /// []  setLimit
+    ///     [X]  Can only be called by admin
+    ///     [X]  Sets limit correctly
+    ///     [X]  Fuzz below current minted amount
+    ///     [X]  Fuzz above current minted amount
+
+    function testCorrectness_setLimitCanOnlyBeCalledByAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("liquidityvault_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        liquidityVault.setLimit(1e18);
+    }
+
+    function testCorrectness_setLimitCorrectlySetsLimit() public {
+        // Set limit
+        liquidityVault.setLimit(1e18);
+
+        // Verify state
+        assertEq(liquidityVault.LIMIT(), 1e18);
+    }
+
+    function testCorrectness_setLimitFuzzBelowCurrentMintedAmount(uint256 newLimit_) public {
+        vm.assume(newLimit_ < 1000e9);
+
+        // Mint extra wstETH to alice
+        wsteth.mint(alice, 1e19);
+
+        // Deposit up to limit
+        vm.startPrank(alice);
+        wsteth.approve(address(liquidityVault), 1e19);
+        liquidityVault.deposit(1e19, 1e18);
+        vm.stopPrank();
+
+        // Get error
+        bytes memory err = abi.encodeWithSignature("LiquidityVault_InvalidParams()");
+        vm.expectRevert(err);
+
+        // Set limit
+        liquidityVault.setLimit(newLimit_);
+    }
+
+    function testCorrectness_setLimitFuzzAboveCurrentMintedAmount(uint256 newLimit_) public {
+        // Current minted amount is 0, all values should be valid
+        // Set limit
+        liquidityVault.setLimit(newLimit_);
+
+        // Verify state
+        assertEq(liquidityVault.LIMIT(), newLimit_);
+    }
+
     /// [X]  setThreshold
     ///     [X]  Can only be called by admin
     ///     [X]  Sets threshold correctly
+    ///     [X]  Fuzz below precision
+    ///     [X]  Fuzz above precision
 
     function testCorrectness_setThresholdCanOnlyBeCalledByAdmin(address user_) public {
         vm.assume(user_ != address(this));
@@ -1036,9 +1343,32 @@ contract StethLiquidityVaultTest is Test {
         assertEq(liquidityVault.THRESHOLD(), 200);
     }
 
+    function testCorrectness_setThresholdFuzzBelowPrecision(uint256 newThreshold_) public {
+        vm.assume(newThreshold_ <= 1000);
+
+        // Set threshold
+        liquidityVault.setThreshold(newThreshold_);
+
+        // Verify state
+        assertEq(liquidityVault.THRESHOLD(), newThreshold_);
+    }
+
+    function testCorrectness_setThresholdFuzzAbovePrecision(uint256 newThreshold_) public {
+        vm.assume(newThreshold_ > 1000);
+
+        // Get error
+        bytes memory err = abi.encodeWithSignature("LiquidityVault_InvalidParams()");
+        vm.expectRevert(err);
+
+        // Set threshold
+        liquidityVault.setThreshold(newThreshold_);
+    }
+
     /// [X]  setFee
     ///     [X]  Can only be called by admin
     ///     [X]  Sets fee correctly
+    ///     [X]  Fuzz below precision
+    ///     [X]  Fuzz above precision
 
     function testCorrectness_setFeeCanOnlyBeCalledByAdmin(address user_) public {
         vm.assume(user_ != address(this));
@@ -1059,5 +1389,26 @@ contract StethLiquidityVaultTest is Test {
 
         // Verify state
         assertEq(liquidityVault.FEE(), 10);
+    }
+
+    function testCorrectness_setFeeFuzzBelowPrecision(uint256 newFee_) public {
+        vm.assume(newFee_ <= 1000);
+
+        // Set fee
+        liquidityVault.setFee(newFee_);
+
+        // Verify state
+        assertEq(liquidityVault.FEE(), newFee_);
+    }
+
+    function testCorrectness_setFeeFuzzAbovePrecision(uint256 newFee_) public {
+        vm.assume(newFee_ > 1000);
+
+        // Get error
+        bytes memory err = abi.encodeWithSignature("LiquidityVault_InvalidParams()");
+        vm.expectRevert(err);
+
+        // Set fee
+        liquidityVault.setFee(newFee_);
     }
 }

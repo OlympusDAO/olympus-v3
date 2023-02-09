@@ -9,6 +9,7 @@ import {SingleSidedLiquidityVault} from "policies/lending/abstracts/SingleSidedL
 import {AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool} from "policies/lending/interfaces/IBalancer.sol";
 import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.sol";
+import {IWsteth} from "policies/lending/interfaces/ILido.sol";
 
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -196,7 +197,10 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
     /// @notice                 Calculates the OHM equivalent quantity for the stETH deposit
     /// @param amount_          Amount of stETH to calculate OHM equivalent for
     /// @return uint256         OHM equivalent quantity
-    function _valueCollateral(uint256 amount_) internal view override returns (uint256) {
+    function _valueCollateral(uint256 amount_) public view override returns (uint256) {
+        // Have to add a way to convert wstETH to stETH
+        uint256 stethPerWsteth = IWsteth(address(pairToken)).stEthPerToken();
+
         // This is returned in 18 decimals and represents ETH per OHM
         uint256 ohmEth = _validatePrice(
             address(ohmEthPriceFeed.feed),
@@ -222,7 +226,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         // decimals we need to use this decimal adjustment
         uint256 decimalAdjustment = 10**(ohmEthDecimals + ethUsdDecimals - stethUsdDecimals - 9);
 
-        return (amount_ * stethUsd * decimalAdjustment) / (ohmEth * ethUsd);
+        return (amount_ * stethPerWsteth * stethUsd * decimalAdjustment) / (ohmEth * ethUsd * 1e18);
     }
 
     /// @notice                 Calculates the prevailing OHM/stETH ratio of the Balancer pool

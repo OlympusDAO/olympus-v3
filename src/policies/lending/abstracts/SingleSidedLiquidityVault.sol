@@ -15,6 +15,7 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 
 // Import utilities
 import {TransferHelper} from "libraries/TransferHelper.sol";
@@ -61,7 +62,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     LQREGv1 public LQREG;
 
     // Tokens
-    ERC20 public ohm;
+    OlympusERC20Token public ohm;
     ERC20 public pairToken;
 
     // Pool
@@ -109,7 +110,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         address liquidityPool_
     ) Policy(kernel_) {
         // Set tokens
-        ohm = ERC20(ohm_);
+        ohm = OlympusERC20Token(ohm_);
         pairToken = ERC20(pairToken_);
 
         // Set pool
@@ -399,6 +400,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     }
 
     function _repay(uint256 amount_) internal {
+        ohm.increaseAllowance(address(MINTR), amount_);
         MINTR.burnOhm(address(this), amount_);
     }
 
@@ -730,7 +732,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     /// @notice                 Calculates the equivalent OHM amount for a given amount of partner tokens
     /// @param amount_          The amount of partner tokens to calculate the OHM value of
     /// @return uint256         The OHM value of the given amount of partner tokens
-    function _valueCollateral(uint256 amount_) internal view virtual returns (uint256) {}
+    function _valueCollateral(uint256 amount_) public view virtual returns (uint256) {}
 
     /// @notice                 Calculates the current price of the liquidity pool in OHM/TKN
     /// @return uint256         The current price of the liquidity pool in OHM/TKN

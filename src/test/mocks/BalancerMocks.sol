@@ -30,7 +30,7 @@ contract MockVault {
     ) external {
         ERC20(request.assets[0]).transferFrom(sender, address(this), request.maxAmountsIn[0]);
         ERC20(request.assets[1]).transferFrom(sender, address(this), request.maxAmountsIn[1]);
-        bpt.mint(recipient, 1e18);
+        bpt.mint(recipient, request.maxAmountsIn[1]);
     }
 
     function exitPool(
