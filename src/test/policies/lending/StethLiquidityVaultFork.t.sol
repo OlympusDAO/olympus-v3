@@ -268,6 +268,9 @@ contract StethLiquidityVaultTest is Test {
             liquidityVault.addInternalRewardToken(address(ldo), 1e18, block.timestamp); // 1 REWARD token per second
             liquidityVault.addExternalRewardToken(address(externalReward));
 
+            // Activate vault
+            liquidityVault.activate();
+
             vm.stopPrank();
 
             vm.prank(ldoController);

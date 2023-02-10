@@ -26,6 +26,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     // ========= ERRORS ========= //
 
+    error LiquidityVault_Inactive();
+    error LiquidityVault_StillActive();
     error LiquidityVault_LimitViolation();
     error LiquidityVault_PoolImbalanced();
     error LiquidityVault_BadPriceFeed();
@@ -79,6 +81,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     mapping(address => uint256) public lpPositions;
     mapping(address => mapping(address => uint256)) public userRewardDebts; // Rewards accumulated prior to user's joining (MasterChef V2 math)
     mapping(address => mapping(address => uint256)) public cachedUserRewards;
+    mapping(address => bool) internal _hasDeposited;
+    address[] public users;
 
     // Reward Token State
     /// @notice An internal reward token is a token where the vault is the only source of rewards and the
@@ -98,6 +102,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     uint256 public THRESHOLD;
     uint256 public FEE;
     uint256 public constant PRECISION = 1000;
+    bool public isVaultActive;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -148,6 +153,15 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     }
 
     //============================================================================================//
+    //                                           MODIFIERS                                        //
+    //============================================================================================//
+
+    modifier onlyWhileActive() {
+        if (!isVaultActive) revert LiquidityVault_Inactive();
+        _;
+    }
+
+    //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
@@ -162,9 +176,16 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     ///                         receives after an external interaction with the liquidity pool
     function deposit(uint256 amount_, uint256 slippageParam_)
         external
+        onlyWhileActive
         nonReentrant
         returns (uint256 lpAmountOut)
     {
+        if (!_hasDeposited[msg.sender]) {
+            _hasDeposited[msg.sender] = true;
+            users.push(msg.sender);
+        }
+
+        // Calculate amount of OHM to borrow
         uint256 ohmToBorrow = _valueCollateral(amount_);
 
         // Cache pair token and OHM balance before deposit
@@ -220,7 +241,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         uint256 lpAmount_,
         uint256[] calldata minTokenAmounts_,
         bool claim_
-    ) external nonReentrant returns (uint256) {
+    ) external onlyWhileActive nonReentrant returns (uint256) {
         if (lpAmount_ == 0 || minTokenAmounts_[0] == 0 || minTokenAmounts_[1] == 0)
             revert LiquidityVault_InvalidParams();
         if (!_isPoolSafe()) revert LiquidityVault_PoolImbalanced();
@@ -250,7 +271,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     }
 
     /// @notice                     Claims user's rewards for all reward tokens
-    function claimRewards() external nonReentrant {
+    function claimRewards() external onlyWhileActive nonReentrant {
         uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256 numExternalRewardTokens = externalRewardTokens.length;
 
@@ -277,6 +298,10 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     //============================================================================================//
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
+
+    function getUsers() public view returns (address[] memory) {
+        return users;
+    }
 
     function getInternalRewardTokens() public view returns (InternalRewardToken[] memory) {
         return internalRewardTokens;
@@ -593,6 +618,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     /// @notice                 Registers the vault in the LQREG contract
     /// @dev                    This function can only be accessed by the liquidityvault_admin role
     function activate() external onlyRole("liquidityvault_admin") {
+        isVaultActive = true;
         LQREG.addVault(address(this));
     }
 
@@ -600,6 +626,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     /// @dev                    This function can only be accessed by the liquidityvault_admin role
     function deactivate(uint256 id_) external onlyRole("liquidityvault_admin") {
         LIMIT = 0;
+        isVaultActive = false;
         LQREG.removeVault(id_, address(this));
     }
 
@@ -699,6 +726,20 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
                 ++i;
             }
         }
+    }
+
+    /// @notice                   Transfers tokens from the contract to the admin
+    /// @param  token_            The address of the token to transfer
+    /// @param  amount_           The amount of tokens to transfer
+    /// @dev                      This function can only be accessed by the liquidityvault_admin role and only when
+    ///                           the vault is deactivated. This acts as an emergency migration function in the event
+    ///                           that the vault is compromised.
+    function rescueToken(address token_, uint256 amount_)
+        external
+        onlyRole("liquidityvault_admin")
+    {
+        if (isVaultActive) revert LiquidityVault_StillActive();
+        ERC20(token_).safeTransfer(msg.sender, amount_);
     }
 
     /// @notice                    Updates the maximum amount of OHM that can be minted by this contract

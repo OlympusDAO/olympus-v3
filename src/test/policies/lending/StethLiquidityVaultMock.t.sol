@@ -209,6 +209,9 @@ contract StethLiquidityVaultTest is Test {
             liquidityVault.addInternalRewardToken(address(reward), 1e18, block.timestamp); // 1 REWARD token per second
             liquidityVault.addExternalRewardToken(address(externalReward));
 
+            // Activate vault
+            liquidityVault.activate();
+
             reward.mint(address(liquidityVault), 1e23);
         }
 
@@ -230,6 +233,7 @@ contract StethLiquidityVaultTest is Test {
     }
 
     /// [X]  deposit
+    ///     [X]  Cannot be accessed when inactive
     ///     [X]  Can be accessed by anyone
     ///     [X]  Can handle any amount up to the limit
     ///     [X]  Fails if pool is imbalanced
@@ -241,6 +245,17 @@ contract StethLiquidityVaultTest is Test {
     ///     [X]  Deposits Balancer LP into Aura
     ///     [X]  Updates user's tracked LP position
     ///     [X]  Updates tracked total LP amount
+
+    function testCorrectness_depositCannotBeAccessedWhenInactive() public {
+        liquidityVault.deactivate(0);
+
+        // Get error
+        bytes memory err = abi.encodeWithSignature("LiquidityVault_Inactive()");
+        vm.expectRevert(err);
+
+        vm.prank(alice);
+        liquidityVault.deposit(STETH_AMOUNT, 0);
+    }
 
     function testCorrectness_depositUserAndAmountFuzz(address user_) public {
         vm.assume(user_ != address(0) && user_ != address(liquidityVault));
@@ -353,6 +368,7 @@ contract StethLiquidityVaultTest is Test {
     }
 
     /// [X]  withdraw (no time has passed)
+    ///     [X]  Cannot be called when inactive
     ///     [X]  Withdraw anyone can deposit
     ///     [X]  Withdraw can be called with any amount up to the limit
     ///     [X]  Fails if pool and oracle prices differ substantially
@@ -368,7 +384,17 @@ contract StethLiquidityVaultTest is Test {
         liquidityVault.deposit(STETH_AMOUNT, 0);
     }
 
-    function testCorrectness__withdrawAnyoneCanWithdraw_noTimeChange(address user_) public {
+    function testCorrectness_withdrawCannotBeCalledWhenInactive_noTimeChange() public {
+        liquidityVault.deactivate(0);
+
+        bytes memory err = abi.encodeWithSignature("LiquidityVault_Inactive()");
+        vm.expectRevert(err);
+
+        vm.prank(alice);
+        liquidityVault.withdraw(1e18, minTokenAmounts_, false);
+    }
+
+    function testCorrectness_withdrawAnyoneCanWithdraw_noTimeChange(address user_) public {
         vm.assume(user_ != address(0) && user_ != address(liquidityVault));
 
         // Mint wstETH
@@ -536,6 +562,7 @@ contract StethLiquidityVaultTest is Test {
     }
 
     /// [X]  withdraw (time has passed)
+    ///     [X]  Cannot be accessed when inactive
     ///     [X]  Can be accessed by anyone
     ///     [X]  Withdraw can be called with any amount up to the limit
     ///     [X]  Fails if pool and oracle prices differ substantially
@@ -555,6 +582,16 @@ contract StethLiquidityVaultTest is Test {
         vm.prank(alice);
         liquidityVault.deposit(STETH_AMOUNT, 1e18);
         vm.warp(block.timestamp + 10); // Increase time 10 seconds so there are rewards
+    }
+
+    function testCorrectness_withdrawCannotBeCalledWhenInactive_timeChange() public {
+        liquidityVault.deactivate(0);
+
+        bytes memory err = abi.encodeWithSignature("LiquidityVault_Inactive()");
+        vm.expectRevert(err);
+
+        vm.prank(alice);
+        liquidityVault.withdraw(1e18, minTokenAmounts_, false);
     }
 
     function testCorrectness_withdrawUserFuzz_timeChange(address user_) public {
@@ -985,8 +1022,15 @@ contract StethLiquidityVaultTest is Test {
     ///     [X]  Can only be called by admin
     ///     [X]  Adds vault to LQREG
 
+    function _activateSetup() internal {
+        // Remove currently activated vault
+        liquidityVault.deactivate(0);
+    }
+
     function testCorrectness_activateCanOnlyBeCalledByAdmin(address user_) public {
         vm.assume(user_ != address(this));
+
+        _activateSetup();
 
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
@@ -999,6 +1043,8 @@ contract StethLiquidityVaultTest is Test {
     }
 
     function testCorrectness_activateCorrectlyAddsVaultToLQREG() public {
+        _activateSetup();
+
         // Verify initial state
         assertEq(lqreg.activeVaultCount(), 0);
 
@@ -1028,6 +1074,8 @@ contract StethLiquidityVaultTest is Test {
     }
 
     function testCorrectness_deactivateCorrectlyRemovesVaultFromLQREG() public {
+        _activateSetup();
+
         // Activate vault
         liquidityVault.activate();
 
@@ -1410,5 +1458,35 @@ contract StethLiquidityVaultTest is Test {
 
         // Set fee
         liquidityVault.setFee(newFee_);
+    }
+
+    /// [X] can view lp positions of all depositors
+
+    function testCorrectness_canViewAllLpPositions(address user_) public {
+        // Alice deposit
+        vm.prank(alice);
+        liquidityVault.deposit(1e18, 1e18);
+
+        // Add second depositor
+        vm.startPrank(user_);
+        wsteth.mint(user_, 1e18);
+        wsteth.approve(address(liquidityVault), 1e18);
+        liquidityVault.deposit(1e18, 1e18);
+        vm.stopPrank();
+
+        // Verify depositor list
+        address[] memory users = liquidityVault.getUsers();
+        assertEq(users[0], alice);
+        assertEq(users[1], user_);
+
+        // Build expected lp positions
+        uint256 numUsers = users.length;
+        uint256[] memory expectedLpPositions = new uint256[](2);
+        for (uint256 i; i < numUsers; ++i) {
+            expectedLpPositions[i] = liquidityVault.lpPositions(users[i]);
+        }
+
+        assertEq(expectedLpPositions[0], 1e18);
+        assertEq(expectedLpPositions[1], 1e18);
     }
 }
