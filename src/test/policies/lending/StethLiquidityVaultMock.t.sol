@@ -945,8 +945,8 @@ contract StethLiquidityVaultTest is Test {
         assertEq(liquidityVault.internalRewardsForToken(1, user_), 5e18);
     }
 
-    /// []  Antagnonist tests
-    ///     []  Cannot get infinite rewards
+    /// [X]  Antagnonist tests
+    ///     [X]  Cannot get infinite rewards
 
     function _withdrawSetUpAntagonist() internal {
         liquidityVault.setLimit(1_000_000e9);
