@@ -945,6 +945,37 @@ contract StethLiquidityVaultTest is Test {
         assertEq(liquidityVault.internalRewardsForToken(1, user_), 5e18);
     }
 
+    /// []  Antagnonist tests
+    ///     []  Cannot get infinite rewards
+
+    function _withdrawSetUpAntagonist() internal {
+        liquidityVault.setLimit(1_000_000e9);
+        wsteth.mint(alice, 1_000e18);
+
+        vm.startPrank(alice);
+        wsteth.approve(address(liquidityVault), STETH_AMOUNT * 100);
+        liquidityVault.deposit(STETH_AMOUNT * 100, 100e18);
+        vm.stopPrank();
+        vm.warp(block.timestamp + 10); // Increase time 10 seconds so there are rewards
+    }
+
+    function testCorrectness_infiniteRewards(address user_) public {
+        vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityVault));
+
+        // Setup
+        _withdrawSetUpAntagonist();
+
+        // Add second depositor
+        vm.startPrank(user_);
+        wsteth.mint(user_, 1e18);
+        wsteth.approve(address(liquidityVault), 1e18);
+        liquidityVault.deposit(1e18, 1e18);
+        liquidityVault.withdraw(1, minTokenAmounts_, false);
+        vm.stopPrank();
+
+        assertFalse(liquidityVault.internalRewardsForToken(0, user_) == type(uint256).max);
+    }
+
     // ========= VIEW TESTS ========= //
 
     /// [X]  internalRewardsForToken
