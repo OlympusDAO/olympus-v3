@@ -9,7 +9,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondTeller} from "interfaces/IBondTeller.sol";
-import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.sol";
 
 import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
@@ -18,7 +17,6 @@ import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {OlympusLiquidityRegistry} from "modules/LQREG/OlympusLiquidityRegistry.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
@@ -29,11 +27,8 @@ import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Distributor} from "policies/Distributor.sol";
 import {Emergency} from "policies/Emergency.sol";
 import {BondManager} from "policies/BondManager.sol";
-import {StethLiquidityVault} from "policies/lending/StethLiquidityVault.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockAuraBooster, MockAuraRewardPool} from "test/mocks/AuraMocks.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
@@ -52,7 +47,6 @@ contract OlympusDeploy is Script {
     OlympusMinter public MINTR;
     OlympusInstructions public INSTR;
     OlympusRoles public ROLES;
-    OlympusLiquidityRegistry public LQREG;
 
     /// Policies
     Operator public operator;
@@ -64,7 +58,6 @@ contract OlympusDeploy is Script {
     Distributor public distributor;
     Emergency public emergency;
     BondManager public bondManager;
-    StethLiquidityVault public stethLiquidityVault;
 
     /// Construction variables
 
@@ -81,13 +74,10 @@ contract OlympusDeploy is Script {
     /// Chainlink price feed addresses
     AggregatorV2V3Interface public ohmEthPriceFeed;
     AggregatorV2V3Interface public reserveEthPriceFeed;
-    AggregatorV2V3Interface public ethUsdPriceFeed;
-    AggregatorV2V3Interface public stethUsdPriceFeed;
 
     /// External contracts
     address public staking;
     address public gnosisEasyAuction;
-    address public auraBooster;
 
     // Deploy system storage
     mapping(string => bytes4) public selectorMap;
@@ -102,7 +92,6 @@ contract OlympusDeploy is Script {
         selectorMap["OlympusTreasury"] = this._deployTreasury.selector;
         selectorMap["OlympusMinter"] = this._deployMinter.selector;
         selectorMap["OlympusRoles"] = this._deployRoles.selector;
-        selectorMap["OlympusLiquidityRegistry"] = this._deployLiquidityRegistry.selector;
         selectorMap["Operator"] = this._deployOperator.selector;
         selectorMap["OlympusHeart"] = this._deployHeart.selector;
         selectorMap["BondCallback"] = this._deployBondCallback.selector;
@@ -112,7 +101,6 @@ contract OlympusDeploy is Script {
         selectorMap["Distributor"] = this._deployDistributor.selector;
         selectorMap["Emergency"] = this._deployEmergency.selector;
         selectorMap["BondManager"] = this._deployBondManager.selector;
-        selectorMap["StethLiquidityVault"] = this._deployStethLiquidityVault.selector;
 
         // Load environment addresses
         string memory env = vm.readFile("./src/scripts/env.json");
@@ -125,12 +113,9 @@ contract OlympusDeploy is Script {
         bondFixedExpiryTeller = IBondTeller(env.readAddress(string.concat(chain_, ".external.bond-protocol.BondFixedExpiryTeller")));
         bondAggregator = IBondAggregator(env.readAddress(string.concat(chain_, ".external.bond-protocol.BondAggregator")));
         ohmEthPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(chain_, ".external.chainlink.ohmEthPriceFeed")));
-        ethUsdPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(chain_, ".external.chainlink.ethUsdPriceFeed")));
-        stethUsdPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(chain_, ".external.chainlink.stethUsdPriceFeed")));
         reserveEthPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(chain_, ".external.chainlink.daiEthPriceFeed")));
         staking = env.readAddress(string.concat(chain_, ".olympus.legacy.Staking"));
         gnosisEasyAuction = env.readAddress(string.concat(chain_, ".external.gnosis.EasyAuction"));
-        auraBooster = env.readAddress(string.concat(chain_, ".external.aura.Booster"));
 
         // Bophades contracts
         kernel = Kernel(env.readAddress(string.concat(chain_, ".olympus.Kernel")));
@@ -419,78 +404,14 @@ contract OlympusDeploy is Script {
         return address(emergency);
     }
 
-    function _deployBondManager(bytes memory args) public returns (address) {
+    function _deployBondManager(bytes memory args) public returns(address) {
+
         // Deploy BondManager policy
         vm.broadcast();
         bondManager = new BondManager(kernel, address(bondFixedExpiryAuctioneer), address(bondFixedExpiryTeller), gnosisEasyAuction, address(ohm));
         console2.log("BondManager deployed at:", address(bondManager));
 
         return address(bondManager);
-    }
-
-    function _deployLiquidityRegistry(bytes memory args) public returns (address) {
-        /// No additional arguments for Liqudity Registry module
-
-        // Deploy Liquidity Registry module
-        vm.broadcast();
-        LQREG = new OlympusLiquidityRegistry(kernel);
-        console2.log("LiquidityRegistry deployed at:", address(LQREG));
-
-        return address(LQREG);
-    }
-
-    function _deployStethLiquidityVault(bytes memory args) public returns (address) {
-        // Decode implementation specifc args for StethLiquidityVault
-        (
-            address steth_,
-            address balVault_,
-            address liquidityPool_,
-            uint256 auraPoolId_,
-            address auraRewardsPool_,
-            uint48 ohmEthUpdateThreshold_,
-            uint48 ethUsdUpdateThreshold_,
-            uint48 stethUsdUpdateThreshold_
-        ) = abi.decode(args, (address, address, address, uint256, address, uint48, uint48, uint48));
-
-        // Price Feed Objects
-        StethLiquidityVault.OracleFeed memory ohmEthOracleFeed = StethLiquidityVault.OracleFeed({
-            feed: ohmEthPriceFeed,
-            updateThreshold: 1 days
-        });
-
-        StethLiquidityVault.OracleFeed memory ethUsdOracleFeed = StethLiquidityVault.OracleFeed({
-            feed: ethUsdPriceFeed,
-            updateThreshold: 1 days
-        });
-
-        StethLiquidityVault.OracleFeed memory stethUsdOracleFeed = StethLiquidityVault.OracleFeed({
-            feed: stethUsdPriceFeed,
-            updateThreshold: 1 days
-        });
-
-        // Aura Pool Object
-        StethLiquidityVault.AuraPool memory auraPool = StethLiquidityVault.AuraPool({
-            pid: 0,
-            booster: IAuraBooster(auraBooster),
-            rewardsPool: IAuraRewardPool(auraRewardsPool_)
-        });
-
-        // Deploy StethLiquidityVault policy
-        vm.broadcast();
-        stethLiquidityVault = new StethLiquidityVault(
-            kernel,
-            address(ohm),
-            address(steth_),
-            address(balVault_),
-            address(liquidityPool_),
-            ohmEthOracleFeed,
-            ethUsdOracleFeed,
-            stethUsdOracleFeed,
-            auraPool
-        );
-        console2.log("StethLiquidityVault deployed at:", address(stethLiquidityVault));
-
-        return address(stethLiquidityVault);
     }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
@@ -666,44 +587,21 @@ contract OlympusDeploy is Script {
 }
 
 contract DependencyDeploy is Script {
-    // MockPriceFeed public ohmEthPriceFeed;
-    // MockPriceFeed public ethUsdPriceFeed;
-    // MockPriceFeed public stethUsdPriceFeed;
-    // MockPriceFeed public reserveEthPriceFeed;
-
-    MockAuraBooster public auraBooster;
-    MockAuraRewardPool public auraRewardPool;
+    MockPriceFeed public ohmEthPriceFeed;
+    MockPriceFeed public reserveEthPriceFeed;
 
     function deploy() external {
         vm.startBroadcast();
 
-        // Reward token
-        MockERC20 mockLdo = new MockERC20("Mock Lido DAO Token", "mLDO", 18);
-        MockERC20 rewardToken = new MockERC20("Mock Aura Reward Token", "RWRD", 18);
-        console2.log("Mock Lido DAO Token deployed to:", address(mockLdo));
-        console2.log("Mock Aura Reward Token deployed to:", address(rewardToken));
-
-        // Deploy Aura mocks
-        auraRewardPool = new MockAuraRewardPool(0xE2E393fC878CC23701A7A0Cc226f7d64ff77F8b0, address(rewardToken));
-        auraBooster = new MockAuraBooster(0xE2E393fC878CC23701A7A0Cc226f7d64ff77F8b0, address(auraRewardPool));
-        console2.log("Mock Aura Reward Pool deployed to:", address(auraRewardPool));
-        console2.log("Mock Aura Booster deployed to:", address(auraBooster));
-
         // Deploy the price feeds
-        // ohmEthPriceFeed = new MockPriceFeed();
-        // console2.log("OHM-ETH Price Feed deployed to:", address(ohmEthPriceFeed));
-        // ethUsdPriceFeed = new MockPriceFeed();
-        // console2.log("ETH-USD Price Feed deployed to:", address(ethUsdPriceFeed));
-        // stethUsdPriceFeed = new MockPriceFeed();
-        // console2.log("stETH-USD Price Feed deployed to:", address(stethUsdPriceFeed));
-        // reserveEthPriceFeed = new MockPriceFeed();
-        // console2.log("RESERVE-ETH Price Feed deployed to:", address(reserveEthPriceFeed));
+        ohmEthPriceFeed = new MockPriceFeed();
+        console2.log("OHM-ETH Price Feed deployed to:", address(ohmEthPriceFeed));
+        reserveEthPriceFeed = new MockPriceFeed();
+        console2.log("RESERVE-ETH Price Feed deployed to:", address(reserveEthPriceFeed));
 
         // Set the decimals of the price feeds
-        // ohmEthPriceFeed.setDecimals(18);
-        // ethUsdPriceFeed.setDecimals(8);
-        // stethUsdPriceFeed.setDecimals(8);
-        // reserveEthPriceFeed.setDecimals(18);
+        ohmEthPriceFeed.setDecimals(18);
+        reserveEthPriceFeed.setDecimals(18);
 
         vm.stopBroadcast();
     }
