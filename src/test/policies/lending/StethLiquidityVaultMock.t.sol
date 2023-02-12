@@ -238,6 +238,7 @@ contract StethLiquidityVaultTest is Test {
     ///     [X]  Can handle any amount up to the limit
     ///     [X]  Fails if pool is imbalanced
     ///     [X]  Cannot be called beyond limit
+    ///     [X]  Limit persists correctly as price moves
     ///     [X]  Increases user's wstETH deposit
     ///     [X]  Correctly values stETH in terms of OHM
     ///     [X]  Transfers wstETH from user
@@ -292,6 +293,40 @@ contract StethLiquidityVaultTest is Test {
 
         liquidityVault.deposit(1e18, 1e18); // Should try to push mint beyond limit
         vm.stopPrank();
+    }
+
+    function testCorrectness_depositLimitPersistsCorrectlyAsPriceMoves() public {
+        // Alice deposits up to the limit
+        wsteth.mint(alice, 1e19);
+        vm.startPrank(alice);
+        wsteth.approve(address(liquidityVault), 1e19);
+        liquidityVault.deposit(1e19, 1e18); // Should mint 1000 OHM which is up to the limit
+
+        bytes memory err = abi.encodeWithSignature("LiquidityVault_LimitViolation()");
+        vm.expectRevert(err);
+
+        // Try to deposit
+        liquidityVault.deposit(1e18, 1e18); // Should try to push mint beyond limit
+
+        // Shift pool price to emit OHM to circulating supply
+        vault.setPoolAmounts(500e9, 15e18);
+        ohmEthPriceFeed.setLatestAnswer(3e16); // 0.03 ETH
+
+        // Try to deposit again
+        // System should still consider there to be 1000 OHM since 500 are in the pool
+        // and 500 were emitted to the circulating supply
+        vm.expectRevert(err);
+        liquidityVault.deposit(1e18, 1e18);
+
+        // Shift price to have net removed OHM from circulating supply
+        vault.setPoolAmounts(2000e9, 1e18);
+        ohmEthPriceFeed.setLatestAnswer(5e14); // 0.0005 ETH
+
+        // Try to deposit again
+        // System should till consider there to be 1000 OHM since ohmMinted is 1000 but
+        // 500 were removed from the circulating supply
+        vm.expectRevert(err);
+        liquidityVault.deposit(1e18, 1e18);
     }
 
     function testCorrectness_depositFailsIfPricesDiffer() public {

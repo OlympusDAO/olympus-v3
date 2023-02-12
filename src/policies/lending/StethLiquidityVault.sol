@@ -279,7 +279,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
     //                                      ADMIN FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @notice Updates the minimum update frequency for each price feed needed for it to not be considered stale
+    /// @notice                 Updates the minimum update frequency for each price feed needed for it to not be considered stale
     function changeUpdateThresholds(
         uint48 ohmEthPriceFeedUpdateThreshold_,
         uint48 ethUsdPriceFeedUpdateThreshold_,
@@ -288,5 +288,16 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         ohmEthPriceFeed.updateThreshold = ohmEthPriceFeedUpdateThreshold_;
         ethUsdPriceFeed.updateThreshold = ethUsdPriceFeedUpdateThreshold_;
         stethUsdPriceFeed.updateThreshold = stethUsdPriceFeedUpdateThreshold_;
+    }
+
+    /// @notice                 Rescue funds from Aura in the event the contract was shut off due to a bug
+    /// @dev                    This function can only be accessed by the liquidityvault_admin role and only when
+    ///                         the vault is deactivated. This acts as an emergency migration function in the event
+    ///                         that the vault is compromised.
+    function rescueFundsFromAura() external onlyRole("liquidityvault_admin") {
+        if (isVaultActive) revert LiquidityVault_StillActive();
+
+        uint256 auraBalance = auraPool.rewardsPool.balanceOf(address(this));
+        auraPool.rewardsPool.withdrawAndUnwrap(auraBalance, false);
     }
 }
