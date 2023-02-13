@@ -7,7 +7,7 @@ import {SingleSidedLiquidityVault} from "policies/lending/abstracts/SingleSidedL
 
 // Import external dependencies
 import {AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
-import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool} from "policies/lending/interfaces/IBalancer.sol";
+import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool, IBalancerHelper} from "policies/lending/interfaces/IBalancer.sol";
 import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.sol";
 import {IWsteth} from "policies/lending/interfaces/ILido.sol";
 
@@ -33,6 +33,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
 
     // Balancer Contracts
     IVault public vault;
+    IBalancerHelper public balancerHelper;
 
     // Aura Pool Info
     AuraPool public auraPool;
@@ -260,6 +261,40 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
     //============================================================================================//
     //                                      VIEW FUNCTIONS                                        //
     //============================================================================================//
+
+    function getExpectedLPAmount(uint256 amount_) public override returns (uint256 bptAmount) {
+        // Cast pool address from abstract to Balancer Base pool
+        IBasePool pool = IBasePool(liquidityPool);
+
+        // Get amount of OHM that would be borrowed
+        uint256 ohmAmount = _valueCollateral(amount_);
+
+        // Build join pool request
+        address[] memory assets = new address[](2);
+        assets[0] = address(ohm);
+        assets[1] = address(pairToken);
+
+        uint256[] memory maxAmountsIn = new uint256[](2);
+        maxAmountsIn[0] = ohmAmount;
+        maxAmountsIn[1] = amount_;
+
+        JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
+            assets: assets,
+            maxAmountsIn: maxAmountsIn,
+            userData: abi.encode(1, maxAmountsIn, 0),
+            fromInternalBalance: false
+        });
+
+        (bptAmount, ) = balancerHelper.queryJoin(
+            pool.getPoolId(),
+            address(this),
+            address(this),
+            joinPoolRequest
+        );
+
+        // Always revert after a query
+        revert("Query only");
+    }
 
     function getUserStethShare(address user_) internal view returns (uint256) {
         // Cast pool address from abstract to Balancer Base pool

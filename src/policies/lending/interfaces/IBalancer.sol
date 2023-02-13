@@ -67,3 +67,19 @@ interface IFactory {
         address owner
     ) external returns (address);
 }
+
+interface IBalancerHelper {
+    function queryJoin(
+        bytes32 poolId,
+        address sender,
+        address recipient,
+        JoinPoolRequest memory request
+    ) external returns (uint256 bptOut, uint256[] memory amountsIn);
+
+    function queryExit(
+        bytes32 poolId,
+        address sender,
+        address recipient,
+        ExitPoolRequest memory request
+    ) external returns (uint256 bptIn, uint256[] memory amountsOut);
+}

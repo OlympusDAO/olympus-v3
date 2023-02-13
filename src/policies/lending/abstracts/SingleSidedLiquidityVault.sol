@@ -784,6 +784,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     //                                     VIRTUAL FUNCTIONS                                      //
     //============================================================================================//
 
+    function getExpectedLPAmount(uint256 amount_) public virtual returns (uint256) {}
+
     /// @notice                 Calculates the equivalent OHM amount for a given amount of partner tokens
     /// @param amount_          The amount of partner tokens to calculate the OHM value of
     /// @return uint256         The OHM value of the given amount of partner tokens
