@@ -16,6 +16,10 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @title Olympus stETH Single-Sided Liquidity Vault
 contract StethLiquidityVault is SingleSidedLiquidityVault {
+    // ========= ERRORS ========= //
+
+    error LiquidityVault_QueryOnly();
+
     // ========= DATA STRUCTURES ========= //
 
     struct OracleFeed {
@@ -262,6 +266,12 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
     //                                      VIEW FUNCTIONS                                        //
     //============================================================================================//
 
+    /// @notice                 Calculates the expected amount of Balancer Pool Tokens that would be received
+    ///                         for depositing a certain amount of stETH
+    /// @param amount_          Amount of stETH to calculate BPT for
+    /// @return bptAmount       Amount of BPT that would be received
+    /// @dev                    This function is not meant to be called within a transaction and it will always revert.
+    ///                         It is meant to be called off-chain (by the frontend) using a call request.
     function getExpectedLPAmount(uint256 amount_) public override returns (uint256 bptAmount) {
         // Cast pool address from abstract to Balancer Base pool
         IBasePool pool = IBasePool(liquidityPool);
@@ -293,7 +303,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         );
 
         // Always revert after a query
-        revert("Query only");
+        revert LiquidityVault_QueryOnly();
     }
 
     function getUserStethShare(address user_) internal view returns (uint256) {
