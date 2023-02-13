@@ -172,6 +172,7 @@ contract StethLiquidityVaultTest is Test {
                 address(ohm),
                 address(wsteth),
                 address(vault),
+                address(0), // Balancer helper, not needed in mock tests
                 address(liquidityPool),
                 ohmEthFeedStruct,
                 ethUsdFeedStruct,

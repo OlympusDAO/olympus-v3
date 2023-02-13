@@ -56,6 +56,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         address ohm_,
         address steth_,
         address vault_,
+        address balancerHelper_,
         address liquidityPool_,
         OracleFeed memory ohmEthPriceFeed_,
         OracleFeed memory ethUsdPriceFeed_,
@@ -64,6 +65,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
     ) SingleSidedLiquidityVault(kernel_, ohm_, steth_, liquidityPool_) {
         // Set Balancer vault
         vault = IVault(vault_);
+        balancerHelper = IBalancerHelper(balancerHelper_);
 
         // Set price feeds
         ohmEthPriceFeed = ohmEthPriceFeed_;
@@ -301,9 +303,6 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
             address(this),
             joinPoolRequest
         );
-
-        // Always revert after a query
-        revert LiquidityVault_QueryOnly();
     }
 
     function getUserStethShare(address user_) internal view returns (uint256) {

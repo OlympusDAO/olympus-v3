@@ -8,7 +8,7 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
-import {IVault, IBasePool, IFactory, JoinPoolRequest} from "src/policies/lending/interfaces/IBalancer.sol";
+import {IVault, IBasePool, IBalancerHelper, IFactory, JoinPoolRequest} from "src/policies/lending/interfaces/IBalancer.sol";
 import {MockVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
 import {MockAuraBooster, MockAuraRewardPool} from "test/mocks/AuraMocks.sol";
 
@@ -21,6 +21,8 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {StethLiquidityVault} from "policies/lending/StethLiquidityVault.sol";
 
 import "src/Kernel.sol";
+
+import {console2} from "forge-std/console2.sol";
 
 interface ILDO {
     function generateTokens(address _owner, uint256 _amount) external returns (bool);
@@ -73,6 +75,7 @@ contract StethLiquidityVaultTest is Test {
     IVault internal vault;
     IFactory internal weightedPoolFactory;
     IBasePool internal liquidityPool;
+    IBalancerHelper internal balancerHelper;
 
     MockAuraBooster internal booster;
     MockAuraRewardPool internal auraPool;
@@ -148,6 +151,7 @@ contract StethLiquidityVaultTest is Test {
             // Balancer setup
             vault = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
             weightedPoolFactory = IFactory(0x8E9aa87E45e92bad84D5F8DD1bff34Fb92637dE9);
+            balancerHelper = IBalancerHelper(0x5aDDCCa35b7A0D07C74063c48700C8590E87864E);
 
             // Deploy Balancer pool
             ERC20[] memory tokens = new ERC20[](2);
@@ -172,6 +176,7 @@ contract StethLiquidityVaultTest is Test {
             // Label Balancer contracts
             vm.label(address(vault), "vault");
             vm.label(address(weightedPoolFactory), "weightedPoolFactory");
+            vm.label(address(balancerHelper), "balancerHelper");
             vm.label(address(liquidityPool), "liquidityPool");
         }
 
@@ -224,6 +229,7 @@ contract StethLiquidityVaultTest is Test {
                 address(ohm),
                 address(wsteth),
                 address(vault),
+                address(balancerHelper),
                 address(liquidityPool),
                 ohmEthFeedStruct,
                 ethUsdFeedStruct,
@@ -1044,5 +1050,30 @@ contract StethLiquidityVaultTest is Test {
         assertApproxEqRel(reward2.balanceOf(alice), 5e18, 1e16); // 1e16 = 1%
         assertApproxEqRel(liquidityVault.internalRewardsForToken(0, bob), 5e18, 1e16); // 1e16 = 1%
         assertApproxEqRel(liquidityVault.internalRewardsForToken(1, bob), 5e18, 1e16); // 1e16 = 1%
+    }
+
+    /// []  getExpectedLPAmount
+    ///     []  Returns correct amount of LP tokens for a deposit of 1 ETH
+    ///     []  Always reverts
+
+    function testCorrectness_getExpectedLPAmountReturnsCorrectAmount() public {
+        // Cache initial balances
+        uint256 initialLpBalance = ERC20(liquidityVault.liquidityPool()).balanceOf(
+            address(liquidityVault)
+        );
+        uint256 initialWstethBalance = wsteth.balanceOf(address(liquidityVault));
+        uint256 initialOhmBalance = ohm.balanceOf(address(liquidityVault));
+
+        // Calculate expected LP amount
+        assertTrue(liquidityVault.getExpectedLPAmount(1e18) > 0);
+        console2.log(liquidityVault.getExpectedLPAmount(1e18) / 1e18);
+
+        // No state should change
+        assertEq(
+            ERC20(liquidityVault.liquidityPool()).balanceOf(address(liquidityVault)),
+            initialLpBalance
+        );
+        assertEq(wsteth.balanceOf(address(liquidityVault)), initialWstethBalance);
+        assertEq(ohm.balanceOf(address(liquidityVault)), initialOhmBalance);
     }
 }
