@@ -1013,9 +1013,31 @@ contract StethLiquidityVaultTest is Test {
 
     // ========= VIEW TESTS ========= //
 
+    /// [X]  getMaxDeposit
     /// [X]  internalRewardsForToken
     /// [X]  externalRewardsForToken
     /// [X]  getOhmEmissions
+
+    function testCorrectness_getMaxDeposit() public {
+        // Check default limit
+        assertEq(liquidityVault.getMaxDeposit(), 1e19);
+
+        // Price moves
+        ohmEthPriceFeed.setLatestAnswer(1e17);
+
+        // Check limit
+        assertEq(liquidityVault.getMaxDeposit(), 1e20);
+
+        // Reset price
+        ohmEthPriceFeed.setLatestAnswer(1e16);
+
+        // Deposit
+        vm.prank(alice);
+        liquidityVault.deposit(1e18, 1e18);
+
+        // Check limit
+        assertEq(liquidityVault.getMaxDeposit(), 9e18);
+    }
 
     function testCorrectness_internalRewardsForToken(address user_) public {
         vm.assume(user_ != address(0) && user_ != alice && user_ != address(liquidityVault));

@@ -35,6 +35,10 @@ contract MockAuraRewardPool is IAuraRewardPool {
         reward = reward_;
     }
 
+    function balanceOf(address account_) public view returns (uint256) {
+        MockERC20(depositToken).balanceOf(address(this));
+    }
+
     function deposit(uint256 assets_, address receiver_) external {
         MockERC20(depositToken).transferFrom(receiver_, address(this), assets_);
     }

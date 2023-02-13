@@ -299,6 +299,20 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
 
+    function getMaxDeposit() public view returns (uint256) {
+        uint256 currentPoolOhmShare = _getPoolOhmShare();
+        uint256 emitted;
+
+        // Calculate max OHM mintable amount
+        if (ohmMinted > currentPoolOhmShare) emitted = ohmMinted - currentPoolOhmShare;
+        uint256 maxOhmAmount = LIMIT + ohmRemoved - ohmMinted - emitted;
+
+        // Convert max OHM mintable amount to pair token amount
+        uint256 ohmPerSteth = _valueCollateral(1e18); // OHM per 1 pairToken
+        uint256 pairTokenDecimalAdjustment = 10**pairToken.decimals();
+        return (maxOhmAmount * pairTokenDecimalAdjustment) / ohmPerSteth;
+    }
+
     function getUsers() public view returns (address[] memory) {
         return users;
     }

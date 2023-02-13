@@ -12,6 +12,8 @@ interface IAuraBooster {
 
 // Define Base Reward Pool interface
 interface IAuraRewardPool {
+    function balanceOf(address account_) external view returns (uint256);
+
     function deposit(uint256 assets_, address receiver_) external;
 
     function getReward(address account_, bool claimExtras_) external;
