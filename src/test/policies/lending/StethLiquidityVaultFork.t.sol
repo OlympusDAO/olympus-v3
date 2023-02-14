@@ -1052,9 +1052,9 @@ contract StethLiquidityVaultTest is Test {
         assertApproxEqRel(liquidityVault.internalRewardsForToken(1, bob), 5e18, 1e16); // 1e16 = 1%
     }
 
-    /// []  getExpectedLPAmount
-    ///     []  Returns correct amount of LP tokens for a deposit of 1 ETH
-    ///     []  Always reverts
+    /// [X]  getExpectedLPAmount
+    ///     [X]  Returns correct amount of LP tokens for a deposit of 1 ETH
+    ///     [X]  Always reverts
 
     function testCorrectness_getExpectedLPAmountReturnsCorrectAmount() public {
         // Cache initial balances

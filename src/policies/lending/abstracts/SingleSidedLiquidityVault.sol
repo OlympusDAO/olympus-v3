@@ -452,8 +452,11 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         for (uint256 i; i < numInternalRewardTokens; ) {
             InternalRewardToken memory rewardToken = internalRewardTokens[i];
 
-            uint256 timeDiff = block.timestamp - rewardToken.lastRewardTime;
-            uint256 totalRewards = (timeDiff * rewardToken.rewardsPerSecond);
+            uint256 totalRewards;
+            if (totalLP > 0) {
+                uint256 timeDiff = block.timestamp - rewardToken.lastRewardTime;
+                totalRewards = (timeDiff * rewardToken.rewardsPerSecond);
+            }
 
             accumulatedInternalRewards[i] = totalRewards;
 
