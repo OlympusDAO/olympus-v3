@@ -1552,6 +1552,8 @@ contract StethLiquidityVaultTest is Test {
     /// [X] can view lp positions of all depositors
 
     function testCorrectness_canViewAllLpPositions(address user_) public {
+        vm.assume(user_ != alice && user_ != address(this) && user_ != address(liquidityVault));
+
         // Alice deposit
         vm.prank(alice);
         liquidityVault.deposit(1e18, 1e18);

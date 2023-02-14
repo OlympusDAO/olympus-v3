@@ -80,9 +80,9 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     mapping(address => uint256) public pairTokenDeposits;
     mapping(address => uint256) public lpPositions;
     mapping(address => mapping(address => uint256)) public userRewardDebts; // Rewards accumulated prior to user's joining (MasterChef V2 math)
-    mapping(address => mapping(address => uint256)) public cachedUserRewards;
-    mapping(address => bool) internal _hasDeposited;
-    address[] public users;
+    mapping(address => mapping(address => uint256)) public cachedUserRewards; // Rewards that have been accumulated but not claimed (avoids underflow errors)
+    mapping(address => bool) internal _hasDeposited; // Used to determine if a user has ever deposited
+    address[] public users; // Used to track users that have interacted with this contract (for migration in the event of a bug)
 
     // Reward Token State
     /// @notice An internal reward token is a token where the vault is the only source of rewards and the
@@ -180,6 +180,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         nonReentrant
         returns (uint256 lpAmountOut)
     {
+        // If this is a new user, add them to the users array in case we need to migrate
+        // their state in the future
         if (!_hasDeposited[msg.sender]) {
             _hasDeposited[msg.sender] = true;
             users.push(msg.sender);
@@ -242,6 +244,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         uint256[] calldata minTokenAmounts_,
         bool claim_
     ) external onlyWhileActive nonReentrant returns (uint256) {
+        // Liquidity vaults should always be built around a two token pool so we can assume
+        // the array will always have two elements
         if (lpAmount_ == 0 || minTokenAmounts_[0] == 0 || minTokenAmounts_[1] == 0)
             revert LiquidityVault_InvalidParams();
         if (!_isPoolSafe()) revert LiquidityVault_PoolImbalanced();
@@ -251,7 +255,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         totalLP -= lpAmount_;
         lpPositions[msg.sender] -= lpAmount_;
 
-        // Withdraw OHM and stETH from LP
+        // Withdraw OHM and pairToken from LP
         (uint256 ohmReceived, uint256 pairTokenReceived) = _withdraw(lpAmount_, minTokenAmounts_);
 
         // Reduce deposit values
@@ -299,6 +303,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
 
+    /// @notice                         Gets the max amount of pair tokens that can be deposited currently
+    /// @return uint256                 The max amount of pair tokens that can be deposited currently
     function getMaxDeposit() public view returns (uint256) {
         uint256 currentPoolOhmShare = _getPoolOhmShare();
         uint256 emitted;
@@ -308,27 +314,33 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         uint256 maxOhmAmount = LIMIT + ohmRemoved - ohmMinted - emitted;
 
         // Convert max OHM mintable amount to pair token amount
-        uint256 ohmPerSteth = _valueCollateral(1e18); // OHM per 1 pairToken
+        uint256 ohmPerPairToken = _valueCollateral(1e18); // OHM per 1 pairToken
         uint256 pairTokenDecimalAdjustment = 10**pairToken.decimals();
-        return (maxOhmAmount * pairTokenDecimalAdjustment) / ohmPerSteth;
+        return (maxOhmAmount * pairTokenDecimalAdjustment) / ohmPerPairToken;
     }
 
+    /// @notice                         Gets all users that have deposited into the vault
+    /// @return address[]               An array of all users that have deposited into the vault
     function getUsers() public view returns (address[] memory) {
         return users;
     }
 
+    /// @notice                         Gets a list of all the internal reward tokens
+    /// @return InternalRewardToken[]   An array of all the internal reward tokens
     function getInternalRewardTokens() public view returns (InternalRewardToken[] memory) {
         return internalRewardTokens;
     }
 
+    /// @notice                         Gets a list of all the external reward tokens
+    /// @return ExternalRewardToken[]   An array of all the external reward tokens
     function getExternalRewardTokens() public view returns (ExternalRewardToken[] memory) {
         return externalRewardTokens;
     }
 
-    /// @notice                     Returns the amount of rewards a user has earned for a given reward token
-    /// @param  id_                 The ID of the reward token
-    /// @param  user_               The user's address to check rewards for
-    /// @return uint256              The amount of rewards the user has earned
+    /// @notice                         Returns the amount of rewards a user has earned for a given reward token
+    /// @param  id_                     The ID of the reward token
+    /// @param  user_                   The user's address to check rewards for
+    /// @return uint256                 The amount of rewards the user has earned
     function internalRewardsForToken(uint256 id_, address user_) public view returns (uint256) {
         InternalRewardToken memory rewardToken = internalRewardTokens[id_];
         uint256 lastRewardTime = rewardToken.lastRewardTime;
@@ -349,10 +361,10 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         return cachedUserRewards[user_][rewardToken.token] + totalAccumulatedRewards;
     }
 
-    /// @notice                     Returns the amount of rewards a user has earned for a given external reward token
-    /// @param  id_                 The ID of the external reward token
-    /// @param  user_               The user's address to check rewards for
-    /// @return uint256              The amount of rewards the user has earned
+    /// @notice                         Returns the amount of rewards a user has earned for a given external reward token
+    /// @param  id_                     The ID of the external reward token
+    /// @param  user_                   The user's address to check rewards for
+    /// @return uint256                 The amount of rewards the user has earned
     function externalRewardsForToken(uint256 id_, address user_) public view returns (uint256) {
         ExternalRewardToken memory rewardToken = externalRewardTokens[id_];
 
@@ -364,10 +376,10 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         return cachedUserRewards[user_][rewardToken.token] + totalAccumulatedRewards;
     }
 
-    /// @notice                     Calculates the net amount of OHM that this contract has emitted to or removed from the broader market
-    /// @return emitted             The amount of OHM that this contract has emitted to the broader market
-    /// @return removed             The amount of OHM that this contract has removed from the broader market
-    /// @dev                        This is based on a point-in-time snapshot of the liquidity pool's current OHM balance
+    /// @notice                         Calculates the net amount of OHM that this contract has emitted to or removed from the broader market
+    /// @return emitted                 The amount of OHM that this contract has emitted to the broader market
+    /// @return removed                 The amount of OHM that this contract has removed from the broader market
+    /// @dev                            This is based on a point-in-time snapshot of the liquidity pool's current OHM balance
     function getOhmEmissions() external view returns (uint256 emitted, uint256 removed) {
         uint256 currentPoolOhmShare = _getPoolOhmShare();
 
@@ -382,7 +394,6 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     // ========= CHECKS AND SAFETY ========= //
 
-    /// @dev                        TODO
     function _canDeposit(uint256 amount_) internal view virtual returns (bool) {
         uint256 currentPoolOhmShare = _getPoolOhmShare();
         uint256 emitted;
@@ -472,11 +483,11 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     function _updateInternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
         // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
-        if (totalLP != 0) {
-            InternalRewardToken storage rewardToken = internalRewardTokens[id_];
+        // This is where lastRewardTime doesn't get properly updated on first deposit
+        InternalRewardToken storage rewardToken = internalRewardTokens[id_];
+        if (totalLP != 0)
             rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
-            rewardToken.lastRewardTime = block.timestamp;
-        }
+        rewardToken.lastRewardTime = block.timestamp;
     }
 
     function _updateExternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
@@ -787,6 +798,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     //                                     VIRTUAL FUNCTIONS                                      //
     //============================================================================================//
 
+    /// @notice                 Calculates the expected amount of LP tokens to receive for a given pair token
+    ///                         deposit. This is useful for the frontend to have a standard interface across vaults
     function getExpectedLPAmount(uint256 amount_) public virtual returns (uint256) {}
 
     /// @notice                 Calculates the equivalent OHM amount for a given amount of partner tokens

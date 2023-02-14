@@ -16,10 +16,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @title Olympus stETH Single-Sided Liquidity Vault
 contract StethLiquidityVault is SingleSidedLiquidityVault {
-    // ========= ERRORS ========= //
-
-    error LiquidityVault_QueryOnly();
-
     // ========= DATA STRUCTURES ========= //
 
     struct OracleFeed {
