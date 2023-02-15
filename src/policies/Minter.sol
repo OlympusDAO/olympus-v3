@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-
-import {TransferHelper} from "libraries/TransferHelper.sol";
-
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
 import "src/Kernel.sol";
@@ -34,8 +29,8 @@ contract Minter is Policy, RolesConsumer {
     // Modules
     MINTRv1 internal MINTR;
 
-    // Burn metadata
-    /// @notice List of approved categories for logging OHM burns
+    // Mint metadata
+    /// @notice List of approved categories for logging OHM mints
     bytes32[] public categories;
     /// @notice Whether a category is approved for logging
     /// @dev This is used to prevent logging of mint events that are not consistent with standardized names
@@ -57,8 +52,11 @@ contract Minter is Policy, RolesConsumer {
 
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
-        requests = new Permissions[](1);
-        requests[0] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
+        Keycode MINTR_KEYCODE = toKeycode("MINTR");
+
+        requests = new Permissions[](2);
+        requests[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[1] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
     }
 
     // ========= MINT FUNCTIONS ========= //
@@ -76,6 +74,9 @@ contract Minter is Policy, RolesConsumer {
         uint256 amount_,
         bytes32 category_
     ) external onlyRole("minter_admin") onlyApproved(category_) {
+        // Increase mint allowance by provided amount
+        MINTR.increaseMintApproval(address(this), amount_);
+
         // Mint the OHM
         MINTR.mintOhm(to_, amount_);
 
@@ -87,7 +88,7 @@ contract Minter is Policy, RolesConsumer {
 
     /// @notice Add a category to the list of approved mint categories
     /// @param category_ Category to add
-    function addCategory(bytes32 category_) external onlyRole("burner_admin") {
+    function addCategory(bytes32 category_) external onlyRole("minter_admin") {
         if (categoryApproved[category_]) revert Minter_CategoryApproved();
         categories.push(category_);
         categoryApproved[category_] = true;
