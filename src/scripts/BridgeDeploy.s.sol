@@ -31,8 +31,11 @@ contract BridgeDeploy is Script {
     OlympusERC20Token public ohm;
 
     // Deploy to new testnet
-    function deploy(address lzEndpoint_, bool isMainnet_) external {
+    function deploy(address lzEndpoint_, bool isMainnet_, uint256 initCount_) external {
         vm.startBroadcast();
+
+        // 
+        if (!isMainnet_) initCount_ = 0;
 
         // Arb goerli endpoint
         //address lzEndpoint = 0x6aB5Ae6822647046626e83ee6dB8187151E1d5ab;
@@ -64,7 +67,7 @@ contract BridgeDeploy is Script {
 
         // Approve policies
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-        _deployBridge(address(kernel), lzEndpoint_, isMainnet_, 0); // Deploy and activate bridge
+        _deployBridge(address(kernel), lzEndpoint_, isMainnet_, initCount_); // Deploy and activate bridge
 
         // Grant roles
         auth.pushVault(address(MINTR), true);

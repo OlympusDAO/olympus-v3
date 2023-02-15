@@ -82,15 +82,17 @@ contract CrossChainBridge is
     // LZ app state
     
     /// @notice Storage for failed messages on receive.
+    /// @notice chainID => source address => endpoint nonce 
     mapping(uint16 => mapping(bytes => mapping(uint64 => bytes32))) public failedMessages;
 
     /// @notice Minimum gas needed for each chain. Optional.
+    /// @notice source chain => dest chain => min gas
     mapping(uint16 => mapping(uint16 => uint256)) public minDstGasLookup;
 
     /// @notice Trusted remote paths. Must be set by admin.
     mapping(uint16 => bytes) public trustedRemoteLookup;
 
-    // TODO
+    /// @notice LZ precrime address
     address public precrime;
 
     //============================================================================================//
@@ -129,11 +131,13 @@ contract CrossChainBridge is
         override
         returns (Permissions[] memory permissions)
     {
+        Keycode MINTR_KEYCODE = MINTR.KEYCODE();
+
         permissions = new Permissions[](4);
-        permissions[0] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
-        permissions[1] = Permissions(MINTR.KEYCODE(), MINTR.burnOhm.selector);
-        permissions[2] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
-        permissions[3] = Permissions(MINTR.KEYCODE(), MINTR.decreaseMintApproval.selector);
+        permissions[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        permissions[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        permissions[3] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -159,9 +163,8 @@ contract CrossChainBridge is
         emit BridgeTransferred(msg.sender, amount_, dstChainId_);
     }
 
-    // TODO receives info to mint to a user's wallet
     /// @notice Implementation of receiving an LZ message
-    /// @dev    Function must be public to be called by low-level call in lzReceive.
+    /// @dev    Function must be public to be called by low-level call in lzReceive
     function _receiveMessage(
         uint16 srcChainId_,
         bytes memory,
@@ -203,7 +206,7 @@ contract CrossChainBridge is
         ) revert Bridge_InvalidMessageSource();
 
         // NOTE: Use low-level call to handle any errors. We trust the underlying receive
-        // impl, so we are doing a regular call vs using ExcessivelySafeCall
+        // implementation, so we are doing a regular call vs using ExcessivelySafeCall
         (bool success, bytes memory reason) = address(this).call(
             abi.encodeWithSelector(
                 this._receiveMessage.selector,
@@ -267,6 +270,9 @@ contract CrossChainBridge is
         );
     }
 
+    /// @notice Verify if given gas is enough for the destination.
+    /// @dev    Used when an application uses custom adapter parameter and the amount of gas on the destination may
+    ///         vary for different messages
     function _checkGasLimit(
         uint16 dstChainId_,
         uint16 type_,
@@ -279,6 +285,7 @@ contract CrossChainBridge is
         if (providedGasLimit < minGasLimit) revert Bridge_GasLimitTooLow();
     }
 
+    /// @notice Return the gas limit for a custom adapter parameter
     function _getGasLimit(bytes memory adapterParams_)
         internal
         pure
@@ -313,7 +320,8 @@ contract CrossChainBridge is
         lzEndpoint.setReceiveVersion(version_);
     }
 
-    // TODO IDK
+    /// @notice Retries a received message. Used as last resort if retryPayload fails.
+    /// @dev    Unblocks queue and DESTROYS transaction forever. USE WITH CAUTION.
     function forceResumeReceive(uint16 srcChainId_, bytes calldata srcAddress_)
         external
         override
@@ -348,6 +356,7 @@ contract CrossChainBridge is
     }
 
     /// @notice Sets the minimum gas needed for a particular destination chain
+    /// @dev    Used for when custom adapter parameters are used.
     function setMinDstGas(
         uint16 dstChainId_,
         uint16 packetType_,
@@ -358,6 +367,7 @@ contract CrossChainBridge is
         emit SetMinDstGas(dstChainId_, packetType_, minGas_);
     }
 
+    /// @notice Activate or deactivate the bridge
     function setBridgeStatus(bool isActive_) external onlyRole("bridge_admin") {
         bridgeActive = isActive_;
         emit BridgeStatusSet(isActive_);
