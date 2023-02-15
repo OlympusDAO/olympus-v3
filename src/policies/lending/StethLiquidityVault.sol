@@ -16,6 +16,10 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @title Olympus stETH Single-Sided Liquidity Vault
 contract StethLiquidityVault is SingleSidedLiquidityVault {
+    // ========= EVENTS ========= //
+
+    event LiquidityVault_ExternalAccumulationError(address token);
+
     // ========= DATA STRUCTURES ========= //
 
     struct OracleFeed {
@@ -185,6 +189,12 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
             ExternalRewardToken storage rewardToken = externalRewardTokens[i];
             uint256 newBalance = ERC20(rewardToken.token).balanceOf(address(this));
 
+            // This shouldn't happen but adding a sanity check in case
+            if (newBalance < rewardToken.lastBalance) {
+                emit LiquidityVault_ExternalAccumulationError(rewardToken.token);
+                continue;
+            }
+
             rewards[i] = newBalance - rewardToken.lastBalance;
             rewardToken.lastBalance = newBalance;
 
@@ -218,7 +228,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         );
         uint256 ethUsdDecimals = ethUsdPriceFeed.feed.decimals();
 
-        // This is returned in 18 decimals and represents USD per stETH
+        // This is returned in 8 decimals and represents USD per stETH
         uint256 stethUsd = _validatePrice(
             address(stethUsdPriceFeed.feed),
             uint256(stethUsdPriceFeed.updateThreshold)

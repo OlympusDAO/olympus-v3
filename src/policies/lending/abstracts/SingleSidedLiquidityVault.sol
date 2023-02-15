@@ -482,7 +482,6 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     function _updateInternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
         // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
-        // This is where lastRewardTime doesn't get properly updated on first deposit
         InternalRewardToken storage rewardToken = internalRewardTokens[id_];
         if (totalLP != 0)
             rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
@@ -749,7 +748,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             accumulatedFees[rewardToken] = 0;
 
             ERC20(rewardToken.token).safeTransfer(msg.sender, feeToSend);
-            rewardToken.lastBalance = ERC20(rewardToken).balanceOf(address(this));
+            rewardToken.lastBalance = ERC20(rewardToken.token).balanceOf(address(this));
 
             unchecked {
                 ++i;
