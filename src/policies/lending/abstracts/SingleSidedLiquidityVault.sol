@@ -20,7 +20,11 @@ import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 // Import utilities
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
-/// @title Olympus Base Single Sided Liquidity Vault Contract
+/// @title  Olympus Base Single Sided Liquidity Vault Contract
+/// @dev    Some caveats around this contract:
+///         - No internal reward token should also be an external reward token
+///         - No pair token should also be an external reward token
+///         - No pair, internal reward, or external reward tokens should be ERC777s or non-standard ERC20s
 abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
     using TransferHelper for ERC20;
 
@@ -622,14 +626,15 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     }
 
     function _claimExternalRewards(uint256 id_) internal {
-        address rewardToken = externalRewardTokens[id_].token;
+        ExternalRewardToken storage rewardToken = externalRewardTokens[id_];
         uint256 reward = externalRewardsForToken(id_, msg.sender);
         uint256 fee = (reward * FEE) / PRECISION;
 
         userRewardDebts[msg.sender][rewardToken] += reward;
         accumulatedFees[rewardToken] += fee;
 
-        if (reward > 0) ERC20(rewardToken).safeTransfer(msg.sender, reward - fee);
+        if (reward > 0) ERC20(rewardToken.token).safeTransfer(msg.sender, reward - fee);
+        rewardToken.lastBalance = ERC20(rewardToken.token).balanceOf(address(this));
 
         emit RewardsClaimed(msg.sender, rewardToken, reward - fee);
     }
@@ -738,12 +743,13 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         }
 
         for (uint256 i; i < numExternalRewardTokens; ) {
-            address rewardToken = externalRewardTokens[i].token;
+            ExternalRewardToken storage rewardToken = externalRewardTokens[i];
             uint256 feeToSend = accumulatedFees[rewardToken];
 
             accumulatedFees[rewardToken] = 0;
 
-            ERC20(rewardToken).safeTransfer(msg.sender, feeToSend);
+            ERC20(rewardToken.token).safeTransfer(msg.sender, feeToSend);
+            rewardToken.lastBalance = ERC20(rewardToken).balanceOf(address(this));
 
             unchecked {
                 ++i;
