@@ -78,7 +78,6 @@ contract LQREGTest is Test {
 
     /// [X]  removeVault
     ///     [X]  Unapproved address cannot call
-    ///     [X]  Fails if vault at passed index doesn't match passed vault
     ///     [X]  Approved address can remove vault
 
     function _removeVaultSetup() internal {
@@ -95,19 +94,7 @@ contract LQREGTest is Test {
 
         // Try to add vault as unapproved user
         vm.prank(user_);
-        lqreg.removeVault(0, address(0));
-    }
-
-    function testCorrectness_removeVaultFailsWithSanityCheck() public {
-        _removeVaultSetup();
-
-        // Expected error
-        bytes memory err = abi.encodeWithSignature("LQREG_RemovalMismatch()");
-        vm.expectRevert(err);
-
-        // Try to remove vault with mismatched address
-        vm.prank(godmode);
-        lqreg.removeVault(0, address(1));
+        lqreg.removeVault(address(0));
     }
 
     function testCorrectness_approvedAddressCanRemoveVault() public {
@@ -123,7 +110,7 @@ contract LQREGTest is Test {
         assertEq(lqreg.activeVaults(1), address(1));
 
         vm.prank(godmode);
-        lqreg.removeVault(0, address(0));
+        lqreg.removeVault(address(0));
 
         // Verify vault was removed
         assertEq(lqreg.activeVaultCount(), 1);

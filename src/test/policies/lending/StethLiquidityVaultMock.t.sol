@@ -249,7 +249,7 @@ contract StethLiquidityVaultTest is Test {
     ///     [X]  Updates tracked total LP amount
 
     function testCorrectness_depositCannotBeAccessedWhenInactive() public {
-        liquidityVault.deactivate(0);
+        liquidityVault.deactivate();
 
         // Get error
         bytes memory err = abi.encodeWithSignature("LiquidityVault_Inactive()");
@@ -421,7 +421,7 @@ contract StethLiquidityVaultTest is Test {
     }
 
     function testCorrectness_withdrawCannotBeCalledWhenInactive_noTimeChange() public {
-        liquidityVault.deactivate(0);
+        liquidityVault.deactivate();
 
         bytes memory err = abi.encodeWithSignature("LiquidityVault_Inactive()");
         vm.expectRevert(err);
@@ -621,7 +621,7 @@ contract StethLiquidityVaultTest is Test {
     }
 
     function testCorrectness_withdrawCannotBeCalledWhenInactive_timeChange() public {
-        liquidityVault.deactivate(0);
+        liquidityVault.deactivate();
 
         bytes memory err = abi.encodeWithSignature("LiquidityVault_Inactive()");
         vm.expectRevert(err);
@@ -1113,7 +1113,7 @@ contract StethLiquidityVaultTest is Test {
 
     function _activateSetup() internal {
         // Remove currently activated vault
-        liquidityVault.deactivate(0);
+        liquidityVault.deactivate();
     }
 
     function testCorrectness_activateCanOnlyBeCalledByAdmin(address user_) public {
@@ -1159,7 +1159,7 @@ contract StethLiquidityVaultTest is Test {
         vm.expectRevert(err);
 
         vm.prank(user_);
-        liquidityVault.deactivate(0);
+        liquidityVault.deactivate();
     }
 
     function testCorrectness_deactivateCorrectlyRemovesVaultFromLQREG() public {
@@ -1173,7 +1173,7 @@ contract StethLiquidityVaultTest is Test {
         assertEq(lqreg.activeVaults(0), address(liquidityVault));
 
         // Deactivate vault
-        liquidityVault.deactivate(0);
+        liquidityVault.deactivate();
 
         // Verify end state
         assertEq(lqreg.activeVaultCount(), 0);

@@ -71,6 +71,9 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     OlympusERC20Token public ohm;
     ERC20 public pairToken;
 
+    // Token Decimals
+    uint256 public pairTokenDecimals;
+
     // Pool
     address public liquidityPool;
 
@@ -121,6 +124,9 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         // Set tokens
         ohm = OlympusERC20Token(ohm_);
         pairToken = ERC20(pairToken_);
+
+        // Set token decimals
+        pairTokenDecimals = pairToken.decimals();
 
         // Set pool
         liquidityPool = liquidityPool_;
@@ -359,10 +365,10 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         }
 
         // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
-        uint256 totalAccumulatedRewards = ((lpPositions[user_] * accumulatedRewardsPerShare) -
-            userRewardDebts[user_][rewardToken.token]) / 1e18;
+        uint256 totalAccumulatedRewards = (lpPositions[user_] * accumulatedRewardsPerShare) -
+            userRewardDebts[user_][rewardToken.token];
 
-        return cachedUserRewards[user_][rewardToken.token] + totalAccumulatedRewards;
+        return (cachedUserRewards[user_][rewardToken.token] + totalAccumulatedRewards) / 1e18;
     }
 
     /// @notice                         Returns the amount of rewards a user has earned for a given external reward token
@@ -373,11 +379,10 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         ExternalRewardToken memory rewardToken = externalRewardTokens[id_];
 
         // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
-        uint256 totalAccumulatedRewards = ((lpPositions[user_] *
-            rewardToken.accumulatedRewardsPerShare) - userRewardDebts[user_][rewardToken.token]) /
-            1e18;
+        uint256 totalAccumulatedRewards = (lpPositions[user_] *
+            rewardToken.accumulatedRewardsPerShare) - userRewardDebts[user_][rewardToken.token];
 
-        return cachedUserRewards[user_][rewardToken.token] + totalAccumulatedRewards;
+        return (cachedUserRewards[user_][rewardToken.token] + totalAccumulatedRewards) / 1e18;
     }
 
     /// @notice                         Calculates the net amount of OHM that this contract has emitted to or removed from the broader market
@@ -594,7 +599,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // Update reward debts so as to not understate the amount of rewards owed to the user, and push
             // any unclaimed rewards to the user's reward debt so that they can be claimed later
             ExternalRewardToken memory rewardToken = externalRewardTokens[i];
-            uint256 rewardDebtDiff = (lpAmount_ * rewardToken.accumulatedRewardsPerShare) / 1e18;
+            uint256 rewardDebtDiff = lpAmount_ * rewardToken.accumulatedRewardsPerShare;
 
             if (rewardDebtDiff > userRewardDebts[msg.sender][rewardToken.token]) {
                 userRewardDebts[msg.sender][rewardToken.token] = 0;
@@ -635,7 +640,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         if (reward > 0) ERC20(rewardToken.token).safeTransfer(msg.sender, reward - fee);
         rewardToken.lastBalance = ERC20(rewardToken.token).balanceOf(address(this));
 
-        emit RewardsClaimed(msg.sender, rewardToken, reward - fee);
+        emit RewardsClaimed(msg.sender, rewardToken.token, reward - fee);
     }
 
     //============================================================================================//
@@ -651,10 +656,10 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     /// @notice                 Unregisters the vault in the LQREG contract and sets the borrowable limit to 0
     /// @dev                    This function can only be accessed by the liquidityvault_admin role
-    function deactivate(uint256 id_) external onlyRole("liquidityvault_admin") {
+    function deactivate() external onlyRole("liquidityvault_admin") {
         LIMIT = 0;
         isVaultActive = false;
-        LQREG.removeVault(id_, address(this));
+        LQREG.removeVault(address(this));
     }
 
     /// @notice                    Adds a new internal reward token to the contract

@@ -14,10 +14,6 @@ abstract contract LQREGv1 is Module {
     event VaultAdded(address indexed vault);
     event VaultRemoved(address indexed vault);
 
-    // ========= ERRORS ========= //
-
-    error LQREG_RemovalMismatch();
-
     // ========= STATE ========= //
 
     /// @notice Count of active vaults
@@ -36,5 +32,5 @@ abstract contract LQREGv1 is Module {
 
     /// @notice         Removes an vault from the registry
     /// @param vault_   The address of the vault to remove
-    function removeVault(uint256 index_, address vault_) external virtual;
+    function removeVault(address vault_) external virtual;
 }

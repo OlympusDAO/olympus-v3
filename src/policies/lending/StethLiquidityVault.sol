@@ -47,6 +47,11 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
     OracleFeed public ethUsdPriceFeed;
     OracleFeed public stethUsdPriceFeed;
 
+    // Price Feed Decimals
+    uint32 public immutable ohmEthPriceFeedDecimals;
+    uint32 public immutable ethUsdPriceFeedDecimals;
+    uint32 public immutable stethUsdPriceFeedDecimals;
+
     //============================================================================================//
     //                                      POLICY SETUP                                          //
     //============================================================================================//
@@ -71,6 +76,11 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         ohmEthPriceFeed = ohmEthPriceFeed_;
         ethUsdPriceFeed = ethUsdPriceFeed_;
         stethUsdPriceFeed = stethUsdPriceFeed_;
+
+        // Set price feed decimals
+        ohmEthPriceFeedDecimals = ohmEthPriceFeed_.feed.decimals();
+        ethUsdPriceFeedDecimals = ethUsdPriceFeed_.feed.decimals();
+        stethUsdPriceFeedDecimals = stethUsdPriceFeed_.feed.decimals();
 
         // Set Aura pool info
         auraPool = auraPool_;
@@ -219,25 +229,28 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
             address(ohmEthPriceFeed.feed),
             uint256(ohmEthPriceFeed.updateThreshold)
         );
-        uint256 ohmEthDecimals = ohmEthPriceFeed.feed.decimals();
 
         // This is returned in 8 decimals and represents USD per ETH
         uint256 ethUsd = _validatePrice(
             address(ethUsdPriceFeed.feed),
             uint256(ethUsdPriceFeed.updateThreshold)
         );
-        uint256 ethUsdDecimals = ethUsdPriceFeed.feed.decimals();
 
         // This is returned in 8 decimals and represents USD per stETH
         uint256 stethUsd = _validatePrice(
             address(stethUsdPriceFeed.feed),
             uint256(stethUsdPriceFeed.updateThreshold)
         );
-        uint256 stethUsdDecimals = stethUsdPriceFeed.feed.decimals();
 
-        // Amount is 18 decimals in the case of stETH and OHM has 9 decimals so to get a result with 9
+        // Amount is 18 decimals in the case of wstETH and OHM has 9 decimals so to get a result with 9
         // decimals we need to use this decimal adjustment
-        uint256 decimalAdjustment = 10**(ohmEthDecimals + ethUsdDecimals - stethUsdDecimals - 9);
+        uint8 ohmDecimals = 9;
+        uint256 decimalAdjustment = 10 **
+            (ohmEthPriceFeedDecimals +
+                ethUsdPriceFeedDecimals +
+                ohmDecimals -
+                stethUsdPriceFeedDecimals -
+                pairTokenDecimals);
 
         return (amount_ * stethPerWsteth * stethUsd * decimalAdjustment) / (ohmEth * ethUsd * 1e18);
     }
@@ -320,9 +333,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
 
         (, uint256[] memory balances_, ) = vault.getPoolTokens(pool.getPoolId());
         uint256 bptTotalSupply = pool.totalSupply();
-
-        if (userLpBalance == 0) return 0;
-        else return (balances_[1] * userLpBalance) / bptTotalSupply;
+        return (balances_[1] * userLpBalance) / bptTotalSupply;
     }
 
     //============================================================================================//
