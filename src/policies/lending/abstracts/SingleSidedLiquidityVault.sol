@@ -629,8 +629,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         uint256 reward = externalRewardsForToken(id_, msg.sender);
         uint256 fee = (reward * FEE) / PRECISION;
 
-        userRewardDebts[msg.sender][rewardToken] += reward;
-        accumulatedFees[rewardToken] += fee;
+        userRewardDebts[msg.sender][rewardToken.token] += reward;
+        accumulatedFees[rewardToken.token] += fee;
 
         if (reward > 0) ERC20(rewardToken.token).safeTransfer(msg.sender, reward - fee);
         rewardToken.lastBalance = ERC20(rewardToken.token).balanceOf(address(this));
@@ -743,9 +743,9 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
         for (uint256 i; i < numExternalRewardTokens; ) {
             ExternalRewardToken storage rewardToken = externalRewardTokens[i];
-            uint256 feeToSend = accumulatedFees[rewardToken];
+            uint256 feeToSend = accumulatedFees[rewardToken.token];
 
-            accumulatedFees[rewardToken] = 0;
+            accumulatedFees[rewardToken.token] = 0;
 
             ERC20(rewardToken.token).safeTransfer(msg.sender, feeToSend);
             rewardToken.lastBalance = ERC20(rewardToken.token).balanceOf(address(this));
