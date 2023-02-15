@@ -395,12 +395,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     // ========= CHECKS AND SAFETY ========= //
 
     function _canDeposit(uint256 amount_) internal view virtual returns (bool) {
-        uint256 currentPoolOhmShare = _getPoolOhmShare();
-        uint256 emitted;
-
-        if (ohmMinted > currentPoolOhmShare) emitted = ohmMinted - currentPoolOhmShare;
-        if (amount_ + ohmMinted + emitted > LIMIT + ohmRemoved)
-            revert LiquidityVault_LimitViolation();
+        if (amount_ + ohmMinted > LIMIT + ohmRemoved) revert LiquidityVault_LimitViolation();
         return true;
     }
 
