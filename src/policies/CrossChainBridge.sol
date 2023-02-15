@@ -38,6 +38,7 @@ contract CrossChainBridge is
     error Bridge_InvalidMinGas();
     error Bridge_InvalidAdapterParams();
     error Bridge_NoTrustedPath();
+    error Bridge_Deactivated();
 
     // Bridge-specific events
     event BridgeTransferred(address sender_, uint256 amount_, uint16 dstChain_);
@@ -61,6 +62,7 @@ contract CrossChainBridge is
     event SetTrustedRemote(uint16 remoteChainId_, bytes path_);
     event SetTrustedRemoteAddress(uint16 remoteChainId_, bytes remoteAddress_);
     event SetMinDstGas(uint16 dstChainId_, uint16 type_, uint256 _minDstGas);
+    event BridgeStatusSet(bool isActive_);
 
     // Modules
     MINTRv1 public MINTR;
@@ -68,16 +70,27 @@ contract CrossChainBridge is
     ILayerZeroEndpoint public immutable lzEndpoint;
     ERC20 ohm;
 
-    // NOTE: Currently only used on mainnet
-    bool public counterEnabled;
+    /// @notice Flag for if offchain OHM counter is enabled or not
+    bool public counterEnabled; // NOTE: Currently only used on mainnet
+
+    /// @notice Flag to determine if bridge is allowed to send messages or not
+    bool public bridgeActive;
 
     /// @notice Count of how much OHM has been bridged offchain
     uint256 public offchainOhmCounter;
 
     // LZ app state
+    
+    /// @notice Storage for failed messages on receive.
     mapping(uint16 => mapping(bytes => mapping(uint64 => bytes32))) public failedMessages;
+
+    /// @notice Minimum gas needed for each chain. Optional.
     mapping(uint16 => mapping(uint16 => uint256)) public minDstGasLookup;
+
+    /// @notice Trusted remote paths. Must be set by admin.
     mapping(uint16 => bytes) public trustedRemoteLookup;
+
+    // TODO
     address public precrime;
 
     //============================================================================================//
@@ -87,10 +100,14 @@ contract CrossChainBridge is
     constructor(
         Kernel kernel_,
         address endpoint_,
-        bool enableCounter_
+        bool enableCounter_,
+        uint256 initCount_
     ) Policy(kernel_) {
         lzEndpoint = ILayerZeroEndpoint(endpoint_);
+        bridgeActive = true;
         counterEnabled = enableCounter_;
+        // Used primarily for migrating bridge data
+        if (enableCounter_) offchainOhmCounter = initCount_;
     }
 
     /// @inheritdoc Policy
@@ -125,20 +142,18 @@ contract CrossChainBridge is
 
     /// @notice Send OHM to an eligible chain
     function sendOhm(
+        uint16 dstChainId_,
         address to_,
-        uint256 amount_,
-        uint16 dstChainId_
+        uint256 amount_
     ) external payable {
+        if (!bridgeActive) revert Bridge_Deactivated();
         if (ohm.balanceOf(msg.sender) < amount_) revert Bridge_InsufficientAmount();
-
         if (counterEnabled) offchainOhmCounter += amount_;
-        // TODO check then set gas here?
-        // TODO uint256 gas = _checkGasLimit(dstChainId_,
 
+        // TODO check then set gas here using _checkGasLimit?
         bytes memory payload = abi.encode(to_, amount_);
 
         MINTR.burnOhm(msg.sender, amount_);
-
         _sendMessage(dstChainId_, payload, payable(msg.sender), address(0x0), bytes(""), msg.value);
 
         emit BridgeTransferred(msg.sender, amount_, dstChainId_);
@@ -146,14 +161,14 @@ contract CrossChainBridge is
 
     // TODO receives info to mint to a user's wallet
     /// @notice Implementation of receiving an LZ message
-    /// @dev    Function must be public to be called by low-level call
+    /// @dev    Function must be public to be called by low-level call in lzReceive.
     function _receiveMessage(
         uint16 srcChainId_,
         bytes memory,
         uint64,
         bytes memory payload_
     ) public {
-        // Needed to restrict access to low-level call from `lzReceive`
+        // Needed to restrict access to low-level call from lzReceive
         if (msg.sender != address(this)) revert Bridge_InvalidCaller();
 
         (address to, uint256 amount) = abi.decode(payload_, (address, uint256));
@@ -168,7 +183,7 @@ contract CrossChainBridge is
 
     // ========= LZ Receive Functions ========= //
 
-    /// @notice Function to be called by LZ endpoint when message is received.
+    /// @inheritdoc ILayerZeroReceiver
     function lzReceive(
         uint16 srcChainId_,
         bytes calldata srcAddress_,
@@ -229,6 +244,8 @@ contract CrossChainBridge is
 
     // ========= LZ Send Functions ========= //
 
+    /// @notice Internal function for sending a message across chains.
+    /// @dev    Params defined in ILayerZeroEndpoint `send` function.
     function _sendMessage(
         uint16 dstChainId_,
         bytes memory payload_,
@@ -236,7 +253,7 @@ contract CrossChainBridge is
         address zroPaymentAddress_,
         bytes memory adapterParams_,
         uint256 _nativeFee
-    ) internal virtual {
+    ) internal {
         bytes memory trustedRemote = trustedRemoteLookup[dstChainId_];
         if (trustedRemote.length == 0) revert Bridge_DestinationNotTrusted();
 
@@ -255,7 +272,7 @@ contract CrossChainBridge is
         uint16 type_,
         bytes memory adapterParams_,
         uint256 extraGas_
-    ) internal view virtual {
+    ) internal view {
         uint256 providedGasLimit = _getGasLimit(adapterParams_);
         uint256 minGasLimit = minDstGasLookup[dstChainId_][type_] + extraGas_;
         if (minGasLimit == 0) revert Bridge_MinGasLimitNotSet();
@@ -274,7 +291,7 @@ contract CrossChainBridge is
         }
     }
 
-    // ========= LZ UserApplication config ========= //
+    // ========= LZ UserApplication & Admin config ========= //
 
     /// @notice Generic config for LayerZero User Application
     function setConfig(
@@ -341,8 +358,14 @@ contract CrossChainBridge is
         emit SetMinDstGas(dstChainId_, packetType_, minGas_);
     }
 
+    function setBridgeStatus(bool isActive_) external onlyRole("bridge_admin") {
+        bridgeActive = isActive_;
+        emit BridgeStatusSet(isActive_);
+    }
+
     // ========= View Functions ========= //
 
+    /// @notice Gets endpoint config for this contract
     function getConfig(
         uint16 version_,
         uint16 chainId_,
@@ -352,6 +375,7 @@ contract CrossChainBridge is
         return lzEndpoint.getConfig(version_, chainId_, address(this), configType_);
     }
 
+    /// @notice 
     function getTrustedRemoteAddress(uint16 remoteChainId_) external view returns (bytes memory) {
         bytes memory path = trustedRemoteLookup[remoteChainId_];
         if (path.length == 0) revert Bridge_NoTrustedPath();

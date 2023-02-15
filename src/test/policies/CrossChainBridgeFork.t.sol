@@ -84,7 +84,7 @@ contract CrossChainBridgeForkTest is Test {
             ROLES = new OlympusRoles(kernel);
 
             // Enable counter
-            bridge = new CrossChainBridge(kernel, L1_lzEndpoint, true);
+            bridge = new CrossChainBridge(kernel, L1_lzEndpoint, true, 0);
             rolesAdmin = new RolesAdmin(kernel);
 
             kernel.executeAction(Actions.InstallModule, address(MINTR));
@@ -113,7 +113,7 @@ contract CrossChainBridgeForkTest is Test {
             ROLES_l2 = new OlympusRoles(kernel_l2);
 
             // No counter necessary since this is L2
-            bridge_l2 = new CrossChainBridge(kernel_l2, L2_lzEndpoint, false);
+            bridge_l2 = new CrossChainBridge(kernel_l2, L2_lzEndpoint, false, 0);
             rolesAdmin_l2 = new RolesAdmin(kernel_l2);
 
             kernel_l2.executeAction(Actions.InstallModule, address(MINTR_l2));
@@ -154,7 +154,7 @@ contract CrossChainBridgeForkTest is Test {
         // Send ohm to user2 on L2
         vm.startPrank(user1);
         ohm1.approve(address(bridge), amount_);
-        bridge.sendOhm{value: 1e17}(user2, amount_, L2_ID);
+        bridge.sendOhm{value: 1e17}(L2_ID, user2, amount_);
         vm.stopPrank();
 
         // pigeon stuff
@@ -176,7 +176,7 @@ contract CrossChainBridgeForkTest is Test {
 
         vm.startPrank(user);
         ohm.approve(address(bridge), amount);
-        bridge.sendOhm{value: 1e17}(user2, amount, L2_CHAIN_ID);
+        bridge.sendOhm{value: 1e17}(L2_ID, user2, amount);
 
         assertEq(ohm.balanceOf(user2), 0);
 
@@ -206,7 +206,7 @@ contract CrossChainBridgeForkTest is Test {
         vm.startPrank(user1);
         for (uint256 i = 0; i < 3; ++i) {
             ohm1.approve(address(bridge), amount_);
-            bridge.sendOhm{value: 1e17}(user2, amount_, L2_ID);
+            bridge.sendOhm{value: 1e17}(L2_ID, user2, amount_);
             count += amount_;
         }
         vm.stopPrank();

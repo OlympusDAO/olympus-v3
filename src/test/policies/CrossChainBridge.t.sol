@@ -78,7 +78,7 @@ contract CrossChainBridgeTest is Test {
             ROLES = new OlympusRoles(kernel);
 
             // Enable counter
-            bridge = new CrossChainBridge(kernel, address(endpoint), true);
+            bridge = new CrossChainBridge(kernel, address(endpoint), true, 0);
             rolesAdmin = new RolesAdmin(kernel);
 
             kernel.executeAction(Actions.InstallModule, address(MINTR));
@@ -96,7 +96,7 @@ contract CrossChainBridgeTest is Test {
             ROLES_l2 = new OlympusRoles(kernel_l2);
 
             // No counter necessary since this is L2
-            bridge_l2 = new CrossChainBridge(kernel_l2, address(endpoint_l2), false);
+            bridge_l2 = new CrossChainBridge(kernel_l2, address(endpoint_l2), false, 0);
             rolesAdmin_l2 = new RolesAdmin(kernel_l2);
 
             kernel_l2.executeAction(Actions.InstallModule, address(MINTR_l2));
@@ -149,7 +149,7 @@ contract CrossChainBridgeTest is Test {
         // Send ohm to user2 on L2
         vm.startPrank(user);
         ohm.approve(address(bridge), amount_);
-        bridge.sendOhm{value: 1e17}(user2, amount_, L2_CHAIN_ID);
+        bridge.sendOhm{value: 1e17}(L2_CHAIN_ID, user2, amount_);
 
         // Verify ohm balance is correct
         assertEq(ohm.balanceOf(user2), amount_);
@@ -162,7 +162,7 @@ contract CrossChainBridgeTest is Test {
         ohm.approve(address(bridge), amount_);
 
         vm.expectRevert(CrossChainBridge.Bridge_InsufficientAmount.selector);
-        bridge.sendOhm{value: 1e17}(user2, amount_, L2_CHAIN_ID);
+        bridge.sendOhm{value: 1e17}(L2_CHAIN_ID, user2, amount_);
     }
 
     // TODO don't think this is needed. Cannot make bridge fail
@@ -210,7 +210,7 @@ contract CrossChainBridgeTest is Test {
         vm.startPrank(user);
         for (uint256 i = 0; i < 3; ++i) {
             ohm.approve(address(bridge), amount_);
-            bridge.sendOhm{value: 1e17}(user2, amount_, L2_CHAIN_ID);
+            bridge.sendOhm{value: 1e17}(L2_CHAIN_ID, user2, amount_);
             count += amount_;
         }
 
