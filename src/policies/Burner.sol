@@ -12,6 +12,11 @@ import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
 import "src/Kernel.sol";
 
+/// @title Olympus Burner Policy
+/// @notice Olympus Burner Policy Contract
+/// @dev This policy is to enable burning of OHM by the DAO MS to support test runs of new products which have not been automated yet.
+///      This policy will be removed once the protocol completes feature development and the DAO no longer needs to test products.
+///      This policy requires categories to be created to designate the purpose for burned OHM, which can be tracked externally from automated systems.
 contract Burner is Policy, RolesConsumer {
     using TransferHelper for ERC20;
 
