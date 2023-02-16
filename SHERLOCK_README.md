@@ -42,7 +42,7 @@ This system will be built as one base level abstract contract that each implemen
 
 ### Past Audits
 
--   LINK TO KEBABSEC AUDIT
+-   [Kebabsec Audit](https://hackmd.io/@12og4u7y8i/HJVAPMlno)
 
 # Single Sided Liquidity Vault Economic Brief
 
