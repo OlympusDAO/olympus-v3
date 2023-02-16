@@ -15,15 +15,28 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 
-/// @title Olympus Base Single Sided Liquidity Vault Contract
+// Import utilities
+import {TransferHelper} from "libraries/TransferHelper.sol";
+
+/// @title  Olympus Base Single Sided Liquidity Vault Contract
+/// @dev    Some caveats around this contract:
+///         - No internal reward token should also be an external reward token
+///         - No pair token should also be an external reward token
+///         - No pair, internal reward, or external reward tokens should be ERC777s or non-standard ERC20s
 abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesConsumer {
+    using TransferHelper for ERC20;
+
     // ========= ERRORS ========= //
 
+    error LiquidityVault_Inactive();
+    error LiquidityVault_StillActive();
     error LiquidityVault_LimitViolation();
     error LiquidityVault_PoolImbalanced();
     error LiquidityVault_BadPriceFeed();
     error LiquidityVault_InvalidRemoval();
+    error LiquidityVault_InvalidParams();
 
     // ========= EVENTS ========= //
 
@@ -35,6 +48,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     struct InternalRewardToken {
         address token;
+        uint256 decimalsAdjustment;
         uint256 rewardsPerSecond;
         uint256 lastRewardTime;
         uint256 accumulatedRewardsPerShare;
@@ -42,7 +56,9 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     struct ExternalRewardToken {
         address token;
+        uint256 decimalsAdjustment;
         uint256 accumulatedRewardsPerShare;
+        uint256 lastBalance;
     }
 
     // ========= STATE ========= //
@@ -52,8 +68,11 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     LQREGv1 public LQREG;
 
     // Tokens
-    ERC20 public ohm;
+    OlympusERC20Token public ohm;
     ERC20 public pairToken;
+
+    // Token Decimals
+    uint256 public pairTokenDecimals;
 
     // Pool
     address public liquidityPool;
@@ -61,13 +80,16 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     // Aggregate Contract State
     uint256 public totalLP;
     uint256 public ohmMinted;
-    uint256 public ohmBurned;
+    uint256 public ohmRemoved;
     mapping(address => uint256) public accumulatedFees;
 
     // User State
     mapping(address => uint256) public pairTokenDeposits;
     mapping(address => uint256) public lpPositions;
-    mapping(address => mapping(address => int256)) public userRewardDebts; // Rewards accumulated prior to user's joining (MasterChef V2 math)
+    mapping(address => mapping(address => uint256)) public userRewardDebts; // Rewards accumulated prior to user's joining (MasterChef V2 math)
+    mapping(address => mapping(address => uint256)) public cachedUserRewards; // Rewards that have been accumulated but not claimed (avoids underflow errors)
+    mapping(address => bool) internal _hasDeposited; // Used to determine if a user has ever deposited
+    address[] public users; // Used to track users that have interacted with this contract (for migration in the event of a bug)
 
     // Reward Token State
     /// @notice An internal reward token is a token where the vault is the only source of rewards and the
@@ -79,11 +101,15 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     ///         rewards back to the vault and then distributing them proportionally to users
     ExternalRewardToken[] public externalRewardTokens;
 
+    // Exchange Name (used by frontend)
+    string public EXCHANGE;
+
     // Configuration values
     uint256 public LIMIT;
     uint256 public THRESHOLD;
     uint256 public FEE;
     uint256 public constant PRECISION = 1000;
+    bool public isVaultActive;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -96,8 +122,11 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         address liquidityPool_
     ) Policy(kernel_) {
         // Set tokens
-        ohm = ERC20(ohm_);
+        ohm = OlympusERC20Token(ohm_);
         pairToken = ERC20(pairToken_);
+
+        // Set token decimals
+        pairTokenDecimals = pairToken.decimals();
 
         // Set pool
         liquidityPool = liquidityPool_;
@@ -134,20 +163,41 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     }
 
     //============================================================================================//
+    //                                           MODIFIERS                                        //
+    //============================================================================================//
+
+    modifier onlyWhileActive() {
+        if (!isVaultActive) revert LiquidityVault_Inactive();
+        _;
+    }
+
+    //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
     /// @notice                 Deposits pair tokens, mints OHM against the deposited pair tokens, and deposits the
     ///                         pair token and OHM into a liquidity pool and receives LP tokens in return
     /// @param  amount_         The amount of pair tokens to deposit
-    /// @param  minLpAmount_    The minimum amount of LP tokens to receive
+    /// @param  slippageParam_  Represents the slippage on joining the liquidity pool. Can either be the minimum LP token
+    ///                         amount to receive in the cases of Balancer or Curve, or can be a value (in thousandths) which
+    ///                         will be used to calculate the minimum amount of OHM and pair tokens to use in the case of Uniswap,
+    ///                         Sushiswap, Fraxswap, etc.
     /// @dev                    This needs to be non-reentrant since the contract only knows the amount of LP tokens it
     ///                         receives after an external interaction with the liquidity pool
-    function deposit(uint256 amount_, uint256 minLpAmount_)
+    function deposit(uint256 amount_, uint256 slippageParam_)
         external
+        onlyWhileActive
         nonReentrant
         returns (uint256 lpAmountOut)
     {
+        // If this is a new user, add them to the users array in case we need to migrate
+        // their state in the future
+        if (!_hasDeposited[msg.sender]) {
+            _hasDeposited[msg.sender] = true;
+            users.push(msg.sender);
+        }
+
+        // Calculate amount of OHM to borrow
         uint256 ohmToBorrow = _valueCollateral(amount_);
 
         // Cache pair token and OHM balance before deposit
@@ -163,17 +213,17 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         _depositUpdateRewardState();
 
         // Gather tokens for deposit
-        pairToken.transferFrom(msg.sender, address(this), amount_);
+        pairToken.safeTransferFrom(msg.sender, address(this), amount_);
         _borrow(ohmToBorrow);
 
-        uint256 lpReceived = _deposit(ohmToBorrow, amount_, minLpAmount_);
+        uint256 lpReceived = _deposit(ohmToBorrow, amount_, slippageParam_);
 
         // Calculate amount of pair tokens and OHM unused in deposit
         uint256 unusedPairToken = pairToken.balanceOf(address(this)) - pairTokenBalanceBefore;
         uint256 unusedOhm = ohm.balanceOf(address(this)) - ohmBalanceBefore;
 
         // Return unused pair tokens to user
-        if (unusedPairToken > 0) pairToken.transfer(msg.sender, unusedPairToken);
+        if (unusedPairToken > 0) pairToken.safeTransfer(msg.sender, unusedPairToken);
 
         // Burn unused OHM
         if (unusedOhm > 0) _repay(unusedOhm);
@@ -203,7 +253,11 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         uint256 lpAmount_,
         uint256[] calldata minTokenAmounts_,
         bool claim_
-    ) external nonReentrant returns (uint256) {
+    ) external onlyWhileActive nonReentrant returns (uint256) {
+        // Liquidity vaults should always be built around a two token pool so we can assume
+        // the array will always have two elements
+        if (lpAmount_ == 0 || minTokenAmounts_[0] == 0 || minTokenAmounts_[1] == 0)
+            revert LiquidityVault_InvalidParams();
         if (!_isPoolSafe()) revert LiquidityVault_PoolImbalanced();
 
         _withdrawUpdateRewardState(lpAmount_, claim_);
@@ -211,7 +265,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         totalLP -= lpAmount_;
         lpPositions[msg.sender] -= lpAmount_;
 
-        // Withdraw OHM and stETH from LP
+        // Withdraw OHM and pairToken from LP
         (uint256 ohmReceived, uint256 pairTokenReceived) = _withdraw(lpAmount_, minTokenAmounts_);
 
         // Reduce deposit values
@@ -219,21 +273,23 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         pairTokenDeposits[msg.sender] -= pairTokenReceived > userDeposit
             ? userDeposit
             : pairTokenReceived;
-        ohmBurned += ohmReceived;
+        ohmMinted -= ohmReceived > ohmMinted ? ohmMinted : ohmReceived;
+        ohmRemoved += ohmReceived > ohmMinted ? ohmReceived - ohmMinted : 0;
 
         // Return assets
         _repay(ohmReceived);
-        pairToken.transfer(msg.sender, pairTokenReceived);
-
-        return pairTokenReceived;
+        pairToken.safeTransfer(msg.sender, pairTokenReceived);
 
         emit Withdraw(msg.sender, pairTokenReceived, ohmReceived);
+        return pairTokenReceived;
     }
 
     /// @notice                     Claims user's rewards for all reward tokens
-    function claimRewards() external {
+    function claimRewards() external onlyWhileActive nonReentrant {
         uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256 numExternalRewardTokens = externalRewardTokens.length;
+
+        uint256[] memory accumulatedRewards = _accumulateExternalRewards();
 
         for (uint256 i; i < numInternalRewardTokens; ) {
             _claimInternalRewards(i);
@@ -244,6 +300,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         }
 
         for (uint256 i; i < numExternalRewardTokens; ) {
+            _updateExternalRewardState(i, accumulatedRewards[i]);
             _claimExternalRewards(i);
 
             unchecked {
@@ -256,10 +313,44 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @notice                     Returns the amount of rewards a user has earned for a given reward token
-    /// @param  id_                 The ID of the reward token
-    /// @param  user_               The user's address to check rewards for
-    /// @return int256              The amount of rewards the user has earned
+    /// @notice                         Gets the max amount of pair tokens that can be deposited currently
+    /// @return uint256                 The max amount of pair tokens that can be deposited currently
+    function getMaxDeposit() public view returns (uint256) {
+        uint256 currentPoolOhmShare = _getPoolOhmShare();
+        uint256 emitted;
+
+        // Calculate max OHM mintable amount
+        if (ohmMinted > currentPoolOhmShare) emitted = ohmMinted - currentPoolOhmShare;
+        uint256 maxOhmAmount = LIMIT + ohmRemoved - ohmMinted - emitted;
+
+        // Convert max OHM mintable amount to pair token amount
+        uint256 ohmPerPairToken = _valueCollateral(1e18); // OHM per 1 pairToken
+        uint256 pairTokenDecimalAdjustment = 10**pairToken.decimals();
+        return (maxOhmAmount * pairTokenDecimalAdjustment) / ohmPerPairToken;
+    }
+
+    /// @notice                         Gets all users that have deposited into the vault
+    /// @return address[]               An array of all users that have deposited into the vault
+    function getUsers() public view returns (address[] memory) {
+        return users;
+    }
+
+    /// @notice                         Gets a list of all the internal reward tokens
+    /// @return InternalRewardToken[]   An array of all the internal reward tokens
+    function getInternalRewardTokens() public view returns (InternalRewardToken[] memory) {
+        return internalRewardTokens;
+    }
+
+    /// @notice                         Gets a list of all the external reward tokens
+    /// @return ExternalRewardToken[]   An array of all the external reward tokens
+    function getExternalRewardTokens() public view returns (ExternalRewardToken[] memory) {
+        return externalRewardTokens;
+    }
+
+    /// @notice                         Returns the amount of rewards a user has earned for a given reward token
+    /// @param  id_                     The ID of the reward token
+    /// @param  user_                   The user's address to check rewards for
+    /// @return uint256                 The amount of rewards the user has earned
     function internalRewardsForToken(uint256 id_, address user_) public view returns (uint256) {
         InternalRewardToken memory rewardToken = internalRewardTokens[id_];
         uint256 lastRewardTime = rewardToken.lastRewardTime;
@@ -268,43 +359,42 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         if (block.timestamp > lastRewardTime && totalLP != 0) {
             uint256 timeDiff = block.timestamp - lastRewardTime;
             uint256 totalRewards = timeDiff * rewardToken.rewardsPerSecond;
+
+            // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
             accumulatedRewardsPerShare += (totalRewards * 1e18) / totalLP;
         }
 
-        return
-            uint256(
-                int256((lpPositions[user_] * accumulatedRewardsPerShare) / 1e18) -
-                    userRewardDebts[user_][rewardToken.token]
-            );
+        // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
+        uint256 totalAccumulatedRewards = (lpPositions[user_] * accumulatedRewardsPerShare) -
+            userRewardDebts[user_][rewardToken.token];
+
+        return (cachedUserRewards[user_][rewardToken.token] + totalAccumulatedRewards) / 1e18;
     }
 
-    /// @notice                     Returns the amount of rewards a user has earned for a given external reward token
-    /// @param  id_                 The ID of the external reward token
-    /// @param  user_               The user's address to check rewards for
-    /// @return int256              The amount of rewards the user has earned
+    /// @notice                         Returns the amount of rewards a user has earned for a given external reward token
+    /// @param  id_                     The ID of the external reward token
+    /// @param  user_                   The user's address to check rewards for
+    /// @return uint256                 The amount of rewards the user has earned
     function externalRewardsForToken(uint256 id_, address user_) public view returns (uint256) {
         ExternalRewardToken memory rewardToken = externalRewardTokens[id_];
 
-        return
-            uint256(
-                int256((lpPositions[user_] * rewardToken.accumulatedRewardsPerShare) / 1e18) -
-                    userRewardDebts[user_][rewardToken.token]
-            );
+        // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
+        uint256 totalAccumulatedRewards = (lpPositions[user_] *
+            rewardToken.accumulatedRewardsPerShare) - userRewardDebts[user_][rewardToken.token];
+
+        return (cachedUserRewards[user_][rewardToken.token] + totalAccumulatedRewards) / 1e18;
     }
 
-    /// @notice                     Calculates the net amount of OHM that this contract has emitted to or removed from the broader market
-    /// @return emitted             The amount of OHM that this contract has emitted to the broader market
-    /// @return removed             The amount of OHM that this contract has removed from the broader market
-    /// @dev                        This is based on a point-in-time snapshot of the liquidity pool's current OHM balance
+    /// @notice                         Calculates the net amount of OHM that this contract has emitted to or removed from the broader market
+    /// @return emitted                 The amount of OHM that this contract has emitted to the broader market
+    /// @return removed                 The amount of OHM that this contract has removed from the broader market
+    /// @dev                            This is based on a point-in-time snapshot of the liquidity pool's current OHM balance
     function getOhmEmissions() external view returns (uint256 emitted, uint256 removed) {
         uint256 currentPoolOhmShare = _getPoolOhmShare();
-        uint256 burnedAndOutstanding = currentPoolOhmShare + ohmBurned;
 
-        if (burnedAndOutstanding > ohmMinted) {
-            removed = burnedAndOutstanding - ohmMinted;
-        } else {
-            emitted = ohmMinted - burnedAndOutstanding;
-        }
+        if (ohmMinted > currentPoolOhmShare + ohmRemoved)
+            emitted = ohmMinted - currentPoolOhmShare - ohmRemoved;
+        else removed = currentPoolOhmShare + ohmRemoved - ohmMinted;
     }
 
     //============================================================================================//
@@ -313,21 +403,8 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     // ========= CHECKS AND SAFETY ========= //
 
-    /// @dev                        Math is: (currentOhmInPoolMintedByThisContract + currentNetOhmEmittedToMarket + amountToDeposit) <= LIMIT
     function _canDeposit(uint256 amount_) internal view virtual returns (bool) {
-        uint256 currentPoolOhmShare = _getPoolOhmShare();
-        uint256 burnedAndOutstanding = currentPoolOhmShare + ohmBurned;
-
-        if (burnedAndOutstanding > ohmMinted) {
-            uint256 removed = burnedAndOutstanding - ohmMinted;
-            uint256 activeOhm = currentPoolOhmShare - removed;
-            if (activeOhm + amount_ > LIMIT) return false;
-        } else {
-            uint256 emitted = ohmMinted - burnedAndOutstanding;
-            uint256 activeOhm = currentPoolOhmShare + emitted;
-            if (activeOhm + amount_ > LIMIT) return false;
-        }
-
+        if (amount_ + ohmMinted > LIMIT + ohmRemoved) revert LiquidityVault_LimitViolation();
         return true;
     }
 
@@ -377,20 +454,24 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     }
 
     function _repay(uint256 amount_) internal {
+        ohm.increaseAllowance(address(MINTR), amount_);
         MINTR.burnOhm(address(this), amount_);
     }
 
     // ========= REWARDS CALCULATIONS ========= //
 
-    function _accumulateInternalRewards() internal returns (uint256[] memory) {
+    function _accumulateInternalRewards() internal view returns (uint256[] memory) {
         uint256 numInternalRewardTokens = internalRewardTokens.length;
         uint256[] memory accumulatedInternalRewards = new uint256[](numInternalRewardTokens);
 
         for (uint256 i; i < numInternalRewardTokens; ) {
             InternalRewardToken memory rewardToken = internalRewardTokens[i];
 
-            uint256 timeDiff = block.timestamp - rewardToken.lastRewardTime;
-            uint256 totalRewards = (timeDiff * rewardToken.rewardsPerSecond);
+            uint256 totalRewards;
+            if (totalLP > 0) {
+                uint256 timeDiff = block.timestamp - rewardToken.lastRewardTime;
+                totalRewards = (timeDiff * rewardToken.rewardsPerSecond);
+            }
 
             accumulatedInternalRewards[i] = totalRewards;
 
@@ -405,14 +486,15 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     // ========= ACCUMULATED REWARDS STATE MANAGEMENT ========= //
 
     function _updateInternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
-        if (totalLP != 0) {
-            InternalRewardToken storage rewardToken = internalRewardTokens[id_];
+        // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
+        InternalRewardToken storage rewardToken = internalRewardTokens[id_];
+        if (totalLP != 0)
             rewardToken.accumulatedRewardsPerShare += (amountAccumulated_ * 1e18) / totalLP;
-            rewardToken.lastRewardTime = block.timestamp;
-        }
+        rewardToken.lastRewardTime = block.timestamp;
     }
 
     function _updateExternalRewardState(uint256 id_, uint256 amountAccumulated_) internal {
+        // This correctly uses 1e18 because the LP tokens of all major DEXs have 18 decimals
         if (totalLP != 0)
             externalRewardTokens[id_].accumulatedRewardsPerShare +=
                 (amountAccumulated_ * 1e18) /
@@ -458,9 +540,9 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // Reward debts for this deposit should be equal to the rewards accrued for a given value
             // of LP tokens prior to the user joining the pool with the given value of LP tokens
             InternalRewardToken memory rewardToken = internalRewardTokens[i];
-            userRewardDebts[msg.sender][rewardToken.token] += int256(
-                (lpReceived_ * rewardToken.accumulatedRewardsPerShare) / 1e18
-            );
+            userRewardDebts[msg.sender][rewardToken.token] +=
+                lpReceived_ *
+                rewardToken.accumulatedRewardsPerShare;
 
             unchecked {
                 ++i;
@@ -471,9 +553,9 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // Reward debts for this deposit should be equal to the rewards accrued for a given value
             // of LP tokens prior to the user joining the pool with the given value of LP tokens
             ExternalRewardToken memory rewardToken = externalRewardTokens[i];
-            userRewardDebts[msg.sender][rewardToken.token] += int256(
-                (lpReceived_ * rewardToken.accumulatedRewardsPerShare) / 1e18
-            );
+            userRewardDebts[msg.sender][rewardToken.token] +=
+                lpReceived_ *
+                rewardToken.accumulatedRewardsPerShare;
 
             unchecked {
                 ++i;
@@ -496,9 +578,16 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // Update reward debts so as to not understate the amount of rewards owed to the user, and push
             // any unclaimed rewards to the user's reward debt so that they can be claimed later
             InternalRewardToken memory rewardToken = internalRewardTokens[i];
-            userRewardDebts[msg.sender][rewardToken.token] -= int256(
-                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) / 1e18
-            );
+            uint256 rewardDebtDiff = lpAmount_ * rewardToken.accumulatedRewardsPerShare;
+
+            if (rewardDebtDiff > userRewardDebts[msg.sender][rewardToken.token]) {
+                userRewardDebts[msg.sender][rewardToken.token] = 0;
+                cachedUserRewards[msg.sender][rewardToken.token] +=
+                    rewardDebtDiff -
+                    userRewardDebts[msg.sender][rewardToken.token];
+            } else {
+                userRewardDebts[msg.sender][rewardToken.token] -= rewardDebtDiff;
+            }
 
             unchecked {
                 ++i;
@@ -512,9 +601,16 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
             // Update reward debts so as to not understate the amount of rewards owed to the user, and push
             // any unclaimed rewards to the user's reward debt so that they can be claimed later
             ExternalRewardToken memory rewardToken = externalRewardTokens[i];
-            userRewardDebts[msg.sender][rewardToken.token] -= int256(
-                (lpAmount_ * rewardToken.accumulatedRewardsPerShare) / 1e18
-            );
+            uint256 rewardDebtDiff = lpAmount_ * rewardToken.accumulatedRewardsPerShare;
+
+            if (rewardDebtDiff > userRewardDebts[msg.sender][rewardToken.token]) {
+                userRewardDebts[msg.sender][rewardToken.token] = 0;
+                cachedUserRewards[msg.sender][rewardToken.token] +=
+                    rewardDebtDiff -
+                    userRewardDebts[msg.sender][rewardToken.token];
+            } else {
+                userRewardDebts[msg.sender][rewardToken.token] -= rewardDebtDiff;
+            }
 
             unchecked {
                 ++i;
@@ -524,30 +620,31 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
     // ========= REWARDS CLAIMING ========= //
 
-    function _claimInternalRewards(uint256 id_) internal returns (uint256) {
+    function _claimInternalRewards(uint256 id_) internal {
         address rewardToken = internalRewardTokens[id_].token;
         uint256 reward = internalRewardsForToken(id_, msg.sender);
         uint256 fee = (reward * FEE) / PRECISION;
 
-        userRewardDebts[msg.sender][rewardToken] += int256(reward);
+        userRewardDebts[msg.sender][rewardToken] += reward;
         accumulatedFees[rewardToken] += fee;
 
-        if (reward > 0) ERC20(rewardToken).transfer(msg.sender, reward - fee);
+        if (reward > 0) ERC20(rewardToken).safeTransfer(msg.sender, reward - fee);
 
         emit RewardsClaimed(msg.sender, rewardToken, reward - fee);
     }
 
-    function _claimExternalRewards(uint256 id_) internal virtual returns (uint256) {
-        address rewardToken = externalRewardTokens[id_].token;
+    function _claimExternalRewards(uint256 id_) internal {
+        ExternalRewardToken storage rewardToken = externalRewardTokens[id_];
         uint256 reward = externalRewardsForToken(id_, msg.sender);
         uint256 fee = (reward * FEE) / PRECISION;
 
-        userRewardDebts[msg.sender][rewardToken] += int256(reward);
-        accumulatedFees[rewardToken] += fee;
+        userRewardDebts[msg.sender][rewardToken.token] += reward;
+        accumulatedFees[rewardToken.token] += fee;
 
-        if (reward > 0) ERC20(rewardToken).transfer(msg.sender, reward - fee);
+        if (reward > 0) ERC20(rewardToken.token).safeTransfer(msg.sender, reward - fee);
+        rewardToken.lastBalance = ERC20(rewardToken.token).balanceOf(address(this));
 
-        emit RewardsClaimed(msg.sender, rewardToken, reward - fee);
+        emit RewardsClaimed(msg.sender, rewardToken.token, reward - fee);
     }
 
     //============================================================================================//
@@ -557,14 +654,16 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     /// @notice                 Registers the vault in the LQREG contract
     /// @dev                    This function can only be accessed by the liquidityvault_admin role
     function activate() external onlyRole("liquidityvault_admin") {
+        isVaultActive = true;
         LQREG.addVault(address(this));
     }
 
     /// @notice                 Unregisters the vault in the LQREG contract and sets the borrowable limit to 0
     /// @dev                    This function can only be accessed by the liquidityvault_admin role
-    function deactivate(uint256 id_) external onlyRole("liquidityvault_admin") {
+    function deactivate() external onlyRole("liquidityvault_admin") {
         LIMIT = 0;
-        LQREG.removeVault(id_, address(this));
+        isVaultActive = false;
+        LQREG.removeVault(address(this));
     }
 
     /// @notice                    Adds a new internal reward token to the contract
@@ -579,6 +678,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     ) external onlyRole("liquidityvault_admin") {
         InternalRewardToken memory newInternalRewardToken = InternalRewardToken({
             token: token_,
+            decimalsAdjustment: 10**ERC20(token_).decimals(),
             rewardsPerSecond: rewardsPerSecond_,
             lastRewardTime: block.timestamp > startTimestamp_ ? block.timestamp : startTimestamp_,
             accumulatedRewardsPerShare: 0
@@ -608,7 +708,9 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     function addExternalRewardToken(address token_) external onlyRole("liquidityvault_admin") {
         ExternalRewardToken memory newRewardToken = ExternalRewardToken({
             token: token_,
-            accumulatedRewardsPerShare: 0
+            decimalsAdjustment: 10**ERC20(token_).decimals(),
+            accumulatedRewardsPerShare: 0,
+            lastBalance: 0
         });
 
         externalRewardTokens.push(newRewardToken);
@@ -641,7 +743,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
             accumulatedFees[rewardToken] = 0;
 
-            ERC20(rewardToken).transfer(msg.sender, feeToSend);
+            ERC20(rewardToken).safeTransfer(msg.sender, feeToSend);
 
             unchecked {
                 ++i;
@@ -649,12 +751,13 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         }
 
         for (uint256 i; i < numExternalRewardTokens; ) {
-            address rewardToken = externalRewardTokens[i].token;
-            uint256 feeToSend = accumulatedFees[rewardToken];
+            ExternalRewardToken storage rewardToken = externalRewardTokens[i];
+            uint256 feeToSend = accumulatedFees[rewardToken.token];
 
-            accumulatedFees[rewardToken] = 0;
+            accumulatedFees[rewardToken.token] = 0;
 
-            ERC20(rewardToken).transfer(msg.sender, feeToSend);
+            ERC20(rewardToken.token).safeTransfer(msg.sender, feeToSend);
+            rewardToken.lastBalance = ERC20(rewardToken.token).balanceOf(address(this));
 
             unchecked {
                 ++i;
@@ -662,10 +765,25 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
         }
     }
 
+    /// @notice                   Transfers tokens from the contract to the admin
+    /// @param  token_            The address of the token to transfer
+    /// @param  amount_           The amount of tokens to transfer
+    /// @dev                      This function can only be accessed by the liquidityvault_admin role and only when
+    ///                           the vault is deactivated. This acts as an emergency migration function in the event
+    ///                           that the vault is compromised.
+    function rescueToken(address token_, uint256 amount_)
+        external
+        onlyRole("liquidityvault_admin")
+    {
+        if (isVaultActive) revert LiquidityVault_StillActive();
+        ERC20(token_).safeTransfer(msg.sender, amount_);
+    }
+
     /// @notice                    Updates the maximum amount of OHM that can be minted by this contract
     /// @param  limit_             The new limit
     /// @dev                       This function can only be accessed by the liquidityvault_admin role
     function setLimit(uint256 limit_) external onlyRole("liquidityvault_admin") {
+        if (limit_ < ohmMinted) revert LiquidityVault_InvalidParams();
         LIMIT = limit_;
     }
 
@@ -673,6 +791,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     /// @param  threshold_         The new threshold (out of 1000)
     /// @dev                       This function can only be accessed by the liquidityvault_admin role
     function setThreshold(uint256 threshold_) external onlyRole("liquidityvault_admin") {
+        if (threshold_ > PRECISION) revert LiquidityVault_InvalidParams();
         THRESHOLD = threshold_;
     }
 
@@ -680,6 +799,7 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     /// @param  fee_               The new fee (out of 1000)
     /// @dev                       This function can only be accessed by the liquidityvault_admin role
     function setFee(uint256 fee_) external onlyRole("liquidityvault_admin") {
+        if (fee_ > PRECISION) revert LiquidityVault_InvalidParams();
         FEE = fee_;
     }
 
@@ -687,10 +807,14 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
     //                                     VIRTUAL FUNCTIONS                                      //
     //============================================================================================//
 
+    /// @notice                 Calculates the expected amount of LP tokens to receive for a given pair token
+    ///                         deposit. This is useful for the frontend to have a standard interface across vaults
+    function getExpectedLPAmount(uint256 amount_) public virtual returns (uint256) {}
+
     /// @notice                 Calculates the equivalent OHM amount for a given amount of partner tokens
     /// @param amount_          The amount of partner tokens to calculate the OHM value of
     /// @return uint256         The OHM value of the given amount of partner tokens
-    function _valueCollateral(uint256 amount_) internal view virtual returns (uint256) {}
+    function _valueCollateral(uint256 amount_) public view virtual returns (uint256) {}
 
     /// @notice                 Calculates the current price of the liquidity pool in OHM/TKN
     /// @return uint256         The current price of the liquidity pool in OHM/TKN

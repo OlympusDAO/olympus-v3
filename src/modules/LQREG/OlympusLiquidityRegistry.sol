@@ -40,14 +40,21 @@ contract OlympusLiquidityRegistry is LQREGv1 {
     }
 
     /// @inheritdoc LQREGv1
-    function removeVault(uint256 index_, address vault_) external override permissioned {
-        // Sanity check that the vault at index_ is the same as vault_
-        if (activeVaults[index_] != vault_) revert LQREG_RemovalMismatch();
+    function removeVault(address vault_) external override permissioned {
+        // Find index of vault in array
+        for (uint256 i; i < activeVaultCount; ) {
+            if (activeVaults[i] == vault_) {
+                // Delete vault from array by swapping with last element and popping
+                activeVaults[i] = activeVaults[activeVaults.length - 1];
+                activeVaults.pop();
+                --activeVaultCount;
+                break;
+            }
 
-        // Delete vault from array by swapping with last element and popping
-        activeVaults[index_] = activeVaults[activeVaults.length - 1];
-        activeVaults.pop();
-        --activeVaultCount;
+            unchecked {
+                ++i;
+            }
+        }
 
         emit VaultRemoved(vault_);
     }
