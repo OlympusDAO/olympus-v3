@@ -582,7 +582,9 @@ abstract contract SingleSidedLiquidityVault is Policy, ReentrancyGuard, RolesCon
 
             if (rewardDebtDiff > userRewardDebts[msg.sender][rewardToken.token]) {
                 userRewardDebts[msg.sender][rewardToken.token] = 0;
-                cachedUserRewards[msg.sender][rewardToken.token] += rewardDebtDiff;
+                cachedUserRewards[msg.sender][rewardToken.token] +=
+                    rewardDebtDiff -
+                    userRewardDebts[msg.sender][rewardToken.token];
             } else {
                 userRewardDebts[msg.sender][rewardToken.token] -= rewardDebtDiff;
             }
