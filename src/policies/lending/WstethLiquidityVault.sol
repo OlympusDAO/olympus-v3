@@ -14,8 +14,8 @@ import {IWsteth} from "policies/lending/interfaces/ILido.sol";
 // Import types
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-/// @title Olympus stETH Single-Sided Liquidity Vault
-contract StethLiquidityVault is SingleSidedLiquidityVault {
+/// @title Olympus wstETH Single-Sided Liquidity Vault
+contract WstethLiquidityVault is SingleSidedLiquidityVault {
     // ========= EVENTS ========= //
 
     event LiquidityVault_ExternalAccumulationError(address token);
@@ -59,7 +59,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
     constructor(
         Kernel kernel_,
         address ohm_,
-        address steth_,
+        address wsteth_,
         address vault_,
         address balancerHelper_,
         address liquidityPool_,
@@ -67,7 +67,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         OracleFeed memory ethUsdPriceFeed_,
         OracleFeed memory stethUsdPriceFeed_,
         AuraPool memory auraPool_
-    ) SingleSidedLiquidityVault(kernel_, ohm_, steth_, liquidityPool_) {
+    ) SingleSidedLiquidityVault(kernel_, ohm_, wsteth_, liquidityPool_) {
         // Set Balancer vault
         vault = IVault(vault_);
         balancerHelper = IBalancerHelper(balancerHelper_);
@@ -95,9 +95,9 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
 
     // ========= CORE FUNCTIONS ========= //
 
-    /// @notice                 Deposits OHM and stETH into the Balancer pool. Deposits the received BPT into Aura to accrue rewards
+    /// @notice                 Deposits OHM and wstETH into the Balancer pool. Deposits the received BPT into Aura to accrue rewards
     /// @param ohmAmount_       Amount of OHM to deposit
-    /// @param pairAmount_      Amount of stETH to deposit
+    /// @param pairAmount_      Amount of wstETH to deposit
     /// @param slippageParam_   Minimum amount of BPT to receive (prior to staking into Aura)
     /// @return uint256         Amount of BPT received
     function _deposit(
@@ -108,7 +108,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         // Cast pool address from abstract to Balancer Base Pool
         IBasePool pool = IBasePool(liquidityPool);
 
-        // OHM-stETH BPT before
+        // OHM-wstETH BPT before
         uint256 bptBefore = pool.balanceOf(address(this));
 
         // Build join pool request
@@ -142,11 +142,11 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         return lpAmountOut;
     }
 
-    /// @notice                 Withdraws BPT from Aura. Exchanges BPT for OHM and stETH to leave the Balancer pool
+    /// @notice                 Withdraws BPT from Aura. Exchanges BPT for OHM and wstETH to leave the Balancer pool
     /// @param lpAmount_        Amount of BPT to withdraw
-    /// @param minTokenAmounts_ Minimum amounts of OHM and stETH to receive ([OHM, stETH])
+    /// @param minTokenAmounts_ Minimum amounts of OHM and wstETH to receive ([OHM, wstETH])
     /// @return uint256         Amount of OHM received
-    /// @return uint256         Amount of stETH received
+    /// @return uint256         Amount of wstETH received
     function _withdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
         internal
         override
@@ -217,11 +217,10 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
 
     // ========= UTILITY FUNCTIONS ========= //
 
-    /// @notice                 Calculates the OHM equivalent quantity for the stETH deposit
-    /// @param amount_          Amount of stETH to calculate OHM equivalent for
+    /// @notice                 Calculates the OHM equivalent quantity for the wstETH deposit
+    /// @param amount_          Amount of wstETH to calculate OHM equivalent for
     /// @return uint256         OHM equivalent quantity
     function _valueCollateral(uint256 amount_) public view override returns (uint256) {
-        // Have to add a way to convert wstETH to stETH
         uint256 stethPerWsteth = IWsteth(address(pairToken)).stEthPerToken();
 
         // This is returned in 18 decimals and represents ETH per OHM
@@ -255,16 +254,16 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         return (amount_ * stethPerWsteth * stethUsd * decimalAdjustment) / (ohmEth * ethUsd * 1e18);
     }
 
-    /// @notice                 Calculates the prevailing OHM/stETH ratio of the Balancer pool
-    /// @return uint256         OHM/stETH ratio
+    /// @notice                 Calculates the prevailing OHM/wstETH ratio of the Balancer pool
+    /// @return uint256         OHM/wstETH ratio
     function _getPoolPrice() internal view override returns (uint256) {
         (, uint256[] memory balances_, ) = vault.getPoolTokens(
             IBasePool(liquidityPool).getPoolId()
         );
 
         // In Balancer pools the tokens are listed in alphabetical order (numbers before letters)
-        // OHM is listed first, stETH is listed second so this calculates OHM/stETH which is then
-        // used to compare against the oracle calculation OHM/stETH price
+        // OHM is listed first, wstETH is listed second so this calculates OHM/wstETH which is then
+        // used to compare against the oracle calculation OHM/wstETH price
         // Hard coding decimals is fine here because it is a specific implementation and we know the
         // decimals of the tokens in the pool
         return (balances_[0] * 1e18) / balances_[1];
@@ -288,8 +287,8 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
     //============================================================================================//
 
     /// @notice                 Calculates the expected amount of Balancer Pool Tokens that would be received
-    ///                         for depositing a certain amount of stETH
-    /// @param amount_          Amount of stETH to calculate BPT for
+    ///                         for depositing a certain amount of wstETH
+    /// @param amount_          Amount of wstETH to calculate BPT for
     /// @return bptAmount       Amount of BPT that would be received
     /// @dev                    This function is not meant to be called within a transaction and it will always revert.
     ///                         It is meant to be called off-chain (by the frontend) using a call request.
@@ -324,7 +323,7 @@ contract StethLiquidityVault is SingleSidedLiquidityVault {
         );
     }
 
-    function getUserStethShare(address user_) internal view returns (uint256) {
+    function getUserWstethShare(address user_) internal view returns (uint256) {
         // Cast pool address from abstract to Balancer Base pool
         IBasePool pool = IBasePool(liquidityPool);
 
