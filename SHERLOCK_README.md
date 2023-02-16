@@ -2,7 +2,7 @@
 
 The purpose of this audit is to review the security of a new OlympusDAO product: Single Sided Liquidity Vaults (SSLV), and some additional contracts to allow minting and burning of OHM by the DAO MS in order to implement governance proposals for pilot programs and other product tests.
 
-These contracts will be installed in the Olympus V3 "Bophades" system, based on the Default Framework. Olympus V3 was audited multiple times prior to launch in November, 2022. The currently deployed Olympus V3 contracts can be found on [GitHub](https://github.com/OlympusDAO/olympus-v3).
+These contracts will be installed in the Olympus V3 "Bophades" system, based on the [Default Framework](https://palm-cause-2bd.notion.site/Default-A-Design-Pattern-for-Better-Protocol-Development-7f8ace6d263c4303b108dc5f8c3055b1). Olympus V3 was audited multiple times prior to launch in November, 2022. The currently deployed Olympus V3 contracts can be found on [GitHub](https://github.com/OlympusDAO/olympus-v3).
 You can reference these audits here:
 
 -   Code4rena Olympus V3 Audit (08/2022)
@@ -67,6 +67,13 @@ lib
 |   |   ├─ ReentrancyGuard.sol
 ```
 
+## Testing
+
+This project is built with Foundry and should be compatible with the latest version.
+
+-   To run the full test suite call `forge test -vvv` in the console
+-   To run a specfic test file call `forge test -vvv path/to/file` in the console
+
 ## Single Sided Liquidity Vault (SSLV) Overview
 
 This project aims to build the capability and framework for the Olympus Treasury to mint OHM directly into liquidity pairs against select, high quality assets.
@@ -107,7 +114,7 @@ The SSLV system will be built as one base level abstract contract that each impl
 
 -   The vaults will integrate with major AMMs, predominantly Balancer
 -   The vaults may integrate with LP staking protocols like Aura or Convex when available
--   Should an integrated protocol end up pausing the single-sided liquidity vaults would be in limbo until funds can be recovered
+-   Should an integrated protocol end up pausing, the single-sided liquidity vaults would be in limbo until funds can be recovered
 
 ### Economic Brief
 
