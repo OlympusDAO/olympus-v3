@@ -146,10 +146,12 @@ contract CrossChainBridgeTest is Test {
         vm.assume(amount_ > 0);
         vm.assume(amount_ < ohm.balanceOf(user));
 
+        (uint256 fee, ) = bridge.estimateSendFee(L2_CHAIN_ID, user2, amount_, bytes(""));
+
         // Send ohm to user2 on L2
         vm.startPrank(user);
         ohm.approve(address(bridge), amount_);
-        bridge.sendOhm{value: 1e17}(L2_CHAIN_ID, user2, amount_);
+        bridge.sendOhm{value: fee}(L2_CHAIN_ID, user2, amount_);
 
         // Verify ohm balance is correct
         assertEq(ohm.balanceOf(user2), amount_);
@@ -158,11 +160,13 @@ contract CrossChainBridgeTest is Test {
     function testRevert_InsufficientAmountOnSend(uint256 amount_) public {
         vm.assume(amount_ > ohm.balanceOf(user));
 
+        (uint256 fee, ) = bridge.estimateSendFee(L2_CHAIN_ID, user2, amount_, bytes(""));
+
         vm.startPrank(user);
         ohm.approve(address(bridge), amount_);
 
         vm.expectRevert(CrossChainBridge.Bridge_InsufficientAmount.selector);
-        bridge.sendOhm{value: 1e17}(L2_CHAIN_ID, user2, amount_);
+        bridge.sendOhm{value: fee}(L2_CHAIN_ID, user2, amount_);
     }
 
     // TODO don't think this is needed. Cannot make bridge fail

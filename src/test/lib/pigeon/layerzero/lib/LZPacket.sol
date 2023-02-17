@@ -3,7 +3,8 @@
 pragma solidity >=0.7.6;
 
 import "./Buffer.sol";
-import "solady/utils/DynamicBufferLib.sol";
+//import "../../../solady/DynamicBufferLib.sol";
+import "src/test/lib/solady/DynamicBufferLib.sol";
 
 library LayerZeroPacket {
     using Buffer for Buffer.buffer;

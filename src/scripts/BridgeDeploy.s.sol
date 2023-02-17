@@ -31,10 +31,14 @@ contract BridgeDeploy is Script {
     OlympusERC20Token public ohm;
 
     // Deploy to new testnet
-    function deploy(address lzEndpoint_, bool isMainnet_, uint256 initCount_) external {
+    function deploy(
+        address lzEndpoint_,
+        bool isMainnet_,
+        uint256 initCount_
+    ) external {
         vm.startBroadcast();
 
-        // 
+        //
         if (!isMainnet_) initCount_ = 0;
 
         // Arb goerli endpoint

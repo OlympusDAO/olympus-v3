@@ -80,9 +80,9 @@ contract CrossChainBridge is
     uint256 public offchainOhmCounter;
 
     // LZ app state
-    
+
     /// @notice Storage for failed messages on receive.
-    /// @notice chainID => source address => endpoint nonce 
+    /// @notice chainID => source address => endpoint nonce
     mapping(uint16 => mapping(bytes => mapping(uint64 => bytes32))) public failedMessages;
 
     /// @notice Minimum gas needed for each chain. Optional.
@@ -94,6 +94,9 @@ contract CrossChainBridge is
 
     /// @notice LZ precrime address
     address public precrime;
+
+    /// @notice LZ endpoint packet type
+    uint16 public constant PT_SEND = 0;
 
     //============================================================================================//
     //                                        POLICY SETUP                                        //
@@ -154,7 +157,6 @@ contract CrossChainBridge is
         if (ohm.balanceOf(msg.sender) < amount_) revert Bridge_InsufficientAmount();
         if (counterEnabled) offchainOhmCounter += amount_;
 
-        // TODO check then set gas here using _checkGasLimit?
         bytes memory payload = abi.encode(to_, amount_);
 
         MINTR.burnOhm(msg.sender, amount_);
@@ -268,6 +270,21 @@ contract CrossChainBridge is
             zroPaymentAddress_,
             adapterParams_
         );
+    }
+
+    /// @notice Function to estimate how much gas is needed to send OHM
+    /// @dev    Should be called by frontend before making sendOhm call
+    /// @return nativeFee - Native token amount to send to sendOhm
+    /// @return zroFee - Fee paid in ZRO token. Unused.
+    function estimateSendFee(
+        uint16 dstChainId_,
+        address to_,
+        uint256 amount_,
+        bytes calldata adapterParams_
+    ) external view returns (uint256 nativeFee, uint256 zroFee) {
+        // Mock the payload for sendOhm()
+        bytes memory payload = abi.encode(to_, amount_);
+        return lzEndpoint.estimateFees(dstChainId_, address(this), payload, false, adapterParams_);
     }
 
     /// @notice Verify if given gas is enough for the destination.
@@ -385,7 +402,7 @@ contract CrossChainBridge is
         return lzEndpoint.getConfig(version_, chainId_, address(this), configType_);
     }
 
-    /// @notice 
+    /// @notice
     function getTrustedRemoteAddress(uint16 remoteChainId_) external view returns (bytes memory) {
         bytes memory path = trustedRemoteLookup[remoteChainId_];
         if (path.length == 0) revert Bridge_NoTrustedPath();
@@ -400,6 +417,7 @@ contract CrossChainBridge is
         returns (bool)
     {
         bytes memory trustedSource = trustedRemoteLookup[srcChainId_];
-        return keccak256(trustedSource) == keccak256(srcAddress_);
+        return (srcAddress_.length == trustedSource.length &&
+            keccak256(srcAddress_) == keccak256(trustedSource));
     }
 }

@@ -151,10 +151,13 @@ contract CrossChainBridgeForkTest is Test {
         vm.selectFork(L1_FORK_ID);
         vm.recordLogs();
 
+        // get fee
+        (uint256 fee, ) = bridge.estimateSendFee(L2_ID, user2, amount_, bytes(""));
+
         // Send ohm to user2 on L2
         vm.startPrank(user1);
         ohm1.approve(address(bridge), amount_);
-        bridge.sendOhm{value: 1e17}(L2_ID, user2, amount_);
+        bridge.sendOhm{value: fee}(L2_ID, user2, amount_);
         vm.stopPrank();
 
         // pigeon stuff
