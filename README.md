@@ -40,6 +40,7 @@ $ forge build
 -   TreasuryCustodian - [0xC9518AC915e46D707585116451Dc19c164513Ccf](https://etherscan.io/address/0xC9518AC915e46D707585116451Dc19c164513Ccf)
 -   Distributor - [0x27e606fdb5C922F8213dC588A434BF7583697866](https://etherscan.io/address/0x27e606fdb5C922F8213dC588A434BF7583697866)
 -   Emergency - [0x9229b0b6FA4A58D67Eb465567DaA2c6A34714A75](https://etherscan.io/address/0x9229b0b6FA4A58D67Eb465567DaA2c6A34714A75)
+-   BondManager - [0xf577c77ee3578c7F216327F41B5D7221EaD2B2A3](https://etherscan.io/address/0xf577c77ee3578c7f216327f41b5d7221ead2b2a3)
 
 ### Goerli Testnet
 
