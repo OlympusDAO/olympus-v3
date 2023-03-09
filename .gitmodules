@@ -8,3 +8,7 @@
 	path = lib/solmate
 	url = https://github.com/transmissions11/solmate
 	branch = main
+[submodule "lib/clones-with-immutable-args"]
+	path = lib/clones-with-immutable-args
+	url = https://github.com/wighawag/clones-with-immutable-args
+	branch = v1.0.0
