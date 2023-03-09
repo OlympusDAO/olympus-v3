@@ -8,7 +8,10 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import "src/Kernel.sol";
 
 // Import external dependencies
+import {AggregatorV3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {IAuraRewardPool, IAuraMiningLib} from "policies/lending/interfaces/IAura.sol";
+import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool, IBalancerHelper} from "policies/lending/interfaces/IBalancer.sol";
+import {IWsteth} from "policies/lending/interfaces/ILido.sol";
 
 // Import vault dependencies
 import {BLEVaultLido} from "policies/lending/BLEVaultLido.sol";
@@ -26,10 +29,37 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
     error BLEFactoryLido_LimitViolation();
     error BLEFactoryLido_InvalidLimit();
     error BLEFactoryLido_InvalidFee();
+    error BLEFactoryLido_BadPriceFeed();
 
     // ========= EVENTS ========= //
 
-    event VaultDeployed(address vault, address owner, uint32 fee);
+    event VaultDeployed(address vault, address owner, uint64 fee);
+
+    // ========= DATA STRUCTURES ========= //
+
+    struct TokenData {
+        address ohm;
+        address pairToken;
+        address aura;
+        address bal;
+    }
+
+    struct BalancerData {
+        address vault;
+        address liquidityPool;
+        address balancerHelper;
+    }
+
+    struct AuraData {
+        uint256 pid;
+        address auraBooster;
+        address auraRewardPool;
+    }
+
+    struct OracleFeed {
+        AggregatorV3Interface feed;
+        uint48 updateThreshold;
+    }
 
     // ========= STATE VARIABLES ========= //
 
@@ -38,26 +68,37 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
     TRSRYv1 public TRSRY;
 
     // Tokens
+    address public ohm;
+    address public pairToken;
     address public aura;
     address public bal;
 
     // Exchange Info
     string public exchangeName;
+    BalancerData public balancerData;
 
     // Aura Info
-    IAuraPool public auraPool;
+    AuraData public auraData;
     IAuraMiningLib public auraMiningLib;
+
+    // Oracle Info
+    OracleFeed public ohmEthPriceFeed;
+    OracleFeed public stethEthPriceFeed;
 
     // Vault Info
     BLEVaultLido public implementation;
     mapping(BLEVaultLido => address) public vaultOwners;
+    mapping(address => BLEVaultLido) public userVaults;
 
-    // System State
-    uint256 public ohmLimit;
+    // Vaults State
+    uint256 public totalLP;
     uint256 public mintedOHM;
     uint256 public netBurnedOHM;
-    uint32 public currentFee;
-    bool public isActive;
+
+    // System Configuration
+    uint256 public ohmLimit;
+    uint64 public currentFee;
+    bool public isLidoBLEActive;
 
     // Constants
     uint32 public constant MAX_FEE = 10000; // 100%
@@ -68,23 +109,56 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
 
     constructor(
         Kernel kernel_,
-        address aura_,
-        address bal_,
-        address auraPool_,
-        uint256 ohmLimit_
+        TokenData memory tokenData_,
+        BalancerData memory balancerData_,
+        AuraData memory auraData_,
+        address auraMiningLib_,
+        OracleFeed memory ohmEthPriceFeed_,
+        OracleFeed memory stethEthPriceFeed_,
+        address implementation_,
+        uint256 ohmLimit_,
+        uint64 fee_
     ) Policy(kernel_) {
         // Set exchange name
-        exchangeName = "Balancer";
+        {
+            exchangeName = "Balancer";
+        }
 
         // Set tokens
-        aura = aura_;
-        bal = bal_;
+        {
+            ohm = tokenData_.ohm;
+            pairToken = tokenData_.pairToken;
+            aura = tokenData_.aura;
+            bal = tokenData_.bal;
+        }
+
+        // Set exchange info
+        {
+            balancerData = balancerData_;
+        }
 
         // Set Aura Pool
-        auraPool = IAuraPool(auraPool_);
+        {
+            auraData = auraData_;
+            auraMiningLib = IAuraMiningLib(auraMiningLib_);
+        }
 
-        // Set OHM Limit
-        ohmLimit = ohmLimit_;
+        // Set oracle info
+        {
+            ohmEthPriceFeed = ohmEthPriceFeed_;
+            stethEthPriceFeed = stethEthPriceFeed_;
+        }
+
+        // Set vault implementation
+        {
+            implementation = BLEVaultLido(implementation_);
+        }
+
+        // Configure system
+        {
+            ohmLimit = ohmLimit_;
+            currentFee = fee_;
+        }
     }
 
     /// @inheritdoc Policy
@@ -119,7 +193,7 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
     //============================================================================================//
 
     modifier onlyWhileActive() {
-        if (!isActive) revert BLEFactoryLido_Inactive();
+        if (!isLidoBLEActive) revert BLEFactoryLido_Inactive();
         _;
     }
 
@@ -135,11 +209,26 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
 
     function deployVault() external onlyWhileActive returns (address vault) {
         // Create clone of vault implementation
-        bytes memory data = abi.encodePacked(msg.sender, this, currentFee);
+        bytes memory data = abi.encodePacked(
+            msg.sender, // Owner
+            this, // Vault Manager
+            address(TRSRY), // Treasury
+            ohm, // OHM
+            pairToken, // Pair Token (wstETH)
+            aura, // Aura
+            bal, // Balancer
+            balancerData.vault, // Balancer Vault
+            balancerData.liquidityPool, // Balancer Pool
+            auraData.pid, // Aura PID
+            auraData.auraBooster, // Aura Booster
+            auraData.auraRewardPool, // Aura Reward Pool
+            currentFee
+        );
         BLEVaultLido clone = BLEVaultLido(address(implementation).clone(data));
 
         // Set vault owner
         vaultOwners[clone] = msg.sender;
+        userVaults[msg.sender] = clone;
 
         // Emit event
         emit VaultDeployed(address(clone), msg.sender, currentFee);
@@ -177,10 +266,91 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
     }
 
     //============================================================================================//
+    //                                     VAULT STATE MANAGEMENT                                 //
+    //============================================================================================//
+
+    function increaseTotalLP(uint256 amount_) external onlyWhileActive onlyVault {
+        totalLP += amount_;
+    }
+
+    function decreaseTotalLP(uint256 amount_) external onlyWhileActive onlyVault {
+        totalLP -= amount_;
+    }
+
+    //============================================================================================//
     //                                         VIEW FUNCTIONS                                     //
     //============================================================================================//
 
+    function getLPBalance(address user_) external view returns (uint256) {
+        return userVaults[user_].getLPBalance();
+    }
+
+    function getUserPairShare(address user_) external view returns (uint256) {
+        return userVaults[user_].getUserPairShare();
+    }
+
+    function getMaxDeposit() external view returns (uint256) {
+        uint256 maxOhmAmount = ohmLimit - mintedOHM;
+
+        // Convert max OHM mintable amount to pair token amount
+        uint256 ohmTknPrice = getOhmTknPrice();
+        uint256 maxTknAmount = (maxOhmAmount * 1e18) / ohmTknPrice;
+
+        return maxTknAmount;
+    }
+
+    /// @dev    This is an external function but should only be used in a callstatic call from an external
+    ///         source like the frontend.
+    function getExpectedLPAmount(uint256 amount_) external returns (uint256 bptAmount) {
+        IBasePool pool = IBasePool(balancerData.liquidityPool);
+        IBalancerHelper balancerHelper = IBalancerHelper(balancerData.balancerHelper);
+
+        // Calculate OHM amount to mint
+        uint256 ohmTknPrice = getOhmTknPrice();
+        uint256 ohmMintAmount = (amount_ * ohmTknPrice) / 1e18;
+
+        // Build join pool request
+        address[] memory assets = new address[](2);
+        assets[0] = ohm;
+        assets[1] = pairToken;
+
+        uint256[] memory maxAmountsIn = new uint256[](2);
+        maxAmountsIn[0] = ohmMintAmount;
+        maxAmountsIn[1] = amount_;
+
+        JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
+            assets: assets,
+            maxAmountsIn: maxAmountsIn,
+            userData: abi.encode(1, maxAmountsIn, 0),
+            fromInternalBalance: false
+        });
+
+        // Join pool query
+        (bptAmount, ) = balancerHelper.queryJoin(
+            pool.getPoolId(),
+            address(this),
+            address(this),
+            joinPoolRequest
+        );
+    }
+
+    function getRewardTokens() external view returns (address[] memory) {
+        IAuraRewardPool auraPool = IAuraRewardPool(auraData.auraRewardPool);
+
+        uint256 numExtraRewards = auraPool.extraRewardsLength();
+        address[] memory rewardTokens = new address[](numExtraRewards + 2);
+        rewardTokens[0] = aura;
+        rewardTokens[1] = auraPool.rewardToken();
+        for (uint256 i = 0; i < numExtraRewards; i++) {
+            IAuraRewardPool extraRewardPool = IAuraRewardPool(auraPool.extraRewards(i));
+            rewardTokens[i + 2] = extraRewardPool.rewardToken();
+        }
+        return rewardTokens;
+    }
+
     function getRewardRate(address rewardToken_) external view returns (uint256 rewardRate) {
+        IAuraRewardPool auraPool = IAuraRewardPool(auraData.auraRewardPool);
+
         if (rewardToken_ == bal) {
             // If reward token is Bal, return rewardRate from Aura Pool
             rewardRate = auraPool.rewardRate();
@@ -189,17 +359,49 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
             uint256 balRewardRate = auraPool.rewardRate();
             rewardRate = auraMiningLib.convertCrvToCvx(balRewardRate);
         } else {
-            uint256 numExtraRewards = auraPool.rewardsPool.extraRewardsLength();
+            uint256 numExtraRewards = auraPool.extraRewardsLength();
             for (uint256 i = 0; i < numExtraRewards; i++) {
-                IAuraRewardPool extraRewardPool = IAuraRewardPool(
-                    auraPool.rewardsPool.extraRewards(i)
-                );
+                IAuraRewardPool extraRewardPool = IAuraRewardPool(auraPool.extraRewards(i));
                 if (rewardToken_ == extraRewardPool.rewardToken()) {
                     rewardRate = extraRewardPool.rewardRate();
                     break;
                 }
             }
         }
+    }
+
+    function getOhmTknPrice() public view returns (uint256) {
+        // Get stETH per wstETH (18 Decimals)
+        uint256 stethPerWsteth = IWsteth(pairToken).stEthPerToken();
+
+        // Get ETH per OHM (18 Decimals)
+        uint256 ethPerOhm = _validatePrice(ohmEthPriceFeed.feed, ohmEthPriceFeed.updateThreshold);
+
+        // Get stETH per ETH (18 Decimals)
+        uint256 stethPerEth = _validatePrice(
+            stethEthPriceFeed.feed,
+            stethEthPriceFeed.updateThreshold
+        );
+
+        // Calculate OHM per wstETH (9 decimals)
+        return (stethPerWsteth * stethPerEth) / (ethPerOhm * 1e9);
+    }
+
+    function getTknOhmPrice() public view returns (uint256) {
+        // Get stETH per wstETH (18 Decimals)
+        uint256 stethPerWsteth = IWsteth(pairToken).stEthPerToken();
+
+        // Get ETH per OHM (18 Decimals)
+        uint256 ethPerOhm = _validatePrice(ohmEthPriceFeed.feed, ohmEthPriceFeed.updateThreshold);
+
+        // Get stETH per ETH (18 Decimals)
+        uint256 stethPerEth = _validatePrice(
+            stethEthPriceFeed.feed,
+            stethEthPriceFeed.updateThreshold
+        );
+
+        // Calculate wstETH per OHM (18 decimals)
+        return (ethPerOhm * 1e36) / (stethPerWsteth * stethPerEth);
     }
 
     //============================================================================================//
@@ -211,16 +413,49 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
         ohmLimit = newLimit_;
     }
 
-    function setFee(uint32 newFee_) external onlyRole("liquidityvault_admin") {
+    function setFee(uint64 newFee_) external onlyRole("liquidityvault_admin") {
         if (newFee_ > MAX_FEE) revert BLEFactoryLido_InvalidFee();
         currentFee = newFee_;
     }
 
+    function changeUpdateThresholds(
+        uint48 ohmEthUpdateThreshold_,
+        uint48 stEthEthUpdateThreshold_
+    ) external onlyRole("liquidityvault_admin") {
+        ohmEthPriceFeed.updateThreshold = ohmEthUpdateThreshold_;
+        stethEthPriceFeed.updateThreshold = stEthEthUpdateThreshold_;
+    }
+
     function activate() external onlyRole("liquidityvault_admin") {
-        isActive = true;
+        isLidoBLEActive = true;
     }
 
     function deactivate() external onlyRole("liquidityvault_admin") {
-        isActive = false;
+        isLidoBLEActive = false;
+    }
+
+    //============================================================================================//
+    //                                      INTERNAL FUNCTIONS                                    //
+    //============================================================================================//
+
+    function _validatePrice(
+        AggregatorV3Interface priceFeed_,
+        uint48 updateThreshold_
+    ) internal view returns (uint256) {
+        // Get price data
+        (uint80 roundId, int256 priceInt, , uint256 updatedAt, uint80 answeredInRound) = priceFeed_
+            .latestRoundData();
+
+        // Validate chainlink price feed data
+        // 1. Price should be greater than 0
+        // 2. Updated at timestamp should be within the update threshold
+        // 3. Answered in round ID should be the same as round ID
+        if (
+            priceInt <= 0 ||
+            updatedAt < block.timestamp - updateThreshold_ ||
+            answeredInRound != roundId
+        ) revert BLEFactoryLido_BadPriceFeed();
+
+        return uint256(priceInt);
     }
 }

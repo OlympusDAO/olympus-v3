@@ -7,3 +7,4 @@ libraries/=src/libraries/
 solmate/=lib/solmate/src/
 bonds/=lib/bonds/src/
 test/=src/test/
+clones/=lib/clones-with-immutable-args/src/
