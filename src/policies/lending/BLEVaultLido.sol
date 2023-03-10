@@ -20,6 +20,8 @@ import {Clone} from "clones/Clone.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
+import {console2} from "forge-std/console2.sol";
+
 contract BLEVaultLido is ReentrancyGuard, Clone {
     using TransferHelper for ERC20;
     using FullMath for uint256;
@@ -54,44 +56,48 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
         return _getArgAddress(40);
     }
 
+    function MINTR() public pure returns (address) {
+        return _getArgAddress(60);
+    }
+
     function ohm() public pure returns (OlympusERC20Token) {
-        return OlympusERC20Token(_getArgAddress(60));
+        return OlympusERC20Token(_getArgAddress(80));
     }
 
     function wsteth() public pure returns (ERC20) {
-        return ERC20(_getArgAddress(80));
-    }
-
-    function aura() public pure returns (ERC20) {
         return ERC20(_getArgAddress(100));
     }
 
-    function bal() public pure returns (ERC20) {
+    function aura() public pure returns (ERC20) {
         return ERC20(_getArgAddress(120));
     }
 
+    function bal() public pure returns (ERC20) {
+        return ERC20(_getArgAddress(140));
+    }
+
     function vault() public pure returns (IVault) {
-        return IVault(_getArgAddress(140));
+        return IVault(_getArgAddress(160));
     }
 
     function liquidityPool() public pure returns (IBasePool) {
-        return IBasePool(_getArgAddress(160));
+        return IBasePool(_getArgAddress(180));
     }
 
     function pid() public pure returns (uint256) {
-        return _getArgUint256(180);
+        return _getArgUint256(200);
     }
 
     function auraBooster() public pure returns (IAuraBooster) {
-        return IAuraBooster(_getArgAddress(212));
+        return IAuraBooster(_getArgAddress(232));
     }
 
     function auraRewardPool() public pure returns (IAuraRewardPool) {
-        return IAuraRewardPool(_getArgAddress(232));
+        return IAuraRewardPool(_getArgAddress(252));
     }
 
     function fee() public pure returns (uint64) {
-        return _getArgUint64(252);
+        return _getArgUint64(272);
     }
 
     // ========= MODIFIERS ========= //
@@ -114,18 +120,28 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
         uint256 amount_,
         uint256 minLPAmount_
     ) external onlyWhileActive onlyOwner nonReentrant returns (uint256 lpAmountOut) {
+        console2.log("1");
+
         // Calculate OHM amount to mint
         uint256 ohmTknPrice = manager().getOhmTknPrice();
         uint256 ohmMintAmount = (amount_ * ohmTknPrice) / 1e18;
 
+        console2.log("2");
+
         // Cache OHM-wstETH BPT before
         uint256 bptBefore = liquidityPool().balanceOf(address(this));
+
+        console2.log("3");
 
         // Mint OHM
         manager().mintOHM(ohmMintAmount);
 
+        console2.log("4");
+
         // Transfer in wstETH
         wsteth().transferFrom(msg.sender, address(this), amount_);
+
+        console2.log("5");
 
         // Build join pool request
         address[] memory assets = new address[](2);
@@ -153,26 +169,34 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
             joinPoolRequest
         );
 
+        console2.log("6");
+
         // OHM-PAIR BPT after
         lpAmountOut = liquidityPool().balanceOf(address(this)) - bptBefore;
         manager().increaseTotalLP(lpAmountOut);
 
+        console2.log("7");
+
         // Stake into Aura
         liquidityPool().approve(address(auraBooster()), lpAmountOut);
         auraBooster().deposit(pid(), lpAmountOut, true);
+
+        console2.log("8");
 
         // Return unused tokens
         uint256 unusedOHM = ohmMintAmount - ohm().balanceOf(address(this));
         uint256 unusedWsteth = amount_ - wsteth().balanceOf(address(this));
 
         if (unusedOHM > 0) {
-            ohm().increaseAllowance(address(manager()), unusedOHM);
+            ohm().increaseAllowance(MINTR(), unusedOHM);
             manager().burnOHM(unusedOHM);
         }
 
         if (unusedWsteth > 0) {
             wsteth().transfer(msg.sender, unusedWsteth);
         }
+
+        console2.log("9");
 
         // Emit event
         emit Deposit(ohmMintAmount - unusedOHM, amount_ - unusedWsteth);
@@ -230,7 +254,7 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
             wsteth().transfer(TRSRY(), wstethAmountOut - wstethToReturn);
 
         // Burn OHM
-        ohm().increaseAllowance(address(manager()), ohmAmountOut);
+        ohm().increaseAllowance(MINTR(), ohmAmountOut);
         manager().burnOHM(ohmAmountOut);
 
         // Return wstETH to owner

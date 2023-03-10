@@ -30,6 +30,7 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
     error BLEFactoryLido_InvalidLimit();
     error BLEFactoryLido_InvalidFee();
     error BLEFactoryLido_BadPriceFeed();
+    error BLEFactoryLido_VaultAlreadyExists();
 
     // ========= EVENTS ========= //
 
@@ -208,11 +209,15 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
     //============================================================================================//
 
     function deployVault() external onlyWhileActive returns (address vault) {
+        if (address(userVaults[msg.sender]) != address(0))
+            revert BLEFactoryLido_VaultAlreadyExists();
+
         // Create clone of vault implementation
         bytes memory data = abi.encodePacked(
             msg.sender, // Owner
             this, // Vault Manager
             address(TRSRY), // Treasury
+            address(MINTR), // Minter
             ohm, // OHM
             pairToken, // Pair Token (wstETH)
             aura, // Aura
@@ -253,8 +258,12 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
     }
 
     function burnOHM(uint256 amount_) external onlyWhileActive onlyVault {
+        uint256 amountToBurn = amount_;
+
         // Handle accounting
         if (amount_ > mintedOHM) {
+            amountToBurn = mintedOHM;
+
             netBurnedOHM += amount_ - mintedOHM;
             mintedOHM = 0;
         } else {
@@ -262,7 +271,7 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
         }
 
         // Burn OHM
-        MINTR.burnOhm(msg.sender, amount_);
+        MINTR.burnOhm(msg.sender, amountToBurn);
     }
 
     //============================================================================================//
