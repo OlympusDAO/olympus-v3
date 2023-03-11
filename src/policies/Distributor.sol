@@ -9,7 +9,7 @@ import "src/Kernel.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {RolesConsumer} from "modules/ROLES/GoerliDaoRoles.sol";
 
 /// Import interfaces
 import "src/interfaces/Uniswap/IUniswapV2Pair.sol";
@@ -41,9 +41,9 @@ contract Distributor is Policy, RolesConsumer {
     TRSRYv1 public TRSRY;
     MINTRv1 public MINTR;
 
-    /// Olympus contract dependencies
-    ERC20 private immutable ohm; // OHM Token
-    address private immutable staking; // OHM Staking Contract
+    /// Goerli Dao contract dependencies
+    ERC20 private immutable gdao; // GDAO Token
+    address private immutable staking; // GDAO Staking Contract
 
     /// Policy state
     address[] public pools; // Liquidity pools to receive rewards
@@ -60,18 +60,18 @@ contract Distributor is Policy, RolesConsumer {
 
     constructor(
         Kernel kernel_,
-        address ohm_,
+        address gdao_,
         address staking_,
         uint256 initialRate_
     ) Policy(kernel_) {
         if (
             address(kernel_) == address(0) ||
-            ohm_ == address(0) ||
+            gdao_ == address(0) ||
             staking_ == address(0) ||
             initialRate_ == 0
         ) revert Distributor_InvalidConstruction();
 
-        ohm = ERC20(ohm_);
+        gdao = ERC20(gdao_);
         staking = staking_;
         rewardRate = initialRate_;
     }
@@ -96,7 +96,7 @@ contract Distributor is Policy, RolesConsumer {
         returns (Permissions[] memory permissions)
     {
         permissions = new Permissions[](3);
-        permissions[0] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
+        permissions[0] = Permissions(MINTR.KEYCODE(), MINTR.mintGdao.selector);
         permissions[1] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
         permissions[2] = Permissions(MINTR.KEYCODE(), MINTR.decreaseMintApproval.selector);
     }
@@ -112,7 +112,7 @@ contract Distributor is Policy, RolesConsumer {
     ///         function.
     function triggerRebase() external {
         unlockRebase = true;
-        IStaking(staking).unstake(msg.sender, 0, true, true); // Give the caller the bounty OHM
+        IStaking(staking).unstake(msg.sender, 0, true, true); // Give the caller the bounty GDAO
         if (unlockRebase) revert Distributor_NoRebaseOccurred();
     }
 
@@ -130,16 +130,16 @@ contract Distributor is Policy, RolesConsumer {
         MINTR.increaseMintApproval(address(this), type(uint256).max);
 
         // Mint enough for rebase
-        MINTR.mintOhm(staking, nextRewardFor(staking));
+        MINTR.mintGdao(staking, nextRewardFor(staking));
 
-        // Mint OHM for mint&sync pools
+        // Mint GDAO for mint&sync pools
         uint256 poolLength = pools.length;
         for (uint256 i; i < poolLength; ) {
             address pool = pools[i];
             uint256 reward = nextRewardFor(pool);
 
             if (pool != address(0) && reward > 0) {
-                MINTR.mintOhm(pool, reward);
+                MINTR.mintGdao(pool, reward);
                 IUniswapV2Pair(pool).sync();
             }
 
@@ -155,11 +155,11 @@ contract Distributor is Policy, RolesConsumer {
     }
 
     /// @notice Mints the bounty (if > 0) to the staking contract for distribution.
-    /// @return uint256 The amount of OHM minted as a bounty.
+    /// @return uint256 The amount of GDAO minted as a bounty.
     function retrieveBounty() external returns (uint256) {
         if (msg.sender != staking) revert Distributor_OnlyStaking();
 
-        if (bounty > 0) MINTR.mintOhm(staking, bounty);
+        if (bounty > 0) MINTR.mintGdao(staking, bounty);
 
         return bounty;
     }
@@ -168,11 +168,11 @@ contract Distributor is Policy, RolesConsumer {
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @notice Returns the next reward for the given address based on their OHM balance.
+    /// @notice Returns the next reward for the given address based on their GDAO balance.
     /// @param  who_ The address to get the next reward for.
     /// @return uint256 The next reward for the given address.
     function nextRewardFor(address who_) public view returns (uint256) {
-        return (ohm.balanceOf(who_) * rewardRate) / DENOMINATOR;
+        return (gdao.balanceOf(who_) * rewardRate) / DENOMINATOR;
     }
 
     //============================================================================================//
@@ -180,7 +180,7 @@ contract Distributor is Policy, RolesConsumer {
     //============================================================================================//
 
     /// @notice Adjusts the bounty
-    /// @param  bounty_ The new bounty amount in OHM (9 decimals).
+    /// @param  bounty_ The new bounty amount in GDAO (9 decimals).
     /// @dev    This function is only available to an authorized user.
     function setBounty(uint256 bounty_) external onlyRole("distributor_admin") {
         bounty = bounty_;
@@ -215,7 +215,7 @@ contract Distributor is Policy, RolesConsumer {
         }
     }
 
-    /// @notice Sets the new OHM reward rate to mint and distribute per epoch
+    /// @notice Sets the new GDAO reward rate to mint and distribute per epoch
     /// @param newRewardRate_ The new rate to set (9 decimals, i.e. 10_000_000 / 1_000_000_000 = 1%)
     function setRewardRate(uint256 newRewardRate_) external onlyRole("distributor_admin") {
         rewardRate = newRewardRate_;

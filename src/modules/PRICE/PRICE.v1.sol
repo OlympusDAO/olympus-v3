@@ -5,7 +5,7 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import "src/Kernel.sol";
 
 /// @notice Price oracle data storage
-/// @dev    The Olympus Price Oracle contract provides a standard interface for OHM price data against a reserve asset.
+/// @dev    The Olympus Price Oracle contract provides a standard interface for GDAO price data against a reserve asset.
 ///         It also implements a moving average price calculation (same as a TWAP) on the price feed data over a configured
 ///         duration and observation frequency. The data provided by this contract is used by the Olympus Range Operator to
 ///         perform market operations. The Olympus Price Oracle is updated each epoch by the Olympus Heart contract.
@@ -15,7 +15,7 @@ abstract contract PRICEv1 is Module {
     event NewObservation(uint256 timestamp_, uint256 price_, uint256 movingAverage_);
     event MovingAverageDurationChanged(uint48 movingAverageDuration_);
     event ObservationFrequencyChanged(uint48 observationFrequency_);
-    event UpdateThresholdsChanged(uint48 ohmEthUpdateThreshold_, uint48 reserveEthUpdateThreshold_);
+    event UpdateThresholdsChanged(uint48 gdaoEthUpdateThreshold_, uint48 reserveEthUpdateThreshold_);
     event MinimumTargetPriceChanged(uint256 minimumTargetPrice_);
 
     // =========  ERRORS ========= //
@@ -27,19 +27,19 @@ abstract contract PRICEv1 is Module {
 
     // =========  STATE ========= //
 
-    /// @dev    Price feeds. Chainlink typically provides price feeds for an asset in ETH. Therefore, we use two price feeds against ETH, one for OHM and one for the Reserve asset, to calculate the relative price of OHM in the Reserve asset.
+    /// @dev    Price feeds. Chainlink typically provides price feeds for an asset in ETH. Therefore, we use two price feeds against ETH, one for GDAO and one for the Reserve asset, to calculate the relative price of GDAO in the Reserve asset.
     /// @dev    Update thresholds are the maximum amount of time that can pass between price feed updates before the price oracle is considered stale. These should be set based on the parameters of the price feed.
 
-    /// @notice OHM/ETH price feed
-    AggregatorV2V3Interface public ohmEthPriceFeed;
+    /// @notice GDAO/ETH price feed
+    AggregatorV2V3Interface public gdaoEthPriceFeed;
 
-    /// @notice Maximum expected time between OHM/ETH price feed updates
-    uint48 public ohmEthUpdateThreshold;
+    /// @notice Maximum expected time between GDAO/ETH price feed updates
+    uint48 public gdaoEthUpdateThreshold;
 
     /// @notice Reserve/ETH price feed
     AggregatorV2V3Interface public reserveEthPriceFeed;
 
-    /// @notice Maximum expected time between OHM/ETH price feed updates
+    /// @notice Maximum expected time between GDAO/ETH price feed updates
     uint48 public reserveEthUpdateThreshold;
 
     /// @notice    Running sum of observations to calculate the moving average price from
@@ -72,7 +72,7 @@ abstract contract PRICEv1 is Module {
     /// @notice Number of decimals in the price values provided by the contract.
     uint8 public constant decimals = 18;
 
-    /// @notice Minimum target price for RBS system. Set manually to correspond to the liquid backing of OHM.
+    /// @notice Minimum target price for RBS system. Set manually to correspond to the liquid backing of GDAO.
     uint256 public minimumTargetPrice;
 
     // =========  FUNCTIONS ========= //
@@ -106,29 +106,29 @@ abstract contract PRICEv1 is Module {
     function changeObservationFrequency(uint48 observationFrequency_) external virtual;
 
     /// @notice   Change the update thresholds for the price feeds
-    /// @param    ohmEthUpdateThreshold_ - Maximum allowed time between OHM/ETH price feed updates
+    /// @param    gdaoEthUpdateThreshold_ - Maximum allowed time between GDAO/ETH price feed updates
     /// @param    reserveEthUpdateThreshold_ - Maximum allowed time between Reserve/ETH price feed updates
     /// @dev      The update thresholds should be set based on the update threshold of the chainlink oracles.
     function changeUpdateThresholds(
-        uint48 ohmEthUpdateThreshold_,
+        uint48 gdaoEthUpdateThreshold_,
         uint48 reserveEthUpdateThreshold_
     ) external virtual;
 
     /// @notice   Change the minimum target price
-    /// @param    minimumTargetPrice_ - Minimum target price for RBS system with 18 decimals, expressed as number of Reserve per OHM
-    /// @dev      The minimum target price should be set based on the liquid backing of OHM.
+    /// @param    minimumTargetPrice_ - Minimum target price for RBS system with 18 decimals, expressed as number of Reserve per GDAO
+    /// @dev      The minimum target price should be set based on the liquid backing of GDAO.
     function changeMinimumTargetPrice(uint256 minimumTargetPrice_) external virtual;
 
-    /// @notice Get the current price of OHM in the Reserve asset from the price feeds
+    /// @notice Get the current price of GDAO in the Reserve asset from the price feeds
     function getCurrentPrice() external view virtual returns (uint256);
 
-    /// @notice Get the last stored price observation of OHM in the Reserve asset
+    /// @notice Get the last stored price observation of GDAO in the Reserve asset
     function getLastPrice() external view virtual returns (uint256);
 
-    /// @notice Get the moving average of OHM in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
+    /// @notice Get the moving average of GDAO in the Reserve asset over the defined window (see movingAverageDuration and observationFrequency).
     function getMovingAverage() external view virtual returns (uint256);
 
-    /// @notice Get target price of OHM in the Reserve asset for the RBS system
+    /// @notice Get target price of GDAO in the Reserve asset for the RBS system
     /// @dev    Returns the maximum of the moving average and the minimum target price
     function getTargetPrice() external view virtual returns (uint256);
 }

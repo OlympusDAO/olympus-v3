@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {OlympusERC20Token as OHM} from "src/external/OlympusERC20.sol";
+import {GoerliDaoERC20Token as GDAO} from "src/external/GDAOERC20.sol";
 import "src/Kernel.sol";
 
-/// @notice Wrapper for minting and burning functions of OHM token.
+/// @notice Wrapper for minting and burning functions of GDAO token.
 abstract contract MINTRv1 is Module {
     // =========  EVENTS ========= //
 
@@ -21,9 +21,9 @@ abstract contract MINTRv1 is Module {
 
     // =========  STATE ========= //
 
-    OHM public ohm;
+    GDAO public gdao;
 
-    /// @notice Status of the minter. If false, minting and burning OHM is disabled.
+    /// @notice Status of the minter. If false, minting and burning GDAO is disabled.
     bool public active;
 
     /// @notice Mapping of who is approved for minting.
@@ -37,11 +37,11 @@ abstract contract MINTRv1 is Module {
         _;
     }
 
-    /// @notice Mint OHM to an address.
-    function mintOhm(address to_, uint256 amount_) external virtual;
+    /// @notice Mint GDAO to an address.
+    function mintGdao(address to_, uint256 amount_) external virtual;
 
-    /// @notice Burn OHM from an address. Must have approval.
-    function burnOhm(address from_, uint256 amount_) external virtual;
+    /// @notice Burn GDAO from an address. Must have approval.
+    function burnGdao(address from_, uint256 amount_) external virtual;
 
     /// @notice Increase approval for specific withdrawer addresses
     /// @dev    Policies must explicity request how much they want approved before withdrawing.

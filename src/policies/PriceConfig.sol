@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {RolesConsumer} from "modules/ROLES/GoerliDaoRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 

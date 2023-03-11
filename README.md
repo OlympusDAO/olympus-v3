@@ -1,6 +1,6 @@
 # Olympus V3
 
-Olympus V3, aka Bophades, is the latest iteration of the Olympus protocol. It is a foundation for the future of the protocol, utilizing the [Default Framework](https://github.com/fullyallocated/Default) to allow extensibility at the base layer via fully onchain governance mechanisms. 
+Olympus V3, aka Bophades, is the latest iteration of the Olympus protocol. It is a foundation for the future of the protocol, utilizing the [Default Framework](https://github.com/fullyallocated/Default) to allow extensibility at the base layer via fully onchain governance mechanisms.
 
 ## Build
 
@@ -84,3 +84,16 @@ $ forge build
 -   Guardian - 0x84C0C005cF574D0e5C602EA7b366aE9c707381E0
 -   Policy - 0x3dC18017cf8d8F4219dB7A8B93315fEC2d15B8a7
 -   Emergency - 0x3dC18017cf8d8F4219dB7A8B93315fEC2d15B8a7
+
+---
+
+# Goerli "Mainnet" Implementation:
+
+Goerli is now mainnet.
+We've forked Olympus v3 and put our own spin on it.
+
+#### LP Bonds:
+
+-   GDAO-METH
+-   GDAO-GETH
+-   GDAO-GDAO

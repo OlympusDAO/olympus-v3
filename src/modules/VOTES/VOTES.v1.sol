@@ -9,7 +9,7 @@ import "src/Kernel.sol";
 abstract contract VOTESv1 is Module, ERC4626 {
     // =========  STATE ========= //
 
-    ERC20 public gOHM;
+    ERC20 public xGDAO;
     mapping(address => uint256) public lastActionTimestamp;
     mapping(address => uint256) public lastDepositTimestamp;
 

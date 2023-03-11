@@ -9,7 +9,7 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IHeart} from "policies/interfaces/IHeart.sol";
 
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {RolesConsumer} from "modules/ROLES/GoerliDaoRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 
