@@ -1,0 +1,524 @@
+// SPDX-License-Identifier: Unlicense
+pragma solidity 0.8.15;
+
+import {Test, stdError} from "forge-std/Test.sol";
+import {UserFactory} from "test/lib/UserFactory.sol";
+import {larping} from "test/lib/larping.sol";
+
+import {FullMath} from "libraries/FullMath.sol";
+
+import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
+import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {MockVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
+import {MockAuraBooster, MockAuraRewardPool} from "test/mocks/AuraMocks.sol";
+
+import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
+import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.sol";
+
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {BLEVaultManagerLido} from "policies/lending/BLEVaultManagerLido.sol";
+import {BLEVaultLido} from "policies/lending/BLEVaultLido.sol";
+
+import "src/Kernel.sol";
+
+import {console2} from "forge-std/console2.sol";
+
+contract MockWsteth is ERC20 {
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        uint8 _decimals
+    ) ERC20(_name, _symbol, _decimals) {}
+
+    function mint(address to, uint256 value) public {
+        _mint(to, value);
+    }
+
+    function burnFrom(address from, uint256 value) public {
+        _burn(from, value);
+    }
+
+    function stEthPerToken() public pure returns (uint256) {
+        return 1e18;
+    }
+}
+
+// solhint-disable-next-line max-states-count
+contract BLEVauldLidoTest is Test {
+    using FullMath for uint256;
+    using larping for *;
+
+    UserFactory public userCreator;
+    address internal alice;
+    address internal bob;
+
+    OlympusERC20Token internal ohm;
+    MockWsteth internal wsteth;
+    MockERC20 internal aura;
+    MockERC20 internal bal;
+
+    MockPriceFeed internal ohmEthPriceFeed;
+    MockPriceFeed internal stethEthPriceFeed;
+
+    MockVault internal vault;
+    MockBalancerPool internal liquidityPool;
+
+    MockAuraBooster internal booster;
+    MockAuraRewardPool internal auraPool;
+
+    IOlympusAuthority internal auth;
+
+    Kernel internal kernel;
+    OlympusMinter internal minter;
+    OlympusTreasury internal treasury;
+    OlympusRoles internal roles;
+
+    RolesAdmin internal rolesAdmin;
+    BLEVaultManagerLido internal vaultManager;
+    BLEVaultLido internal vaultImplementation;
+
+    BLEVaultLido internal aliceVault;
+
+    uint256[] internal minAmountsOut = [0, 0];
+
+    function setUp() public {
+        vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
+
+        // Deploy mock users
+        {
+            userCreator = new UserFactory();
+            address[] memory users = userCreator.create(2);
+            alice = users[0];
+            bob = users[1];
+        }
+
+        // Deploy auth
+        {
+            auth = new MockLegacyAuthority(address(0x0));
+        }
+
+        // Deploy mock tokens
+        {
+            ohm = new OlympusERC20Token(address(auth));
+            wsteth = new MockWsteth("Wrapped Staked ETH", "wstETH", 18);
+            aura = new MockERC20("Aura", "AURA", 18);
+            bal = new MockERC20("Balancer", "BAL", 18);
+        }
+
+        // Deploy mock price feeds
+        {
+            ohmEthPriceFeed = new MockPriceFeed();
+            stethEthPriceFeed = new MockPriceFeed();
+
+            ohmEthPriceFeed.setDecimals(18);
+            stethEthPriceFeed.setDecimals(18);
+
+            ohmEthPriceFeed.setLatestAnswer(1e16); // 0.01 ETH
+            stethEthPriceFeed.setLatestAnswer(1e18); // 1 ETH
+        }
+
+        // Deploy mock Balancer contracts
+        {
+            liquidityPool = new MockBalancerPool();
+            vault = new MockVault(address(liquidityPool), address(ohm), address(wsteth));
+            vault.setPoolAmounts(100e9, 1e18);
+        }
+
+        // Deploy mock Aura contracts
+        {
+            auraPool = new MockAuraRewardPool(address(vault.bpt()), address(bal));
+            booster = new MockAuraBooster(address(vault.bpt()), address(auraPool));
+        }
+
+        // Deploy kernel
+        {
+            kernel = new Kernel();
+        }
+
+        // Deploy modules
+        {
+            minter = new OlympusMinter(kernel, address(ohm));
+            treasury = new OlympusTreasury(kernel);
+            roles = new OlympusRoles(kernel);
+        }
+
+        // Set vault in auth to MINTR
+        {
+            auth.vault.larp(address(minter));
+        }
+
+        // Deploy policies
+        {
+            vaultImplementation = new BLEVaultLido();
+
+            BLEVaultManagerLido.TokenData memory tokenData = BLEVaultManagerLido.TokenData({
+                ohm: address(ohm),
+                pairToken: address(wsteth),
+                aura: address(aura),
+                bal: address(bal)
+            });
+
+            BLEVaultManagerLido.BalancerData memory balancerData = BLEVaultManagerLido
+                .BalancerData({
+                    vault: address(vault),
+                    liquidityPool: address(liquidityPool),
+                    balancerHelper: address(0)
+                });
+
+            BLEVaultManagerLido.AuraData memory auraData = BLEVaultManagerLido.AuraData({
+                pid: uint256(0),
+                auraBooster: address(booster),
+                auraRewardPool: address(auraPool)
+            });
+
+            BLEVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = BLEVaultManagerLido
+                .OracleFeed({feed: ohmEthPriceFeed, updateThreshold: uint48(1 days)});
+
+            BLEVaultManagerLido.OracleFeed memory stethEthPriceFeedData = BLEVaultManagerLido
+                .OracleFeed({feed: stethEthPriceFeed, updateThreshold: uint48(1 days)});
+
+            vaultManager = new BLEVaultManagerLido(
+                kernel,
+                tokenData,
+                balancerData,
+                auraData,
+                address(0),
+                ohmEthPriceFeedData,
+                stethEthPriceFeedData,
+                address(vaultImplementation),
+                100_000e9,
+                0
+            );
+            rolesAdmin = new RolesAdmin(kernel);
+        }
+
+        // Initialize system
+        {
+            // Initialize modules
+            kernel.executeAction(Actions.InstallModule, address(minter));
+            kernel.executeAction(Actions.InstallModule, address(treasury));
+            kernel.executeAction(Actions.InstallModule, address(roles));
+
+            // Activate policies
+            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+            kernel.executeAction(Actions.ActivatePolicy, address(vaultManager));
+        }
+
+        // Set roles
+        {
+            rolesAdmin.grantRole("liquidityvault_admin", address(this));
+        }
+
+        // Activate Vault Manager
+        {
+            vaultManager.activate();
+        }
+
+        // Initialize timestamps on mock price feeds
+        {
+            ohmEthPriceFeed.setTimestamp(block.timestamp);
+            stethEthPriceFeed.setTimestamp(block.timestamp);
+        }
+
+        // Prepare alice's account
+        {
+            // Mint OHM to alice
+            wsteth.mint(alice, 100e18);
+
+            // Create alice's vault
+            vm.startPrank(alice);
+            aliceVault = BLEVaultLido(vaultManager.deployVault());
+
+            // Approve wstETH to alice's vault
+            wsteth.approve(address(aliceVault), type(uint256).max);
+            vm.stopPrank();
+        }
+    }
+
+    //============================================================================================//
+    //                                      LIQUIDITY FUNCTIONS                                   //
+    //============================================================================================//
+
+    /// [X]  deposit
+    ///     [X]  can only be called when the manager is active
+    ///     [X]  can only be called by the vault's owner
+    ///     [X]  correctly increases state values (mintedOHM and totalLP)
+    ///     [X]  correctly deploys liquidity
+
+    function testCorrectness_depositCanOnlyBeCalledWhenManagerIsActive() public {
+        // Deactivate vault manager
+        vaultManager.deactivate();
+
+        bytes memory err = abi.encodeWithSignature("BLEVaultLido_Inactive()");
+        vm.expectRevert();
+
+        // Try to deposit
+        vm.prank(alice);
+        aliceVault.deposit(1e18, 0);
+    }
+
+    function testCorrectness_depositCanOnlyBeCalledByTheVaultOwner(address attacker_) public {
+        if (attacker_ == alice) {
+            vm.prank(alice);
+            aliceVault.deposit(1e18, 0);
+        } else {
+            bytes memory err = abi.encodeWithSignature("BLEVaultLido_OnlyOwner()");
+            vm.expectRevert();
+
+            // Try to deposit
+            vm.prank(attacker_);
+            aliceVault.deposit(1e18, 0);
+        }
+    }
+
+    function testCorrectness_depositCorrectlyIncreasesState(uint256 depositAmount_) public {
+        vm.assume(depositAmount_ > 1e9 && depositAmount_ < 1_000_000_000_000e18);
+
+        // Set limit based on deposit amount
+        uint256 newLimit = (vaultManager.getOhmTknPrice() * depositAmount_) / 1e18;
+        vaultManager.setLimit(newLimit);
+
+        // Mint more wstETH to alice
+        wsteth.mint(alice, depositAmount_);
+
+        // Approve wstETH to alice's vault
+        vm.startPrank(alice);
+        wsteth.approve(address(aliceVault), type(uint256).max);
+
+        // Verify state before
+        assertEq(vaultManager.mintedOHM(), 0);
+        assertEq(vaultManager.totalLP(), 0);
+
+        // Deposit
+        aliceVault.deposit(depositAmount_, 0);
+        vm.stopPrank();
+
+        // Verify state after
+        assertEq(vaultManager.mintedOHM(), newLimit);
+        assertEq(vaultManager.totalLP(), depositAmount_);
+    }
+
+    function testCorrectness_depositCorrectlyDeploysLiquidity() public {
+        // Verify state before
+        assertEq(ohm.balanceOf(address(vault)), 0);
+        assertEq(wsteth.balanceOf(address(vault)), 0);
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 0);
+
+        // Deposit wstETH
+        vm.prank(alice);
+        aliceVault.deposit(100e18, 0);
+
+        // Verify state after
+        uint256 expectedOhmAmount = (100e18 * vaultManager.getOhmTknPrice()) / 1e18;
+        assertEq(ohm.balanceOf(address(vault)), expectedOhmAmount);
+        assertEq(wsteth.balanceOf(address(vault)), 100e18);
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
+    }
+
+    /// [X]  withdraw
+    ///     [X]  can only be called when the manager is active
+    ///     [X]  can only be called by the vault's owner
+    ///     [X]  correctly decreases state values (mintedOHM and totalLP)
+    ///     [X]  correctly withdraws liquidity
+
+    function _withdrawSetup() internal {
+        // Deposit wstETH
+        vm.prank(alice);
+        aliceVault.deposit(100e18, 0);
+    }
+
+    function testCorrectness_withdrawCanOnlyBeCalledWhenManagerIsActive() public {
+        // Deactivate vault manager
+        vaultManager.deactivate();
+
+        bytes memory err = abi.encodeWithSignature("BLEVaultLido_Inactive()");
+        vm.expectRevert();
+
+        // Try to withdraw
+        vm.prank(alice);
+        aliceVault.withdraw(1e18, minAmountsOut);
+    }
+
+    function testCorrectness_withdrawCanOnlyBeCalledByTheVaultOwner(address attacker_) public {
+        _withdrawSetup();
+
+        if (attacker_ == alice) {
+            vm.prank(alice);
+            aliceVault.withdraw(1e18, minAmountsOut);
+        } else {
+            bytes memory err = abi.encodeWithSignature("BLEVaultLido_OnlyOwner()");
+            vm.expectRevert();
+
+            // Try to withdraw
+            vm.prank(attacker_);
+            aliceVault.withdraw(1e18, minAmountsOut);
+        }
+    }
+
+    function testCorrectness_withdrawCorrectlyDecreasesState(uint256 withdrawAmount_) public {
+        _withdrawSetup();
+
+        // Get alice vault's LP balance
+        uint256 aliceLPBalance = aliceVault.getLPBalance();
+        vm.assume(withdrawAmount_ <= aliceLPBalance);
+
+        // Check state before
+        assertEq(vaultManager.mintedOHM(), 10_000e9);
+        assertEq(vaultManager.totalLP(), aliceLPBalance);
+
+        // Withdraw
+        vm.prank(alice);
+        aliceVault.withdraw(withdrawAmount_, minAmountsOut);
+
+        // Check state after
+        assertTrue(vaultManager.mintedOHM() < 10_000e9);
+        assertEq(vaultManager.totalLP(), aliceLPBalance - withdrawAmount_);
+    }
+
+    function testCorrectness_withdrawCorrectlyWithdrawsLiquidity() public {
+        _withdrawSetup();
+
+        // Get alice vault's LP balance
+        uint256 aliceLPBalance = aliceVault.getLPBalance();
+
+        // Check state before
+        assertEq(ohm.balanceOf(address(vault)), 10_000e9);
+        assertEq(wsteth.balanceOf(address(vault)), aliceLPBalance);
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), aliceLPBalance);
+
+        // Withdraw
+        vm.prank(alice);
+        aliceVault.withdraw(aliceLPBalance, minAmountsOut);
+
+        // Check state after
+        assertEq(ohm.balanceOf(address(vault)), 0);
+        assertEq(wsteth.balanceOf(address(vault)), 0);
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 0);
+    }
+
+    //============================================================================================//
+    //                                       REWARDS FUNCTIONS                                    //
+    //============================================================================================//
+
+    /// [X]  claimRewards
+    ///     [X]  can only be called when the manager is active
+    ///     [X]  can only be called by the vault's owner
+    ///     [X]  correctly claims rewards from Aura
+
+    function testCorrectness_claimRewardsCanOnlyBeCalledWhenManagerIsActive() public {
+        // Deactivate vault manager
+        vaultManager.deactivate();
+
+        bytes memory err = abi.encodeWithSignature("BLEVaultLido_Inactive()");
+        vm.expectRevert();
+
+        // Try to claim rewards
+        vm.prank(alice);
+        aliceVault.claimRewards();
+    }
+
+    function testCorrectness_claimRewardsCanOnlyBeCalledByTheVaultOwner(address attacker_) public {
+        if (attacker_ == alice) {
+            vm.prank(alice);
+            aliceVault.claimRewards();
+        } else {
+            bytes memory err = abi.encodeWithSignature("BLEVaultLido_OnlyOwner()");
+            vm.expectRevert();
+
+            // Try to claim rewards
+            vm.prank(attacker_);
+            aliceVault.claimRewards();
+        }
+    }
+
+    function testCorrectness_claimRewardsCorrectlyClaims() public {
+        // Deposit wstETH
+        _withdrawSetup();
+
+        // Check state before
+        assertEq(bal.balanceOf(address(alice)), 0);
+
+        // Claim rewards
+        vm.prank(alice);
+        aliceVault.claimRewards();
+
+        // Check state after
+        assertEq(bal.balanceOf(address(alice)), 1e18);
+    }
+
+    //============================================================================================//
+    //                                        VIEW FUNCTIONS                                      //
+    //============================================================================================//
+
+    /// [X]  getLPBalance
+    ///     [X]  returns the correct LP balance
+
+    function testCorrectness_getLPBalance(uint256 depositAmount_) public {
+        vm.assume(depositAmount_ > 1e9 && depositAmount_ < 1_000_000_000_000e18);
+
+        // Set limit based on deposit amount
+        uint256 newLimit = (vaultManager.getOhmTknPrice() * depositAmount_) / 1e18;
+        vaultManager.setLimit(newLimit);
+
+        // Mint more wstETH to alice
+        wsteth.mint(alice, depositAmount_);
+
+        // Approve wstETH to alice's vault
+        vm.startPrank(alice);
+        wsteth.approve(address(aliceVault), type(uint256).max);
+
+        // Check state before
+        assertEq(aliceVault.getLPBalance(), 0);
+
+        // Deposit
+        aliceVault.deposit(depositAmount_, 0);
+        vm.stopPrank();
+
+        // Check state after
+        assertEq(aliceVault.getLPBalance(), depositAmount_);
+    }
+
+    /// [X]  getUserPairShare
+    ///     [X]  returns the correct user wstETH share
+
+    function testCorrectness_getUserPairShare(uint256 depositAmount_) public {
+        vm.assume(depositAmount_ > 1e9 && depositAmount_ < 1_000_000_000_000e18);
+
+        // Set limit based on deposit amount
+        uint256 newLimit = (vaultManager.getOhmTknPrice() * depositAmount_) / 1e18;
+        vaultManager.setLimit(newLimit);
+
+        // Mint more wstETH to alice
+        wsteth.mint(alice, depositAmount_);
+
+        // Approve wstETH to alice's vault
+        vm.startPrank(alice);
+        wsteth.approve(address(aliceVault), type(uint256).max);
+
+        // Check state before
+        assertEq(aliceVault.getUserPairShare(), 0);
+
+        // Deposit
+        aliceVault.deposit(depositAmount_, 0);
+        vm.stopPrank();
+
+        // Set pool amounts to true balances
+        vault.setPoolAmounts(ohm.balanceOf(address(vault)), wsteth.balanceOf(address(vault)));
+
+        // Calculate expected share
+        uint256 tknOhmPrice = vaultManager.getTknOhmPrice();
+        uint256 userOhmShare = (depositAmount_ * ohm.balanceOf(address(vault))) /
+            liquidityPool.totalSupply();
+        uint256 expectedWstethShare = (userOhmShare * tknOhmPrice) / 1e9;
+        uint256 expectedShare = depositAmount_ > expectedWstethShare
+            ? expectedWstethShare
+            : depositAmount_;
+
+        // Check state after
+        assertEq(aliceVault.getUserPairShare(), expectedShare);
+    }
+}

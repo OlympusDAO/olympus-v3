@@ -116,32 +116,23 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
     //                                      LIQUIDITY FUNCTIONS                                   //
     //============================================================================================//
 
+    // TODO: Re-add nonReentrant modifier. Currently giving me issues.
     function deposit(
         uint256 amount_,
         uint256 minLPAmount_
-    ) external onlyWhileActive onlyOwner nonReentrant returns (uint256 lpAmountOut) {
-        console2.log("1");
-
+    ) external onlyWhileActive onlyOwner returns (uint256 lpAmountOut) {
         // Calculate OHM amount to mint
         uint256 ohmTknPrice = manager().getOhmTknPrice();
         uint256 ohmMintAmount = (amount_ * ohmTknPrice) / 1e18;
 
-        console2.log("2");
-
         // Cache OHM-wstETH BPT before
         uint256 bptBefore = liquidityPool().balanceOf(address(this));
-
-        console2.log("3");
 
         // Mint OHM
         manager().mintOHM(ohmMintAmount);
 
-        console2.log("4");
-
         // Transfer in wstETH
         wsteth().transferFrom(msg.sender, address(this), amount_);
-
-        console2.log("5");
 
         // Build join pool request
         address[] memory assets = new address[](2);
@@ -169,23 +160,17 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
             joinPoolRequest
         );
 
-        console2.log("6");
-
         // OHM-PAIR BPT after
         lpAmountOut = liquidityPool().balanceOf(address(this)) - bptBefore;
         manager().increaseTotalLP(lpAmountOut);
-
-        console2.log("7");
 
         // Stake into Aura
         liquidityPool().approve(address(auraBooster()), lpAmountOut);
         auraBooster().deposit(pid(), lpAmountOut, true);
 
-        console2.log("8");
-
         // Return unused tokens
-        uint256 unusedOHM = ohmMintAmount - ohm().balanceOf(address(this));
-        uint256 unusedWsteth = amount_ - wsteth().balanceOf(address(this));
+        uint256 unusedOHM = ohm().balanceOf(address(this));
+        uint256 unusedWsteth = wsteth().balanceOf(address(this));
 
         if (unusedOHM > 0) {
             ohm().increaseAllowance(MINTR(), unusedOHM);
@@ -196,18 +181,17 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
             wsteth().transfer(msg.sender, unusedWsteth);
         }
 
-        console2.log("9");
-
         // Emit event
         emit Deposit(ohmMintAmount - unusedOHM, amount_ - unusedWsteth);
 
         return lpAmountOut;
     }
 
+    // TODO: Re-add nonReentrant modifier. Currently giving me issues.
     function withdraw(
         uint256 lpAmount_,
         uint256[] calldata minTokenAmounts_
-    ) external onlyWhileActive onlyOwner nonReentrant returns (uint256, uint256) {
+    ) external onlyWhileActive onlyOwner returns (uint256, uint256) {
         // Cache OHM and wstETH balances before
         uint256 ohmBefore = ohm().balanceOf(address(this));
         uint256 wstethBefore = wsteth().balanceOf(address(this));
@@ -273,7 +257,8 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
     //                                       REWARDS FUNCTIONS                                    //
     //============================================================================================//
 
-    function claimRewards() external onlyWhileActive onlyOwner nonReentrant {
+    // TODO: Re-add nonReentrant modifier. Currently giving me issues.
+    function claimRewards() external onlyWhileActive onlyOwner {
         // Claim rewards from Aura
         auraRewardPool().getReward(owner(), true);
 
@@ -290,6 +275,9 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
     }
 
     function getUserPairShare() public view returns (uint256) {
+        // If total supply is 0 return 0
+        if (liquidityPool().totalSupply() == 0) return 0;
+
         // Get user's LP balance
         uint256 userLPBalance = getLPBalance();
 
