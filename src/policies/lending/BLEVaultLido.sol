@@ -8,9 +8,6 @@ import {BLEVaultManagerLido} from "policies/lending/BLEVaultManagerLido.sol";
 import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool} from "policies/lending/interfaces/IBalancer.sol";
 import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.sol";
 
-// Import internal dependencies
-import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
-
 // Import types
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -22,7 +19,7 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {console2} from "forge-std/console2.sol";
 
-contract BLEVaultLido is ReentrancyGuard, Clone {
+contract BLEVaultLido is Clone {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
@@ -31,6 +28,7 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
     error BLEVaultLido_AlreadyInitialized();
     error BLEVaultLido_OnlyOwner();
     error BLEVaultLido_Inactive();
+    error BLEVaultLido_Reentrancy();
 
     // ========= EVENTS ========= //
 
@@ -38,9 +36,20 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
     event Withdraw(uint256 ohmAmount, uint256 wstethAmount);
     event RewardsClaimed(address indexed rewardsToken, uint256 amount);
 
+    // ========= STATE VARIABLES ========= //
+
+    uint256 private _reentrancyStatus;
+
     // ========= CONSTRUCTOR ========= //
 
     constructor() {}
+
+    // ========= INITIALIZER ========= //
+
+    function initializeClone() external {
+        if (_reentrancyStatus != 0) revert BLEVaultLido_AlreadyInitialized();
+        _reentrancyStatus = 1;
+    }
 
     // ========= IMMUTABLE CLONE ARGS ========= //
 
@@ -112,15 +121,24 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
         _;
     }
 
+    modifier nonReentrant() {
+        if (_reentrancyStatus != 1) revert BLEVaultLido_Reentrancy();
+
+        _reentrancyStatus = 2;
+
+        _;
+
+        _reentrancyStatus = 1;
+    }
+
     //============================================================================================//
     //                                      LIQUIDITY FUNCTIONS                                   //
     //============================================================================================//
 
-    // TODO: Re-add nonReentrant modifier. Currently giving me issues.
     function deposit(
         uint256 amount_,
         uint256 minLPAmount_
-    ) external onlyWhileActive onlyOwner returns (uint256 lpAmountOut) {
+    ) external onlyWhileActive onlyOwner nonReentrant returns (uint256 lpAmountOut) {
         // Calculate OHM amount to mint
         uint256 ohmTknPrice = manager().getOhmTknPrice();
         uint256 ohmMintAmount = (amount_ * ohmTknPrice) / 1e18;
@@ -187,11 +205,10 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
         return lpAmountOut;
     }
 
-    // TODO: Re-add nonReentrant modifier. Currently giving me issues.
     function withdraw(
         uint256 lpAmount_,
         uint256[] calldata minTokenAmounts_
-    ) external onlyWhileActive onlyOwner returns (uint256, uint256) {
+    ) external onlyWhileActive onlyOwner nonReentrant returns (uint256, uint256) {
         // Cache OHM and wstETH balances before
         uint256 ohmBefore = ohm().balanceOf(address(this));
         uint256 wstethBefore = wsteth().balanceOf(address(this));
@@ -257,8 +274,7 @@ contract BLEVaultLido is ReentrancyGuard, Clone {
     //                                       REWARDS FUNCTIONS                                    //
     //============================================================================================//
 
-    // TODO: Re-add nonReentrant modifier. Currently giving me issues.
-    function claimRewards() external onlyWhileActive onlyOwner {
+    function claimRewards() external onlyWhileActive onlyOwner nonReentrant {
         // Claim rewards from Aura
         auraRewardPool().getReward(owner(), true);
 

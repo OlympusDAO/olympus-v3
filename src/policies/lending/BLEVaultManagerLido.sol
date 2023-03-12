@@ -231,6 +231,9 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
         );
         BLEVaultLido clone = BLEVaultLido(address(implementation).clone(data));
 
+        // Initialize clone of vault implementation (for reentrancy state)
+        clone.initializeClone();
+
         // Set vault owner
         vaultOwners[clone] = msg.sender;
         userVaults[msg.sender] = clone;
