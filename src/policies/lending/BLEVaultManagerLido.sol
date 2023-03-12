@@ -382,6 +382,19 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
         }
     }
 
+    function getOhmEmissions() external view returns (uint256 emitted, uint256 removed) {
+        uint256 currentPoolOhmShare = _getPoolOhmShare();
+
+        // Net emitted is the amount of OHM that was minted to the pool but is no longer in the
+        // pool beyond what has been burned in the past. Net removed is the amount of OHM that is
+        // in the pool but wasn’t minted there plus what has been burned in the past.
+        if (mintedOHM > currentPoolOhmShare + netBurnedOHM) {
+            emitted = mintedOHM - currentPoolOhmShare - netBurnedOHM;
+        } else {
+            removed = currentPoolOhmShare + netBurnedOHM - mintedOHM;
+        }
+    }
+
     function getOhmTknPrice() public view returns (uint256) {
         // Get stETH per wstETH (18 Decimals)
         uint256 stethPerWsteth = IWsteth(pairToken).stEthPerToken();
@@ -469,5 +482,20 @@ contract BLEVaultManagerLido is Policy, RolesConsumer {
         ) revert BLEFactoryLido_BadPriceFeed();
 
         return uint256(priceInt);
+    }
+
+    function _getPoolOhmShare() internal view returns (uint256) {
+        // Cast addresses
+        IVault vault = IVault(balancerData.vault);
+        IBasePool pool = IBasePool(balancerData.liquidityPool);
+
+        // Get pool total supply
+        uint256 poolTotalSupply = pool.totalSupply();
+
+        // Get token balances in pool
+        (, uint256[] memory balances_, ) = vault.getPoolTokens(pool.getPoolId());
+
+        if (poolTotalSupply == 0) return 0;
+        else return (balances_[0] * totalLP) / poolTotalSupply;
     }
 }
