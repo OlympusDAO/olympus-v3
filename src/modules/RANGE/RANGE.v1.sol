@@ -39,8 +39,8 @@ abstract contract RANGEv1 is Module {
     struct Side {
         bool active; // Whether or not the side is active (i.e. the Operator is performing market operations on this side, true = active, false = inactive)
         uint48 lastActive; // Unix timestamp when the side was last active (in seconds)
-        uint256 capacity; // Amount of tokens that can be used to defend the side of the range. Specified in OHM tokens on the high side and Reserve tokens on the low side.
-        uint256 threshold; // Minimum number of tokens required in capacity to maintain an active side. Specified in OHM tokens on the high side and Reserve tokens on the low side.
+        uint256 capacity; // Amount of tokens that can be used to defend the side of the range. Specified in GDAO tokens on the high side and Reserve tokens on the low side.
+        uint256 threshold; // Minimum number of tokens required in capacity to maintain an active side. Specified in GDAO tokens on the high side and Reserve tokens on the low side.
         uint256 market; // Market ID of the cushion bond market for the side. If no market is active, the market ID is set to max uint256 value.
     }
 
@@ -58,8 +58,8 @@ abstract contract RANGEv1 is Module {
     /// @dev    A threshold is required so that a wall is not "active" with a capacity near zero, but unable to be depleted practically (dust).
     uint256 public thresholdFactor;
 
-    /// @notice OHM token contract address
-    ERC20 public ohm;
+    /// @notice GDAO token contract address
+    ERC20 public gdao;
 
     /// @notice Reserve token contract address
     ERC20 public reserve;
@@ -69,7 +69,7 @@ abstract contract RANGEv1 is Module {
     /// @notice Update the capacity for a side of the range.
     /// @notice Access restricted to activated policies.
     /// @param  high_ - Specifies the side of the range to update capacity for (true = high side, false = low side).
-    /// @param  capacity_ - Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
+    /// @param  capacity_ - Amount to set the capacity to (GDAO tokens for high side, Reserve tokens for low side).
     function updateCapacity(bool high_, uint256 capacity_) external virtual;
 
     /// @notice Update the prices for the low and high sides.
@@ -80,14 +80,14 @@ abstract contract RANGEv1 is Module {
     /// @notice Regenerate a side of the range to a specific capacity.
     /// @notice Access restricted to activated policies.
     /// @param  high_ - Specifies the side of the range to regenerate (true = high side, false = low side).
-    /// @param  capacity_ - Amount to set the capacity to (OHM tokens for high side, Reserve tokens for low side).
+    /// @param  capacity_ - Amount to set the capacity to (GDAO tokens for high side, Reserve tokens for low side).
     function regenerate(bool high_, uint256 capacity_) external virtual;
 
     /// @notice Update the market ID (cushion) for a side of the range.
     /// @notice Access restricted to activated policies.
     /// @param  high_ - Specifies the side of the range to update market for (true = high side, false = low side).
     /// @param  market_ - Market ID to set for the side.
-    /// @param  marketCapacity_ - Amount to set the last market capacity to (OHM tokens for high side, Reserve tokens for low side).
+    /// @param  marketCapacity_ - Amount to set the last market capacity to (GDAO tokens for high side, Reserve tokens for low side).
     function updateMarket(
         bool high_,
         uint256 market_,

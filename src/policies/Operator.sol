@@ -11,7 +11,7 @@ import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {RolesConsumer} from "modules/ROLES/GoerliDaoRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
@@ -58,9 +58,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     IBondCallback public callback;
 
     // Tokens
-    /// @notice OHM token contract
-    ERC20 public immutable ohm;
-    uint8 public immutable ohmDecimals;
+    /// @notice GDAO token contract
+    ERC20 public immutable gdao;
+    uint8 public immutable gdaoDecimals;
     /// @notice Reserve token contract
     ERC20 public immutable reserve;
     uint8 public immutable reserveDecimals;
@@ -77,7 +77,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         Kernel kernel_,
         IBondSDA auctioneer_,
         IBondCallback callback_,
-        ERC20[2] memory tokens_, // [ohm, reserve]
+        ERC20[2] memory tokens_, // [gdao, reserve]
         uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
     ) Policy(kernel_) {
         // Check params are valid
@@ -107,8 +107,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         auctioneer = auctioneer_;
         callback = callback_;
-        ohm = tokens_[0];
-        ohmDecimals = tokens_[0].decimals();
+        gdao = tokens_[0];
+        gdaoDecimals = tokens_[0].decimals();
         reserve = tokens_[1];
         reserveDecimals = tokens_[1].decimals();
 
@@ -153,8 +153,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         MINTR = MINTRv1(getModuleAddress(dependencies[3]));
         ROLES = ROLESv1(getModuleAddress(dependencies[4]));
 
-        // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
-        ohm.safeApprove(address(MINTR), type(uint256).max);
+        // Approve MINTR for burning GDAO (called here so that it is re-approved on updates)
+        gdao.safeApprove(address(MINTR), type(uint256).max);
     }
 
     /// @inheritdoc Policy
@@ -173,8 +173,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[7] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         requests[8] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
-        requests[9] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        requests[10] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[9] = Permissions(MINTR_KEYCODE, MINTR.mintGdao.selector);
+        requests[10] = Permissions(MINTR_KEYCODE, MINTR.burnGdao.selector);
         requests[11] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
         requests[12] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
@@ -279,7 +279,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         uint256 amountIn_,
         uint256 minAmountOut_
     ) external override onlyWhileActive nonReentrant returns (uint256 amountOut) {
-        if (tokenIn_ == ohm) {
+        if (tokenIn_ == gdao) {
             // Revert if lower wall is inactive
             if (!RANGE.active(false)) revert Operator_WallDown();
 
@@ -300,16 +300,16 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // If wall is down after swap, deactive the cushion as well
             _checkCushion(false);
 
-            // Transfer OHM from sender
-            ohm.safeTransferFrom(msg.sender, address(this), amountIn_);
+            // Transfer GDAO from sender
+            gdao.safeTransferFrom(msg.sender, address(this), amountIn_);
 
-            // Burn OHM
-            MINTR.burnOhm(address(this), amountIn_);
+            // Burn GDAO
+            MINTR.burnGdao(address(this), amountIn_);
 
             // Withdraw and transfer reserve to sender
             TRSRY.withdrawReserves(msg.sender, reserve, amountOut);
 
-            emit Swap(ohm, reserve, amountIn_, amountOut);
+            emit Swap(gdao, reserve, amountIn_, amountOut);
         } else if (tokenIn_ == reserve) {
             // Revert if upper wall is inactive
             if (!RANGE.active(true)) revert Operator_WallDown();
@@ -334,10 +334,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Transfer reserves to treasury
             reserve.safeTransferFrom(msg.sender, address(TRSRY), amountIn_);
 
-            // Mint OHM to sender
-            MINTR.mintOhm(msg.sender, amountOut);
+            // Mint GDAO to sender
+            MINTR.mintGdao(msg.sender, amountOut);
 
-            emit Swap(reserve, ohm, amountIn_, amountOut);
+            emit Swap(reserve, gdao, amountIn_, amountOut);
         } else {
             revert Operator_InvalidParams();
         }
@@ -375,13 +375,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(range.cushion.high.price);
-            int8 scaleAdjustment = int8(ohmDecimals) - int8(reserveDecimals) + (priceDecimals / 2);
+            int8 scaleAdjustment = int8(gdaoDecimals) - int8(reserveDecimals) + (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
             uint256 oracleScale = 10**uint8(int8(PRICE.decimals()) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
-                    36 + scaleAdjustment + int8(reserveDecimals) - int8(ohmDecimals) - priceDecimals
+                    36 + scaleAdjustment + int8(reserveDecimals) - int8(gdaoDecimals) - priceDecimals
                 );
 
             uint256 initialPrice = PRICE.getLastPrice().mulDiv(bondScale, oracleScale);
@@ -396,9 +396,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
                 ONE_HUNDRED_PERCENT
             );
 
-            // Create new bond market to buy the reserve with OHM
+            // Create new bond market to buy the reserve with GDAO
             IBondSDA.MarketParams memory params = IBondSDA.MarketParams({
-                payoutToken: ohm,
+                payoutToken: gdao,
                 quoteToken: reserve,
                 callbackAddr: address(callback),
                 capacityInQuote: false,
@@ -430,13 +430,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(invCushionPrice);
-            int8 scaleAdjustment = int8(reserveDecimals) - int8(ohmDecimals) + (priceDecimals / 2);
+            int8 scaleAdjustment = int8(reserveDecimals) - int8(gdaoDecimals) + (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
             uint256 oracleScale = 10**uint8(int8(oracleDecimals) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
-                    36 + scaleAdjustment + int8(ohmDecimals) - int8(reserveDecimals) - priceDecimals
+                    36 + scaleAdjustment + int8(gdaoDecimals) - int8(reserveDecimals) - priceDecimals
                 );
 
             uint256 initialPrice = invCurrentPrice.mulDiv(bondScale, oracleScale);
@@ -451,10 +451,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
                 ONE_HUNDRED_PERCENT
             );
 
-            // Create new bond market to buy OHM with the reserve
+            // Create new bond market to buy GDAO with the reserve
             IBondSDA.MarketParams memory params = IBondSDA.MarketParams({
                 payoutToken: reserve,
-                quoteToken: ohm,
+                quoteToken: gdao,
                 callbackAddr: address(callback),
                 capacityInQuote: false,
                 capacity: marketCapacity,
@@ -506,7 +506,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice          Update the capacity on the RANGE module.
     /// @param high_     Whether to update the high side or low side capacity (true = high, false = low).
-    /// @param reduceBy_ The amount to reduce the capacity by (OHM tokens for high side, Reserve tokens for low side).
+    /// @param reduceBy_ The amount to reduce the capacity by (GDAO tokens for high side, Reserve tokens for low side).
     function _updateCapacity(bool high_, uint256 reduceBy_) internal {
         // Initialize update variables, decrement capacity if a reduceBy amount is provided
         uint256 capacity = RANGE.capacity(high_) - reduceBy_;
@@ -584,7 +584,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Calculate capacity
             uint256 capacity = fullCapacity(true);
 
-            // Get approval from MINTR to mint OHM up to the capacity
+            // Get approval from MINTR to mint GDAO up to the capacity
             // If current approval is higher than the capacity, reduce it
             uint256 currentApproval = MINTR.mintApproval(address(this));
             if (currentApproval < capacity) {
@@ -795,11 +795,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IOperator
     function getAmountOut(ERC20 tokenIn_, uint256 amountIn_) public view returns (uint256) {
-        if (tokenIn_ == ohm) {
+        if (tokenIn_ == gdao) {
             // Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
                 10**reserveDecimals * RANGE.price(true, false),
-                10**ohmDecimals * 10**PRICE.decimals()
+                10**gdaoDecimals * 10**PRICE.decimals()
             );
 
             // Revert if amount out exceeds capacity
@@ -809,7 +809,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         } else if (tokenIn_ == reserve) {
             // Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
-                10**ohmDecimals * 10**PRICE.decimals(),
+                10**gdaoDecimals * 10**PRICE.decimals(),
                 10**reserveDecimals * RANGE.price(true, true)
             );
 
@@ -829,7 +829,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (high_) {
             capacity =
                 (capacity.mulDiv(
-                    10**ohmDecimals * 10**PRICE.decimals(),
+                    10**gdaoDecimals * 10**PRICE.decimals(),
                     10**reserveDecimals * RANGE.price(true, true)
                 ) * (ONE_HUNDRED_PERCENT + RANGE.spread(true) * 2)) /
                 ONE_HUNDRED_PERCENT;

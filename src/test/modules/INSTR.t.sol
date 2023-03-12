@@ -12,12 +12,12 @@ import {MockInvalidModule} from "test/mocks/MockInvalidModule.sol";
 import {MockValidModule} from "test/mocks/MockValidModule.sol";
 import {MockValidUpgradedModule} from "test/mocks/MockValidUpgradedModule.sol";
 
-import "modules/INSTR/OlympusInstructions.sol";
+import "modules/INSTR/GoerliDaoInstructions.sol";
 import "src/Kernel.sol";
 
 contract InstructionsTest is Test {
     Kernel internal kernel;
-    using ModuleTestFixtureGenerator for OlympusInstructions;
+    using ModuleTestFixtureGenerator for GoerliDaoInstructions;
 
     OlympusInstructions internal instr;
     Parthenon internal governance;
@@ -31,11 +31,11 @@ contract InstructionsTest is Test {
         kernel = new Kernel(); // this contract will be the executor
 
         /// Deploy modules (some mocks)
-        instr = new OlympusInstructions(kernel);
+        instr = new GoerliDaoInstructions(kernel);
         invalidModule = new MockInvalidModule(kernel);
 
         /// Deploy policies
-        writer = instr.generateGodmodeFixture(type(OlympusInstructions).name);
+        writer = instr.generateGodmodeFixture(type(GoerliDaoInstructions).name);
         governance = new Parthenon(kernel);
 
         /// Install modules

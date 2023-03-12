@@ -6,12 +6,12 @@ pragma solidity 0.8.15;
 import {INSTRv1} from "src/modules/INSTR/INSTR.v1.sol";
 import {VOTESv1} from "src/modules/VOTES/VOTES.v1.sol";
 
-import {OlympusInstructions} from "src/modules/INSTR/OlympusInstructions.sol";
-import {OlympusVotes} from "src/modules/VOTES/OlympusVotes.sol";
+import {GoerliDaoInstructions} from "src/modules/INSTR/GoerliDaoInstructions.sol";
+import {GoerliDaoVotes} from "src/modules/VOTES/GoerliDaoVotes.sol";
 
 import "src/Kernel.sol";
 
-/// @notice Parthenon, OlympusDAO's on-chain governance system.
+/// @notice Parthenon, Goerli DAO's on-chain governance system.
 /// @dev The Parthenon policy is also the Kernel's Executor.
 contract Parthenon is Policy {
     // =========  EVENTS ========= //

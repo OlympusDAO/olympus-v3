@@ -10,7 +10,7 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {RolesConsumer} from "modules/ROLES/GoerliDaoRoles.sol";
 
 import {Operator} from "policies/Operator.sol";
 import "src/Kernel.sol";
@@ -18,7 +18,7 @@ import "src/Kernel.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
-/// @title Olympus Bond Callback
+/// @title Goerli DAO Bond Callback
 contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     using TransferHelper for ERC20;
     using FullMath for uint256;
@@ -41,7 +41,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     Operator public operator;
 
     IBondAggregator public aggregator;
-    ERC20 public ohm;
+    ERC20 public gdao;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -50,10 +50,10 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     constructor(
         Kernel kernel_,
         IBondAggregator aggregator_,
-        ERC20 ohm_
+        ERC20 gdao_
     ) Policy(kernel_) {
         aggregator = aggregator_;
-        ohm = ohm_;
+        gdao = gdao_;
     }
 
     /// @inheritdoc Policy
@@ -67,8 +67,8 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
 
-        // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
-        ohm.safeApprove(address(MINTR), type(uint256).max);
+        // Approve MINTR for burning GDAO (called here so that it is re-approved on updates)
+        gdao.safeApprove(address(MINTR), type(uint256).max);
     }
 
     /// @inheritdoc Policy
@@ -79,8 +79,8 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         requests = new Permissions[](5);
         requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        requests[2] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        requests[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[2] = Permissions(MINTR_KEYCODE, MINTR.mintGdao.selector);
+        requests[3] = Permissions(MINTR_KEYCODE, MINTR.burnGdao.selector);
         requests[4] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
     }
 
@@ -143,9 +143,9 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
 
         uint256 toApprove = capacityInQuote ? capacity.mulDiv(scale, minPrice) : capacity;
 
-        // If payout token is in OHM, request mint approval for the capacity in OHM
+        // If payout token is in GDAO, request mint approval for the capacity in GDAO
         // Otherwise, request withdrawal approval for the capacity from the TRSRY
-        if (address(payoutToken) == address(ohm)) {
+        if (address(payoutToken) == address(gdao)) {
             MINTR.increaseMintApproval(address(this), toApprove);
         } else {
             TRSRY.increaseWithdrawApproval(address(this), payoutToken, toApprove);
@@ -187,22 +187,22 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
             revert Callback_TokensNotReceived();
 
         // Handle payout
-        if (quoteToken == payoutToken && quoteToken == ohm) {
-            // If OHM-OHM bond, burn OHM received and then mint OHM to the Teller
+        if (quoteToken == payoutToken && quoteToken == gdao) {
+            // If GDAO-GDAO bond, burn GDAO received and then mint GDAO to the Teller
             // We don't mint the difference because there could be rare cases where input is greater than output
-            MINTR.burnOhm(address(this), inputAmount_);
-            MINTR.mintOhm(msg.sender, outputAmount_);
-        } else if (quoteToken == ohm) {
-            // If inverse bond (buying ohm), transfer payout tokens to sender
+            MINTR.burnGdao(address(this), inputAmount_);
+            MINTR.mintGdao(msg.sender, outputAmount_);
+        } else if (quoteToken == gdao) {
+            // If inverse bond (buying gdao), transfer payout tokens to sender
             TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
 
-            // Burn OHM received from sender
-            MINTR.burnOhm(address(this), inputAmount_);
-        } else if (payoutToken == ohm) {
-            // Else (selling ohm), mint OHM to sender
-            MINTR.mintOhm(msg.sender, outputAmount_);
+            // Burn GDAO received from sender
+            MINTR.burnGdao(address(this), inputAmount_);
+        } else if (payoutToken == gdao) {
+            // Else (selling gdao), mint GDAO to sender
+            MINTR.mintGdao(msg.sender, outputAmount_);
         } else {
-            // Revert since this callback only handles OHM bonds
+            // Revert since this callback only handles GDAO bonds
             revert Callback_MarketNotSupported(id_);
         }
 
