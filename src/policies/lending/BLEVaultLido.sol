@@ -2,12 +2,13 @@
 pragma solidity 0.8.15;
 
 // Import system dependencies
-import {IBLEVaultLido} from "policies/lending/interfaces/IBLEVaultLido.sol";
+import {IBLEVaultLido, RewardsData} from "policies/lending/interfaces/IBLEVaultLido.sol";
+import {IBLEVaultManagerLido} from "policies/lending/interfaces/IBLEVaultManagerLido.sol";
 import {BLEVaultManagerLido} from "policies/lending/BLEVaultManagerLido.sol";
 
 // Import external dependencies
 import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool} from "policies/lending/interfaces/IBalancer.sol";
-import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.sol";
+import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/lending/interfaces/IAura.sol";
 
 // Import types
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
@@ -17,8 +18,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Clone} from "clones/Clone.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
-
-import {console2} from "forge-std/console2.sol";
 
 contract BLEVaultLido is IBLEVaultLido, Clone {
     using TransferHelper for ERC20;
@@ -317,6 +316,39 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
         return userWstethShare > expectedWstethShare ? expectedWstethShare : userWstethShare;
     }
 
+    /// @inheritdoc IBLEVaultLido
+    function getOutstandingRewards() public view override returns (RewardsData[] memory) {
+        uint256 numExtraRewards = auraRewardPool().extraRewardsLength();
+        RewardsData[] memory rewards = new RewardsData[](numExtraRewards + 2);
+
+        // Get Bal reward
+        uint256 balRewards = auraRewardPool().earned(address(this));
+        rewards[0] = RewardsData({rewardToken: address(bal()), outstandingRewards: balRewards});
+
+        // Get Aura rewards
+        uint256 auraRewards = manager().auraMiningLib().convertCrvToCvx(balRewards);
+        rewards[1] = RewardsData({rewardToken: address(aura()), outstandingRewards: auraRewards});
+
+        // Get extra rewards
+        for (uint256 i; i < numExtraRewards; ) {
+            IAuraRewardPool extraRewardPool = IAuraRewardPool(auraRewardPool().extraRewards(i));
+
+            address extraRewardToken = extraRewardPool.rewardToken();
+            uint256 extraRewardAmount = extraRewardPool.earned(address(this));
+
+            rewards[i + 2] = RewardsData({
+                rewardToken: extraRewardToken,
+                outstandingRewards: extraRewardAmount
+            });
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return rewards;
+    }
+
     //============================================================================================//
     //                                      INTERNAL FUNCTIONS                                    //
     //============================================================================================//
@@ -361,6 +393,10 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
                     );
                 }
                 if (extraRewardFee > 0) extraRewardToken.transfer(TRSRY(), extraRewardFee);
+
+                unchecked {
+                    ++i;
+                }
             }
         }
     }

@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.8.0;
 
+struct RewardsData {
+    address rewardToken;
+    uint256 outstandingRewards;
+}
+
 interface IBLEVaultLido {
     //============================================================================================//
     //                                      LIQUIDITY FUNCTIONS                                   //
@@ -43,4 +48,8 @@ interface IBLEVaultLido {
     /// @notice                 Gets the contract's claim on wstETH based on its LP balance deposited into Aura
     /// @return uint256         Claim on wstETH
     function getUserPairShare() external view returns (uint256);
+
+    /// @notice                         Returns the vault's unclaimed rewards in Aura
+    /// @return RewardsData[]           The vault's unclaimed rewards in Aura
+    function getOutstandingRewards() external view returns (RewardsData[] memory);
 }

@@ -10,9 +10,8 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {AggregatorV3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {IAuraMiningLib} from "policies/lending/interfaces/IAura.sol";
 
-// TODO Change to interface
 // Import vault dependencies
-import {BLEVaultLido} from "policies/lending/BLEVaultLido.sol";
+import {IBLEVaultLido, RewardsData} from "policies/lending/interfaces/IBLEVaultLido.sol";
 
 interface IBLEVaultManagerLido {
     // ========= DATA STRUCTURES ========= //
@@ -39,11 +38,6 @@ interface IBLEVaultManagerLido {
     struct OracleFeed {
         AggregatorV3Interface feed;
         uint48 updateThreshold;
-    }
-
-    struct RewardsData {
-        address rewardToken;
-        uint256 outstandingRewards;
     }
 
     //============================================================================================//

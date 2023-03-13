@@ -2,7 +2,6 @@
 pragma solidity 0.8.15;
 
 // Import system dependencies
-import {IBLEVaultManagerLido} from "policies/lending/interfaces/IBLEVaultManagerLido.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1, RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
@@ -15,6 +14,8 @@ import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool, IBalancerHelper} fr
 import {IWsteth} from "policies/lending/interfaces/ILido.sol";
 
 // Import vault dependencies
+import {RewardsData} from "policies/lending/interfaces/IBLEVaultLido.sol";
+import {IBLEVaultManagerLido} from "policies/lending/interfaces/IBLEVaultManagerLido.sol";
 import {BLEVaultLido} from "policies/lending/BLEVaultLido.sol";
 
 // Import libraries
@@ -287,35 +288,10 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     function getOutstandingRewards(
         address user_
     ) external view override returns (RewardsData[] memory) {
-        // Cast address to reward pool
-        IAuraRewardPool auraPool = IAuraRewardPool(auraData.auraRewardPool);
-
-        uint256 numExtraRewards = auraPool.extraRewardsLength();
-        RewardsData[] memory rewards = new RewardsData[](numExtraRewards + 2);
-
         // Get user's vault address
-        address vault = address(userVaults[user_]);
+        BLEVaultLido vault = userVaults[user_];
 
-        // Get Bal rewards
-        uint256 balRewards = auraPool.earned(vault);
-        rewards[0] = RewardsData({rewardToken: bal, outstandingRewards: balRewards});
-
-        // Get Aura rewards
-        uint256 auraRewards = auraMiningLib.convertCrvToCvx(balRewards);
-        rewards[1] = RewardsData({rewardToken: aura, outstandingRewards: auraRewards});
-
-        // Get extra rewards
-        for (uint256 i = 0; i < numExtraRewards; i++) {
-            IAuraRewardPool extraRewardPool = IAuraRewardPool(auraPool.extraRewards(i));
-            address extraRewardToken = extraRewardPool.rewardToken();
-            uint256 extraRewardAmount = extraRewardPool.earned(vault);
-
-            rewards[i + 2] = RewardsData({
-                rewardToken: extraRewardToken,
-                outstandingRewards: extraRewardAmount
-            });
-        }
-
+        RewardsData[] memory rewards = vault.getOutstandingRewards();
         return rewards;
     }
 
@@ -374,9 +350,13 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
         address[] memory rewardTokens = new address[](numExtraRewards + 2);
         rewardTokens[0] = aura;
         rewardTokens[1] = auraPool.rewardToken();
-        for (uint256 i = 0; i < numExtraRewards; i++) {
+        for (uint256 i; i < numExtraRewards; ) {
             IAuraRewardPool extraRewardPool = IAuraRewardPool(auraPool.extraRewards(i));
             rewardTokens[i + 2] = extraRewardPool.rewardToken();
+
+            unchecked {
+                ++i;
+            }
         }
         return rewardTokens;
     }
@@ -396,11 +376,15 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
             rewardRate = auraMiningLib.convertCrvToCvx(balRewardRate);
         } else {
             uint256 numExtraRewards = auraPool.extraRewardsLength();
-            for (uint256 i = 0; i < numExtraRewards; i++) {
+            for (uint256 i; i < numExtraRewards; ) {
                 IAuraRewardPool extraRewardPool = IAuraRewardPool(auraPool.extraRewards(i));
                 if (rewardToken_ == extraRewardPool.rewardToken()) {
                     rewardRate = extraRewardPool.rewardRate();
                     break;
+                }
+
+                unchecked {
+                    ++i;
                 }
             }
         }
