@@ -239,7 +239,7 @@ contract BLEVaultManagerLidoTest is Test {
         // Deactivate contract
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEFactoryLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLEManagerLido_Inactive()");
         vm.expectRevert(err);
 
         vaultManager.deployVault();
@@ -255,7 +255,7 @@ contract BLEVaultManagerLidoTest is Test {
         vm.prank(alice);
         vaultManager.deployVault();
 
-        bytes memory err = abi.encodeWithSignature("BLEFactoryLido_VaultAlreadyExists()");
+        bytes memory err = abi.encodeWithSignature("BLEManagerLido_VaultAlreadyExists()");
         vm.expectRevert(err);
 
         // Try to create second vault
@@ -311,7 +311,7 @@ contract BLEVaultManagerLidoTest is Test {
         // Deactive system
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEFactoryLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLEManagerLido_Inactive()");
         vm.expectRevert(err);
 
         vaultManager.mintOHM(1e9);
@@ -324,7 +324,7 @@ contract BLEVaultManagerLidoTest is Test {
         vaultManager.mintOHM(1e9);
 
         if (attacker_ != validVault) {
-            bytes memory err = abi.encodeWithSignature("BLEFactoryLido_InvalidVault()");
+            bytes memory err = abi.encodeWithSignature("BLEManagerLido_InvalidVault()");
             vm.expectRevert(err);
 
             vm.prank(attacker_);
@@ -341,7 +341,7 @@ contract BLEVaultManagerLidoTest is Test {
             vm.prank(validVault);
             vaultManager.mintOHM(amount_);
         } else {
-            bytes memory err = abi.encodeWithSignature("BLEFactoryLido_LimitViolation()");
+            bytes memory err = abi.encodeWithSignature("BLEManagerLido_LimitViolation()");
             vm.expectRevert(err);
 
             vm.prank(validVault);
@@ -389,7 +389,7 @@ contract BLEVaultManagerLidoTest is Test {
         // Deactive system
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEFactoryLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLEManagerLido_Inactive()");
         vm.expectRevert(err);
 
         vaultManager.burnOHM(1e9);
@@ -408,7 +408,7 @@ contract BLEVaultManagerLidoTest is Test {
         vm.stopPrank();
 
         if (attacker_ != validVault) {
-            bytes memory err = abi.encodeWithSignature("BLEFactoryLido_InvalidVault()");
+            bytes memory err = abi.encodeWithSignature("BLEManagerLido_InvalidVault()");
             vm.expectRevert(err);
 
             vm.prank(attacker_);
@@ -417,27 +417,34 @@ contract BLEVaultManagerLidoTest is Test {
     }
 
     function testCorrectness_burnOHMCorrectlyUpdatesState(uint256 amount_) public {
-        vm.assume(amount_ != 0);
+        vm.assume(amount_ != 0 && amount_ <= 100_000_000e9);
 
         // Setup
         address validVault = _createVault();
+        vaultManager.setLimit(50_000_000e9);
+
+        // Mint base amount
+        vm.startPrank(address(vaultManager));
+        minter.increaseMintApproval(address(vaultManager), 50_000_000e9);
+        minter.mintOhm(validVault, 50_000_000e9);
+        vm.stopPrank();
 
         vm.startPrank(validVault);
-        vaultManager.mintOHM(1e9);
-        ohm.increaseAllowance(address(minter), 1e9);
+        vaultManager.mintOHM(50_000_000e9);
+        ohm.increaseAllowance(address(minter), 100_000_000e9);
 
         // Check state before
-        assertEq(vaultManager.mintedOHM(), 1e9);
+        assertEq(vaultManager.mintedOHM(), 50_000_000e9);
         assertEq(vaultManager.netBurnedOHM(), 0);
 
         vaultManager.burnOHM(amount_);
 
         // Check state after
-        if (amount_ > 1e9) {
+        if (amount_ > 50_000_000e9) {
             assertEq(vaultManager.mintedOHM(), 0);
-            assertEq(vaultManager.netBurnedOHM(), amount_ - 1e9);
+            assertEq(vaultManager.netBurnedOHM(), amount_ - 50_000_000e9);
         } else {
-            assertEq(vaultManager.mintedOHM(), 1e9 - amount_);
+            assertEq(vaultManager.mintedOHM(), 50_000_000e9 - amount_);
             assertEq(vaultManager.netBurnedOHM(), 0);
         }
 
@@ -471,7 +478,7 @@ contract BLEVaultManagerLidoTest is Test {
         // Deactive system
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEFactoryLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLEManagerLido_Inactive()");
         vm.expectRevert(err);
 
         vaultManager.increaseTotalLP(1e18);
@@ -488,7 +495,7 @@ contract BLEVaultManagerLidoTest is Test {
         vaultManager.increaseTotalLP(1e18);
 
         if (attacker_ != validVault) {
-            bytes memory err = abi.encodeWithSignature("BLEFactoryLido_InvalidVault()");
+            bytes memory err = abi.encodeWithSignature("BLEManagerLido_InvalidVault()");
             vm.expectRevert(err);
 
             vm.prank(attacker_);
@@ -519,7 +526,7 @@ contract BLEVaultManagerLidoTest is Test {
         // Deactive system
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEFactoryLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLEManagerLido_Inactive()");
         vm.expectRevert(err);
 
         vaultManager.decreaseTotalLP(1e18);
@@ -538,7 +545,7 @@ contract BLEVaultManagerLidoTest is Test {
         vm.stopPrank();
 
         if (attacker_ != validVault) {
-            bytes memory err = abi.encodeWithSignature("BLEFactoryLido_InvalidVault()");
+            bytes memory err = abi.encodeWithSignature("BLEManagerLido_InvalidVault()");
             vm.expectRevert(err);
 
             vm.prank(attacker_);
@@ -691,7 +698,7 @@ contract BLEVaultManagerLidoTest is Test {
         vaultManager.mintOHM(10_000e9);
 
         // Try to set limit
-        bytes memory err = abi.encodeWithSignature("BLEFactoryLido_InvalidLimit()");
+        bytes memory err = abi.encodeWithSignature("BLEManagerLido_InvalidLimit()");
         vm.expectRevert(err);
 
         vaultManager.setLimit(1e9);
@@ -726,7 +733,7 @@ contract BLEVaultManagerLidoTest is Test {
     function testCorrectness_setFeeCannotSetFeeAbove100(uint64 fee_) public {
         vm.assume(fee_ > 10_000);
 
-        bytes memory err = abi.encodeWithSignature("BLEFactoryLido_InvalidFee()");
+        bytes memory err = abi.encodeWithSignature("BLEManagerLido_InvalidFee()");
         vm.expectRevert(err);
 
         vaultManager.setFee(fee_);

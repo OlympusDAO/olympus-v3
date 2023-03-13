@@ -250,6 +250,7 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
         uint256 tknOhmPrice = manager().getTknOhmPrice();
         uint256 expectedWstethAmountOut = (ohmAmountOut * tknOhmPrice) / 1e9;
 
+        // Take any arbs relative to the oracle price for the Treasury and return the rest to the owner
         uint256 wstethToReturn = wstethAmountOut > expectedWstethAmountOut
             ? expectedWstethAmountOut
             : wstethAmountOut;

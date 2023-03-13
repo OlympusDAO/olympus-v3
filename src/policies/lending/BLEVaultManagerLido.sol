@@ -10,7 +10,7 @@ import "src/Kernel.sol";
 // Import external dependencies
 import {AggregatorV3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {IAuraRewardPool, IAuraMiningLib} from "policies/lending/interfaces/IAura.sol";
-import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool, IBalancerHelper} from "policies/lending/interfaces/IBalancer.sol";
+import {JoinPoolRequest, IVault, IBasePool, IBalancerHelper} from "policies/lending/interfaces/IBalancer.sol";
 import {IWsteth} from "policies/lending/interfaces/ILido.sol";
 
 // Import vault dependencies
@@ -26,13 +26,13 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
 
     // ========= ERRORS ========= //
 
-    error BLEFactoryLido_Inactive();
-    error BLEFactoryLido_InvalidVault();
-    error BLEFactoryLido_LimitViolation();
-    error BLEFactoryLido_InvalidLimit();
-    error BLEFactoryLido_InvalidFee();
-    error BLEFactoryLido_BadPriceFeed();
-    error BLEFactoryLido_VaultAlreadyExists();
+    error BLEManagerLido_Inactive();
+    error BLEManagerLido_InvalidVault();
+    error BLEManagerLido_LimitViolation();
+    error BLEManagerLido_InvalidLimit();
+    error BLEManagerLido_InvalidFee();
+    error BLEManagerLido_BadPriceFeed();
+    error BLEManagerLido_VaultAlreadyExists();
 
     // ========= EVENTS ========= //
 
@@ -170,13 +170,13 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     //============================================================================================//
 
     modifier onlyWhileActive() {
-        if (!isLidoBLEActive) revert BLEFactoryLido_Inactive();
+        if (!isLidoBLEActive) revert BLEManagerLido_Inactive();
         _;
     }
 
     modifier onlyVault() {
         if (vaultOwners[BLEVaultLido(msg.sender)] == address(0))
-            revert BLEFactoryLido_InvalidVault();
+            revert BLEManagerLido_InvalidVault();
         _;
     }
 
@@ -187,7 +187,7 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     /// @inheritdoc IBLEVaultManagerLido
     function deployVault() external override onlyWhileActive returns (address vault) {
         if (address(userVaults[msg.sender]) != address(0))
-            revert BLEFactoryLido_VaultAlreadyExists();
+            revert BLEManagerLido_VaultAlreadyExists();
 
         // Create clone of vault implementation
         bytes memory data = abi.encodePacked(
@@ -229,7 +229,7 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     /// @inheritdoc IBLEVaultManagerLido
     function mintOHM(uint256 amount_) external override onlyWhileActive onlyVault {
         // Check that minting will not exceed limit
-        if (mintedOHM + amount_ > ohmLimit) revert BLEFactoryLido_LimitViolation();
+        if (mintedOHM + amount_ > ohmLimit) revert BLEManagerLido_LimitViolation();
 
         mintedOHM += amount_;
 
@@ -240,12 +240,8 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
 
     /// @inheritdoc IBLEVaultManagerLido
     function burnOHM(uint256 amount_) external override onlyWhileActive onlyVault {
-        uint256 amountToBurn = amount_;
-
         // Handle accounting
         if (amount_ > mintedOHM) {
-            amountToBurn = mintedOHM;
-
             netBurnedOHM += amount_ - mintedOHM;
             mintedOHM = 0;
         } else {
@@ -253,7 +249,7 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
         }
 
         // Burn OHM
-        MINTR.burnOhm(msg.sender, amountToBurn);
+        MINTR.burnOhm(msg.sender, amount_);
     }
 
     //============================================================================================//
@@ -446,13 +442,13 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
 
     /// @inheritdoc IBLEVaultManagerLido
     function setLimit(uint256 newLimit_) external override onlyRole("liquidityvault_admin") {
-        if (newLimit_ < mintedOHM) revert BLEFactoryLido_InvalidLimit();
+        if (newLimit_ < mintedOHM) revert BLEManagerLido_InvalidLimit();
         ohmLimit = newLimit_;
     }
 
     /// @inheritdoc IBLEVaultManagerLido
     function setFee(uint64 newFee_) external override onlyRole("liquidityvault_admin") {
-        if (newFee_ > MAX_FEE) revert BLEFactoryLido_InvalidFee();
+        if (newFee_ > MAX_FEE) revert BLEManagerLido_InvalidFee();
         currentFee = newFee_;
     }
 
@@ -495,7 +491,7 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
             priceInt <= 0 ||
             updatedAt < block.timestamp - updateThreshold_ ||
             answeredInRound != roundId
-        ) revert BLEFactoryLido_BadPriceFeed();
+        ) revert BLEManagerLido_BadPriceFeed();
 
         return uint256(priceInt);
     }
