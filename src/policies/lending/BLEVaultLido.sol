@@ -136,10 +136,14 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
     //============================================================================================//
 
     /// @inheritdoc IBLEVaultLido
-    function deposit(
-        uint256 amount_,
-        uint256 minLPAmount_
-    ) external override onlyWhileActive onlyOwner nonReentrant returns (uint256 lpAmountOut) {
+    function deposit(uint256 amount_, uint256 minLPAmount_)
+        external
+        override
+        onlyWhileActive
+        onlyOwner
+        nonReentrant
+        returns (uint256 lpAmountOut)
+    {
         // Calculate OHM amount to mint
         uint256 ohmTknPrice = manager().getOhmTknPrice();
         uint256 ohmMintAmount = (amount_ * ohmTknPrice) / 1e18;
@@ -207,10 +211,14 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
     }
 
     /// @inheritdoc IBLEVaultLido
-    function withdraw(
-        uint256 lpAmount_,
-        uint256[] calldata minTokenAmounts_
-    ) external override onlyWhileActive onlyOwner nonReentrant returns (uint256, uint256) {
+    function withdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
+        external
+        override
+        onlyWhileActive
+        onlyOwner
+        nonReentrant
+        returns (uint256, uint256)
+    {
         // Cache OHM and wstETH balances before
         uint256 ohmBefore = ohm().balanceOf(address(this));
         uint256 wstethBefore = wsteth().balanceOf(address(this));

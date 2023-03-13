@@ -281,9 +281,12 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     }
 
     /// @inheritdoc IBLEVaultManagerLido
-    function getOutstandingRewards(
-        address user_
-    ) external view override returns (RewardsData[] memory) {
+    function getOutstandingRewards(address user_)
+        external
+        view
+        override
+        returns (RewardsData[] memory)
+    {
         // Get user's vault address
         BLEVaultLido vault = userVaults[user_];
 
@@ -358,9 +361,12 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     }
 
     /// @inheritdoc IBLEVaultManagerLido
-    function getRewardRate(
-        address rewardToken_
-    ) external view override returns (uint256 rewardRate) {
+    function getRewardRate(address rewardToken_)
+        external
+        view
+        override
+        returns (uint256 rewardRate)
+    {
         IAuraRewardPool auraPool = IAuraRewardPool(auraData.auraRewardPool);
 
         if (rewardToken_ == bal) {
@@ -453,10 +459,10 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     }
 
     /// @inheritdoc IBLEVaultManagerLido
-    function changeUpdateThresholds(
-        uint48 ohmEthUpdateThreshold_,
-        uint48 stethEthUpdateThreshold_
-    ) external onlyRole("liquidityvault_admin") {
+    function changeUpdateThresholds(uint48 ohmEthUpdateThreshold_, uint48 stethEthUpdateThreshold_)
+        external
+        onlyRole("liquidityvault_admin")
+    {
         ohmEthPriceFeed.updateThreshold = ohmEthUpdateThreshold_;
         stethEthPriceFeed.updateThreshold = stethEthUpdateThreshold_;
     }
@@ -475,10 +481,11 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     //                                      INTERNAL FUNCTIONS                                    //
     //============================================================================================//
 
-    function _validatePrice(
-        AggregatorV3Interface priceFeed_,
-        uint48 updateThreshold_
-    ) internal view returns (uint256) {
+    function _validatePrice(AggregatorV3Interface priceFeed_, uint48 updateThreshold_)
+        internal
+        view
+        returns (uint256)
+    {
         // Get price data
         (uint80 roundId, int256 priceInt, , uint256 updatedAt, uint80 answeredInRound) = priceFeed_
             .latestRoundData();

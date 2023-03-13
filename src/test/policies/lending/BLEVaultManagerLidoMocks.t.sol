@@ -484,9 +484,9 @@ contract BLEVaultManagerLidoTest is Test {
         vaultManager.increaseTotalLP(1e18);
     }
 
-    function testCorrectness_increaseTotalLPCanOnlyBeCalledByAnApprovedVault(
-        address attacker_
-    ) public {
+    function testCorrectness_increaseTotalLPCanOnlyBeCalledByAnApprovedVault(address attacker_)
+        public
+    {
         // Setup
         address validVault = _createVault();
 
@@ -532,9 +532,9 @@ contract BLEVaultManagerLidoTest is Test {
         vaultManager.decreaseTotalLP(1e18);
     }
 
-    function testCorrectness_decreaseTotalLPCanOnlyBeCalledByAnApprovedVault(
-        address attacker_
-    ) public {
+    function testCorrectness_decreaseTotalLPCanOnlyBeCalledByAnApprovedVault(address attacker_)
+        public
+    {
         // Setup
         address validVault = _createVault();
 
@@ -753,9 +753,9 @@ contract BLEVaultManagerLidoTest is Test {
     ///     [X]  can only be called by liquidityvault_admin
     ///     [X]  correctly sets price feed update thresholds
 
-    function testCorrectness_changeUpdateThresholdsCanOnlyBeCalledByAdmin(
-        address attacker_
-    ) public {
+    function testCorrectness_changeUpdateThresholdsCanOnlyBeCalledByAdmin(address attacker_)
+        public
+    {
         vm.assume(attacker_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(

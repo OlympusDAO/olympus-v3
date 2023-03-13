@@ -3,7 +3,11 @@ pragma solidity >=0.8.0;
 
 // Define Booster Interface
 interface IAuraBooster {
-    function deposit(uint256 pid_, uint256 amount_, bool stake_) external;
+    function deposit(
+        uint256 pid_,
+        uint256 amount_,
+        bool stake_
+    ) external;
 }
 
 // Define Base Reward Pool interface
