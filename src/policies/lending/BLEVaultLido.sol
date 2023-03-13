@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 // Import system dependencies
+import {IBLEVaultLido} from "policies/lending/interfaces/IBLEVaultLido.sol";
 import {BLEVaultManagerLido} from "policies/lending/BLEVaultManagerLido.sol";
 
 // Import external dependencies
@@ -19,7 +20,7 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {console2} from "forge-std/console2.sol";
 
-contract BLEVaultLido is Clone {
+contract BLEVaultLido is IBLEVaultLido, Clone {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
@@ -135,10 +136,11 @@ contract BLEVaultLido is Clone {
     //                                      LIQUIDITY FUNCTIONS                                   //
     //============================================================================================//
 
+    /// @inheritdoc IBLEVaultLido
     function deposit(
         uint256 amount_,
         uint256 minLPAmount_
-    ) external onlyWhileActive onlyOwner nonReentrant returns (uint256 lpAmountOut) {
+    ) external override onlyWhileActive onlyOwner nonReentrant returns (uint256 lpAmountOut) {
         // Calculate OHM amount to mint
         uint256 ohmTknPrice = manager().getOhmTknPrice();
         uint256 ohmMintAmount = (amount_ * ohmTknPrice) / 1e18;
@@ -205,10 +207,11 @@ contract BLEVaultLido is Clone {
         return lpAmountOut;
     }
 
+    /// @inheritdoc IBLEVaultLido
     function withdraw(
         uint256 lpAmount_,
         uint256[] calldata minTokenAmounts_
-    ) external onlyWhileActive onlyOwner nonReentrant returns (uint256, uint256) {
+    ) external override onlyWhileActive onlyOwner nonReentrant returns (uint256, uint256) {
         // Cache OHM and wstETH balances before
         uint256 ohmBefore = ohm().balanceOf(address(this));
         uint256 wstethBefore = wsteth().balanceOf(address(this));
@@ -274,7 +277,8 @@ contract BLEVaultLido is Clone {
     //                                       REWARDS FUNCTIONS                                    //
     //============================================================================================//
 
-    function claimRewards() external onlyWhileActive onlyOwner nonReentrant {
+    /// @inheritdoc IBLEVaultLido
+    function claimRewards() external override onlyWhileActive onlyOwner nonReentrant {
         // Claim rewards from Aura
         auraRewardPool().getReward(owner(), true);
 
@@ -286,11 +290,13 @@ contract BLEVaultLido is Clone {
     //                                        VIEW FUNCTIONS                                      //
     //============================================================================================//
 
-    function getLPBalance() public view returns (uint256) {
+    /// @inheritdoc IBLEVaultLido
+    function getLPBalance() public view override returns (uint256) {
         return auraRewardPool().balanceOf(address(this));
     }
 
-    function getUserPairShare() public view returns (uint256) {
+    /// @inheritdoc IBLEVaultLido
+    function getUserPairShare() public view override returns (uint256) {
         // If total supply is 0 return 0
         if (liquidityPool().totalSupply() == 0) return 0;
 

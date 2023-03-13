@@ -20,7 +20,7 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {BLEVaultManagerLido} from "policies/lending/BLEVaultManagerLido.sol";
+import {IBLEVaultManagerLido, BLEVaultManagerLido} from "policies/lending/BLEVaultManagerLido.sol";
 import {BLEVaultLido} from "policies/lending/BLEVaultLido.sol";
 
 import "src/Kernel.sol";
@@ -155,30 +155,30 @@ contract BLEVauldLidoTest is Test {
         {
             vaultImplementation = new BLEVaultLido();
 
-            BLEVaultManagerLido.TokenData memory tokenData = BLEVaultManagerLido.TokenData({
+            IBLEVaultManagerLido.TokenData memory tokenData = IBLEVaultManagerLido.TokenData({
                 ohm: address(ohm),
                 pairToken: address(wsteth),
                 aura: address(aura),
                 bal: address(bal)
             });
 
-            BLEVaultManagerLido.BalancerData memory balancerData = BLEVaultManagerLido
+            IBLEVaultManagerLido.BalancerData memory balancerData = IBLEVaultManagerLido
                 .BalancerData({
                     vault: address(vault),
                     liquidityPool: address(liquidityPool),
                     balancerHelper: address(0)
                 });
 
-            BLEVaultManagerLido.AuraData memory auraData = BLEVaultManagerLido.AuraData({
+            IBLEVaultManagerLido.AuraData memory auraData = IBLEVaultManagerLido.AuraData({
                 pid: uint256(0),
                 auraBooster: address(booster),
                 auraRewardPool: address(auraPool)
             });
 
-            BLEVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = BLEVaultManagerLido
+            IBLEVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = IBLEVaultManagerLido
                 .OracleFeed({feed: ohmEthPriceFeed, updateThreshold: uint48(1 days)});
 
-            BLEVaultManagerLido.OracleFeed memory stethEthPriceFeedData = BLEVaultManagerLido
+            IBLEVaultManagerLido.OracleFeed memory stethEthPriceFeedData = IBLEVaultManagerLido
                 .OracleFeed({feed: stethEthPriceFeed, updateThreshold: uint48(1 days)});
 
             vaultManager = new BLEVaultManagerLido(

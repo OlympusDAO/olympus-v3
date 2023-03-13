@@ -1,0 +1,165 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+pragma solidity >=0.8.0;
+
+// Import system dependencies
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+
+// Import external dependencies
+import {AggregatorV3Interface} from "interfaces/AggregatorV2V3Interface.sol";
+import {IAuraMiningLib} from "policies/lending/interfaces/IAura.sol";
+
+// TODO Change to interface
+// Import vault dependencies
+import {BLEVaultLido} from "policies/lending/BLEVaultLido.sol";
+
+interface IBLEVaultManagerLido {
+    // ========= DATA STRUCTURES ========= //
+
+    struct TokenData {
+        address ohm;
+        address pairToken;
+        address aura;
+        address bal;
+    }
+
+    struct BalancerData {
+        address vault;
+        address liquidityPool;
+        address balancerHelper;
+    }
+
+    struct AuraData {
+        uint256 pid;
+        address auraBooster;
+        address auraRewardPool;
+    }
+
+    struct OracleFeed {
+        AggregatorV3Interface feed;
+        uint48 updateThreshold;
+    }
+
+    struct RewardsData {
+        address rewardToken;
+        uint256 outstandingRewards;
+    }
+
+    //============================================================================================//
+    //                                        VAULT DEPLOYMENT                                    //
+    //============================================================================================//
+
+    /// @notice                         Deploys a personal single sided vault for the user
+    /// @dev                            The vault is deployed with the user as the owner
+    /// @return vault                   The address of the deployed vault
+    function deployVault() external returns (address);
+
+    //============================================================================================//
+    //                                         OHM MANAGEMENT                                     //
+    //============================================================================================//
+
+    /// @notice                         Mints OHM to the caller
+    /// @dev                            Can only be called by an approved vault
+    /// @param amount_                  The amount of OHM to mint
+    function mintOHM(uint256 amount_) external;
+
+    /// @notice                         Burns OHM from the caller
+    /// @dev                            Can only be called by an approved vault. The caller must have an OHM approval for the MINTR.
+    /// @param amount_                  The amount of OHM to burn
+    function burnOHM(uint256 amount_) external;
+
+    //============================================================================================//
+    //                                     VAULT STATE MANAGEMENT                                 //
+    //============================================================================================//
+
+    /// @notice                         Increases the tracked value for totalLP
+    /// @dev                            Can only be called by an approved vault
+    /// @param amount_                  The amount of LP tokens to add to the total
+    function increaseTotalLP(uint256 amount_) external;
+
+    /// @notice                         Decreases the tracked value for totalLP
+    /// @dev                            Can only be called by an approved vault
+    /// @param amount_                  The amount of LP tokens to remove from the total
+    function decreaseTotalLP(uint256 amount_) external;
+
+    //============================================================================================//
+    //                                         VIEW FUNCTIONS                                     //
+    //============================================================================================//
+
+    /// @notice                         Returns the user's vault's LP balance
+    /// @param user_                    The user to check the vault of
+    /// @return uint256                 The user's vault's LP balance
+    function getLPBalance(address user_) external view returns (uint256);
+
+    /// @notice                         Returns the user's vault's claim on wstETH
+    /// @param user_                    The user to check the vault of
+    /// @return uint256                 The user's vault's claim on wstETH
+    function getUserPairShare(address user_) external view returns (uint256);
+
+    /// @notice                         Returns the user's vault's unclaimed rewards in Aura
+    /// @param user_                    The user to check the vault of
+    /// @return RewardsData[]           The user's vault's unclaimed rewards in Aura
+    function getOutstandingRewards(address user_) external view returns (RewardsData[] memory);
+
+    /// @notice                         Calculates the max wstETH deposit based on the limit and current amount of OHM minted
+    /// @return uint256                 The max wstETH deposit
+    function getMaxDeposit() external view returns (uint256);
+
+    /// @notice                         Calculates the amount of LP tokens that will be generated for a given amount of wstETH
+    /// @param amount_                  The amount of wstETH to calculate the LP tokens for
+    /// @return uint256                 The amount of LP tokens that will be generated
+    function getExpectedLPAmount(uint256 amount_) external returns (uint256);
+
+    /// @notice                         Gets all the reward tokens from the Aura pool
+    /// @return address[]               The addresses of the reward tokens
+    function getRewardTokens() external view returns (address[] memory);
+
+    /// @notice                         Gets the reward rate (tokens per second) of the passed reward token
+    /// @return uint256                 The reward rate (tokens per second)
+    function getRewardRate(address rewardToken_) external view returns (uint256);
+
+    /// @notice                         Gets the net OHM emitted or removed by the system since inception
+    /// @return uint256                 Net OHM emitted
+    /// @return uint256                 Net OHM removed
+    function getOhmEmissions() external view returns (uint256, uint256);
+
+    /// @notice                         Gets the number of OHM per 1 wstETH
+    /// @return uint256                 OHM per 1 wstETH (9 decimals)
+    function getOhmTknPrice() external view returns (uint256);
+
+    /// @notice                         Gets the number of wstETH per 1 OHM
+    /// @return uint256                 wstETH per 1 OHM (18 decimals)
+    function getTknOhmPrice() external view returns (uint256);
+
+    //============================================================================================//
+    //                                        ADMIN FUNCTIONS                                     //
+    //============================================================================================//
+
+    /// @notice                         Updates the limit on minting OHM
+    /// @dev                            Can only be called by the admin. Cannot be set lower than the current outstanding minted OHM.
+    /// @param newLimit_                The new OHM limit (9 decimals)
+    function setLimit(uint256 newLimit_) external;
+
+    /// @notice                         Updates the fee on reward tokens
+    /// @dev                            Can only be called by the admin. Cannot be set beyond 10_000 (100%). Only is used by vaults deployed after the update.
+    /// @param newFee_                  The new fee (in basis points)
+    function setFee(uint64 newFee_) external;
+
+    /// @notice                         Updates the time threshold for oracle staleness checks
+    /// @dev                            Can only be called by the admin
+    /// @param ohmEthUpdateThreshold_   The new time threshold for the OHM-ETH oracle
+    /// @param stethEthUpdateThreshold_ The new time threshold for the stETH-ETH oracle
+    function changeUpdateThresholds(
+        uint48 ohmEthUpdateThreshold_,
+        uint48 stethEthUpdateThreshold_
+    ) external;
+
+    /// @notice                         Activates the vault manager and all approved vaults
+    /// @dev                            Can only be called by the admin
+    function activate() external;
+
+    /// @notice                         Deactivates the vault manager and all approved vaults
+    /// @dev                            Can only be called by the admin
+    function deactivate() external;
+}

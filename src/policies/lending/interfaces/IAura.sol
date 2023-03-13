@@ -10,6 +10,8 @@ interface IAuraBooster {
 interface IAuraRewardPool {
     function balanceOf(address account_) external view returns (uint256);
 
+    function earned(address account_) external view returns (uint256);
+
     function rewardRate() external view returns (uint256);
 
     function rewardToken() external view returns (address);
