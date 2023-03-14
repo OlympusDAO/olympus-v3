@@ -9,19 +9,19 @@ import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusVotes} from "src/modules/VOTES/OlympusVotes.sol";
+import {GoerliDaoVotes} from "src/modules/VOTES/GoerliDaoVotes.sol";
 
 import "test/lib/ModuleTestFixtureGenerator.sol";
 
 contract VOTESTest is Test {
-    using ModuleTestFixtureGenerator for OlympusVotes;
+    using ModuleTestFixtureGenerator for GoerliDaoVotes;
 
     uint256 internal MAX_SUPPLY = 10_000_000 * 1e18;
 
     Kernel internal kernel;
 
-    OlympusVotes internal VOTES;
-    MockERC20 internal gOHM;
+    GoerliDaoVotes internal VOTES;
+    MockERC20 internal xGDAO;
 
     address internal user1;
     address internal user2;
@@ -35,12 +35,12 @@ contract VOTESTest is Test {
         kernel = new Kernel();
 
         // modules
-        gOHM = new MockERC20("gOHM", "gOHM", 18);
-        VOTES = new OlympusVotes(kernel, gOHM);
+        xGDAO = new MockERC20("xGDAO", "xGDAO", 18);
+        VOTES = new GoerliDaoVotes(kernel, xGDAO);
 
         // generate godmode address
-        user1 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
-        user2 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        user1 = VOTES.generateGodmodeFixture(type(GoerliDaoVotes).name);
+        user2 = VOTES.generateGodmodeFixture(type(GoerliDaoVotes).name);
 
         // set up kernel
         kernel.executeAction(Actions.InstallModule, address(VOTES));
@@ -51,15 +51,15 @@ contract VOTESTest is Test {
     function testCorrectness_deposit_simple(uint256 amt) public {
         vm.assume(amt > 0 && amt < MAX_SUPPLY);
 
-        gOHM.mint(user1, amt);
-        gOHM.mint(user2, amt);
+        xGDAO.mint(user1, amt);
+        xGDAO.mint(user2, amt);
 
         vm.startPrank(user1);
-        gOHM.approve(address(VOTES), amt);
+        xGDAO.approve(address(VOTES), amt);
         VOTES.deposit(amt, user1);
 
-        // assert gOHM was deposited
-        assertEq(gOHM.balanceOf(user1), 0);
+        // assert xGDAO was deposited
+        assertEq(xGDAO.balanceOf(user1), 0);
 
         // assert VOTES was exchanged 1:1
         assertEq(VOTES.balanceOf(user1), amt);
@@ -67,11 +67,11 @@ contract VOTESTest is Test {
         vm.stopPrank();
 
         vm.startPrank(user2);
-        gOHM.approve(address(VOTES), amt);
+        xGDAO.approve(address(VOTES), amt);
         VOTES.deposit(amt, user2);
 
-        // assert gOHM was deposited
-        assertEq(gOHM.balanceOf(user2), 0);
+        // assert xGDAO was deposited
+        assertEq(xGDAO.balanceOf(user2), 0);
 
         // assert VOTES was exchanged 1:1
         assertEq(VOTES.balanceOf(user2), amt);
@@ -83,41 +83,41 @@ contract VOTESTest is Test {
         uint256 user1DepositAmt = 2_000_000 * 1e18;
         uint256 user2DepositAmt = 1_000_000 * 1e18;
 
-        gOHM.mint(user1, user1DepositAmt);
-        gOHM.mint(user2, user2DepositAmt);
+        xGDAO.mint(user1, user1DepositAmt);
+        xGDAO.mint(user2, user2DepositAmt);
 
         // 1. user1 deposits and mints shares 1:1
         vm.startPrank(user1);
-        gOHM.approve(address(VOTES), user1DepositAmt);
+        xGDAO.approve(address(VOTES), user1DepositAmt);
         VOTES.deposit(user1DepositAmt, user1);
 
-        // assert gOHM was deposited and VOTES was exchanged 1:1
-        assertEq(gOHM.balanceOf(address(VOTES)), user1DepositAmt);
+        // assert xGDAO was deposited and VOTES was exchanged 1:1
+        assertEq(xGDAO.balanceOf(address(VOTES)), user1DepositAmt);
         assertEq(VOTES.balanceOf(user1), user1DepositAmt);
         assertEq(VOTES.lastDepositTimestamp(user1), block.timestamp);
         vm.stopPrank();
 
         // 2. yield is deposited into VOTES
         uint256 yieldAmt = 2_000_000 * 1e18;
-        gOHM.mint(auxUser, yieldAmt);
+        xGDAO.mint(auxUser, yieldAmt);
         vm.prank(auxUser);
-        gOHM.transfer(address(VOTES), yieldAmt);
+        xGDAO.transfer(address(VOTES), yieldAmt);
 
         // assert underlying amt and share amt (sanity check)
-        // 2_000_000 + 2_000_000 gOHM to 2_000_000 VOTES
-        // 2 gOHM : 1 VOTES
-        assertEq(gOHM.balanceOf(address(VOTES)), user1DepositAmt + yieldAmt);
+        // 2_000_000 + 2_000_000 xGDAO to 2_000_000 VOTES
+        // 2 xGDAO : 1 VOTES
+        assertEq(xGDAO.balanceOf(address(VOTES)), user1DepositAmt + yieldAmt);
         assertEq(VOTES.totalSupply(), user1DepositAmt);
 
         // 3. user2 deposits more assets mints shares 1:2
         vm.startPrank(user2);
-        gOHM.approve(address(VOTES), user2DepositAmt);
+        xGDAO.approve(address(VOTES), user2DepositAmt);
         VOTES.deposit(user2DepositAmt, user2);
 
-        // assert expected amount of gOHM is on contract
-        assertEq(gOHM.balanceOf(address(VOTES)), user1DepositAmt + yieldAmt + user2DepositAmt);
+        // assert expected amount of xGDAO is on contract
+        assertEq(xGDAO.balanceOf(address(VOTES)), user1DepositAmt + yieldAmt + user2DepositAmt);
 
-        // gOHM:VOTES at 2:1 ratio
+        // xGDAO:VOTES at 2:1 ratio
         assertEq(VOTES.balanceOf(user2), user2DepositAmt / 2);
 
         assertEq(VOTES.lastDepositTimestamp(user2), block.timestamp);
@@ -128,12 +128,12 @@ contract VOTESTest is Test {
     function testCorrectness_mint(uint256 amt) public {
         vm.assume(amt > 2 && amt % 2 == 0 && amt <= MAX_SUPPLY / 3);
 
-        gOHM.mint(user1, amt);
-        gOHM.mint(user2, amt * 2);
+        xGDAO.mint(user1, amt);
+        xGDAO.mint(user2, amt * 2);
 
-        // mint VOTES from gOHM at 1:1
+        // mint VOTES from xGDAO at 1:1
         vm.startPrank(user1);
-        gOHM.approve(address(VOTES), amt);
+        xGDAO.approve(address(VOTES), amt);
         uint256 user1DepositTimestamp = block.timestamp;
         VOTES.mint(amt, user1);
 
@@ -142,15 +142,15 @@ contract VOTESTest is Test {
 
         // assert VOTES was minted at 1:1
         assertEq(VOTES.balanceOf(user1), amt);
-        assertEq(gOHM.balanceOf(user1), 0);
+        assertEq(xGDAO.balanceOf(user1), 0);
         assertEq(VOTES.lastDepositTimestamp(user1), user1DepositTimestamp);
         vm.stopPrank();
 
         // double the amount of assets
-        gOHM.mint(address(VOTES), amt);
+        xGDAO.mint(address(VOTES), amt);
 
         vm.startPrank(user2);
-        gOHM.approve(address(VOTES), amt * 2);
+        xGDAO.approve(address(VOTES), amt * 2);
         uint256 user2DepositTimestamp = block.timestamp;
         VOTES.mint(amt, user2);
 
@@ -159,7 +159,7 @@ contract VOTESTest is Test {
 
         // assert that VOTES was minted at 1:2
         assertEq(VOTES.balanceOf(user2), amt);
-        assertEq(gOHM.balanceOf(user2), 0);
+        assertEq(xGDAO.balanceOf(user2), 0);
         assertEq(VOTES.lastDepositTimestamp(user2), user2DepositTimestamp);
         vm.stopPrank();
     }
@@ -167,46 +167,46 @@ contract VOTESTest is Test {
     function testCorrectness_withdraw(uint256 amt) public {
         vm.assume(amt > 0 && amt <= MAX_SUPPLY);
 
-        gOHM.mint(user1, amt);
+        xGDAO.mint(user1, amt);
 
-        // exchange all gOHM for VOTES at 1:1
+        // exchange all xGDAO for VOTES at 1:1
         vm.startPrank(user1);
-        gOHM.approve(address(VOTES), amt);
+        xGDAO.approve(address(VOTES), amt);
         VOTES.deposit(amt, user1);
         vm.stopPrank();
 
         // double the amount of assets backing each share
-        gOHM.mint(address(VOTES), amt);
+        xGDAO.mint(address(VOTES), amt);
 
         // withdraw double the assets that user1 deposited with
         vm.startPrank(user1);
-        uint256 beforeBalance = gOHM.balanceOf(user1);
+        uint256 beforeBalance = xGDAO.balanceOf(user1);
         VOTES.withdraw(amt * 2, user1, user1);
 
-        // assert that user exchanged all VOTES for gOHM at 1:2
+        // assert that user exchanged all VOTES for xGDAO at 1:2
         assertEq(VOTES.balanceOf(user1), 0);
-        assertEq(gOHM.balanceOf(user1), beforeBalance + (amt * 2));
+        assertEq(xGDAO.balanceOf(user1), beforeBalance + (amt * 2));
         vm.stopPrank();
     }
 
     function testCorrectness_redeem(uint256 amt) public {
         vm.assume(amt > 0 && amt <= MAX_SUPPLY / 2 && amt % 2 == 0);
 
-        gOHM.mint(user1, amt);
+        xGDAO.mint(user1, amt);
 
         vm.startPrank(user1);
-        gOHM.approve(address(VOTES), amt);
+        xGDAO.approve(address(VOTES), amt);
         VOTES.deposit(amt, user1);
         vm.stopPrank();
 
-        gOHM.mint(address(VOTES), amt);
+        xGDAO.mint(address(VOTES), amt);
 
         vm.startPrank(user1);
         VOTES.redeem(amt, user1, user1);
 
         // assert that redeemed VOTES at 2:1
         assertEq(VOTES.balanceOf(user1), 0);
-        assertEq(gOHM.balanceOf(user1), amt * 2);
+        assertEq(xGDAO.balanceOf(user1), amt * 2);
         vm.stopPrank();
     }
 
@@ -220,11 +220,11 @@ contract VOTESTest is Test {
         vm.assume(sender != address(0) && receiver != address(0) && balance != 0);
 
         // mint fuzzed amount to address
-        gOHM.mint(user1, balance);
+        xGDAO.mint(user1, balance);
 
-        // exchange gOHM for VOTES and mint to sender
+        // exchange xGDAO for VOTES and mint to sender
         vm.startPrank(user1);
-        gOHM.approve(address(VOTES), balance);
+        xGDAO.approve(address(VOTES), balance);
         VOTES.mint(balance, sender);
         vm.stopPrank();
 
@@ -240,11 +240,11 @@ contract VOTESTest is Test {
 
     function testCorrectness_transferFrom() public {
         uint256 balance = 100 * 1e18;
-        gOHM.mint(user1, balance);
+        xGDAO.mint(user1, balance);
 
         // mint VOTES to aux user
         vm.startPrank(user1);
-        gOHM.approve(address(VOTES), balance);
+        xGDAO.approve(address(VOTES), balance);
         VOTES.mint(balance, auxUser);
         vm.stopPrank();
 
@@ -264,11 +264,11 @@ contract VOTESTest is Test {
 
     function testRevert_transferFrom() public {
         uint256 balance = 100 * 1e18;
-        gOHM.mint(user1, balance);
+        xGDAO.mint(user1, balance);
 
         // mint VOTES to user1 and approve aux user to take VOTES from user1
         vm.startPrank(user1);
-        gOHM.approve(address(VOTES), balance);
+        xGDAO.approve(address(VOTES), balance);
         VOTES.mint(balance, user1);
 
         // approve aux user to take VOTES

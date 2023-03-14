@@ -7,14 +7,14 @@ import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {GoerliDaoRoles} from "src/modules/ROLES/GoerliDaoRoles.sol";
 import "src/Kernel.sol";
 
 contract ROLESTest is Test {
-    using ModuleTestFixtureGenerator for OlympusRoles;
+    using ModuleTestFixtureGenerator for GoerliDaoRoles;
 
     Kernel internal kernel;
-    OlympusRoles public ROLES;
+    GoerliDaoRoles public ROLES;
     address public testUser;
     address public testUser2;
     address public godmode;
@@ -23,7 +23,7 @@ contract ROLESTest is Test {
 
     function setUp() public {
         kernel = new Kernel();
-        ROLES = new OlympusRoles(kernel);
+        ROLES = new GoerliDaoRoles(kernel);
 
         address[] memory users = (new UserFactory()).create(2);
         testUser = users[0];
@@ -32,7 +32,7 @@ contract ROLESTest is Test {
         kernel.executeAction(Actions.InstallModule, address(ROLES));
 
         // Generate test policy with all authorizations
-        godmode = ROLES.generateGodmodeFixture(type(OlympusRoles).name);
+        godmode = ROLES.generateGodmodeFixture(type(GoerliDaoRoles).name);
         kernel.executeAction(Actions.ActivatePolicy, godmode);
     }
 

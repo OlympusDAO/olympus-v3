@@ -12,7 +12,7 @@ import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/author
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
-import {MockOhm} from "test/mocks/MockOhm.sol";
+import {MockGdao} from "test/mocks/MockGdao.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
@@ -20,10 +20,10 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
-import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
-import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {GoerliDaoRange} from "modules/RANGE/GoerliDaoRange.sol";
+import {GoerliDaoTreasury} from "modules/TRSRY/GoerliDaoTreasury.sol";
+import {GdaoMinter, GDAO} from "modules/MINTR/GdaoMinter.sol";
+import {GoerliDaoRoles} from "modules/ROLES/GoerliDaoRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {Operator} from "policies/Operator.sol";
 import {BondCallback} from "policies/BondCallback.sol";
@@ -44,15 +44,15 @@ contract OperatorTest is Test {
     BondAggregator internal aggregator;
     BondFixedTermTeller internal teller;
     BondFixedTermSDA internal auctioneer;
-    MockOhm internal ohm;
+    MockGdao internal gdao;
     MockERC20 internal reserve;
 
     Kernel internal kernel;
     MockPrice internal price;
-    OlympusRange internal range;
-    OlympusTreasury internal treasury;
-    OlympusMinter internal minter;
-    OlympusRoles internal roles;
+    GoerliDaoRange internal range;
+    GoerliDaoTreasury internal treasury;
+    GdaoMinter internal minter;
+    GoerliDaoRoles internal roles;
 
     Operator internal operator;
     BondCallback internal callback;
@@ -83,7 +83,7 @@ contract OperatorTest is Test {
 
         {
             /// Deploy mock tokens
-            ohm = new MockOhm("Olympus", "OHM", 9);
+            gdao = new MockGdao("Goerli DAO", "GDAO", 9);
             reserve = new MockERC20("Reserve", "RSV", 18);
         }
 
@@ -93,17 +93,17 @@ contract OperatorTest is Test {
 
             /// Deploy modules (some mocks)
             price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
-            range = new OlympusRange(
+            range = new GoerliDaoRange(
                 kernel,
-                ERC20(ohm),
+                ERC20(gdao),
                 ERC20(reserve),
                 uint256(100),
                 uint256(1000),
                 uint256(2000)
             );
-            treasury = new OlympusTreasury(kernel);
-            minter = new OlympusMinter(kernel, address(ohm));
-            roles = new OlympusRoles(kernel);
+            treasury = new GoerliDaoTreasury(kernel);
+            minter = new GdaoMinter(kernel, address(gdao));
+            roles = new GoerliDaoRoles(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -114,14 +114,14 @@ contract OperatorTest is Test {
 
         {
             /// Deploy bond callback
-            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
+            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), gdao);
 
             /// Deploy operator
             operator = new Operator(
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [ERC20(ohm), ERC20(reserve)],
+                [ERC20(gdao), ERC20(reserve)],
                 [
                     uint32(2000), // cushionFactor
                     uint32(5 days), // duration
@@ -177,22 +177,22 @@ contract OperatorTest is Test {
         callback.setOperator(operator);
 
         // Mint tokens to users and treasury for testing
-        uint256 testOhm = 1_000_000 * 1e9;
+        uint256 testGdao = 1_000_000 * 1e9;
         uint256 testReserve = 1_000_000 * 1e18;
 
-        ohm.mint(alice, testOhm * 20);
+        gdao.mint(alice, testGdao * 20);
         reserve.mint(alice, testReserve * 20);
 
         reserve.mint(address(treasury), testReserve * 100);
 
         // Approve the operator and bond teller for the tokens to swap
         vm.prank(alice);
-        ohm.approve(address(operator), testOhm * 20);
+        gdao.approve(address(operator), testGdao * 20);
         vm.prank(alice);
         reserve.approve(address(operator), testReserve * 20);
 
         vm.prank(alice);
-        ohm.approve(address(teller), testOhm * 20);
+        gdao.approve(address(teller), testGdao * 20);
         vm.prank(alice);
         reserve.approve(address(teller), testReserve * 20);
     }
@@ -218,11 +218,11 @@ contract OperatorTest is Test {
             uint256 lowWallPrice = range.price(true, false);
             amountIn = startCapacity.mulDiv(1e9, lowWallPrice).mulDiv(9999, 10000) + 1;
 
-            uint256 expAmountOut = operator.getAmountOut(ohm, amountIn);
+            uint256 expAmountOut = operator.getAmountOut(gdao, amountIn);
 
             /// Swap at the low wall
             vm.prank(alice);
-            amountOut = operator.swap(ohm, amountIn, expAmountOut);
+            amountOut = operator.swap(gdao, amountIn, expAmountOut);
         }
     }
 
@@ -243,7 +243,7 @@ contract OperatorTest is Test {
         /// Get current capacity of the high wall and starting balance for user
         uint256 startCapacity = range.capacity(true);
         uint256 amountIn = 100 * 1e18;
-        uint256 ohmBalance = ohm.balanceOf(alice);
+        uint256 gdaoBalance = gdao.balanceOf(alice);
         uint256 reserveBalance = reserve.balanceOf(alice);
 
         /// Calculate expected difference
@@ -259,7 +259,7 @@ contract OperatorTest is Test {
 
         assertEq(amountOut, expAmountOut);
         assertEq(endCapacity, startCapacity - amountOut);
-        assertEq(ohm.balanceOf(alice), ohmBalance + amountOut);
+        assertEq(gdao.balanceOf(alice), gdaoBalance + amountOut);
         assertEq(reserve.balanceOf(alice), reserveBalance - amountIn);
     }
 
@@ -271,7 +271,7 @@ contract OperatorTest is Test {
         /// Get current capacity of the high wall and starting balance for user
         uint256 startCapacity = range.capacity(false);
         uint256 amountIn = 100 * 1e9;
-        uint256 ohmBalance = ohm.balanceOf(alice);
+        uint256 gdaoBalance = gdao.balanceOf(alice);
         uint256 reserveBalance = reserve.balanceOf(alice);
 
         /// Calculate expected difference
@@ -280,14 +280,14 @@ contract OperatorTest is Test {
 
         /// Swap at the high wall
         vm.prank(alice);
-        uint256 amountOut = operator.swap(ohm, amountIn, expAmountOut);
+        uint256 amountOut = operator.swap(gdao, amountIn, expAmountOut);
 
         /// Get updated capacity of the high wall
         uint256 endCapacity = range.capacity(false);
 
         assertEq(amountOut, expAmountOut);
         assertEq(endCapacity, startCapacity - amountOut);
-        assertEq(ohm.balanceOf(alice), ohmBalance - amountIn);
+        assertEq(gdao.balanceOf(alice), gdaoBalance - amountIn);
         assertEq(reserve.balanceOf(alice), reserveBalance + amountOut);
     }
 
@@ -300,7 +300,7 @@ contract OperatorTest is Test {
         assertTrue(range.active(true));
 
         /// Get initial balances and capacity
-        uint256 ohmBalance = ohm.balanceOf(alice);
+        uint256 gdaoBalance = gdao.balanceOf(alice);
         uint256 reserveBalance = reserve.balanceOf(alice);
         uint256 startCapacity = range.capacity(true);
 
@@ -315,7 +315,7 @@ contract OperatorTest is Test {
 
         /// Check that capacity and balances are correct
         assertEq(endCapacity, startCapacity - amountOut);
-        assertEq(ohm.balanceOf(alice), ohmBalance + amountOut);
+        assertEq(gdao.balanceOf(alice), gdaoBalance + amountOut);
         assertEq(reserve.balanceOf(alice), reserveBalance - amountIn);
     }
 
@@ -328,7 +328,7 @@ contract OperatorTest is Test {
         assertTrue(range.active(false));
 
         /// Get initial balances and capacity
-        uint256 ohmBalance = ohm.balanceOf(alice);
+        uint256 gdaoBalance = gdao.balanceOf(alice);
         uint256 reserveBalance = reserve.balanceOf(alice);
         uint256 startCapacity = range.capacity(false);
 
@@ -343,7 +343,7 @@ contract OperatorTest is Test {
 
         /// Check that capacity and balances are correct
         assertEq(endCapacity, startCapacity - amountOut);
-        assertEq(ohm.balanceOf(alice), ohmBalance - amountIn);
+        assertEq(gdao.balanceOf(alice), gdaoBalance - amountIn);
         assertEq(reserve.balanceOf(alice), reserveBalance + amountOut);
     }
 
@@ -386,7 +386,7 @@ contract OperatorTest is Test {
         bytes memory err = abi.encodeWithSignature("Operator_WallDown()");
         vm.expectRevert(err);
         vm.prank(alice);
-        operator.swap(ohm, amountIn, expAmountOut);
+        operator.swap(gdao, amountIn, expAmountOut);
     }
 
     function testCorrectness_cannotSwapHighWallWithStalePrice() public {
@@ -428,7 +428,7 @@ contract OperatorTest is Test {
         bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
         vm.expectRevert(err);
         vm.prank(alice);
-        operator.swap(ohm, amountIn, expAmountOut);
+        operator.swap(gdao, amountIn, expAmountOut);
     }
 
     function testCorrectness_swapRevertsOnSlippage() public {
@@ -468,7 +468,7 @@ contract OperatorTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(alice);
-        operator.swap(ohm, amountIn, minAmountOut);
+        operator.swap(gdao, amountIn, minAmountOut);
     }
 
     function testCorrectness_swapRevertsWithInvalidToken() public {
@@ -1654,14 +1654,14 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Get starting bands
-        OlympusRange.Range memory startRange = range.range();
+        GoerliDaoRange.Range memory startRange = range.range();
 
         /// Set spreads larger as admin
         vm.prank(policy);
         operator.setSpreads(1500, 3000);
 
         /// Get new bands
-        OlympusRange.Range memory newRange = range.range();
+        GoerliDaoRange.Range memory newRange = range.range();
 
         /// Check that the spreads have been set and prices are updated
         assertEq(newRange.cushion.spread, 1500);
@@ -1945,7 +1945,7 @@ contract OperatorTest is Test {
 
         /// Create new bond contracts
         BondFixedTermSDA newSDA = new BondFixedTermSDA(teller, aggregator, guardian, auth);
-        BondCallback newCb = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
+        BondCallback newCb = new BondCallback(kernel, IBondAggregator(address(aggregator)), gdao);
 
         /// Update the bond contracts as guardian
         vm.prank(policy);
@@ -2107,7 +2107,7 @@ contract OperatorTest is Test {
 
         vm.expectRevert(err);
         vm.prank(alice);
-        operator.swap(ohm, 1e9, 1);
+        operator.swap(gdao, 1e9, 1);
 
         vm.expectRevert(err);
         vm.prank(alice);
@@ -2126,7 +2126,7 @@ contract OperatorTest is Test {
         operator.operate();
 
         vm.prank(alice);
-        operator.swap(ohm, 1e9, 1);
+        operator.swap(gdao, 1e9, 1);
 
         vm.prank(alice);
         operator.swap(reserve, 1e18, 1);
@@ -2221,18 +2221,18 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Check that getAmountOut returns the amount of token to receive for different combinations of inputs
-        /// Case 1: OHM In, less than capacity
+        /// Case 1: GDAO In, less than capacity
         uint256 amountIn = 100 * 1e9;
         uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
 
-        assertEq(expAmountOut, operator.getAmountOut(ohm, amountIn));
+        assertEq(expAmountOut, operator.getAmountOut(gdao, amountIn));
 
-        /// Case 2: OHM In, more than capacity
+        /// Case 2: GDAO In, more than capacity
         amountIn = range.capacity(false).mulDiv(1e9 * 1e18, 1e18 * range.price(true, false)) + 1e9;
 
         bytes memory err = abi.encodeWithSignature("Operator_InsufficientCapacity()");
         vm.expectRevert(err);
-        operator.getAmountOut(ohm, amountIn);
+        operator.getAmountOut(gdao, amountIn);
 
         /// Case 3: Reserve In, less than capacity
         amountIn = 10000 * 1e18;
@@ -2265,7 +2265,7 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Store the starting bands
-        OlympusRange.Range memory startRange = range.range();
+        GoerliDaoRange.Range memory startRange = range.range();
 
         /// Update moving average upwards and trigger the operator
         price.setMovingAverage(105 * 1e18);
@@ -2295,7 +2295,7 @@ contract OperatorTest is Test {
         operator.operate();
 
         /// Get the current bands
-        OlympusRange.Range memory currentRange = range.range();
+        GoerliDaoRange.Range memory currentRange = range.range();
 
         /// Move moving average below minimum target
         price.setMovingAverage(5 * 1e18);

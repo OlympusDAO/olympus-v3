@@ -8,21 +8,21 @@ import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import {OlympusInstructions} from "src/modules/INSTR/OlympusInstructions.sol";
-import {OlympusVotes} from "src/modules/VOTES/OlympusVotes.sol";
+import {GoerliDaoInstructions} from "src/modules/INSTR/GoerliDaoInstructions.sol";
+import {GoerliDaoVotes} from "src/modules/VOTES/GoerliDaoVotes.sol";
 import {Parthenon} from "src/policies/Parthenon.sol";
 import "src/Kernel.sol";
 
 contract ParthenonTest is Test {
-    using ModuleTestFixtureGenerator for OlympusVotes;
+    using ModuleTestFixtureGenerator for GoerliDaoVotes;
 
     event Transfer(address, address, uint256);
 
     Kernel internal kernel;
 
-    OlympusInstructions internal INSTR;
-    OlympusVotes internal VOTES;
-    MockERC20 internal gOHM;
+    GoerliDaoInstructions internal INSTR;
+    GoerliDaoVotes internal VOTES;
+    MockERC20 internal xGDAO;
 
     Parthenon internal governance;
     Parthenon internal newProposedPolicy;
@@ -41,14 +41,14 @@ contract ParthenonTest is Test {
 
     function setUp() public {
         // Deploy BB token
-        gOHM = new MockERC20("gOHM", "gOHM", 18);
+        xGDAO = new MockERC20("xGDAO", "xGDAO", 18);
 
         // Deploy kernel
         kernel = new Kernel(); // this contract will be the executor
 
         // Deploy modules
-        INSTR = new OlympusInstructions(kernel);
-        VOTES = new OlympusVotes(kernel, gOHM);
+        INSTR = new GoerliDaoInstructions(kernel);
+        VOTES = new GoerliDaoVotes(kernel, xGDAO);
 
         // Deploy policies
         governance = new Parthenon(kernel);
@@ -62,54 +62,54 @@ contract ParthenonTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(governance));
 
         // Generate test fixture policy addresses with different authorizations
-        voter1 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        voter1 = VOTES.generateGodmodeFixture(type(GoerliDaoVotes).name);
         kernel.executeAction(Actions.ActivatePolicy, voter1);
 
-        voter2 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        voter2 = VOTES.generateGodmodeFixture(type(GoerliDaoVotes).name);
         kernel.executeAction(Actions.ActivatePolicy, voter2);
 
-        voter3 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        voter3 = VOTES.generateGodmodeFixture(type(GoerliDaoVotes).name);
         kernel.executeAction(Actions.ActivatePolicy, voter3);
 
-        voter4 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        voter4 = VOTES.generateGodmodeFixture(type(GoerliDaoVotes).name);
         kernel.executeAction(Actions.ActivatePolicy, voter4);
 
-        voter5 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        voter5 = VOTES.generateGodmodeFixture(type(GoerliDaoVotes).name);
         kernel.executeAction(Actions.ActivatePolicy, voter5);
 
         // Change executor
         kernel.executeAction(Actions.ChangeExecutor, address(governance));
 
-        // mint gOHM to voters
-        gOHM.mint(voter1, 1_000_000 * 1e18);
-        gOHM.mint(voter2, 1_000_000 * 1e18);
-        gOHM.mint(voter3, 1_000_000 * 1e18);
-        gOHM.mint(voter4, 1_000_000 * 1e18);
-        gOHM.mint(voter5, 1_000_000 * 1e18);
+        // mint xGDAO to voters
+        xGDAO.mint(voter1, 1_000_000 * 1e18);
+        xGDAO.mint(voter2, 1_000_000 * 1e18);
+        xGDAO.mint(voter3, 1_000_000 * 1e18);
+        xGDAO.mint(voter4, 1_000_000 * 1e18);
+        xGDAO.mint(voter5, 1_000_000 * 1e18);
 
         // mint VOTES to voters
         vm.startPrank(voter1);
-        gOHM.approve(address(VOTES), type(uint256).max);
+        xGDAO.approve(address(VOTES), type(uint256).max);
         VOTES.mint(100_000 * 1e18, voter1);
         vm.stopPrank();
 
         vm.startPrank(voter2);
-        gOHM.approve(address(VOTES), type(uint256).max);
+        xGDAO.approve(address(VOTES), type(uint256).max);
         VOTES.mint(200_000 * 1e18, voter2);
         vm.stopPrank();
 
         vm.startPrank(voter3);
-        gOHM.approve(address(VOTES), type(uint256).max);
+        xGDAO.approve(address(VOTES), type(uint256).max);
         VOTES.mint(300_000 * 1e18, voter3);
         vm.stopPrank();
 
         vm.startPrank(voter4);
-        gOHM.approve(address(VOTES), type(uint256).max);
+        xGDAO.approve(address(VOTES), type(uint256).max);
         VOTES.mint(400_000 * 1e18, voter4);
         vm.stopPrank();
 
         vm.startPrank(voter5);
-        gOHM.approve(address(VOTES), type(uint256).max);
+        xGDAO.approve(address(VOTES), type(uint256).max);
         VOTES.mint(500_000 * 1e18, voter5);
         vm.stopPrank();
 

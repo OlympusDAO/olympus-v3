@@ -5,7 +5,7 @@ import {Vm} from "forge-std/Vm.sol";
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockOhm} from "test/mocks/MockOhm.sol";
+import {MockGdao} from "test/mocks/MockGdao.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
 import {BondFixedTermSDA} from "test/lib/bonds/BondFixedTermSDA.sol";
@@ -23,18 +23,18 @@ import {ZuniswapV2Router} from "test/lib/zuniswapv2/ZuniswapV2Router.sol";
 import {MathLibrary} from "test/lib/zuniswapv2/libraries/Math.sol";
 
 import "src/Kernel.sol";
-import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
-import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
-import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
-import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {GoerliDaoPrice} from "modules/PRICE/GoerliDaoPrice.sol";
+import {GoerliDaoRange} from "modules/RANGE/GoerliDaoRange.sol";
+import {GoerliDaoTreasury} from "modules/TRSRY/GoerliDaoTreasury.sol";
+import {GdaoMinter} from "modules/MINTR/GdaoMinter.sol";
+import {GoerliDaoInstructions} from "modules/INSTR/GoerliDaoInstructions.sol";
+import {GoerliDaoVotes} from "modules/VOTES/GoerliDaoVotes.sol";
+import {GoerliDaoRoles} from "modules/ROLES/GoerliDaoRoles.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
-import {OlympusPriceConfig} from "policies/PriceConfig.sol";
+import {GoerliDaoPriceConfig} from "policies/PriceConfig.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
@@ -186,16 +186,16 @@ abstract contract RangeSim is Test {
     // =========  RANGE SYSTEM CONTRACTS ========= //
 
     Kernel public kernel;
-    OlympusPrice public price;
-    OlympusRange public range;
-    OlympusTreasury public treasury;
-    OlympusMinter public minter;
-    OlympusRoles public roles;
+    GoerliDaoPrice public price;
+    GoerliDaoRange public range;
+    GoerliDaoTreasury public treasury;
+    GdaoMinter public minter;
+    GoerliDaoRoles public roles;
 
     Operator public operator;
     BondCallback public callback;
     OlympusHeart public heart;
-    OlympusPriceConfig public priceConfig;
+    GoerliDaoPriceConfig public priceConfig;
     RolesAdmin public rolesAdmin;
 
     mapping(uint32 => SimIO.Params) internal params; // map of sim keys to sim params
@@ -212,12 +212,12 @@ abstract contract RangeSim is Test {
     BondAggregator internal aggregator;
     BondFixedTermTeller internal teller;
     BondFixedTermSDA internal auctioneer;
-    MockOhm internal ohm;
+    MockGdao internal gdao;
     MockERC20 internal reserve;
     ZuniswapV2Factory internal lpFactory;
     ZuniswapV2Pair internal pool;
     ZuniswapV2Router internal router;
-    MockPriceFeed internal ohmEthPriceFeed;
+    MockPriceFeed internal gdaoEthPriceFeed;
     MockPriceFeed internal reserveEthPriceFeed;
 
     // =========  SIMULATION VARIABLES ========= //
@@ -282,25 +282,25 @@ abstract contract RangeSim is Test {
 
         {
             // Deploy mock tokens and price feeds
-            reserve = new MockERC20("Reserve", "RSV", 18); // deploying reserve before ohm in the broader context of this file means it will have a smaller address and therefore will be token0 in the LP pool
-            ohm = new MockOhm("Olympus", "OHM", 9);
-            require(address(reserve) < address(ohm)); // ensure reserve is token0 in the LP pool
+            reserve = new MockERC20("Reserve", "RSV", 18); // deploying reserve before gdao in the broader context of this file means it will have a smaller address and therefore will be token0 in the LP pool
+            gdao = new MockGdao("Goerli DAO", "GDAO", 9);
+            require(address(reserve) < address(gdao)); // ensure reserve is token0 in the LP pool
 
-            ohmEthPriceFeed = new MockPriceFeed();
-            ohmEthPriceFeed.setDecimals(18);
+            gdaoEthPriceFeed = new MockPriceFeed();
+            gdaoEthPriceFeed.setDecimals(18);
 
             reserveEthPriceFeed = new MockPriceFeed();
             reserveEthPriceFeed.setDecimals(18);
 
             // Initialize price feeds
 
-            // Set reserveEthPriceFeed to $1000 constant for the sim, changes will be reflected in the ohmEthPriceFeed
+            // Set reserveEthPriceFeed to $1000 constant for the sim, changes will be reflected in the gdaoEthPriceFeed
             reserveEthPriceFeed.setLatestAnswer(int256(1e15));
             reserveEthPriceFeed.setTimestamp(block.timestamp);
 
-            // ohmEthPriceFeed is the price passed in to the sim, divided by 1000
-            ohmEthPriceFeed.setLatestAnswer(int256(vm.envUint("PRICE") / 1e3));
-            ohmEthPriceFeed.setTimestamp(block.timestamp);
+            // gdaoEthPriceFeed is the price passed in to the sim, divided by 1000
+            gdaoEthPriceFeed.setLatestAnswer(int256(vm.envUint("PRICE") / 1e3));
+            gdaoEthPriceFeed.setTimestamp(block.timestamp);
         }
 
         {
@@ -308,7 +308,7 @@ abstract contract RangeSim is Test {
             lpFactory = new ZuniswapV2Factory();
             router = new ZuniswapV2Router(address(lpFactory));
 
-            address poolAddress = lpFactory.createPair(address(reserve), address(ohm));
+            address poolAddress = lpFactory.createPair(address(reserve), address(gdao));
             pool = ZuniswapV2Pair(poolAddress);
         }
 
@@ -348,9 +348,9 @@ abstract contract RangeSim is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             /// Deploy modules
-            price = new OlympusPrice(
+            price = new GoerliDaoPrice(
                 kernel,
-                ohmEthPriceFeed,
+                gdaoEthPriceFeed,
                 uint48(24 hours),
                 reserveEthPriceFeed,
                 uint48(24 hours),
@@ -358,28 +358,28 @@ abstract contract RangeSim is Test {
                 uint48(vm.envUint("MA_DURATION")),
                 10 * 1e18 // TODO placeholder for liquid backing
             );
-            range = new OlympusRange(
+            range = new GoerliDaoRange(
                 kernel,
-                ERC20(ohm), ERC20(reserve),
+                ERC20(gdao), ERC20(reserve),
                 vm.envUint("THRESHOLD_FACTOR"),
                 uint256(_params.cushionSpread),
                 uint256(_params.wallSpread)
             );
-            treasury = new OlympusTreasury(kernel);
-            minter = new OlympusMinter(kernel, address(ohm));
-            roles = new OlympusRoles(kernel);
+            treasury = new GoerliDaoTreasury(kernel);
+            minter = new GdaoMinter(kernel, address(gdao));
+            roles = new GoerliDaoRoles(kernel);
         }
 
         {
             /// Deploy bond callback
-            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
+            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), gdao);
 
             /// Deploy operator
             operator = new Operator(
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [ERC20(ohm), ERC20(reserve)],
+                [ERC20(gdao), ERC20(reserve)],
                 [
                     _params.cushionFactor, // cushionFactor
                     uint32(vm.envUint("CUSHION_DURATION")), // duration
@@ -394,7 +394,7 @@ abstract contract RangeSim is Test {
             );
 
             // Deploy PriceConfig
-            priceConfig = new OlympusPriceConfig(kernel);
+            priceConfig = new GoerliDaoPriceConfig(kernel);
 
             // Deploy Heart
             heart = new OlympusHeart(
@@ -457,39 +457,39 @@ abstract contract RangeSim is Test {
             // Mint reserves + reserve liquidity to treasury
             reserve.mint(address(treasury), treasuryReserves + liquidityReserves);
 
-            // Mint equivalent OHM to treasury for to provide as liquidity
-            uint256 liquidityOhm = liquidityReserves.mulDiv(1e18 * 1e9, initialPrice * 1e18);
-            ohm.mint(address(treasury), liquidityOhm);
+            // Mint equivalent Gdao to treasury for to provide as liquidity
+            uint256 liquidityGdao = liquidityReserves.mulDiv(1e18 * 1e9, initialPrice * 1e18);
+            gdao.mint(address(treasury), liquidityGdao);
 
             // Approve the liquidity pool for both tokens and deposit
             vm.startPrank(address(treasury));
-            ohm.approve(address(router), type(uint256).max);
+            gdao.approve(address(router), type(uint256).max);
             reserve.approve(address(router), type(uint256).max);
             router.addLiquidity(
                 address(reserve),
-                address(ohm),
+                address(gdao),
                 liquidityReserves,
-                liquidityOhm,
+                liquidityGdao,
                 liquidityReserves,
-                liquidityOhm,
+                liquidityGdao,
                 address(treasury)
             );
             vm.stopPrank();
 
-            // Get the difference between initial supply and OHM in LP, mint to the market
-            uint256 supplyDiff = initialSupply - liquidityOhm;
-            ohm.mint(market, supplyDiff);
+            // Get the difference between initial supply and Gdao in LP, mint to the market
+            uint256 supplyDiff = initialSupply - liquidityGdao;
+            gdao.mint(market, supplyDiff);
 
             // Mint large amount of reserves to the market
             reserve.mint(market, 100_000_000_000 * 1e18);
 
             // Approve the Operator, Teller, and Router for the market with both tokens
             vm.startPrank(market);
-            ohm.approve(address(operator), type(uint256).max);
+            gdao.approve(address(operator), type(uint256).max);
             reserve.approve(address(operator), type(uint256).max);
-            ohm.approve(address(teller), type(uint256).max);
+            gdao.approve(address(teller), type(uint256).max);
             reserve.approve(address(teller), type(uint256).max);
-            ohm.approve(address(router), type(uint256).max);
+            gdao.approve(address(router), type(uint256).max);
             reserve.approve(address(router), type(uint256).max);
             vm.stopPrank();
         }
@@ -529,7 +529,7 @@ abstract contract RangeSim is Test {
     /// @dev Values are based on the minimum value for each tier as defined in OIP-18.
     function getRebasePercent() internal view returns (uint256) {
         // Implement the current reward rate framework based on supply
-        uint256 supply = ohm.totalSupply();
+        uint256 supply = gdao.totalSupply();
         if (supply < 1_000_000 * 1e9) {
             return 3058;
         } else if (supply < 10_000_000 * 1e9) {
@@ -558,7 +558,7 @@ abstract contract RangeSim is Test {
         uint256 highCushionPrice = range.price(false, true);
         uint256 lowWallPrice = range.price(true, false);
         uint256 lowCushionPrice = range.price(false, false);
-        uint256 backingPrice = reserve.balanceOf(address(treasury)) * 1e9 / ohm.totalSupply();
+        uint256 backingPrice = reserve.balanceOf(address(treasury)) * 1e9 / gdao.totalSupply();
         uint256 threeXPremiumPrice = backingPrice * 3;
 
         // Determine rebase adjustment based on price
@@ -579,7 +579,7 @@ abstract contract RangeSim is Test {
         }
     }
 
-    /// @dev Simulating rebases by minting OHM to the market account (at 80% rate) and the liquidity pool
+    /// @dev Simulating rebases by minting Gdao to the market account (at 80% rate) and the liquidity pool
     function rebase(bool dynamicRR) internal {
         uint256 perc = getRebasePercent();
 
@@ -589,14 +589,14 @@ abstract contract RangeSim is Test {
         // If percent is zero, do nothing
         if (perc == 0) return;
 
-        // Mint OHM to the market account
+        // Mint Gdao to the market account
         vm.startPrank(address(minter));
-        ohm.mint(market, (ohm.balanceOf(market) * perc) / 1e6);
+        gdao.mint(market, (gdao.balanceOf(market) * perc) / 1e6);
 
-        // Mint OHM to the liquidity pool and sync the balances
-        uint256 poolBalance = ohm.balanceOf(address(pool));
+        // Mint Gdao to the liquidity pool and sync the balances
+        uint256 poolBalance = gdao.balanceOf(address(pool));
 
-        ohm.mint(address(pool), (poolBalance * perc) / 1e6);
+        gdao.mint(address(pool), (poolBalance * perc) / 1e6);
         vm.stopPrank();
 
         // Sync the pool balance
@@ -608,12 +608,12 @@ abstract contract RangeSim is Test {
         uint256 currentPrice = poolPrice();
 
         // Set new price on feeds and update timestamps
-        ohmEthPriceFeed.setLatestAnswer(int256(currentPrice / 1e3));
-        ohmEthPriceFeed.setTimestamp(block.timestamp);
+        gdaoEthPriceFeed.setLatestAnswer(int256(currentPrice / 1e3));
+        gdaoEthPriceFeed.setTimestamp(block.timestamp);
         reserveEthPriceFeed.setTimestamp(block.timestamp);
     }
 
-    /// @notice Creates a convenient abstraction on the balancer interface for single swaps between OHM and Reserve
+    /// @notice Creates a convenient abstraction on the balancer interface for single swaps between GDAO and Reserve
     /// @param sender Account to send the swap from and receive the amount out
     /// @param reserveIn Whether the reserve token is being sent in (true) or received from (false) the swap
     /// @param amount Amount of reserves to get in or out (based on reserveIn)
@@ -624,11 +624,11 @@ abstract contract RangeSim is Test {
         uint256 amount
     ) internal {
         if (reserveIn) {
-            // Swap exact amount of reserves in for amount of OHM we can receive
+            // Swap exact amount of reserves in for amount of GDAO we can receive
             // Create path to swap
             address[] memory path = new address[](2);
             path[0] = address(reserve);
-            path[1] = address(ohm);
+            path[1] = address(gdao);
 
             /// Get amount out for the reserves to swap
             uint256[] memory amounts = ZuniswapV2Library.getAmountsOut(
@@ -641,10 +641,10 @@ abstract contract RangeSim is Test {
             vm.prank(market);
             router.swapExactTokensForTokens(amount, amounts[1], path, sender);
         } else {
-            // Swap amount of ohm for exact amount of reserves out
+            // Swap amount of gdao for exact amount of reserves out
             // Create path to swap
             address[] memory path = new address[](2);
-            path[0] = address(ohm);
+            path[0] = address(gdao);
             path[1] = address(reserve);
 
             uint256[] memory amounts = ZuniswapV2Library.getAmountsIn(
@@ -664,8 +664,8 @@ abstract contract RangeSim is Test {
 
     /// @notice Returns the price of the token implied by the liquidity pool
     function poolPrice() public view returns (uint256) {
-        (uint256 reserveBal, uint256 ohmBal, ) = pool.getReserves();
-        return reserveBal.mulDiv(1e18 * 1e9, ohmBal * 1e18);
+        (uint256 reserveBal, uint256 gdaoBal, ) = pool.getReserves();
+        return reserveBal.mulDiv(1e18 * 1e9, gdaoBal * 1e18);
     }
 
     /// @notice Returns the amount of token in to swap on the liquidity pool to move the price to a target value
@@ -676,9 +676,9 @@ abstract contract RangeSim is Test {
         returns (uint256 amountIn)
     {
         // Get existing data from pool
-        (uint256 reserveBal, uint256 ohmBal, ) = pool.getReserves();
-        uint256 currentPrice = reserveBal.mulDiv(1e18 * 1e9, ohmBal * 1e18);
-        uint256 invariant = reserveBal * ohmBal * 1e9; // Multiplying by 1e9 to correct for OHM decimals
+        (uint256 reserveBal, uint256 gdaoBal, ) = pool.getReserves();
+        uint256 currentPrice = reserveBal.mulDiv(1e18 * 1e9, gdaoBal * 1e18);
+        uint256 invariant = reserveBal * gdaoBal * 1e9; // Multiplying by 1e9 to correct for GDAO decimals
 
         // Compute new pool balance for token in at target price
         uint256 currentBal;
@@ -686,10 +686,10 @@ abstract contract RangeSim is Test {
         if (tokenIn == reserve) {
             require(currentPrice <= targetPrice);
             currentBal = reserveBal;
-            newBal = MathLibrary.sqrt(invariant * targetPrice) / 1e9; // Dividing by 1e9 to correct for OHM decimals
+            newBal = MathLibrary.sqrt(invariant * targetPrice) / 1e9; // Dividing by 1e9 to correct for GDAO decimals
         } else {
             require(currentPrice >= targetPrice);
-            currentBal = ohmBal;
+            currentBal = gdaoBal;
             newBal = MathLibrary.sqrt(invariant / targetPrice);
         }
 
@@ -745,12 +745,12 @@ abstract contract RangeSim is Test {
         uint256 flow = reserveIn ? uint256(netflow) : uint256(-netflow);
 
         // Handle branching scenarios
-        // If reserves are flowing in (market is buying OHM)
+        // If reserves are flowing in (market is buying GDAO)
         if (reserveIn) {
             uint256 wallPrice = range.price(true, true);
             uint256 cushionPrice = range.price(false, true);
             uint256 currentPrice = price.getCurrentPrice();
-            while (flow > currentPrice / 1e9) { // If below this amount, swaps will yield 0 OHM, which errors on the liquidity pool
+            while (flow > currentPrice / 1e9) { // If below this amount, swaps will yield 0 GDAO, which errors on the liquidity pool
                 console2.log("High", flow);
                 // Check if the RBS side is active, if not, swap all flow into the liquidity pool
                 if (range.active(true)) {
@@ -759,7 +759,7 @@ abstract contract RangeSim is Test {
                     uint256 oracleScale = 10**(price.decimals());
                     // If the market price is above the wall price, swap at the wall up to its capacity
                     if (currentPrice >= wallPrice) {
-                        uint256 capacity = range.capacity(true); // Capacity is in OHM units
+                        uint256 capacity = range.capacity(true); // Capacity is in GDAO units
                         uint256 capacityInReserve = capacity.mulDiv(
                             wallPrice * 1e18,
                             oracleScale * 1e9
@@ -866,11 +866,11 @@ abstract contract RangeSim is Test {
                 }
             }
         } else {
-            // If reserves are flowing out (market is selling OHM)
+            // If reserves are flowing out (market is selling GDAO)
             uint256 wallPrice = range.price(true, false);
             uint256 cushionPrice = range.price(false, false);
             uint256 currentPrice = price.getCurrentPrice();
-            while (flow > currentPrice / 1e9) { // If below this amount, swaps will yield 0 OHM, which errors on the liquidity pool
+            while (flow > currentPrice / 1e9) { // If below this amount, swaps will yield 0 GDAO, which errors on the liquidity pool
                 console2.log("Low", flow);
                 // Check if the RBS side is active, if not, swap all flow into the liquidity pool
                 if (range.active(false)) {
@@ -883,18 +883,18 @@ abstract contract RangeSim is Test {
                         uint256 capacity = range.capacity(false); // Lower side capacity is in reserves
                         if (flow > capacity) {
                             // If flow is greater than capacity, swap the capacity at the wall
-                            uint256 amountIn = capacity.mulDiv(oracleScale * 1e9, wallPrice * 1e18); // Convert to OHM units
-                            uint256 minAmountOut = operator.getAmountOut(ohm, amountIn);
+                            uint256 amountIn = capacity.mulDiv(oracleScale * 1e9, wallPrice * 1e18); // Convert to GDAO units
+                            uint256 minAmountOut = operator.getAmountOut(gdao, amountIn);
                             vm.prank(market);
-                            operator.swap(ohm, amountIn, minAmountOut);
+                            operator.swap(gdao, amountIn, minAmountOut);
                             console2.log("  Wall swap", capacity);
                             flow -= capacity;
                         } else {
                             // If flow is less than capacity, swap the flow at the wall
-                            uint256 amountIn = flow.mulDiv(oracleScale * 1e9, wallPrice * 1e18); // Convert to OHM units
-                            uint256 minAmountOut = operator.getAmountOut(ohm, amountIn);
+                            uint256 amountIn = flow.mulDiv(oracleScale * 1e9, wallPrice * 1e18); // Convert to GDAO units
+                            uint256 minAmountOut = operator.getAmountOut(gdao, amountIn);
                             vm.prank(market);
-                            operator.swap(ohm, amountIn, minAmountOut);
+                            operator.swap(gdao, amountIn, minAmountOut);
                             console2.log("  Wall swap", flow);
                             flow = 0;
                         }
@@ -912,12 +912,12 @@ abstract contract RangeSim is Test {
                                     aggregator.marketPrice(id).mulDiv(oracleScale * 1e9, bondScale)
                                 && aggregator.isLive(id)
                             ) {
-                                uint256 maxBond = aggregator.maxAmountAccepted(id, address(treasury)); // in OHM units
+                                uint256 maxBond = aggregator.maxAmountAccepted(id, address(treasury)); // in GDAO units
                                 uint256 maxPayout = aggregator.payoutFor(maxBond, id, address(treasury)); // in reserve units
                                 if (maxPayout < 1e18) break;
                                 uint256 bondPrice = aggregator.marketPrice(id);
                                 if (maxPayout > flow) {
-                                    uint256 amountIn = flow.mulDiv(bondPrice, bondScale); // convert to OHM units
+                                    uint256 amountIn = flow.mulDiv(bondPrice, bondScale); // convert to GDAO units
                                     uint256 minAmountOut = aggregator.payoutFor(
                                         amountIn,
                                         id,
@@ -935,7 +935,7 @@ abstract contract RangeSim is Test {
                                     flow = 0;
                                     break;
                                 } else {
-                                    // uint256 amountIn = maxPayout.mulDiv(bondPrice, bondScale); // convert to OHM units
+                                    // uint256 amountIn = maxPayout.mulDiv(bondPrice, bondScale); // convert to GDAO units
                                     // uint256 minAmountOut = aggregator.payoutFor(
                                     //     amountIn,
                                     //     id,
@@ -958,8 +958,8 @@ abstract contract RangeSim is Test {
                         // If there is some flow remaining or no active bond market, swap it in the liquidity pool up to the wall price
                         if (flow > currentPrice / 1e9) {
                             // Get amount that can swapped in the liquidity pool to push price to wall price
-                            uint256 maxOhmIn = amountToTargetPrice(ohm, wallPrice);
-                            uint256 maxReserveOut = maxOhmIn.mulDiv(wallPrice * 1e18, oracleScale * 1e9); // convert to reserve units
+                            uint256 maxGdaoIn = amountToTargetPrice(gdao, wallPrice);
+                            uint256 maxReserveOut = maxGdaoIn.mulDiv(wallPrice * 1e18, oracleScale * 1e9); // convert to reserve units
                             if (flow > maxReserveOut) {
                                 // Swap the max amount in the liquidity pool
                                 swap(market, false, maxReserveOut);
@@ -975,8 +975,8 @@ abstract contract RangeSim is Test {
                     } else {
                         // If the market price is below the cushion price, swap into the liquidity pool up to the wall price
                         // Get amount that can swapped in the liquidity pool to push price to wall price
-                        uint256 maxOhmIn = amountToTargetPrice(ohm, wallPrice);
-                        uint256 maxReserveOut = maxOhmIn.mulDiv(wallPrice * 1e18, oracleScale * 1e9); // convert to reserve units
+                        uint256 maxGdaoIn = amountToTargetPrice(gdao, wallPrice);
+                        uint256 maxReserveOut = maxGdaoIn.mulDiv(wallPrice * 1e18, oracleScale * 1e9); // convert to reserve units
                         if (flow > maxReserveOut) {
                             // Swap the max amount in the liquidity pool
                             swap(market, false, maxReserveOut);
@@ -1005,14 +1005,14 @@ abstract contract RangeSim is Test {
         returns (SimIO.Result memory result)
     {
         // Retrieve data from the contracts on current status
-        uint256 supply = ohm.totalSupply();
+        uint256 supply = gdao.totalSupply();
         uint256 lastPrice = price.getLastPrice();
         uint256 marketCap = (supply * lastPrice) / 1e9;
         uint256 reservesInTreasury = reserve.balanceOf(address(treasury));
         uint256 reservesInLiquidity = reserve.balanceOf(address(pool));
         uint256 reservesInTotal = reservesInTreasury + reservesInLiquidity;
         uint256 liquidityRatio = uint256((reservesInLiquidity * 1e4) / reservesInTotal);
-        OlympusRange.Range memory _range = range.range();
+        GoerliDaoRange.Range memory _range = range.range();
 
         // Create result struct
         result = SimIO.Result(

@@ -7,8 +7,8 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {GoerliDaoTreasury} from "src/modules/TRSRY/GoerliDaoTreasury.sol";
+import {GoerliDaoRoles} from "modules/ROLES/GoerliDaoRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
@@ -21,8 +21,8 @@ contract TreasuryCustodianTest is Test {
 
     Kernel internal kernel;
 
-    OlympusTreasury internal TRSRY;
-    OlympusRoles internal ROLES;
+    GoerliDaoTreasury internal TRSRY;
+    GoerliDaoRoles internal ROLES;
     TreasuryCustodian internal custodian;
     RolesAdmin internal rolesAdmin;
 
@@ -37,8 +37,8 @@ contract TreasuryCustodianTest is Test {
 
         kernel = new Kernel(); // this contract will be the executor
 
-        TRSRY = new OlympusTreasury(kernel);
-        ROLES = new OlympusRoles(kernel);
+        TRSRY = new GoerliDaoTreasury(kernel);
+        ROLES = new GoerliDaoRoles(kernel);
 
         custodian = new TreasuryCustodian(kernel);
         rolesAdmin = new RolesAdmin(kernel);

@@ -19,10 +19,10 @@ import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
-import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {GoerliDaoRange} from "modules/RANGE/GoerliDaoRange.sol";
+import {GoerliDaoTreasury} from "modules/TRSRY/GoerliDaoTreasury.sol";
+import {GdaoMinter, GDAO} from "modules/MINTR/GdaoMinter.sol";
+import {GoerliDaoRoles} from "modules/ROLES/GoerliDaoRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Operator} from "policies/Operator.sol";
@@ -30,7 +30,7 @@ import {BondCallback} from "policies/BondCallback.sol";
 
 import "src/Kernel.sol";
 
-contract MockOhm is ERC20 {
+contract MockGdao is ERC20 {
     constructor(
         string memory _name,
         string memory _symbol,
@@ -60,16 +60,16 @@ contract BondCallbackTest is Test {
     BondAggregator internal aggregator;
     BondFixedTermTeller internal teller;
     BondFixedTermSDA internal auctioneer;
-    MockOhm internal ohm;
+    MockGdao internal gdao;
     MockERC20 internal reserve;
     MockERC20 internal other;
 
     Kernel internal kernel;
     MockPrice internal price;
-    OlympusRange internal range;
-    OlympusTreasury internal treasury;
-    OlympusMinter internal minter;
-    OlympusRoles internal roles;
+    GoerliDaoRange internal range;
+    GoerliDaoTreasury internal treasury;
+    GdaoMinter internal minter;
+    GoerliDaoRoles internal roles;
 
     Operator internal operator;
     BondCallback internal callback;
@@ -106,7 +106,7 @@ contract BondCallbackTest is Test {
 
         {
             /// Deploy mock tokens
-            ohm = new MockOhm("Olympus", "OHM", 9);
+            gdao = new MockGdao("Goerli DAO", "GDAO", 9);
             reserve = new MockERC20("Reserve", "RSV", 18);
             other = new MockERC20("Other", "OTH", 18);
         }
@@ -117,17 +117,17 @@ contract BondCallbackTest is Test {
 
             /// Deploy modules (some mocks)
             price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
-            range = new OlympusRange(
+            range = new GoerliDaoRange(
                 kernel,
-                ERC20(ohm),
+                ERC20(gdao),
                 ERC20(reserve),
                 uint256(100),
                 uint256(1000),
                 uint256(2000)
             );
-            treasury = new OlympusTreasury(kernel);
-            minter = new OlympusMinter(kernel, address(ohm));
-            roles = new OlympusRoles(kernel);
+            treasury = new GoerliDaoTreasury(kernel);
+            minter = new GdaoMinter(kernel, address(gdao));
+            roles = new GoerliDaoRoles(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -141,14 +141,14 @@ contract BondCallbackTest is Test {
             rolesAdmin = new RolesAdmin(kernel);
 
             /// Deploy bond callback
-            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
+            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), gdao);
 
             /// Deploy operator
             operator = new Operator(
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [ERC20(ohm), ERC20(reserve)],
+                [ERC20(gdao), ERC20(reserve)],
                 [
                     uint32(2000), // cushionFactor
                     uint32(5 days), // duration
@@ -210,36 +210,36 @@ contract BondCallbackTest is Test {
         operator.initialize();
 
         // Mint tokens to users and treasury for testing
-        uint256 testOhm = 1_000_000 * 1e9;
+        uint256 testGdao = 1_000_000 * 1e9;
         uint256 testReserve = 1_000_000 * 1e18;
 
-        ohm.mint(alice, testOhm * 20);
+        gdao.mint(alice, testGdao * 20);
         reserve.mint(alice, testReserve * 20);
 
         reserve.mint(address(treasury), testReserve * 100);
 
         // Approve the operator and bond teller for the tokens to swap
         vm.prank(alice);
-        ohm.approve(address(operator), testOhm * 20);
+        gdao.approve(address(operator), testGdao * 20);
         vm.prank(alice);
         reserve.approve(address(operator), testReserve * 20);
 
         vm.prank(alice);
-        ohm.approve(address(teller), testOhm * 20);
+        gdao.approve(address(teller), testGdao * 20);
         vm.prank(alice);
         reserve.approve(address(teller), testReserve * 20);
 
         // Create five markets in the bond system
-        // 0. Regular OHM bond (Reserve -> OHM)
-        regBond = createMarket(reserve, ohm, 0, 1, 3);
-        // 1. Inverse bond (OHM -> Reserve)
-        invBond = createMarket(ohm, reserve, 1, 0, 3);
-        // 2. Internal bond (OHM -> OHM)
-        internalBond = createMarket(ohm, ohm, 1, 0, 8);
-        // 3. Non-OHM bond (WETH -> Reserve)
+        // 0. Regular GDAO bond (Reserve -> GDAO)
+        regBond = createMarket(reserve, gdao, 0, 1, 3);
+        // 1. Inverse bond (GDAO -> Reserve)
+        invBond = createMarket(gdao, reserve, 1, 0, 3);
+        // 2. Internal bond (GDAO -> GDAO)
+        internalBond = createMarket(gdao, gdao, 1, 0, 8);
+        // 3. Non-GDAO bond (WETH -> Reserve)
         externalBond = createMarket(reserve, reserve, 0, -1, 8);
-        // 4. Regular OHM bond that will not be whitelisted
-        nonWhitelistedBond = createMarket(reserve, ohm, 0, 1, 3);
+        // 4. Regular GDAO bond that will not be whitelisted
+        nonWhitelistedBond = createMarket(reserve, gdao, 0, 1, 3);
 
         // Whitelist all markets except the last one
         vm.prank(policy);
@@ -322,12 +322,12 @@ contract BondCallbackTest is Test {
     function testCorrectness_callback() public {
         /// Ensure the callback handles payouts for the 4 market cases correctly
 
-        /// Case 1: Regular Bond (Reserve -> OHM)
-        /// OHM is minted for payout
+        /// Case 1: Regular Bond (Reserve -> GDAO)
+        /// GDAO is minted for payout
         /// Reserve is stored in callback until batched to treasury
 
         /// Store start balances of teller and callback
-        uint256 startBalTeller = ohm.balanceOf(address(teller));
+        uint256 startBalTeller = gdao.balanceOf(address(teller));
         uint256 startBalCallback = reserve.balanceOf(address(callback));
 
         /// Mint tokens to the callback to simulate a purchase
@@ -338,49 +338,49 @@ contract BondCallbackTest is Test {
         callback.callback(regBond, 300, 10);
 
         /// Expect the balances of the teller and callback to be updated
-        assertEq(ohm.balanceOf(address(teller)), startBalTeller + 10);
+        assertEq(gdao.balanceOf(address(teller)), startBalTeller + 10);
         assertEq(reserve.balanceOf(address(callback)), startBalCallback + 300);
 
-        /// Case 2: Inverse Bond (OHM -> Reserve)
+        /// Case 2: Inverse Bond (GDAO -> Reserve)
         /// Reserve is withdrawn from the treasury to pay out teller
-        /// OHM received is held in the callback until batched to treasury
+        /// GDAO received is held in the callback until batched to treasury
 
         /// Store start balances of teller and callback
         startBalTeller = reserve.balanceOf(address(teller));
-        startBalCallback = ohm.balanceOf(address(callback));
+        startBalCallback = gdao.balanceOf(address(callback));
 
         /// Mint tokens to the callback to simulate a purchase
-        ohm.mint(address(callback), 10);
+        gdao.mint(address(callback), 10);
 
         /// Call the callback function from the teller
         vm.prank(address(teller));
         callback.callback(invBond, 10, 300);
 
         /// Expect the balances of the teller and callback to be updated
-        /// Callback should be the same as the start amount since the OHM is burned
+        /// Callback should be the same as the start amount since the GDAO is burned
         assertEq(reserve.balanceOf(address(teller)), startBalTeller + 300);
-        assertEq(ohm.balanceOf(address(callback)), startBalCallback);
+        assertEq(gdao.balanceOf(address(callback)), startBalCallback);
 
-        /// Case 3: Internal Bond (OHM -> OHM)
-        /// OHM is received by the callback and the difference
+        /// Case 3: Internal Bond (GDAO -> GDAO)
+        /// GDAO is received by the callback and the difference
         /// in the quote token and payout is minted to the callback to pay the teller
 
         /// Store start balances of teller and callback
-        startBalTeller = ohm.balanceOf(address(teller));
-        startBalCallback = ohm.balanceOf(address(callback));
+        startBalTeller = gdao.balanceOf(address(teller));
+        startBalCallback = gdao.balanceOf(address(callback));
 
         /// Mint tokens to the callback to simulate a purchase
-        ohm.mint(address(callback), 100);
+        gdao.mint(address(callback), 100);
 
         /// Call the callback function from the teller
         vm.prank(address(teller));
         callback.callback(internalBond, 100, 150);
 
         /// Expect the balances of the teller and callback to be updated
-        assertEq(ohm.balanceOf(address(teller)), startBalTeller + 150);
-        assertEq(ohm.balanceOf(address(callback)), startBalCallback);
+        assertEq(gdao.balanceOf(address(teller)), startBalTeller + 150);
+        assertEq(gdao.balanceOf(address(callback)), startBalCallback);
 
-        /// Case 4: Non-OHM Bond (Reserve -> Reserve)
+        /// Case 4: Non-GDAO Bond (Reserve -> Reserve)
         /// Should fail with Callback_MarketNotSupported(id)
 
         /// Mint tokens to the callback to simulate a purchase
@@ -439,8 +439,8 @@ contract BondCallbackTest is Test {
         // Mint tokens to callback to simulate deposit from teller
         reserve.mint(address(callback), 10);
 
-        // Get balance of OHM in teller to start
-        uint256 oldTellerBal = ohm.balanceOf(address(teller));
+        // Get balance of GDAO in teller to start
+        uint256 oldTellerBal = gdao.balanceOf(address(teller));
 
         // Attempt callback from teller for non-whitelisted bond, expect to fail
         bytes memory err = abi.encodeWithSignature(
@@ -451,8 +451,8 @@ contract BondCallbackTest is Test {
         vm.expectRevert(err);
         callback.callback(nonWhitelistedBond, 10, 10);
 
-        // Check teller balance of OHM is still the same
-        uint256 newTellerBal = ohm.balanceOf(address(teller));
+        // Check teller balance of GDAO is still the same
+        uint256 newTellerBal = gdao.balanceOf(address(teller));
         assertEq(newTellerBal, oldTellerBal);
 
         // Attempt callback from teller on whitelisted market, expect to succeed
@@ -460,7 +460,7 @@ contract BondCallbackTest is Test {
         callback.callback(regBond, 10, 10);
 
         // Check teller balance is updated
-        newTellerBal = ohm.balanceOf(address(teller));
+        newTellerBal = gdao.balanceOf(address(teller));
         assertEq(newTellerBal, oldTellerBal + 10);
 
         // Change the market to not be whitelisted and expect revert
@@ -483,8 +483,8 @@ contract BondCallbackTest is Test {
 
     function testCorrectness_whitelist() public {
         // Create two new markets to test whitelist functionality
-        uint256 wlOne = createMarket(reserve, ohm, 0, 1, 3);
-        uint256 wlTwo = createMarket(reserve, ohm, 0, 1, 3);
+        uint256 wlOne = createMarket(reserve, gdao, 0, 1, 3);
+        uint256 wlTwo = createMarket(reserve, gdao, 0, 1, 3);
 
         // Attempt to whitelist a market as a non-approved address, expect revert
         bytes memory err = abi.encodeWithSelector(
@@ -512,7 +512,7 @@ contract BondCallbackTest is Test {
 
     function testCorrectness_blacklist() public {
         // Create two new markets to test whitelist functionality
-        uint256 wlOne = createMarket(reserve, ohm, 0, 1, 3);
+        uint256 wlOne = createMarket(reserve, gdao, 0, 1, 3);
 
         // Whitelist the bond market from the policy address
         vm.prank(policy);
@@ -546,7 +546,7 @@ contract BondCallbackTest is Test {
 
     function testCorrectness_batchToTreasury() public {
         /// Create an extra market with the other token as the quote token
-        uint256 otherBond = createMarket(other, ohm, 2, 1, 5);
+        uint256 otherBond = createMarket(other, gdao, 2, 1, 5);
 
         /// Whitelist new market on the callback
         vm.prank(policy);

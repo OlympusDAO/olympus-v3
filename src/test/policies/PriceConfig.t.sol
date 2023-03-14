@@ -10,9 +10,9 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
-import {OlympusPriceConfig} from "policies/PriceConfig.sol";
-import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {GoerliDaoPriceConfig} from "policies/PriceConfig.sol";
+import {GoerliDaoPrice} from "modules/PRICE/GoerliDaoPrice.sol";
+import {GoerliDaoRoles} from "modules/ROLES/GoerliDaoRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import "src/Kernel.sol";
@@ -26,15 +26,15 @@ contract PriceConfigTest is Test {
     address internal carol;
     address internal guardian;
 
-    MockPriceFeed internal ohmEthPriceFeed;
+    MockPriceFeed internal gdaoEthPriceFeed;
     MockPriceFeed internal reserveEthPriceFeed;
-    MockERC20 internal ohm;
+    MockERC20 internal gdao;
     MockERC20 internal reserve;
 
     Kernel internal kernel;
-    OlympusPrice internal price;
-    OlympusRoles internal roles;
-    OlympusPriceConfig internal priceConfig;
+    GoerliDaoPrice internal price;
+    GoerliDaoRoles internal roles;
+    GoerliDaoPriceConfig internal priceConfig;
     RolesAdmin internal rolesAdmin;
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
@@ -52,11 +52,11 @@ contract PriceConfigTest is Test {
 
         {
             /// Deploy protocol mocks external to guidance
-            ohm = new MockERC20("Olympus", "OHM", 9);
+            gdao = new MockERC20("Goerli Dao", "GDAO", 9);
             reserve = new MockERC20("Reserve", "RSV", 18);
 
-            ohmEthPriceFeed = new MockPriceFeed();
-            ohmEthPriceFeed.setDecimals(18);
+            gdaoEthPriceFeed = new MockPriceFeed();
+            gdaoEthPriceFeed.setDecimals(18);
 
             reserveEthPriceFeed = new MockPriceFeed();
             reserveEthPriceFeed.setDecimals(18);
@@ -67,10 +67,10 @@ contract PriceConfigTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             /// Deploy price module
-            price = new OlympusPrice(
+            price = new GoerliDaoPrice(
                 kernel,
-                ohmEthPriceFeed, // AggregatorInterface ohmEthPriceFeed_,
-                uint48(24 hours), // uint32 ohmEthUpdateThreshold_,
+                gdaoEthPriceFeed, // AggregatorInterface gdaoEthPriceFeed_,
+                uint48(24 hours), // uint32 gdaoEthUpdateThreshold_,
                 reserveEthPriceFeed, // AggregatorInterface reserveEthPriceFeed_,
                 uint48(24 hours), // uint32 reserveEthUpdateThreshold_,
                 uint48(8 hours), // uint32 observationFrequency_,
@@ -78,10 +78,10 @@ contract PriceConfigTest is Test {
                 10 * 1e18 // uint256 minimumTargetPrice_
             );
 
-            roles = new OlympusRoles(kernel);
+            roles = new GoerliDaoRoles(kernel);
 
             /// Deploy price config policy
-            priceConfig = new OlympusPriceConfig(kernel);
+            priceConfig = new GoerliDaoPriceConfig(kernel);
 
             /// Deploy rolesAdmin
             rolesAdmin = new RolesAdmin(kernel);
@@ -108,7 +108,7 @@ contract PriceConfigTest is Test {
 
         {
             /// Initialize timestamps on the mock price feeds
-            ohmEthPriceFeed.setTimestamp(block.timestamp);
+            gdaoEthPriceFeed.setTimestamp(block.timestamp);
             reserveEthPriceFeed.setTimestamp(block.timestamp);
         }
     }
@@ -119,12 +119,12 @@ contract PriceConfigTest is Test {
         reserveEthPriceFeed.setLatestAnswer(int256(5e14));
         uint256 reserveEthPrice = uint256(reserveEthPriceFeed.latestAnswer());
 
-        /// Set ohmEth price to 0.01 ETH = 1 OHM initially
-        int256 ohmEthPrice = int256(1e16);
+        /// Set gdaoEth price to 0.01 ETH = 1 GDAO initially
+        int256 gdaoEthPrice = int256(1e16);
 
         /// Set scaling value for calculations
         uint256 scale = 10 **
-            (price.decimals() + reserveEthPriceFeed.decimals() - ohmEthPriceFeed.decimals());
+            (price.decimals() + reserveEthPriceFeed.decimals() - gdaoEthPriceFeed.decimals());
 
         /// Calculate the number of observations and initialize the observation array
         uint48 observationFrequency = price.observationFrequency();
@@ -138,14 +138,14 @@ contract PriceConfigTest is Test {
             /// Calculate a random percentage change from -10% to + 10% using the nonce and observation number
             change = int256(uint256(keccak256(abi.encodePacked(nonce, i)))) % int256(1000);
 
-            /// Calculate the new ohmEth price
-            ohmEthPrice = (ohmEthPrice * (CHANGE_DECIMALS + change)) / CHANGE_DECIMALS;
+            /// Calculate the new gdaoEth price
+            gdaoEthPrice = (gdaoEthPrice * (CHANGE_DECIMALS + change)) / CHANGE_DECIMALS;
 
             /// Update price feed
-            ohmEthPriceFeed.setLatestAnswer(ohmEthPrice);
+            gdaoEthPriceFeed.setLatestAnswer(gdaoEthPrice);
 
             /// Get the current price from the price module and store in the observations array
-            observations[i] = uint256(ohmEthPrice).mulDiv(scale, reserveEthPrice);
+            observations[i] = uint256(gdaoEthPrice).mulDiv(scale, reserveEthPrice);
         }
 
         return observations;
@@ -260,32 +260,32 @@ contract PriceConfigTest is Test {
         priceConfig.initialize(obs, uint48(block.timestamp));
 
         /// Check that the price feed errors after the existing update threshold is exceeded
-        uint48 startOhmEthThreshold = price.ohmEthUpdateThreshold();
-        vm.warp(block.timestamp + startOhmEthThreshold + 1);
+        uint48 startGdaoEthThreshold = price.gdaoEthUpdateThreshold();
+        vm.warp(block.timestamp + startGdaoEthThreshold + 1);
         vm.expectRevert(
-            abi.encodeWithSignature("Price_BadFeed(address)", address(ohmEthPriceFeed))
+            abi.encodeWithSignature("Price_BadFeed(address)", address(gdaoEthPriceFeed))
         );
         price.getCurrentPrice();
 
         /// Roll back time
-        vm.warp(block.timestamp - startOhmEthThreshold - 1);
+        vm.warp(block.timestamp - startGdaoEthThreshold - 1);
 
         /// Change update thresholds to a different value (larger than current)
         vm.prank(guardian);
         priceConfig.changeUpdateThresholds(uint48(36 hours), uint48(36 hours));
 
         /// Check that the update thresholds are updated correctly
-        assertEq(price.ohmEthUpdateThreshold(), uint48(36 hours));
+        assertEq(price.gdaoEthUpdateThreshold(), uint48(36 hours));
         assertEq(price.reserveEthUpdateThreshold(), uint48(36 hours));
 
         /// Check that the price feed doesn't error at the old threshold
-        vm.warp(block.timestamp + startOhmEthThreshold + 1);
+        vm.warp(block.timestamp + startGdaoEthThreshold + 1);
         price.getCurrentPrice();
 
         /// Roll time past new threshold
-        vm.warp(block.timestamp - startOhmEthThreshold + price.ohmEthUpdateThreshold());
+        vm.warp(block.timestamp - startGdaoEthThreshold + price.gdaoEthUpdateThreshold());
         vm.expectRevert(
-            abi.encodeWithSignature("Price_BadFeed(address)", address(ohmEthPriceFeed))
+            abi.encodeWithSignature("Price_BadFeed(address)", address(gdaoEthPriceFeed))
         );
         price.getCurrentPrice();
     }

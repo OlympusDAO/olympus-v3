@@ -10,12 +10,12 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {GoerliDaoRange} from "modules/RANGE/GoerliDaoRange.sol";
 import "src/Kernel.sol";
 
 contract RangeTest is Test {
     using FullMath for uint256;
-    using ModuleTestFixtureGenerator for OlympusRange;
+    using ModuleTestFixtureGenerator for GoerliDaoRange;
 
     UserFactory public userCreator;
     address internal alice;
@@ -24,11 +24,11 @@ contract RangeTest is Test {
     address internal policy;
     address internal heart;
 
-    MockERC20 internal ohm;
+    MockERC20 internal gdao;
     MockERC20 internal reserve;
 
     Kernel internal kernel;
-    OlympusRange internal range;
+    GoerliDaoRange internal range;
 
     address internal writer;
 
@@ -46,7 +46,7 @@ contract RangeTest is Test {
 
         {
             /// Deploy protocol mocks external to guidance
-            ohm = new MockERC20("Olympus", "OHM", 9);
+            gdao = new MockERC20("Goerli Dao", "gdao", 9);
             reserve = new MockERC20("Reserve", "RSV", 18);
         }
 
@@ -55,9 +55,9 @@ contract RangeTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             /// Deploy module
-            range = new OlympusRange(
+            range = new GoerliDaoRange(
                 kernel,
-                ERC20(ohm),
+                ERC20(gdao),
                 ERC20(reserve),
                 uint256(100),
                 uint256(1000),
@@ -65,7 +65,7 @@ contract RangeTest is Test {
             );
 
             // Deploy mock module writer
-            writer = range.generateGodmodeFixture(type(OlympusRange).name);
+            writer = range.generateGodmodeFixture(type(GoerliDaoRange).name);
         }
 
         {
@@ -147,7 +147,7 @@ contract RangeTest is Test {
 
     function testCorrectness_updatePrices() public {
         /// Store the starting bands
-        OlympusRange.Range memory startRange = range.range();
+        GoerliDaoRange.Range memory startRange = range.range();
 
         /// Update the prices with a new moving average above the initial one
         vm.prank(writer);
@@ -172,7 +172,7 @@ contract RangeTest is Test {
 
     function testCorrectness_regenerate() public {
         /// Confirm that the capacities and thresholds are set to initial values
-        OlympusRange.Range memory startRange = range.range();
+        GoerliDaoRange.Range memory startRange = range.range();
         assertEq(startRange.low.capacity, 10_000_000 * 1e18);
         assertEq(startRange.high.capacity, 10_000_000 * 1e18);
         assertEq(startRange.low.threshold, 100_000 * 1e18);
@@ -196,7 +196,7 @@ contract RangeTest is Test {
         range.regenerate(false, 20_000_000 * 1e18);
 
         /// Check that the capacities and thresholds are set to the regenerated values
-        OlympusRange.Range memory endRange = range.range();
+        GoerliDaoRange.Range memory endRange = range.range();
         assertEq(endRange.low.capacity, 20_000_000 * 1e18);
         assertEq(endRange.high.capacity, 20_000_000 * 1e18);
         assertEq(endRange.low.threshold, 200_000 * 1e18);
@@ -266,7 +266,7 @@ contract RangeTest is Test {
         assertEq(range.spread(true), 2000);
 
         /// Store initial prices. These should not update immediately when the spreads are updated because they require update prices to be called first.
-        OlympusRange.Range memory startRange = range.range();
+        GoerliDaoRange.Range memory startRange = range.range();
 
         /// Update the spreads with valid parameters from an approved address
         vm.expectEmit(false, false, false, true);
@@ -298,7 +298,7 @@ contract RangeTest is Test {
         assertEq(range.thresholdFactor(), uint256(100));
 
         /// Store current threshold for each side
-        OlympusRange.Range memory startRange = range.range();
+        GoerliDaoRange.Range memory startRange = range.range();
 
         /// Update the threshold factor with valid parameters from an approved address
         vm.prank(writer);
@@ -306,7 +306,7 @@ contract RangeTest is Test {
 
         /// Expect the threshold factor to be updated and the thresholds to be the same
         assertEq(range.thresholdFactor(), uint256(200));
-        OlympusRange.Range memory newRange = range.range();
+        GoerliDaoRange.Range memory newRange = range.range();
         assertEq(newRange.low.threshold, startRange.low.threshold);
         assertEq(newRange.high.threshold, startRange.high.threshold);
 
@@ -403,7 +403,7 @@ contract RangeTest is Test {
 
     function testCorrectness_viewRange() public {
         /// Get range data
-        OlympusRange.Range memory _range = range.range();
+        GoerliDaoRange.Range memory _range = range.range();
 
         /// Confirm it matches initialized variables
         assertTrue(_range.low.active);
@@ -429,7 +429,7 @@ contract RangeTest is Test {
 
     function testCorrectness_viewCapacity() public {
         /// Load the sides directly from the range
-        OlympusRange.Range memory _range = range.range();
+        GoerliDaoRange.Range memory _range = range.range();
 
         /// Check that capacity returns the capacity value in the range
         assertEq(range.capacity(false), _range.low.capacity);
@@ -438,7 +438,7 @@ contract RangeTest is Test {
 
     function testCorrectness_viewActive() public {
         /// Load the sides directly from the range
-        OlympusRange.Range memory _range = range.range();
+        GoerliDaoRange.Range memory _range = range.range();
 
         /// Check that wallUp returns the same result as the struct
         assertTrue(range.active(false) == _range.low.active);
@@ -447,7 +447,7 @@ contract RangeTest is Test {
 
     function testCorrectness_viewPrice() public {
         /// Load the bands directly from the range
-        OlympusRange.Range memory _range = range.range();
+        GoerliDaoRange.Range memory _range = range.range();
 
         /// Check that cushion and walls prices match the value returned from price
         assertEq(range.price(false, false), _range.cushion.low.price);
@@ -458,7 +458,7 @@ contract RangeTest is Test {
 
     function testCorrectness_viewSpread() public {
         /// Load the bands directly from the range
-        OlympusRange.Range memory _range = range.range();
+        GoerliDaoRange.Range memory _range = range.range();
 
         /// Check that cushion and walls prices match the value returned from price
         assertEq(range.spread(false), _range.cushion.spread);
@@ -467,7 +467,7 @@ contract RangeTest is Test {
 
     function testCorrectness_viewMarket() public {
         /// Load the sides directly from the range
-        OlympusRange.Range memory _range = range.range();
+        GoerliDaoRange.Range memory _range = range.range();
 
         /// Check that wallUp returns the same result as the struct
         assertEq(range.market(false), _range.low.market);
@@ -476,7 +476,7 @@ contract RangeTest is Test {
 
     function testCorrectness_viewLastActive() public {
         /// Load the sides directly from the range
-        OlympusRange.Range memory _range = range.range();
+        GoerliDaoRange.Range memory _range = range.range();
 
         /// Check that lastActive returns the same result as the struct
         assertEq(range.lastActive(false), _range.low.lastActive);

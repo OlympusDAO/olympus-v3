@@ -8,7 +8,7 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {GoerliDaoRoles} from "modules/ROLES/GoerliDaoRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import "src/Kernel.sol";
 
@@ -21,7 +21,7 @@ contract TreasuryCustodianTest is Test {
     bytes32 internal testRole = "test_role";
 
     Kernel internal kernel;
-    OlympusRoles internal ROLES;
+    GoerliDaoRoles internal ROLES;
     RolesAdmin internal rolesAdmin;
 
     function setUp() public {
@@ -33,7 +33,7 @@ contract TreasuryCustodianTest is Test {
 
         kernel = new Kernel(); // this contract will be the executor
 
-        ROLES = new OlympusRoles(kernel);
+        ROLES = new GoerliDaoRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
 
         kernel.executeAction(Actions.InstallModule, address(ROLES));

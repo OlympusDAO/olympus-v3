@@ -7,7 +7,7 @@ import {console2} from "forge-std/console2.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {GoerliDaoRoles} from "modules/ROLES/GoerliDaoRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
@@ -57,7 +57,7 @@ contract HeartTest is Test {
 
     Kernel internal kernel;
     MockPrice internal price;
-    OlympusRoles internal roles;
+    GoerliDaoRoles internal roles;
 
     MockOperator internal operator;
     OlympusHeart internal heart;
@@ -83,7 +83,7 @@ contract HeartTest is Test {
 
             /// Deploy modules (some mocks)
             price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
-            roles = new OlympusRoles(kernel);
+            roles = new GoerliDaoRoles(kernel);
 
             /// Configure mocks
             price.setMovingAverage(100 * 1e18);

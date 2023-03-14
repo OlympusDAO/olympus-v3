@@ -7,19 +7,19 @@ import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
+import {GoerliDaoERC20Token} from "src/external/GDAOERC20.sol";
 //import {MockPolicy} from "test/mocks/KernelTestMocks.sol";
 
-import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {GoerliDaoTreasury} from "src/modules/TRSRY/GoerliDaoTreasury.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
 import "src/Kernel.sol";
 
 contract TRSRYTest is Test {
-    using ModuleTestFixtureGenerator for OlympusTreasury;
+    using ModuleTestFixtureGenerator for GoerliDaoTreasury;
 
     Kernel internal kernel;
-    OlympusTreasury public TRSRY;
+    GoerliDaoTreasury public TRSRY;
     MockERC20 public ngmi;
     address public testUser;
     address public godmode;
@@ -29,18 +29,18 @@ contract TRSRYTest is Test {
 
     function setUp() public {
         kernel = new Kernel();
-        TRSRY = new OlympusTreasury(kernel);
+        TRSRY = new GoerliDaoTreasury(kernel);
         ngmi = new MockERC20("not gonna make it", "NGMI", 18);
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
 
         // Generate test fixture policy addresses with different authorizations
-        godmode = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
+        godmode = TRSRY.generateGodmodeFixture(type(GoerliDaoTreasury).name);
         kernel.executeAction(Actions.ActivatePolicy, godmode);
 
         testUser = TRSRY.generateFunctionFixture(TRSRY.withdrawReserves.selector);
         kernel.executeAction(Actions.ActivatePolicy, testUser);
 
-        debtor = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
+        debtor = TRSRY.generateGodmodeFixture(type(GoerliDaoTreasury).name);
         kernel.executeAction(Actions.ActivatePolicy, debtor);
 
         // Give TRSRY some tokens

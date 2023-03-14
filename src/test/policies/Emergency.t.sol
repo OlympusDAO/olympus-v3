@@ -13,10 +13,10 @@ import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
-import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
+import {GoerliDaoTreasury} from "modules/TRSRY/GoerliDaoTreasury.sol";
+import {GdaoMinter, GDAO} from "modules/MINTR/GdaoMinter.sol";
+import {GoerliDaoRoles} from "modules/ROLES/GoerliDaoRoles.sol";
+import {GoerliDaoERC20Token, IOlympusAuthority} from "src/external/GDAOERC20.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Emergency} from "policies/Emergency.sol";
@@ -24,8 +24,8 @@ import {Emergency} from "policies/Emergency.sol";
 // solhint-disable-next-line max-states-count
 contract EmergencyTest is Test {
     using FullMath for uint256;
-    using ModuleTestFixtureGenerator for OlympusMinter;
-    using ModuleTestFixtureGenerator for OlympusTreasury;
+    using ModuleTestFixtureGenerator for GdaoMinter;
+    using ModuleTestFixtureGenerator for GoerliDaoTreasury;
     using larping for *;
 
     UserFactory public userCreator;
@@ -33,14 +33,14 @@ contract EmergencyTest is Test {
     address internal guardian;
     address internal emergencyMS;
 
-    OlympusERC20Token internal ohm;
+    GoerliDaoERC20Token internal gdao;
     MockERC20 internal reserve;
 
     Kernel internal kernel;
     IOlympusAuthority internal authority;
-    OlympusTreasury internal treasury;
-    OlympusMinter internal minter;
-    OlympusRoles internal roles;
+    GoerliDaoTreasury internal treasury;
+    GdaoMinter internal minter;
+    GoerliDaoRoles internal roles;
 
     Emergency internal emergency;
     RolesAdmin internal rolesAdmin;
@@ -64,7 +64,7 @@ contract EmergencyTest is Test {
             authority = new MockLegacyAuthority(address(0x0));
 
             // Deploy mock tokens
-            ohm = new OlympusERC20Token(address(authority));
+            gdao = new GoerliDaoERC20Token(address(authority));
             reserve = new MockERC20("Reserve", "RSV", 18);
         }
 
@@ -73,9 +73,9 @@ contract EmergencyTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy modules (some mocks)
-            treasury = new OlympusTreasury(kernel);
-            minter = new OlympusMinter(kernel, address(ohm));
-            roles = new OlympusRoles(kernel);
+            treasury = new GoerliDaoTreasury(kernel);
+            minter = new GdaoMinter(kernel, address(gdao));
+            roles = new GoerliDaoRoles(kernel);
         }
 
         {
@@ -86,8 +86,8 @@ contract EmergencyTest is Test {
             rolesAdmin = new RolesAdmin(kernel);
 
             // Deploy authorized policy to call minter and treasury functions
-            treasuryAdmin = treasury.generateGodmodeFixture(type(OlympusTreasury).name);
-            minterAdmin = minter.generateGodmodeFixture(type(OlympusMinter).name);
+            treasuryAdmin = treasury.generateGodmodeFixture(type(GoerliDaoTreasury).name);
+            minterAdmin = minter.generateGodmodeFixture(type(GdaoMinter).name);
         }
 
         {
@@ -147,17 +147,17 @@ contract EmergencyTest is Test {
         // Check that MINTR is active initially
         assertTrue(minter.active());
 
-        // Try minting OHM and expect to pass
+        // Try minting GDAO and expect to pass
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 2e9);
-        assertEq(ohm.balanceOf(alice), 2e9);
+        minter.mintGdao(alice, 2e9);
+        assertEq(gdao.balanceOf(alice), 2e9);
 
-        // Try burning OHM and expect to pass
+        // Try burning GDAO and expect to pass
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        gdao.approve(address(minter), 1e9);
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
-        assertEq(ohm.balanceOf(alice), 1e9);
+        minter.burnGdao(alice, 1e9);
+        assertEq(gdao.balanceOf(alice), 1e9);
 
         // Shutdown MINTR
         vm.prank(emergencyMS);
@@ -166,25 +166,25 @@ contract EmergencyTest is Test {
         // Check that MINTR is inactive
         assertTrue(!minter.active());
 
-        // Try minting OHM and expect to fail
+        // Try minting GDAO and expect to fail
         bytes memory err = abi.encodeWithSignature("MINTR_NotActive()");
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        minter.mintGdao(alice, 1e9);
 
-        // Check that no OHM was minted
-        assertEq(ohm.balanceOf(alice), 1e9);
+        // Check that no GDAO was minted
+        assertEq(gdao.balanceOf(alice), 1e9);
 
-        // Try burning OHM and expect to fail
+        // Try burning GDAO and expect to fail
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        gdao.approve(address(minter), 1e9);
 
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        minter.burnGdao(alice, 1e9);
 
-        // Check that no OHM was burned
-        assertEq(ohm.balanceOf(alice), 1e9);
+        // Check that no GDAO was burned
+        assertEq(gdao.balanceOf(alice), 1e9);
     }
 
     function testCorrectness_ShutdownTRSRY() public {
@@ -237,18 +237,18 @@ contract EmergencyTest is Test {
         assertTrue(minter.active());
         assertTrue(treasury.active());
 
-        // Try minting OHM expect to pass
+        // Try minting GDAO expect to pass
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 2e9);
-        assertEq(ohm.balanceOf(alice), 2e9);
+        minter.mintGdao(alice, 2e9);
+        assertEq(gdao.balanceOf(alice), 2e9);
 
-        // Try burning OHM and expect to pass
+        // Try burning GDAO and expect to pass
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        gdao.approve(address(minter), 1e9);
 
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
-        assertEq(ohm.balanceOf(alice), 1e9);
+        minter.burnGdao(alice, 1e9);
+        assertEq(gdao.balanceOf(alice), 1e9);
 
         // Try withdrawing reserve and expect to pass
         vm.prank(treasuryAdmin);
@@ -271,25 +271,25 @@ contract EmergencyTest is Test {
         assertTrue(!minter.active());
         assertTrue(!treasury.active());
 
-        // Try minting OHM and expect to fail
+        // Try minting GDAO and expect to fail
         bytes memory err = abi.encodeWithSignature("MINTR_NotActive()");
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        minter.mintGdao(alice, 1e9);
 
-        // Check that no OHM was minted
-        assertEq(ohm.balanceOf(alice), 1e9);
+        // Check that no GDAO was minted
+        assertEq(gdao.balanceOf(alice), 1e9);
 
-        // Try burning OHM and expect to fail
+        // Try burning GDAO and expect to fail
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        gdao.approve(address(minter), 1e9);
 
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        minter.burnGdao(alice, 1e9);
 
-        // Check that no OHM was burned
-        assertEq(ohm.balanceOf(alice), 1e9);
+        // Check that no GDAO was burned
+        assertEq(gdao.balanceOf(alice), 1e9);
 
         // Try withdrawing reserve and expect to fail
         err = abi.encodeWithSignature("TRSRY_NotActive()");
@@ -386,9 +386,9 @@ contract EmergencyTest is Test {
     }
 
     function testCorrectness_RestartMINTR() public {
-        // Mint some OHM initially so balance isn't zero
+        // Mint some GDAO initially so balance isn't zero
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        minter.mintGdao(alice, 1e9);
 
         // Shutdown Minting
         vm.prank(emergencyMS);
@@ -397,25 +397,25 @@ contract EmergencyTest is Test {
         // Check that MINTR is inactive
         assertTrue(!minter.active());
 
-        // Try minting OHM and expect to fail
+        // Try minting GDAO and expect to fail
         bytes memory err = abi.encodeWithSignature("MINTR_NotActive()");
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        minter.mintGdao(alice, 1e9);
 
-        // Check that no OHM was minted
-        assertEq(ohm.balanceOf(alice), 1e9);
+        // Check that no GDAO was minted
+        assertEq(gdao.balanceOf(alice), 1e9);
 
-        // Try burning OHM and expect to fail
+        // Try burning GDAO and expect to fail
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        gdao.approve(address(minter), 1e9);
 
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        minter.burnGdao(alice, 1e9);
 
-        // Check that no OHM was burned
-        assertEq(ohm.balanceOf(alice), 1e9);
+        // Check that no GDAO was burned
+        assertEq(gdao.balanceOf(alice), 1e9);
 
         // Restart MINTR
         vm.prank(guardian);
@@ -424,22 +424,22 @@ contract EmergencyTest is Test {
         // Check that MINTR is active
         assertTrue(minter.active());
 
-        // Try minting OHM and expect to succeed
+        // Try minting GDAO and expect to succeed
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        minter.mintGdao(alice, 1e9);
 
-        // Check that OHM was minted
-        assertEq(ohm.balanceOf(alice), 2e9);
+        // Check that GDAO was minted
+        assertEq(gdao.balanceOf(alice), 2e9);
 
-        // Try burning OHM and expect to succeed
+        // Try burning GDAO and expect to succeed
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        gdao.approve(address(minter), 1e9);
 
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        minter.burnGdao(alice, 1e9);
 
-        // Check that OHM was burned
-        assertEq(ohm.balanceOf(alice), 1e9);
+        // Check that GDAO was burned
+        assertEq(gdao.balanceOf(alice), 1e9);
     }
 
     function testCorrectness_RestartTRSRY() public {
@@ -492,9 +492,9 @@ contract EmergencyTest is Test {
     }
 
     function testCorrectness_Restart() public {
-        // Mint some OHM initially so balance isn't zero
+        // Mint some GDAO initially so balance isn't zero
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        minter.mintGdao(alice, 1e9);
 
         // Shutdown Minting and Withdrawals
         vm.prank(emergencyMS);
@@ -504,25 +504,25 @@ contract EmergencyTest is Test {
         assertTrue(!minter.active());
         assertTrue(!treasury.active());
 
-        // Try minting OHM and expect to fail
+        // Try minting GDAO and expect to fail
         bytes memory err = abi.encodeWithSignature("MINTR_NotActive()");
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        minter.mintGdao(alice, 1e9);
 
-        // Check that no OHM was minted
-        assertEq(ohm.balanceOf(alice), 1e9);
+        // Check that no GDAO was minted
+        assertEq(gdao.balanceOf(alice), 1e9);
 
-        // Try burning OHM and expect to fail
+        // Try burning GDAO and expect to fail
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        gdao.approve(address(minter), 1e9);
 
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        minter.burnGdao(alice, 1e9);
 
-        // Check that no OHM was burned
-        assertEq(ohm.balanceOf(alice), 1e9);
+        // Check that no GDAO was burned
+        assertEq(gdao.balanceOf(alice), 1e9);
 
         // Try withdrawing reserve and expect to fail
         err = abi.encodeWithSignature("TRSRY_NotActive()");
@@ -550,22 +550,22 @@ contract EmergencyTest is Test {
         assertTrue(minter.active());
         assertTrue(treasury.active());
 
-        // Try minting OHM and expect to succeed
+        // Try minting GDAO and expect to succeed
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        minter.mintGdao(alice, 1e9);
 
-        // Check that OHM was minted
-        assertEq(ohm.balanceOf(alice), 2e9);
+        // Check that GDAO was minted
+        assertEq(gdao.balanceOf(alice), 2e9);
 
-        // Try burning OHM and expect to succeed
+        // Try burning GDAO and expect to succeed
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        gdao.approve(address(minter), 1e9);
 
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        minter.burnGdao(alice, 1e9);
 
-        // Check that OHM was burned
-        assertEq(ohm.balanceOf(alice), 1e9);
+        // Check that GDAO was burned
+        assertEq(gdao.balanceOf(alice), 1e9);
 
         // Try withdrawing reserve and expect to succeed
         vm.prank(treasuryAdmin);

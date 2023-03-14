@@ -19,7 +19,7 @@ contract InstructionsTest is Test {
     Kernel internal kernel;
     using ModuleTestFixtureGenerator for GoerliDaoInstructions;
 
-    OlympusInstructions internal instr;
+    GoerliDaoInstructions internal instr;
     Parthenon internal governance;
     address internal writer;
     Module internal invalidModule;

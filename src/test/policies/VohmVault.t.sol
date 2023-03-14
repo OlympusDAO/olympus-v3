@@ -11,22 +11,22 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 
 import "src/Kernel.sol";
 
-import {VohmVault} from "src/policies/VohmVault.sol";
-import {OlympusVotes} from "src/modules/VOTES/OlympusVotes.sol";
+import {VgdaoVault} from "src/policies/VgdaoVault.sol";
+import {GoerliDaoVotes} from "src/modules/VOTES/GoerliDaoVotes.sol";
 
-contract VohmVaultTest is Test {
-    using ModuleTestFixtureGenerator for OlympusVotes;
+contract VgdaoVaultTest is Test {
+    using ModuleTestFixtureGenerator for GoerliDaoVotes;
 
-    MockERC20 internal gOHM;
+    MockERC20 internal xGDAO;
 
     // kernel
     Kernel internal kernel;
 
     // modules
-    OlympusVotes internal VOTES;
+    GoerliDaoVotes internal VOTES;
 
     // policies
-    VohmVault internal vOHMvault;
+    VgdaoVault internal vGDAOvault;
 
     // test user
     address internal user1;
@@ -37,36 +37,36 @@ contract VohmVaultTest is Test {
     function setUp() public {
         user1 = new UserFactory().create(1)[0];
 
-        // OHM erc20
-        gOHM = new MockERC20("gOHM", "gOHM", 18);
+        // GDAO erc20
+        xGDAO = new MockERC20("xGDAO", "xGDAO", 18);
 
         // Deploy kernel
         kernel = new Kernel();
 
         // modules
-        VOTES = new OlympusVotes(kernel, gOHM);
+        VOTES = new GoerliDaoVotes(kernel, xGDAO);
 
         // policies
-        vOHMvault = new VohmVault(kernel);
+        vGDAOvault = new VgdaoVault(kernel);
 
         // set up kernel
         kernel.executeAction(Actions.InstallModule, address(VOTES));
-        kernel.executeAction(Actions.ActivatePolicy, address(vOHMvault));
+        kernel.executeAction(Actions.ActivatePolicy, address(vGDAOvault));
 
-        godmode = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        godmode = VOTES.generateGodmodeFixture(type(GoerliDaoVotes).name);
         kernel.executeAction(Actions.ActivatePolicy, godmode);
     }
 
     function testCorrectness_deposit() public {
         uint256 amt = 100 * 1e18;
-        gOHM.mint(user1, amt);
+        xGDAO.mint(user1, amt);
 
         vm.startPrank(user1);
-        gOHM.approve(address(vOHMvault), amt);
-        vOHMvault.deposit(amt);
+        xGDAO.approve(address(vGDAOvault), amt);
+        vGDAOvault.deposit(amt);
         vm.stopPrank();
 
-        assertEq(gOHM.balanceOf(user1), 0);
+        assertEq(xGDAO.balanceOf(user1), 0);
         assertEq(VOTES.balanceOf(user1), amt); // minted at 1:1
         assertEq(VOTES.lastActionTimestamp(user1), 0); // since its the first mint timestamp should be zero
         assertEq(VOTES.lastDepositTimestamp(user1), block.timestamp);
@@ -74,12 +74,12 @@ contract VohmVaultTest is Test {
 
     function testCorrectness_withdraw() public {
         uint256 amt = 100 * 1e18;
-        gOHM.mint(user1, amt);
+        xGDAO.mint(user1, amt);
 
-        // 1. deposit OHM to receive VOTES
+        // 1. deposit GDAO to receive VOTES
         vm.startPrank(user1);
-        gOHM.approve(address(vOHMvault), amt);
-        vOHMvault.deposit(amt);
+        xGDAO.approve(address(vGDAOvault), amt);
+        vGDAOvault.deposit(amt);
         vm.stopPrank();
 
         // reset users actions so they must vest
@@ -87,28 +87,28 @@ contract VohmVaultTest is Test {
         VOTES.resetActionTimestamp(user1);
 
         // let deposit vest
-        vm.warp(block.timestamp + vOHMvault.VESTING_PERIOD());
+        vm.warp(block.timestamp + vGDAOvault.VESTING_PERIOD());
 
-        // 2. withdraw OHM
+        // 2. withdraw GDAO
         vm.startPrank(user1);
-        VOTES.approve(address(vOHMvault), amt);
+        VOTES.approve(address(vGDAOvault), amt);
 
         // withdraw
-        vOHMvault.withdraw(amt);
+        vGDAOvault.withdraw(amt);
         vm.stopPrank();
 
-        assertEq(gOHM.balanceOf(user1), amt);
+        assertEq(xGDAO.balanceOf(user1), amt);
         assertEq(VOTES.balanceOf(user1), 0);
     }
 
     function testRevert_withdraw_unvested() public {
         uint256 amt = 100 * 1e18;
-        gOHM.mint(user1, amt);
+        xGDAO.mint(user1, amt);
 
-        // 1. deposit OHM and receive VOTES
+        // 1. deposit GDAO and receive VOTES
         vm.startPrank(user1);
-        gOHM.approve(address(vOHMvault), amt);
-        vOHMvault.deposit(amt);
+        xGDAO.approve(address(vGDAOvault), amt);
+        vGDAOvault.deposit(amt);
         vm.stopPrank();
 
         // reset users actions so they must vest
@@ -116,29 +116,29 @@ contract VohmVaultTest is Test {
         VOTES.resetActionTimestamp(user1);
 
         // let deposit vest half way
-        vm.warp(block.timestamp + vOHMvault.VESTING_PERIOD() / 2);
+        vm.warp(block.timestamp + vGDAOvault.VESTING_PERIOD() / 2);
 
-        // 2. attempt to withdraw OHM
+        // 2. attempt to withdraw GDAO
         vm.startPrank(user1);
-        VOTES.approve(address(vOHMvault), amt);
+        VOTES.approve(address(vGDAOvault), amt);
 
         // should revert because not vested
-        bytes memory err = abi.encodeWithSignature("VohmVault_NotVested()");
+        bytes memory err = abi.encodeWithSignature("VgdaoVault_NotVested()");
         vm.expectRevert(err);
-        vOHMvault.withdraw(amt);
+        vGDAOvault.withdraw(amt);
         vm.stopPrank();
     }
 
     function testCorrectness_mint() public {
         uint256 amt = 100 * 1e18;
-        gOHM.mint(user1, amt);
+        xGDAO.mint(user1, amt);
 
         vm.startPrank(user1);
-        gOHM.approve(address(vOHMvault), amt);
-        vOHMvault.mint(amt);
+        xGDAO.approve(address(vGDAOvault), amt);
+        vGDAOvault.mint(amt);
         vm.stopPrank();
 
-        assertEq(gOHM.balanceOf(user1), 0);
+        assertEq(xGDAO.balanceOf(user1), 0);
         assertEq(VOTES.balanceOf(user1), amt); // minted at 1:1
         assertEq(VOTES.lastActionTimestamp(user1), 0); // since its the first mint timestamp should be zero
         assertEq(VOTES.lastDepositTimestamp(user1), block.timestamp);
@@ -146,12 +146,12 @@ contract VohmVaultTest is Test {
 
     function testCorrectness_redeem() public {
         uint256 amt = 100 * 1e18;
-        gOHM.mint(user1, amt);
+        xGDAO.mint(user1, amt);
 
         // 1. mint VOTES
         vm.startPrank(user1);
-        gOHM.approve(address(vOHMvault), amt);
-        vOHMvault.mint(amt);
+        xGDAO.approve(address(vGDAOvault), amt);
+        vGDAOvault.mint(amt);
         vm.stopPrank();
 
         // reset users actions so they must vest
@@ -159,15 +159,15 @@ contract VohmVaultTest is Test {
         VOTES.resetActionTimestamp(user1);
 
         // let mint vest
-        vm.warp(block.timestamp + vOHMvault.VESTING_PERIOD());
+        vm.warp(block.timestamp + vGDAOvault.VESTING_PERIOD());
 
-        // 2. redeem VOTES for OHM
+        // 2. redeem VOTES for GDAO
         vm.startPrank(user1);
-        VOTES.approve(address(vOHMvault), amt);
-        vOHMvault.redeem(amt);
+        VOTES.approve(address(vGDAOvault), amt);
+        vGDAOvault.redeem(amt);
 
-        // assert VOTES burned and OHM returned
-        assertEq(gOHM.balanceOf(user1), amt);
+        // assert VOTES burned and GDAO returned
+        assertEq(xGDAO.balanceOf(user1), amt);
         assertEq(VOTES.balanceOf(user1), 0);
 
         vm.stopPrank();
@@ -175,12 +175,12 @@ contract VohmVaultTest is Test {
 
     function testRevert_redeem_unvested() public {
         uint256 amt = 100 * 1e18;
-        gOHM.mint(user1, amt);
+        xGDAO.mint(user1, amt);
 
         // 1. mint VOTES
         vm.startPrank(user1);
-        gOHM.approve(address(vOHMvault), amt);
-        vOHMvault.mint(amt);
+        xGDAO.approve(address(vGDAOvault), amt);
+        vGDAOvault.mint(amt);
         vm.stopPrank();
 
         // reset users actions so they must vest
@@ -188,16 +188,16 @@ contract VohmVaultTest is Test {
         VOTES.resetActionTimestamp(user1);
 
         // let mint vest halfway
-        vm.warp(block.timestamp + vOHMvault.VESTING_PERIOD() / 2);
+        vm.warp(block.timestamp + vGDAOvault.VESTING_PERIOD() / 2);
 
-        // 2. attempt to redeem VOTES for OHM
+        // 2. attempt to redeem VOTES for GDAO
         vm.startPrank(user1);
-        VOTES.approve(address(vOHMvault), amt);
+        VOTES.approve(address(vGDAOvault), amt);
 
         // should revert because not vested
-        bytes memory err = abi.encodeWithSignature("VohmVault_NotVested()");
+        bytes memory err = abi.encodeWithSignature("VgdaoVault_NotVested()");
         vm.expectRevert(err);
-        vOHMvault.redeem(amt);
+        vGDAOvault.redeem(amt);
 
         vm.stopPrank();
     }

@@ -10,18 +10,18 @@ import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
 
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
-import "modules/MINTR/OlympusMinter.sol";
+import {GoerliDaoERC20Token, IOlympusAuthority} from "src/external/GDAOERC20.sol";
+import "modules/MINTR/GdaoMinter.sol";
 import "src/Kernel.sol";
 
 contract MINTRTest is Test {
-    using ModuleTestFixtureGenerator for OlympusMinter;
+    using ModuleTestFixtureGenerator for GdaoMinter;
     using larping for *;
 
     Kernel internal kernel;
-    OlympusMinter internal MINTR;
+    GdaoMinter internal MINTR;
     IOlympusAuthority internal auth;
-    OlympusERC20Token internal ohm;
+    GoerliDaoERC20Token internal gdao;
 
     address[] public users;
     address public godmode;
@@ -30,8 +30,8 @@ contract MINTRTest is Test {
     function setUp() public {
         kernel = new Kernel();
         auth = new MockLegacyAuthority(address(0x0));
-        ohm = new OlympusERC20Token(address(auth));
-        MINTR = new OlympusMinter(kernel, address(ohm));
+        gdao = new GoerliDaoERC20Token(address(auth));
+        MINTR = new GdaoMinter(kernel, address(gdao));
 
         // Set vault in authority to MINTR module
         auth.vault.larp(address(MINTR));
@@ -41,7 +41,7 @@ contract MINTRTest is Test {
 
         kernel.executeAction(Actions.InstallModule, address(MINTR));
 
-        godmode = MINTR.generateGodmodeFixture(type(OlympusMinter).name);
+        godmode = MINTR.generateGodmodeFixture(type(GdaoMinter).name);
         kernel.executeAction(Actions.ActivatePolicy, godmode);
 
         dummy = MINTR.generateDummyFixture();
@@ -52,7 +52,7 @@ contract MINTRTest is Test {
         assertEq("MINTR", fromKeycode(MINTR.KEYCODE()));
     }
 
-    function test_ApprovedAddressMintsOhm(address to_, uint256 amount_) public {
+    function test_ApprovedAddressMintsGdao(address to_, uint256 amount_) public {
         // Will test mint not working against zero-address separately
         vm.assume(to_ != address(0x0));
         vm.assume(amount_ != 0);
@@ -61,9 +61,9 @@ contract MINTRTest is Test {
         MINTR.increaseMintApproval(godmode, amount_);
 
         vm.prank(godmode);
-        MINTR.mintOhm(to_, amount_);
+        MINTR.mintGdao(to_, amount_);
 
-        assertEq(ohm.balanceOf(to_), amount_);
+        assertEq(gdao.balanceOf(to_), amount_);
     }
 
     function testRevert_ApprovedAddressCannotMintToZeroAddress(uint256 amount_) public {
@@ -75,10 +75,10 @@ contract MINTRTest is Test {
         bytes memory err = abi.encodePacked("ERC20: mint to the zero address");
         vm.expectRevert(err);
         vm.prank(godmode);
-        MINTR.mintOhm(address(0x0), amount_);
+        MINTR.mintGdao(address(0x0), amount_);
     }
 
-    function testRevert_UnapprovedAddressCannotMintOhm(address to_, uint256 amount_) public {
+    function testRevert_UnapprovedAddressCannotMintGdao(address to_, uint256 amount_) public {
         // Have user try to mint
         bytes memory err = abi.encodeWithSelector(
             Module.Module_PolicyNotPermitted.selector,
@@ -86,28 +86,28 @@ contract MINTRTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(users[0]);
-        MINTR.mintOhm(to_, amount_);
+        MINTR.mintGdao(to_, amount_);
     }
 
-    function testCorrectness_ApprovedAddressBurnsOhm(address from_, uint256 amount_) public {
+    function testCorrectness_ApprovedAddressBurnsGdao(address from_, uint256 amount_) public {
         vm.assume(from_ != address(0x0));
         vm.assume(amount_ != 0);
 
-        // Setup: mint ohm into user0
+        // Setup: mint gdao into user0
         vm.prank(godmode);
         MINTR.increaseMintApproval(godmode, amount_);
 
         vm.prank(godmode);
-        MINTR.mintOhm(from_, amount_);
-        assertEq(ohm.balanceOf(from_), amount_);
+        MINTR.mintGdao(from_, amount_);
+        assertEq(gdao.balanceOf(from_), amount_);
 
         vm.prank(from_);
-        ohm.approve(address(MINTR), amount_);
+        gdao.approve(address(MINTR), amount_);
 
         vm.prank(godmode);
-        MINTR.burnOhm(from_, amount_);
+        MINTR.burnGdao(from_, amount_);
 
-        assertEq(ohm.balanceOf(from_), 0);
+        assertEq(gdao.balanceOf(from_), 0);
     }
 
     function testRevert_ApprovedAddressCannotBurnFromAddressWithoutApproval(uint256 amount_)
@@ -115,37 +115,37 @@ contract MINTRTest is Test {
     {
         vm.assume(amount_ != 0);
 
-        // Setup: mint ohm into user0
+        // Setup: mint gdao into user0
         vm.prank(godmode);
         MINTR.increaseMintApproval(godmode, amount_);
         vm.prank(godmode);
-        MINTR.mintOhm(users[0], amount_);
+        MINTR.mintGdao(users[0], amount_);
 
-        assertEq(ohm.balanceOf(users[0]), amount_);
+        assertEq(gdao.balanceOf(users[0]), amount_);
 
         bytes memory err = abi.encodePacked("ERC20: burn amount exceeds allowance");
         vm.expectRevert(err);
         vm.prank(godmode);
-        MINTR.burnOhm(users[0], amount_);
+        MINTR.burnGdao(users[0], amount_);
     }
 
     // Removed burn from zero address test because the functionality cannot be tested.
-    // The OlympusERC20 requires the address to have approved a token before a burn (which is checked first).
+    // The GDAOERC20 requires the address to have approved a token before a burn (which is checked first).
     // It's not possible to reach the burn error in a burnFrom call.
 
-    function testRevert_UnapprovedAddressCannotBurnOhm(uint256 amount_) public {
+    function testRevert_UnapprovedAddressCannotBurnGdao(uint256 amount_) public {
         vm.assume(amount_ != 0);
 
-        // Setup: mint ohm into user0
+        // Setup: mint gdao into user0
         vm.prank(godmode);
         MINTR.increaseMintApproval(godmode, amount_);
 
         vm.prank(godmode);
-        MINTR.mintOhm(users[1], amount_);
-        assertEq(ohm.balanceOf(users[1]), amount_);
+        MINTR.mintGdao(users[1], amount_);
+        assertEq(gdao.balanceOf(users[1]), amount_);
 
         vm.prank(users[1]);
-        ohm.approve(users[0], amount_);
+        gdao.approve(users[0], amount_);
 
         // Have user try to burn, expect revert
         bytes memory err = abi.encodeWithSelector(
@@ -154,7 +154,7 @@ contract MINTRTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(users[0]);
-        MINTR.burnOhm(users[1], amount_);
+        MINTR.burnGdao(users[1], amount_);
     }
 
     function testCorrectness_ApprovedAddressCanOnlyMintUpToApprovalLimit(uint256 approval_) public {
@@ -166,17 +166,17 @@ contract MINTRTest is Test {
 
         // Mint approval_ amount to user0
         vm.prank(godmode);
-        MINTR.mintOhm(users[0], approval_);
+        MINTR.mintGdao(users[0], approval_);
 
-        assertEq(ohm.balanceOf(users[0]), approval_);
+        assertEq(gdao.balanceOf(users[0]), approval_);
 
-        // Try to mint 1 more OHM and expect revert
+        // Try to mint 1 more gdao and expect revert
         bytes memory err = abi.encodeWithSignature("MINTR_NotApproved()");
         vm.expectRevert(err);
         vm.prank(godmode);
-        MINTR.mintOhm(users[1], 1);
+        MINTR.mintGdao(users[1], 1);
 
-        assertEq(ohm.balanceOf(users[1]), 0);
+        assertEq(gdao.balanceOf(users[1]), 0);
     }
 
     function testCorrectness_IncreaseMinterApprovalAllowsMoreMinting(uint256 amount_) public {
@@ -250,20 +250,20 @@ contract MINTRTest is Test {
         vm.prank(godmode);
         MINTR.increaseMintApproval(godmode, type(uint256).max);
 
-        // Try to mint 0 OHM and expect revert
+        // Try to mint 0 gdao and expect revert
         bytes memory err = abi.encodeWithSignature("MINTR_ZeroAmount()");
         vm.expectRevert(err);
         vm.prank(godmode);
-        MINTR.mintOhm(users[0], 0);
+        MINTR.mintGdao(users[0], 0);
 
-        // Mint 1 OHM to user0 so balance isn't 0
+        // Mint 1 gdao to user0 so balance isn't 0
         vm.prank(godmode);
-        MINTR.mintOhm(users[0], 1);
+        MINTR.mintGdao(users[0], 1);
 
-        // Try to burn 0 OHM and expect revert
+        // Try to burn 0 gdao and expect revert
         vm.expectRevert(err);
         vm.prank(godmode);
-        MINTR.burnOhm(users[0], 0);
+        MINTR.burnGdao(users[0], 0);
     }
 
     function testCorrectness_Shutdown(uint256 amount_) public {
@@ -273,27 +273,27 @@ contract MINTRTest is Test {
         vm.prank(godmode);
         MINTR.increaseMintApproval(godmode, type(uint256).max);
 
-        // Mint amount_ OHM to user0 so balance isn't 0
+        // Mint amount_ gdao to user0 so balance isn't 0
         vm.prank(godmode);
-        MINTR.mintOhm(users[0], amount_);
+        MINTR.mintGdao(users[0], amount_);
 
         // Shutdown the system
         vm.prank(godmode);
         MINTR.deactivate();
 
-        // Try to mint amount_ OHM and expect revert
+        // Try to mint amount_ gdao and expect revert
         bytes memory err = abi.encodeWithSignature("MINTR_NotActive()");
         vm.expectRevert(err);
         vm.prank(godmode);
-        MINTR.mintOhm(users[0], amount_);
+        MINTR.mintGdao(users[0], amount_);
 
-        // Try to burn 1 OHM and expect revert
+        // Try to burn 1 gdao and expect revert
         vm.expectRevert(err);
         vm.prank(godmode);
-        MINTR.burnOhm(users[0], amount_);
+        MINTR.burnGdao(users[0], amount_);
 
         // Check balance still the same
-        assertEq(ohm.balanceOf(users[0]), amount_);
+        assertEq(gdao.balanceOf(users[0]), amount_);
 
         // Reactivate the system
         vm.prank(godmode);
@@ -303,23 +303,23 @@ contract MINTRTest is Test {
         vm.prank(godmode);
         MINTR.increaseMintApproval(godmode, type(uint256).max);
 
-        // Approve MINTR to burn ohm from user0
+        // Approve MINTR to burn gdao from user0
         vm.prank(users[0]);
-        ohm.approve(address(MINTR), amount_);
+        gdao.approve(address(MINTR), amount_);
 
-        // Burn amount_ OHM from user0
+        // Burn amount_ gdao from user0
         vm.prank(godmode);
-        MINTR.burnOhm(users[0], amount_);
+        MINTR.burnGdao(users[0], amount_);
 
         // Check balance is 0
-        assertEq(ohm.balanceOf(users[0]), 0);
+        assertEq(gdao.balanceOf(users[0]), 0);
 
-        // Mint amount_ OHM to user1
+        // Mint amount_ gdao to user1
         vm.prank(godmode);
-        MINTR.mintOhm(users[0], amount_);
+        MINTR.mintGdao(users[0], amount_);
 
         // Check balance of user1
-        assertEq(ohm.balanceOf(users[0]), amount_);
+        assertEq(gdao.balanceOf(users[0]), amount_);
     }
 
     function testRevert_AddressWithPermCannotShutdownOrRestart() public {

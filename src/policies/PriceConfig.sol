@@ -7,7 +7,7 @@ import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 
 import "src/Kernel.sol";
 
-contract OlympusPriceConfig is Policy, RolesConsumer {
+contract GoerliDaoPriceConfig is Policy, RolesConsumer {
     // =========  STATE ========= //
 
     PRICEv1 internal PRICE;
