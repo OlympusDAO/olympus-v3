@@ -14,14 +14,14 @@ import {MockVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
 import {MockAuraBooster, MockAuraRewardPool} from "test/mocks/AuraMocks.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
-import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.sol";
+import {IAuraBooster, IAuraRewardPool} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {IBLEVaultManagerLido, BLEVaultManagerLido} from "policies/lending/BLEVaultManagerLido.sol";
-import {BLEVaultLido} from "policies/lending/BLEVaultLido.sol";
+import {IBLVaultManagerLido, BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
+import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
 
 import "src/Kernel.sol";
 
@@ -48,7 +48,7 @@ contract MockWsteth is ERC20 {
 }
 
 // solhint-disable-next-line max-states-count
-contract BLEVaultManagerLidoTest is Test {
+contract BLVaultManagerLidoTest is Test {
     using FullMath for uint256;
     using larping for *;
 
@@ -77,8 +77,8 @@ contract BLEVaultManagerLidoTest is Test {
     OlympusRoles internal roles;
 
     RolesAdmin internal rolesAdmin;
-    BLEVaultManagerLido internal vaultManager;
-    BLEVaultLido internal vaultImplementation;
+    BLVaultManagerLido internal vaultManager;
+    BLVaultLido internal vaultImplementation;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -147,35 +147,35 @@ contract BLEVaultManagerLidoTest is Test {
 
         // Deploy policies
         {
-            vaultImplementation = new BLEVaultLido();
+            vaultImplementation = new BLVaultLido();
 
-            IBLEVaultManagerLido.TokenData memory tokenData = IBLEVaultManagerLido.TokenData({
+            IBLVaultManagerLido.TokenData memory tokenData = IBLVaultManagerLido.TokenData({
                 ohm: address(ohm),
                 pairToken: address(wsteth),
                 aura: address(aura),
                 bal: address(bal)
             });
 
-            IBLEVaultManagerLido.BalancerData memory balancerData = IBLEVaultManagerLido
+            IBLVaultManagerLido.BalancerData memory balancerData = IBLVaultManagerLido
                 .BalancerData({
                     vault: address(vault),
                     liquidityPool: address(liquidityPool),
                     balancerHelper: address(0)
                 });
 
-            IBLEVaultManagerLido.AuraData memory auraData = IBLEVaultManagerLido.AuraData({
+            IBLVaultManagerLido.AuraData memory auraData = IBLVaultManagerLido.AuraData({
                 pid: uint256(0),
                 auraBooster: address(booster),
                 auraRewardPool: address(auraPool)
             });
 
-            IBLEVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = IBLEVaultManagerLido
+            IBLVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = IBLVaultManagerLido
                 .OracleFeed({feed: ohmEthPriceFeed, updateThreshold: uint48(1 days)});
 
-            IBLEVaultManagerLido.OracleFeed memory stethEthPriceFeedData = IBLEVaultManagerLido
+            IBLVaultManagerLido.OracleFeed memory stethEthPriceFeedData = IBLVaultManagerLido
                 .OracleFeed({feed: stethEthPriceFeed, updateThreshold: uint48(1 days)});
 
-            vaultManager = new BLEVaultManagerLido(
+            vaultManager = new BLVaultManagerLido(
                 kernel,
                 tokenData,
                 balancerData,
@@ -235,11 +235,11 @@ contract BLEVaultManagerLidoTest is Test {
     ///     [X]  correctly deploys new vault
     ///     [X]  correctly tracks vaults state
 
-    function testCorrectness_deployVaultFailsWhenBLEInactive() public {
+    function testCorrectness_deployVaultFailsWhenBLInactive() public {
         // Deactivate contract
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEManagerLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLido_Inactive()");
         vm.expectRevert(err);
 
         vaultManager.deployVault();
@@ -255,7 +255,7 @@ contract BLEVaultManagerLidoTest is Test {
         vm.prank(alice);
         vaultManager.deployVault();
 
-        bytes memory err = abi.encodeWithSignature("BLEManagerLido_VaultAlreadyExists()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLido_VaultAlreadyExists()");
         vm.expectRevert(err);
 
         // Try to create second vault
@@ -266,7 +266,7 @@ contract BLEVaultManagerLidoTest is Test {
     function testCorrectness_deployVaultCorrectlyClonesVault() public {
         // Create vault
         vm.prank(alice);
-        BLEVaultLido aliceVault = BLEVaultLido(vaultManager.deployVault());
+        BLVaultLido aliceVault = BLVaultLido(vaultManager.deployVault());
 
         // Verify vault state
         assertEq(aliceVault.owner(), alice);
@@ -286,18 +286,18 @@ contract BLEVaultManagerLidoTest is Test {
 
     function testCorrectness_deployVaultCorrectlyTracksVaultState(address user_) public {
         vm.prank(user_);
-        BLEVaultLido userVault = BLEVaultLido(vaultManager.deployVault());
+        BLVaultLido userVault = BLVaultLido(vaultManager.deployVault());
 
         // Verify manager state
         assertEq(vaultManager.vaultOwners(userVault), user_);
         assertEq(address(vaultManager.userVaults(user_)), address(userVault));
     }
 
-    /// [X]  mintOHM
+    /// [X]  mintOhmToVault
     ///     [X]  can only be called when system is active
     ///     [X]  can only be called by an approved vault
     ///     [X]  cannot mint beyond the limit
-    ///     [X]  increases mintedOHM value
+    ///     [X]  increases deployedOhm value
     ///     [X]  mints OHM to correct address
 
     function _createVault() internal returns (address) {
@@ -307,65 +307,67 @@ contract BLEVaultManagerLidoTest is Test {
         return aliceVault;
     }
 
-    function testCorrectness_mintOHMFailsWhenBLEInactive() public {
+    function testCorrectness_mintOhmToVaultFailsWhenBLInactive() public {
         // Deactive system
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEManagerLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLido_Inactive()");
         vm.expectRevert(err);
 
-        vaultManager.mintOHM(1e9);
+        vaultManager.mintOhmToVault(1e9);
     }
 
-    function testCorrectness_mintOHMCanOnlyBeCalledByApprovedVault(address attacker_) public {
+    function testCorrectness_mintOhmToVaultCanOnlyBeCalledByApprovedVault(
+        address attacker_
+    ) public {
         address validVault = _createVault();
 
         vm.prank(validVault);
-        vaultManager.mintOHM(1e9);
+        vaultManager.mintOhmToVault(1e9);
 
         if (attacker_ != validVault) {
-            bytes memory err = abi.encodeWithSignature("BLEManagerLido_InvalidVault()");
+            bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidVault()");
             vm.expectRevert(err);
 
             vm.prank(attacker_);
-            vaultManager.mintOHM(1e9);
+            vaultManager.mintOhmToVault(1e9);
         }
     }
 
-    function testCorrectness_mintOHMCannotMintBeyondLimit(uint256 amount_) public {
+    function testCorrectness_mintOhmToVaultCannotMintBeyondLimit(uint256 amount_) public {
         vm.assume(amount_ != 0);
 
         address validVault = _createVault();
 
         if (amount_ <= vaultManager.ohmLimit()) {
             vm.prank(validVault);
-            vaultManager.mintOHM(amount_);
+            vaultManager.mintOhmToVault(amount_);
         } else {
-            bytes memory err = abi.encodeWithSignature("BLEManagerLido_LimitViolation()");
+            bytes memory err = abi.encodeWithSignature("BLManagerLido_LimitViolation()");
             vm.expectRevert(err);
 
             vm.prank(validVault);
-            vaultManager.mintOHM(amount_);
+            vaultManager.mintOhmToVault(amount_);
         }
     }
 
-    function testCorrectness_mintOHMIncreasesMintedOHMValue(uint256 amount_) public {
+    function testCorrectness_mintOhmToVaultIncreasesDeployedOhmValue(uint256 amount_) public {
         vm.assume(amount_ != 0 && amount_ <= vaultManager.ohmLimit());
 
         address validVault = _createVault();
 
         // Check state before
-        assertEq(vaultManager.mintedOHM(), 0);
+        assertEq(vaultManager.deployedOhm(), 0);
 
         // Mint OHM
         vm.prank(validVault);
-        vaultManager.mintOHM(amount_);
+        vaultManager.mintOhmToVault(amount_);
 
         // Check state after
-        assertEq(vaultManager.mintedOHM(), amount_);
+        assertEq(vaultManager.deployedOhm(), amount_);
     }
 
-    function testCorrectness_mintOHMMintsToCorrectAddress() public {
+    function testCorrectness_mintOhmToVaultMintsToCorrectAddress() public {
         address validVault = _createVault();
 
         // Check balance before
@@ -373,50 +375,52 @@ contract BLEVaultManagerLidoTest is Test {
 
         // Mint OHM
         vm.prank(validVault);
-        vaultManager.mintOHM(1e9);
+        vaultManager.mintOhmToVault(1e9);
 
         // Check balance after
         assertEq(ohm.balanceOf(validVault), 1e9);
     }
 
-    /// [X]  burnOHM
+    /// [X]  burnOhmFromVault
     ///     [X]  can only be called when system is active
     ///     [X]  can only be called by an approved vault
-    ///     [X]  correctly updates mintedOHM and netBurnedOHM
+    ///     [X]  correctly updates deployedOhm and circulatingOhmBurned
     ///     [X]  burns OHM from correct address
 
-    function testCorrectness_burnOHMFailsWhenBLEInactive() public {
+    function testCorrectness_burnOhmFromVaultFailsWhenBLInactive() public {
         // Deactive system
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEManagerLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLido_Inactive()");
         vm.expectRevert(err);
 
-        vaultManager.burnOHM(1e9);
+        vaultManager.burnOhmFromVault(1e9);
     }
 
-    function testCorrectness_burnOHMCanOnlyBeCalledByAnApprovedVault(address attacker_) public {
+    function testCorrectness_burnOhmFromVaultCanOnlyBeCalledByAnApprovedVault(
+        address attacker_
+    ) public {
         // Setup
         address validVault = _createVault();
         vm.prank(validVault);
-        vaultManager.mintOHM(1e9);
+        vaultManager.mintOhmToVault(1e9);
 
         // If address is valid
         vm.startPrank(validVault);
         ohm.increaseAllowance(address(minter), 1e9);
-        vaultManager.burnOHM(1e9);
+        vaultManager.burnOhmFromVault(1e9);
         vm.stopPrank();
 
         if (attacker_ != validVault) {
-            bytes memory err = abi.encodeWithSignature("BLEManagerLido_InvalidVault()");
+            bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidVault()");
             vm.expectRevert(err);
 
             vm.prank(attacker_);
-            vaultManager.burnOHM(1e9);
+            vaultManager.burnOhmFromVault(1e9);
         }
     }
 
-    function testCorrectness_burnOHMCorrectlyUpdatesState(uint256 amount_) public {
+    function testCorrectness_burnOhmFromVaultCorrectlyUpdatesState(uint256 amount_) public {
         vm.assume(amount_ != 0 && amount_ <= 100_000_000e9);
 
         // Setup
@@ -430,144 +434,144 @@ contract BLEVaultManagerLidoTest is Test {
         vm.stopPrank();
 
         vm.startPrank(validVault);
-        vaultManager.mintOHM(50_000_000e9);
+        vaultManager.mintOhmToVault(50_000_000e9);
         ohm.increaseAllowance(address(minter), 100_000_000e9);
 
         // Check state before
-        assertEq(vaultManager.mintedOHM(), 50_000_000e9);
-        assertEq(vaultManager.netBurnedOHM(), 0);
+        assertEq(vaultManager.deployedOhm(), 50_000_000e9);
+        assertEq(vaultManager.circulatingOhmBurned(), 0);
 
-        vaultManager.burnOHM(amount_);
+        vaultManager.burnOhmFromVault(amount_);
 
         // Check state after
         if (amount_ > 50_000_000e9) {
-            assertEq(vaultManager.mintedOHM(), 0);
-            assertEq(vaultManager.netBurnedOHM(), amount_ - 50_000_000e9);
+            assertEq(vaultManager.deployedOhm(), 0);
+            assertEq(vaultManager.circulatingOhmBurned(), amount_ - 50_000_000e9);
         } else {
-            assertEq(vaultManager.mintedOHM(), 50_000_000e9 - amount_);
-            assertEq(vaultManager.netBurnedOHM(), 0);
+            assertEq(vaultManager.deployedOhm(), 50_000_000e9 - amount_);
+            assertEq(vaultManager.circulatingOhmBurned(), 0);
         }
 
         vm.stopPrank();
     }
 
-    function testCorrectness_burnOHMBurnsFromCorrectAddress() public {
+    function testCorrectness_burnOhmFromVaultBurnsFromCorrectAddress() public {
         address validVault = _createVault();
 
         vm.startPrank(validVault);
-        vaultManager.mintOHM(1e9);
+        vaultManager.mintOhmToVault(1e9);
         ohm.increaseAllowance(address(minter), 1e9);
 
         // Check balance before
         assertEq(ohm.balanceOf(validVault), 1e9);
 
         // Burn OHM
-        vaultManager.burnOHM(1e9);
+        vaultManager.burnOhmFromVault(1e9);
 
         // Check balance after
         assertEq(ohm.balanceOf(validVault), 0);
         vm.stopPrank();
     }
 
-    /// [X]  increaseTotalLP
+    /// [X]  increaseTotalLp
     ///     [X]  can only be called when system is active
     ///     [X]  can only be called by an approved vault
-    ///     [X]  increases totalLP value
+    ///     [X]  increases totalLp value
 
-    function testCorrectness_increaseTotalLPFailsWhenBLEInactive() public {
+    function testCorrectness_increaseTotalLpFailsWhenInactive() public {
         // Deactive system
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEManagerLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLido_Inactive()");
         vm.expectRevert(err);
 
-        vaultManager.increaseTotalLP(1e18);
+        vaultManager.increaseTotalLp(1e18);
     }
 
-    function testCorrectness_increaseTotalLPCanOnlyBeCalledByAnApprovedVault(address attacker_)
-        public
-    {
+    function testCorrectness_increaseTotalLpCanOnlyBeCalledByAnApprovedVault(
+        address attacker_
+    ) public {
         // Setup
         address validVault = _createVault();
 
         // If address is valid
         vm.prank(validVault);
-        vaultManager.increaseTotalLP(1e18);
+        vaultManager.increaseTotalLp(1e18);
 
         if (attacker_ != validVault) {
-            bytes memory err = abi.encodeWithSignature("BLEManagerLido_InvalidVault()");
+            bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidVault()");
             vm.expectRevert(err);
 
             vm.prank(attacker_);
-            vaultManager.increaseTotalLP(1e18);
+            vaultManager.increaseTotalLp(1e18);
         }
     }
 
-    function testCorrectness_increaseTotalLPCorrectlyIncreasesValue(uint256 amount_) public {
+    function testCorrectness_increaseTotalLpCorrectlyIncreasesValue(uint256 amount_) public {
         address validVault = _createVault();
 
         // Check state before
-        assertEq(vaultManager.totalLP(), 0);
+        assertEq(vaultManager.totalLp(), 0);
 
         // Increase total LP amount
         vm.prank(validVault);
-        vaultManager.increaseTotalLP(amount_);
+        vaultManager.increaseTotalLp(amount_);
 
         // Check state after
-        assertEq(vaultManager.totalLP(), amount_);
+        assertEq(vaultManager.totalLp(), amount_);
     }
 
-    /// [X]  decreaseTotalLP
+    /// [X]  decreaseTotalLp
     ///     [X]  can only be called when system is active
     ///     [X]  can only be called by an approved vault
-    ///     [X]  decreases totalLP value
+    ///     [X]  decreases totalLp value
 
-    function testCorrectness_decreaseTotalLPFailsWhenBLEInactive() public {
+    function testCorrectness_decreaseTotalLpFailsWhenBLInactive() public {
         // Deactive system
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEManagerLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLido_Inactive()");
         vm.expectRevert(err);
 
-        vaultManager.decreaseTotalLP(1e18);
+        vaultManager.decreaseTotalLp(1e18);
     }
 
-    function testCorrectness_decreaseTotalLPCanOnlyBeCalledByAnApprovedVault(address attacker_)
-        public
-    {
+    function testCorrectness_decreaseTotalLpCanOnlyBeCalledByAnApprovedVault(
+        address attacker_
+    ) public {
         // Setup
         address validVault = _createVault();
 
         // If address is valid
         vm.startPrank(validVault);
-        vaultManager.increaseTotalLP(1e18);
-        vaultManager.decreaseTotalLP(1e18);
+        vaultManager.increaseTotalLp(1e18);
+        vaultManager.decreaseTotalLp(1e18);
         vm.stopPrank();
 
         if (attacker_ != validVault) {
-            bytes memory err = abi.encodeWithSignature("BLEManagerLido_InvalidVault()");
+            bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidVault()");
             vm.expectRevert(err);
 
             vm.prank(attacker_);
-            vaultManager.decreaseTotalLP(1e18);
+            vaultManager.decreaseTotalLp(1e18);
         }
     }
 
-    function testCorrectness_decreaseTotalLPCorrectlyDecreasesValue(uint256 amount_) public {
+    function testCorrectness_decreaseTotalLpCorrectlyDecreasesValue(uint256 amount_) public {
         address validVault = _createVault();
 
         // Increase total LP
         vm.startPrank(validVault);
-        vaultManager.increaseTotalLP(amount_);
+        vaultManager.increaseTotalLp(amount_);
 
         // Check state before
-        assertEq(vaultManager.totalLP(), amount_);
+        assertEq(vaultManager.totalLp(), amount_);
 
         // Decrease total LP
-        vaultManager.decreaseTotalLP(amount_);
+        vaultManager.decreaseTotalLp(amount_);
 
         // Check state after
-        assertEq(vaultManager.totalLP(), 0);
+        assertEq(vaultManager.totalLp(), 0);
         vm.stopPrank();
     }
 
@@ -575,43 +579,43 @@ contract BLEVaultManagerLidoTest is Test {
     //                                         VIEW FUNCTIONS                                     //
     //============================================================================================//
 
-    /// []  getLPBalance
-    ///     []  returns the correct LP value
+    /// [X]  getLpBalance
+    ///     [X]  returns the correct LP value
 
-    // function testCorrectness_getLPBalance() public {
-    //     address aliceVault = _createVault();
+    function testCorrectness_getLpBalance() public {
+        address aliceVault = _createVault();
 
-    //     // Check state before
-    //     assertEq(vaultManager.getLPBalance(alice), 0);
+        // Check state before
+        assertEq(vaultManager.getLpBalance(alice), 0);
 
-    //     // Deposit wstETH
-    //     vm.startPrank(alice);
-    //     wsteth.approve(aliceVault, type(uint256).max);
-    //     BLEVaultLido(aliceVault).deposit(1e18, 0);
-    //     vm.stopPrank();
+        // Deposit wstETH
+        vm.startPrank(alice);
+        wsteth.approve(aliceVault, type(uint256).max);
+        BLVaultLido(aliceVault).deposit(1e18, 0);
+        vm.stopPrank();
 
-    //     // Check state after
-    //     assertTrue(vaultManager.getLPBalance(alice) > 0);
-    // }
+        // Check state after
+        assertTrue(vaultManager.getLpBalance(alice) > 0);
+    }
 
-    /// []  getUserPairShare
-    ///     []  returns correct user wstETH share
+    /// [X]  getUserPairShare
+    ///     [X]  returns correct user wstETH share
 
-    // function testCorrectness_getUserPairShare() public {
-    //     address aliceVault = _createVault();
+    function testCorrectness_getUserPairShare() public {
+        address aliceVault = _createVault();
 
-    //     // Check state before
-    //     assertEq(vaultManager.getUserPairShare(alice), 0);
+        // Check state before
+        assertEq(vaultManager.getUserPairShare(alice), 0);
 
-    //     // Deposit wstETH
-    //     vm.startPrank(alice);
-    //     wsteth.approve(aliceVault, type(uint256).max);
-    //     BLEVaultLido(aliceVault).deposit(1e18, 0);
-    //     vm.stopPrank();
+        // Deposit wstETH
+        vm.startPrank(alice);
+        wsteth.approve(aliceVault, type(uint256).max);
+        BLVaultLido(aliceVault).deposit(1e18, 0);
+        vm.stopPrank();
 
-    //     // Check state after
-    //     assertTrue(vaultManager.getUserPairShare(alice) > 0);
-    // }
+        // Check state after
+        assertTrue(vaultManager.getUserPairShare(alice) > 0);
+    }
 
     /// [X]  getMaxDeposit
     ///     [X]  returns correct wstETH deposit amount
@@ -624,7 +628,7 @@ contract BLEVaultManagerLidoTest is Test {
 
         // Increase OHM minted
         vm.prank(aliceVault);
-        vaultManager.mintOHM(99_900e9);
+        vaultManager.mintOhmToVault(99_900e9);
 
         // Check state after
         assertEq(vaultManager.getMaxDeposit(), 1e18);
@@ -674,7 +678,7 @@ contract BLEVaultManagerLidoTest is Test {
 
     /// [X]  setLimit
     ///     [X]  can only be called by liquidityvault_admin
-    ///     [X]  cannot set the limit below the current mintedOHM value
+    ///     [X]  cannot set the limit below the current deployedOhm value
     ///     [X]  correctly sets ohmLimit
 
     function testCorrectness_setLimitCanOnlyBeCalledByAdmin(address attacker_) public {
@@ -690,15 +694,15 @@ contract BLEVaultManagerLidoTest is Test {
         vaultManager.setLimit(1e18);
     }
 
-    function testCorrectness_setLimitCannotSetLimitBelowCurrentMintedOHM() public {
+    function testCorrectness_setLimitCannotSetLimitBelowCurrentDeployedOhm() public {
         address validVault = _createVault();
 
         // Mint OHM
         vm.prank(validVault);
-        vaultManager.mintOHM(10_000e9);
+        vaultManager.mintOhmToVault(10_000e9);
 
         // Try to set limit
-        bytes memory err = abi.encodeWithSignature("BLEManagerLido_InvalidLimit()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidLimit()");
         vm.expectRevert(err);
 
         vaultManager.setLimit(1e9);
@@ -733,7 +737,7 @@ contract BLEVaultManagerLidoTest is Test {
     function testCorrectness_setFeeCannotSetFeeAbove100(uint64 fee_) public {
         vm.assume(fee_ > 10_000);
 
-        bytes memory err = abi.encodeWithSignature("BLEManagerLido_InvalidFee()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidFee()");
         vm.expectRevert(err);
 
         vaultManager.setFee(fee_);
@@ -753,9 +757,9 @@ contract BLEVaultManagerLidoTest is Test {
     ///     [X]  can only be called by liquidityvault_admin
     ///     [X]  correctly sets price feed update thresholds
 
-    function testCorrectness_changeUpdateThresholdsCanOnlyBeCalledByAdmin(address attacker_)
-        public
-    {
+    function testCorrectness_changeUpdateThresholdsCanOnlyBeCalledByAdmin(
+        address attacker_
+    ) public {
         vm.assume(attacker_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
@@ -785,7 +789,7 @@ contract BLEVaultManagerLidoTest is Test {
 
     /// [X]  activate
     ///     [X]  can only be called by liquidityvault_admin
-    ///     [X]  sets isLidoBLEActive to true
+    ///     [X]  sets isLidoBLVaultActive to true
 
     function testCorrectness_activateCanOnlyBeCalledByAdmin(address attacker_) public {
         vm.assume(attacker_ != address(this));
@@ -800,17 +804,17 @@ contract BLEVaultManagerLidoTest is Test {
         vaultManager.activate();
     }
 
-    function testCorrectness_activateCorrectlySetsIsLidoBLEActive() public {
+    function testCorrectness_activateCorrectlySetsIsLidoBLVaultActive() public {
         // Activate
         vaultManager.activate();
 
         // Check state after
-        assertEq(vaultManager.isLidoBLEActive(), true);
+        assertEq(vaultManager.isLidoBLVaultActive(), true);
     }
 
     /// [X]  deactivate
     ///     [X]  can only be called by liquidityvault_admin
-    ///     [X]  sets isLidoBLEActive to false
+    ///     [X]  sets isLidoBLVaultActive to false
 
     function testCorrectness_deactivateCanOnlyBeCalledByAdmin(address attacker_) public {
         vm.assume(attacker_ != address(this));
@@ -825,11 +829,11 @@ contract BLEVaultManagerLidoTest is Test {
         vaultManager.deactivate();
     }
 
-    function testCorrectness_deactivateCorrectlySetsIsLidoBLEActive() public {
+    function testCorrectness_deactivateCorrectlySetsIsLidoBLVaultActive() public {
         // Deactivate
         vaultManager.deactivate();
 
         // Check state after
-        assertEq(vaultManager.isLidoBLEActive(), false);
+        assertEq(vaultManager.isLidoBLVaultActive(), false);
     }
 }

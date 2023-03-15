@@ -14,14 +14,14 @@ import {MockVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
 import {MockAuraBooster, MockAuraRewardPool} from "test/mocks/AuraMocks.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
-import {IAuraBooster, IAuraRewardPool} from "policies/lending/interfaces/IAura.sol";
+import {IAuraBooster, IAuraRewardPool} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {IBLEVaultManagerLido, BLEVaultManagerLido} from "policies/lending/BLEVaultManagerLido.sol";
-import {BLEVaultLido} from "policies/lending/BLEVaultLido.sol";
+import {IBLVaultManagerLido, BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
+import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
 
 import "src/Kernel.sol";
 
@@ -48,7 +48,7 @@ contract MockWsteth is ERC20 {
 }
 
 // solhint-disable-next-line max-states-count
-contract BLEVauldLidoTest is Test {
+contract BLVaultLidoTest is Test {
     using FullMath for uint256;
     using larping for *;
 
@@ -78,10 +78,10 @@ contract BLEVauldLidoTest is Test {
     OlympusRoles internal roles;
 
     RolesAdmin internal rolesAdmin;
-    BLEVaultManagerLido internal vaultManager;
-    BLEVaultLido internal vaultImplementation;
+    BLVaultManagerLido internal vaultManager;
+    BLVaultLido internal vaultImplementation;
 
-    BLEVaultLido internal aliceVault;
+    BLVaultLido internal aliceVault;
 
     uint256[] internal minAmountsOut = [0, 0];
 
@@ -153,35 +153,35 @@ contract BLEVauldLidoTest is Test {
 
         // Deploy policies
         {
-            vaultImplementation = new BLEVaultLido();
+            vaultImplementation = new BLVaultLido();
 
-            IBLEVaultManagerLido.TokenData memory tokenData = IBLEVaultManagerLido.TokenData({
+            IBLVaultManagerLido.TokenData memory tokenData = IBLVaultManagerLido.TokenData({
                 ohm: address(ohm),
                 pairToken: address(wsteth),
                 aura: address(aura),
                 bal: address(bal)
             });
 
-            IBLEVaultManagerLido.BalancerData memory balancerData = IBLEVaultManagerLido
+            IBLVaultManagerLido.BalancerData memory balancerData = IBLVaultManagerLido
                 .BalancerData({
                     vault: address(vault),
                     liquidityPool: address(liquidityPool),
                     balancerHelper: address(0)
                 });
 
-            IBLEVaultManagerLido.AuraData memory auraData = IBLEVaultManagerLido.AuraData({
+            IBLVaultManagerLido.AuraData memory auraData = IBLVaultManagerLido.AuraData({
                 pid: uint256(0),
                 auraBooster: address(booster),
                 auraRewardPool: address(auraPool)
             });
 
-            IBLEVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = IBLEVaultManagerLido
+            IBLVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = IBLVaultManagerLido
                 .OracleFeed({feed: ohmEthPriceFeed, updateThreshold: uint48(1 days)});
 
-            IBLEVaultManagerLido.OracleFeed memory stethEthPriceFeedData = IBLEVaultManagerLido
+            IBLVaultManagerLido.OracleFeed memory stethEthPriceFeedData = IBLVaultManagerLido
                 .OracleFeed({feed: stethEthPriceFeed, updateThreshold: uint48(1 days)});
 
-            vaultManager = new BLEVaultManagerLido(
+            vaultManager = new BLVaultManagerLido(
                 kernel,
                 tokenData,
                 balancerData,
@@ -231,7 +231,7 @@ contract BLEVauldLidoTest is Test {
 
             // Create alice's vault
             vm.startPrank(alice);
-            aliceVault = BLEVaultLido(vaultManager.deployVault());
+            aliceVault = BLVaultLido(vaultManager.deployVault());
 
             // Approve wstETH to alice's vault
             wsteth.approve(address(aliceVault), type(uint256).max);
@@ -246,14 +246,14 @@ contract BLEVauldLidoTest is Test {
     /// [X]  deposit
     ///     [X]  can only be called when the manager is active
     ///     [X]  can only be called by the vault's owner
-    ///     [X]  correctly increases state values (mintedOHM and totalLP)
+    ///     [X]  correctly increases state values (deployedOhm and totalLp)
     ///     [X]  correctly deploys liquidity
 
     function testCorrectness_depositCanOnlyBeCalledWhenManagerIsActive() public {
         // Deactivate vault manager
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEVaultLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLVaultLido_Inactive()");
         vm.expectRevert();
 
         // Try to deposit
@@ -266,7 +266,7 @@ contract BLEVauldLidoTest is Test {
             vm.prank(alice);
             aliceVault.deposit(1e18, 0);
         } else {
-            bytes memory err = abi.encodeWithSignature("BLEVaultLido_OnlyOwner()");
+            bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
             vm.expectRevert();
 
             // Try to deposit
@@ -290,16 +290,16 @@ contract BLEVauldLidoTest is Test {
         wsteth.approve(address(aliceVault), type(uint256).max);
 
         // Verify state before
-        assertEq(vaultManager.mintedOHM(), 0);
-        assertEq(vaultManager.totalLP(), 0);
+        assertEq(vaultManager.deployedOhm(), 0);
+        assertEq(vaultManager.totalLp(), 0);
 
         // Deposit
         aliceVault.deposit(depositAmount_, 0);
         vm.stopPrank();
 
         // Verify state after
-        assertEq(vaultManager.mintedOHM(), newLimit);
-        assertEq(vaultManager.totalLP(), depositAmount_);
+        assertEq(vaultManager.deployedOhm(), newLimit);
+        assertEq(vaultManager.totalLp(), depositAmount_);
     }
 
     function testCorrectness_depositCorrectlyDeploysLiquidity() public {
@@ -322,7 +322,7 @@ contract BLEVauldLidoTest is Test {
     /// [X]  withdraw
     ///     [X]  can only be called when the manager is active
     ///     [X]  can only be called by the vault's owner
-    ///     [X]  correctly decreases state values (mintedOHM and totalLP)
+    ///     [X]  correctly decreases state values (deployedOhm and totalLp)
     ///     [X]  correctly withdraws liquidity
 
     function _withdrawSetup() internal {
@@ -335,7 +335,7 @@ contract BLEVauldLidoTest is Test {
         // Deactivate vault manager
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEVaultLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLVaultLido_Inactive()");
         vm.expectRevert();
 
         // Try to withdraw
@@ -350,7 +350,7 @@ contract BLEVauldLidoTest is Test {
             vm.prank(alice);
             aliceVault.withdraw(1e18, minAmountsOut);
         } else {
-            bytes memory err = abi.encodeWithSignature("BLEVaultLido_OnlyOwner()");
+            bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
             vm.expectRevert();
 
             // Try to withdraw
@@ -362,37 +362,37 @@ contract BLEVauldLidoTest is Test {
     function testCorrectness_withdrawCorrectlyDecreasesState(uint256 withdrawAmount_) public {
         _withdrawSetup();
 
-        // Get alice vault's LP balance
-        uint256 aliceLPBalance = aliceVault.getLPBalance();
-        vm.assume(withdrawAmount_ <= aliceLPBalance);
+        // Get alice vault's Lp balance
+        uint256 aliceLpBalance = aliceVault.getLpBalance();
+        vm.assume(withdrawAmount_ <= aliceLpBalance);
 
         // Check state before
-        assertEq(vaultManager.mintedOHM(), 10_000e9);
-        assertEq(vaultManager.totalLP(), aliceLPBalance);
+        assertEq(vaultManager.deployedOhm(), 10_000e9);
+        assertEq(vaultManager.totalLp(), aliceLpBalance);
 
         // Withdraw
         vm.prank(alice);
         aliceVault.withdraw(withdrawAmount_, minAmountsOut);
 
         // Check state after
-        assertTrue(vaultManager.mintedOHM() < 10_000e9);
-        assertEq(vaultManager.totalLP(), aliceLPBalance - withdrawAmount_);
+        assertTrue(vaultManager.deployedOhm() < 10_000e9);
+        assertEq(vaultManager.totalLp(), aliceLpBalance - withdrawAmount_);
     }
 
     function testCorrectness_withdrawCorrectlyWithdrawsLiquidity() public {
         _withdrawSetup();
 
         // Get alice vault's LP balance
-        uint256 aliceLPBalance = aliceVault.getLPBalance();
+        uint256 aliceLpBalance = aliceVault.getLpBalance();
 
         // Check state before
         assertEq(ohm.balanceOf(address(vault)), 10_000e9);
-        assertEq(wsteth.balanceOf(address(vault)), aliceLPBalance);
-        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), aliceLPBalance);
+        assertEq(wsteth.balanceOf(address(vault)), aliceLpBalance);
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), aliceLpBalance);
 
         // Withdraw
         vm.prank(alice);
-        aliceVault.withdraw(aliceLPBalance, minAmountsOut);
+        aliceVault.withdraw(aliceLpBalance, minAmountsOut);
 
         // Check state after
         assertEq(ohm.balanceOf(address(vault)), 0);
@@ -413,7 +413,7 @@ contract BLEVauldLidoTest is Test {
         // Deactivate vault manager
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLEVaultLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLVaultLido_Inactive()");
         vm.expectRevert();
 
         // Try to claim rewards
@@ -426,7 +426,7 @@ contract BLEVauldLidoTest is Test {
             vm.prank(alice);
             aliceVault.claimRewards();
         } else {
-            bytes memory err = abi.encodeWithSignature("BLEVaultLido_OnlyOwner()");
+            bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
             vm.expectRevert();
 
             // Try to claim rewards
@@ -454,10 +454,10 @@ contract BLEVauldLidoTest is Test {
     //                                        VIEW FUNCTIONS                                      //
     //============================================================================================//
 
-    /// [X]  getLPBalance
+    /// [X]  getLpBalance
     ///     [X]  returns the correct LP balance
 
-    function testCorrectness_getLPBalance(uint256 depositAmount_) public {
+    function testCorrectness_getLpBalance(uint256 depositAmount_) public {
         vm.assume(depositAmount_ > 1e9 && depositAmount_ < 1_000_000_000_000e18);
 
         // Set limit based on deposit amount
@@ -472,14 +472,14 @@ contract BLEVauldLidoTest is Test {
         wsteth.approve(address(aliceVault), type(uint256).max);
 
         // Check state before
-        assertEq(aliceVault.getLPBalance(), 0);
+        assertEq(aliceVault.getLpBalance(), 0);
 
         // Deposit
         aliceVault.deposit(depositAmount_, 0);
         vm.stopPrank();
 
         // Check state after
-        assertEq(aliceVault.getLPBalance(), depositAmount_);
+        assertEq(aliceVault.getLpBalance(), depositAmount_);
     }
 
     /// [X]  getUserPairShare

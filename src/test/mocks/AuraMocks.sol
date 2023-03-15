@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0;
 
-import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/lending/interfaces/IAura.sol";
+import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 contract MockAuraBooster is IAuraBooster {
@@ -13,11 +13,7 @@ contract MockAuraBooster is IAuraBooster {
         pools.push(pool_);
     }
 
-    function deposit(
-        uint256 pid_,
-        uint256 amount_,
-        bool stake_
-    ) external {
+    function deposit(uint256 pid_, uint256 amount_, bool stake_) external {
         MockERC20(token).transferFrom(msg.sender, pools[pid_], amount_);
     }
 

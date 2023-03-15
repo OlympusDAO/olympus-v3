@@ -8,12 +8,12 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
 // Import external dependencies
 import {AggregatorV3Interface} from "interfaces/AggregatorV2V3Interface.sol";
-import {IAuraMiningLib} from "policies/lending/interfaces/IAura.sol";
+import {IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
 // Import vault dependencies
-import {IBLEVaultLido, RewardsData} from "policies/lending/interfaces/IBLEVaultLido.sol";
+import {IBLVaultLido, RewardsData} from "policies/BoostedLiquidity/interfaces/IBLVaultLido.sol";
 
-interface IBLEVaultManagerLido {
+interface IBLVaultManagerLido {
     // ========= DATA STRUCTURES ========= //
 
     struct TokenData {
@@ -56,12 +56,12 @@ interface IBLEVaultManagerLido {
     /// @notice                         Mints OHM to the caller
     /// @dev                            Can only be called by an approved vault
     /// @param amount_                  The amount of OHM to mint
-    function mintOHM(uint256 amount_) external;
+    function mintOhmToVault(uint256 amount_) external;
 
     /// @notice                         Burns OHM from the caller
     /// @dev                            Can only be called by an approved vault. The caller must have an OHM approval for the MINTR.
     /// @param amount_                  The amount of OHM to burn
-    function burnOHM(uint256 amount_) external;
+    function burnOhmFromVault(uint256 amount_) external;
 
     //============================================================================================//
     //                                     VAULT STATE MANAGEMENT                                 //
@@ -70,12 +70,12 @@ interface IBLEVaultManagerLido {
     /// @notice                         Increases the tracked value for totalLP
     /// @dev                            Can only be called by an approved vault
     /// @param amount_                  The amount of LP tokens to add to the total
-    function increaseTotalLP(uint256 amount_) external;
+    function increaseTotalLp(uint256 amount_) external;
 
     /// @notice                         Decreases the tracked value for totalLP
     /// @dev                            Can only be called by an approved vault
     /// @param amount_                  The amount of LP tokens to remove from the total
-    function decreaseTotalLP(uint256 amount_) external;
+    function decreaseTotalLp(uint256 amount_) external;
 
     //============================================================================================//
     //                                         VIEW FUNCTIONS                                     //
@@ -84,7 +84,7 @@ interface IBLEVaultManagerLido {
     /// @notice                         Returns the user's vault's LP balance
     /// @param user_                    The user to check the vault of
     /// @return uint256                 The user's vault's LP balance
-    function getLPBalance(address user_) external view returns (uint256);
+    function getLpBalance(address user_) external view returns (uint256);
 
     /// @notice                         Returns the user's vault's claim on wstETH
     /// @param user_                    The user to check the vault of
@@ -103,7 +103,7 @@ interface IBLEVaultManagerLido {
     /// @notice                         Calculates the amount of LP tokens that will be generated for a given amount of wstETH
     /// @param amount_                  The amount of wstETH to calculate the LP tokens for
     /// @return uint256                 The amount of LP tokens that will be generated
-    function getExpectedLPAmount(uint256 amount_) external returns (uint256);
+    function getExpectedLpAmount(uint256 amount_) external returns (uint256);
 
     /// @notice                         Gets all the reward tokens from the Aura pool
     /// @return address[]               The addresses of the reward tokens
@@ -113,10 +113,15 @@ interface IBLEVaultManagerLido {
     /// @return uint256                 The reward rate (tokens per second)
     function getRewardRate(address rewardToken_) external view returns (uint256);
 
+    /// @notice                         Returns the amount of OHM in the pool that is owned by this vault system.
+    /// @return uint256                 The amount of OHM in the pool that is owned by this vault system.
+    function getPoolOhmShare() external view returns (uint256);
+
     /// @notice                         Gets the net OHM emitted or removed by the system since inception
-    /// @return uint256                 Net OHM emitted
-    /// @return uint256                 Net OHM removed
-    function getOhmEmissions() external view returns (uint256, uint256);
+    /// @return uint256                 Vault system's current claim on OHM from the Balancer pool
+    /// @return uint256                 Current amount of OHM minted by the system into the Balancer pool
+    /// @return uint256                 OHM that wasn't minted, but was previously circulating that has been burned by the system
+    function getOhmSupplyChangeData() external view returns (uint256, uint256, uint256);
 
     /// @notice                         Gets the number of OHM per 1 wstETH
     /// @return uint256                 OHM per 1 wstETH (9 decimals)
@@ -144,8 +149,10 @@ interface IBLEVaultManagerLido {
     /// @dev                            Can only be called by the admin
     /// @param ohmEthUpdateThreshold_   The new time threshold for the OHM-ETH oracle
     /// @param stethEthUpdateThreshold_ The new time threshold for the stETH-ETH oracle
-    function changeUpdateThresholds(uint48 ohmEthUpdateThreshold_, uint48 stethEthUpdateThreshold_)
-        external;
+    function changeUpdateThresholds(
+        uint48 ohmEthUpdateThreshold_,
+        uint48 stethEthUpdateThreshold_
+    ) external;
 
     /// @notice                         Activates the vault manager and all approved vaults
     /// @dev                            Can only be called by the admin

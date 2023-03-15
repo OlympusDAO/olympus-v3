@@ -2,13 +2,13 @@
 pragma solidity 0.8.15;
 
 // Import system dependencies
-import {IBLEVaultLido, RewardsData} from "policies/lending/interfaces/IBLEVaultLido.sol";
-import {IBLEVaultManagerLido} from "policies/lending/interfaces/IBLEVaultManagerLido.sol";
-import {BLEVaultManagerLido} from "policies/lending/BLEVaultManagerLido.sol";
+import {IBLVaultLido, RewardsData} from "policies/BoostedLiquidity/interfaces/IBLVaultLido.sol";
+import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
+import {BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
 
 // Import external dependencies
-import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool} from "policies/lending/interfaces/IBalancer.sol";
-import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/lending/interfaces/IAura.sol";
+import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool} from "policies/BoostedLiquidity/interfaces/IBalancer.sol";
+import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
 // Import types
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
@@ -19,16 +19,16 @@ import {Clone} from "clones/Clone.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
-contract BLEVaultLido is IBLEVaultLido, Clone {
+contract BLVaultLido is IBLVaultLido, Clone {
     using TransferHelper for ERC20;
     using FullMath for uint256;
 
     // ========= ERRORS ========= //
 
-    error BLEVaultLido_AlreadyInitialized();
-    error BLEVaultLido_OnlyOwner();
-    error BLEVaultLido_Inactive();
-    error BLEVaultLido_Reentrancy();
+    error BLVaultLido_AlreadyInitialized();
+    error BLVaultLido_OnlyOwner();
+    error BLVaultLido_Inactive();
+    error BLVaultLido_Reentrancy();
 
     // ========= EVENTS ========= //
 
@@ -37,6 +37,9 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
     event RewardsClaimed(address indexed rewardsToken, uint256 amount);
 
     // ========= STATE VARIABLES ========= //
+
+    uint256 private constant _OHM_DECIMALS = 1e9;
+    uint256 private constant _WSTETH_DECIMALS = 1e18;
 
     uint256 private _reentrancyStatus;
 
@@ -47,7 +50,7 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
     // ========= INITIALIZER ========= //
 
     function initializeClone() external {
-        if (_reentrancyStatus != 0) revert BLEVaultLido_AlreadyInitialized();
+        if (_reentrancyStatus != 0) revert BLVaultLido_AlreadyInitialized();
         _reentrancyStatus = 1;
     }
 
@@ -57,8 +60,8 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
         return _getArgAddress(0);
     }
 
-    function manager() public pure returns (BLEVaultManagerLido) {
-        return BLEVaultManagerLido(_getArgAddress(20));
+    function manager() public pure returns (BLVaultManagerLido) {
+        return BLVaultManagerLido(_getArgAddress(20));
     }
 
     function TRSRY() public pure returns (address) {
@@ -112,17 +115,17 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
     // ========= MODIFIERS ========= //
 
     modifier onlyOwner() {
-        if (msg.sender != owner()) revert BLEVaultLido_OnlyOwner();
+        if (msg.sender != owner()) revert BLVaultLido_OnlyOwner();
         _;
     }
 
     modifier onlyWhileActive() {
-        if (!manager().isLidoBLEActive()) revert BLEVaultLido_Inactive();
+        if (!manager().isLidoBLVaultActive()) revert BLVaultLido_Inactive();
         _;
     }
 
     modifier nonReentrant() {
-        if (_reentrancyStatus != 1) revert BLEVaultLido_Reentrancy();
+        if (_reentrancyStatus != 1) revert BLVaultLido_Reentrancy();
 
         _reentrancyStatus = 2;
 
@@ -135,142 +138,107 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
     //                                      LIQUIDITY FUNCTIONS                                   //
     //============================================================================================//
 
-    /// @inheritdoc IBLEVaultLido
-    function deposit(uint256 amount_, uint256 minLPAmount_)
-        external
-        override
-        onlyWhileActive
-        onlyOwner
-        nonReentrant
-        returns (uint256 lpAmountOut)
-    {
+    /// @inheritdoc IBLVaultLido
+    function deposit(
+        uint256 amount_,
+        uint256 minLpAmount_
+    ) external override onlyWhileActive onlyOwner nonReentrant returns (uint256 lpAmountOut) {
+        // Cache variables into memory
+        IBLVaultManagerLido manager = manager();
+        OlympusERC20Token ohm = ohm();
+        ERC20 wsteth = wsteth();
+        IBasePool liquidityPool = liquidityPool();
+        IAuraBooster auraBooster = auraBooster();
+
         // Calculate OHM amount to mint
-        uint256 ohmTknPrice = manager().getOhmTknPrice();
-        uint256 ohmMintAmount = (amount_ * ohmTknPrice) / 1e18;
+        // getOhmTknPrice returns the amount of OHM per 1 wstETH
+        uint256 ohmWstethPrice = manager.getOhmTknPrice();
+        uint256 ohmMintAmount = (amount_ * ohmWstethPrice) / _WSTETH_DECIMALS;
 
         // Cache OHM-wstETH BPT before
-        uint256 bptBefore = liquidityPool().balanceOf(address(this));
-
-        // Mint OHM
-        manager().mintOHM(ohmMintAmount);
+        uint256 bptBefore = liquidityPool.balanceOf(address(this));
 
         // Transfer in wstETH
-        wsteth().transferFrom(msg.sender, address(this), amount_);
+        wsteth.transferFrom(msg.sender, address(this), amount_);
 
-        // Build join pool request
-        address[] memory assets = new address[](2);
-        assets[0] = address(ohm());
-        assets[1] = address(wsteth());
+        // Mint OHM
+        manager.mintOhmToVault(ohmMintAmount);
 
-        uint256[] memory maxAmountsIn = new uint256[](2);
-        maxAmountsIn[0] = ohmMintAmount;
-        maxAmountsIn[1] = amount_;
-
-        JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
-            assets: assets,
-            maxAmountsIn: maxAmountsIn,
-            userData: abi.encode(1, maxAmountsIn, minLPAmount_),
-            fromInternalBalance: false
-        });
-
-        // Join pool
-        ohm().increaseAllowance(address(vault()), ohmMintAmount);
-        wsteth().approve(address(vault()), amount_);
-        vault().joinPool(
-            liquidityPool().getPoolId(),
-            address(this),
-            address(this),
-            joinPoolRequest
-        );
+        // Join Balancer pool
+        _joinBalancerPool(ohmMintAmount, amount_, minLpAmount_);
 
         // OHM-PAIR BPT after
-        lpAmountOut = liquidityPool().balanceOf(address(this)) - bptBefore;
-        manager().increaseTotalLP(lpAmountOut);
+        lpAmountOut = liquidityPool.balanceOf(address(this)) - bptBefore;
+        manager.increaseTotalLp(lpAmountOut);
 
         // Stake into Aura
-        liquidityPool().approve(address(auraBooster()), lpAmountOut);
-        auraBooster().deposit(pid(), lpAmountOut, true);
+        liquidityPool.approve(address(auraBooster), lpAmountOut);
+        auraBooster.deposit(pid(), lpAmountOut, true);
 
         // Return unused tokens
-        uint256 unusedOHM = ohm().balanceOf(address(this));
-        uint256 unusedWsteth = wsteth().balanceOf(address(this));
+        uint256 unusedOhm = ohm.balanceOf(address(this));
+        uint256 unusedWsteth = wsteth.balanceOf(address(this));
 
-        if (unusedOHM > 0) {
-            ohm().increaseAllowance(MINTR(), unusedOHM);
-            manager().burnOHM(unusedOHM);
+        if (unusedOhm > 0) {
+            ohm.increaseAllowance(MINTR(), unusedOhm);
+            manager.burnOhmFromVault(unusedOhm);
         }
 
         if (unusedWsteth > 0) {
-            wsteth().transfer(msg.sender, unusedWsteth);
+            wsteth.transfer(msg.sender, unusedWsteth);
         }
 
         // Emit event
-        emit Deposit(ohmMintAmount - unusedOHM, amount_ - unusedWsteth);
+        emit Deposit(ohmMintAmount - unusedOhm, amount_ - unusedWsteth);
 
         return lpAmountOut;
     }
 
-    /// @inheritdoc IBLEVaultLido
-    function withdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
-        external
-        override
-        onlyWhileActive
-        onlyOwner
-        nonReentrant
-        returns (uint256, uint256)
-    {
+    /// @inheritdoc IBLVaultLido
+    function withdraw(
+        uint256 lpAmount_,
+        uint256[] calldata minTokenAmounts_
+    ) external override onlyWhileActive onlyOwner nonReentrant returns (uint256, uint256) {
+        // Cache variables into memory
+        OlympusERC20Token ohm = ohm();
+        ERC20 wsteth = wsteth();
+        IBLVaultManagerLido manager = manager();
+
         // Cache OHM and wstETH balances before
-        uint256 ohmBefore = ohm().balanceOf(address(this));
-        uint256 wstethBefore = wsteth().balanceOf(address(this));
+        uint256 ohmBefore = ohm.balanceOf(address(this));
+        uint256 wstethBefore = wsteth.balanceOf(address(this));
 
         // Decrease total LP
-        manager().decreaseTotalLP(lpAmount_);
+        manager.decreaseTotalLp(lpAmount_);
 
         // Unstake from Aura
         auraRewardPool().withdrawAndUnwrap(lpAmount_, true);
 
-        // Build exit pool request
-        address[] memory assets = new address[](2);
-        assets[0] = address(ohm());
-        assets[1] = address(wsteth());
-
-        ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
-            assets: assets,
-            minAmountsOut: minTokenAmounts_,
-            userData: abi.encode(1, lpAmount_),
-            toInternalBalance: false
-        });
-
         // Exit Balancer pool
-        liquidityPool().approve(address(vault()), lpAmount_);
-        vault().exitPool(
-            liquidityPool().getPoolId(),
-            address(this),
-            payable(address(this)),
-            exitPoolRequest
-        );
+        _exitBalancerPool(lpAmount_, minTokenAmounts_);
 
         // Calculate OHM and wstETH amounts received
-        uint256 ohmAmountOut = ohm().balanceOf(address(this)) - ohmBefore;
-        uint256 wstethAmountOut = wsteth().balanceOf(address(this)) - wstethBefore;
+        uint256 ohmAmountOut = ohm.balanceOf(address(this)) - ohmBefore;
+        uint256 wstethAmountOut = wsteth.balanceOf(address(this)) - wstethBefore;
 
-        // Calculate oracle expexted wstETH received amount
-        uint256 tknOhmPrice = manager().getTknOhmPrice();
-        uint256 expectedWstethAmountOut = (ohmAmountOut * tknOhmPrice) / 1e9;
+        // Calculate oracle expected wstETH received amount
+        // getTknOhmPrice returns the amount of wstETH per 1 OHM based on the oracle price
+        uint256 wstethOhmPrice = manager.getTknOhmPrice();
+        uint256 expectedWstethAmountOut = (ohmAmountOut * wstethOhmPrice) / _OHM_DECIMALS;
 
         // Take any arbs relative to the oracle price for the Treasury and return the rest to the owner
         uint256 wstethToReturn = wstethAmountOut > expectedWstethAmountOut
             ? expectedWstethAmountOut
             : wstethAmountOut;
         if (wstethAmountOut > wstethToReturn)
-            wsteth().transfer(TRSRY(), wstethAmountOut - wstethToReturn);
+            wsteth.transfer(TRSRY(), wstethAmountOut - wstethToReturn);
 
         // Burn OHM
-        ohm().increaseAllowance(MINTR(), ohmAmountOut);
-        manager().burnOHM(ohmAmountOut);
+        ohm.increaseAllowance(MINTR(), ohmAmountOut);
+        manager.burnOhmFromVault(ohmAmountOut);
 
         // Return wstETH to owner
-        wsteth().transfer(msg.sender, wstethToReturn);
+        wsteth.transfer(msg.sender, wstethToReturn);
 
         // Return rewards to owner
         _sendRewards();
@@ -285,7 +253,7 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
     //                                       REWARDS FUNCTIONS                                    //
     //============================================================================================//
 
-    /// @inheritdoc IBLEVaultLido
+    /// @inheritdoc IBLVaultLido
     function claimRewards() external override onlyWhileActive onlyOwner nonReentrant {
         // Claim rewards from Aura
         auraRewardPool().getReward(owner(), true);
@@ -298,34 +266,35 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
     //                                        VIEW FUNCTIONS                                      //
     //============================================================================================//
 
-    /// @inheritdoc IBLEVaultLido
-    function getLPBalance() public view override returns (uint256) {
+    /// @inheritdoc IBLVaultLido
+    function getLpBalance() public view override returns (uint256) {
         return auraRewardPool().balanceOf(address(this));
     }
 
-    /// @inheritdoc IBLEVaultLido
+    /// @inheritdoc IBLVaultLido
     function getUserPairShare() public view override returns (uint256) {
         // If total supply is 0 return 0
         if (liquidityPool().totalSupply() == 0) return 0;
 
         // Get user's LP balance
-        uint256 userLPBalance = getLPBalance();
+        uint256 userLpBalance = getLpBalance();
 
         // Get pool balances
         (, uint256[] memory balances, ) = vault().getPoolTokens(liquidityPool().getPoolId());
 
         // Get user's share of the wstETH
-        uint256 userWstethShare = (userLPBalance * balances[1]) / liquidityPool().totalSupply();
+        uint256 userWstethShare = (userLpBalance * balances[1]) / liquidityPool().totalSupply();
 
         // Check pool against oracle price
-        uint256 tknOhmPrice = manager().getTknOhmPrice();
-        uint256 userOhmShare = (userLPBalance * balances[0]) / liquidityPool().totalSupply();
-        uint256 expectedWstethShare = (userOhmShare * tknOhmPrice) / 1e9;
+        // getTknOhmPrice returns the amount of wstETH per 1 OHM based on the oracle price
+        uint256 wstethOhmPrice = manager().getTknOhmPrice();
+        uint256 userOhmShare = (userLpBalance * balances[0]) / liquidityPool().totalSupply();
+        uint256 expectedWstethShare = (userOhmShare * wstethOhmPrice) / _OHM_DECIMALS;
 
         return userWstethShare > expectedWstethShare ? expectedWstethShare : userWstethShare;
     }
 
-    /// @inheritdoc IBLEVaultLido
+    /// @inheritdoc IBLVaultLido
     function getOutstandingRewards() public view override returns (RewardsData[] memory) {
         uint256 numExtraRewards = auraRewardPool().extraRewardsLength();
         RewardsData[] memory rewards = new RewardsData[](numExtraRewards + 2);
@@ -361,6 +330,67 @@ contract BLEVaultLido is IBLEVaultLido, Clone {
     //============================================================================================//
     //                                      INTERNAL FUNCTIONS                                    //
     //============================================================================================//
+
+    function _joinBalancerPool(
+        uint256 ohmAmount_,
+        uint256 wstethAmount_,
+        uint256 minLpAmount_
+    ) internal {
+        // Cache variables to memory
+        OlympusERC20Token ohm = ohm();
+        ERC20 wsteth = wsteth();
+        IVault vault = vault();
+
+        // Build join pool request
+        address[] memory assets = new address[](2);
+        assets[0] = address(ohm);
+        assets[1] = address(wsteth);
+
+        uint256[] memory maxAmountsIn = new uint256[](2);
+        maxAmountsIn[0] = ohmAmount_;
+        maxAmountsIn[1] = wstethAmount_;
+
+        JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
+            assets: assets,
+            maxAmountsIn: maxAmountsIn,
+            userData: abi.encode(1, maxAmountsIn, minLpAmount_),
+            fromInternalBalance: false
+        });
+
+        // Join pool
+        ohm.increaseAllowance(address(vault), ohmAmount_);
+        wsteth.approve(address(vault), wstethAmount_);
+        vault.joinPool(liquidityPool().getPoolId(), address(this), address(this), joinPoolRequest);
+    }
+
+    function _exitBalancerPool(uint256 lpAmount_, uint256[] calldata minTokenAmounts_) internal {
+        // Cache variables to memory
+        OlympusERC20Token ohm = ohm();
+        ERC20 wsteth = wsteth();
+        IBasePool liquidityPool = liquidityPool();
+        IVault vault = vault();
+
+        // Build exit pool request
+        address[] memory assets = new address[](2);
+        assets[0] = address(ohm);
+        assets[1] = address(wsteth);
+
+        ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
+            assets: assets,
+            minAmountsOut: minTokenAmounts_,
+            userData: abi.encode(1, lpAmount_),
+            toInternalBalance: false
+        });
+
+        // Exit Balancer pool
+        liquidityPool.approve(address(vault), lpAmount_);
+        vault.exitPool(
+            liquidityPool.getPoolId(),
+            address(this),
+            payable(address(this)),
+            exitPoolRequest
+        );
+    }
 
     function _sendRewards() internal {
         // Send Bal rewards to owner

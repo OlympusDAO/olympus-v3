@@ -9,30 +9,31 @@ import "src/Kernel.sol";
 
 // Import external dependencies
 import {AggregatorV3Interface} from "interfaces/AggregatorV2V3Interface.sol";
-import {IAuraRewardPool, IAuraMiningLib} from "policies/lending/interfaces/IAura.sol";
-import {JoinPoolRequest, IVault, IBasePool, IBalancerHelper} from "policies/lending/interfaces/IBalancer.sol";
-import {IWsteth} from "policies/lending/interfaces/ILido.sol";
+import {IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
+import {JoinPoolRequest, IVault, IBasePool, IBalancerHelper} from "policies/BoostedLiquidity/interfaces/IBalancer.sol";
+import {IWsteth} from "policies/BoostedLiquidity/interfaces/ILido.sol";
 
 // Import vault dependencies
-import {RewardsData} from "policies/lending/interfaces/IBLEVaultLido.sol";
-import {IBLEVaultManagerLido} from "policies/lending/interfaces/IBLEVaultManagerLido.sol";
-import {BLEVaultLido} from "policies/lending/BLEVaultLido.sol";
+import {RewardsData} from "policies/BoostedLiquidity/interfaces/IBLVaultLido.sol";
+import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
+import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
 
 // Import libraries
 import {ClonesWithImmutableArgs} from "clones/ClonesWithImmutableArgs.sol";
 
-contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
+contract BLVaultManagerLido is Policy, IBLVaultManagerLido, RolesConsumer {
     using ClonesWithImmutableArgs for address;
 
     // ========= ERRORS ========= //
 
-    error BLEManagerLido_Inactive();
-    error BLEManagerLido_InvalidVault();
-    error BLEManagerLido_LimitViolation();
-    error BLEManagerLido_InvalidLimit();
-    error BLEManagerLido_InvalidFee();
-    error BLEManagerLido_BadPriceFeed();
-    error BLEManagerLido_VaultAlreadyExists();
+    error BLManagerLido_Inactive();
+    error BLManagerLido_InvalidVault();
+    error BLManagerLido_LimitViolation();
+    error BLManagerLido_InvalidLpAmount();
+    error BLManagerLido_InvalidLimit();
+    error BLManagerLido_InvalidFee();
+    error BLManagerLido_BadPriceFeed();
+    error BLManagerLido_VaultAlreadyExists();
 
     // ========= EVENTS ========= //
 
@@ -46,7 +47,7 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
 
     // Tokens
     address public ohm;
-    address public pairToken;
+    address public pairToken; // wstETH for this implementation
     address public aura;
     address public bal;
 
@@ -63,19 +64,19 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     OracleFeed public stethEthPriceFeed;
 
     // Vault Info
-    BLEVaultLido public implementation;
-    mapping(BLEVaultLido => address) public vaultOwners;
-    mapping(address => BLEVaultLido) public userVaults;
+    BLVaultLido public implementation;
+    mapping(BLVaultLido => address) public vaultOwners;
+    mapping(address => BLVaultLido) public userVaults;
 
     // Vaults State
-    uint256 public totalLP;
-    uint256 public mintedOHM;
-    uint256 public netBurnedOHM;
+    uint256 public totalLp;
+    uint256 public deployedOhm;
+    uint256 public circulatingOhmBurned;
 
     // System Configuration
     uint256 public ohmLimit;
     uint64 public currentFee;
-    bool public isLidoBLEActive;
+    bool public isLidoBLVaultActive;
 
     // Constants
     uint32 public constant MAX_FEE = 10000; // 100%
@@ -128,7 +129,7 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
 
         // Set vault implementation
         {
-            implementation = BLEVaultLido(implementation_);
+            implementation = BLVaultLido(implementation_);
         }
 
         // Configure system
@@ -170,13 +171,12 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     //============================================================================================//
 
     modifier onlyWhileActive() {
-        if (!isLidoBLEActive) revert BLEManagerLido_Inactive();
+        if (!isLidoBLVaultActive) revert BLManagerLido_Inactive();
         _;
     }
 
     modifier onlyVault() {
-        if (vaultOwners[BLEVaultLido(msg.sender)] == address(0))
-            revert BLEManagerLido_InvalidVault();
+        if (vaultOwners[BLVaultLido(msg.sender)] == address(0)) revert BLManagerLido_InvalidVault();
         _;
     }
 
@@ -184,10 +184,10 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     //                                        VAULT DEPLOYMENT                                    //
     //============================================================================================//
 
-    /// @inheritdoc IBLEVaultManagerLido
+    /// @inheritdoc IBLVaultManagerLido
     function deployVault() external override onlyWhileActive returns (address vault) {
         if (address(userVaults[msg.sender]) != address(0))
-            revert BLEManagerLido_VaultAlreadyExists();
+            revert BLManagerLido_VaultAlreadyExists();
 
         // Create clone of vault implementation
         bytes memory data = abi.encodePacked(
@@ -206,7 +206,7 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
             auraData.auraRewardPool, // Aura Reward Pool
             currentFee
         );
-        BLEVaultLido clone = BLEVaultLido(address(implementation).clone(data));
+        BLVaultLido clone = BLVaultLido(address(implementation).clone(data));
 
         // Initialize clone of vault implementation (for reentrancy state)
         clone.initializeClone();
@@ -226,26 +226,29 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     //                                         OHM MANAGEMENT                                     //
     //============================================================================================//
 
-    /// @inheritdoc IBLEVaultManagerLido
-    function mintOHM(uint256 amount_) external override onlyWhileActive onlyVault {
+    /// @inheritdoc IBLVaultManagerLido
+    function mintOhmToVault(uint256 amount_) external override onlyWhileActive onlyVault {
         // Check that minting will not exceed limit
-        if (mintedOHM + amount_ > ohmLimit) revert BLEManagerLido_LimitViolation();
+        if (deployedOhm + amount_ > ohmLimit + circulatingOhmBurned)
+            revert BLManagerLido_LimitViolation();
 
-        mintedOHM += amount_;
+        deployedOhm += amount_;
 
         // Mint OHM
         MINTR.increaseMintApproval(address(this), amount_);
         MINTR.mintOhm(msg.sender, amount_);
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
-    function burnOHM(uint256 amount_) external override onlyWhileActive onlyVault {
-        // Handle accounting
-        if (amount_ > mintedOHM) {
-            netBurnedOHM += amount_ - mintedOHM;
-            mintedOHM = 0;
+    /// @inheritdoc IBLVaultManagerLido
+    function burnOhmFromVault(uint256 amount_) external override onlyWhileActive onlyVault {
+        // Account for how much OHM has been deployed by the Vault system or burned from circulating supply.
+        // If we are burning more OHM than has been deployed by the system we are removing previously
+        // circulating OHM which should be tracked separately.
+        if (amount_ > deployedOhm) {
+            circulatingOhmBurned += amount_ - deployedOhm;
+            deployedOhm = 0;
         } else {
-            mintedOHM -= amount_;
+            deployedOhm -= amount_;
         }
 
         // Burn OHM
@@ -256,47 +259,45 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     //                                     VAULT STATE MANAGEMENT                                 //
     //============================================================================================//
 
-    /// @inheritdoc IBLEVaultManagerLido
-    function increaseTotalLP(uint256 amount_) external override onlyWhileActive onlyVault {
-        totalLP += amount_;
+    /// @inheritdoc IBLVaultManagerLido
+    function increaseTotalLp(uint256 amount_) external override onlyWhileActive onlyVault {
+        totalLp += amount_;
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
-    function decreaseTotalLP(uint256 amount_) external override onlyWhileActive onlyVault {
-        totalLP -= amount_;
+    /// @inheritdoc IBLVaultManagerLido
+    function decreaseTotalLp(uint256 amount_) external override onlyWhileActive onlyVault {
+        if (amount_ > totalLp) revert BLManagerLido_InvalidLpAmount();
+        totalLp -= amount_;
     }
 
     //============================================================================================//
     //                                         VIEW FUNCTIONS                                     //
     //============================================================================================//
 
-    /// @inheritdoc IBLEVaultManagerLido
-    function getLPBalance(address user_) external view override returns (uint256) {
-        return userVaults[user_].getLPBalance();
+    /// @inheritdoc IBLVaultManagerLido
+    function getLpBalance(address user_) external view override returns (uint256) {
+        return userVaults[user_].getLpBalance();
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
+    /// @inheritdoc IBLVaultManagerLido
     function getUserPairShare(address user_) external view override returns (uint256) {
         return userVaults[user_].getUserPairShare();
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
-    function getOutstandingRewards(address user_)
-        external
-        view
-        override
-        returns (RewardsData[] memory)
-    {
+    /// @inheritdoc IBLVaultManagerLido
+    function getOutstandingRewards(
+        address user_
+    ) external view override returns (RewardsData[] memory) {
         // Get user's vault address
-        BLEVaultLido vault = userVaults[user_];
+        BLVaultLido vault = userVaults[user_];
 
         RewardsData[] memory rewards = vault.getOutstandingRewards();
         return rewards;
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
+    /// @inheritdoc IBLVaultManagerLido
     function getMaxDeposit() external view override returns (uint256) {
-        uint256 maxOhmAmount = ohmLimit - mintedOHM;
+        uint256 maxOhmAmount = ohmLimit - deployedOhm;
 
         // Convert max OHM mintable amount to pair token amount
         uint256 ohmTknPrice = getOhmTknPrice();
@@ -305,10 +306,10 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
         return maxTknAmount;
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
-    /// @dev    This is an external function but should only be used in a callstatic call from an external
+    /// @inheritdoc IBLVaultManagerLido
+    /// @dev    This is an external function but should only be used in a callstatic from an external
     ///         source like the frontend.
-    function getExpectedLPAmount(uint256 amount_) external override returns (uint256 bptAmount) {
+    function getExpectedLpAmount(uint256 amount_) external override returns (uint256 bptAmount) {
         IBasePool pool = IBasePool(balancerData.liquidityPool);
         IBalancerHelper balancerHelper = IBalancerHelper(balancerData.balancerHelper);
 
@@ -341,7 +342,7 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
         );
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
+    /// @inheritdoc IBLVaultManagerLido
     function getRewardTokens() external view override returns (address[] memory) {
         IAuraRewardPool auraPool = IAuraRewardPool(auraData.auraRewardPool);
 
@@ -360,13 +361,10 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
         return rewardTokens;
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
-    function getRewardRate(address rewardToken_)
-        external
-        view
-        override
-        returns (uint256 rewardRate)
-    {
+    /// @inheritdoc IBLVaultManagerLido
+    function getRewardRate(
+        address rewardToken_
+    ) external view override returns (uint256 rewardRate) {
         IAuraRewardPool auraPool = IAuraRewardPool(auraData.auraRewardPool);
 
         if (rewardToken_ == bal) {
@@ -392,21 +390,41 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
         }
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
-    function getOhmEmissions() external view override returns (uint256 emitted, uint256 removed) {
-        uint256 currentPoolOhmShare = _getPoolOhmShare();
+    /// @inheritdoc IBLVaultManagerLido
+    function getPoolOhmShare() public view override returns (uint256) {
+        // Cast addresses
+        IVault vault = IVault(balancerData.vault);
+        IBasePool pool = IBasePool(balancerData.liquidityPool);
 
-        // Net emitted is the amount of OHM that was minted to the pool but is no longer in the
-        // pool beyond what has been burned in the past. Net removed is the amount of OHM that is
-        // in the pool but wasn’t minted there plus what has been burned in the past.
-        if (mintedOHM > currentPoolOhmShare + netBurnedOHM) {
-            emitted = mintedOHM - currentPoolOhmShare - netBurnedOHM;
-        } else {
-            removed = currentPoolOhmShare + netBurnedOHM - mintedOHM;
-        }
+        // Get pool total supply
+        uint256 poolTotalSupply = pool.totalSupply();
+
+        // Get token balances in pool
+        (, uint256[] memory balances_, ) = vault.getPoolTokens(pool.getPoolId());
+
+        // Balancer pool tokens are sorted alphabetically by token address. In the case of this
+        // deployment, OHM is the first token in the pool. Therefore, the OHM balance is at index 0.
+        if (poolTotalSupply == 0) return 0;
+        else return (balances_[0] * totalLp) / poolTotalSupply;
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
+    /// @inheritdoc IBLVaultManagerLido
+    function getOhmSupplyChangeData()
+        external
+        view
+        override
+        returns (uint256 poolOhmShare, uint256 deployedOhm, uint256 circulatingOhmBurned)
+    {
+        // Net emitted is the amount of OHM that was minted to the pool but is no longer in the
+        // pool beyond what has been burned in the past. Net removed is the amount of OHM that is
+        // in the pool but wasn’t minted there plus what has been burned in the past. Here we just return
+        // the data components to calculate that.
+
+        uint256 currentPoolOhmShare = getPoolOhmShare();
+        return (currentPoolOhmShare, deployedOhm, circulatingOhmBurned);
+    }
+
+    /// @inheritdoc IBLVaultManagerLido
     function getOhmTknPrice() public view override returns (uint256) {
         // Get stETH per wstETH (18 Decimals)
         uint256 stethPerWsteth = IWsteth(pairToken).stEthPerToken();
@@ -424,7 +442,7 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
         return (stethPerWsteth * stethPerEth) / (ethPerOhm * 1e9);
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
+    /// @inheritdoc IBLVaultManagerLido
     function getTknOhmPrice() public view override returns (uint256) {
         // Get stETH per wstETH (18 Decimals)
         uint256 stethPerWsteth = IWsteth(pairToken).stEthPerToken();
@@ -446,46 +464,45 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
     //                                        ADMIN FUNCTIONS                                     //
     //============================================================================================//
 
-    /// @inheritdoc IBLEVaultManagerLido
+    /// @inheritdoc IBLVaultManagerLido
     function setLimit(uint256 newLimit_) external override onlyRole("liquidityvault_admin") {
-        if (newLimit_ < mintedOHM) revert BLEManagerLido_InvalidLimit();
+        if (newLimit_ < deployedOhm) revert BLManagerLido_InvalidLimit();
         ohmLimit = newLimit_;
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
+    /// @inheritdoc IBLVaultManagerLido
     function setFee(uint64 newFee_) external override onlyRole("liquidityvault_admin") {
-        if (newFee_ > MAX_FEE) revert BLEManagerLido_InvalidFee();
+        if (newFee_ > MAX_FEE) revert BLManagerLido_InvalidFee();
         currentFee = newFee_;
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
-    function changeUpdateThresholds(uint48 ohmEthUpdateThreshold_, uint48 stethEthUpdateThreshold_)
-        external
-        onlyRole("liquidityvault_admin")
-    {
+    /// @inheritdoc IBLVaultManagerLido
+    function changeUpdateThresholds(
+        uint48 ohmEthUpdateThreshold_,
+        uint48 stethEthUpdateThreshold_
+    ) external onlyRole("liquidityvault_admin") {
         ohmEthPriceFeed.updateThreshold = ohmEthUpdateThreshold_;
         stethEthPriceFeed.updateThreshold = stethEthUpdateThreshold_;
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
+    /// @inheritdoc IBLVaultManagerLido
     function activate() external override onlyRole("liquidityvault_admin") {
-        isLidoBLEActive = true;
+        isLidoBLVaultActive = true;
     }
 
-    /// @inheritdoc IBLEVaultManagerLido
+    /// @inheritdoc IBLVaultManagerLido
     function deactivate() external override onlyRole("liquidityvault_admin") {
-        isLidoBLEActive = false;
+        isLidoBLVaultActive = false;
     }
 
     //============================================================================================//
     //                                      INTERNAL FUNCTIONS                                    //
     //============================================================================================//
 
-    function _validatePrice(AggregatorV3Interface priceFeed_, uint48 updateThreshold_)
-        internal
-        view
-        returns (uint256)
-    {
+    function _validatePrice(
+        AggregatorV3Interface priceFeed_,
+        uint48 updateThreshold_
+    ) internal view returns (uint256) {
         // Get price data
         (uint80 roundId, int256 priceInt, , uint256 updatedAt, uint80 answeredInRound) = priceFeed_
             .latestRoundData();
@@ -498,23 +515,8 @@ contract BLEVaultManagerLido is Policy, IBLEVaultManagerLido, RolesConsumer {
             priceInt <= 0 ||
             updatedAt < block.timestamp - updateThreshold_ ||
             answeredInRound != roundId
-        ) revert BLEManagerLido_BadPriceFeed();
+        ) revert BLManagerLido_BadPriceFeed();
 
         return uint256(priceInt);
-    }
-
-    function _getPoolOhmShare() internal view returns (uint256) {
-        // Cast addresses
-        IVault vault = IVault(balancerData.vault);
-        IBasePool pool = IBasePool(balancerData.liquidityPool);
-
-        // Get pool total supply
-        uint256 poolTotalSupply = pool.totalSupply();
-
-        // Get token balances in pool
-        (, uint256[] memory balances_, ) = vault.getPoolTokens(pool.getPoolId());
-
-        if (poolTotalSupply == 0) return 0;
-        else return (balances_[0] * totalLP) / poolTotalSupply;
     }
 }
