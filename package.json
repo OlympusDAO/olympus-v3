@@ -4,10 +4,7 @@
   "version": "1.0.0",
   "description": "A forge template",
   "homepage": "https://github.com/FrankieIsLost/forge-template#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/FrankieIsLost/forge-template.git"
-  },
+  "repository": "git+https://github.com/FrankieIsLost/forge-template.git",
   "scripts": {
     "build": "chmod +x shell/* && ./shell/full_install.sh",
     "prettier": "prettier --write 'src/**/*.sol'",
@@ -29,5 +26,12 @@
     "singleQuote": false,
     "bracketSpacing": false,
     "printWidth": 100
-  }
+  },
+  "dependencies": {
+    "hardhat": "^2.13.0",
+    "hardhat-preprocessor": "^0.1.5",
+    "typechain": "^8.1.1"
+  },
+  "main": "index.js",
+  "license": "MIT"
 }
