@@ -1,5 +1,5 @@
-out/
-generated/
+/out/
+/generated/
 cache/
 node_modules/
 .env
