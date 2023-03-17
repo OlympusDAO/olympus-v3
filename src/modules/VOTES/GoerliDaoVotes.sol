@@ -14,7 +14,7 @@ contract GoerliDaoVotes is VOTESv1 {
 
     constructor(Kernel kernel_, ERC20 xGDAO_)
         Module(kernel_)
-        ERC4626(xGDAO_, "Goerli DAO Votes", "xGDAO")
+        ERC4626(xGDAO_, "Goerli DAO Votes", "vGDAO")
     {
         xGDAO = xGDAO_;
     }

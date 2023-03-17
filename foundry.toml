@@ -11,7 +11,7 @@ remappings = [
     'policies/=src/policies',
     'libraries/=src/libraries',
 ]
-fs_permissions = [{access = "write", path = "./src/test/sim/out/"}, {access = "write", path = "./deployments/"}]
+fs_permissions = [{access = "write", path = "./src/test/sim/out/"}, {access = "write", path = "./deployments/"}, {access = "read", path = ".secret"}]
 solc_version = "0.8.15"
 optimizer = true
 optimizer_runs = 10
