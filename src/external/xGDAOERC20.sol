@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.7.5;
-
-import "../interfaces/IxGDAO.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
+pragma solidity >=0.7.5;
 
 contract xGDAO is IxGDAO, ERC20 {
     /* ========== DEPENDENCIES ========== */
-
+x
     using Address for address;
     using SafeMath for uint256;
 

@@ -16,14 +16,14 @@ contract DeployDistributor is Script {
     vm.startBroadcast(privateKey);
     address kernel_addr = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
     Kernel kernel = Kernel(kernel_addr);
-    address gdao_addr = ;
-    address staking_addr = ;
+    address gdao_addr = 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512;
+    address staking_addr = 0x6D65b498cb23deAba4f3efb28b9fF90f4Bf4b9e2;
     uint256 initialRate = 12055988;
     
 
     distributor = new Distributor(kernel, gdao_addr, staking_addr, initialRate);
 
-    vm.stopBroadcast();
+    //vm.stopBroadcast();
     return distributor;
   }
 }
