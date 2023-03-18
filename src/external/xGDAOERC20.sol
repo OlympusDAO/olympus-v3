@@ -1,231 +1,239 @@
-// SPDX-License-Identifier: MIT
-pragma solidity >=0.7.5;
+// // SPDX-License-Identifier: MIT
+// pragma solidity >=0.7.5;
 
-contract xGDAO is IxGDAO, ERC20 {
-    /* ========== DEPENDENCIES ========== */
-x
-    using Address for address;
-    using SafeMath for uint256;
+// import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+// import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
+// import {IxGDAO} from "interfaces/IxGDAO.sol";
+// import {ERC20} from "solmate/tokens/ERC20.sol";
 
-    /* ========== MODIFIERS ========== */
 
-    modifier onlyApproved() {
-        require(msg.sender == approved, "Only approved");
-        _;
-    }
+// contract xGDAO is IxGDAO {
+//     /* ========== DEPENDENCIES ========== */
 
-    /* ========== EVENTS ========== */
+//     using Address for address;
+//     using SafeMath for uint256;
 
-    event DelegateChanged(address indexed delegator, address indexed fromDelegate, address indexed toDelegate);
-    event DelegateVotesChanged(address indexed delegate, uint256 previousBalance, uint256 newBalance);
+//     /* ========== MODIFIERS ========== */
 
-    /* ========== DATA STRUCTURES ========== */
+//     modifier onlyApproved() {
+//         require(msg.sender == approved, "Only approved");
+//         _;
+//     }
 
-    /// @notice A checkpoint for marking number of votes from a given block
-    struct Checkpoint {
-        uint256 fromBlock;
-        uint256 votes;
-    }
+//     /* ========== EVENTS ========== */
 
-    /* ========== STATE VARIABLES ========== */
+//     event DelegateChanged(address indexed delegator, address indexed fromDelegate, address indexed toDelegate);
+//     event DelegateVotesChanged(address indexed delegate, uint256 previousBalance, uint256 newBalance);
 
-    address public approved; // minter
+//     /* ========== DATA STRUCTURES ========== */
 
-    mapping(address => mapping(uint256 => Checkpoint)) public checkpoints;
-    mapping(address => uint256) public numCheckpoints;
-    mapping(address => address) public delegates;
+//     /// @notice A checkpoint for marking number of votes from a given block
+//     struct Checkpoint {
+//         uint256 fromBlock;
+//         uint256 votes;
+//     }
 
-    /* ========== CONSTRUCTOR ========== */
+//     /* ========== STATE VARIABLES ========== */
 
-    constructor(address _migrator, address _sOHM) ERC20("Governance GDAO", "xGDAO", 18) {
-        require(_migrator != address(0), "Zero address: Migrator");
-        approved = _migrator;
-        require(_sOHM != address(0), "Zero address: sOHM");
-        sOHM = IsOHM(_sOHM);
-    }
+//     address public approved; // minter
 
-    /* ========== MUTATIVE FUNCTIONS ========== */
+//     mapping(address => mapping(uint256 => Checkpoint)) public checkpoints;
+//     mapping(address => uint256) public numCheckpoints;
+//     mapping(address => address) public delegates;
+//     bool migrated;
+//     mapping(address => uint256) public _balances;
 
-    /**
-     * @notice transfer mint rights from migrator to staking
-     * @notice can only be done once, at the time of contract migration
-     * @param _staking address
-     * @param _sOHM address
-     */
-    function migrate(address _staking, address _sOHM) external override onlyApproved {
-        require(!migrated, "Migrated");
-        migrated = true;
+//     /* ========== CONSTRUCTOR ========== */
 
-        require(_staking != approved, "Invalid argument");
-        require(_staking != address(0), "Zero address found");
-        approved = _staking;
+//     constructor(address _migrator, address _xGDAO) ERC20("Governance GDAO", "xGDAO", 18) {
+//         require(_migrator != address(0), "Zero address: Migrator");
+//         approved = _migrator;
+//         require(_xGDAO != address(0), "Zero address: xGDAO");
+//         xGDAO = IxGDAO(_xGDAO);
+//     }
 
-        require(_sOHM != address(0), "Zero address found");
-        sOHM = IsOHM(_sOHM);
-    }
+//     /* ========== MUTATIVE FUNCTIONS ========== */
 
-    /**
-     * @notice Delegate votes from `msg.sender` to `delegatee`
-     * @param delegatee The address to delegate votes to
-     */
-    function delegate(address delegatee) external {
-        return _delegate(msg.sender, delegatee);
-    }
+//     /**
+//      * @notice transfer mint rights from migrator to staking
+//      * @notice can only be done once, at the time of contract migration
+//      * @param _staking address
+//      * @param _xGDAO address
+//      */
+//     function migrate(address _staking, address _xGDAO) external override onlyApproved {
+//         require(!migrated, "Migrated");
+//         migrated = true;
 
-    /**
-        @notice mint gOHM
-        @param _to address
-        @param _amount uint
-     */
-    function mint(address _to, uint256 _amount) external override onlyApproved {
-        _mint(_to, _amount);
-    }
+//         require(_staking != approved, "Invalid argument");
+//         require(_staking != address(0), "Zero address found");
+//         approved = _staking;
 
-    /**
-        @notice burn gOHM
-        @param _from address
-        @param _amount uint
-     */
-    function burn(address _from, uint256 _amount) external override onlyApproved {
-        _burn(_from, _amount);
-    }
+//         require(_xGDAO != address(0), "Zero address found");
+//         xGDAO = IxGDAO(_xGDAO);
+//     }
 
-    /* ========== VIEW FUNCTIONS ========== */
+//     /**
+//      * @notice Delegate votes from `msg.sender` to `delegatee`
+//      * @param delegatee The address to delegate votes to
+//      */
+//     function delegate(address delegatee) external {
+//         return _delegate(msg.sender, delegatee);
+//     }
 
-    /**
-     * @notice pull index from sOHM token
-     */
-    function index() public view override returns (uint256) {
-        return sOHM.index();
-    }
+//     // /**
+//     //     @notice mint gOHM
+//     //     @param _to address
+//     //     @param _amount uint
+//     //  */
+//     // function mint(address _to, uint256 _amount) external override onlyApproved {
+//     //     _mint(_to, _amount);
+//     // }
 
-    /**
-        @notice converts gOHM amount to OHM
-        @param _amount uint
-        @return uint
-     */
-    function balanceFrom(uint256 _amount) public view override returns (uint256) {
-        return _amount.mul(index()).div(10**decimals());
-    }
+//     // /**
+//     //     @notice burn gOHM
+//     //     @param _from address
+//     //     @param _amount uint
+//     //  */
+//     // function burn(address _from, uint256 _amount) external override onlyApproved {
+//     //     _burn(_from, _amount);
+//     // }
 
-    /**
-        @notice converts OHM amount to gOHM
-        @param _amount uint
-        @return uint
-     */
-    function balanceTo(uint256 _amount) public view override returns (uint256) {
-        return _amount.mul(10**decimals()).div(index());
-    }
+//     /* ========== VIEW FUNCTIONS ========== */
 
-    /**
-     * @notice Gets the current votes balance for `account`
-     * @param account The address to get votes balance
-     * @return The number of current votes for `account`
-     */
-    function getCurrentVotes(address account) external view returns (uint256) {
-        uint256 nCheckpoints = numCheckpoints[account];
-        return nCheckpoints > 0 ? checkpoints[account][nCheckpoints - 1].votes : 0;
-    }
+//     /**
+//      * @notice pull index from xGDAO token
+//      */
+//     function index() public view override returns (uint256) {
+//         return xGDAO.index();
+//     }
 
-    /**
-     * @notice Determine the prior number of votes for an account as of a block number
-     * @dev Block number must be a finalized block or else this function will revert to prevent misinformation.
-     * @param account The address of the account to check
-     * @param blockNumber The block number to get the vote balance at
-     * @return The number of votes the account had as of the given block
-     */
-    function getPriorVotes(address account, uint256 blockNumber) external view returns (uint256) {
-        require(blockNumber < block.number, "gOHM::getPriorVotes: not yet determined");
+//     /**
+//         @notice converts gOHM amount to OHM
+//         @param _amount uint
+//         @return uint
+//      */
+//     function balanceFrom(uint256 _amount) public view override returns (uint256) {
+//         return _amount.mul(index()).div(10**9);
+//     }
 
-        uint256 nCheckpoints = numCheckpoints[account];
-        if (nCheckpoints == 0) {
-            return 0;
-        }
+//     /**
+//         @notice converts OHM amount to gOHM
+//         @param _amount uint
+//         @return uint
+//      */
+//     function balanceTo(uint256 _amount) public view override returns (uint256) {
+//         return _amount.mul(10**9).div(index());
+//     }
 
-        // First check most recent balance
-        if (checkpoints[account][nCheckpoints - 1].fromBlock <= blockNumber) {
-            return checkpoints[account][nCheckpoints - 1].votes;
-        }
+//     /**
+//      * @notice Gets the current votes balance for `account`
+//      * @param account The address to get votes balance
+//      * @return The number of current votes for `account`
+//      */
+//     function getCurrentVotes(address account) external view returns (uint256) {
+//         uint256 nCheckpoints = numCheckpoints[account];
+//         return nCheckpoints > 0 ? checkpoints[account][nCheckpoints - 1].votes : 0;
+//     }
 
-        // Next check implicit zero balance
-        if (checkpoints[account][0].fromBlock > blockNumber) {
-            return 0;
-        }
+//     /**
+//      * @notice Determine the prior number of votes for an account as of a block number
+//      * @dev Block number must be a finalized block or else this function will revert to prevent misinformation.
+//      * @param account The address of the account to check
+//      * @param blockNumber The block number to get the vote balance at
+//      * @return The number of votes the account had as of the given block
+//      */
+//     function getPriorVotes(address account, uint256 blockNumber) external view returns (uint256) {
+//         require(blockNumber < block.number, "xGDAO::getPriorVotes: not yet determined");
 
-        uint256 lower = 0;
-        uint256 upper = nCheckpoints - 1;
-        while (upper > lower) {
-            uint256 center = upper - (upper - lower) / 2; // ceil, avoiding overflow
-            Checkpoint memory cp = checkpoints[account][center];
-            if (cp.fromBlock == blockNumber) {
-                return cp.votes;
-            } else if (cp.fromBlock < blockNumber) {
-                lower = center;
-            } else {
-                upper = center - 1;
-            }
-        }
-        return checkpoints[account][lower].votes;
-    }
+//         uint256 nCheckpoints = numCheckpoints[account];
+//         if (nCheckpoints == 0) {
+//             return 0;
+//         }
 
-    /* ========== INTERNAL FUNCTIONS ========== */
+//         // First check most recent balance
+//         if (checkpoints[account][nCheckpoints - 1].fromBlock <= blockNumber) {
+//             return checkpoints[account][nCheckpoints - 1].votes;
+//         }
 
-    function _delegate(address delegator, address delegatee) internal {
-        address currentDelegate = delegates[delegator];
-        uint256 delegatorBalance = _balances[delegator];
-        delegates[delegator] = delegatee;
+//         // Next check implicit zero balance
+//         if (checkpoints[account][0].fromBlock > blockNumber) {
+//             return 0;
+//         }
 
-        emit DelegateChanged(delegator, currentDelegate, delegatee);
+//         uint256 lower = 0;
+//         uint256 upper = nCheckpoints - 1;
+//         while (upper > lower) {
+//             uint256 center = upper - (upper - lower) / 2; // ceil, avoiding overflow
+//             Checkpoint memory cp = checkpoints[account][center];
+//             if (cp.fromBlock == blockNumber) {
+//                 return cp.votes;
+//             } else if (cp.fromBlock < blockNumber) {
+//                 lower = center;
+//             } else {
+//                 upper = center - 1;
+//             }
+//         }
+//         return checkpoints[account][lower].votes;
+//     }
 
-        _moveDelegates(currentDelegate, delegatee, delegatorBalance);
-    }
+//     /* ========== INTERNAL FUNCTIONS ========== */
 
-    function _moveDelegates(
-        address srcRep,
-        address dstRep,
-        uint256 amount
-    ) internal {
-        if (srcRep != dstRep && amount > 0) {
-            if (srcRep != address(0)) {
-                uint256 srcRepNum = numCheckpoints[srcRep];
-                uint256 srcRepOld = srcRepNum > 0 ? checkpoints[srcRep][srcRepNum - 1].votes : 0;
-                uint256 srcRepNew = srcRepOld.sub(amount);
-                _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
-            }
+//     function _delegate(address delegator, address delegatee) internal {
+//         address currentDelegate = delegates[delegator];
+//         uint256 delegatorBalance = _balances[delegator];
+//         delegates[delegator] = delegatee;
 
-            if (dstRep != address(0)) {
-                uint256 dstRepNum = numCheckpoints[dstRep];
-                uint256 dstRepOld = dstRepNum > 0 ? checkpoints[dstRep][dstRepNum - 1].votes : 0;
-                uint256 dstRepNew = dstRepOld.add(amount);
-                _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);
-            }
-        }
-    }
+//         emit DelegateChanged(delegator, currentDelegate, delegatee);
 
-    function _writeCheckpoint(
-        address delegatee,
-        uint256 nCheckpoints,
-        uint256 oldVotes,
-        uint256 newVotes
-    ) internal {
-        if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromBlock == block.number) {
-            checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
-        } else {
-            checkpoints[delegatee][nCheckpoints] = Checkpoint(block.number, newVotes);
-            numCheckpoints[delegatee] = nCheckpoints + 1;
-        }
+//         _moveDelegates(currentDelegate, delegatee, delegatorBalance);
+//     }
 
-        emit DelegateVotesChanged(delegatee, oldVotes, newVotes);
-    }
+//     function _moveDelegates(
+//         address srcRep,
+//         address dstRep,
+//         uint256 amount
+//     ) internal {
+//         if (srcRep != dstRep && amount > 0) {
+//             if (srcRep != address(0)) {
+//                 uint256 srcRepNum = numCheckpoints[srcRep];
+//                 uint256 srcRepOld = srcRepNum > 0 ? checkpoints[srcRep][srcRepNum - 1].votes : 0;
+//                 uint256 srcRepNew = srcRepOld.sub(amount);
+//                 _writeCheckpoint(srcRep, srcRepNum, srcRepOld, srcRepNew);
+//             }
 
-    /**
-        @notice Ensure delegation moves when token is transferred.
-     */
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 amount
-    ) internal override {
-        _moveDelegates(delegates[from], delegates[to], amount);
-    }
-}
+//             if (dstRep != address(0)) {
+//                 uint256 dstRepNum = numCheckpoints[dstRep];
+//                 uint256 dstRepOld = dstRepNum > 0 ? checkpoints[dstRep][dstRepNum - 1].votes : 0;
+//                 uint256 dstRepNew = dstRepOld.add(amount);
+//                 _writeCheckpoint(dstRep, dstRepNum, dstRepOld, dstRepNew);
+//             }
+//         }
+//     }
+
+//     function _writeCheckpoint(
+//         address delegatee,
+//         uint256 nCheckpoints,
+//         uint256 oldVotes,
+//         uint256 newVotes
+//     ) internal {
+//         if (nCheckpoints > 0 && checkpoints[delegatee][nCheckpoints - 1].fromBlock == block.number) {
+//             checkpoints[delegatee][nCheckpoints - 1].votes = newVotes;
+//         } else {
+//             checkpoints[delegatee][nCheckpoints] = Checkpoint(block.number, newVotes);
+//             numCheckpoints[delegatee] = nCheckpoints + 1;
+//         }
+
+//         emit DelegateVotesChanged(delegatee, oldVotes, newVotes);
+//     }
+
+//     /**
+//         @notice Ensure delegation moves when token is transferred.
+//      */
+//     function _beforeTokenTransfer(
+//         address from,
+//         address to,
+//         uint256 amount
+//     ) internal override {
+//         _moveDelegates(delegates[from], delegates[to], amount);
+//     }
+// }
