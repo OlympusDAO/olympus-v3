@@ -26,6 +26,7 @@ contract MockAuraRewardPool is IAuraRewardPool {
     // Tokens
     address public depositToken;
     address public rewardToken;
+    address public aura;
 
     // Reward Token Reward Rate (per second)
     uint256 public rewardRate = 1e18;
@@ -34,9 +35,10 @@ contract MockAuraRewardPool is IAuraRewardPool {
     uint256 public extraRewardsLength;
     address[] public extraRewards;
 
-    constructor(address depositToken_, address reward_) {
+    constructor(address depositToken_, address reward_, address aura_) {
         depositToken = depositToken_;
         rewardToken = reward_;
+        aura = aura_;
     }
 
     function balanceOf(address account_) public view returns (uint256) {
@@ -49,6 +51,14 @@ contract MockAuraRewardPool is IAuraRewardPool {
 
     function getReward(address account_, bool claimExtras_) public {
         MockERC20(rewardToken).mint(account_, 1e18);
+        if (aura != address(0)) MockERC20(aura).mint(account_, 1e18);
+
+        if (claimExtras_) {
+            for (uint256 i; i < extraRewardsLength; i++) {
+                IAuraRewardPool(extraRewards[i]).getReward(account_, false);
+                ++i;
+            }
+        }
     }
 
     function withdrawAndUnwrap(uint256 amount_, bool claim_) external {
@@ -58,6 +68,15 @@ contract MockAuraRewardPool is IAuraRewardPool {
 
     function earned(address account_) external view returns (uint256) {
         return 1e18;
+    }
+
+    function addExtraReward(address reward_) external {
+        extraRewards.push(reward_);
+        extraRewardsLength++;
+    }
+
+    function setRewardRate(uint256 rate_) external {
+        rewardRate = rate_;
     }
 }
 

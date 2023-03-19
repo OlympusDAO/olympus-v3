@@ -3,12 +3,12 @@ pragma solidity 0.8.15;
 
 import "src/Kernel.sol";
 
-/// @title  Olympus Liquidity Vault Registry
-/// @notice Olympus Liquidity Vault Registry (Module) Contract
-/// @dev    The Olympus Liquidity Vault Registry Module tracks the single-sided liquidity vaults
+/// @title  Olympus Boosted Liquidity Vault Registry
+/// @notice Olympus Boosted Liquidity Vault Registry (Module) Contract
+/// @dev    The Olympus Boosted Liquidity Vault Registry Module tracks the boosted liquidity vaults
 ///         that are approved to be used by the Olympus protocol. This allows for a single-soure
 ///         of truth for reporting purposes around total OHM deployed and net emissions.
-abstract contract LQREGv1 is Module {
+abstract contract BLREGv1 is Module {
     // ========= EVENTS ========= //
 
     event VaultAdded(address indexed vault);

@@ -18,6 +18,7 @@ import {IAuraBooster, IAuraRewardPool} from "policies/BoostedLiquidity/interface
 
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {IBLVaultManagerLido, BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
@@ -75,6 +76,7 @@ contract BLVaultLidoTest is Test {
     Kernel internal kernel;
     OlympusMinter internal minter;
     OlympusTreasury internal treasury;
+    OlympusBoostedLiquidityRegistry internal blreg;
     OlympusRoles internal roles;
 
     RolesAdmin internal rolesAdmin;
@@ -130,7 +132,7 @@ contract BLVaultLidoTest is Test {
 
         // Deploy mock Aura contracts
         {
-            auraPool = new MockAuraRewardPool(address(vault.bpt()), address(bal));
+            auraPool = new MockAuraRewardPool(address(vault.bpt()), address(bal), address(aura));
             booster = new MockAuraBooster(address(vault.bpt()), address(auraPool));
         }
 
@@ -143,6 +145,7 @@ contract BLVaultLidoTest is Test {
         {
             minter = new OlympusMinter(kernel, address(ohm));
             treasury = new OlympusTreasury(kernel);
+            blreg = new OlympusBoostedLiquidityRegistry(kernel);
             roles = new OlympusRoles(kernel);
         }
 
@@ -201,6 +204,7 @@ contract BLVaultLidoTest is Test {
             // Initialize modules
             kernel.executeAction(Actions.InstallModule, address(minter));
             kernel.executeAction(Actions.InstallModule, address(treasury));
+            kernel.executeAction(Actions.InstallModule, address(blreg));
             kernel.executeAction(Actions.InstallModule, address(roles));
 
             // Activate policies

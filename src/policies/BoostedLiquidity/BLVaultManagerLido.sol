@@ -5,6 +5,7 @@ pragma solidity 0.8.15;
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1, RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {BLREGv1} from "src/modules/BLREG/BLREG.v1.sol";
 import "src/Kernel.sol";
 
 // Import external dependencies
@@ -44,6 +45,7 @@ contract BLVaultManagerLido is Policy, IBLVaultManagerLido, RolesConsumer {
     // Modules
     MINTRv1 public MINTR;
     TRSRYv1 public TRSRY;
+    BLREGv1 public BLREG;
 
     // Tokens
     address public ohm;
@@ -141,14 +143,16 @@ contract BLVaultManagerLido is Policy, IBLVaultManagerLido, RolesConsumer {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
+        dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("MINTR");
         dependencies[1] = toKeycode("TRSRY");
-        dependencies[2] = toKeycode("ROLES");
+        dependencies[2] = toKeycode("BLREG");
+        dependencies[3] = toKeycode("ROLES");
 
         MINTR = MINTRv1(getModuleAddress(dependencies[0]));
         TRSRY = TRSRYv1(getModuleAddress(dependencies[1]));
-        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
+        BLREG = BLREGv1(getModuleAddress(dependencies[2]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[3]));
     }
 
     /// @inheritdoc Policy
@@ -159,11 +163,14 @@ contract BLVaultManagerLido is Policy, IBLVaultManagerLido, RolesConsumer {
         returns (Permissions[] memory permissions)
     {
         Keycode mintrKeycode = MINTR.KEYCODE();
+        Keycode blregKeycode = BLREG.KEYCODE();
 
         permissions = new Permissions[](5);
         permissions[0] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
         permissions[1] = Permissions(mintrKeycode, MINTR.burnOhm.selector);
         permissions[2] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
+        permissions[3] = Permissions(blregKeycode, BLREG.addVault.selector);
+        permissions[4] = Permissions(blregKeycode, BLREG.removeVault.selector);
     }
 
     //============================================================================================//
@@ -488,11 +495,13 @@ contract BLVaultManagerLido is Policy, IBLVaultManagerLido, RolesConsumer {
     /// @inheritdoc IBLVaultManagerLido
     function activate() external override onlyRole("liquidityvault_admin") {
         isLidoBLVaultActive = true;
+        BLREG.addVault(address(this));
     }
 
     /// @inheritdoc IBLVaultManagerLido
     function deactivate() external override onlyRole("liquidityvault_admin") {
         isLidoBLVaultActive = false;
+        BLREG.removeVault(address(this));
     }
 
     //============================================================================================//

@@ -18,6 +18,7 @@ import {IAuraBooster, IAuraRewardPool} from "policies/BoostedLiquidity/interface
 
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {IBLVaultManagerLido, BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
@@ -74,6 +75,7 @@ contract BLVaultManagerLidoTest is Test {
     Kernel internal kernel;
     OlympusMinter internal minter;
     OlympusTreasury internal treasury;
+    OlympusBoostedLiquidityRegistry internal blreg;
     OlympusRoles internal roles;
 
     RolesAdmin internal rolesAdmin;
@@ -124,7 +126,7 @@ contract BLVaultManagerLidoTest is Test {
 
         // Deploy mock Aura contracts
         {
-            auraPool = new MockAuraRewardPool(address(vault.bpt()), address(bal));
+            auraPool = new MockAuraRewardPool(address(vault.bpt()), address(bal), address(aura));
             booster = new MockAuraBooster(address(vault.bpt()), address(auraPool));
         }
 
@@ -137,6 +139,7 @@ contract BLVaultManagerLidoTest is Test {
         {
             minter = new OlympusMinter(kernel, address(ohm));
             treasury = new OlympusTreasury(kernel);
+            blreg = new OlympusBoostedLiquidityRegistry(kernel);
             roles = new OlympusRoles(kernel);
         }
 
@@ -195,6 +198,7 @@ contract BLVaultManagerLidoTest is Test {
             // Initialize modules
             kernel.executeAction(Actions.InstallModule, address(minter));
             kernel.executeAction(Actions.InstallModule, address(treasury));
+            kernel.executeAction(Actions.InstallModule, address(blreg));
             kernel.executeAction(Actions.InstallModule, address(roles));
 
             // Activate policies
@@ -805,11 +809,19 @@ contract BLVaultManagerLidoTest is Test {
     }
 
     function testCorrectness_activateCorrectlySetsIsLidoBLVaultActive() public {
+        // Setup
+        vaultManager.deactivate();
+
+        // Check state before
+        assertEq(vaultManager.isLidoBLVaultActive(), false);
+        assertEq(blreg.activeVaultCount(), 0);
+
         // Activate
         vaultManager.activate();
 
         // Check state after
         assertEq(vaultManager.isLidoBLVaultActive(), true);
+        assertEq(blreg.activeVaults(0), address(vaultManager));
     }
 
     /// [X]  deactivate
@@ -830,6 +842,11 @@ contract BLVaultManagerLidoTest is Test {
     }
 
     function testCorrectness_deactivateCorrectlySetsIsLidoBLVaultActive() public {
+        // Check state before
+        assertEq(vaultManager.isLidoBLVaultActive(), true);
+        assertEq(blreg.activeVaultCount(), 1);
+        assertEq(blreg.activeVaults(0), address(vaultManager));
+
         // Deactivate
         vaultManager.deactivate();
 

@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {LQREGv1} from "src/modules/LQREG/LQREG.v1.sol";
+import {BLREGv1} from "src/modules/BLREG/BLREG.v1.sol";
 import "src/Kernel.sol";
 
-/// @title  Olympus Liquidity Vault Registry
-/// @notice Olympus Liquidity Vault Registry (Module) Contract
-/// @dev    The Olympus Liquidity Vault Registry Module tracks the single-sided liquidity vaults
+/// @title  Olympus Boosted Liquidity Vault Registry
+/// @notice Olympus Boosted Liquidity Vault Registry (Module) Contract
+/// @dev    The Olympus Boosted Liquidity Vault Registry Module tracks the boosted liquidity vaults
 ///         that are approved to be used by the Olympus protocol. This allows for a single-soure
 ///         of truth for reporting purposes around total OHM deployed and net emissions.
-contract OlympusLiquidityRegistry is LQREGv1 {
+contract OlympusBoostedLiquidityRegistry is BLREGv1 {
     //============================================================================================//
     //                                      MODULE SETUP                                          //
     //============================================================================================//
@@ -18,7 +18,7 @@ contract OlympusLiquidityRegistry is LQREGv1 {
 
     /// @inheritdoc Module
     function KEYCODE() public pure override returns (Keycode) {
-        return toKeycode("LQREG");
+        return toKeycode("BLREG");
     }
 
     /// @inheritdoc Module
@@ -31,7 +31,7 @@ contract OlympusLiquidityRegistry is LQREGv1 {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @inheritdoc LQREGv1
+    /// @inheritdoc BLREGv1
     function addVault(address vault_) external override permissioned {
         activeVaults.push(vault_);
         ++activeVaultCount;
@@ -39,7 +39,7 @@ contract OlympusLiquidityRegistry is LQREGv1 {
         emit VaultAdded(vault_);
     }
 
-    /// @inheritdoc LQREGv1
+    /// @inheritdoc BLREGv1
     function removeVault(address vault_) external override permissioned {
         // Find index of vault in array
         for (uint256 i; i < activeVaultCount; ) {
