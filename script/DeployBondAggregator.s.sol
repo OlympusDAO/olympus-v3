@@ -27,6 +27,4 @@ contract DeployBondAggregator is Script {
   }
 }
 
-        // Kernel kernel_,
-        // IBondAggregator aggregator_,
-        // ERC20 gdao_
+ //    constructor(address guardian_, Authority authority_) Auth(guardian_, authority_) {}

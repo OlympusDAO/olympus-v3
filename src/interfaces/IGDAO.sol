@@ -1,10 +1,9 @@
-// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.7.5;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-interface IxGDAO is IERC20 {
-   function mint(address _to, uint256 _amount) external;
+interface IGDAO is IERC20 {
+  function mint(address _to, uint256 _amount) external;
 
   function burn(address _from, uint256 _amount) external;
 
@@ -14,6 +13,5 @@ interface IxGDAO is IERC20 {
 
   function balanceTo(uint256 _amount) external view returns (uint256);
 
-  function migrate( address _staking, address _sGDAO ) external;
-
+  function migrate( address _staking, address _sOHM ) external;
 }

@@ -9,7 +9,16 @@ forge script script/DeployGDAO.s.sol:GdaoDeploy --fork-url http://127.0.0.1:8545
 forge script script/DeployGDAO.s.sol:GdaoDeploy --broadcast --fork-url http://127.0.0.1:8545
 
 # Deploy xGDAO? - to do
+forge script script/v2/DeployxGDAO.s.sol:xGdaoDeploy --fork-url http://127.0.0.1:8545
+forge script script/v2/DeployxGDAO.s.sol:xGdaoDeploy --broadcast --fork-url http://127.0.0.1:8545
 
+# Deploy sGDAO? - to do
+forge script script/v2/DeploysGDAO.s.sol:sGdaoDeploy --fork-url http://127.0.0.1:8545
+forge script script/v2/DeploysGDAO.s.sol:sGdaoDeploy --broadcast --fork-url http://127.0.0.1:8545
+
+# Deploy GDAOStaking - to do
+forge script script/v2/DeployGDAOStaking.s.sol:GDAOStakingDeploy --fork-url http://127.0.0.1:8545
+forge script script/v2/DeployGDAOStaking.s.sol:GDAOStakingDeploy --broadcast --fork-url http://127.0.0.1:8545
 
 # Modules
 
@@ -33,7 +42,7 @@ forge script script/DeployMockPriceFeed.s.sol:DeployMockPriceFeed --broadcast --
 forge script script/DeployPrice.s.sol:DeployPrice --fork-url http://127.0.0.1:8545
 forge script script/DeployPrice.s.sol:DeployPrice --broadcast --fork-url http://127.0.0.1:8545
 
-# Deploy Range
+# Deploy Range - can deploy later (need more R&D)
 forge script script/modules/DeployRange.s.sol:DeployRange --fork-url http://127.0.0.1:8545
 forge script script/modules/DeployRange.s.sol:DeployRange --broadcast --fork-url http://127.0.0.1:8545
 
@@ -45,19 +54,24 @@ forge script script/modules/DeployRoles.s.sol:DeployRoles --broadcast --fork-url
 forge script script/modules/DeployTreasury.s.sol:DeployTreasury --fork-url http://127.0.0.1:8545
 forge script script/modules/DeployTreasury.s.sol:DeployTreasury --broadcast --fork-url http://127.0.0.1:8545
 
-# Deploy Votes
+# Deploy Votes - can deploy with xGDAO
 forge script script/modules/DeployVotes.s.sol:DeployVotes --fork-url http://127.0.0.1:8545
 forge script script/modules/DeployVotes.s.sol:DeployVotes --broadcast --fork-url http://127.0.0.1:8545
 
 # Policies
 
-# Deploy Bond Aggregator - to do
+# Deploy Bond Aggregator - set guardian and authority
 forge script script/DeployBondAggregator.s.sol:DeployBondAggregator --fork-url http://127.0.0.1:8545
 forge script script/DeployBondAggregator.s.sol:DeployBondAggregator --broadcast --fork-url http://127.0.0.1:8545
 
-# Deploy Bond Callback - to do
+# Deploy Bond Callback - get bondaggregator address
 forge script script/DeployBondCallback.s.sol:DeployBondCallback --fork-url http://127.0.0.1:8545
 forge script script/DeployBondCallback.s.sol:DeployBondCallback --broadcast --fork-url http://127.0.0.1:8545
+
+# Deploy FixedTermTeller
+forge script script/DeployFixedTermTeller.s.sol:DeployBondFixedTermTeller --fork-url http://127.0.0.1:8545
+forge script script/DeployFixedTermTeller.s.sol:DeployBondFixedTermTeller --broadcast --fork-url http://127.0.0.1:8545
+
 
 # Deploy Operator - only needed when there are reserve assets - to do
 

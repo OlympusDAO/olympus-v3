@@ -17,7 +17,7 @@ contract DeployDistributor is Script {
     address kernel_addr = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
     Kernel kernel = Kernel(kernel_addr);
     address gdao_addr = 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512;
-    address staking_addr = 0x6d65B498cb23DEabA4F3eFB28b9FF90f4bF4b9E2;
+    address staking_addr = 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512; //update 
     uint256 initialRate = 12055988;
     
 

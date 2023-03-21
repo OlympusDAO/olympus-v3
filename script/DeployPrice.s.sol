@@ -16,10 +16,10 @@ contract DeployPrice is Script {
     uint256 privateKey = vm.deriveKey(seedPhrase, 0);
     vm.startBroadcast(privateKey);
     address kernel_addr = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
-    address gdaoEthPriceFeed_addr = 0xdC8E4eD326cFb730a759312B6b1727C6Ef9ca233; // address -> oracle? MockPrice contract (deploy first)
+    address gdaoEthPriceFeed_addr = 0x5FC8d32690cc91D4c39d9d3abcBD16989F875707; // address -> oracle? MockPrice contract (deploy first)
     AggregatorV2V3Interface gdaoEthPriceFeed = AggregatorV2V3Interface(gdaoEthPriceFeed_addr);
     uint48 gdaoEthUpdateThreshold = 86400; //1x a day
-    address reserveEthPriceFeed_addr = 0xdC8E4eD326cFb730a759312B6b1727C6Ef9ca233; // address -> oracle? MockPrice contract (deploy first)
+    address reserveEthPriceFeed_addr = 0x5FC8d32690cc91D4c39d9d3abcBD16989F875707; // address -> oracle? MockPrice contract (deploy first)
     AggregatorV2V3Interface reserveEthPriceFeed = AggregatorV2V3Interface(reserveEthPriceFeed_addr);
     uint48 reserveEthUpdateThreshold = 86400; //1x a day
     uint48 observationFrequency = 28800; // 3x a day

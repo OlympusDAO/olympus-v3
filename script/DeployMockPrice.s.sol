@@ -2,28 +2,32 @@
 pragma solidity ^0.8.15;
 
 import {Script} from 'forge-std/Script.sol';
-import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
-import {GoerliDaoRoles} from "src/modules/ROLES/GoerliDaoRoles.sol";
+import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {Kernel} from "src/Kernel.sol";
 
 /// @notice A very simple deployment script
-contract DeployRange is Script {
+contract DeployMockPrice is Script {
 
   /// @notice The main script entrypoint
-  /// @return roles The deployed contract
-  function run() external returns (GoerliDaoRoles roles) {
+  /// @return mock_price The deployed contract
+  function run() external returns (MockPrice mock_price) {
     string memory seedPhrase = vm.readFile(".secret");
     uint256 privateKey = vm.deriveKey(seedPhrase, 0);
     vm.startBroadcast(privateKey);
     address kernel_addr = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
+    uint48 observationFrequency = 28800; // 3x a day
+    uint256 minimumTargetPrice = 10410000000000000000; // 10.41? 
 
     Kernel kernel = Kernel(kernel_addr);
 
-    roles = new GoerliDaoRoles(kernel);
+    mock_price = new MockPrice(kernel, observationFrequency, minimumTargetPrice);
 
     vm.stopBroadcast();
-    return roles;
+    return mock_price;
   }
 }
 
+
         // Kernel kernel_,
+        // uint48 observationFrequency_,
+        // uint256 minimumTargetPrice_

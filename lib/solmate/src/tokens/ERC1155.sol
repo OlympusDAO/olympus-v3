@@ -40,7 +40,6 @@ abstract contract ERC1155 {
                              METADATA LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function uri(uint256 id) public view virtual returns (string memory);
 
     /*//////////////////////////////////////////////////////////////
                               ERC1155 LOGIC

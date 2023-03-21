@@ -20,7 +20,7 @@ contract DeployBondCallback is Script {
     address kernel_addr = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
     Kernel kernel = Kernel(kernel_addr);
     
-    address aggregator_addr = 0x007A66A2a13415DB3613C1a4dd1C942A285902d1; //0x007A66A2a13415DB3613C1a4dd1C942A285902d1;
+    address aggregator_addr = 0x8A791620dd6260079BF849Dc5567aDC3F2FdC318; //get from DeployBondAggregator.s.sol;
     IBondAggregator aggregator = IBondAggregator(aggregator_addr);
     address gdao_addr = 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512; // 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512;
     ERC20 gdao = ERC20(gdao_addr);
