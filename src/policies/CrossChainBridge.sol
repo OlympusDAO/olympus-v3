@@ -71,12 +71,16 @@ contract CrossChainBridge is
     ERC20 ohm;
 
     /// @notice Flag for if offchain OHM counter is enabled or not
-    bool public counterEnabled; // NOTE: Currently only used on mainnet
+    /// @dev    This counter is only used on mainnet currently. It is only safe if:
+    ///         1. OHM minted outside of bridge is only on one chain
+    ///         2. The counter is only enabled on that chain
+    bool public counterEnabled;
 
     /// @notice Flag to determine if bridge is allowed to send messages or not
     bool public bridgeActive;
 
-    /// @notice Count of how much OHM has been bridged offchain
+    /// @notice Count of how much OHM has been bridged offchain. Only nonzero if
+    ///         `counterEnabled` is true.
     uint256 public offchainOhmCounter;
 
     // LZ app state
@@ -173,9 +177,6 @@ contract CrossChainBridge is
         uint64,
         bytes memory payload_
     ) public {
-        // Needed to restrict access to low-level call from lzReceive
-        if (msg.sender != address(this)) revert Bridge_InvalidCaller();
-
         (address to, uint256 amount) = abi.decode(payload_, (address, uint256));
 
         if (counterEnabled) offchainOhmCounter -= amount;
@@ -211,7 +212,7 @@ contract CrossChainBridge is
         // implementation, so we are doing a regular call vs using ExcessivelySafeCall
         (bool success, bytes memory reason) = address(this).call(
             abi.encodeWithSelector(
-                this._receiveMessage.selector,
+                this.receiveMessage.selector,
                 srcChainId_,
                 srcAddress_,
                 nonce_,
@@ -225,6 +226,20 @@ contract CrossChainBridge is
             emit MessageFailed(srcChainId_, srcAddress_, nonce_, payload_, reason);
         }
     }
+
+    /// @notice Implementation of receiving an LZ message
+    /// @dev    Function must be public to be called by low-level call in lzReceive
+    function receiveMessage(
+        uint16 srcChainId_,
+        bytes memory srcAddress_,
+        uint64 nonce_,
+        bytes memory payload_
+    ) public {
+        // Needed to restrict access to low-level call from lzReceive
+        if (msg.sender != address(this)) revert Bridge_InvalidCaller();
+        _receiveMessage(srcChainId_, srcAddress_, nonce_, payload_);
+   }
+
 
     /// @notice Retry a failed receive message
     function retryMessage(
@@ -285,34 +300,6 @@ contract CrossChainBridge is
         // Mock the payload for sendOhm()
         bytes memory payload = abi.encode(to_, amount_);
         return lzEndpoint.estimateFees(dstChainId_, address(this), payload, false, adapterParams_);
-    }
-
-    /// @notice Verify if given gas is enough for the destination.
-    /// @dev    Used when an application uses custom adapter parameter and the amount of gas on the destination may
-    ///         vary for different messages
-    function _checkGasLimit(
-        uint16 dstChainId_,
-        uint16 type_,
-        bytes memory adapterParams_,
-        uint256 extraGas_
-    ) internal view {
-        uint256 providedGasLimit = _getGasLimit(adapterParams_);
-        uint256 minGasLimit = minDstGasLookup[dstChainId_][type_] + extraGas_;
-        if (minGasLimit == 0) revert Bridge_MinGasLimitNotSet();
-        if (providedGasLimit < minGasLimit) revert Bridge_GasLimitTooLow();
-    }
-
-    /// @notice Return the gas limit for a custom adapter parameter
-    function _getGasLimit(bytes memory adapterParams_)
-        internal
-        pure
-        virtual
-        returns (uint256 gasLimit)
-    {
-        if (adapterParams_.length < 34) revert Bridge_InvalidAdapterParams();
-        assembly {
-            gasLimit := mload(add(adapterParams_, 34))
-        }
     }
 
     // ========= LZ UserApplication & Admin config ========= //
