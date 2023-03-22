@@ -227,8 +227,7 @@ contract CrossChainBridge is
         // Needed to restrict access to low-level call from lzReceive
         if (msg.sender != address(this)) revert Bridge_InvalidCaller();
         _receiveMessage(srcChainId_, srcAddress_, nonce_, payload_);
-   }
-
+    }
 
     /// @notice Retry a failed receive message
     function retryMessage(
@@ -366,7 +365,7 @@ contract CrossChainBridge is
         return lzEndpoint.getConfig(version_, chainId_, address(this), configType_);
     }
 
-    /// @notice Get trusted remote for the given chain as an 
+    /// @notice Get trusted remote for the given chain as an
     function getTrustedRemoteAddress(uint16 remoteChainId_) external view returns (bytes memory) {
         bytes memory path = trustedRemoteLookup[remoteChainId_];
         if (path.length == 0) revert Bridge_NoTrustedPath();
