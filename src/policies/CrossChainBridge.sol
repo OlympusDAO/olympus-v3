@@ -33,10 +33,6 @@ contract CrossChainBridge is
     error Bridge_NoStoredMessage();
     error Bridge_InvalidPayload();
     error Bridge_DestinationNotTrusted();
-    error Bridge_MinGasLimitNotSet();
-    error Bridge_GasLimitTooLow();
-    error Bridge_InvalidMinGas();
-    error Bridge_InvalidAdapterParams();
     error Bridge_NoTrustedPath();
     error Bridge_Deactivated();
 
@@ -89,18 +85,11 @@ contract CrossChainBridge is
     /// @notice chainID => source address => endpoint nonce
     mapping(uint16 => mapping(bytes => mapping(uint64 => bytes32))) public failedMessages;
 
-    /// @notice Minimum gas needed for each chain. Optional.
-    /// @notice source chain => dest chain => min gas
-    mapping(uint16 => mapping(uint16 => uint256)) public minDstGasLookup;
-
     /// @notice Trusted remote paths. Must be set by admin.
     mapping(uint16 => bytes) public trustedRemoteLookup;
 
     /// @notice LZ precrime address
     address public precrime;
-
-    /// @notice LZ endpoint packet type
-    uint16 public constant PT_SEND = 0;
 
     //============================================================================================//
     //                                        POLICY SETUP                                        //
@@ -140,11 +129,10 @@ contract CrossChainBridge is
     {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        permissions = new Permissions[](4);
+        permissions = new Permissions[](3);
         permissions[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         permissions[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
         permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
-        permissions[3] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -272,12 +260,12 @@ contract CrossChainBridge is
         address payable refundAddress_,
         address zroPaymentAddress_,
         bytes memory adapterParams_,
-        uint256 _nativeFee
+        uint256 nativeFee_
     ) internal {
         bytes memory trustedRemote = trustedRemoteLookup[dstChainId_];
         if (trustedRemote.length == 0) revert Bridge_DestinationNotTrusted();
 
-        lzEndpoint.send{value: _nativeFee}(
+        lzEndpoint.send{value: nativeFee_}(
             dstChainId_,
             trustedRemote,
             payload_,
@@ -288,7 +276,7 @@ contract CrossChainBridge is
     }
 
     /// @notice Function to estimate how much gas is needed to send OHM
-    /// @dev    Should be called by frontend before making sendOhm call
+    /// @dev    Should be called by frontend before making sendOhm call.
     /// @return nativeFee - Native token amount to send to sendOhm
     /// @return zroFee - Fee paid in ZRO token. Unused.
     function estimateSendFee(
@@ -359,18 +347,6 @@ contract CrossChainBridge is
         emit SetPrecrime(precrime_);
     }
 
-    /// @notice Sets the minimum gas needed for a particular destination chain
-    /// @dev    Used for when custom adapter parameters are used.
-    function setMinDstGas(
-        uint16 dstChainId_,
-        uint16 packetType_,
-        uint256 minGas_
-    ) external onlyRole("bridge_admin") {
-        if (minGas_ == 0) revert Bridge_InvalidMinGas();
-        minDstGasLookup[dstChainId_][packetType_] = minGas_;
-        emit SetMinDstGas(dstChainId_, packetType_, minGas_);
-    }
-
     /// @notice Activate or deactivate the bridge
     function setBridgeStatus(bool isActive_) external onlyRole("bridge_admin") {
         bridgeActive = isActive_;
@@ -389,7 +365,7 @@ contract CrossChainBridge is
         return lzEndpoint.getConfig(version_, chainId_, address(this), configType_);
     }
 
-    /// @notice
+    /// @notice Get trusted remote for the given chain as an 
     function getTrustedRemoteAddress(uint16 remoteChainId_) external view returns (bytes memory) {
         bytes memory path = trustedRemoteLookup[remoteChainId_];
         if (path.length == 0) revert Bridge_NoTrustedPath();
