@@ -35,6 +35,7 @@ contract CrossChainBridge is
     error Bridge_DestinationNotTrusted();
     error Bridge_NoTrustedPath();
     error Bridge_Deactivated();
+    error Bridge_TrustedRemoteUninitialized();
 
     // Bridge-specific events
     event BridgeTransferred(address sender_, uint256 amount_, uint16 dstChain_);
@@ -46,15 +47,15 @@ contract CrossChainBridge is
         bytes srcAddress_,
         uint64 nonce_,
         bytes payload_,
-        bytes _reason
+        bytes reason_
     );
     event RetryMessageSuccess(
         uint16 srcChainId_,
         bytes srcAddress_,
         uint64 nonce_,
-        bytes32 _payloadHash
+        bytes32 payloadHash_
     );
-    event SetPrecrime(address precrime);
+    event SetPrecrime(address precrime_);
     event SetTrustedRemote(uint16 remoteChainId_, bytes path_);
     event SetTrustedRemoteAddress(uint16 remoteChainId_, bytes remoteAddress_);
     event SetMinDstGas(uint16 dstChainId_, uint16 type_, uint256 _minDstGas);
@@ -380,6 +381,8 @@ contract CrossChainBridge is
         returns (bool)
     {
         bytes memory trustedSource = trustedRemoteLookup[srcChainId_];
+        if (srcAddress_.length == 0 || trustedSource.length == 0)
+            revert Bridge_TrustedRemoteUninitialized();
         return (srcAddress_.length == trustedSource.length &&
             keccak256(srcAddress_) == keccak256(trustedSource));
     }
