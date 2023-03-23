@@ -165,7 +165,7 @@ contract CrossChainBridge is
         bytes memory,
         uint64,
         bytes memory payload_
-    ) public {
+    ) internal {
         (address to, uint256 amount) = abi.decode(payload_, (address, uint256));
 
         if (counterEnabled) offchainOhmCounter -= amount;
