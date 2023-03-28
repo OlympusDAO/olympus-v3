@@ -67,25 +67,9 @@ contract CrossChainBridge is
     ILayerZeroEndpoint public immutable lzEndpoint;
     ERC20 ohm;
 
-<<<<<<< HEAD
     /// @notice Flag to determine if bridge is allowed to send messages or not
     bool public bridgeActive;
 
-=======
-    /// @notice Flag for if offchain OHM counter is enabled or not
-    /// @dev    This counter is only used on mainnet currently. It is only safe if:
-    ///         1. OHM minted outside of bridge is only on one chain
-    ///         2. The counter is only enabled on that chain
-    bool public counterEnabled;
-
-    /// @notice Flag to determine if bridge is allowed to send messages or not
-    bool public bridgeActive;
-
-    /// @notice Count of how much OHM has been bridged offchain. Only nonzero if
-    ///         `counterEnabled` is true.
-    uint256 public offchainOhmCounter;
-
->>>>>>> e004ebb4cc5a0bcc287ac0aa154ac654908f9cf7
     // LZ app state
 
     /// @notice Storage for failed messages on receive.
