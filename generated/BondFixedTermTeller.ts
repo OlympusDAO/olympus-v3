@@ -315,6 +315,7 @@ export interface BondFixedTermTellerInterface extends utils.Interface {
     "OwnerUpdated(address,address)": EventFragment;
     "TransferBatch(address,address,address,uint256[],uint256[])": EventFragment;
     "TransferSingle(address,address,address,uint256,uint256)": EventFragment;
+    "URI(string,uint256)": EventFragment;
   };
 
   getEvent(nameOrSignatureOrTopic: "ApprovalForAll"): EventFragment;
@@ -324,6 +325,7 @@ export interface BondFixedTermTellerInterface extends utils.Interface {
   getEvent(nameOrSignatureOrTopic: "OwnerUpdated"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "TransferBatch"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "TransferSingle"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "URI"): EventFragment;
 }
 
 export interface ApprovalForAllEventObject {
@@ -414,6 +416,14 @@ export type TransferSingleEvent = TypedEvent<
 >;
 
 export type TransferSingleEventFilter = TypedEventFilter<TransferSingleEvent>;
+
+export interface URIEventObject {
+  value: string;
+  id: BigNumber;
+}
+export type URIEvent = TypedEvent<[string, BigNumber], URIEventObject>;
+
+export type URIEventFilter = TypedEventFilter<URIEvent>;
 
 export interface BondFixedTermTeller extends BaseContract {
   connect(signerOrProvider: Signer | Provider | string): this;
@@ -1014,6 +1024,12 @@ export interface BondFixedTermTeller extends BaseContract {
       id?: null,
       amount?: null
     ): TransferSingleEventFilter;
+
+    "URI(string,uint256)"(
+      value?: null,
+      id?: PromiseOrValue<BigNumberish> | null
+    ): URIEventFilter;
+    URI(value?: null, id?: PromiseOrValue<BigNumberish> | null): URIEventFilter;
   };
 
   estimateGas: {

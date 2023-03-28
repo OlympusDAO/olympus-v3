@@ -19,7 +19,7 @@ contract Faucet is ReentrancyGuard {
     // =========  STRUCTS ========= //
     enum Asset {
         ETH,
-        OHM,
+        GDAO,
         RESERVE
     }
 
@@ -34,19 +34,19 @@ contract Faucet is ReentrancyGuard {
     // =========  CONSTRUCTOR ========= //
     constructor(
         address admin_,
-        ERC20 ohm_,
+        ERC20 gdao_,
         ERC20 reserve_,
         uint256 ethDrip_,
-        uint256 ohmDrip_,
+        uint256 gdaoDrip_,
         uint256 reserveDrip_,
         uint256 dripInterval_
     ) {
         admin = admin_;
-        token[Asset.OHM] = ohm_;
+        token[Asset.GDAO] = gdao_;
         token[Asset.RESERVE] = reserve_;
 
         dripAmount[Asset.ETH] = ethDrip_;
-        dripAmount[Asset.OHM] = ohmDrip_;
+        dripAmount[Asset.GDAO] = gdaoDrip_;
         dripAmount[Asset.RESERVE] = reserveDrip_;
 
         dripInterval = dripInterval_;
@@ -70,7 +70,7 @@ contract Faucet is ReentrancyGuard {
 
     function dripTestAmounts() external {
         drip(Asset.ETH);
-        drip(Asset.OHM);
+        drip(Asset.GDAO);
         drip(Asset.RESERVE);
     }
 

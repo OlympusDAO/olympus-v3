@@ -14,27 +14,27 @@ const _abi = [
     inputs: [
       {
         internalType: "address",
-        name: "operator",
+        name: "",
         type: "address",
       },
       {
         internalType: "address",
-        name: "from",
+        name: "",
         type: "address",
       },
       {
         internalType: "uint256[]",
-        name: "ids",
+        name: "",
         type: "uint256[]",
       },
       {
         internalType: "uint256[]",
-        name: "amounts",
+        name: "",
         type: "uint256[]",
       },
       {
         internalType: "bytes",
-        name: "data",
+        name: "",
         type: "bytes",
       },
     ],
@@ -53,27 +53,27 @@ const _abi = [
     inputs: [
       {
         internalType: "address",
-        name: "operator",
+        name: "",
         type: "address",
       },
       {
         internalType: "address",
-        name: "from",
+        name: "",
         type: "address",
       },
       {
         internalType: "uint256",
-        name: "id",
+        name: "",
         type: "uint256",
       },
       {
         internalType: "uint256",
-        name: "amount",
+        name: "",
         type: "uint256",
       },
       {
         internalType: "bytes",
-        name: "data",
+        name: "",
         type: "bytes",
       },
     ],

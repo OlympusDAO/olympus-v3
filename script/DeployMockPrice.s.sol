@@ -14,7 +14,7 @@ contract DeployMockPrice is Script {
     string memory seedPhrase = vm.readFile(".secret");
     uint256 privateKey = vm.deriveKey(seedPhrase, 0);
     vm.startBroadcast(privateKey);
-    address kernel_addr = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
+    address kernel_addr = vm.envAddress("KERNEL");
     uint48 observationFrequency = 28800; // 3x a day
     uint256 minimumTargetPrice = 10410000000000000000; // 10.41? 
 

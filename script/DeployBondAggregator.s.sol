@@ -17,8 +17,9 @@ contract DeployBondAggregator is Script {
     string memory seedPhrase = vm.readFile(".secret");
     uint256 privateKey = vm.deriveKey(seedPhrase, 0);
     vm.startBroadcast(privateKey);
-    address guardian = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8; // use test wallet #2
-    address authority = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+    address guardian = vm.envAddress("LOCAL_GUARDIAN"); // use test wallet #2
+    address authority = vm.envAddress("LOCAL_AUTHORITY");
+
     Authority auth = Authority(authority);
     bond_aggregator = new BondAggregator(guardian, auth);
 

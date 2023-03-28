@@ -17,12 +17,14 @@ contract DeployBondCallback is Script {
     string memory seedPhrase = vm.readFile(".secret");
     uint256 privateKey = vm.deriveKey(seedPhrase, 0);
     vm.startBroadcast(privateKey);
-    address kernel_addr = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
+    address kernel_addr = vm.envAddress("KERNEL");
     Kernel kernel = Kernel(kernel_addr);
-    
-    address aggregator_addr = 0x8A791620dd6260079BF849Dc5567aDC3F2FdC318; //get from DeployBondAggregator.s.sol;
+    //get from DeployBondAggregator.s.sol;
+    address aggregator_addr = vm.envAddress("BOND_AGGREGATOR");
+
     IBondAggregator aggregator = IBondAggregator(aggregator_addr);
-    address gdao_addr = 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512; // 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512;
+    address gdao_addr = vm.envAddress("GDAO");
+
     ERC20 gdao = ERC20(gdao_addr);
 
     bond_callback = new BondCallback(kernel, aggregator, gdao);

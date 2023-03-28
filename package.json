@@ -17,6 +17,7 @@
         "test": "./shell/test_all.sh"
     },
     "devDependencies": {
+        "@typechain/ethers-v5": "^10.2.0",
         "prettier": "^2.5.1",
         "prettier-plugin-solidity": "^1.0.0-beta.19",
         "solhint": "^3.3.7",
@@ -29,8 +30,13 @@
         "printWidth": 100
     },
     "dependencies": {
-        "@typechain/ethers-v5": "^10.2.0",
+        "@ethersproject/abi": "^5.7.0",
+        "@ethersproject/address": "^5.7.0",
+        "@ethersproject/bytes": "^5.7.0",
+        "@ethersproject/providers": "^5.7.2",
+        "ethers": "5",
         "hardhat": "^2.13.0",
-        "hardhat-preprocessor": "^0.1.5"
+        "hardhat-preprocessor": "^0.1.5",
+        "typescript": "^5.0.2"
     }
 }

@@ -4,6 +4,7 @@
 // import {Script} from 'forge-std/Script.sol';
 // import {GoerliDaoVotes} from "src/modules/VOTES/GoerliDaoVotes.sol";
 // import {Kernel} from "src/Kernel.sol";
+// import {XGDAO} from "solmate/tokens/ERC20.sol";
 
 // /// @notice A very simple deployment script
 // contract Deployvotes is Script {
@@ -14,8 +15,10 @@
 //     string memory seedPhrase = vm.readFile(".secret");
 //     uint256 privateKey = vm.deriveKey(seedPhrase, 0);
 //     vm.startBroadcast(privateKey);
-//     address kernel_addr = 0x5FbDB2315678afecb367f032d93F642f64180aa3;
-//     address xgdao = ;
+//     address kernel_addr = vm.envAddress("LOCAL_KERNEL");
+//     address xgdao_addr = vm.envAddress("LOCAL_XGDAO_ADDR");
+
+//     ERC20 xgdao = new ERC20(xgdao_addr);
 
 //     Kernel kernel = Kernel(kernel_addr);
 

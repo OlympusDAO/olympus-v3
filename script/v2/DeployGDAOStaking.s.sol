@@ -15,13 +15,13 @@ contract GDAOStakingDeploy is Script {
     string memory seedPhrase = vm.readFile(".secret");
     uint256 privateKey = vm.deriveKey(seedPhrase, 0);
     vm.startBroadcast(privateKey);
-    address gdao = 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512; 
-    address sgdao = 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512; // update when deployed
-    address xgdao = 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512; // update when deployed
+    address gdao = vm.envAddress("GDAO"); // make sure updated in .env
+    address sgdao = vm.envAddress("SGDAO"); // make sure updated in .env
+    address xgdao = vm.envAddress("XGDAO"); // make sure updated in .env
     uint256 epochLength = 28800;
     uint256 firstEpochNumber = 1;
-    uint256 firstEpochTime = 1679376680;
-    address authority = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+    uint256 firstEpochTime = 1679791104;
+    address authority = vm.envAddress("LOCAL_AUTHORITY");
     GDAOStaking staking = new GDAOStaking(gdao, sgdao, xgdao, epochLength, firstEpochNumber, firstEpochTime, authority);
 
     vm.stopBroadcast();

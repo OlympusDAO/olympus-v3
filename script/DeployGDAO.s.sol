@@ -14,7 +14,7 @@ contract GdaoDeploy is Script {
     string memory seedPhrase = vm.readFile(".secret");
     uint256 privateKey = vm.deriveKey(seedPhrase, 0);
     vm.startBroadcast(privateKey);
-    address authority = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+    address authority = vm.envAddress("LOCAL_AUTHORITY");
     gdao = new GoerliDaoERC20Token(authority);
 
     vm.stopBroadcast();
