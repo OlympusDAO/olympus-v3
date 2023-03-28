@@ -33,12 +33,9 @@ contract CrossChainBridge is
     error Bridge_NoStoredMessage();
     error Bridge_InvalidPayload();
     error Bridge_DestinationNotTrusted();
-    error Bridge_MinGasLimitNotSet();
-    error Bridge_GasLimitTooLow();
-    error Bridge_InvalidMinGas();
-    error Bridge_InvalidAdapterParams();
     error Bridge_NoTrustedPath();
     error Bridge_Deactivated();
+    error Bridge_TrustedRemoteUninitialized();
 
     // Bridge-specific events
     event BridgeTransferred(address sender_, uint256 amount_, uint16 dstChain_);
@@ -50,15 +47,15 @@ contract CrossChainBridge is
         bytes srcAddress_,
         uint64 nonce_,
         bytes payload_,
-        bytes _reason
+        bytes reason_
     );
     event RetryMessageSuccess(
         uint16 srcChainId_,
         bytes srcAddress_,
         uint64 nonce_,
-        bytes32 _payloadHash
+        bytes32 payloadHash_
     );
-    event SetPrecrime(address precrime);
+    event SetPrecrime(address precrime_);
     event SetTrustedRemote(uint16 remoteChainId_, bytes path_);
     event SetTrustedRemoteAddress(uint16 remoteChainId_, bytes remoteAddress_);
     event SetMinDstGas(uint16 dstChainId_, uint16 type_, uint256 _minDstGas);
@@ -70,18 +67,30 @@ contract CrossChainBridge is
     ILayerZeroEndpoint public immutable lzEndpoint;
     ERC20 ohm;
 
+<<<<<<< HEAD
     /// @notice Flag to determine if bridge is allowed to send messages or not
     bool public bridgeActive;
 
+=======
+    /// @notice Flag for if offchain OHM counter is enabled or not
+    /// @dev    This counter is only used on mainnet currently. It is only safe if:
+    ///         1. OHM minted outside of bridge is only on one chain
+    ///         2. The counter is only enabled on that chain
+    bool public counterEnabled;
+
+    /// @notice Flag to determine if bridge is allowed to send messages or not
+    bool public bridgeActive;
+
+    /// @notice Count of how much OHM has been bridged offchain. Only nonzero if
+    ///         `counterEnabled` is true.
+    uint256 public offchainOhmCounter;
+
+>>>>>>> e004ebb4cc5a0bcc287ac0aa154ac654908f9cf7
     // LZ app state
 
     /// @notice Storage for failed messages on receive.
     /// @notice chainID => source address => endpoint nonce
     mapping(uint16 => mapping(bytes => mapping(uint64 => bytes32))) public failedMessages;
-
-    /// @notice Minimum gas needed for each chain. Optional.
-    /// @notice source chain => dest chain => min gas
-    mapping(uint16 => mapping(uint16 => uint256)) public minDstGasLookup;
 
     /// @notice Trusted remote paths. Must be set by admin.
     mapping(uint16 => bytes) public trustedRemoteLookup;
@@ -156,10 +165,7 @@ contract CrossChainBridge is
         bytes memory,
         uint64,
         bytes memory payload_
-    ) public {
-        // Needed to restrict access to low-level call from lzReceive
-        if (msg.sender != address(this)) revert Bridge_InvalidCaller();
-
+    ) internal {
         (address to, uint256 amount) = abi.decode(payload_, (address, uint256));
 
         MINTR.increaseMintApproval(address(this), amount);
@@ -193,7 +199,7 @@ contract CrossChainBridge is
         // implementation, so we are doing a regular call vs using ExcessivelySafeCall
         (bool success, bytes memory reason) = address(this).call(
             abi.encodeWithSelector(
-                this._receiveMessage.selector,
+                this.receiveMessage.selector,
                 srcChainId_,
                 srcAddress_,
                 nonce_,
@@ -206,6 +212,19 @@ contract CrossChainBridge is
             failedMessages[srcChainId_][srcAddress_][nonce_] = keccak256(payload_);
             emit MessageFailed(srcChainId_, srcAddress_, nonce_, payload_, reason);
         }
+    }
+
+    /// @notice Implementation of receiving an LZ message
+    /// @dev    Function must be public to be called by low-level call in lzReceive
+    function receiveMessage(
+        uint16 srcChainId_,
+        bytes memory srcAddress_,
+        uint64 nonce_,
+        bytes memory payload_
+    ) public {
+        // Needed to restrict access to low-level call from lzReceive
+        if (msg.sender != address(this)) revert Bridge_InvalidCaller();
+        _receiveMessage(srcChainId_, srcAddress_, nonce_, payload_);
     }
 
     /// @notice Retry a failed receive message
@@ -239,12 +258,12 @@ contract CrossChainBridge is
         address payable refundAddress_,
         address zroPaymentAddress_,
         bytes memory adapterParams_,
-        uint256 _nativeFee
+        uint256 nativeFee_
     ) internal {
         bytes memory trustedRemote = trustedRemoteLookup[dstChainId_];
         if (trustedRemote.length == 0) revert Bridge_DestinationNotTrusted();
 
-        lzEndpoint.send{value: _nativeFee}(
+        lzEndpoint.send{value: nativeFee_}(
             dstChainId_,
             trustedRemote,
             payload_,
@@ -255,7 +274,7 @@ contract CrossChainBridge is
     }
 
     /// @notice Function to estimate how much gas is needed to send OHM
-    /// @dev    Should be called by frontend before making sendOhm call
+    /// @dev    Should be called by frontend before making sendOhm call.
     /// @return nativeFee - Native token amount to send to sendOhm
     /// @return zroFee - Fee paid in ZRO token. Unused.
     function estimateSendFee(
@@ -267,34 +286,6 @@ contract CrossChainBridge is
         // Mock the payload for sendOhm()
         bytes memory payload = abi.encode(to_, amount_);
         return lzEndpoint.estimateFees(dstChainId_, address(this), payload, false, adapterParams_);
-    }
-
-    /// @notice Verify if given gas is enough for the destination.
-    /// @dev    Used when an application uses custom adapter parameter and the amount of gas on the destination may
-    ///         vary for different messages
-    function _checkGasLimit(
-        uint16 dstChainId_,
-        uint16 type_,
-        bytes memory adapterParams_,
-        uint256 extraGas_
-    ) internal view {
-        uint256 providedGasLimit = _getGasLimit(adapterParams_);
-        uint256 minGasLimit = minDstGasLookup[dstChainId_][type_] + extraGas_;
-        if (minGasLimit == 0) revert Bridge_MinGasLimitNotSet();
-        if (providedGasLimit < minGasLimit) revert Bridge_GasLimitTooLow();
-    }
-
-    /// @notice Return the gas limit for a custom adapter parameter
-    function _getGasLimit(bytes memory adapterParams_)
-        internal
-        pure
-        virtual
-        returns (uint256 gasLimit)
-    {
-        if (adapterParams_.length < 34) revert Bridge_InvalidAdapterParams();
-        assembly {
-            gasLimit := mload(add(adapterParams_, 34))
-        }
     }
 
     // ========= LZ UserApplication & Admin config ========= //
@@ -354,18 +345,6 @@ contract CrossChainBridge is
         emit SetPrecrime(precrime_);
     }
 
-    /// @notice Sets the minimum gas needed for a particular destination chain
-    /// @dev    Used for when custom adapter parameters are used.
-    function setMinDstGas(
-        uint16 dstChainId_,
-        uint16 packetType_,
-        uint256 minGas_
-    ) external onlyRole("bridge_admin") {
-        if (minGas_ == 0) revert Bridge_InvalidMinGas();
-        minDstGasLookup[dstChainId_][packetType_] = minGas_;
-        emit SetMinDstGas(dstChainId_, packetType_, minGas_);
-    }
-
     /// @notice Activate or deactivate the bridge
     function setBridgeStatus(bool isActive_) external onlyRole("bridge_admin") {
         bridgeActive = isActive_;
@@ -384,7 +363,7 @@ contract CrossChainBridge is
         return lzEndpoint.getConfig(version_, chainId_, address(this), configType_);
     }
 
-    /// @notice
+    /// @notice Get trusted remote for the given chain as an
     function getTrustedRemoteAddress(uint16 remoteChainId_) external view returns (bytes memory) {
         bytes memory path = trustedRemoteLookup[remoteChainId_];
         if (path.length == 0) revert Bridge_NoTrustedPath();
@@ -399,6 +378,8 @@ contract CrossChainBridge is
         returns (bool)
     {
         bytes memory trustedSource = trustedRemoteLookup[srcChainId_];
+        if (srcAddress_.length == 0 || trustedSource.length == 0)
+            revert Bridge_TrustedRemoteUninitialized();
         return (srcAddress_.length == trustedSource.length &&
             keccak256(srcAddress_) == keccak256(trustedSource));
     }
