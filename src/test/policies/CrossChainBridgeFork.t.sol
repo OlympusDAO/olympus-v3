@@ -46,8 +46,8 @@ contract CrossChainBridgeForkTest is Test {
 
     uint256 internal constant INITIAL_AMOUNT = 100000e9;
 
-    string RPC_ETH_MAINNET = "https://eth.llamarpc.com";
-    string RPC_POLYGON_MAINNET = "https://polygon.llamarpc.com";
+    string RPC_ETH_MAINNET = vm.envString("ETH_MAINNET_RPC_URL");
+    string RPC_POLYGON_MAINNET = vm.envString("POLYGON_MAINNET_RPC_URL");
 
     // Mainnet contracts
     Kernel internal kernel;
@@ -84,7 +84,7 @@ contract CrossChainBridgeForkTest is Test {
             ROLES = new OlympusRoles(kernel);
 
             // Enable counter
-            bridge = new CrossChainBridge(kernel, L1_lzEndpoint, true, 0);
+            bridge = new CrossChainBridge(kernel, L1_lzEndpoint);
             rolesAdmin = new RolesAdmin(kernel);
 
             kernel.executeAction(Actions.InstallModule, address(MINTR));
@@ -113,7 +113,7 @@ contract CrossChainBridgeForkTest is Test {
             ROLES_l2 = new OlympusRoles(kernel_l2);
 
             // No counter necessary since this is L2
-            bridge_l2 = new CrossChainBridge(kernel_l2, L2_lzEndpoint, false, 0);
+            bridge_l2 = new CrossChainBridge(kernel_l2, L2_lzEndpoint);
             rolesAdmin_l2 = new RolesAdmin(kernel_l2);
 
             kernel_l2.executeAction(Actions.InstallModule, address(MINTR_l2));
@@ -195,35 +195,4 @@ contract CrossChainBridgeForkTest is Test {
         assertEq(ohm.balanceOf(user2), amount);
     }
     */
-
-    function testCorrectness_OffchainOhmCountAccurate(uint256 amount_) public {
-        vm.assume(amount_ > 0);
-        vm.assume(amount_ < INITIAL_AMOUNT / 3);
-
-        uint256 count;
-
-        vm.selectFork(L1_FORK_ID);
-        vm.recordLogs();
-
-        // Do 3 transfers then check for accuracy
-        vm.startPrank(user1);
-        for (uint256 i = 0; i < 3; ++i) {
-            ohm1.approve(address(bridge), amount_);
-            bridge.sendOhm{value: 1e17}(L2_ID, user2, amount_);
-            count += amount_;
-        }
-        vm.stopPrank();
-
-        // pigeon stuff
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        lzHelper.help(L2_lzEndpoint, 3e17, L2_FORK_ID, logs);
-
-        // Mainnet bridge should have a count
-        vm.selectFork(L1_FORK_ID);
-        assertEq(count, bridge.offchainOhmCounter());
-
-        // L2 bridge should not be counting
-        vm.selectFork(L2_FORK_ID);
-        assertEq(0, bridge_l2.offchainOhmCounter());
-    }
 }

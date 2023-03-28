@@ -71,7 +71,7 @@ contract BridgeDeploy is Script {
 
         // Approve policies
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-        _deployBridge(address(kernel), lzEndpoint_, isMainnet_, initCount_); // Deploy and activate bridge
+        _deployBridge(address(kernel), lzEndpoint_); // Deploy and activate bridge
 
         // Grant roles
         auth.pushVault(address(MINTR), true);
@@ -88,16 +88,14 @@ contract BridgeDeploy is Script {
         uint256 initCount_
     ) public {
         vm.broadcast();
-        _deployBridge(kernel_, lzEndpoint_, enableCounter_, initCount_);
+        _deployBridge(kernel_, lzEndpoint_);
     }
 
     function _deployBridge(
         address kernel_,
-        address lzEndpoint_,
-        bool enableCounter_,
-        uint256 initCount_
+        address lzEndpoint_
     ) public {
-        bridge = new CrossChainBridge(Kernel(kernel_), lzEndpoint_, enableCounter_, initCount_);
+        bridge = new CrossChainBridge(Kernel(kernel_), lzEndpoint_);
         console2.log("Bridge deployed at:", address(bridge));
 
         kernel.executeAction(Actions.ActivatePolicy, address(bridge));
