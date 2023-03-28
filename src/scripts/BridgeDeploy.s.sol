@@ -91,10 +91,7 @@ contract BridgeDeploy is Script {
         _deployBridge(kernel_, lzEndpoint_);
     }
 
-    function _deployBridge(
-        address kernel_,
-        address lzEndpoint_
-    ) public {
+    function _deployBridge(address kernel_, address lzEndpoint_) public {
         bridge = new CrossChainBridge(Kernel(kernel_), lzEndpoint_);
         console2.log("Bridge deployed at:", address(bridge));
 

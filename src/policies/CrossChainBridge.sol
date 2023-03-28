@@ -86,10 +86,7 @@ contract CrossChainBridge is
     //                                        POLICY SETUP                                        //
     //============================================================================================//
 
-    constructor(
-        Kernel kernel_,
-        address endpoint_
-    ) Policy(kernel_) {
+    constructor(Kernel kernel_, address endpoint_) Policy(kernel_) {
         lzEndpoint = ILayerZeroEndpoint(endpoint_);
         bridgeActive = true;
     }
