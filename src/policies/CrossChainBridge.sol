@@ -70,14 +70,8 @@ contract CrossChainBridge is
     ILayerZeroEndpoint public immutable lzEndpoint;
     ERC20 ohm;
 
-    /// @notice Flag for if offchain OHM counter is enabled or not
-    bool public counterEnabled; // NOTE: Currently only used on mainnet
-
     /// @notice Flag to determine if bridge is allowed to send messages or not
     bool public bridgeActive;
-
-    /// @notice Count of how much OHM has been bridged offchain
-    uint256 public offchainOhmCounter;
 
     // LZ app state
 
@@ -92,11 +86,8 @@ contract CrossChainBridge is
     /// @notice Trusted remote paths. Must be set by admin.
     mapping(uint16 => bytes) public trustedRemoteLookup;
 
-    /// @notice LZ precrime address
+    /// @notice LZ precrime address. Currently unused.
     address public precrime;
-
-    /// @notice LZ endpoint packet type
-    uint16 public constant PT_SEND = 0;
 
     //============================================================================================//
     //                                        POLICY SETUP                                        //
@@ -104,15 +95,10 @@ contract CrossChainBridge is
 
     constructor(
         Kernel kernel_,
-        address endpoint_,
-        bool enableCounter_,
-        uint256 initCount_
+        address endpoint_
     ) Policy(kernel_) {
         lzEndpoint = ILayerZeroEndpoint(endpoint_);
         bridgeActive = true;
-        counterEnabled = enableCounter_;
-        // Used primarily for migrating bridge data
-        if (enableCounter_) offchainOhmCounter = initCount_;
     }
 
     /// @inheritdoc Policy
@@ -136,11 +122,10 @@ contract CrossChainBridge is
     {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        permissions = new Permissions[](4);
+        permissions = new Permissions[](3);
         permissions[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         permissions[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
         permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
-        permissions[3] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -155,7 +140,6 @@ contract CrossChainBridge is
     ) external payable {
         if (!bridgeActive) revert Bridge_Deactivated();
         if (ohm.balanceOf(msg.sender) < amount_) revert Bridge_InsufficientAmount();
-        if (counterEnabled) offchainOhmCounter += amount_;
 
         bytes memory payload = abi.encode(to_, amount_);
 
@@ -177,8 +161,6 @@ contract CrossChainBridge is
         if (msg.sender != address(this)) revert Bridge_InvalidCaller();
 
         (address to, uint256 amount) = abi.decode(payload_, (address, uint256));
-
-        if (counterEnabled) offchainOhmCounter -= amount;
 
         MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);
