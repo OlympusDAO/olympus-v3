@@ -27,6 +27,7 @@ import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Distributor} from "policies/Distributor.sol";
 import {Emergency} from "policies/Emergency.sol";
 import {BondManager} from "policies/BondManager.sol";
+import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
@@ -38,6 +39,7 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 contract OlympusDeploy is Script {
     using stdJson for string;
     using TransferHelper for ERC20;
+
     Kernel public kernel;
 
     /// Modules
@@ -58,6 +60,7 @@ contract OlympusDeploy is Script {
     Distributor public distributor;
     Emergency public emergency;
     BondManager public bondManager;
+    CrossChainBridge public bridge;
 
     /// Construction variables
 
@@ -101,6 +104,7 @@ contract OlympusDeploy is Script {
         selectorMap["Distributor"] = this._deployDistributor.selector;
         selectorMap["Emergency"] = this._deployEmergency.selector;
         selectorMap["BondManager"] = this._deployBondManager.selector;
+        selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
 
         // Load environment addresses
         string memory env = vm.readFile("./src/scripts/env.json");
@@ -134,6 +138,7 @@ contract OlympusDeploy is Script {
         distributor = Distributor(env.readAddress(string.concat(chain_, ".olympus.policies.Distributor")));
         emergency = Emergency(env.readAddress(string.concat(chain_, ".olympus.policies.Emergency")));
         bondManager = BondManager(env.readAddress(string.concat(chain_, ".olympus.policies.BondManager")));
+        bridge = CrossChainBridge(env.readAddress(string.concat(chain_, ".olympus.policies.CrossChainBridge")));
 
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy.json");
@@ -414,6 +419,16 @@ contract OlympusDeploy is Script {
         return address(bondManager);
     }
 
+    function _deployCrossChainBridge(bytes memory args) public returns (address) {
+        address lzEndpoint = abi.decode(args, (address));
+
+        // Deploy CrossChainBridge policy
+        bridge = new CrossChainBridge(kernel, lzEndpoint);
+        console2.log("Bridge deployed at:", address(bridge));
+
+        return address(bridge);
+    }
+
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
     /// @dev Should be called prior to verifyAndPushAuth()
     function verifyKernelInstallation() external {
@@ -435,6 +450,7 @@ contract OlympusDeploy is Script {
         treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
         distributor = Distributor(vm.envAddress("DISTRIBUTOR"));
         emergency = Emergency(vm.envAddress("EMERGENCY"));
+        bridge = CrossChainBridge(vm.envAddress("BRIDGE"));
 
         /// Check that Modules are installed
         /// PRICE
