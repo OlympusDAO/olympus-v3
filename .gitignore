@@ -11,7 +11,7 @@ src/test/sim/sims/*.t.sol
 secret.txt
 deploy.py
 .secret
-out/**/
-generated/**/
+out/**/*.json
+typechain/**/.ts
 out
-generated
+typechain
