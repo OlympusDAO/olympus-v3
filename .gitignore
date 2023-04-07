@@ -1,6 +1,6 @@
 /out/
-/generated/
 cache/
+typechain/
 node_modules/
 .env
 remappings.txt
@@ -9,9 +9,9 @@ src/test/sim/in/*.json
 src/test/sim/out/*.json
 src/test/sim/sims/*.t.sol
 secret.txt
-deploy.py
+./deploy.py
 .secret
+/out/**
+typechain/**
 out/**/*.json
-typechain/**/.ts
-out
-typechain
+typechain/**/*.ts
