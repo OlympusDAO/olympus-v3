@@ -20,7 +20,7 @@ contract GDAOStakingDeploy is Script {
     address xgdao = vm.envAddress("XGDAO"); // make sure updated in .env
     uint256 epochLength = 28800;
     uint256 firstEpochNumber = 1;
-    uint256 firstEpochTime = 1679791104;
+    uint256 firstEpochTime = 1680849230;
     address authority = vm.envAddress("LOCAL_AUTHORITY");
     GDAOStaking staking = new GDAOStaking(gdao, sgdao, xgdao, epochLength, firstEpochNumber, firstEpochTime, authority);
 
