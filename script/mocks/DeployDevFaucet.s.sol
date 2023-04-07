@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 import {Script} from 'forge-std/Script.sol';
 import {Kernel} from "src/Kernel.sol";
-import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {DAI} from "src/external/testnet/testDAI.sol";
 import {Faucet} from "src/test/mocks/Faucet.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
@@ -16,13 +16,13 @@ contract DeployDevFaucet is Script {
     string memory seedPhrase = vm.readFile(".secret");
     uint256 privateKey = vm.deriveKey(seedPhrase, 0);
     vm.startBroadcast(privateKey);
-    address kernel_addr = vm.envAddress("KERNEL");
+    address kernel_addr = vm.envAddress("LOCAL_KERNEL");
     Kernel kernel = Kernel(kernel_addr);
 
-    address gdao_addr = vm.envAddress("GDAO");
+    address gdao_addr = vm.envAddress("LOCAL_GDAO");
     ERC20 gdao = ERC20(gdao_addr);
-    address mock_reserve_addr = vm.envAddress("MOCK_RESERVE");
-    MockOhm mock_reserve = MockOhm(mock_reserve_addr);
+    address mock_reserve_addr = vm.envAddress("TEST_DAI");
+    ERC20 mock_reserve = ERC20(mock_reserve_addr);
 
     uint256 ethDrip = 1000000000000000000;
     uint256 gdaoDrip = 1000000000000000;

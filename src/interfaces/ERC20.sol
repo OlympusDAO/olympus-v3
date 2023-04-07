@@ -1,6 +1,5 @@
 // File: types/ERC20.sol
 
-
 pragma solidity >=0.7.5;
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
