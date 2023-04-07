@@ -1,5 +1,5 @@
 /out/
-/generated/
+typechain
 cache/
 node_modules/
 .env
@@ -11,7 +11,6 @@ src/test/sim/sims/*.t.sol
 secret.txt
 deploy.py
 .secret
-out/**/*.json
-typechain/**/.ts
-out
-typechain
+out/**
+typechain/**
+out/**/.json
