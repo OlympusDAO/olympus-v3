@@ -11,10 +11,13 @@ contract TestGdaoDeploy is Script {
   /// @notice The main script entrypoint
   /// @return testgdao The deployed contract
   function run() external returns (TestGDAO testgdao) {
-    string memory seedPhrase = vm.readFile(".secret");
-    uint256 privateKey = vm.deriveKey(seedPhrase, 0);
-    vm.startBroadcast(privateKey);
-    address authority = vm.envAddress("LOCAL_AUTHORITY");
+    
+    // string memory seedPhrase = vm.readFile(".secret");
+    // uint256 privateKey = vm.deriveKey(seedPhrase, 0);
+    uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV");
+    // vm.startBroadcast(privateKey);
+    vm.startBroadcast(deployerPrivateKey);
+    address authority = vm.envAddress("SEPOLIA_AUTHORITY");
     testgdao = new TestGDAO(authority);
 
     vm.stopBroadcast();
