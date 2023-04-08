@@ -11,9 +11,11 @@ contract sGdaoDeploy is Script {
   /// @notice The main script entrypoint
   /// @return sgdao The deployed contract
   function run() external returns (sGDAO sgdao) {
-    string memory seedPhrase = vm.readFile(".secret");
-    uint256 privateKey = vm.deriveKey(seedPhrase, 0);
-    vm.startBroadcast(privateKey);
+    // string memory seedPhrase = vm.readFile(".secret");
+    // uint256 privateKey = vm.deriveKey(seedPhrase, 0);
+    uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV");
+    // vm.startBroadcast(privateKey);
+    vm.startBroadcast(deployerPrivateKey);
     sgdao = new sGDAO();
 
     vm.stopBroadcast();

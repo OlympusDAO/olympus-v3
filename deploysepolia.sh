@@ -29,14 +29,14 @@ forge script script/mocks/DeployTestDAI.s.sol:DeployDAI --broadcast --rpc-url ${
 forge script script/mocks/DeployDevFaucet.s.sol:DeployDevFaucet --rpc-url ${SEPOLIA_INFURA}
 forge script script/mocks/DeployDevFaucet.s.sol:DeployDevFaucet --broadcast --rpc-url ${SEPOLIA_INFURA}
 
+# Deploy Strong Faucet
+forge script script/mocks/DeployStrongFaucet.s.sol:DeployStrongFaucet --broadcast --rpc-url ${SEPOLIA_INFURA}
+
+
 ## test dev faucet
 # use cast to mint gdao tokens from dev faucet
 
 cast send -f 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 "drip(uint8)" 1 --rpc-url ${SEPOLIA_INFURA}
-
-
-### ----
-
 
 # Deploy MockPriceFeed - no constructor params
 forge script script/mocks/DeployMockPriceFeed.s.sol:DeployMockPriceFeed --rpc-url ${SEPOLIA_INFURA}
@@ -48,7 +48,7 @@ forge script script/mocks/DeployMockPrice.s.sol:DeployMockPrice  --broadcast --r
 
 # Deploy Mock Uni pair
 forge script script/mocks/DeployMockUni.s.sol:DeployMockUni --rpc-url ${SEPOLIA_INFURA}
-forge script script/mocks/DeployMockUni.s.sol:DeployMockUni --broadcast  --broadcast --rpc-url ${SEPOLIA_INFURA}
+forge script script/mocks/DeployMockUni.s.sol:DeployMockUni  --broadcast --rpc-url ${SEPOLIA_INFURA}
 
 # Deploy Mock Module Writer (tseting gated permission stuff)
 forge script script/mocks/DeployMockModuleWriter.s.sol:DeployMockModuleWriter --rpc-url ${SEPOLIA_INFURA}
@@ -61,16 +61,16 @@ forge script script/mocks/DeployMockValidModule.s.sol:DeployMockValidModule --br
 
 
 # Deploy Mock Tests (stake/bond/claim)
-forge script script/DeployMockTests.s.sol:DeployMockTests --rpc-url ${SEPOLIA_INFURA}
-forge script script/DeployMockTests.s.sol:DeployMockTests --broadcast  --broadcast --rpc-url ${SEPOLIA_INFURA}
+forge script script/mocks/DeployMockTests.s.sol:DeployMockTests --rpc-url ${SEPOLIA_INFURA}
+forge script script/mocks/DeployMockTests.s.sol:DeployMockTests --broadcast --rpc-url ${SEPOLIA_INFURA}
 
 
 
 ### TESTNET DEPLOYMENT
 
 # Deploy Kernel
-forge script script/Deploy.s.sol:KernelDeploy --rpc-url ${SEPOLIA_INFURA}
-forge script script/Deploy.s.sol:KernelDeploy --rpc-url ${SEPOLIA_INFURA} --private-key ${PRIV_KEY} --broadcast --verify --optimize --optimizer-runs 20000 -vvvv
+# forge script script/Deploy.s.sol:KernelDeploy --rpc-url ${SEPOLIA_INFURA}
+# forge script script/Deploy.s.sol:KernelDeploy --rpc-url ${SEPOLIA_INFURA} --private-key ${PRIV_KEY} --broadcast --verify --optimize --optimizer-runs 20000 -vvvv
 
 # # Deploy Testnet GDAO
 # forge script script/v2/DeployTestnetGDAO.s.sol:TestGdaoDeploy --rpc-url ${SEPOLIA_INFURA}
@@ -91,6 +91,9 @@ forge script script/mocks/DeployDevFaucet.s.sol:DeployDevFaucet --broadcast --fo
 # Deploy GDAO - use authority, store kernel address
 forge script script/DeployGDAO.s.sol:GdaoDeploy --fork-url ${SEPOLIA_INFURA}
 forge script script/DeployGDAO.s.sol:GdaoDeploy --rpc-url ${SEPOLIA_INFURA}  --broadcast #-g 150 --gas-limit 1165322 --gas-price 5760
+
+### ----
+
 
 # Deploy xGDAO
 forge script script/v2/DeployxGDAO.s.sol:xGdaoDeploy --fork-url ${SEPOLIA_INFURA}

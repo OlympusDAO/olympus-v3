@@ -5,7 +5,7 @@ import {Script} from 'forge-std/Script.sol';
 import {MockUniV2Pair} from "src/test/mocks/MockUniV2Pair.sol";
 
 /// @notice A very simple deployment script
-contract TestGdaoDeploy is Script {
+contract DeployMockUni is Script {
 
   /// @notice The main script entrypoint
   /// @return mockuniv2 The deployed contract
@@ -15,9 +15,9 @@ contract TestGdaoDeploy is Script {
     uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV");
     // vm.startBroadcast(privateKey);
     vm.startBroadcast(deployerPrivateKey);
-    
-    address test_gdao = vm.envAddress("TEST_GDAO");
-    address test_dai = vm.envAddress("TEST_DAI");
+
+    address test_gdao = vm.envAddress("SEPOLIA_GDAO");
+    address test_dai = vm.envAddress("SEPOLIA_DAI");
     mockuniv2 = new MockUniV2Pair(test_gdao, test_dai);
 
     vm.stopBroadcast();

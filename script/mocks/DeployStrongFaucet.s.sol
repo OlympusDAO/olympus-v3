@@ -4,15 +4,15 @@ pragma solidity ^0.8.15;
 import {Script} from 'forge-std/Script.sol';
 import {Kernel} from "src/Kernel.sol";
 import {DAI} from "src/external/testnet/testDAI.sol";
-import {Faucet} from "src/test/mocks/Faucet.sol";
+import {StrongFaucet} from "src/test/mocks/FaucetStrong.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @notice A very simple deployment script
-contract DeployDevFaucet is Script {
+contract DeployStrongFaucet is Script {
 
   /// @notice The main script entrypoint
   /// @return faucet The deployed contract
-  function run() external returns (Faucet faucet) {
+  function run() external returns (StrongFaucet faucet) {
     // string memory seedPhrase = vm.readFile(".secret");
     // uint256 privateKey = vm.deriveKey(seedPhrase, 0);
     uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV");
@@ -34,11 +34,11 @@ contract DeployDevFaucet is Script {
 
     uint256 ethDrip = 1000000000000000000;
     // uint256 gdaoDrip = 1000000000000000;
-    uint256 gdaoDrip = 100000000000000000; //1000 GDAO
+    uint256 gdaoDrip = 100000000000000000; // 1000 GDAO
     uint256 reserveDrip = 10000000000000000000000000;
     uint256 dripInterval = 360;
 
-    Faucet faucet = new Faucet(
+    StrongFaucet faucet = new StrongFaucet(
         sepolia_kernel,
         gdao,
         mock_reserve,
