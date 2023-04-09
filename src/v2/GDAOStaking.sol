@@ -112,7 +112,7 @@ interface IDistributor {
 // File: Staking.sol
 
 
-contract GDAOStaking is OlympusAccessControlled {
+contract GoerliStaking is OlympusAccessControlled {
     /* ========== DEPENDENCIES ========== */
 
     using SafeMath for uint256;

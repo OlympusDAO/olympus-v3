@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
-import {GoerliDaoERC20Token as GDAO} from "src/external/GDAOERC20.sol";
+import "src/external/GDAO.sol";
 import "src/Kernel.sol";
 
 /// @notice Wrapper for minting and burning functions of GDAO token.

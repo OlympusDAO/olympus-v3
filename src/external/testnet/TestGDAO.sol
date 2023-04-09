@@ -3,7 +3,7 @@ pragma solidity >=0.7.5;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "src/interfaces/IERC20Permit.sol";
-import "./ERC20Permit.sol";
+import "src/types/ERC20Permit.sol";
 import "./GDAOAccessControlled.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";

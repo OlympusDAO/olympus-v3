@@ -92,9 +92,6 @@ forge script script/mocks/DeployDevFaucet.s.sol:DeployDevFaucet --broadcast --fo
 forge script script/DeployGDAO.s.sol:GdaoDeploy --fork-url ${SEPOLIA_INFURA}
 forge script script/DeployGDAO.s.sol:GdaoDeploy --rpc-url ${SEPOLIA_INFURA}  --broadcast #-g 150 --gas-limit 1165322 --gas-price 5760
 
-### ----
-
-
 # Deploy xGDAO
 forge script script/v2/DeployxGDAO.s.sol:xGdaoDeploy --fork-url ${SEPOLIA_INFURA}
 forge script script/v2/DeployxGDAO.s.sol:xGdaoDeploy --broadcast --fork-url ${SEPOLIA_INFURA}
@@ -106,6 +103,12 @@ forge script script/v2/DeploysGDAO.s.sol:sGdaoDeploy --broadcast --fork-url ${SE
 # Deploy GDAOStaking
 forge script script/v2/DeployGDAOStaking.s.sol:GDAOStakingDeploy --fork-url ${SEPOLIA_INFURA}
 forge script script/v2/DeployGDAOStaking.s.sol:GDAOStakingDeploy --broadcast --rpc-url ${SEPOLIA_INFURA}
+
+### ---- redeploy staking / deploy gdao erc20---- ###   
+# Deploy GDAOStaking
+forge script script/v2/DeployGoerliStaking.s.sol:GDAOStakingDeploy --fork-url ${SEPOLIA_INFURA}
+forge script script/v2/DeployGoerliStaking.s.sol:GDAOStakingDeploy --broadcast --rpc-url ${SEPOLIA_INFURA}
+
 # Modules
 
 # Deploy GDaoInstructions
@@ -165,20 +168,24 @@ forge script script/modules/DeployMinter.s.sol:DeployMinter --fork-url ${SEPOLIA
 forge script script/modules/DeployMinter.s.sol:DeployMinter --broadcast --fork-url ${SEPOLIA_INFURA}
 
 # Deploy MockPriceFeed
-forge script script/DeployMockPriceFeed.s.sol:DeployMockPriceFeed --fork-url ${SEPOLIA_INFURA}
-forge script script/DeployMockPriceFeed.s.sol:DeployMockPriceFeed --broadcast --fork-url ${SEPOLIA_INFURA}
+# forge script script/DeployMockPriceFeed.s.sol:DeployMockPriceFeed --fork-url ${SEPOLIA_INFURA}
+# forge script script/DeployMockPriceFeed.s.sol:DeployMockPriceFeed --broadcast --fork-url ${SEPOLIA_INFURA}
 
-# Deploy MockOHM (local only)
-forge script script/mocks/DeployMockReserve.s.sol:DeployMockReserve --fork-url ${SEPOLIA_INFURA}
-forge script script/mocks/DeployMockReserve.s.sol:DeployMockReserve --broadcast --fork-url ${SEPOLIA_INFURA}
+# # Deploy MockOHM (local only)
+# forge script script/mocks/DeployMockReserve.s.sol:DeployMockReserve --fork-url ${SEPOLIA_INFURA}
+# forge script script/mocks/DeployMockReserve.s.sol:DeployMockReserve --broadcast --fork-url ${SEPOLIA_INFURA}
 
-# Deploy MockPrice
-forge script script/DeployMockPrice.s.sol:DeployMockPrice --fork-url ${SEPOLIA_INFURA}
-forge script script/DeployMockPrice.s.sol:DeployMockPrice --broadcast --fork-url ${SEPOLIA_INFURA}
+# # Deploy MockPrice
+# forge script script/DeployMockPrice.s.sol:DeployMockPrice --fork-url ${SEPOLIA_INFURA}
+# forge script script/DeployMockPrice.s.sol:DeployMockPrice --broadcast --fork-url ${SEPOLIA_INFURA}
 
-# Deploy Dev Faucet (local only) - get mock reserve, gdao, kernel address
-forge script script/mocks/DeployDevFaucet.s.sol:DeployDevFaucet --fork-url ${SEPOLIA_INFURA}
-forge script script/mocks/DeployDevFaucet.s.sol:DeployDevFaucet --broadcast --fork-url ${SEPOLIA_INFURA}
+# # Deploy Dev Faucet (local only) - get mock reserve, gdao, kernel address
+# forge script script/mocks/DeployDevFaucet.s.sol:DeployDevFaucet --fork-url ${SEPOLIA_INFURA}
+# forge script script/mocks/DeployDevFaucet.s.sol:DeployDevFaucet --broadcast --fork-url ${SEPOLIA_INFURA}
+
+# # Deploy Dev Faucet (local only) - get mock reserve, gdao, kernel address
+forge script script/mocks/DeployV1DevFaucet.s.sol:DeployFaucetV1 --fork-url ${SEPOLIA_INFURA}
+forge script script/mocks/DeployV1DevFaucet.s.sol:DeployFaucetV1 --broadcast --fork-url ${SEPOLIA_INFURA}
 
 
 # Deploy Price - deploy with price feeds for get and reserve assets
@@ -204,7 +211,6 @@ forge script script/modules/DeployVotes.s.sol:DeployVotes --broadcast --fork-url
 # Policies
 
 # Deploy Bond Aggregator - set guardian and authority
-<<<<<<< HEAD
 forge script script/DeployBondAggregator.s.sol:DeployBondAggregator --fork-url ${SEPOLIA_INFURA}
 forge script script/DeployBondAggregator.s.sol:DeployBondAggregator --broadcast --fork-url ${SEPOLIA_INFURA}
 
@@ -215,7 +221,6 @@ forge script script/DeployBondCallback.s.sol:DeployBondCallback --broadcast --fo
 # Deploy FixedTermTeller - update with Aggregator Contract
 forge script script/v2/DeployFixedTermTeller.s.sol:DeployBondFixedTermTeller --fork-url ${SEPOLIA_INFURA}
 forge script script/v2/DeployFixedTermTeller.s.sol:DeployBondFixedTermTeller --broadcast --fork-url ${SEPOLIA_INFURA}
-=======
 forge script script/DeployBondAggregator.s.sol:DeployBondAggregator --fork-url ${SEPOLIA_INFURA}
 forge script script/DeployBondAggregator.s.sol:DeployBondAggregator --broadcast --fork-url ${SEPOLIA_INFURA}
 
@@ -226,7 +231,6 @@ forge script script/DeployBondCallback.s.sol:DeployBondCallback --broadcast --fo
 # Deploy FixedTermTeller - update with Aggregator Contract
 forge script script/v2/DeployFixedTermTeller.s.sol:DeployBondFixedTermTeller --fork-url ${SEPOLIA_INFURA}
 forge script script/v2/DeployFixedTermTeller.s.sol:DeployBondFixedTermTeller --broadcast --fork-url ${SEPOLIA_INFURA}
->>>>>>> v3
 
 
 # Deploy Operator - only needed when there are reserve assets - to do
@@ -234,7 +238,6 @@ forge script script/v2/DeployFixedTermTeller.s.sol:DeployBondFixedTermTeller --b
 # Deploy Heart - to do
 
 # Deploy PriceConfig
-<<<<<<< HEAD
 forge script script/DeployPriceConfig.s.sol:DeployPriceConfig --fork-url ${SEPOLIA_INFURA}
 forge script script/DeployPriceConfig.s.sol:DeployPriceConfig --broadcast --fork-url ${SEPOLIA_INFURA}
 
@@ -263,7 +266,6 @@ forge script script/DeployParthenon.s.sol:DeployParthenon --broadcast --fork-url
 
 # cast call 0x96f3ce39ad2bfdcf92c0f6e2c2cabf83874660fc "dripTestAmounts()" $LOCAL_AUTHORITY_PRIV
 # cast send --from 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 "mint(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, 1000000000)(address)(uint256)" $LOCAL_AUTHORITY_PRIV
-=======
 forge script script/DeployPriceConfig.s.sol:DeployPriceConfig --fork-url ${SEPOLIA_INFURA}
 forge script script/DeployPriceConfig.s.sol:DeployPriceConfig --broadcast --fork-url ${SEPOLIA_INFURA}
 
@@ -290,5 +292,4 @@ forge script script/DeployParthenon.s.sol:DeployParthenon --broadcast --fork-url
 # Deploy VgdaoVault - to do
 
 forge script script/mocks/DeployFaucet.s.sol:DeployFaucet --broadcast --fork-url ${SEPOLIA_INFURA}
->>>>>>> v3
 

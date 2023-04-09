@@ -1,12 +1,11 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity >=0.7.5;
 
-import "src/interfaces/IERC20Permit.sol";
-import "src/interfaces/ERC20.sol";
+import "../interfaces/IERC20Permit.sol";
 import "src/libraries/Counters.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import "../types/ERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-
 
 /**
  * @dev Implementation of the ERC20 Permit extension allowing approvals to be made via signatures, as defined in
@@ -25,7 +24,9 @@ abstract contract ERC20Permit is ERC20, IERC20Permit, EIP712 {
 
     // solhint-disable-next-line var-name-mixedcase
     bytes32 private immutable _PERMIT_TYPEHASH =
-        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+        keccak256(
+            "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
+        );
 
     /**
      * @dev Initializes the {EIP712} domain separator using the `name` parameter, and setting `version` to `"1"`.
@@ -48,7 +49,9 @@ abstract contract ERC20Permit is ERC20, IERC20Permit, EIP712 {
     ) public virtual override {
         require(block.timestamp <= deadline, "ERC20Permit: expired deadline");
 
-        bytes32 structHash = keccak256(abi.encode(_PERMIT_TYPEHASH, owner, spender, value, _useNonce(owner), deadline));
+        bytes32 structHash = keccak256(
+            abi.encode(_PERMIT_TYPEHASH, owner, spender, value, _useNonce(owner), deadline)
+        );
 
         bytes32 hash = _hashTypedDataV4(structHash);
 

@@ -4,7 +4,7 @@ pragma solidity ^0.8.15;
 import {Script} from 'forge-std/Script.sol';
 import {BondAggregator} from "src/policies/BondAggregator.sol";
 import {Kernel} from "src/Kernel.sol";
-import {GoerliDaoERC20Token} from "src/external/GDAOERC20.sol";
+import {GDAO} from "src/external/GDAO.sol";
 import {Auth, Authority} from "solmate/auth/Auth.sol";
 
 

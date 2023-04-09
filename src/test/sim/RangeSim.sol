@@ -26,7 +26,7 @@ import "src/Kernel.sol";
 import {GoerliDaoPrice} from "modules/PRICE/GoerliDaoPrice.sol";
 import {GoerliDaoRange} from "modules/RANGE/GoerliDaoRange.sol";
 import {GoerliDaoTreasury} from "modules/TRSRY/GoerliDaoTreasury.sol";
-import {GdaoMinter} from "modules/MINTR/GdaoMinter.sol";
+import {GoerliMinter} from "modules/MINTR/GoerliMinter.sol";
 import {GoerliDaoInstructions} from "modules/INSTR/GoerliDaoInstructions.sol";
 import {GoerliDaoVotes} from "modules/VOTES/GoerliDaoVotes.sol";
 import {GoerliDaoRoles} from "modules/ROLES/GoerliDaoRoles.sol";
@@ -189,7 +189,7 @@ abstract contract RangeSim is Test {
     GoerliDaoPrice public price;
     GoerliDaoRange public range;
     GoerliDaoTreasury public treasury;
-    GdaoMinter public minter;
+    GoerliMinter public minter;
     GoerliDaoRoles public roles;
 
     Operator public operator;
@@ -366,7 +366,7 @@ abstract contract RangeSim is Test {
                 uint256(_params.wallSpread)
             );
             treasury = new GoerliDaoTreasury(kernel);
-            minter = new GdaoMinter(kernel, address(gdao));
+            minter = new GoerliMinter(kernel, address(gdao));
             roles = new GoerliDaoRoles(kernel);
         }
 

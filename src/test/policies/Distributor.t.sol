@@ -9,7 +9,7 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 /// Import Distributor
 import {Distributor} from "policies/Distributor.sol";
 import "src/Kernel.sol";
-import {GdaoMinter} from "modules/MINTR/GdaoMinter.sol";
+import {GoerliMinter} from "modules/MINTR/GoerliMinter.sol";
 import {GoerliDaoTreasury} from "modules/TRSRY/GoerliDaoTreasury.sol";
 import {GoerliDaoRoles} from "modules/ROLES/GoerliDaoRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
@@ -24,7 +24,7 @@ import {MockLegacyAuthority} from "../modules/MINTR.t.sol";
 contract DistributorTest is Test {
     /// Bophades Systems
     Kernel internal kernel;
-    GdaoMinter internal mintr;
+    GoerliMinter internal mintr;
     GoerliDaoTreasury internal trsry;
     GoerliDaoRoles internal roles;
 
@@ -64,7 +64,7 @@ contract DistributorTest is Test {
 
         {
             /// Deploy Bophades Modules
-            mintr = new GdaoMinter(kernel, address(gdao));
+            mintr = new GoerliMinter(kernel, address(gdao));
             trsry = new GoerliDaoTreasury(kernel);
             roles = new GoerliDaoRoles(kernel);
         }

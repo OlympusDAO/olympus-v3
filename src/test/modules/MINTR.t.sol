@@ -10,18 +10,19 @@ import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
 
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import {GoerliDaoERC20Token, IOlympusAuthority} from "src/external/GDAOERC20.sol";
-import "modules/MINTR/GdaoMinter.sol";
+import "src/external/GDAO.sol";
+import "src/interfaces/IOlympusAuthority.sol";
+import "modules/MINTR/GoerliMinter.sol";
 import "src/Kernel.sol";
 
 contract MINTRTest is Test {
-    using ModuleTestFixtureGenerator for GdaoMinter;
+    using ModuleTestFixtureGenerator for GoerliMinter;
     using larping for *;
 
     Kernel internal kernel;
-    GdaoMinter internal MINTR;
+    GoerliMinter internal MINTR;
     IOlympusAuthority internal auth;
-    GoerliDaoERC20Token internal gdao;
+    GDAO internal gdao;
 
     address[] public users;
     address public godmode;
@@ -30,8 +31,8 @@ contract MINTRTest is Test {
     function setUp() public {
         kernel = new Kernel();
         auth = new MockLegacyAuthority(address(0x0));
-        gdao = new GoerliDaoERC20Token(address(auth));
-        MINTR = new GdaoMinter(kernel, address(gdao));
+        gdao = new GDAO(address(auth));
+        MINTR = new GoerliMinter(kernel, address(gdao));
 
         // Set vault in authority to MINTR module
         auth.vault.larp(address(MINTR));
@@ -41,7 +42,7 @@ contract MINTRTest is Test {
 
         kernel.executeAction(Actions.InstallModule, address(MINTR));
 
-        godmode = MINTR.generateGodmodeFixture(type(GdaoMinter).name);
+        godmode = MINTR.generateGodmodeFixture(type(GoerliMinter).name);
         kernel.executeAction(Actions.ActivatePolicy, godmode);
 
         dummy = MINTR.generateDummyFixture();

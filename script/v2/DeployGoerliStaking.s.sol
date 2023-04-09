@@ -17,12 +17,12 @@ contract GDAOStakingDeploy is Script {
     uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV");
     // vm.startBroadcast(privateKey);
     vm.startBroadcast(deployerPrivateKey);
-    address gdao = vm.envAddress("SEPOLIA_GDAO_1_1"); // make sure updated in .env
+    address gdao = vm.envAddress("SEPOLIA_GDAO"); // make sure updated in .env
     address sgdao = vm.envAddress("SEPOLIA_SGDAO"); // make sure updated in .env
     address xgdao = vm.envAddress("SEPOLIA_XGDAO"); // make sure updated in .env
     uint256 epochLength = 28800;
     uint256 firstEpochNumber = 1;
-    uint256 firstEpochTime = 1681078368;
+    uint256 firstEpochTime = 1680968801;
     address authority = vm.envAddress("SEPOLIA_AUTHORITY"); // make sure updated in .env
     GoerliStaking staking = new GoerliStaking(gdao, sgdao, xgdao, epochLength, firstEpochNumber, firstEpochTime, authority);
 

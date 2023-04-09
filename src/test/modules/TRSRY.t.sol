@@ -7,7 +7,7 @@ import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {GoerliDaoERC20Token} from "src/external/GDAOERC20.sol";
+import {GDAO} from "src/external/GDAO.sol";
 //import {MockPolicy} from "test/mocks/KernelTestMocks.sol";
 
 import {GoerliDaoTreasury} from "src/modules/TRSRY/GoerliDaoTreasury.sol";

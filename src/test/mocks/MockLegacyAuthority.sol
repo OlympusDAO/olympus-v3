@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.0;
 
-import {IOlympusAuthority} from "src/external/GDAOERC20.sol";
+import "src/interfaces/IOlympusAuthority.sol";
 
 contract MockLegacyAuthority is IOlympusAuthority {
     address internal kernel;

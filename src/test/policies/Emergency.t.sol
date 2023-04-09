@@ -14,9 +14,10 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
 import {GoerliDaoTreasury} from "modules/TRSRY/GoerliDaoTreasury.sol";
-import {GdaoMinter, GDAO} from "modules/MINTR/GdaoMinter.sol";
+import {GoerliMinter, GDAO} from "modules/MINTR/GoerliMinter.sol";
 import {GoerliDaoRoles} from "modules/ROLES/GoerliDaoRoles.sol";
-import {GoerliDaoERC20Token, IOlympusAuthority} from "src/external/GDAOERC20.sol";
+import {GDAO} from "src/external/GDAO.sol";
+import "src/interfaces/IOlympusAuthority.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Emergency} from "policies/Emergency.sol";
@@ -24,7 +25,7 @@ import {Emergency} from "policies/Emergency.sol";
 // solhint-disable-next-line max-states-count
 contract EmergencyTest is Test {
     using FullMath for uint256;
-    using ModuleTestFixtureGenerator for GdaoMinter;
+    using ModuleTestFixtureGenerator for GoerliMinter;
     using ModuleTestFixtureGenerator for GoerliDaoTreasury;
     using larping for *;
 
@@ -33,13 +34,13 @@ contract EmergencyTest is Test {
     address internal guardian;
     address internal emergencyMS;
 
-    GoerliDaoERC20Token internal gdao;
+    GDAO internal gdao;
     MockERC20 internal reserve;
 
     Kernel internal kernel;
     IOlympusAuthority internal authority;
     GoerliDaoTreasury internal treasury;
-    GdaoMinter internal minter;
+    GoerliMinter internal minter;
     GoerliDaoRoles internal roles;
 
     Emergency internal emergency;
@@ -64,7 +65,7 @@ contract EmergencyTest is Test {
             authority = new MockLegacyAuthority(address(0x0));
 
             // Deploy mock tokens
-            gdao = new GoerliDaoERC20Token(address(authority));
+            gdao = new GDAO(address(authority));
             reserve = new MockERC20("Reserve", "RSV", 18);
         }
 
@@ -74,7 +75,7 @@ contract EmergencyTest is Test {
 
             // Deploy modules (some mocks)
             treasury = new GoerliDaoTreasury(kernel);
-            minter = new GdaoMinter(kernel, address(gdao));
+            minter = new GoerliMinter(kernel, address(gdao));
             roles = new GoerliDaoRoles(kernel);
         }
 
@@ -87,7 +88,7 @@ contract EmergencyTest is Test {
 
             // Deploy authorized policy to call minter and treasury functions
             treasuryAdmin = treasury.generateGodmodeFixture(type(GoerliDaoTreasury).name);
-            minterAdmin = minter.generateGodmodeFixture(type(GdaoMinter).name);
+            minterAdmin = minter.generateGodmodeFixture(type(GoerliMinter).name);
         }
 
         {

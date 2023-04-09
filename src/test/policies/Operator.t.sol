@@ -22,7 +22,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import "src/Kernel.sol";
 import {GoerliDaoRange} from "modules/RANGE/GoerliDaoRange.sol";
 import {GoerliDaoTreasury} from "modules/TRSRY/GoerliDaoTreasury.sol";
-import {GdaoMinter, GDAO} from "modules/MINTR/GdaoMinter.sol";
+import {GoerliMinter, GDAO} from "modules/MINTR/GoerliMinter.sol";
 import {GoerliDaoRoles} from "modules/ROLES/GoerliDaoRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {Operator} from "policies/Operator.sol";
@@ -51,7 +51,7 @@ contract OperatorTest is Test {
     MockPrice internal price;
     GoerliDaoRange internal range;
     GoerliDaoTreasury internal treasury;
-    GdaoMinter internal minter;
+    GoerliMinter internal minter;
     GoerliDaoRoles internal roles;
 
     Operator internal operator;
@@ -102,7 +102,7 @@ contract OperatorTest is Test {
                 uint256(2000)
             );
             treasury = new GoerliDaoTreasury(kernel);
-            minter = new GdaoMinter(kernel, address(gdao));
+            minter = new GoerliMinter(kernel, address(gdao));
             roles = new GoerliDaoRoles(kernel);
 
             /// Configure mocks

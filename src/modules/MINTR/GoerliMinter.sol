@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {MINTRv1, GDAO} from "src/modules/MINTR/MINTR.v1.sol";
 import "src/Kernel.sol";
 
 /// @notice Wrapper for minting and burning functions of GDAO token.
-contract GdaoMinter is MINTRv1 {
+contract GoerliMinter is MINTRv1 {
     //============================================================================================//
     //                                      MODULE SETUP                                          //
     //============================================================================================//
