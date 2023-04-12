@@ -17,12 +17,12 @@ contract DeployBondFixedTermTeller is Script {
     uint256 privateKey = vm.deriveKey(seedPhrase, 0);
     vm.startBroadcast(privateKey);
     
-    address protocol = vm.envAddress("LOCAL_PROTOCOL"); // #3 account in anvil
-    address aggregator_addr = vm.envAddress("BOND_AGGREGATOR");
-    address guardian = vm.envAddress("LOCAL_GUARDIAN");
+    address protocol = vm.envAddress("SEPOLIA_PROTOCOL"); // #3 account in anvil
+    address aggregator_addr = vm.envAddress("SEPOLIA_AGGREGATOR");
+    address guardian = vm.envAddress("SEPOLIA_GUARDIAN");
 
     IBondAggregator aggregator = IBondAggregator(aggregator_addr);
-    address authority_addr = vm.envAddress("LOCAL_AUTHORITY");
+    address authority_addr = vm.envAddress("SEPOLIA_ROLES_AUTH");
 
     Authority authority = Authority(authority_addr);
 

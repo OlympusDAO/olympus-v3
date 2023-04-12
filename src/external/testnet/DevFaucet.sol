@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.10;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import "../../interfaces/IStaking.sol";
 import "./Ownable.sol";
-import "./GDAOAccessControlled.sol";
+import "src/types/OlympusAccessControlled.sol";
 
 interface IFaucet is IERC20 {
     function faucetMint(address recipient_) external;
@@ -13,7 +13,7 @@ interface IFaucet is IERC20 {
 /// TODO - get this to be forward compatible if new contracts are deployed
 ///        i.e. if a new token is added, how can we mint without redeploying a contract
 ///        Add daily limit to prevent abuse
-contract DevFaucet is GDAOAccessControlled {
+contract DevFaucet is OlympusAccessControlled {
     /*================== ERRORS ==================*/
 
     error CanOnlyMintOnceADay();
@@ -40,7 +40,7 @@ contract DevFaucet is GDAOAccessControlled {
         address gdaoV2_,
         address stakingV2_,
         address authority_
-    ) GDAOAccessControlled(IGDAOAuthority(authority_)) {
+    ) OlympusAccessControlled(IOlympusAuthority(authority_)) {
         DAI = IERC20(dai_);
         mintable.push(IFaucet(gdaoV2_));
         stakingV2 = IStaking(stakingV2_);

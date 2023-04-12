@@ -11,10 +11,12 @@ contract DeployParthenon is Script {
   /// @notice The main script entrypoint
   /// @return parthenon The deployed contract
   function run() external returns (Parthenon parthenon) {
-    string memory seedPhrase = vm.readFile(".secret");
-    uint256 privateKey = vm.deriveKey(seedPhrase, 0);
-    vm.startBroadcast(privateKey);
-    address kernel_addr = vm.envAddress("KERNEL");
+   // string memory seedPhrase = vm.readFile(".secret");
+    // uint256 privateKey = vm.deriveKey(seedPhrase, 0);
+    uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV");
+    // vm.startBroadcast(privateKey);
+    vm.startBroadcast(deployerPrivateKey);
+    address kernel_addr = vm.envAddress("SEPOLIA_KERNEL");
     Kernel kernel = Kernel(kernel_addr);
 
     parthenon = new Parthenon(kernel);

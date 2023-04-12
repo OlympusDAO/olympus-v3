@@ -2,11 +2,9 @@
 pragma solidity >=0.7.5;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "src/interfaces/IERC20Permit.sol";
 import "src/types/ERC20Permit.sol";
 import "./GDAOAccessControlled.sol";
-
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 
 interface ITestGDAO is IERC20 {
       function mint(address account_, uint256 amount_) external;

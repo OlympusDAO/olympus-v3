@@ -7,12 +7,12 @@ pragma solidity >=0.7.5;
 
 // File: GDAO.sol
 
-import "../types/ERC20Permit.sol";
-import "../interfaces/IOlympusAuthority.sol";
-import "../types/ERC20.sol";
-import "../types/OlympusAccessControlled.sol";
-import "../interfaces/IGDAO.sol";
+import "src/types/ERC20Permit.sol";
+import "src/interfaces/IOlympusAuthority.sol";
+import "src/types/OlympusAccessControlled.sol";
+import "src/interfaces/IGDAO.sol";
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
+
 
 contract GDAO is ERC20Permit, IGDAO, OlympusAccessControlled {
     using SafeMath for uint256;
@@ -40,6 +40,7 @@ contract GDAO is ERC20Permit, IGDAO, OlympusAccessControlled {
             amount_,
             "ERC20: burn amount exceeds allowance"
         );
+    
 
         _approve(account_, msg.sender, decreasedAllowance_);
         _burn(account_, amount_);

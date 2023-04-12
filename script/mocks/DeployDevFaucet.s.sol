@@ -25,7 +25,7 @@ contract DeployDevFaucet is Script {
     // Kernel kernel = Kernel(sepolia_kernel);
 
     // address gdao_addr = vm.envAddress("LOCAL_GDAO");
-    address sepolia_gdao = vm.envAddress("SEPOLIA_GDAO");
+    address sepolia_gdao = vm.envAddress("SEPOLIA_GDAO_1_2");
     ERC20 gdao = ERC20(sepolia_gdao);
 
     // address mock_reserve_addr = vm.envAddress("TEST_DAI");

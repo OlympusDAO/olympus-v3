@@ -4,7 +4,7 @@ pragma solidity >=0.7.5;
 import "../interfaces/IERC20Permit.sol";
 import "src/libraries/Counters.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
-import "../types/ERC20.sol";
+import {ERC20} from "src/types/ERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /**

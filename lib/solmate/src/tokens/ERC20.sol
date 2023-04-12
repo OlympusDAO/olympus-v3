@@ -42,7 +42,7 @@ abstract contract ERC20 {
 
     bytes32 internal immutable INITIAL_DOMAIN_SEPARATOR;
 
-    mapping(address => uint256) public nonces;
+    // mapping(address => uint256) public nonces;
 
     /*//////////////////////////////////////////////////////////////
                                CONSTRUCTOR
@@ -140,7 +140,7 @@ abstract contract ERC20 {
                                 owner,
                                 spender,
                                 value,
-                                nonces[owner]++,
+                                // nonces[owner]++,
                                 deadline
                             )
                         )

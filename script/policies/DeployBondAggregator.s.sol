@@ -14,11 +14,13 @@ contract DeployBondAggregator is Script {
   /// @notice The main script entrypoint
   /// @return bond_aggregator The deployed contract
   function run() external returns (BondAggregator bond_aggregator) {
-    string memory seedPhrase = vm.readFile(".secret");
-    uint256 privateKey = vm.deriveKey(seedPhrase, 0);
-    vm.startBroadcast(privateKey);
-    address guardian = vm.envAddress("LOCAL_GUARDIAN"); // use test wallet #2
-    address authority = vm.envAddress("LOCAL_AUTHORITY");
+    // string memory seedPhrase = vm.readFile(".secret");
+    // uint256 privateKey = vm.deriveKey(seedPhrase, 0);
+    uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV");
+    // vm.startBroadcast(privateKey);
+    vm.startBroadcast(deployerPrivateKey);
+    address guardian = vm.envAddress("SEPOLIA_GUARDIAN"); // use test wallet #2
+    address authority = vm.envAddress("SEPOLIA_AUTHORITY");
 
     Authority auth = Authority(authority);
     bond_aggregator = new BondAggregator(guardian, auth);
