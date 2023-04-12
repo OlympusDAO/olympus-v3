@@ -2736,6 +2736,14 @@ type-fest@^0.7.1:
   resolved "https://registry.npmjs.org/type-fest/-/type-fest-0.7.1.tgz"
   integrity sha512-Ne2YiiGN8bmrmJJEuTWTLJR32nh/JdL1+PSicowtNb0WFpn59GK8/lfD61bVtzguz7b3PBt74nxpv/Pw5po5Rg==
 
+typechain-target-react-query-wagmi@^0.1.0:
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/typechain-target-react-query-wagmi/-/typechain-target-react-query-wagmi-0.1.0.tgz#0bbe0b126ca2b808f911e6b142be7f9c7ecc2652"
+  integrity sha512-f7+SYEiUhEljI5qdwCQT1fQ88sQNEBvd3IRwiKv2bVXzAo5eLlrqOSUsLk1XttJKt+SAmz0epWkDdEbjhb3nBQ==
+  dependencies:
+    lodash "^4.17.15"
+    ts-essentials "^7.0.1"
+
 typechain@^8.1.1:
   version "8.1.1"
   resolved "https://registry.npmjs.org/typechain/-/typechain-8.1.1.tgz"

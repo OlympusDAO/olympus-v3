@@ -39,7 +39,6 @@ export interface ZuniswapV2PairInterface extends utils.Interface {
     "initialize(address,address)": FunctionFragment;
     "mint(address)": FunctionFragment;
     "name()": FunctionFragment;
-    "nonces(address)": FunctionFragment;
     "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)": FunctionFragment;
     "price0CumulativeLast()": FunctionFragment;
     "price1CumulativeLast()": FunctionFragment;
@@ -65,7 +64,6 @@ export interface ZuniswapV2PairInterface extends utils.Interface {
       | "initialize"
       | "mint"
       | "name"
-      | "nonces"
       | "permit"
       | "price0CumulativeLast"
       | "price1CumulativeLast"
@@ -113,10 +111,6 @@ export interface ZuniswapV2PairInterface extends utils.Interface {
     values: [PromiseOrValue<string>]
   ): string;
   encodeFunctionData(functionFragment: "name", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "nonces",
-    values: [PromiseOrValue<string>]
-  ): string;
   encodeFunctionData(
     functionFragment: "permit",
     values: [
@@ -183,7 +177,6 @@ export interface ZuniswapV2PairInterface extends utils.Interface {
   decodeFunctionResult(functionFragment: "initialize", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "mint", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "nonces", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "permit", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "price0CumulativeLast",
@@ -365,11 +358,6 @@ export interface ZuniswapV2Pair extends BaseContract {
 
     name(overrides?: CallOverrides): Promise<[string]>;
 
-    nonces(
-      arg0: PromiseOrValue<string>,
-      overrides?: CallOverrides
-    ): Promise<[BigNumber]>;
-
     permit(
       owner: PromiseOrValue<string>,
       spender: PromiseOrValue<string>,
@@ -461,11 +449,6 @@ export interface ZuniswapV2Pair extends BaseContract {
   ): Promise<ContractTransaction>;
 
   name(overrides?: CallOverrides): Promise<string>;
-
-  nonces(
-    arg0: PromiseOrValue<string>,
-    overrides?: CallOverrides
-  ): Promise<BigNumber>;
 
   permit(
     owner: PromiseOrValue<string>,
@@ -560,11 +543,6 @@ export interface ZuniswapV2Pair extends BaseContract {
     ): Promise<BigNumber>;
 
     name(overrides?: CallOverrides): Promise<string>;
-
-    nonces(
-      arg0: PromiseOrValue<string>,
-      overrides?: CallOverrides
-    ): Promise<BigNumber>;
 
     permit(
       owner: PromiseOrValue<string>,
@@ -719,11 +697,6 @@ export interface ZuniswapV2Pair extends BaseContract {
 
     name(overrides?: CallOverrides): Promise<BigNumber>;
 
-    nonces(
-      arg0: PromiseOrValue<string>,
-      overrides?: CallOverrides
-    ): Promise<BigNumber>;
-
     permit(
       owner: PromiseOrValue<string>,
       spender: PromiseOrValue<string>,
@@ -814,11 +787,6 @@ export interface ZuniswapV2Pair extends BaseContract {
     ): Promise<PopulatedTransaction>;
 
     name(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-
-    nonces(
-      arg0: PromiseOrValue<string>,
-      overrides?: CallOverrides
-    ): Promise<PopulatedTransaction>;
 
     permit(
       owner: PromiseOrValue<string>,

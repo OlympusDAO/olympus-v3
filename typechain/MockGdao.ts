@@ -37,7 +37,6 @@ export interface MockGdaoInterface extends utils.Interface {
     "decimals()": FunctionFragment;
     "mint(address,uint256)": FunctionFragment;
     "name()": FunctionFragment;
-    "nonces(address)": FunctionFragment;
     "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)": FunctionFragment;
     "symbol()": FunctionFragment;
     "totalSupply()": FunctionFragment;
@@ -55,7 +54,6 @@ export interface MockGdaoInterface extends utils.Interface {
       | "decimals"
       | "mint"
       | "name"
-      | "nonces"
       | "permit"
       | "symbol"
       | "totalSupply"
@@ -89,10 +87,6 @@ export interface MockGdaoInterface extends utils.Interface {
     values: [PromiseOrValue<string>, PromiseOrValue<BigNumberish>]
   ): string;
   encodeFunctionData(functionFragment: "name", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "nonces",
-    values: [PromiseOrValue<string>]
-  ): string;
   encodeFunctionData(
     functionFragment: "permit",
     values: [
@@ -134,7 +128,6 @@ export interface MockGdaoInterface extends utils.Interface {
   decodeFunctionResult(functionFragment: "decimals", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "mint", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "nonces", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "permit", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "symbol", data: BytesLike): Result;
   decodeFunctionResult(
@@ -242,11 +235,6 @@ export interface MockGdao extends BaseContract {
 
     name(overrides?: CallOverrides): Promise<[string]>;
 
-    nonces(
-      arg0: PromiseOrValue<string>,
-      overrides?: CallOverrides
-    ): Promise<[BigNumber]>;
-
     permit(
       owner: PromiseOrValue<string>,
       spender: PromiseOrValue<string>,
@@ -311,11 +299,6 @@ export interface MockGdao extends BaseContract {
 
   name(overrides?: CallOverrides): Promise<string>;
 
-  nonces(
-    arg0: PromiseOrValue<string>,
-    overrides?: CallOverrides
-  ): Promise<BigNumber>;
-
   permit(
     owner: PromiseOrValue<string>,
     spender: PromiseOrValue<string>,
@@ -379,11 +362,6 @@ export interface MockGdao extends BaseContract {
     ): Promise<void>;
 
     name(overrides?: CallOverrides): Promise<string>;
-
-    nonces(
-      arg0: PromiseOrValue<string>,
-      overrides?: CallOverrides
-    ): Promise<BigNumber>;
 
     permit(
       owner: PromiseOrValue<string>,
@@ -474,11 +452,6 @@ export interface MockGdao extends BaseContract {
 
     name(overrides?: CallOverrides): Promise<BigNumber>;
 
-    nonces(
-      arg0: PromiseOrValue<string>,
-      overrides?: CallOverrides
-    ): Promise<BigNumber>;
-
     permit(
       owner: PromiseOrValue<string>,
       spender: PromiseOrValue<string>,
@@ -543,11 +516,6 @@ export interface MockGdao extends BaseContract {
     ): Promise<PopulatedTransaction>;
 
     name(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-
-    nonces(
-      arg0: PromiseOrValue<string>,
-      overrides?: CallOverrides
-    ): Promise<PopulatedTransaction>;
 
     permit(
       owner: PromiseOrValue<string>,

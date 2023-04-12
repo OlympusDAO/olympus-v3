@@ -4,7 +4,7 @@ pragma solidity ^0.8.15;
 import {Script} from 'forge-std/Script.sol';
 import {Kernel} from "src/Kernel.sol";
 import {DAI} from "src/external/testnet/testDAI.sol";
-import {Faucet} from "src/test/mocks/Faucet.sol";
+import {Faucet} from "src/external/Faucet.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// @notice A very simple deployment script

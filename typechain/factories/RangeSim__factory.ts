@@ -454,7 +454,7 @@ const _abi = [
     name: "minter",
     outputs: [
       {
-        internalType: "contract GdaoMinter",
+        internalType: "contract GoerliMinter",
         name: "",
         type: "address",
       },

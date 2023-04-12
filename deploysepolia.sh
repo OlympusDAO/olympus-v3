@@ -142,8 +142,8 @@ forge script script/v2/DeployFixedTermTeller.s.sol:DeployBondFixedTermTeller --r
 forge script script/v2/DeployFixedTermTeller.s.sol:DeployBondFixedTermTeller --broadcast --rpc-url ${SEPOLIA_INFURA}
 
 # Deploy BondFixedSDA
-forge script script/v2/DeployFixedSDA.s.sol: --rpc-url ${SEPOLIA_INFURA}
-forge script script/v2/DeployFixedSDA.s.sol: --broadcast --rpc-url ${SEPOLIA_INFURA}
+forge script script/policies/DeployFixedBondSDA.s.sol:DeployFixedBondSDA --rpc-url ${SEPOLIA_INFURA}
+forge script script/policies/DeployFixedBondSDA.s.sol:DeployFixedBondSDA --broadcast --rpc-url ${SEPOLIA_INFURA}
 
 # Deploy Roles Authority
 forge script script/v2/DeployRolesAuthority.s.sol:DeployRolesAuthority --rpc-url ${SEPOLIA_INFURA}

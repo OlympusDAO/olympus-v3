@@ -44,7 +44,6 @@ export interface ERC4626Interface extends utils.Interface {
     "maxWithdraw(address)": FunctionFragment;
     "mint(uint256,address)": FunctionFragment;
     "name()": FunctionFragment;
-    "nonces(address)": FunctionFragment;
     "permit(address,address,uint256,uint256,uint8,bytes32,bytes32)": FunctionFragment;
     "previewDeposit(uint256)": FunctionFragment;
     "previewMint(uint256)": FunctionFragment;
@@ -76,7 +75,6 @@ export interface ERC4626Interface extends utils.Interface {
       | "maxWithdraw"
       | "mint"
       | "name"
-      | "nonces"
       | "permit"
       | "previewDeposit"
       | "previewMint"
@@ -142,10 +140,6 @@ export interface ERC4626Interface extends utils.Interface {
     values: [PromiseOrValue<BigNumberish>, PromiseOrValue<string>]
   ): string;
   encodeFunctionData(functionFragment: "name", values?: undefined): string;
-  encodeFunctionData(
-    functionFragment: "nonces",
-    values: [PromiseOrValue<string>]
-  ): string;
   encodeFunctionData(
     functionFragment: "permit",
     values: [
@@ -239,7 +233,6 @@ export interface ERC4626Interface extends utils.Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "mint", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
-  decodeFunctionResult(functionFragment: "nonces", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "permit", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "previewDeposit",
@@ -432,11 +425,6 @@ export interface ERC4626 extends BaseContract {
 
     name(overrides?: CallOverrides): Promise<[string]>;
 
-    nonces(
-      arg0: PromiseOrValue<string>,
-      overrides?: CallOverrides
-    ): Promise<[BigNumber]>;
-
     permit(
       owner: PromiseOrValue<string>,
       spender: PromiseOrValue<string>,
@@ -569,11 +557,6 @@ export interface ERC4626 extends BaseContract {
 
   name(overrides?: CallOverrides): Promise<string>;
 
-  nonces(
-    arg0: PromiseOrValue<string>,
-    overrides?: CallOverrides
-  ): Promise<BigNumber>;
-
   permit(
     owner: PromiseOrValue<string>,
     spender: PromiseOrValue<string>,
@@ -705,11 +688,6 @@ export interface ERC4626 extends BaseContract {
     ): Promise<BigNumber>;
 
     name(overrides?: CallOverrides): Promise<string>;
-
-    nonces(
-      arg0: PromiseOrValue<string>,
-      overrides?: CallOverrides
-    ): Promise<BigNumber>;
 
     permit(
       owner: PromiseOrValue<string>,
@@ -896,11 +874,6 @@ export interface ERC4626 extends BaseContract {
 
     name(overrides?: CallOverrides): Promise<BigNumber>;
 
-    nonces(
-      arg0: PromiseOrValue<string>,
-      overrides?: CallOverrides
-    ): Promise<BigNumber>;
-
     permit(
       owner: PromiseOrValue<string>,
       spender: PromiseOrValue<string>,
@@ -1033,11 +1006,6 @@ export interface ERC4626 extends BaseContract {
     ): Promise<PopulatedTransaction>;
 
     name(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-
-    nonces(
-      arg0: PromiseOrValue<string>,
-      overrides?: CallOverrides
-    ): Promise<PopulatedTransaction>;
 
     permit(
       owner: PromiseOrValue<string>,

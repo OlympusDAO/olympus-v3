@@ -37,6 +37,7 @@
         "ethers": "5",
         "hardhat": "^2.13.0",
         "hardhat-preprocessor": "^0.1.5",
+        "typechain-target-react-query-wagmi": "^0.1.0",
         "typescript": "^5.0.2"
     }
 }

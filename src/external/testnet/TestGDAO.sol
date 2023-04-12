@@ -3,8 +3,10 @@ pragma solidity >=0.7.5;
 
 import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "src/types/ERC20Permit.sol";
-import "./GDAOAccessControlled.sol";
+import "src/types/OlympusAccessControlled.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import "src/interfaces/IOlympusAuthority.sol";
+
 
 interface ITestGDAO is IERC20 {
       function mint(address account_, uint256 amount_) external;
@@ -15,13 +17,13 @@ interface ITestGDAO is IERC20 {
 
 }
 
-contract TestGDAO is ERC20Permit, ITestGDAO, GDAOAccessControlled {
+contract TestGDAO is ERC20Permit, ITestGDAO, OlympusAccessControlled {
     using SafeMath for uint256;
 
     constructor(address _authority)
         ERC20("TEST Goerli DAO", "GDAO", 9)
         ERC20Permit("TEST Goerli DAO")
-        GDAOAccessControlled(IGDAOAuthority(_authority))
+        OlympusAccessControlled(IOlympusAuthority(_authority))
     {}
 
     function mint(address account_, uint256 amount_) external override onlyVault {

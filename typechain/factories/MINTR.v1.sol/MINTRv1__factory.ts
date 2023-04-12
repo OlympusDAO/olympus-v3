@@ -251,7 +251,7 @@ const _abi = [
     name: "gdao",
     outputs: [
       {
-        internalType: "contract GoerliDaoERC20Token",
+        internalType: "contract GDAO",
         name: "",
         type: "address",
       },

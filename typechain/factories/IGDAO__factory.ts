@@ -190,7 +190,7 @@ const _abi = [
     inputs: [
       {
         internalType: "address",
-        name: "to",
+        name: "recipient",
         type: "address",
       },
       {
@@ -214,12 +214,12 @@ const _abi = [
     inputs: [
       {
         internalType: "address",
-        name: "from",
+        name: "sender",
         type: "address",
       },
       {
         internalType: "address",
-        name: "to",
+        name: "recipient",
         type: "address",
       },
       {
