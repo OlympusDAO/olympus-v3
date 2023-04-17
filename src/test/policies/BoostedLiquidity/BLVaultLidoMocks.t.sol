@@ -271,7 +271,7 @@ contract BLVaultLidoTest is Test {
         vaultManager.deactivate();
 
         bytes memory err = abi.encodeWithSignature("BLVaultLido_Inactive()");
-        vm.expectRevert();
+        vm.expectRevert(err);
 
         // Try to deposit
         vm.prank(alice);
@@ -284,7 +284,7 @@ contract BLVaultLidoTest is Test {
             aliceVault.deposit(1e18, 0);
         } else {
             bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
-            vm.expectRevert();
+            vm.expectRevert(err);
 
             // Try to deposit
             vm.prank(attacker_);
@@ -395,25 +395,13 @@ contract BLVaultLidoTest is Test {
         vm.warp(block.timestamp + 1 days);
     }
 
-    function testCorrectness_withdrawCanOnlyBeCalledWhenManagerIsActive() public {
-        // Deactivate vault manager
-        vaultManager.deactivate();
-
-        bytes memory err = abi.encodeWithSignature("BLVaultLido_Inactive()");
-        vm.expectRevert();
-
-        // Try to withdraw
-        vm.prank(alice);
-        aliceVault.withdraw(1e18, minAmountsOut, 0, true);
-    }
-
     function testCorrectness_withdrawFailsIfCooldownPeriodHasNotPassed() public {
         // Deposit wstETH
         vm.prank(alice);
         aliceVault.deposit(100e18, 0);
 
         bytes memory err = abi.encodeWithSignature("BLVaultLido_WithdrawalDelay()");
-        vm.expectRevert();
+        vm.expectRevert(err);
 
         // Try to withdraw
         vm.prank(alice);
@@ -428,7 +416,7 @@ contract BLVaultLidoTest is Test {
             aliceVault.withdraw(1e18, minAmountsOut, 0, true);
         } else {
             bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
-            vm.expectRevert();
+            vm.expectRevert(err);
 
             // Try to withdraw
             vm.prank(attacker_);
@@ -443,7 +431,7 @@ contract BLVaultLidoTest is Test {
         ohmEthPriceFeed.setLatestAnswer(1e15);
 
         bytes memory err = abi.encodeWithSignature("BLVaultLido_WithdrawFailedPriceImbalance()");
-        vm.expectRevert();
+        vm.expectRevert(err);
 
         // Try to withdraw
         vm.prank(alice);
@@ -531,7 +519,7 @@ contract BLVaultLidoTest is Test {
         vaultManager.deactivate();
 
         bytes memory err = abi.encodeWithSignature("BLVaultLido_Inactive()");
-        vm.expectRevert();
+        vm.expectRevert(err);
 
         // Try to claim rewards
         vm.prank(alice);
@@ -544,7 +532,7 @@ contract BLVaultLidoTest is Test {
             aliceVault.claimRewards();
         } else {
             bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
-            vm.expectRevert();
+            vm.expectRevert(err);
 
             // Try to claim rewards
             vm.prank(attacker_);

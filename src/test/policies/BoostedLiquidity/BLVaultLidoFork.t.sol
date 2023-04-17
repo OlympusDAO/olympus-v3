@@ -79,7 +79,7 @@ contract BLVaultLidoTest is Test {
 
     uint256[] internal minAmountsOut = [0, 0];
 
-    uint256 forkId;
+    uint256 internal forkId;
 
     function setUp() public {
         {
@@ -331,7 +331,7 @@ contract BLVaultLidoTest is Test {
         vaultManager.deactivate();
 
         bytes memory err = abi.encodeWithSignature("BLVaultLido_Inactive()");
-        vm.expectRevert();
+        vm.expectRevert(err);
 
         // Try to deposit
         vm.prank(alice);
@@ -340,7 +340,7 @@ contract BLVaultLidoTest is Test {
 
     function testCorrectness_depositCanOnlyBeCalledByTheVaultOwner() public {
         bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
-        vm.expectRevert();
+        vm.expectRevert(err);
 
         // Try to deposit
         vm.prank(address(0));
@@ -410,7 +410,7 @@ contract BLVaultLidoTest is Test {
         vaultManager.deactivate();
 
         bytes memory err = abi.encodeWithSignature("BLVaultLido_Inactive()");
-        vm.expectRevert();
+        vm.expectRevert(err);
 
         // Try to withdraw
         vm.prank(alice);
@@ -421,7 +421,7 @@ contract BLVaultLidoTest is Test {
         _withdrawSetup();
 
         bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
-        vm.expectRevert();
+        vm.expectRevert(err);
 
         // Try to withdraw
         vm.prank(address(0));
@@ -436,7 +436,6 @@ contract BLVaultLidoTest is Test {
 
         // Check state before
         uint256 deployedOhmBefore = vaultManager.deployedOhm();
-        uint256 totalLpBefore = vaultManager.totalLp();
 
         // Withdraw
         vm.prank(alice);
@@ -486,7 +485,7 @@ contract BLVaultLidoTest is Test {
         vaultManager.deactivate();
 
         bytes memory err = abi.encodeWithSignature("BLVaultLido_Inactive()");
-        vm.expectRevert();
+        vm.expectRevert(err);
 
         // Try to claim rewards
         vm.prank(alice);
@@ -495,7 +494,7 @@ contract BLVaultLidoTest is Test {
 
     function testCorrectness_claimRewardsCanOnlyBeCalledByTheVaultOwner() public {
         bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
-        vm.expectRevert();
+        vm.expectRevert(err);
 
         // Try to claim rewards
         vm.prank(address(0));
