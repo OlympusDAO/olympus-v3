@@ -17,7 +17,7 @@ Set up a foundry config in foundry.toml.
 │  ├─ PRICE
 │  ├─ RANGE
 │  ├─ TRSRY
-│  ├─ BLREGd
+│  ├─ BLREG
 ├─ policies - "Default framework policies"
 ├─ test - "General test utilities and mocks/larps"
 ```
