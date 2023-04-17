@@ -63,7 +63,8 @@ contract BLVaultLidoTest is Test {
     MockERC20 internal bal;
 
     MockPriceFeed internal ohmEthPriceFeed;
-    MockPriceFeed internal stethEthPriceFeed;
+    MockPriceFeed internal ethUsdPriceFeed;
+    MockPriceFeed internal stethUsdPriceFeed;
 
     MockVault internal vault;
     MockBalancerPool internal liquidityPool;
@@ -114,13 +115,16 @@ contract BLVaultLidoTest is Test {
         // Deploy mock price feeds
         {
             ohmEthPriceFeed = new MockPriceFeed();
-            stethEthPriceFeed = new MockPriceFeed();
+            ethUsdPriceFeed = new MockPriceFeed();
+            stethUsdPriceFeed = new MockPriceFeed();
 
             ohmEthPriceFeed.setDecimals(18);
-            stethEthPriceFeed.setDecimals(18);
+            ethUsdPriceFeed.setDecimals(8);
+            stethUsdPriceFeed.setDecimals(8);
 
             ohmEthPriceFeed.setLatestAnswer(1e16); // 0.01 ETH
-            stethEthPriceFeed.setLatestAnswer(1e18); // 1 ETH
+            ethUsdPriceFeed.setLatestAnswer(1000e8); // 1000 USD
+            stethUsdPriceFeed.setLatestAnswer(1000e8); // 1000 USD
         }
 
         // Deploy mock Balancer contracts
@@ -181,8 +185,11 @@ contract BLVaultLidoTest is Test {
             IBLVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = IBLVaultManagerLido
                 .OracleFeed({feed: ohmEthPriceFeed, updateThreshold: uint48(1 days)});
 
-            IBLVaultManagerLido.OracleFeed memory stethEthPriceFeedData = IBLVaultManagerLido
-                .OracleFeed({feed: stethEthPriceFeed, updateThreshold: uint48(1 days)});
+            IBLVaultManagerLido.OracleFeed memory ethUsdPriceFeedData = IBLVaultManagerLido
+                .OracleFeed({feed: ethUsdPriceFeed, updateThreshold: uint48(1 days)});
+
+            IBLVaultManagerLido.OracleFeed memory stethUsdPriceFeedData = IBLVaultManagerLido
+                .OracleFeed({feed: stethUsdPriceFeed, updateThreshold: uint48(1 days)});
 
             vaultManager = new BLVaultManagerLido(
                 kernel,
@@ -191,10 +198,12 @@ contract BLVaultLidoTest is Test {
                 auraData,
                 address(0),
                 ohmEthPriceFeedData,
-                stethEthPriceFeedData,
+                ethUsdPriceFeedData,
+                stethUsdPriceFeedData,
                 address(vaultImplementation),
                 100_000e9,
-                0
+                0,
+                1 days
             );
             rolesAdmin = new RolesAdmin(kernel);
         }
@@ -215,6 +224,7 @@ contract BLVaultLidoTest is Test {
         // Set roles
         {
             rolesAdmin.grantRole("liquidityvault_admin", address(this));
+            rolesAdmin.grantRole("emergency_admin", address(this));
         }
 
         // Activate Vault Manager
@@ -225,7 +235,8 @@ contract BLVaultLidoTest is Test {
         // Initialize timestamps on mock price feeds
         {
             ohmEthPriceFeed.setTimestamp(block.timestamp);
-            stethEthPriceFeed.setTimestamp(block.timestamp);
+            ethUsdPriceFeed.setTimestamp(block.timestamp);
+            stethUsdPriceFeed.setTimestamp(block.timestamp);
         }
 
         // Prepare alice's account
@@ -252,6 +263,8 @@ contract BLVaultLidoTest is Test {
     ///     [X]  can only be called by the vault's owner
     ///     [X]  correctly increases state values (deployedOhm and totalLp)
     ///     [X]  correctly deploys liquidity
+    ///     [X]  correctly deploys liquidity when oracle price < pool price
+    ///     [X]  correctly deploys liquidity when oracle price > pool price
 
     function testCorrectness_depositCanOnlyBeCalledWhenManagerIsActive() public {
         // Deactivate vault manager
@@ -323,16 +336,63 @@ contract BLVaultLidoTest is Test {
         assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
     }
 
+    function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueLow() public {
+        // Set oracle price to 0.5
+        ohmEthPriceFeed.setLatestAnswer(0.5e18);
+
+        // Verify state before
+        assertEq(ohm.balanceOf(address(vault)), 0);
+        assertEq(wsteth.balanceOf(address(vault)), 0);
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 0);
+
+        // Deposit wstETH
+        vm.prank(alice);
+        aliceVault.deposit(100e18, 0);
+
+        // Verify state after
+        uint256 expectedOhmAmount = (100e18 * vaultManager.getOhmTknPrice()) / 1e18;
+        assertEq(ohm.balanceOf(address(vault)), expectedOhmAmount);
+        assertEq(wsteth.balanceOf(address(vault)), 100e18);
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
+    }
+
+    function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueHigh() public {
+        // Set oracle price to 0.001
+        ohmEthPriceFeed.setLatestAnswer(1e15);
+
+        // Verify state before
+        assertEq(ohm.balanceOf(address(vault)), 0);
+        assertEq(wsteth.balanceOf(address(vault)), 0);
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 0);
+
+        // Deposit wstETH
+        vm.prank(alice);
+        aliceVault.deposit(100e18, 0);
+
+        // Verify state after
+        // TODO change 100e9 to ohmWstethPoolPrice
+        uint256 expectedOhmAmount = (100e18 * 100e9) / 1e18;
+        assertEq(ohm.balanceOf(address(vault)), expectedOhmAmount);
+        assertEq(wsteth.balanceOf(address(vault)), 100e18);
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
+    }
+
     /// [X]  withdraw
     ///     [X]  can only be called when the manager is active
     ///     [X]  can only be called by the vault's owner
+    ///     [X]  fails if not enough wstETH will be sent
+    ///     [X]  fails if the cooldown period has not passed
     ///     [X]  correctly decreases state values (deployedOhm and totalLp)
     ///     [X]  correctly withdraws liquidity
+    ///     [X]  correctly withdraws liquidity when oracle price differs from pool price
 
     function _withdrawSetup() internal {
         // Deposit wstETH
         vm.prank(alice);
         aliceVault.deposit(100e18, 0);
+
+        // Wait 1 day to pass the cooldown period
+        vm.warp(block.timestamp + 1 days);
     }
 
     function testCorrectness_withdrawCanOnlyBeCalledWhenManagerIsActive() public {
@@ -344,7 +404,20 @@ contract BLVaultLidoTest is Test {
 
         // Try to withdraw
         vm.prank(alice);
-        aliceVault.withdraw(1e18, minAmountsOut);
+        aliceVault.withdraw(1e18, minAmountsOut, 0, true);
+    }
+
+    function testCorrectness_withdrawFailsIfCooldownPeriodHasNotPassed() public {
+        // Deposit wstETH
+        vm.prank(alice);
+        aliceVault.deposit(100e18, 0);
+
+        bytes memory err = abi.encodeWithSignature("BLVaultLido_WithdrawalDelay()");
+        vm.expectRevert();
+
+        // Try to withdraw
+        vm.prank(alice);
+        aliceVault.withdraw(1e18, minAmountsOut, 0, true);
     }
 
     function testCorrectness_withdrawCanOnlyBeCalledByTheVaultOwner(address attacker_) public {
@@ -352,15 +425,29 @@ contract BLVaultLidoTest is Test {
 
         if (attacker_ == alice) {
             vm.prank(alice);
-            aliceVault.withdraw(1e18, minAmountsOut);
+            aliceVault.withdraw(1e18, minAmountsOut, 0, true);
         } else {
             bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
             vm.expectRevert();
 
             // Try to withdraw
             vm.prank(attacker_);
-            aliceVault.withdraw(1e18, minAmountsOut);
+            aliceVault.withdraw(1e18, minAmountsOut, 0, true);
         }
+    }
+
+    function testCorrectness_withdrawFailsIfNotEnoughWstethWillBeSent() public {
+        _withdrawSetup();
+
+        // Set price to 0.001
+        ohmEthPriceFeed.setLatestAnswer(1e15);
+
+        bytes memory err = abi.encodeWithSignature("BLVaultLido_WithdrawFailedPriceImbalance()");
+        vm.expectRevert();
+
+        // Try to withdraw
+        vm.prank(alice);
+        aliceVault.withdraw(1e18, minAmountsOut, 90e18, true);
     }
 
     function testCorrectness_withdrawCorrectlyDecreasesState(uint256 withdrawAmount_) public {
@@ -376,7 +463,7 @@ contract BLVaultLidoTest is Test {
 
         // Withdraw
         vm.prank(alice);
-        aliceVault.withdraw(withdrawAmount_, minAmountsOut);
+        aliceVault.withdraw(withdrawAmount_, minAmountsOut, 0, true);
 
         // Check state after
         assertTrue(vaultManager.deployedOhm() < 10_000e9);
@@ -396,11 +483,37 @@ contract BLVaultLidoTest is Test {
 
         // Withdraw
         vm.prank(alice);
-        aliceVault.withdraw(aliceLpBalance, minAmountsOut);
+        aliceVault.withdraw(aliceLpBalance, minAmountsOut, 0, true);
 
         // Check state after
         assertEq(ohm.balanceOf(address(vault)), 0);
         assertEq(wsteth.balanceOf(address(vault)), 0);
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 0);
+    }
+
+    function testCorrectness_withdrawCorrectlyWithdrawsLiquidityPriceDiff() public {
+        _withdrawSetup();
+
+        // Set oracle price to 0.001
+        ohmEthPriceFeed.setLatestAnswer(1e15);
+
+        // Get alice vault's LP balance
+        uint256 aliceLpBalance = aliceVault.getLpBalance();
+
+        // Check state before
+        assertEq(ohm.balanceOf(address(vault)), 10_000e9);
+        assertEq(wsteth.balanceOf(address(vault)), aliceLpBalance);
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), aliceLpBalance);
+
+        // Withdraw
+        vm.prank(alice);
+        aliceVault.withdraw(aliceLpBalance, minAmountsOut, 0, true);
+
+        // Check state after
+        assertEq(ohm.balanceOf(address(vault)), 0);
+        assertEq(wsteth.balanceOf(address(vault)), 0);
+        assertEq(wsteth.balanceOf(address(alice)), 10e18);
+        assertEq(wsteth.balanceOf(address(treasury)), 90e18);
         assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 0);
     }
 

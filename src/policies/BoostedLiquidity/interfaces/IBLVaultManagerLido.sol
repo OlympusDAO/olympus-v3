@@ -41,6 +41,13 @@ interface IBLVaultManagerLido {
     }
 
     //============================================================================================//
+    //                                        STATE VARIABLES                                     //
+    //============================================================================================//
+
+    /// @notice                         The minimum length of time between a deposit and a withdrawal
+    function minWithdrawalDelay() external returns (uint48);
+
+    //============================================================================================//
     //                                        VAULT DEPLOYMENT                                    //
     //============================================================================================//
 
@@ -81,6 +88,11 @@ interface IBLVaultManagerLido {
     //                                         VIEW FUNCTIONS                                     //
     //============================================================================================//
 
+    /// @notice                         Returns whether enough time has passed since the last deposit for the user to be ale to withdraw
+    /// @param user_                    The user to check the vault of
+    /// @return bool                    Whether enough time has passed since the last deposit for the user to be ale to withdraw
+    function canWithdraw(address user_) external view returns (bool);
+
     /// @notice                         Returns the user's vault's LP balance
     /// @param user_                    The user to check the vault of
     /// @return uint256                 The user's vault's LP balance
@@ -105,6 +117,20 @@ interface IBLVaultManagerLido {
     /// @return uint256                 The amount of LP tokens that will be generated
     function getExpectedLpAmount(uint256 amount_) external returns (uint256);
 
+    /// @notice                         Calculates the amount of OHM and pair tokens that should be received by the vault for withdrawing a given amount of LP tokens
+    /// @param lpAmount_                The amount of LP tokens to calculate the OHM and pair tokens for
+    /// @return expectedTokenAmounts    The amount of OHM and pair tokens that should be received
+    function getExpectedTokensOutProtocol(uint256 lpAmount_)
+        external
+        returns (uint256[] memory expectedTokenAmounts);
+
+    /// @notice                         Calculates the amount of pair tokens that should be received by the user for withdrawing a given amount of LP tokens after the treasury takes any arbs
+    /// @param lpAmount_                The amount of LP tokens to calculate the pair tokens for
+    /// @return expectedTknAmount       The amount of pair tokens that should be received
+    function getExpectedPairTokenOutUser(uint256 lpAmount_)
+        external
+        returns (uint256 expectedTknAmount);
+
     /// @notice                         Gets all the reward tokens from the Aura pool
     /// @return address[]               The addresses of the reward tokens
     function getRewardTokens() external view returns (address[] memory);
@@ -121,19 +147,35 @@ interface IBLVaultManagerLido {
     /// @return uint256                 Vault system's current claim on OHM from the Balancer pool
     /// @return uint256                 Current amount of OHM minted by the system into the Balancer pool
     /// @return uint256                 OHM that wasn't minted, but was previously circulating that has been burned by the system
-    function getOhmSupplyChangeData() external view returns (uint256, uint256, uint256);
+    function getOhmSupplyChangeData()
+        external
+        view
+        returns (
+            uint256,
+            uint256,
+            uint256
+        );
 
-    /// @notice                         Gets the number of OHM per 1 wstETH
+    /// @notice                         Gets the number of OHM per 1 wstETH using oracle prices
     /// @return uint256                 OHM per 1 wstETH (9 decimals)
     function getOhmTknPrice() external view returns (uint256);
 
-    /// @notice                         Gets the number of wstETH per 1 OHM
+    /// @notice                         Gets the number of wstETH per 1 OHM using oracle prices
     /// @return uint256                 wstETH per 1 OHM (18 decimals)
     function getTknOhmPrice() external view returns (uint256);
+
+    /// @notice                         Gets the number of OHM per 1 wstETH using pool prices
+    /// @return uint256                 OHM per 1 wstETH (9 decimals)
+    function getOhmTknPoolPrice() external view returns (uint256);
 
     //============================================================================================//
     //                                        ADMIN FUNCTIONS                                     //
     //============================================================================================//
+
+    /// @notice                         Emergency burns OHM that has been sent to the manager in the event a user had to emergency withdraw
+    /// @dev                            Can only be called by the admin
+    /// @param amount_                  The amount of OHM to burn
+    function emergencyBurnOhm(uint256 amount_) external;
 
     /// @notice                         Updates the limit on minting OHM
     /// @dev                            Can only be called by the admin. Cannot be set lower than the current outstanding minted OHM.
@@ -145,13 +187,20 @@ interface IBLVaultManagerLido {
     /// @param newFee_                  The new fee (in basis points)
     function setFee(uint64 newFee_) external;
 
+    /// @notice                         Updates the minimum holding period before a user can withdraw
+    /// @dev                            Can only be called by the admin
+    /// @param newDelay_                The new minimum holding period (in seconds)
+    function setWithdrawalDelay(uint48 newDelay_) external;
+
     /// @notice                         Updates the time threshold for oracle staleness checks
     /// @dev                            Can only be called by the admin
     /// @param ohmEthUpdateThreshold_   The new time threshold for the OHM-ETH oracle
-    /// @param stethEthUpdateThreshold_ The new time threshold for the stETH-ETH oracle
+    /// @param ethUsdUpdateThreshold_   The new time threshold for the ETH-USD oracle
+    /// @param stethUsdUpdateThreshold_ The new time threshold for the stETH-USD oracle
     function changeUpdateThresholds(
         uint48 ohmEthUpdateThreshold_,
-        uint48 stethEthUpdateThreshold_
+        uint48 ethUsdUpdateThreshold_,
+        uint48 stethUsdUpdateThreshold_
     ) external;
 
     /// @notice                         Activates the vault manager and all approved vaults

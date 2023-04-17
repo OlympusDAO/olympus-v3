@@ -13,8 +13,19 @@ contract MockAuraBooster is IAuraBooster {
         pools.push(pool_);
     }
 
-    function deposit(uint256 pid_, uint256 amount_, bool stake_) external {
-        MockERC20(token).transferFrom(msg.sender, pools[pid_], amount_);
+    function deposit(
+        uint256 pid_,
+        uint256 amount_,
+        bool stake_
+    ) external returns (bool) {
+        address pool = pools[pid_];
+
+        MockERC20(token).transferFrom(msg.sender, address(this), amount_);
+
+        MockERC20(token).approve(pool, amount_);
+        IAuraRewardPool(pool).deposit(amount_, msg.sender);
+
+        return true;
     }
 
     function addPool(address pool_) external {
@@ -35,21 +46,27 @@ contract MockAuraRewardPool is IAuraRewardPool {
     uint256 public extraRewardsLength;
     address[] public extraRewards;
 
-    constructor(address depositToken_, address reward_, address aura_) {
+    // User balances
+    mapping(address => uint256) public balanceOf;
+
+    constructor(
+        address depositToken_,
+        address reward_,
+        address aura_
+    ) {
         depositToken = depositToken_;
         rewardToken = reward_;
         aura = aura_;
     }
 
-    function balanceOf(address account_) public view returns (uint256) {
-        return MockERC20(depositToken).balanceOf(address(this));
-    }
-
     function deposit(uint256 assets_, address receiver_) external {
-        MockERC20(depositToken).transferFrom(receiver_, address(this), assets_);
+        balanceOf[receiver_] += assets_;
+        MockERC20(depositToken).transferFrom(msg.sender, address(this), assets_);
     }
 
     function getReward(address account_, bool claimExtras_) public {
+        if (balanceOf[account_] == 0) return;
+
         MockERC20(rewardToken).mint(account_, 1e18);
         if (aura != address(0)) MockERC20(aura).mint(account_, 1e18);
 
@@ -61,13 +78,18 @@ contract MockAuraRewardPool is IAuraRewardPool {
         }
     }
 
-    function withdrawAndUnwrap(uint256 amount_, bool claim_) external {
+    function withdrawAndUnwrap(uint256 amount_, bool claim_) external returns (bool) {
         MockERC20(depositToken).transfer(msg.sender, amount_);
         if (claim_) getReward(msg.sender, true);
+
+        balanceOf[msg.sender] -= amount_;
+
+        return true;
     }
 
     function earned(address account_) external view returns (uint256) {
-        return 1e18;
+        if (balanceOf[account_] != 0) return 1e18;
+        return 0;
     }
 
     function addExtraReward(address reward_) external {

@@ -8,7 +8,7 @@ import {BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.s
 
 // Import external dependencies
 import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool} from "policies/BoostedLiquidity/interfaces/IBalancer.sol";
-import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
+import {IAuraBooster, IAuraRewardPool, IAuraMiningLib, ISTASHToken} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
 // Import types
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
@@ -27,8 +27,13 @@ contract BLVaultLido is IBLVaultLido, Clone {
 
     error BLVaultLido_AlreadyInitialized();
     error BLVaultLido_OnlyOwner();
+    error BLVaultLido_Active();
     error BLVaultLido_Inactive();
     error BLVaultLido_Reentrancy();
+    error BLVaultLido_AuraDepositFailed();
+    error BLVaultLido_AuraWithdrawalFailed();
+    error BLVaultLido_WithdrawFailedPriceImbalance();
+    error BLVaultLido_WithdrawalDelay();
 
     // ========= EVENTS ========= //
 
@@ -37,6 +42,9 @@ contract BLVaultLido is IBLVaultLido, Clone {
     event RewardsClaimed(address indexed rewardsToken, uint256 amount);
 
     // ========= STATE VARIABLES ========= //
+
+    /// @notice The last timestamp a deposit was made. Used for enforcing minimum deposit lengths.
+    uint256 public lastDeposit;
 
     uint256 private constant _OHM_DECIMALS = 1e9;
     uint256 private constant _WSTETH_DECIMALS = 1e18;
@@ -124,6 +132,11 @@ contract BLVaultLido is IBLVaultLido, Clone {
         _;
     }
 
+    modifier onlyWhileInactive() {
+        if (manager().isLidoBLVaultActive()) revert BLVaultLido_Active();
+        _;
+    }
+
     modifier nonReentrant() {
         if (_reentrancyStatus != 1) revert BLVaultLido_Reentrancy();
 
@@ -139,10 +152,14 @@ contract BLVaultLido is IBLVaultLido, Clone {
     //============================================================================================//
 
     /// @inheritdoc IBLVaultLido
-    function deposit(
-        uint256 amount_,
-        uint256 minLpAmount_
-    ) external override onlyWhileActive onlyOwner nonReentrant returns (uint256 lpAmountOut) {
+    function deposit(uint256 amount_, uint256 minLpAmount_)
+        external
+        override
+        onlyWhileActive
+        onlyOwner
+        nonReentrant
+        returns (uint256 lpAmountOut)
+    {
         // Cache variables into memory
         IBLVaultManagerLido manager = manager();
         OlympusERC20Token ohm = ohm();
@@ -150,30 +167,50 @@ contract BLVaultLido is IBLVaultLido, Clone {
         IBasePool liquidityPool = liquidityPool();
         IAuraBooster auraBooster = auraBooster();
 
+        uint256 ohmMintAmount;
+
+        // Set last deposit timestamp
+        lastDeposit = block.timestamp;
+
+        // Block scope to avoid stack too deep
         // Calculate OHM amount to mint
-        // getOhmTknPrice returns the amount of OHM per 1 wstETH
-        uint256 ohmWstethPrice = manager.getOhmTknPrice();
-        uint256 ohmMintAmount = (amount_ * ohmWstethPrice) / _WSTETH_DECIMALS;
+        {
+            // getOhmTknPrice returns the amount of OHM per 1 wstETH
+            uint256 ohmWstethOraclePrice = manager.getOhmTknPrice();
+            uint256 ohmWstethPoolPrice = manager.getOhmTknPoolPrice();
 
-        // Cache OHM-wstETH BPT before
-        uint256 bptBefore = liquidityPool.balanceOf(address(this));
+            // If the expected oracle price mint amount is less than the expected pool price mint amount, use the oracle price
+            // otherwise use the pool price
+            uint256 ohmWstethPrice = ohmWstethOraclePrice < ohmWstethPoolPrice
+                ? ohmWstethOraclePrice
+                : ohmWstethPoolPrice;
+            ohmMintAmount = (amount_ * ohmWstethPrice) / _WSTETH_DECIMALS;
+        }
 
-        // Transfer in wstETH
-        wsteth.transferFrom(msg.sender, address(this), amount_);
+        // Block scope to avoid stack too deep
+        // Get tokens and deposit to Balancer and Aura
+        {
+            // Cache OHM-wstETH BPT before
+            uint256 bptBefore = liquidityPool.balanceOf(address(this));
 
-        // Mint OHM
-        manager.mintOhmToVault(ohmMintAmount);
+            // Transfer in wstETH
+            wsteth.safeTransferFrom(msg.sender, address(this), amount_);
 
-        // Join Balancer pool
-        _joinBalancerPool(ohmMintAmount, amount_, minLpAmount_);
+            // Mint OHM
+            manager.mintOhmToVault(ohmMintAmount);
 
-        // OHM-PAIR BPT after
-        lpAmountOut = liquidityPool.balanceOf(address(this)) - bptBefore;
-        manager.increaseTotalLp(lpAmountOut);
+            // Join Balancer pool
+            _joinBalancerPool(ohmMintAmount, amount_, minLpAmount_);
 
-        // Stake into Aura
-        liquidityPool.approve(address(auraBooster), lpAmountOut);
-        auraBooster.deposit(pid(), lpAmountOut, true);
+            // OHM-PAIR BPT after
+            lpAmountOut = liquidityPool.balanceOf(address(this)) - bptBefore;
+            manager.increaseTotalLp(lpAmountOut);
+
+            // Stake into Aura
+            liquidityPool.approve(address(auraBooster), lpAmountOut);
+            bool depositSuccess = auraBooster.deposit(pid(), lpAmountOut, true);
+            if (!depositSuccess) revert BLVaultLido_AuraDepositFailed();
+        }
 
         // Return unused tokens
         uint256 unusedOhm = ohm.balanceOf(address(this));
@@ -185,7 +222,7 @@ contract BLVaultLido is IBLVaultLido, Clone {
         }
 
         if (unusedWsteth > 0) {
-            wsteth.transfer(msg.sender, unusedWsteth);
+            wsteth.safeTransfer(msg.sender, unusedWsteth);
         }
 
         // Emit event
@@ -197,12 +234,18 @@ contract BLVaultLido is IBLVaultLido, Clone {
     /// @inheritdoc IBLVaultLido
     function withdraw(
         uint256 lpAmount_,
-        uint256[] calldata minTokenAmounts_
-    ) external override onlyWhileActive onlyOwner nonReentrant returns (uint256, uint256) {
+        uint256[] calldata minTokenAmountsBalancer_,
+        uint256 minTokenAmountUser_,
+        bool claim_
+    ) external override onlyOwner nonReentrant returns (uint256, uint256) {
         // Cache variables into memory
         OlympusERC20Token ohm = ohm();
         ERC20 wsteth = wsteth();
         IBLVaultManagerLido manager = manager();
+
+        // Check if enough time has passed since the latest deposit
+        if (block.timestamp - lastDeposit < manager.minWithdrawalDelay())
+            revert BLVaultLido_WithdrawalDelay();
 
         // Cache OHM and wstETH balances before
         uint256 ohmBefore = ohm.balanceOf(address(this));
@@ -212,10 +255,11 @@ contract BLVaultLido is IBLVaultLido, Clone {
         manager.decreaseTotalLp(lpAmount_);
 
         // Unstake from Aura
-        auraRewardPool().withdrawAndUnwrap(lpAmount_, true);
+        bool withdrawalSuccess = auraRewardPool().withdrawAndUnwrap(lpAmount_, claim_);
+        if (!withdrawalSuccess) revert BLVaultLido_AuraWithdrawalFailed();
 
         // Exit Balancer pool
-        _exitBalancerPool(lpAmount_, minTokenAmounts_);
+        _exitBalancerPool(lpAmount_, minTokenAmountsBalancer_);
 
         // Calculate OHM and wstETH amounts received
         uint256 ohmAmountOut = ohm.balanceOf(address(this)) - ohmBefore;
@@ -230,23 +274,61 @@ contract BLVaultLido is IBLVaultLido, Clone {
         uint256 wstethToReturn = wstethAmountOut > expectedWstethAmountOut
             ? expectedWstethAmountOut
             : wstethAmountOut;
+
+        if (wstethToReturn < minTokenAmountUser_) revert BLVaultLido_WithdrawFailedPriceImbalance();
         if (wstethAmountOut > wstethToReturn)
-            wsteth.transfer(TRSRY(), wstethAmountOut - wstethToReturn);
+            wsteth.safeTransfer(TRSRY(), wstethAmountOut - wstethToReturn);
 
         // Burn OHM
         ohm.increaseAllowance(MINTR(), ohmAmountOut);
         manager.burnOhmFromVault(ohmAmountOut);
 
         // Return wstETH to owner
-        wsteth.transfer(msg.sender, wstethToReturn);
+        wsteth.safeTransfer(msg.sender, wstethToReturn);
 
         // Return rewards to owner
-        _sendRewards();
+        if (claim_) _sendRewards();
 
         // Emit event
         emit Withdraw(ohmAmountOut, wstethToReturn);
 
         return (ohmAmountOut, wstethToReturn);
+    }
+
+    /// @inheritdoc IBLVaultLido
+    function emergencyWithdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
+        external
+        override
+        onlyWhileInactive
+        onlyOwner
+        nonReentrant
+        returns (uint256, uint256)
+    {
+        // Cache variables into memory
+        OlympusERC20Token ohm = ohm();
+        ERC20 wsteth = wsteth();
+
+        // Cache OHM and wstETH balances before
+        uint256 ohmBefore = ohm.balanceOf(address(this));
+        uint256 wstethBefore = wsteth.balanceOf(address(this));
+
+        // Unstake from Aura
+        auraRewardPool().withdrawAndUnwrap(lpAmount_, false);
+
+        // Exit Balancer pool
+        _exitBalancerPool(lpAmount_, minTokenAmounts_);
+
+        // Calculate OHM and wstETH amounts received
+        uint256 ohmAmountOut = ohm.balanceOf(address(this)) - ohmBefore;
+        uint256 wstethAmountOut = wsteth.balanceOf(address(this)) - wstethBefore;
+
+        // Transfer wstETH to owner
+        wsteth.safeTransfer(msg.sender, wstethAmountOut);
+
+        // Transfer OHM to manager
+        ohm.transfer(address(manager()), ohmAmountOut);
+
+        return (ohmAmountOut, wstethAmountOut);
     }
 
     //============================================================================================//
@@ -256,7 +338,7 @@ contract BLVaultLido is IBLVaultLido, Clone {
     /// @inheritdoc IBLVaultLido
     function claimRewards() external override onlyWhileActive onlyOwner nonReentrant {
         // Claim rewards from Aura
-        auraRewardPool().getReward(owner(), true);
+        auraRewardPool().getReward(address(this), true);
 
         // Send rewards to owner
         _sendRewards();
@@ -265,6 +347,11 @@ contract BLVaultLido is IBLVaultLido, Clone {
     //============================================================================================//
     //                                        VIEW FUNCTIONS                                      //
     //============================================================================================//
+
+    /// @inheritdoc IBLVaultLido
+    function canWithdraw() external view override returns (bool) {
+        return block.timestamp - lastDeposit >= manager().minWithdrawalDelay();
+    }
 
     /// @inheritdoc IBLVaultLido
     function getLpBalance() public view override returns (uint256) {
@@ -288,8 +375,8 @@ contract BLVaultLido is IBLVaultLido, Clone {
         // Check pool against oracle price
         // getTknOhmPrice returns the amount of wstETH per 1 OHM based on the oracle price
         uint256 wstethOhmPrice = manager().getTknOhmPrice();
-        uint256 userOhmShare = (userLpBalance * balances[0]) / liquidityPool().totalSupply();
-        uint256 expectedWstethShare = (userOhmShare * wstethOhmPrice) / _OHM_DECIMALS;
+        uint256 expectedWstethShare = (userLpBalance * balances[0] * wstethOhmPrice) /
+            (liquidityPool().totalSupply() * _OHM_DECIMALS);
 
         return userWstethShare > expectedWstethShare ? expectedWstethShare : userWstethShare;
     }
@@ -311,7 +398,7 @@ contract BLVaultLido is IBLVaultLido, Clone {
         for (uint256 i; i < numExtraRewards; ) {
             IAuraRewardPool extraRewardPool = IAuraRewardPool(auraRewardPool().extraRewards(i));
 
-            address extraRewardToken = extraRewardPool.rewardToken();
+            address extraRewardToken = ISTASHToken(extraRewardPool.rewardToken()).baseToken();
             uint256 extraRewardAmount = extraRewardPool.earned(address(this));
 
             rewards[i + 2] = RewardsData({
@@ -398,10 +485,10 @@ contract BLVaultLido is IBLVaultLido, Clone {
             uint256 balRewards = bal().balanceOf(address(this));
             uint256 balFee = (balRewards * fee()) / 10_000;
             if (balRewards - balFee > 0) {
-                bal().transfer(owner(), balRewards - balFee);
+                bal().safeTransfer(owner(), balRewards - balFee);
                 emit RewardsClaimed(address(bal()), balRewards - balFee);
             }
-            if (balFee > 0) bal().transfer(TRSRY(), balFee);
+            if (balFee > 0) bal().safeTransfer(TRSRY(), balFee);
         }
 
         // Send Aura rewards to owner
@@ -409,10 +496,10 @@ contract BLVaultLido is IBLVaultLido, Clone {
             uint256 auraRewards = aura().balanceOf(address(this));
             uint256 auraFee = (auraRewards * fee()) / 10_000;
             if (auraRewards - auraFee > 0) {
-                aura().transfer(owner(), auraRewards - auraFee);
+                aura().safeTransfer(owner(), auraRewards - auraFee);
                 emit RewardsClaimed(address(aura()), auraRewards - auraFee);
             }
-            if (auraFee > 0) aura().transfer(TRSRY(), auraFee);
+            if (auraFee > 0) aura().safeTransfer(TRSRY(), auraFee);
         }
 
         // Send extra rewards to owner
@@ -420,18 +507,20 @@ contract BLVaultLido is IBLVaultLido, Clone {
             uint256 numExtraRewards = auraRewardPool().extraRewardsLength();
             for (uint256 i; i < numExtraRewards; ) {
                 IAuraRewardPool extraRewardPool = IAuraRewardPool(auraRewardPool().extraRewards(i));
-                ERC20 extraRewardToken = ERC20(extraRewardPool.rewardToken());
+                ERC20 extraRewardToken = ERC20(
+                    ISTASHToken(extraRewardPool.rewardToken()).baseToken()
+                );
 
                 uint256 extraRewardAmount = extraRewardToken.balanceOf(address(this));
                 uint256 extraRewardFee = (extraRewardAmount * fee()) / 10_000;
                 if (extraRewardAmount - extraRewardFee > 0) {
-                    extraRewardToken.transfer(owner(), extraRewardAmount - extraRewardFee);
+                    extraRewardToken.safeTransfer(owner(), extraRewardAmount - extraRewardFee);
                     emit RewardsClaimed(
                         address(extraRewardToken),
                         extraRewardAmount - extraRewardFee
                     );
                 }
-                if (extraRewardFee > 0) extraRewardToken.transfer(TRSRY(), extraRewardFee);
+                if (extraRewardFee > 0) extraRewardToken.safeTransfer(TRSRY(), extraRewardFee);
 
                 unchecked {
                     ++i;
