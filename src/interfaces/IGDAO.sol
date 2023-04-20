@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.7.5;
-import {IERC20} from "src/interfaces/IERC20.sol";
+import "src/interfaces/IERC20.sol";
 // File: interfaces/IGDAO.sol
 
 interface IGDAO is IERC20 {

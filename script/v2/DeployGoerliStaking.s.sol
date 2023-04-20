@@ -20,9 +20,9 @@ contract GDAOStakingDeploy is Script {
     address gdao = vm.envAddress("SEPOLIA_GDAO_1_2"); // make sure updated in .env
     address sgdao = vm.envAddress("SEPOLIA_SGDAO"); // make sure updated in .env
     address xgdao = vm.envAddress("SEPOLIA_XGDAO"); // make sure updated in .env
-    uint256 epochLength = 28800;
+    uint256 epochLength = 300;
     uint256 firstEpochNumber = 1;
-    uint256 firstEpochTime = 1639512000;
+    uint256 firstEpochTime = 1681962944;
     address authority = vm.envAddress("SEPOLIA_AUTHORITY"); // make sure updated in .env
     GoerliStaking staking = new GoerliStaking(gdao, sgdao, xgdao, epochLength, firstEpochNumber, firstEpochTime, authority);
 

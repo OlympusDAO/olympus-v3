@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.10;
 
-import {IERC20} from "src/interfaces/IERC20.sol";
-import "../../interfaces/IStaking.sol";
+import "src/interfaces/IERC20.sol";
+import "src/interfaces/IStaking.sol";
 import "./Ownable.sol";
 import "src/types/OlympusAccessControlled.sol";
 

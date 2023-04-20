@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity >=0.7.5;
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import "src/libraries/SafeERC20.sol";
+import "src/libraries/SafeMath.sol";
+import "src/interfaces/IERC20.sol";
 import  {IxGDAO} from "src/interfaces/IxGDAO.sol";
 import  {IsGDAO} from "src/interfaces/IsGDAO.sol";
+
+
+
 
 // File: interfaces/IOlympusAuthority.sol
 

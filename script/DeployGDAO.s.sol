@@ -13,12 +13,11 @@ contract GdaoDeploy is Script {
   function run() external returns (GDAO gdao) {
     // string memory seedPhrase = vm.readFile(".secret");
     // uint256 privateKey = vm.deriveKey(seedPhrase, 0);
-    uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV");
+    uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV_5");
     // vm.startBroadcast(privateKey);
     vm.startBroadcast(deployerPrivateKey);
-    address authority = vm.envAddress("SEPOLIA_AUTHORITY");
+    address authority = vm.envAddress("GOERLI_AUTHORITY");
     gdao = new GDAO(authority);
-
     vm.stopBroadcast();
     return gdao;
   }

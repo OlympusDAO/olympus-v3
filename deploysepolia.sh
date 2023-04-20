@@ -6,10 +6,6 @@ source .env
 # deploy kernel first
 # take note of genesis timestamp in anvil
 
-# Deploy Kernel
-forge script script/DeployKernel.s.sol:KernelDeploy --rpc-url ${SEPOLIA_INFURA}
-forge script script/DeployKernel.s.sol:KernelDeploy --broadcast --rpc-url ${SEPOLIA_INFURA} --private-key 
-
 # Deploy Testnet GDAO
 forge script script/mocks/DeployTestnetGDAO.s.sol:TestGdaoDeploy --rpc-url ${SEPOLIA_INFURA}
 forge script script/mocks/DeployTestnetGDAO.s.sol:TestGdaoDeploy --broadcast --rpc-url ${SEPOLIA_INFURA}
@@ -50,6 +46,7 @@ forge script script/mocks/DeployMockTests.s.sol:DeployMockTests --broadcast --rp
 
 ### TESTNET DEPLOYMENT ################################
 
+
 # Deploy Kernel
 forge script script/Deploy.s.sol:KernelDeploy --rpc-url ${SEPOLIA_INFURA}
 forge script script/Deploy.s.sol:KernelDeploy --rpc-url ${SEPOLIA_INFURA} --private-key ${PRIV_KEY} --broadcast --verify --optimize --optimizer-runs 20000 -vvvv
@@ -57,6 +54,10 @@ forge script script/Deploy.s.sol:KernelDeploy --rpc-url ${SEPOLIA_INFURA} --priv
 # Deploy Authority
 forge script script/v2/DeployGdaoAuthority.s.sol:AuthorityDeploy --rpc-url ${SEPOLIA_INFURA}
 forge script script/v2/DeployGdaoAuthority.s.sol:AuthorityDeploy --broadcast --rpc-url ${SEPOLIA_INFURA}
+
+# Deploy sGDAO 
+forge script script/v2/DeploysGDAO.s.sol:sGdaoDeploy --rpc-url ${SEPOLIA_INFURA}
+forge script script/v2/DeploysGDAO.s.sol:sGdaoDeploy --broadcast --rpc-url https://sepolia.infura.io/v3/e1c03f0a80f94c67b2e94cea8b656616
 
 # External
 # Deploy GDAO - use authority, store kernel address
@@ -67,14 +68,21 @@ forge script script/DeployGDAO.s.sol:GdaoDeploy --broadcast --rpc-url ${SEPOLIA_
 forge script script/v2/DeployxGDAO.s.sol:xGdaoDeploy --rpc-url ${SEPOLIA_INFURA}
 forge script script/v2/DeployxGDAO.s.sol:xGdaoDeploy --broadcast --rpc-url ${SEPOLIA_INFURA}
 
-# Deploy sGDAO 
-forge script script/v2/DeploysGDAO.s.sol:sGdaoDeploy --rpc-url ${SEPOLIA_INFURA}
-forge script script/v2/DeploysGDAO.s.sol:sGdaoDeploy --broadcast --rpc-url ${SEPOLIA_INFURA}
-
+# Deploy Treasury
+forge script script/modules/DeployTreasury.s.sol:DeployTreasury --rpc-url ${SEPOLIA_INFURA}
+forge script script/modules/DeployTreasury.s.sol:DeployTreasury --broadcast --rpc-url ${SEPOLIA_INFURA}
 
 # Deploy GDAOStaking
 forge script script/v2/DeployGoerliStaking.s.sol:GDAOStakingDeploy --rpc-url ${SEPOLIA_INFURA}
 forge script script/v2/DeployGoerliStaking.s.sol:GDAOStakingDeploy --broadcast --rpc-url ${SEPOLIA_INFURA}
+
+# Deploy Bonding Calc?
+
+# Deploy Distributor - update staking address
+forge script script/policies/DeployDistributor.s.sol:DeployDistributor --rpc-url ${SEPOLIA_INFURA}
+forge script script/policies/DeployDistributor.s.sol:DeployDistributor --broadcast --rpc-url ${SEPOLIA_INFURA}
+
+
 
 # Modules
 
@@ -85,10 +93,6 @@ forge script script/modules/DeployGDaoInstructions.s.sol:GDaoInstrDeploy --broad
 # Deploy Roles
 forge script script/modules/DeployRoles.s.sol:DeployRoles --rpc-url ${SEPOLIA_INFURA}
 forge script script/modules/DeployRoles.s.sol:DeployRoles --broadcast --rpc-url ${SEPOLIA_INFURA}
-
-# Deploy Treasury
-forge script script/modules/DeployTreasury.s.sol:DeployTreasury --rpc-url ${SEPOLIA_INFURA}
-forge script script/modules/DeployTreasury.s.sol:DeployTreasury --broadcast --rpc-url ${SEPOLIA_INFURA}
 
 ##### Modules
 
@@ -115,10 +119,6 @@ forge script script/modules/DeployRange.s.sol:DeployRange --broadcast --rpc-url 
 # Deploy Roles
 forge script script/modules/DeployRoles.s.sol:DeployRoles --rpc-url ${SEPOLIA_INFURA}
 forge script script/modules/DeployRoles.s.sol:DeployRoles --broadcast --rpc-url ${SEPOLIA_INFURA}
-
-# Deploy Treasury
-forge script script/modules/DeployTreasury.s.sol:DeployTreasury --rpc-url ${SEPOLIA_INFURA}
-forge script script/modules/DeployTreasury.s.sol:DeployTreasury --broadcast --rpc-url ${SEPOLIA_INFURA}
 
 # Deploy Votes - can deploy with xGDAO
 forge script script/modules/DeployVotes.s.sol:DeployVotes --rpc-url ${SEPOLIA_INFURA}
@@ -173,10 +173,6 @@ forge script script/policies/DeployDistributor.s.sol:DeployDistributor --broadca
 # Deploy Emergency
 forge script script/policies/DeployEmergency.s.sol:DeployEmergency --rpc-url ${SEPOLIA_INFURA}
 forge script script/policies/DeployEmergency.s.sol:DeployEmergency --broadcast --rpc-url ${SEPOLIA_INFURA}
-
-# Deploy Distributor - update staking address
-forge script script/policies/DeployDistributor.s.sol:DeployDistributor --rpc-url ${SEPOLIA_INFURA}
-forge script script/policies/DeployDistributor.s.sol:DeployDistributor --broadcast --rpc-url ${SEPOLIA_INFURA}
 
 # Deploy Emergency
 forge script script/policies/DeployEmergency.s.sol:DeployEmergency --rpc-url ${SEPOLIA_INFURA}

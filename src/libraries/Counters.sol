@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.7.5;
 
-import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "src/libraries/SafeMath.sol";
 
 
 library Counters {

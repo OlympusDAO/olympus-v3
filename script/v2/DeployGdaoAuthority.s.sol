@@ -11,13 +11,13 @@ contract AuthorityDeploy is Script {
   function run() external returns (GdaoAuthority authority) {
     // string memory seedPhrase = vm.readFile(".secret");
     // uint256 privateKey = vm.deriveKey(seedPhrase, 0);
-    uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV");
+    uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV_5");
     // vm.startBroadcast(privateKey);
     vm.startBroadcast(deployerPrivateKey);
-    address governor = vm.envAddress("SEPOLIA_MULTISIG1");
-    address guardian = vm.envAddress("SEPOLIA_MULTISIG1");
-    address policy = vm.envAddress("SEPOLIA_MULTISIG2");
-    address vault = vm.envAddress("SEPOLIA_MULTISIG1");
+    address governor = vm.envAddress("GOERLI_KERNEL_5");
+    address guardian = vm.envAddress("GOERLI_KERNEL_5");
+    address policy = vm.envAddress("GOERLI_MULTISIG_2");
+    address vault = vm.envAddress("GOERLI_KERNEL_5");
 
     authority = new GdaoAuthority(governor, guardian, policy, vault);
 

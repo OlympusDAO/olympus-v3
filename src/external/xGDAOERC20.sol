@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-
-// File: interfaces/IERC20.sol
-
 pragma solidity >=0.7.5;
 
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeMath} from "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
-import  {IxGDAO} from "../interfaces/IxGDAO.sol";
-import {Address} from "@openzeppelin/contracts/utils/Address.sol";
-import  {IsGDAO} from "../interfaces/IsGDAO.sol";
+import "src/libraries/SafeMath.sol";
+import "src/interfaces/IERC20.sol";
+import "src/interfaces/IxGDAO.sol";
+import "src/libraries/Address.sol";
+import "src/interfaces/IsGDAO.sol";
 
 
 abstract contract ERC20 is IERC20 {

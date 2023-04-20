@@ -1,3 +1,17 @@
+# GOERLI DEPLOYMENT
+
+# Kernel
+forge verify-contract --chain-id 5 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor()") 0xe43cd84c93c12d0b613ab736f6b62dbbfaa2df37 Kernel
+
+# Authority
+forge verify-contract --force --chain-id 5 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor(address,address,address,address)" 0x47Cd2cDF6f4413a2c7F66B91887C7d3Fb7c21d08 0x47Cd2cDF6f4413a2c7F66B91887C7d3Fb7c21d08 0xEb132Bb3B49Cae688975476897AE12535069c1bc 0x47Cd2cDF6f4413a2c7F66B91887C7d3Fb7c21d08) 0xb04e0937de6bab1606ed9cfb3d9e9627bcbf28af GdaoAuthority 
+
+# GDAO
+forge verify-contract --force --chain-id 5 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor(address)" 0xB04E0937DE6bAb1606eD9CFb3d9e9627bcbf28af) 0x89176d8025453555B3465E16c5f99093F7a462B5 src/external/GDAO.sol:GDAO
+
+# -------------------------------------------------#
+
+
 # Kernel deployment verification script (Sepolia)
 forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor()") 0xe43cd84c93c12d0b613ab736f6b62dbbfaa2df37 Kernel
 
@@ -26,10 +40,10 @@ forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "
 forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor()") 0xFFbC5937d48afc21E0D514D1650ffc1e4B84e98C xGDAO
 
  # Deploy sGDAO Sepolia
-forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor()") 0x66d281fbde3014e01255fbd65108214a5e634657 sGDAO
+forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor()") 0x9716adc3fb42db0715ad296552770b8b16943862 sGDAO
 
 # Deploy Goerli Staking 1.2
-forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor(uint256,uint256,uint256,uint256,uint256,uint256,uint256)" 0x9523d80e515960a26cB787C5809CCF68ddAbCBDb 0x66d281fbde3014e01255fbd65108214a5e634657 0xFFbC5937d48afc21E0D514D1650ffc1e4B84e98C 28800 1 1639512000 0x86D9e2623D6fFFB1165A58379fE99613df77F17A) 0x2dAba5d558088f874110dBda520717d6C1947f42 src/v2/GDAOStaking.sol:GoerliStaking
+forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor(uint256,uint256,uint256,uint256,uint256,uint256,uint256)" 0x9523d80e515960a26cB787C5809CCF68ddAbCBDb 0x9716adc3fb42db0715ad296552770b8b16943862 0xFFbC5937d48afc21E0D514D1650ffc1e4B84e98C 300 1 1681962944 0x86D9e2623D6fFFB1165A58379fE99613df77F17A) 0x97dcf425cfbdbd7e841d8005ea23527fee92bbba src/v2/GDAOStaking.sol:GoerliStaking
 
 # Deploy V1 Faucet
 forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor(address,address,address,address)" 0x85983eb365f7159ed6Adf1b130919c1b962cCfA7 0x553F5301DD8709a88Dc1Cd9F416AB33EB5A7cf56 0x419cfD6aBe4F68b7ed001a0b83aF9997a0b26451 0xD358dA590f6fA5BF87b2580cD77B70808E297185) 0xf0248575d8a249730b6ba055ddb6ac13544bc63d Faucet_V1
@@ -58,7 +72,7 @@ forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "
 forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor(address)" 0xE43CD84c93c12d0B613aB736F6b62DBbFaa2DF37) 0x6c12Bf970a2AC029f607547c86B8Be1531a9a4CF GoerliDaoRoles 
 
 # Deploy Treasury 
-forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor(address)" 0xE43CD84c93c12d0B613aB736F6b62DBbFaa2DF37) 0x99c7ACE5C32444D64B6829AB7Ffc9Df36865d491 GoerliDaoTreasury 
+forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor(address)" 0xE43CD84c93c12d0B613aB736F6b62DBbFaa2DF37) 0x42014333a9e48f3f2A9D43A1f8d6d8afeB61A8B3 GoerliDaoTreasury 
 
 # Deploy Bond Aggregator (before fixed term - related to Bond Protocol)
 forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor(address,address)" 0x96dEBE563Ac45450Bc1c647489658A74BBC8B094 0x86D9e2623D6fFFB1165A58379fE99613df77F17A) 0xfc7724823061Ce89d9514267De048deDae852DC6  src/policies/BondAggregator.sol:BondAggregator
