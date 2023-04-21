@@ -14,16 +14,16 @@ contract GDAOStakingDeploy is Script {
   function run() external returns (GoerliStaking staking) {
     // string memory seedPhrase = vm.readFile(".secret");
     // uint256 privateKey = vm.deriveKey(seedPhrase, 0);
-    uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV");
+    uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV_5");
     // vm.startBroadcast(privateKey);
     vm.startBroadcast(deployerPrivateKey);
-    address gdao = vm.envAddress("SEPOLIA_GDAO_1_1"); // make sure updated in .env
-    address sgdao = vm.envAddress("SEPOLIA_SGDAO"); // make sure updated in .env
-    address xgdao = vm.envAddress("SEPOLIA_XGDAO"); // make sure updated in .env
+    address gdao = vm.envAddress("GOERLI_GDAO"); // make sure updated in .env
+    address sgdao = vm.envAddress("GOERLI_SGDAO"); // make sure updated in .env
+    address xgdao = vm.envAddress("GOERLI_XGDAO"); // make sure updated in .env
     uint256 epochLength = 28800;
     uint256 firstEpochNumber = 1;
     uint256 firstEpochTime = 1681078368;
-    address authority = vm.envAddress("SEPOLIA_AUTHORITY"); // make sure updated in .env
+    address authority = vm.envAddress("GOERLI_AUTHORITY"); // make sure updated in .env
     GoerliStaking staking = new GoerliStaking(gdao, sgdao, xgdao, epochLength, firstEpochNumber, firstEpochTime, authority);
 
     vm.stopBroadcast();

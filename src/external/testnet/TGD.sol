@@ -1,13 +1,16 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity >=0.7.5;
 
-import "src/libraries/SafeMath.sol";
-import "src/types/OlympusAccessControlled.sol";
-import "src/interfaces/IOlympusAuthority.sol";
 import "src/interfaces/IGDAO.sol";
+import "src/interfaces/IOlympusAuthority.sol";
 import "src/interfaces/IERC20.sol";
+import "src/types/OlympusAccessControlled.sol";
+import "src/libraries/SafeMath.sol";
 import "src/libraries/Counters.sol";
 
+/// @notice Goerli DAO (GDAO) token
+/// @dev This contract is the legacy v2 OHM token. Included in the repo for completeness,
+///      since it is not being changed and is imported in some contracts.
 
 // File: cryptography/ECDSA.sol
 
@@ -348,6 +351,16 @@ abstract contract EIP712 {
     }
 }
 
+// File: interfaces/IERC20Permit.sol
+
+/**
+ * @dev Interface of the ERC20 Permit extension allowing approvals to be made via signatures, as defined in
+ * https://eips.ethereum.org/EIPS/eip-2612[EIP-2612].
+ *
+ * Adds the {permit} method, which can be used to change an account's ERC20 allowance (see {IERC20-allowance}) by
+ * presenting a message signed by the account. By not relying on {IERC20-approve}, the token holder account doesn't
+ * need to send a transaction, and thus is not required to hold Ether at all.
+ */
 interface IERC20Permit {
     /**
      * @dev Sets `value` as th xe allowance of `spender` over ``owner``'s tokens,
@@ -395,7 +408,6 @@ interface IERC20Permit {
     // solhint-disable-next-line func-name-mixedcase
     function DOMAIN_SEPARATOR() external view returns (bytes32);
 }
-
 
 // File: types/ERC20.sol
 
@@ -637,21 +649,18 @@ abstract contract ERC20Permit is ERC20, IERC20Permit, EIP712 {
     }
 }
 
-contract TestGDAO is ERC20Permit, IGDAO, OlympusAccessControlled {
+
+contract TGD is ERC20Permit, IGDAO, OlympusAccessControlled {
     using SafeMath for uint256;
 
     constructor(address _authority)
-        ERC20("TEST Goerli DAO", "GDAO", 9)
-        ERC20Permit("TEST Goerli DAO")
+        ERC20("Test Goe", "TGO", 9)
+        ERC20Permit("Test Goe")
         OlympusAccessControlled(IOlympusAuthority(_authority))
     {}
 
     function mint(address account_, uint256 amount_) external override onlyVault {
         _mint(account_, amount_);
-    }
-
-    function faucetMint(address recipient_) external {
-        _mint(recipient_, 10000000000);
     }
 
     function burn(uint256 amount) external override {
@@ -667,6 +676,7 @@ contract TestGDAO is ERC20Permit, IGDAO, OlympusAccessControlled {
             amount_,
             "ERC20: burn amount exceeds allowance"
         );
+    
 
         _approve(account_, msg.sender, decreasedAllowance_);
         _burn(account_, amount_);

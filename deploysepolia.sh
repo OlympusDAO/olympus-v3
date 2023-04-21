@@ -62,7 +62,8 @@ forge script script/v2/DeploysGDAO.s.sol:sGdaoDeploy --broadcast --rpc-url https
 # External
 # Deploy GDAO - use authority, store kernel address
 forge script script/DeployGDAO.s.sol:GdaoDeploy --rpc-url ${SEPOLIA_INFURA}
-forge script script/DeployGDAO.s.sol:GdaoDeploy --broadcast --rpc-url ${SEPOLIA_INFURA}
+forge script script/DeployGDAO.s.sol:GdaoDeploy --broadcast --rpc-url ${SEPOLIA_INFURA} --broadcast --verify --optimize --optimizer-runs 20000 -vvvv
+
 
 # Deploy xGDAO
 forge script script/v2/DeployxGDAO.s.sol:xGdaoDeploy --rpc-url ${SEPOLIA_INFURA}

@@ -13,7 +13,7 @@ contract xGdaoDeploy is Script {
   function run() external returns (xGDAO xgdao) {
     // string memory seedPhrase = vm.readFile(".secret");
     // uint256 privateKey = vm.deriveKey(seedPhrase, 0);
-    uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV");
+    uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV_5");
     // vm.startBroadcast(privateKey);
     vm.startBroadcast(deployerPrivateKey);
     xgdao = new xGDAO();

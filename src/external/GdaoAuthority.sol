@@ -10,12 +10,10 @@ import "src/types/OlympusAccessControlled.sol";
 import "src/interfaces/IGDAOAuthority.sol";
 import "src/interfaces/IOlympusAuthority.sol";
 
-
 // File: authority.sol
 pragma solidity >=0.7.5;
 
 contract GdaoAuthority is IOlympusAuthority, OlympusAccessControlled {
-
 
     /* ========== STATE VARIABLES ========== */
 
