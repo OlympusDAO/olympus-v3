@@ -48,12 +48,3 @@ forge script script/v2/DeployGoerliStaking.s.sol:GDAOStakingDeploy --rpc-url ${G
 forge script script/policies/DeployDistributor.s.sol:DeployDistributor --rpc-url ${GOERLI_INFURA}
 forge script script/policies/DeployDistributor.s.sol:DeployDistributor --rpc-url ${GOERLI_INFURA} --etherscan-api-key ${ETHERSCAN_API_KEY} --broadcast --verify --optimize --optimizer-runs 20000 -vvvv
 
-
-
-
-
-
-# Modules
-
-# Policies
-
