@@ -1,8 +1,4 @@
 /out/
-<<<<<<< HEAD
-typechain
-=======
->>>>>>> 313596655016a230f2b1043cdab7b636bed0f876
 cache/
 typechain/
 node_modules/
@@ -16,13 +12,7 @@ src/test/sim/sims/*.t.sol
 secret.txt
 ./deploy.py
 .secret
-<<<<<<< HEAD
-out/**
-typechain/**
-out/**/.json
-=======
 /out/**
 typechain/**
 out/**/*.json
 typechain/**/*.ts
->>>>>>> 313596655016a230f2b1043cdab7b636bed0f876
