@@ -244,7 +244,7 @@ contract BLVaultManagerLidoTest is Test {
             vm.startPrank(guardian);
 
             // Initialize modules
-            kernel.executeAction(Actions.InstallModule, address(blreg));
+            kernel.executeAction(Actions.UpgradeModule, address(blreg));
 
             // Activate policies
             kernel.executeAction(Actions.ActivatePolicy, address(vaultManager));

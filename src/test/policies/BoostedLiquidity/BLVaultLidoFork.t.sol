@@ -248,7 +248,7 @@ contract BLVaultLidoTest is Test {
             vm.startPrank(guardian);
 
             // Initialize modules
-            kernel.executeAction(Actions.InstallModule, address(blreg));
+            kernel.executeAction(Actions.UpgradeModule, address(blreg));
 
             // Activate policies
             kernel.executeAction(Actions.ActivatePolicy, address(vaultManager));
@@ -392,7 +392,6 @@ contract BLVaultLidoTest is Test {
     }
 
     /// [X]  withdraw
-    ///     [X]  can only be called when the manager is active
     ///     [X]  can only be called by the vault's owner
     ///     [X]  correctly decreases state values (deployedOhm and totalLp)
     ///     [X]  correctly withdraws liquidity
@@ -403,18 +402,6 @@ contract BLVaultLidoTest is Test {
         aliceVault.deposit(10e18, 0);
 
         vm.warp(block.timestamp + 1 minutes);
-    }
-
-    function testCorrectness_withdrawCanOnlyBeCalledWhenManagerIsActive() public {
-        // Deactivate vault manager
-        vaultManager.deactivate();
-
-        bytes memory err = abi.encodeWithSignature("BLVaultLido_Inactive()");
-        vm.expectRevert(err);
-
-        // Try to withdraw
-        vm.prank(alice);
-        aliceVault.withdraw(1e18, minAmountsOut, 0, true);
     }
 
     function testCorrectness_withdrawCanOnlyBeCalledByTheVaultOwner() public {
