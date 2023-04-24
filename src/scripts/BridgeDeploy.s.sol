@@ -79,7 +79,11 @@ contract BridgeDeploy is Script {
 
     // To allow calling this separately. Assumes sender is executor
     // (ie cant be used where we're using Multisig)
-    function installBridge(address kernel_, address rolesAdmin_, address bridge_) public {
+    function installBridge(
+        address kernel_,
+        address rolesAdmin_,
+        address bridge_
+    ) public {
         vm.startBroadcast();
         //deployBridge(kernel_, lzEndpoint_);
         Kernel(kernel_).executeAction(Actions.ActivatePolicy, address(bridge_));
