@@ -65,7 +65,7 @@ contract CrossChainBridge is
     MINTRv1 public MINTR;
 
     ILayerZeroEndpoint public immutable lzEndpoint;
-    ERC20 ohm;
+    ERC20 public ohm;
 
     /// @notice Flag to determine if bridge is allowed to send messages or not
     bool public bridgeActive;
@@ -123,11 +123,7 @@ contract CrossChainBridge is
     //============================================================================================//
 
     /// @notice Send OHM to an eligible chain
-    function sendOhm(
-        uint16 dstChainId_,
-        address to_,
-        uint256 amount_
-    ) external payable {
+    function sendOhm(uint16 dstChainId_, address to_, uint256 amount_) external payable {
         if (!bridgeActive) revert Bridge_Deactivated();
         if (ohm.balanceOf(msg.sender) < amount_) revert Bridge_InsufficientAmount();
 
@@ -244,6 +240,7 @@ contract CrossChainBridge is
         bytes memory trustedRemote = trustedRemoteLookup[dstChainId_];
         if (trustedRemote.length == 0) revert Bridge_DestinationNotTrusted();
 
+        // solhint-disable-next-line
         lzEndpoint.send{value: nativeFee_}(
             dstChainId_,
             trustedRemote,
@@ -293,29 +290,28 @@ contract CrossChainBridge is
 
     /// @notice Retries a received message. Used as last resort if retryPayload fails.
     /// @dev    Unblocks queue and DESTROYS transaction forever. USE WITH CAUTION.
-    function forceResumeReceive(uint16 srcChainId_, bytes calldata srcAddress_)
-        external
-        override
-        onlyRole("bridge_admin")
-    {
+    function forceResumeReceive(
+        uint16 srcChainId_,
+        bytes calldata srcAddress_
+    ) external override onlyRole("bridge_admin") {
         lzEndpoint.forceResumeReceive(srcChainId_, srcAddress_);
     }
 
     /// @notice Sets the trusted path for the cross-chain communication
     /// @dev    path_ = abi.encodePacked(remoteAddress, localAddress)
-    function setTrustedRemote(uint16 srcChainId_, bytes calldata path_)
-        external
-        onlyRole("bridge_admin")
-    {
+    function setTrustedRemote(
+        uint16 srcChainId_,
+        bytes calldata path_
+    ) external onlyRole("bridge_admin") {
         trustedRemoteLookup[srcChainId_] = path_;
         emit SetTrustedRemote(srcChainId_, path_);
     }
 
     /// @notice Convenience function for setting trusted paths between EVM addresses
-    function setTrustedRemoteAddress(uint16 remoteChainId_, bytes calldata remoteAddress_)
-        external
-        onlyRole("bridge_admin")
-    {
+    function setTrustedRemoteAddress(
+        uint16 remoteChainId_,
+        bytes calldata remoteAddress_
+    ) external onlyRole("bridge_admin") {
         trustedRemoteLookup[remoteChainId_] = abi.encodePacked(remoteAddress_, address(this));
         emit SetTrustedRemoteAddress(remoteChainId_, remoteAddress_);
     }
@@ -353,11 +349,10 @@ contract CrossChainBridge is
         return path.slice(0, path.length - 20);
     }
 
-    function isTrustedRemote(uint16 srcChainId_, bytes calldata srcAddress_)
-        external
-        view
-        returns (bool)
-    {
+    function isTrustedRemote(
+        uint16 srcChainId_,
+        bytes calldata srcAddress_
+    ) external view returns (bool) {
         bytes memory trustedSource = trustedRemoteLookup[srcChainId_];
         if (srcAddress_.length == 0 || trustedSource.length == 0)
             revert Bridge_TrustedRemoteUninitialized();
