@@ -72,11 +72,10 @@ contract BondAggregator is IBondAggregator, Auth {
     }
 
     /// @inheritdoc IBondAggregator
-    function registerMarket(ERC20 payoutToken_, ERC20 quoteToken_)
-        external
-        override
-        returns (uint256 marketId)
-    {
+    function registerMarket(
+        ERC20 payoutToken_,
+        ERC20 quoteToken_
+    ) external override returns (uint256 marketId) {
         if (!_whitelist[msg.sender]) revert Aggregator_OnlyAuctioneer();
         if (address(payoutToken_) == address(0) || address(quoteToken_) == address(0))
             revert Aggregator_InvalidParams();
@@ -135,12 +134,10 @@ contract BondAggregator is IBondAggregator, Auth {
     }
 
     /// @inheritdoc IBondAggregator
-    function liveMarketsBetween(uint256 firstIndex_, uint256 lastIndex_)
-        external
-        view
-        override
-        returns (uint256[] memory)
-    {
+    function liveMarketsBetween(
+        uint256 firstIndex_,
+        uint256 lastIndex_
+    ) external view override returns (uint256[] memory) {
         uint256 count;
         for (uint256 i = firstIndex_; i < lastIndex_; ++i) {
             if (isLive(i)) ++count;
@@ -158,12 +155,10 @@ contract BondAggregator is IBondAggregator, Auth {
     }
 
     /// @inheritdoc IBondAggregator
-    function liveMarketsFor(address token_, bool isPayout_)
-        public
-        view
-        override
-        returns (uint256[] memory)
-    {
+    function liveMarketsFor(
+        address token_,
+        bool isPayout_
+    ) public view override returns (uint256[] memory) {
         uint256[] memory mkts;
 
         mkts = isPayout_ ? marketsForPayout[token_] : marketsForQuote[token_];

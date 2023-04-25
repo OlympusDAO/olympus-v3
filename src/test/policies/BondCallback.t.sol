@@ -266,7 +266,7 @@ contract BondCallbackTest is Test {
         uint8 _payoutDecimals = payoutToken.decimals();
         uint8 _quoteDecimals = quoteToken.decimals();
 
-        uint256 capacity = 100_000 * 10**uint8(int8(_payoutDecimals) - _payoutPriceDecimals);
+        uint256 capacity = 100_000 * 10 ** uint8(int8(_payoutDecimals) - _payoutPriceDecimals);
 
         int8 scaleAdjustment = int8(_payoutDecimals) -
             int8(_quoteDecimals) -

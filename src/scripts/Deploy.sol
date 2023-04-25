@@ -217,7 +217,7 @@ contract OlympusDeploy is Script {
     }
 
     /// @dev should be called by address with the guardian role
-    function initialize() external {
+    function initializeOperator() external {
         // Set addresses from deployment
         // priceConfig = OlympusPriceConfig();
         operator = Operator(vm.envAddress("OPERATOR"));

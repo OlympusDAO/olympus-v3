@@ -17,6 +17,7 @@ Set up a foundry config in foundry.toml.
 │  ├─ PRICE
 │  ├─ RANGE
 │  ├─ TRSRY
+│  ├─ BLREG
 ├─ policies - "Default framework policies"
 ├─ test - "General test utilities and mocks/larps"
 ```
@@ -34,6 +35,7 @@ Set up a foundry config in foundry.toml.
 -   PRICE - [0xd6C4D723fdadCf0D171eF9A2a3Bfa870675b282f](https://etherscan.io/address/0xd6C4D723fdadCf0D171eF9A2a3Bfa870675b282f)
 -   RANGE - [0xb212D9584cfc56EFf1117F412Fe0bBdc53673954](https://etherscan.io/address/0xb212D9584cfc56EFf1117F412Fe0bBdc53673954)
 -   ROLES - [0x6CAfd730Dc199Df73C16420C4fCAb18E3afbfA59](https://etherscan.io/address/0x6CAfd730Dc199Df73C16420C4fCAb18E3afbfA59)
+-   BLREG - [0x375E06C694B5E50aF8be8FB03495A612eA3e2275](https://etherscan.io/address/0x375E06C694B5E50aF8be8FB03495A612eA3e2275)
 
 #### Policies
 
@@ -45,6 +47,7 @@ Set up a foundry config in foundry.toml.
 -   TreasuryCustodian - [0xC9518AC915e46D707585116451Dc19c164513Ccf](https://etherscan.io/address/0xC9518AC915e46D707585116451Dc19c164513Ccf)
 -   Distributor - [0x27e606fdb5C922F8213dC588A434BF7583697866](https://etherscan.io/address/0x27e606fdb5C922F8213dC588A434BF7583697866)
 -   Emergency - [0x9229b0b6FA4A58D67Eb465567DaA2c6A34714A75](https://etherscan.io/address/0x9229b0b6FA4A58D67Eb465567DaA2c6A34714A75)
+-   BLVaultManagerLido - [0xafe729d57d2CC58978C2e01b4EC39C47FB7C4b23](https://etherscan.io/address/0xafe729d57d2CC58978C2e01b4EC39C47FB7C4b23)
 -   BondManager - [0xf577c77ee3578c7F216327F41B5D7221EaD2B2A3](https://etherscan.io/address/0xf577c77ee3578c7f216327f41b5d7221ead2b2a3)
 
 ### Goerli Testnet
@@ -58,6 +61,7 @@ Set up a foundry config in foundry.toml.
 -   PRICE - [0xD9ace3Be2d80006EF4D90A2D35D861a5C9F98252](https://goerli.etherscan.io/address/0xD9ace3Be2d80006EF4D90A2D35D861a5C9F98252)
 -   RANGE - [0x446f06f8Df7d5f627B073c6349b948B95c1f9185](https://goerli.etherscan.io/address/0x446f06f8Df7d5f627B073c6349b948B95c1f9185)
 -   ROLES - [0xe9a9d80CE3eE32FFf7279dce4c2962eC8098f71B](https://goerli.etherscan.io/address/0xe9a9d80CE3eE32FFf7279dce4c2962eC8098f71B)
+-   BLREG - [0x24963bEA5a156E3dAb8aBA4FCB8a2dBE8c1Aaa14](https://goerli.etherscan.io/address/0x24963bEA5a156E3dAb8aBA4FCB8a2dBE8c1Aaa14)
 
 #### Policies
 
@@ -70,6 +74,8 @@ Set up a foundry config in foundry.toml.
 -   RolesAdmin - [0x54FfCA586cD1B01E96a5682DF93a55d7Ef91EFF0](https://goerli.etherscan.io/address/0x54FfCA586cD1B01E96a5682DF93a55d7Ef91EFF0)
 -   Emergency - [0x196a59fB453da942f062Be4407D923129c759435](https://goerli.etherscan.io/address/0x196a59fB453da942f062Be4407D923129c759435)
 -   Faucet (Testnet only) - [0xA247156a39169c0FAFf979F57361CC734e82e3d0](https://goerli.etherscan.io/address/0xA247156a39169c0FAFf979F57361CC734e82e3d0)
+-   Burner - [0x0cA928E9E75BE317E8C83FbD8397AdcFa06B4853](https://goerli.etherscan.io/address/0x0cA928E9E75BE317E8C83FbD8397AdcFa06B4853)
+-   BLVaultManagerLido - [0x5c9352d333F4D9EA1FDbF374d8D392e1843D0E34](https://goerli.etherscan.io/address/0x5c9352d333F4D9EA1FDbF374d8D392e1843D0E34)
 
 #### Dependencies
 

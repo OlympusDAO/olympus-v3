@@ -10,6 +10,8 @@
     "func-visibility": [ "warn", { "ignoreConstructors":true }],
     "no-inline-assembly": "off",
     "reason-string": "off",
-    "no-empty-blocks": "off"
+    "no-empty-blocks": "off",
+    "no-console": "off",
+    "no-global-import": "off"
   }
 }
