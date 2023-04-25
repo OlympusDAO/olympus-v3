@@ -152,14 +152,10 @@ contract BLVaultLido is IBLVaultLido, Clone {
     //============================================================================================//
 
     /// @inheritdoc IBLVaultLido
-    function deposit(uint256 amount_, uint256 minLpAmount_)
-        external
-        override
-        onlyWhileActive
-        onlyOwner
-        nonReentrant
-        returns (uint256 lpAmountOut)
-    {
+    function deposit(
+        uint256 amount_,
+        uint256 minLpAmount_
+    ) external override onlyWhileActive onlyOwner nonReentrant returns (uint256 lpAmountOut) {
         // Cache variables into memory
         IBLVaultManagerLido manager = manager();
         OlympusERC20Token ohm = ohm();
@@ -296,14 +292,10 @@ contract BLVaultLido is IBLVaultLido, Clone {
     }
 
     /// @inheritdoc IBLVaultLido
-    function emergencyWithdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
-        external
-        override
-        onlyWhileInactive
-        onlyOwner
-        nonReentrant
-        returns (uint256, uint256)
-    {
+    function emergencyWithdraw(
+        uint256 lpAmount_,
+        uint256[] calldata minTokenAmounts_
+    ) external override onlyWhileInactive onlyOwner nonReentrant returns (uint256, uint256) {
         // Cache variables into memory
         OlympusERC20Token ohm = ohm();
         ERC20 wsteth = wsteth();

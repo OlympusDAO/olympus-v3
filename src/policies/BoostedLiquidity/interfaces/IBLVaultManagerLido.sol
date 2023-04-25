@@ -120,16 +120,16 @@ interface IBLVaultManagerLido {
     /// @notice                         Calculates the amount of OHM and pair tokens that should be received by the vault for withdrawing a given amount of LP tokens
     /// @param lpAmount_                The amount of LP tokens to calculate the OHM and pair tokens for
     /// @return expectedTokenAmounts    The amount of OHM and pair tokens that should be received
-    function getExpectedTokensOutProtocol(uint256 lpAmount_)
-        external
-        returns (uint256[] memory expectedTokenAmounts);
+    function getExpectedTokensOutProtocol(
+        uint256 lpAmount_
+    ) external returns (uint256[] memory expectedTokenAmounts);
 
     /// @notice                         Calculates the amount of pair tokens that should be received by the user for withdrawing a given amount of LP tokens after the treasury takes any arbs
     /// @param lpAmount_                The amount of LP tokens to calculate the pair tokens for
     /// @return expectedTknAmount       The amount of pair tokens that should be received
-    function getExpectedPairTokenOutUser(uint256 lpAmount_)
-        external
-        returns (uint256 expectedTknAmount);
+    function getExpectedPairTokenOutUser(
+        uint256 lpAmount_
+    ) external returns (uint256 expectedTknAmount);
 
     /// @notice                         Gets all the reward tokens from the Aura pool
     /// @return address[]               The addresses of the reward tokens
@@ -147,14 +147,7 @@ interface IBLVaultManagerLido {
     /// @return uint256                 Vault system's current claim on OHM from the Balancer pool
     /// @return uint256                 Current amount of OHM minted by the system into the Balancer pool
     /// @return uint256                 OHM that wasn't minted, but was previously circulating that has been burned by the system
-    function getOhmSupplyChangeData()
-        external
-        view
-        returns (
-            uint256,
-            uint256,
-            uint256
-        );
+    function getOhmSupplyChangeData() external view returns (uint256, uint256, uint256);
 
     /// @notice                         Gets the number of OHM per 1 wstETH using oracle prices
     /// @return uint256                 OHM per 1 wstETH (9 decimals)

@@ -39,9 +39,10 @@ interface IBLVaultLido {
     /// @param minTokenAmounts_         The minimum acceptable amounts of OHM (first entry), and wstETH (second entry) to receive back from Balancer
     /// @return uint256                 The amount of OHM received
     /// @return uint256                 The amount of wstETH received
-    function emergencyWithdraw(uint256 lpAmount_, uint256[] calldata minTokenAmounts_)
-        external
-        returns (uint256, uint256);
+    function emergencyWithdraw(
+        uint256 lpAmount_,
+        uint256[] calldata minTokenAmounts_
+    ) external returns (uint256, uint256);
 
     //============================================================================================//
     //                                       REWARDS FUNCTIONS                                    //

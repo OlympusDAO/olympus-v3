@@ -78,7 +78,9 @@ contract MockFixedExpirySDA {
 
     // ========= VIEW FUNCTIONS ========= //
 
-    function getMarketInfoForPurchase(uint256 id_)
+    function getMarketInfoForPurchase(
+        uint256 id_
+    )
         external
         view
         returns (

@@ -133,11 +133,10 @@ contract BondManager is Policy, RolesConsumer {
     /// @notice                 Creates a market on the Bond Protocol contracts to auction off OHM bonds
     /// @param capacity_        The budget of OHM to payout through OHM bonds
     /// @param bondTerm_        How long should the OHM be locked in the bond
-    function createFixedExpiryBondMarket(uint256 capacity_, uint48 bondTerm_)
-        external
-        onlyRole("bondmanager_admin")
-        returns (uint256 marketId)
-    {
+    function createFixedExpiryBondMarket(
+        uint256 capacity_,
+        uint48 bondTerm_
+    ) external onlyRole("bondmanager_admin") returns (uint256 marketId) {
         // Validate parameters
         if (bondTerm_ < fixedExpiryParameters.auctionTime + 1 days)
             revert BondManager_TermTooShort();
@@ -178,11 +177,10 @@ contract BondManager is Policy, RolesConsumer {
     /// @notice                 Creates a bond token using Bond Protocol and creates a Gnosis Auction to sell it
     /// @param capacity_        The amount of OHM to use in the OHM bonds
     /// @param bondTerm_        How long should the OHM be locked in the bond
-    function createBatchAuction(uint96 capacity_, uint48 bondTerm_)
-        external
-        onlyRole("bondmanager_admin")
-        returns (uint256 auctionId)
-    {
+    function createBatchAuction(
+        uint96 capacity_,
+        uint48 bondTerm_
+    ) external onlyRole("bondmanager_admin") returns (uint256 auctionId) {
         // Validate parameters
         if (bondTerm_ < batchAuctionParameters.auctionTime) revert BondManager_TermTooShort();
         if (batchAuctionParameters.auctionCancelTime > batchAuctionParameters.auctionTime)
@@ -295,10 +293,9 @@ contract BondManager is Policy, RolesConsumer {
 
     /// @notice                     Blacklists the specified market to prevent the bond callback from minting more OHM on purchases
     /// @param marketId_            The ID of the Bond Protocol auction to shutdown
-    function emergencyShutdownFixedExpiryMarket(uint256 marketId_)
-        external
-        onlyRole("bondmanager_admin")
-    {
+    function emergencyShutdownFixedExpiryMarket(
+        uint256 marketId_
+    ) external onlyRole("bondmanager_admin") {
         bondCallback.blacklist(address(fixedExpiryTeller), marketId_);
         fixedExpiryAuctioneer.closeMarket(marketId_);
     }
@@ -307,10 +304,10 @@ contract BondManager is Policy, RolesConsumer {
     /// @param contract_            The contract to give spending permission to
     /// @param amount_              The amount to increase the OHM spending permission by
     /// @dev                        This shouldn't be needed but is a safegaurd in the event of accounting errors in the market creation functions
-    function emergencySetApproval(address contract_, uint256 amount_)
-        external
-        onlyRole("bondmanager_admin")
-    {
+    function emergencySetApproval(
+        address contract_,
+        uint256 amount_
+    ) external onlyRole("bondmanager_admin") {
         ohm.increaseAllowance(contract_, amount_);
     }
 

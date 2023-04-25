@@ -13,11 +13,7 @@ contract MockAuraBooster is IAuraBooster {
         pools.push(pool_);
     }
 
-    function deposit(
-        uint256 pid_,
-        uint256 amount_,
-        bool stake_
-    ) external returns (bool) {
+    function deposit(uint256 pid_, uint256 amount_, bool stake_) external returns (bool) {
         address pool = pools[pid_];
 
         MockERC20(token).transferFrom(msg.sender, address(this), amount_);
@@ -49,11 +45,7 @@ contract MockAuraRewardPool is IAuraRewardPool {
     // User balances
     mapping(address => uint256) public balanceOf;
 
-    constructor(
-        address depositToken_,
-        address reward_,
-        address aura_
-    ) {
+    constructor(address depositToken_, address reward_, address aura_) {
         depositToken = depositToken_;
         rewardToken = reward_;
         aura = aura_;

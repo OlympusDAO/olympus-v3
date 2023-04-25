@@ -120,10 +120,10 @@ contract PriceTest is Test {
         price.initialize(observations, uint48(block.timestamp));
     }
 
-    function makeRandomObservations(uint8 nonce, uint256 observations)
-        internal
-        returns (uint48 timeIncrease)
-    {
+    function makeRandomObservations(
+        uint8 nonce,
+        uint256 observations
+    ) internal returns (uint48 timeIncrease) {
         /// Perform a random walk and update the moving average with the supplied number of observations
         int256 change; // percentage with two decimals
         int256 ohmEthPrice = ohmEthPriceFeed.latestAnswer();
@@ -260,8 +260,8 @@ contract PriceTest is Test {
         assertEq(
             currentPrice,
             ohmEthPrice.mulDiv(
-                10**(reserveEthPriceFeed.decimals() + price.decimals()),
-                reserveEthPrice * 10**ohmEthPriceFeed.decimals()
+                10 ** (reserveEthPriceFeed.decimals() + price.decimals()),
+                reserveEthPrice * 10 ** ohmEthPriceFeed.decimals()
             )
         );
 

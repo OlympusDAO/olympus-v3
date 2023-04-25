@@ -147,7 +147,7 @@ contract ZuniswapV2Pair is ERC20, Math {
 
         if (
             balance0Adjusted * balance1Adjusted <
-            uint256(reserve0_) * uint256(reserve1_) * (1000**2)
+            uint256(reserve0_) * uint256(reserve1_) * (1000 ** 2)
         ) revert InvalidK();
 
         _update(balance0, balance1, reserve0_, reserve1_);
@@ -165,15 +165,7 @@ contract ZuniswapV2Pair is ERC20, Math {
         );
     }
 
-    function getReserves()
-        public
-        view
-        returns (
-            uint112,
-            uint112,
-            uint32
-        )
-    {
+    function getReserves() public view returns (uint112, uint112, uint32) {
         return (reserve0, reserve1, blockTimestampLast);
     }
 
@@ -212,11 +204,7 @@ contract ZuniswapV2Pair is ERC20, Math {
         emit Sync(reserve0, reserve1);
     }
 
-    function _safeTransfer(
-        address token,
-        address to,
-        uint256 value
-    ) private {
+    function _safeTransfer(address token, address to, uint256 value) private {
         (bool success, bytes memory data) = token.call(
             abi.encodeWithSignature("transfer(address,uint256)", to, value)
         );

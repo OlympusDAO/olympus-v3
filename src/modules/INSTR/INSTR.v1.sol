@@ -25,10 +25,9 @@ abstract contract INSTRv1 is Module {
     // =========  FUNCTIONS ========= //
 
     /// @notice View function for retrieving a list of Instructions in an outside contract.
-    function getInstructions(uint256 instructionsId_)
-        external
-        virtual
-        returns (Instruction[] memory);
+    function getInstructions(
+        uint256 instructionsId_
+    ) external virtual returns (Instruction[] memory);
 
     /// @notice Store a list of Instructions to be executed in the future.
     function store(Instruction[] calldata instructions_) external virtual returns (uint256);

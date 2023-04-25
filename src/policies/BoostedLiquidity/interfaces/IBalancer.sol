@@ -35,14 +35,9 @@ interface IVault {
         ExitPoolRequest memory request
     ) external;
 
-    function getPoolTokens(bytes32 poolId)
-        external
-        view
-        returns (
-            address[] memory,
-            uint256[] memory,
-            uint256
-        );
+    function getPoolTokens(
+        bytes32 poolId
+    ) external view returns (address[] memory, uint256[] memory, uint256);
 }
 
 // Define Balancer Base Pool Interface

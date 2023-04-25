@@ -129,11 +129,7 @@ interface IOperator {
     /// @param  threshold_ - Number of price points on other side of moving average to reinstate a wall
     /// @param  observe_ - Number of price points to observe to determine regeneration
     /// @dev    We must see Threshold number of price points that meet our criteria within the last Observe number of price points to regenerate a wall.
-    function setRegenParams(
-        uint32 wait_,
-        uint32 threshold_,
-        uint32 observe_
-    ) external;
+    function setRegenParams(uint32 wait_, uint32 threshold_, uint32 observe_) external;
 
     /// @notice Set the contracts that the Operator deploys bond markets with.
     /// @notice Access restricted

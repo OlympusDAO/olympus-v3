@@ -47,11 +47,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     //                                      POLICY SETUP                                          //
     //============================================================================================//
 
-    constructor(
-        Kernel kernel_,
-        IBondAggregator aggregator_,
-        ERC20 ohm_
-    ) Policy(kernel_) {
+    constructor(Kernel kernel_, IBondAggregator aggregator_, ERC20 ohm_) Policy(kernel_) {
         aggregator = aggregator_;
         ohm = ohm_;
     }
@@ -89,11 +85,10 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IBondCallback
-    function whitelist(address teller_, uint256 id_)
-        external
-        override
-        onlyRole("callback_whitelist")
-    {
+    function whitelist(
+        address teller_,
+        uint256 id_
+    ) external override onlyRole("callback_whitelist") {
         // Check that the teller matches the aggregator provided teller for the market ID
         if (teller_ != address(aggregator.getTeller(id_))) revert Callback_InvalidParams();
 
@@ -156,11 +151,10 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     /// @dev    Shutdown function in case there's an issue with the teller
     /// @param  teller_ Address of the Teller contract which serves the market
     /// @param  id_     ID of the market to remove from whitelist
-    function blacklist(address teller_, uint256 id_)
-        external
-        override
-        onlyRole("callback_whitelist")
-    {
+    function blacklist(
+        address teller_,
+        uint256 id_
+    ) external override onlyRole("callback_whitelist") {
         // Check that the teller matches the aggregator provided teller for the market ID
         if (teller_ != address(aggregator.getTeller(id_))) revert Callback_InvalidParams();
 
@@ -252,12 +246,9 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IBondCallback
-    function amountsForMarket(uint256 id_)
-        external
-        view
-        override
-        returns (uint256 in_, uint256 out_)
-    {
+    function amountsForMarket(
+        uint256 id_
+    ) external view override returns (uint256 in_, uint256 out_) {
         uint256[2] memory marketAmounts = _amountsPerMarket[id_];
         return (marketAmounts[0], marketAmounts[1]);
     }

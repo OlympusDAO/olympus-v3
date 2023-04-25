@@ -151,22 +151,19 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IHeart
-    function setRewardTokenAndAmount(ERC20 token_, uint256 reward_)
-        external
-        onlyRole("heart_admin")
-        notWhileBeatAvailable
-    {
+    function setRewardTokenAndAmount(
+        ERC20 token_,
+        uint256 reward_
+    ) external onlyRole("heart_admin") notWhileBeatAvailable {
         rewardToken = token_;
         reward = reward_;
         emit RewardUpdated(token_, reward_);
     }
 
     /// @inheritdoc IHeart
-    function withdrawUnspentRewards(ERC20 token_)
-        external
-        onlyRole("heart_admin")
-        notWhileBeatAvailable
-    {
+    function withdrawUnspentRewards(
+        ERC20 token_
+    ) external onlyRole("heart_admin") notWhileBeatAvailable {
         token_.safeTransfer(msg.sender, token_.balanceOf(address(this)));
     }
 
