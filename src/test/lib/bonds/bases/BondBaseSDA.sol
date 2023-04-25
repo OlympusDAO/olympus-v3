@@ -165,7 +165,7 @@ abstract contract BondBaseSDA is IBondSDA, Auth {
         // scaleAdjustment should be equal to (payoutDecimals - quoteDecimals) - ((payoutPriceDecimals - quotePriceDecimals) / 2)
         uint256 scale;
         unchecked {
-            scale = 10**uint8(36 + params_.scaleAdjustment);
+            scale = 10 ** uint8(36 + params_.scaleAdjustment);
         }
 
         if (params_.formattedInitialPrice < params_.formattedMinimumPrice)
@@ -572,11 +572,7 @@ abstract contract BondBaseSDA is IBondSDA, Auth {
     /// @param id_          ID of market
     /// @param time_        Timestamp (saves gas when passed in)
     /// @param price_       Current price of the market
-    function _tune(
-        uint256 id_,
-        uint48 time_,
-        uint256 price_
-    ) internal {
+    function _tune(uint256 id_, uint48 time_, uint256 price_) internal {
         BondMetadata memory meta = metadata[id_];
         BondMarket memory market = markets[id_];
 
@@ -673,15 +669,9 @@ abstract contract BondBaseSDA is IBondSDA, Auth {
     /// @return decay           change in control variable
     /// @return secondsSince    seconds since last change in control variable
     /// @return active          whether or not change remains active
-    function _controlDecay(uint256 id_)
-        internal
-        view
-        returns (
-            uint256 decay,
-            uint48 secondsSince,
-            bool active
-        )
-    {
+    function _controlDecay(
+        uint256 id_
+    ) internal view returns (uint256 decay, uint48 secondsSince, bool active) {
         Adjustment memory info = adjustments[id_];
         if (!info.active) return (0, 0, false);
 
@@ -695,7 +685,9 @@ abstract contract BondBaseSDA is IBondSDA, Auth {
     /* ========== EXTERNAL VIEW FUNCTIONS ========== */
 
     /// @inheritdoc IBondAuctioneer
-    function getMarketInfoForPurchase(uint256 id_)
+    function getMarketInfoForPurchase(
+        uint256 id_
+    )
         external
         view
         returns (

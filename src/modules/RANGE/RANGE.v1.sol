@@ -88,11 +88,7 @@ abstract contract RANGEv1 is Module {
     /// @param  high_ - Specifies the side of the range to update market for (true = high side, false = low side).
     /// @param  market_ - Market ID to set for the side.
     /// @param  marketCapacity_ - Amount to set the last market capacity to (OHM tokens for high side, Reserve tokens for low side).
-    function updateMarket(
-        bool high_,
-        uint256 market_,
-        uint256 marketCapacity_
-    ) external virtual;
+    function updateMarket(bool high_, uint256 market_, uint256 marketCapacity_) external virtual;
 
     /// @notice Set the wall and cushion spreads.
     /// @notice Access restricted to activated policies.

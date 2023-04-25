@@ -11,11 +11,7 @@ interface IBondCallback {
     /// @param outputAmount_    Amount of payout tokens to be paid out to the market
     /// @dev Must transfer the output amount of payout tokens back to the Teller
     /// @dev Should check that the quote tokens have been transferred to the contract in the _callback function
-    function callback(
-        uint256 id_,
-        uint256 inputAmount_,
-        uint256 outputAmount_
-    ) external;
+    function callback(uint256 id_, uint256 inputAmount_, uint256 outputAmount_) external;
 
     /// @notice         Returns the number of quote tokens received and payout tokens paid out for a market
     /// @param id_      ID of the market
@@ -40,11 +36,7 @@ interface IBondCallback {
     /// @param to_      Address of the recipient
     /// @param token_   Address of the token to withdraw
     /// @param amount_  Amount of tokens to withdraw
-    function withdraw(
-        address to_,
-        ERC20 token_,
-        uint256 amount_
-    ) external;
+    function withdraw(address to_, ERC20 token_, uint256 amount_) external;
 
     /// @notice         Deposit tokens to the callback and update balances
     /// @notice         Only callback owner

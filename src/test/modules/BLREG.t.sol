@@ -4,32 +4,32 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import "modules/LQREG/OlympusLiquidityRegistry.sol";
+import "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import "src/Kernel.sol";
 
-contract LQREGTest is Test {
-    using ModuleTestFixtureGenerator for OlympusLiquidityRegistry;
+contract BLREGTest is Test {
+    using ModuleTestFixtureGenerator for OlympusBoostedLiquidityRegistry;
 
     address public godmode;
 
     Kernel internal kernel;
-    OlympusLiquidityRegistry internal lqreg;
+    OlympusBoostedLiquidityRegistry internal blreg;
 
     function setUp() public {
         // Deploy Kernel and modules
         {
             kernel = new Kernel();
-            lqreg = new OlympusLiquidityRegistry(kernel);
+            blreg = new OlympusBoostedLiquidityRegistry(kernel);
         }
 
         // Generate fixtures
         {
-            godmode = lqreg.generateGodmodeFixture(type(OlympusLiquidityRegistry).name);
+            godmode = blreg.generateGodmodeFixture(type(OlympusBoostedLiquidityRegistry).name);
         }
 
         // Install modules and policies on Kernel
         {
-            kernel.executeAction(Actions.InstallModule, address(lqreg));
+            kernel.executeAction(Actions.InstallModule, address(blreg));
             kernel.executeAction(Actions.ActivatePolicy, godmode);
         }
     }
@@ -39,11 +39,11 @@ contract LQREGTest is Test {
     ///     [X]  VERSION returns correctly
 
     function test_KEYCODE() public {
-        assertEq("LQREG", fromKeycode(lqreg.KEYCODE()));
+        assertEq("BLREG", fromKeycode(blreg.KEYCODE()));
     }
 
     function test_VERSION() public {
-        (uint8 major, uint8 minor) = lqreg.VERSION();
+        (uint8 major, uint8 minor) = blreg.VERSION();
         assertEq(major, 1);
         assertEq(minor, 0);
     }
@@ -61,19 +61,19 @@ contract LQREGTest is Test {
 
         // Try to add vault as unapproved user
         vm.prank(user_);
-        lqreg.addVault(address(0));
+        blreg.addVault(address(0));
     }
 
     function testCorrectness_approvedAddressCanAddVault() public {
         // Verify initial state
-        assertEq(lqreg.activeVaultCount(), 0);
+        assertEq(blreg.activeVaultCount(), 0);
 
         vm.prank(godmode);
-        lqreg.addVault(address(0));
+        blreg.addVault(address(0));
 
         // Verify vault was added
-        assertEq(lqreg.activeVaultCount(), 1);
-        assertEq(lqreg.activeVaults(0), address(0));
+        assertEq(blreg.activeVaultCount(), 1);
+        assertEq(blreg.activeVaults(0), address(0));
     }
 
     /// [X]  removeVault
@@ -82,7 +82,7 @@ contract LQREGTest is Test {
 
     function _removeVaultSetup() internal {
         vm.prank(godmode);
-        lqreg.addVault(address(0));
+        blreg.addVault(address(0));
     }
 
     function testCorrectness_unapprovedAddressCannotRemoveVault(address user_) public {
@@ -94,7 +94,7 @@ contract LQREGTest is Test {
 
         // Try to add vault as unapproved user
         vm.prank(user_);
-        lqreg.removeVault(address(0));
+        blreg.removeVault(address(0));
     }
 
     function testCorrectness_approvedAddressCanRemoveVault() public {
@@ -102,18 +102,18 @@ contract LQREGTest is Test {
 
         // Add second vault
         vm.prank(godmode);
-        lqreg.addVault(address(1));
+        blreg.addVault(address(1));
 
         // Verify initial state
-        assertEq(lqreg.activeVaultCount(), 2);
-        assertEq(lqreg.activeVaults(0), address(0));
-        assertEq(lqreg.activeVaults(1), address(1));
+        assertEq(blreg.activeVaultCount(), 2);
+        assertEq(blreg.activeVaults(0), address(0));
+        assertEq(blreg.activeVaults(1), address(1));
 
         vm.prank(godmode);
-        lqreg.removeVault(address(0));
+        blreg.removeVault(address(0));
 
         // Verify vault was removed
-        assertEq(lqreg.activeVaultCount(), 1);
-        assertEq(lqreg.activeVaults(0), address(1));
+        assertEq(blreg.activeVaultCount(), 1);
+        assertEq(blreg.activeVaults(0), address(1));
     }
 }

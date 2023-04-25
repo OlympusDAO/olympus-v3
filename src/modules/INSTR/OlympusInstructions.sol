@@ -28,22 +28,16 @@ contract OlympusInstructions is INSTRv1 {
     //============================================================================================//
 
     /// @inheritdoc INSTRv1
-    function getInstructions(uint256 instructionsId_)
-        public
-        view
-        override
-        returns (Instruction[] memory)
-    {
+    function getInstructions(
+        uint256 instructionsId_
+    ) public view override returns (Instruction[] memory) {
         return storedInstructions[instructionsId_];
     }
 
     /// @inheritdoc INSTRv1
-    function store(Instruction[] calldata instructions_)
-        external
-        override
-        permissioned
-        returns (uint256)
-    {
+    function store(
+        Instruction[] calldata instructions_
+    ) external override permissioned returns (uint256) {
         uint256 length = instructions_.length;
         uint256 instructionsId = ++totalInstructions;
 

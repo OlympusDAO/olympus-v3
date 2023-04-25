@@ -244,11 +244,10 @@ abstract contract BondBaseTeller is IBondTeller, Auth, ReentrancyGuard {
     /// @param expiry_      Timestamp that the Bond Token vests at
     /// @return name        Bond token name, format is "Token YYYY-MM-DD"
     /// @return symbol      Bond token symbol, format is "TKN-YYYYMMDD"
-    function _getNameAndSymbol(ERC20 underlying_, uint256 expiry_)
-        internal
-        view
-        returns (string memory name, string memory symbol)
-    {
+    function _getNameAndSymbol(
+        ERC20 underlying_,
+        uint256 expiry_
+    ) internal view returns (string memory name, string memory symbol) {
         // Convert a number of days into a human-readable date, courtesy of BokkyPooBah.
         // Source: https://github.com/bokkypoobah/BokkyPooBahsDateTimeLibrary/blob/master/contracts/BokkyPooBahsDateTimeLibrary.sol
 

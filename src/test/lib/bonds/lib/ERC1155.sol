@@ -117,12 +117,10 @@ abstract contract ERC1155 {
         );
     }
 
-    function balanceOfBatch(address[] memory owners, uint256[] memory ids)
-        public
-        view
-        virtual
-        returns (uint256[] memory balances)
-    {
+    function balanceOfBatch(
+        address[] memory owners,
+        uint256[] memory ids
+    ) public view virtual returns (uint256[] memory balances) {
         uint256 ownersLength = owners.length; // Saves MLOADs.
 
         require(ownersLength == ids.length, "LENGTH_MISMATCH");
@@ -153,12 +151,7 @@ abstract contract ERC1155 {
                         INTERNAL MINT/BURN LOGIC
     //////////////////////////////////////////////////////////////*/
 
-    function _mint(
-        address to,
-        uint256 id,
-        uint256 amount,
-        bytes memory data
-    ) internal {
+    function _mint(address to, uint256 id, uint256 amount, bytes memory data) internal {
         balanceOf[to][id] += amount;
 
         emit TransferSingle(msg.sender, address(0), to, id, amount);
@@ -213,11 +206,7 @@ abstract contract ERC1155 {
         );
     }
 
-    function _batchBurn(
-        address from,
-        uint256[] memory ids,
-        uint256[] memory amounts
-    ) internal {
+    function _batchBurn(address from, uint256[] memory ids, uint256[] memory amounts) internal {
         uint256 idsLength = ids.length; // Saves MLOADs.
 
         require(idsLength == amounts.length, "LENGTH_MISMATCH");
@@ -235,11 +224,7 @@ abstract contract ERC1155 {
         emit TransferBatch(msg.sender, from, address(0), ids, amounts);
     }
 
-    function _burn(
-        address from,
-        uint256 id,
-        uint256 amount
-    ) internal {
+    function _burn(address from, uint256 id, uint256 amount) internal {
         balanceOf[from][id] -= amount;
 
         emit TransferSingle(msg.sender, from, address(0), id, amount);

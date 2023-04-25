@@ -104,12 +104,10 @@ contract OlympusTreasury is TRSRYv1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1
-    function incurDebt(ERC20 token_, uint256 amount_)
-        external
-        override
-        permissioned
-        onlyWhileActive
-    {
+    function incurDebt(
+        ERC20 token_,
+        uint256 amount_
+    ) external override permissioned onlyWhileActive {
         debtApproval[msg.sender][token_] -= amount_;
 
         // Add debt to caller

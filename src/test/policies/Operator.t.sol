@@ -2207,7 +2207,7 @@ contract OperatorTest is Test {
         uint256 resInTreasury = treasury.getReserveBalance(reserve);
         uint256 lowCapacity = resInTreasury.mulDiv(config.reserveFactor, 1e4);
         uint256 highCapacity = (lowCapacity.mulDiv(
-            1e9 * 10**price.decimals(),
+            1e9 * 10 ** price.decimals(),
             1e18 * range.price(true, true)
         ) * (1e4 + range.spread(true) * 2)) / 1e4;
 

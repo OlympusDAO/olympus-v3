@@ -88,11 +88,10 @@ contract Burner is Policy, RolesConsumer {
 
     /// @notice Burn OHM from the treasury
     /// @param amount_ Amount of OHM to burn
-    function burnFromTreasury(uint256 amount_, bytes32 category_)
-        external
-        onlyRole("burner_admin")
-        onlyApproved(category_)
-    {
+    function burnFromTreasury(
+        uint256 amount_,
+        bytes32 category_
+    ) external onlyRole("burner_admin") onlyApproved(category_) {
         // Withdraw OHM from the treasury
         TRSRY.increaseWithdrawApproval(address(this), ohm, amount_);
         TRSRY.withdrawReserves(address(this), ohm, amount_);
@@ -127,11 +126,10 @@ contract Burner is Policy, RolesConsumer {
 
     /// @notice Burn OHM in this contract
     /// @param amount_ Amount of OHM to burn
-    function burn(uint256 amount_, bytes32 category_)
-        external
-        onlyRole("burner_admin")
-        onlyApproved(category_)
-    {
+    function burn(
+        uint256 amount_,
+        bytes32 category_
+    ) external onlyRole("burner_admin") onlyApproved(category_) {
         // Burn the OHM
         MINTR.burnOhm(address(this), amount_);
 

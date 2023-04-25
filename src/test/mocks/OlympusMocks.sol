@@ -17,11 +17,11 @@ contract MockGohm is MockERC20 {
     }
 
     function balanceFrom(uint256 amount_) public view returns (uint256) {
-        return (amount_ * index) / 10**decimals;
+        return (amount_ * index) / 10 ** decimals;
     }
 
     function balanceTo(uint256 amount_) public view returns (uint256) {
-        return (amount_ * 10**decimals) / index;
+        return (amount_ * 10 ** decimals) / index;
     }
 }
 
@@ -112,11 +112,7 @@ contract MockStaking {
         return bounty;
     }
 
-    function _send(
-        address to_,
-        uint256 amount_,
-        bool rebasing_
-    ) internal returns (uint256) {
+    function _send(address to_, uint256 amount_, bool rebasing_) internal returns (uint256) {
         if (rebasing_) {
             sOHM.mint(to_, amount_);
             return amount_;

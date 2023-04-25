@@ -12,10 +12,10 @@ contract OlympusVotes is VOTESv1 {
     //                                      MODULE SETUP                                          //
     //============================================================================================//
 
-    constructor(Kernel kernel_, ERC20 gOhm_)
-        Module(kernel_)
-        ERC4626(gOhm_, "Olympus Votes", "vOHM")
-    {
+    constructor(
+        Kernel kernel_,
+        ERC20 gOhm_
+    ) Module(kernel_) ERC4626(gOhm_, "Olympus Votes", "vOHM") {
         gOHM = gOhm_;
     }
 
@@ -34,22 +34,18 @@ contract OlympusVotes is VOTESv1 {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    function deposit(uint256 assets_, address receiver_)
-        public
-        override
-        permissioned
-        returns (uint256)
-    {
+    function deposit(
+        uint256 assets_,
+        address receiver_
+    ) public override permissioned returns (uint256) {
         lastDepositTimestamp[receiver_] = block.timestamp;
         return super.deposit(assets_, receiver_);
     }
 
-    function mint(uint256 shares_, address receiver_)
-        public
-        override
-        permissioned
-        returns (uint256)
-    {
+    function mint(
+        uint256 shares_,
+        address receiver_
+    ) public override permissioned returns (uint256) {
         lastDepositTimestamp[receiver_] = block.timestamp;
         return super.mint(shares_, receiver_);
     }
