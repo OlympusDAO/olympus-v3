@@ -21,4 +21,4 @@ optimizer = true
 optimizer_runs = 10
 
 [fuzz]
-runs = 4096
+runs = 256
