@@ -409,11 +409,12 @@ contract OlympusDeploy is Script {
 
     function _deployHeart(bytes memory args) public returns (address) {
         // Decode arguments for OlympusHeart policy
-        uint256 reward = abi.decode(args, (uint256));
+        (uint256 maxReward, uint48 auctionDuration) = abi.decode(args, (uint256, uint48));
+
 
         // Deploy OlympusHeart policy
         vm.broadcast();
-        heart = new OlympusHeart(kernel, operator, ohm, reward);
+        heart = new OlympusHeart(kernel, operator, ohm, maxReward, auctionDuration);
         console2.log("OlympusHeart deployed at:", address(heart));
 
         return address(heart);

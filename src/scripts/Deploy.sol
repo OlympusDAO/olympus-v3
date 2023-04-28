@@ -142,7 +142,7 @@ contract OlympusDeploy is Script {
         );
         console2.log("Operator deployed at:", address(operator));
 
-        heart = new OlympusHeart(kernel, operator, rewardToken, 5 * 1e9); // TODO verify initial keeper reward
+        heart = new OlympusHeart(kernel, operator, rewardToken, 10 * 1e9, uint48(12 * 25)); // TODO verify initial keeper reward and auction duration
         console2.log("Heart deployed at:", address(heart));
 
         priceConfig = new OlympusPriceConfig(kernel);
