@@ -32,13 +32,15 @@ contract BridgeDeploy is Script {
 
     // Deploy ohm, authority, kernel, MINTR, ROLES, rolesadmin to new testnet.
     // Assumes that the caller is the executor
-    function deploy(address lzEndpoint_) external {
+    function deploy(address lzEndpoint_, address multisig_) external {
         vm.startBroadcast();
 
         // Arb goerli endpoint
         //address lzEndpoint = 0x6aB5Ae6822647046626e83ee6dB8187151E1d5ab;
 
-        auth = new OlympusAuthority(msg.sender, msg.sender, msg.sender, msg.sender);
+        // Keep deployer as vault in order to transfer minter role after OHM
+        // token is deployed
+        auth = new OlympusAuthority(msg.sender, multisig_, multisig_, msg.sender);
         ohm = new OlympusERC20Token(address(auth));
         console2.log("OlympusAuthority deployed at:", address(auth));
         console2.log("OlympusERC20Token deployed at:", address(ohm));
@@ -69,21 +71,20 @@ contract BridgeDeploy is Script {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(bridge));
 
+        // Multisig still needs to claim the admin role
         rolesAdmin.grantRole("bridge_admin", msg.sender);
+        rolesAdmin.pushNewAdmin(multisig_);
 
         // Grant roles
         auth.pushVault(address(MINTR), true);
+        auth.pushGovernor(multisig_, true);
 
         vm.stopBroadcast();
     }
 
     // To allow calling this separately. Assumes sender is executor
     // (ie cant be used where we're using Multisig)
-    function installBridge(
-        address kernel_,
-        address rolesAdmin_,
-        address bridge_
-    ) public {
+    function installBridge(address kernel_, address rolesAdmin_, address bridge_) public {
         vm.startBroadcast();
         //deployBridge(kernel_, lzEndpoint_);
         Kernel(kernel_).executeAction(Actions.ActivatePolicy, address(bridge_));
@@ -107,11 +108,26 @@ contract BridgeDeploy is Script {
         bytes memory path1 = abi.encodePacked(remoteBridge_, localBridge_);
 
         vm.broadcast();
-        bridge.setTrustedRemote(remoteLzChainId_, path1);
+        CrossChainBridge(localBridge_).setTrustedRemote(remoteLzChainId_, path1);
     }
 
     function grantBridgeAdminRole(address rolesAdmin_, address to_) public {
         vm.broadcast();
         RolesAdmin(rolesAdmin_).grantRole("bridge_admin", to_);
+    }
+
+    // Change executor, bridge_admin and RolesAdmin admin to multisig
+    function handoffToMultisig(address multisig_, address kernel_, address rolesAdmin_) public {
+        vm.startBroadcast();
+
+        // Remove bridge_admin role from deployer
+        RolesAdmin(rolesAdmin_).revokeRole("bridge_admin", msg.sender);
+
+        // Give roles to multisig and pull admin
+        RolesAdmin(rolesAdmin_).grantRole("bridge_admin", multisig_);
+        RolesAdmin(rolesAdmin_).pullNewAdmin();
+        Kernel(kernel_).executeAction(Actions.ChangeExecutor, multisig_);
+
+        vm.stopBroadcast();
     }
 }
