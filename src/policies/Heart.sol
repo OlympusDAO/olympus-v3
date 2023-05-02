@@ -108,20 +108,18 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         // Trigger price range update and market operations
         operator.operate();
 
-        // Issue reward to sender
-        _issueReward(msg.sender);
+        // Calculate the reward
+        uint256 reward = currentReward();
 
         // Update the last beat timestamp
         // Ensure that update frequency doesn't change, but do not allow multiple beats if one is skipped
         lastBeat = currentTime - ((currentTime - lastBeat) % frequency());
 
-        emit Beat(block.timestamp);
-    }
+        // Issue the reward
+        rewardToken.safeTransfer(msg.sender, reward);
+        emit RewardIssued(msg.sender, reward);
 
-    function _issueReward(address to_) internal {
-        uint256 amount = currentReward();
-        rewardToken.safeTransfer(to_, amount);
-        emit RewardIssued(to_, amount);
+        emit Beat(block.timestamp);
     }
 
     //============================================================================================//
@@ -165,7 +163,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         uint256 maxReward_,
         uint48 auctionDuration_
     ) external onlyRole("heart_admin") notWhileBeatAvailable {
-        // auction duration must be less than or equal to frequency
+        // auction duration should be less than or equal to frequency, otherwise frequency will be used
         if (auctionDuration_ > frequency()) revert Heart_InvalidParams();
 
         rewardToken = token_;
@@ -194,14 +192,16 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     function currentReward() public view returns (uint256) {
         // If beat not available, return 0
         // Otherwise, calculate reward from linearly increasing auction bounded by maxReward and heart balance
-        uint48 nextBeat = lastBeat + frequency();
+        uint48 frequency = frequency();
+        uint48 nextBeat = lastBeat + frequency;
         uint48 currentTime = uint48(block.timestamp);
+        uint48 duration = auctionDuration > frequency ? frequency : auctionDuration;
         if (currentTime <= nextBeat) {
             return 0;
         } else {
-            uint256 auctionAmount = currentTime - nextBeat > auctionDuration
+            uint256 auctionAmount = currentTime - nextBeat > duration
                 ? maxReward
-                : (uint256(currentTime - nextBeat) * maxReward) / uint256(auctionDuration);
+                : (uint256(currentTime - nextBeat) * maxReward) / uint256(duration);
             uint256 balance = rewardToken.balanceOf(address(this));
             return auctionAmount > balance ? balance : auctionAmount;
         }
