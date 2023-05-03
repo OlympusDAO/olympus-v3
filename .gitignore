@@ -16,3 +16,5 @@ secret.txt
 typechain/**
 out/**/*.json
 typechain/**/*.ts
+notes.txt
+

@@ -3,6 +3,14 @@ source .env
 
 # Mocks
 
+# Deploy Migrator
+forge script script/v2/DeployMigrator.s.sol:MigratorDeploy --rpc-url ${GOERLI_INFURA}
+forge script script/v2/DeployMigrator.s.sol:MigratorDeploy --rpc-url ${GOERLI_INFURA} --etherscan-api-key ${ETHERSCAN_API_KEY} --broadcast --verify --optimize --optimizer-runs 20000 -vvvv
+
+# Deploy xGDAO (#2)
+forge script script/DeployKernel.s.sol:KernelDeploy --rpc-url ${GOERLI_INFURA}
+forge script script/DeployKernel.s.sol:KernelDeploy --rpc-url ${GOERLI_INFURA} --etherscan-api-key ${ETHERSCAN_API_KEY} --broadcast --verify --optimize --optimizer-runs 20000 -vvvv
+
 # V2
 # Deploy Kernel
 forge script script/DeployKernel.s.sol:KernelDeploy --rpc-url ${GOERLI_INFURA}
@@ -48,3 +56,6 @@ forge script script/v2/DeployGoerliStaking.s.sol:GDAOStakingDeploy --rpc-url ${G
 forge script script/policies/DeployDistributor.s.sol:DeployDistributor --rpc-url ${GOERLI_INFURA}
 forge script script/policies/DeployDistributor.s.sol:DeployDistributor --rpc-url ${GOERLI_INFURA} --etherscan-api-key ${ETHERSCAN_API_KEY} --broadcast --verify --optimize --optimizer-runs 20000 -vvvv
 
+# Deploy Forwarder Contract
+forge script script/DeployForwarder.s.sol:ForwarderDeploy --rpc-url ${GOERLI_INFURA}
+forge script script/DeployForwarder.s.sol:ForwarderDeploy --rpc-url ${GOERLI_INFURA} --etherscan-api-key ${ETHERSCAN_API_KEY} --broadcast --verify --optimize --optimizer-runs 20000 -vvvv

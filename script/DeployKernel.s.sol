@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {Script} from 'forge-std/Script.sol';
+import {Script} from "forge-std/Script.sol";
 
 import {Kernel} from "src/Kernel.sol";
 import "src/modules/INSTR/GoerliDaoInstructions.sol";
@@ -39,7 +39,7 @@ contract KernelDeploy is Script {
   address staking_addr = vm.envAddress("GOERLI_STAKING"); //update env
   uint256 initialRate = 12055988; // 50M% APR
 
-// authority, gdao, staking, sgdao, xgdao should already be deployed at this point
+// authority, gdao, staking, sgdao, xgdao, migrator should already be deployed at this point
 
   /// @notice The main script entrypoint
   /// @return kernel The deployed contract

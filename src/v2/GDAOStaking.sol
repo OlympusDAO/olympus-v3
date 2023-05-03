@@ -8,8 +8,6 @@ import  {IxGDAO} from "src/interfaces/IxGDAO.sol";
 import  {IsGDAO} from "src/interfaces/IsGDAO.sol";
 
 
-
-
 // File: interfaces/IOlympusAuthority.sol
 
 interface IOlympusAuthority {
