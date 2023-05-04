@@ -14,12 +14,13 @@ contract AuthorityDeploy is Script {
     uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV_5");
     // vm.startBroadcast(privateKey);
     vm.startBroadcast(deployerPrivateKey);
-    address governor = vm.envAddress("GOERLI_KERNEL_5");
-    address guardian = vm.envAddress("GOERLI_KERNEL_5");
-    address policy = vm.envAddress("GOERLI_MULTISIG_2");
-    address vault = vm.envAddress("GOERLI_KERNEL_5");
-
+    address governor = vm.envAddress("GOERLI_DEPLOYER");
+    address guardian = vm.envAddress("GOERLI_DEPLOYER");
+    address policy = vm.envAddress("GOERLI_MULTISIG");
+    address vault = vm.envAddress("GOERLI_DEPLOYER");
+    address newVault = vm.envAddress("GOERLI_DEPLOYER");
     authority = new GdaoAuthority(governor, guardian, policy, vault);
+    authority.pushVault(newVault, true);
 
     vm.stopBroadcast();
     return authority;

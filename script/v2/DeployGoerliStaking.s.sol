@@ -22,7 +22,7 @@ contract GDAOStakingDeploy is Script {
     address xgdao = vm.envAddress("GOERLI_XGDAO"); // make sure updated in .env
     uint256 epochLength = 300;
     uint256 firstEpochNumber = 1;
-    uint256 firstEpochTime = 1682051578;
+    uint256 firstEpochTime = 1683175077;
     address authority = vm.envAddress("GOERLI_AUTHORITY"); // make sure updated in .env
     GoerliStaking staking = new GoerliStaking(gdao, sgdao, xgdao, epochLength, firstEpochNumber, firstEpochTime, authority);
 

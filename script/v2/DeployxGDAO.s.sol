@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import {Script} from 'forge-std/Script.sol';
+import {Script} from "forge-std/Script.sol";
 
-import {xGDAO} from "src/external/xGDAOERC20.sol";
+import {xGDAO} from "src/external/xGDAO.sol";
 
 /// @notice A very simple deployment script
 contract xGdaoDeploy is Script {
@@ -16,9 +16,14 @@ contract xGdaoDeploy is Script {
     uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV_5");
     // vm.startBroadcast(privateKey);
     vm.startBroadcast(deployerPrivateKey);
-    xgdao = new xGDAO();
+    address migrator = vm.envAddress("GOERLI_SGDAO");
+    address sGDAO = vm.envAddress("GOERLI_SGDAO"); 
+
+    xgdao = new xGDAO(migrator, sGDAO);
 
     vm.stopBroadcast();
     return xgdao;
   }
 }
+
+    // constructor(address _migrator, address _sGDAO)

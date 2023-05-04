@@ -32,9 +32,8 @@ contract KernelDeploy is Script {
   RolesAdmin roles_admin;
   TreasuryCustodian treasury_custodian;
 
-  
   // address tgd_addr = vm.envAddress("GOERLI_GDAO"); //update env
-  ERC20 constant TGD = ERC20(0xba7caC3E2A1391bb9D5edfD64793cCD4Fd29Dc09);
+  ERC20 constant GDAO = ERC20(0xE12873DFEab0Ba61aC7b742fc3679F702a6808e9); // update
 
   address staking_addr = vm.envAddress("GOERLI_STAKING"); //update env
   uint256 initialRate = 12055988; // 50M% APR
@@ -49,14 +48,14 @@ contract KernelDeploy is Script {
     kernel = new Kernel();
     
     gdaoInstr = new GoerliDaoInstructions(kernel);
-    gdaoMinter = new GoerliMinter(kernel, address(TGD));
+    gdaoMinter = new GoerliMinter(kernel, address(GDAO));
     // gdaoPrice = new GoerliDaoPrice(kernel, gdaoEthPriceFeed, gdaoEthUpdateThreshold, reserveEthPriceFeed, reserveEthUpdateThreshold, observationFrequency, movingAverageDuration, minimumTargetPrice);
     // gdaoRange = new GoerliDaoRange();
     gdaoRoles = new GoerliDaoRoles(kernel);
     gdaoTreasury = new GoerliDaoTreasury(kernel);
     // gdaoVotes = new GoerliDaoVotes();
     
-    distributor = new Distributor(kernel, address(TGD), staking_addr, initialRate);
+    distributor = new Distributor(kernel, address(GDAO), staking_addr, initialRate);
     emergency = new Emergency(kernel);
     treasury_custodian = new TreasuryCustodian(kernel);
     roles_admin = new RolesAdmin(kernel);
