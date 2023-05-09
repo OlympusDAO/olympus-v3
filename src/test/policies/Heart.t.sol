@@ -141,7 +141,7 @@ contract HeartTest is Test {
     //     [X] cannot beat if not active
     //     [X] cannot beat if not enough time has passed
     //     [X] fails if price or operator revert
-    //     [ ] reward auction functions correctly based on time since beat available
+    //     [X] reward auction functions correctly based on time since beat available
 
     function testCorrectness_beat() public {
         // Get the beat frequency of the heart and wait that amount of time
