@@ -214,8 +214,10 @@ contract OlympusDeploy is Script {
             console2.log("Deploying", name);
 
             // Parse and store args if not kernel
+            // Note: constructor args need to be provided in alphabetical order
+            // due to changes with forge-std or a struct needs to be used
             if (keccak256(bytes(name)) != keccak256(bytes("Kernel"))) {
-                argsMap[name] = data.parseRaw(string.concat(".sequence[?(@.name == '",name,"')].args.[*]"));
+                argsMap[name] = data.parseRaw(string.concat(".sequence[?(@.name == '",name,"')].args"));
             }
            
         }
@@ -409,8 +411,7 @@ contract OlympusDeploy is Script {
 
     function _deployHeart(bytes memory args) public returns (address) {
         // Decode arguments for OlympusHeart policy
-        (uint256 maxReward, uint48 auctionDuration) = abi.decode(args, (uint256, uint48));
-
+        (uint48 auctionDuration, uint256 maxReward) = abi.decode(args, (uint48, uint256));
 
         // Deploy OlympusHeart policy
         vm.broadcast();
