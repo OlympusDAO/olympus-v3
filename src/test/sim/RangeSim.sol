@@ -401,7 +401,8 @@ abstract contract RangeSim is Test {
                 kernel,
                 operator,
                 reserve,
-                uint256(0) // no keeper rewards for sim
+                uint256(0), // no keeper rewards for sim
+                uint48(0) // no keeper rewards for sim
             );
 
             /// Deploy RolesAdmin

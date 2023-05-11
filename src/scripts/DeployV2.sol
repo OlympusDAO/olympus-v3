@@ -192,20 +192,20 @@ contract OlympusDeploy is Script {
         string memory data = vm.readFile("./src/scripts/deploy.json");
 
         // Have to use a hack with jq to get the length of the deployment sequence since the json lib used by forge doesn't have a length operation
-        // string[] memory inputs = new string[](3);
-        // inputs[0] = "sh";
-        // inputs[1] = "-c";
-        // inputs[2] = 'jq -c ".sequence | length" ./src/scripts/deploy.json | cast --to-uint256';
-        // uint256 len = abi.decode(vm.ffi(inputs), (uint256));
+        string[] memory inputs = new string[](3);
+        inputs[0] = "sh";
+        inputs[1] = "-c";
+        inputs[2] = 'jq -c ".sequence | length" ./src/scripts/deploy.json | cast --to-uint256';
+        uint256 len = abi.decode(vm.ffi(inputs), (uint256));
 
-        // // Forge doesn't correctly parse a string[] from a json array so we have to do it manually
-        // string[] memory names = abi.decode(bytes.concat(bytes32(uint256(32)),bytes32(len),data.parseRaw(".sequence..name")),(string[]));
+        // Forge doesn't correctly parse a string[] from a json array so we have to do it manually
+        string[] memory names = abi.decode(bytes.concat(bytes32(uint256(32)),bytes32(len),data.parseRaw(".sequence..name")),(string[]));
 
-        uint256 len = 3;
-        string[] memory names = new string[](len);
-        names[0] = "OlympusBoostedLiquidityRegistry";
-        names[1] = "BLVaultLido";
-        names[2] = "BLVaultManagerLido";
+        // uint256 len = 3;
+        // string[] memory names = new string[](len);
+        // names[0] = "OlympusBoostedLiquidityRegistry";
+        // names[1] = "BLVaultLido";
+        // names[2] = "BLVaultManagerLido";
 
         // Iterate through deployment sequence and set deployment args
         for (uint256 i = 0; i < len; i++) {
@@ -214,8 +214,10 @@ contract OlympusDeploy is Script {
             console2.log("Deploying", name);
 
             // Parse and store args if not kernel
+            // Note: constructor args need to be provided in alphabetical order
+            // due to changes with forge-std or a struct needs to be used
             if (keccak256(bytes(name)) != keccak256(bytes("Kernel"))) {
-                argsMap[name] = data.parseRaw(string.concat(".sequence[?(@.name == '",name,"')].args.[*]"));
+                argsMap[name] = data.parseRaw(string.concat(".sequence[?(@.name == '",name,"')].args"));
             }
            
         }
@@ -409,11 +411,11 @@ contract OlympusDeploy is Script {
 
     function _deployHeart(bytes memory args) public returns (address) {
         // Decode arguments for OlympusHeart policy
-        uint256 reward = abi.decode(args, (uint256));
+        (uint48 auctionDuration, uint256 maxReward) = abi.decode(args, (uint48, uint256));
 
         // Deploy OlympusHeart policy
         vm.broadcast();
-        heart = new OlympusHeart(kernel, operator, ohm, reward);
+        heart = new OlympusHeart(kernel, operator, ohm, maxReward, auctionDuration);
         console2.log("OlympusHeart deployed at:", address(heart));
 
         return address(heart);

@@ -20,22 +20,26 @@ import "src/Kernel.sol";
 /// @dev    The Olympus Heart contract provides keeper rewards to call the heart beat function which fuels
 ///         Olympus market operations. The Heart orchestrates state updates in the correct order to ensure
 ///         market operations use up to date information.
+///         This version implements an auction style reward system where the reward is linearly increasing up to a max reward
 contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
 
     // =========  STATE ========= //
 
-    /// @notice Status of the Heart, false = stopped, true = beating
-    bool public active;
-
     /// @notice Timestamp of the last beat (UTC, in seconds)
-    uint256 public lastBeat;
+    uint48 public lastBeat;
 
-    /// @notice Reward for beating the Heart (in reward token decimals)
-    uint256 public reward;
+    /// @notice Duration of the reward auction (in seconds)
+    uint48 public auctionDuration;
 
     /// @notice Reward token address that users are sent for beating the Heart
     ERC20 public rewardToken;
+
+    /// @notice Max reward for beating the Heart (in reward token decimals)
+    uint256 public maxReward;
+
+    /// @notice Status of the Heart, false = stopped, true = beating
+    bool public active;
 
     // Modules
     PRICEv1 internal PRICE;
@@ -47,18 +51,24 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     //                                      POLICY SETUP                                          //
     //============================================================================================//
 
+    /// @dev Auction duration must be less than or equal to frequency, but we cannot validate that in the constructor because PRICE is not yet set.
+    ///      Therefore, manually ensure that the value is valid when deploying the contract.
     constructor(
         Kernel kernel_,
         IOperator operator_,
         ERC20 rewardToken_,
-        uint256 reward_
+        uint256 maxReward_,
+        uint48 auctionDuration_
     ) Policy(kernel_) {
         operator = operator_;
 
         active = true;
-        lastBeat = block.timestamp;
+        lastBeat = uint48(block.timestamp);
+        auctionDuration = auctionDuration_;
         rewardToken = rewardToken_;
-        reward = reward_;
+        maxReward = maxReward_;
+
+        emit RewardUpdated(rewardToken_, maxReward_, auctionDuration_);
     }
 
     /// @inheritdoc Policy
@@ -89,7 +99,8 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IHeart
     function beat() external nonReentrant {
         if (!active) revert Heart_BeatStopped();
-        if (block.timestamp < lastBeat + frequency()) revert Heart_OutOfCycle();
+        uint48 currentTime = uint48(block.timestamp);
+        if (currentTime < lastBeat + frequency()) revert Heart_OutOfCycle();
 
         // Update the moving average on the Price module
         PRICE.updateMovingAverage();
@@ -97,22 +108,18 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         // Trigger price range update and market operations
         operator.operate();
 
+        // Calculate the reward
+        uint256 reward = currentReward();
+
         // Update the last beat timestamp
         // Ensure that update frequency doesn't change, but do not allow multiple beats if one is skipped
-        lastBeat = block.timestamp - ((block.timestamp - lastBeat) % frequency());
+        lastBeat = currentTime - ((currentTime - lastBeat) % frequency());
 
-        // Issue reward to sender
-        _issueReward(msg.sender);
+        // Issue the reward
+        rewardToken.safeTransfer(msg.sender, reward);
+        emit RewardIssued(msg.sender, reward);
 
         emit Beat(block.timestamp);
-    }
-
-    function _issueReward(address to_) internal {
-        uint256 amount = reward > rewardToken.balanceOf(address(this))
-            ? rewardToken.balanceOf(address(this))
-            : reward;
-        rewardToken.safeTransfer(to_, amount);
-        emit RewardIssued(to_, amount);
     }
 
     //============================================================================================//
@@ -120,7 +127,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     //============================================================================================//
 
     function _resetBeat() internal {
-        lastBeat = block.timestamp - frequency();
+        lastBeat = uint48(block.timestamp) - frequency();
     }
 
     /// @inheritdoc IHeart
@@ -146,18 +153,23 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
     modifier notWhileBeatAvailable() {
         // Prevent calling if a beat is available to avoid front-running a keeper
-        if (block.timestamp >= lastBeat + frequency()) revert Heart_BeatAvailable();
+        if (uint48(block.timestamp) >= lastBeat + frequency()) revert Heart_BeatAvailable();
         _;
     }
 
     /// @inheritdoc IHeart
-    function setRewardTokenAndAmount(
+    function setRewardAuctionParams(
         ERC20 token_,
-        uint256 reward_
+        uint256 maxReward_,
+        uint48 auctionDuration_
     ) external onlyRole("heart_admin") notWhileBeatAvailable {
+        // auction duration should be less than or equal to frequency, otherwise frequency will be used
+        if (auctionDuration_ > frequency()) revert Heart_InvalidParams();
+
         rewardToken = token_;
-        reward = reward_;
-        emit RewardUpdated(token_, reward_);
+        maxReward = maxReward_;
+        auctionDuration = auctionDuration_;
+        emit RewardUpdated(token_, maxReward_, auctionDuration_);
     }
 
     /// @inheritdoc IHeart
@@ -172,7 +184,26 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     //============================================================================================//
 
     /// @inheritdoc IHeart
-    function frequency() public view returns (uint256) {
-        return uint256(PRICE.observationFrequency());
+    function frequency() public view returns (uint48) {
+        return uint48(PRICE.observationFrequency());
+    }
+
+    /// @inheritdoc IHeart
+    function currentReward() public view returns (uint256) {
+        // If beat not available, return 0
+        // Otherwise, calculate reward from linearly increasing auction bounded by maxReward and heart balance
+        uint48 frequency = frequency();
+        uint48 nextBeat = lastBeat + frequency;
+        uint48 currentTime = uint48(block.timestamp);
+        uint48 duration = auctionDuration > frequency ? frequency : auctionDuration;
+        if (currentTime <= nextBeat) {
+            return 0;
+        } else {
+            uint256 auctionAmount = currentTime - nextBeat > duration
+                ? maxReward
+                : (uint256(currentTime - nextBeat) * maxReward) / uint256(duration);
+            uint256 balance = rewardToken.balanceOf(address(this));
+            return auctionAmount > balance ? balance : auctionAmount;
+        }
     }
 }
