@@ -2,7 +2,7 @@
 source .env
 
 # Step 1: Deploy and setup dependencies + bridge
-#forge script ./src/scripts/BridgeDeploy.s.sol:BridgeDeploy --sig "deploy(address,address)()" $ARB_LZ_ENDPOINT $ARB_MULTISIG --rpc-url $RPC_URL --private-key $PRIVATE_KEY --slow -vvvvv \
+forge script ./src/scripts/BridgeDeploy.s.sol:BridgeDeploy --sig "deploy(address,address)()" $OP_LZ_ENDPOINT $OP_MULTISIG --rpc-url $RPC_URL --private-key $PRIVATE_KEY --slow -vvvvv \
 # --broadcast --verify --etherscan-api-key $ARBISCAN_API_KEY #--etherscan-api-key $ETHERSCAN_KEY #\ # uncomment to broadcast to the network
 
 # Use Alt steps for when kernel is already deployed
