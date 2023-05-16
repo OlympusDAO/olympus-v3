@@ -14,8 +14,8 @@ import {IAuraRewardPool, IAuraMiningLib, ISTASHToken} from "policies/BoostedLiqu
 import {JoinPoolRequest, ExitPoolRequest, IVault, IBasePool, IBalancerHelper} from "policies/BoostedLiquidity/interfaces/IBalancer.sol";
 
 // Import vault dependencies
-import {RewardsData} from "policies/BoostedLiquidity/interfaces/IBLVaultLusd.sol";
-import {IBLVaultManagerLusd} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLusd.sol";
+import {RewardsData} from "policies/BoostedLiquidity/interfaces/IBLVault.sol";
+import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 
 // Import types
@@ -24,7 +24,7 @@ import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 // Import libraries
 import {ClonesWithImmutableArgs} from "clones/ClonesWithImmutableArgs.sol";
 
-contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
+contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
     using ClonesWithImmutableArgs for address;
 
     // ========= ERRORS ========= //
@@ -102,7 +102,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         address auraMiningLib_,
         OracleFeed memory ohmEthPriceFeed_,
         OracleFeed memory ethUsdPriceFeed_,
-        OracleFeed memory stethUsdPriceFeed_,
+        OracleFeed memory lusdUsdPriceFeed_,
         address implementation_,
         uint256 ohmLimit_,
         uint64 fee_,
@@ -136,7 +136,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         {
             ohmEthPriceFeed = ohmEthPriceFeed_;
             ethUsdPriceFeed = ethUsdPriceFeed_;
-            stethUsdPriceFeed = stethUsdPriceFeed_;
+            lusdUsdPriceFeed = lusdUsdPriceFeed_;
         }
 
         // Set vault implementation
@@ -202,7 +202,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
     //                                        VAULT DEPLOYMENT                                    //
     //============================================================================================//
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function deployVault() external override onlyWhileActive returns (address vault) {
         if (address(userVaults[msg.sender]) != address(0))
             revert BLManagerLusd_VaultAlreadyExists();
@@ -214,7 +214,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
             address(TRSRY), // Treasury
             address(MINTR), // Minter
             ohm, // OHM
-            pairToken, // Pair Token (wstETH)
+            pairToken, // Pair Token (LUSD)
             aura, // Aura
             bal, // Balancer
             balancerData.vault, // Balancer Vault
@@ -244,7 +244,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
     //                                         OHM MANAGEMENT                                     //
     //============================================================================================//
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function mintOhmToVault(uint256 amount_) external override onlyWhileActive onlyVault {
         // Check that minting will not exceed limit
         if (deployedOhm + amount_ > ohmLimit + circulatingOhmBurned)
@@ -257,7 +257,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         MINTR.mintOhm(msg.sender, amount_);
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function burnOhmFromVault(uint256 amount_) external override onlyWhileActive onlyVault {
         // Account for how much OHM has been deployed by the Vault system or burned from circulating supply.
         // If we are burning more OHM than has been deployed by the system we are removing previously
@@ -277,12 +277,12 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
     //                                     VAULT STATE MANAGEMENT                                 //
     //============================================================================================//
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function increaseTotalLp(uint256 amount_) external override onlyWhileActive onlyVault {
         totalLp += amount_;
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function decreaseTotalLp(uint256 amount_) external override onlyWhileActive onlyVault {
         if (amount_ > totalLp) amount_ = totalLp;
         totalLp -= amount_;
@@ -292,25 +292,25 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
     //                                         VIEW FUNCTIONS                                     //
     //============================================================================================//
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function canWithdraw(address user_) external view override returns (bool) {
         if (address(userVaults[user_]) == address(0)) return false;
         return userVaults[user_].canWithdraw();
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function getLpBalance(address user_) external view override returns (uint256) {
         if (address(userVaults[user_]) == address(0)) return 0;
         return userVaults[user_].getLpBalance();
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function getUserPairShare(address user_) external view override returns (uint256) {
         if (address(userVaults[user_]) == address(0)) return 0;
         return userVaults[user_].getUserPairShare();
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function getOutstandingRewards(
         address user_
     ) external view override returns (RewardsData[] memory) {
@@ -322,7 +322,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         return rewards;
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function getMaxDeposit() external view override returns (uint256) {
         uint256 maxOhmAmount = ohmLimit + circulatingOhmBurned - deployedOhm;
 
@@ -333,7 +333,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         return maxTknAmount;
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     /// @dev    This is an external function but should only be used in a callstatic from an external
     ///         source like the frontend.
     function getExpectedLpAmount(uint256 amount_) external override returns (uint256 bptAmount) {
@@ -376,7 +376,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         );
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     /// @dev    This is an external function but should only be used in a callstatic from an external
     ///         source like the frontend.
     function getExpectedTokensOutProtocol(
@@ -409,6 +409,9 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         );
     }
 
+    /// @inheritdoc IBLVaultManager
+    /// @dev    This is an external function but should only be used in a callstatic from an external
+    ///         source like the frontend.
     function getExpectedPairTokenOutUser(
         uint256 lpAmount_
     ) external override returns (uint256 expectedTknAmount) {
@@ -447,7 +450,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
             : expectedTokenAmounts[1];
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function getRewardTokens() external view override returns (address[] memory) {
         IAuraRewardPool auraPool = IAuraRewardPool(auraData.auraRewardPool);
 
@@ -466,7 +469,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         return rewardTokens;
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function getRewardRate(
         address rewardToken_
     ) external view override returns (uint256 rewardRate) {
@@ -495,7 +498,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         }
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function getPoolOhmShare() public view override returns (uint256) {
         // Cast addresses
         IVault vault = IVault(balancerData.vault);
@@ -513,7 +516,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         else return (balances_[0] * totalLp) / poolTotalSupply;
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function getOhmSupplyChangeData()
         external
         view
@@ -531,54 +534,49 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         // in the past (poolOhmShare + circulatingOhmBurned - deployedOhm). Here we just return
         // the data components to calculate these data points.
 
-        uint256 poolOhmShare = getPoolOhmShare();
+        poolOhmShare = getPoolOhmShare();
         mintedOhm = deployedOhm;
         netBurnedOhm = circulatingOhmBurned;
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function getOhmTknPrice() public view override returns (uint256) {
-        // Get stETH per wstETH (18 Decimals)
-        uint256 stethPerWsteth = IWsteth(pairToken).stEthPerToken();
-
         // Get ETH per OHM (18 Decimals)
         uint256 ethPerOhm = _validatePrice(ohmEthPriceFeed.feed, ohmEthPriceFeed.updateThreshold);
 
         // Get USD per ETH (8 decimals)
         uint256 usdPerEth = _validatePrice(ethUsdPriceFeed.feed, ethUsdPriceFeed.updateThreshold);
 
-        // Get USD per stETH (8 decimals)
-        uint256 usdPerSteth = _validatePrice(
-            stethUsdPriceFeed.feed,
-            stethUsdPriceFeed.updateThreshold
+        // Get USD per LUSD (8 decimals)
+        uint256 usdPerLusd = _validatePrice(
+            lusdUsdPriceFeed.feed,
+            lusdUsdPriceFeed.updateThreshold
         );
 
-        // Calculate OHM per wstETH (9 decimals)
-        return (stethPerWsteth * usdPerSteth * 1e9) / (ethPerOhm * usdPerEth);
+        // Calculate OHM per LUSD (9 decimals)
+        return (usdPerLusd * 1e27) / (ethPerOhm * usdPerEth);
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function getTknOhmPrice() public view override returns (uint256) {
-        // Get stETH per wstETH (18 Decimals)
-        uint256 stethPerWsteth = IWsteth(pairToken).stEthPerToken();
-
         // Get ETH per OHM (18 Decimals)
         uint256 ethPerOhm = _validatePrice(ohmEthPriceFeed.feed, ohmEthPriceFeed.updateThreshold);
 
         // Get USD per ETH (8 decimals)
         uint256 usdPerEth = _validatePrice(ethUsdPriceFeed.feed, ethUsdPriceFeed.updateThreshold);
 
-        // Get USD per stETH (8 decimals)
-        uint256 usdPerSteth = _validatePrice(
-            stethUsdPriceFeed.feed,
-            stethUsdPriceFeed.updateThreshold
+        // Get USD per LUSD (8 decimals)
+        uint256 usdPerLusd = _validatePrice(
+            lusdUsdPriceFeed.feed,
+            lusdUsdPriceFeed.updateThreshold
         );
 
-        // Calculate wstETH per OHM (18 decimals)
-        return (ethPerOhm * usdPerEth * 1e18) / (stethPerWsteth * usdPerSteth);
+        // Calculate LUSD per OHM (18 decimals)
+        return (ethPerOhm * usdPerEth) / (usdPerLusd);
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    // TODO: Update
+    /// @inheritdoc IBLVaultManager
     function getOhmTknPoolPrice() public view override returns (uint256) {
         IBasePool pool = IBasePool(balancerData.liquidityPool);
         IVault vault = IVault(balancerData.vault);
@@ -586,7 +584,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         // Get token balances
         (, uint256[] memory balances, ) = vault.getPoolTokens(pool.getPoolId());
 
-        // Get OHM per wstETH (9 decimals)
+        // Get OHM per LUSD (9 decimals)
         if (balances[1] == 0) return 0;
         else return (balances[0] * 1e18) / balances[1];
     }
@@ -595,43 +593,42 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
     //                                        ADMIN FUNCTIONS                                     //
     //============================================================================================//
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function emergencyBurnOhm(uint256 amount_) external override onlyRole("liquidityvault_admin") {
         OlympusERC20Token(ohm).increaseAllowance(address(MINTR), amount_);
         MINTR.burnOhm(address(this), amount_);
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function setLimit(uint256 newLimit_) external override onlyRole("liquidityvault_admin") {
         if (newLimit_ + circulatingOhmBurned < deployedOhm) revert BLManagerLusd_InvalidLimit();
         ohmLimit = newLimit_;
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function setFee(uint64 newFee_) external override onlyRole("liquidityvault_admin") {
         if (newFee_ > MAX_FEE) revert BLManagerLusd_InvalidFee();
         currentFee = newFee_;
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function setWithdrawalDelay(
         uint48 newDelay_
     ) external override onlyRole("liquidityvault_admin") {
         minWithdrawalDelay = newDelay_;
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
     function changeUpdateThresholds(
         uint48 ohmEthUpdateThreshold_,
         uint48 ethUsdUpdateThreshold_,
-        uint48 stethUsdUpdateThreshold_
+        uint48 lusdUsdUpdateThreshold_
     ) external onlyRole("liquidityvault_admin") {
         ohmEthPriceFeed.updateThreshold = ohmEthUpdateThreshold_;
         ethUsdPriceFeed.updateThreshold = ethUsdUpdateThreshold_;
-        stethUsdPriceFeed.updateThreshold = stethUsdUpdateThreshold_;
+        lusdUsdPriceFeed.updateThreshold = lusdUsdUpdateThreshold_;
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function activate() external override onlyRole("liquidityvault_admin") {
         if (isLusdBLVaultActive) revert BLManagerLusd_AlreadyActive();
 
@@ -639,7 +636,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManagerLusd, RolesConsumer {
         BLREG.addVault(address(this));
     }
 
-    /// @inheritdoc IBLVaultManagerLusd
+    /// @inheritdoc IBLVaultManager
     function deactivate() external override onlyRole("emergency_admin") {
         if (!isLusdBLVaultActive) revert BLManagerLusd_AlreadyInactive();
 
