@@ -16,7 +16,7 @@ contract xGdaoDeploy is Script {
     uint256 deployerPrivateKey = vm.envUint("KERNEL_PRIV_5");
     // vm.startBroadcast(privateKey);
     vm.startBroadcast(deployerPrivateKey);
-    address migrator = vm.envAddress("GOERLI_SGDAO");
+    address migrator = vm.envAddress("GOERLI_DEPLOYER");
     address sGDAO = vm.envAddress("GOERLI_SGDAO"); 
 
     xgdao = new xGDAO(migrator, sGDAO);

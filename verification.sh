@@ -37,7 +37,7 @@ forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "
 forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor(address)" 0xE43CD84c93c12d0B613aB736F6b62DBbFaa2DF37) 0x27a5df72fbf3795db58a44edab5170131b38426b MockPolicy
 
 # Deploy xGDAO Sepolia
-forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor()") 0xFFbC5937d48afc21E0D514D1650ffc1e4B84e98C xGDAO
+forge verify-contract --chain-id 5 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor(address, address)" 0x58C02FBA7Fbaf1eDF44c4e16E0010dF1d04Da7d8 0xfd46c3d057933574501d2743ef115fe1c90d38bb) 0x3B83e7EBeeBF9155c107B7b95d20331c45D1790e src/external/xGDAO.sol:xGDAO
 
  # Deploy sGDAO Sepolia
 forge verify-contract --chain-id 11155111 --flatten --watch --compiler-version "v0.8.15+commit.e14f2714" --constructor-args $(cast abi-encode "constructor()") 0x9716adc3fb42db0715ad296552770b8b16943862 sGDAO

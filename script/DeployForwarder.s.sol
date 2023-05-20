@@ -16,7 +16,7 @@ contract ForwarderDeploy is Script {
     // vm.startBroadcast(privateKey);
     vm.startBroadcast(deployerPrivateKey);
     address depositCoin = vm.envAddress("GOERLI_ETH"); // GETH
-    address saleToken = vm.envAddress("GOERLI_TGD"); // GDAO
+    address saleToken = vm.envAddress("GOERLI_GDAO"); // GDAO
     address multisig = vm.envAddress("GOERLI_MULTISIG"); // make sure updated in .env
     forwarder = new Forwarder(depositCoin, saleToken, multisig);
     vm.stopBroadcast();
