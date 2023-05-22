@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: AGPL-3.0
+pragma solidity 0.8.15;
+
+import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
+import {ReentrancyGuard} from "src/libraries/Balancer/contracts/ReentrancyGuard.sol";
+
+contract MockBalancerVault is IVault, ReentrancyGuard {
+    address[] internal tokens;
+    uint256[] internal balances;
+    uint256 internal lastChangeBlock;
+
+    function setTokens(address[] memory _tokens) public {
+        tokens = _tokens;
+    }
+
+    function setBalances(uint256[] memory _balances) public {
+        balances = _balances;
+    }
+
+    function setLastChangeBlock(uint256 _lastChangeBlock) public {
+        lastChangeBlock = _lastChangeBlock;
+    }
+
+    function getPoolTokens(
+        bytes32 poolId
+    ) external view override returns (address[] memory, uint256[] memory, uint256) {
+        return (tokens, balances, lastChangeBlock);
+    }
+
+    function manageUserBalance(UserBalanceOp[] memory ops) external payable override nonReentrant {
+        // Implementation not required
+    }
+}
