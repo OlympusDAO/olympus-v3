@@ -11,7 +11,7 @@ import {IHeart} from "policies/interfaces/IHeart.sol";
 
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
+import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 import "src/Kernel.sol";
 
@@ -42,7 +42,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     bool public active;
 
     // Modules
-    PRICEv1 internal PRICE;
+    PRICEv2 internal PRICE;
 
     // Policies
     IOperator public operator;
@@ -77,7 +77,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("ROLES");
 
-        PRICE = PRICEv1(getModuleAddress(dependencies[0]));
+        PRICE = PRICEv2(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
     }
 
@@ -89,7 +89,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         returns (Permissions[] memory permissions)
     {
         permissions = new Permissions[](1);
-        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
+        permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.storePrice.selector);
     }
 
     //============================================================================================//
@@ -102,8 +102,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         uint48 currentTime = uint48(block.timestamp);
         if (currentTime < lastBeat + frequency()) revert Heart_OutOfCycle();
 
-        // Update the moving average on the Price module
-        PRICE.updateMovingAverage();
+        // Update the OHM/RESERVE moving average by store each of their prices on the PRICE module
+        PRICE.storePrice(address(operator.ohm()));
+        PRICE.storePrice(address(operator.reserve()));
 
         // Trigger price range update and market operations
         operator.operate();
@@ -192,10 +193,10 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     function currentReward() public view returns (uint256) {
         // If beat not available, return 0
         // Otherwise, calculate reward from linearly increasing auction bounded by maxReward and heart balance
-        uint48 frequency = frequency();
-        uint48 nextBeat = lastBeat + frequency;
+        uint48 _frequency = frequency();
+        uint48 nextBeat = lastBeat + _frequency;
         uint48 currentTime = uint48(block.timestamp);
-        uint48 duration = auctionDuration > frequency ? frequency : auctionDuration;
+        uint48 duration = auctionDuration > _frequency ? _frequency : auctionDuration;
         if (currentTime <= nextBeat) {
             return 0;
         } else {

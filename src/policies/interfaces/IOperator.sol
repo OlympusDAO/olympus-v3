@@ -18,6 +18,7 @@ interface IOperator {
     event CushionParamsChanged(uint32 duration_, uint32 debtBuffer_, uint32 depositInterval_);
     event ReserveFactorChanged(uint32 reserveFactor_);
     event RegenParamsChanged(uint32 wait_, uint32 threshold_, uint32 observe_);
+    event MinTargetPriceChanged(uint256 minTargetPrice_);
 
     // =========  ERRORS ========= //
 
@@ -137,6 +138,11 @@ interface IOperator {
     /// @param  callback_ - Address of the callback to use.
     function setBondContracts(IBondSDA auctioneer_, IBondCallback callback_) external;
 
+    /// @notice Set the minimum target price for the Operator
+    /// @notice Access restricted
+    /// @param  minTargetPrice_ - Minimum target price in OHM/RESERVE with same units as PRICE.priceDecimals()
+    function setMinTargetPrice(uint256 minTargetPrice_) external;
+
     /// @notice Initialize the Operator to begin market operations
     /// @notice Access restricted
     /// @notice Can only be called once
@@ -167,6 +173,13 @@ interface IOperator {
 
     // =========  VIEW FUNCTIONS ========= //
 
+    /// @notice Returns the Operator's target price. Target Price is the maximum of liquid backing per backed ohm and
+    /// @notice the moving average of OHM against the reserve (duration and frequency configured on PRICE).
+    /// @dev This function calculates the target price based on the stored min target price and the moving average
+    /// @dev During an operate transaction, it is expected that it will be updated in the same block prior to the call.
+    /// @return targetPrice_ - The target price
+    function targetPrice() external view returns (uint256);
+
     /// @notice Returns the full capacity of the specified wall (if it was regenerated now)
     /// @dev    Calculates the capacity to deploy for a wall based on the amount of reserves owned by the treasury and the reserve factor.
     /// @param  high_ - Whether to return the full capacity for the high or low wall
@@ -177,4 +190,10 @@ interface IOperator {
 
     /// @notice Returns the config variable of the Operator as a Config struct
     function config() external view returns (Config memory);
+
+    /// @notice Returns the ohm address used by the Operator
+    function ohm() external view returns (address);
+
+    /// @notice Returns the reserve address used by the Operator
+    function reserve() external view returns (address);
 }
