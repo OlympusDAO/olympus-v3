@@ -92,7 +92,7 @@ contract MockPrice is PRICEv2 {
         if (basePrice == 0) revert PRICE_PriceZero(base_);
 
         // Return asset price / base price
-        return ((assetPrice * decimals) / basePrice, timestamp);
+        return ((assetPrice * 10 ** decimals) / basePrice, timestamp);
     }
 
     function KEYCODE() public pure override returns (Keycode) {
@@ -108,7 +108,9 @@ contract MockPrice is PRICEv2 {
 
     function getAssetData(address asset_) external view override returns (Asset memory) {}
 
-    function storePrice(address asset_) external override {}
+    function storePrice(address asset_) external override {
+        getPrice(asset_, Variant.CURRENT);
+    }
 
     function addAsset(
         address asset_,

@@ -24,10 +24,14 @@ import {IOperator} from "policies/RBS/interfaces/IOperator.sol";
  */
 contract MockOperator is Policy {
     bool public result;
+    address public ohm;
+    address public reserve;
     error Operator_CustomError();
 
-    constructor(Kernel kernel_) Policy(kernel_) {
+    constructor(Kernel kernel_, address ohm_, address reserve_) Policy(kernel_) {
         result = true;
+        ohm = ohm_;
+        reserve = reserve_;
     }
 
     // =========  FRAMEWORK CONFIFURATION ========= //
@@ -98,7 +102,7 @@ contract HeartTest is Test {
 
         {
             // Deploy mock operator
-            operator = new MockOperator(kernel);
+            operator = new MockOperator(kernel, address(ohm), address(reserve));
 
             // Deploy heart
             heart = new OlympusHeart(

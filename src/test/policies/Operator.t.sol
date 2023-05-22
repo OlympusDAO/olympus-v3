@@ -131,7 +131,8 @@ contract OperatorTest is Test {
                     uint32(1 hours), // regenWait
                     uint32(5), // regenThreshold
                     uint32(7) // regenObserve
-                ]
+                ],
+                10e18 // minTargetPrice
             );
 
             /// Deploy roles administrator

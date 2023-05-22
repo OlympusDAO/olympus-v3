@@ -12,7 +12,7 @@ import {IBondSDA as LibIBondSDA} from "test/lib/bonds/interfaces/IBondSDA.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockPrice} from "test/mocks/MockPrice.sol";
+import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
@@ -116,7 +116,7 @@ contract BondCallbackTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             /// Deploy modules (some mocks)
-            price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
+            price = new MockPrice(kernel, uint8(18), uint32(8 hours));
             range = new OlympusRange(
                 kernel,
                 ERC20(ohm),
@@ -130,10 +130,10 @@ contract BondCallbackTest is Test {
             roles = new OlympusRoles(kernel);
 
             /// Configure mocks
-            price.setMovingAverage(100 * 1e18);
-            price.setLastPrice(100 * 1e18);
-            price.setDecimals(18);
-            price.setLastTime(uint48(block.timestamp));
+            price.setPrice(address(ohm), 100e18);
+            price.setPrice(address(reserve), 1e18);
+            price.setMovingAverage(address(ohm), 100e18);
+            price.setMovingAverage(address(reserve), 1e18);
         }
 
         {
@@ -158,8 +158,8 @@ contract BondCallbackTest is Test {
                     uint32(1 hours), // regenWait
                     uint32(5), // regenThreshold
                     uint32(7) // regenObserve
-                    // uint32(8 hours) // observationFrequency
-                ]
+                ],
+                10e18 // uint256 minTargetPrice_
             );
 
             /// Registor operator to create bond markets with a callback

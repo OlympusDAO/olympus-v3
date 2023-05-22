@@ -372,7 +372,7 @@ contract OlympusDeploy is Script {
     function _deployOperator(bytes memory args) public returns (address) {
         // Decode arguments for Operator policy
         // Must use a dynamic array to parse correctly since the json lib defaults to this
-        uint32[] memory configParams_ = abi.decode(args, (uint32[]));
+        (uint32[] memory configParams_, uint256 minTargetPrice_) = abi.decode(args, (uint32[], uint256));
         uint32[8] memory configParams = [
             configParams_[0],
             configParams_[1],
@@ -391,7 +391,8 @@ contract OlympusDeploy is Script {
             bondAuctioneer,
             callback,
             [ohm, reserve],
-            configParams
+            configParams,
+            minTargetPrice_
         );
         console2.log("Operator deployed at:", address(operator));
 

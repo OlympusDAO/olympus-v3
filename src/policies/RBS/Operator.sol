@@ -80,7 +80,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         IBondSDA auctioneer_,
         IBondCallback callback_,
         ERC20[2] memory tokens_, // [ohm, reserve]
-        uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
+        uint32[8] memory configParams, // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
+        uint256 minTargetPrice_
     ) Policy(kernel_) {
         // Check params are valid
         if (address(auctioneer_) == address(0) || address(callback_) == address(0))
@@ -134,10 +135,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         _status = Status({low: regen, high: regen});
 
+        minTargetPrice = minTargetPrice_;
+
         emit CushionFactorChanged(configParams[0]);
         emit CushionParamsChanged(configParams[1], configParams[2], configParams[3]);
         emit ReserveFactorChanged(configParams[4]);
         emit RegenParamsChanged(configParams[5], configParams[6], configParams[7]);
+        emit MinTargetPriceChanged(minTargetPrice_);
     }
 
     /// @inheritdoc Policy

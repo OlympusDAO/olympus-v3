@@ -390,7 +390,8 @@ abstract contract RangeSim is Test {
                     uint32(vm.envUint("REGEN_THRESHOLD")), // regenThreshold
                     uint32(vm.envUint("REGEN_OBSERVE")) // regenObserve
                     // uint32(vm.envUint("EPOCH_DURATION")) // observationFrequency
-                ]
+                ],
+                10e18 // uint256 minTargetPrice
             );
 
             // Deploy PriceConfig
