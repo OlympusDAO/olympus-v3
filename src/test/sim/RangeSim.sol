@@ -31,10 +31,10 @@ import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
-import {Operator} from "policies/Operator.sol";
-import {OlympusHeart} from "policies/Heart.sol";
-import {BondCallback} from "policies/BondCallback.sol";
-import {OlympusPriceConfig} from "policies/PriceConfig.sol";
+import {Operator} from "policies/RBS/Operator.sol";
+import {OlympusHeart} from "policies/RBS/Heart.sol";
+import {BondCallback} from "policies/Bonds/BondCallback.sol";
+import {OlympusPriceConfig} from "policies/RBS/PriceConfig.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 

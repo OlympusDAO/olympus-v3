@@ -25,8 +25,8 @@ import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {Operator} from "policies/Operator.sol";
-import {BondCallback} from "policies/BondCallback.sol";
+import {Operator} from "policies/RBS/Operator.sol";
+import {BondCallback} from "policies/Bonds/BondCallback.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 // solhint-disable-next-line max-states-count

@@ -13,7 +13,7 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {Minter} from "policies/Minter.sol";
+import {Minter} from "policies/OHM/Minter.sol";
 
 // solhint-disable-next-line max-states-count
 contract MinterTest is Test {

@@ -7,7 +7,7 @@ import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
 /// Import Distributor
-import {Distributor} from "policies/Distributor.sol";
+import {Distributor} from "policies/OHM/Distributor.sol";
 import "src/Kernel.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";

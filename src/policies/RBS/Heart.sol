@@ -6,8 +6,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
-import {IOperator} from "policies/interfaces/IOperator.sol";
-import {IHeart} from "policies/interfaces/IHeart.sol";
+import {IOperator} from "policies/RBS/interfaces/IOperator.sol";
+import {IHeart} from "policies/RBS/interfaces/IHeart.sol";
 
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";

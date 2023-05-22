@@ -7,8 +7,8 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusVotes} from "modules/VOTES/OlympusVotes.sol";
 import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
-import {Parthenon} from "policies/Parthenon.sol";
-import {VohmVault} from "policies/VohmVault.sol";
+import {Parthenon} from "policies/Governance/Parthenon.sol";
+import {VohmVault} from "policies/Governance/VohmVault.sol";
 
 /// @notice Script to deploy the Governance System in the Olympus Bophades
 contract GovernanceDeploy is Script {

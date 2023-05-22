@@ -6,7 +6,7 @@ import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import {Parthenon} from "policies/Parthenon.sol";
+import {Parthenon} from "policies/Governance/Parthenon.sol";
 import {MockModuleWriter} from "test/mocks/MockModuleWriter.sol";
 import {MockInvalidModule} from "test/mocks/MockInvalidModule.sol";
 import {MockValidModule} from "test/mocks/MockValidModule.sol";

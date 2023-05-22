@@ -11,7 +11,7 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 
 import "src/Kernel.sol";
 
-import {VohmVault} from "src/policies/VohmVault.sol";
+import {VohmVault} from "src/policies/Governance/VohmVault.sol";
 import {OlympusVotes} from "src/modules/VOTES/OlympusVotes.sol";
 
 contract VohmVaultTest is Test {

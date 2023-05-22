@@ -7,7 +7,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
-import {IOperator} from "policies/interfaces/IOperator.sol";
+import {IOperator} from "policies/RBS/interfaces/IOperator.sol";
 import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 

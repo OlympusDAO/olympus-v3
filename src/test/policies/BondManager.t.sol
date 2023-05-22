@@ -17,8 +17,8 @@ import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 
-import {BondCallback} from "policies/BondCallback.sol";
-import {BondManager} from "policies/BondManager.sol";
+import {BondCallback} from "policies/Bonds/BondCallback.sol";
+import {BondManager} from "policies/Bonds/BondManager.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";

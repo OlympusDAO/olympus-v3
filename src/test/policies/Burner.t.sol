@@ -14,7 +14,7 @@ import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {Burner} from "policies/Burner.sol";
+import {Burner} from "policies/OHM/Burner.sol";
 
 // solhint-disable-next-line max-states-count
 contract BurnerTest is Test {

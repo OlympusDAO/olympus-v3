@@ -25,8 +25,8 @@ import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {Operator} from "policies/Operator.sol";
-import {BondCallback} from "policies/BondCallback.sol";
+import {Operator} from "policies/RBS/Operator.sol";
+import {BondCallback} from "policies/Bonds/BondCallback.sol";
 
 import "src/Kernel.sol";
 

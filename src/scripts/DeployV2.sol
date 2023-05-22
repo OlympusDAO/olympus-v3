@@ -26,16 +26,16 @@ import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 
-import {Operator} from "policies/Operator.sol";
-import {OlympusHeart} from "policies/Heart.sol";
-import {BondCallback} from "policies/BondCallback.sol";
-import {OlympusPriceConfig} from "policies/PriceConfig.sol";
+import {Operator} from "policies/RBS/Operator.sol";
+import {OlympusHeart} from "policies/RBS/Heart.sol";
+import {BondCallback} from "policies/Bonds/BondCallback.sol";
+import {OlympusPriceConfig} from "policies/RBS/PriceConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
-import {Distributor} from "policies/Distributor.sol";
+import {Distributor} from "policies/OHM/Distributor.sol";
 import {Emergency} from "policies/Emergency.sol";
-import {BondManager} from "policies/BondManager.sol";
-import {Burner} from "policies/Burner.sol";
+import {BondManager} from "policies/Bonds/BondManager.sol";
+import {Burner} from "policies/OHM/Burner.sol";
 import {BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
 import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
 

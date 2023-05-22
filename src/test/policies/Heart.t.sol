@@ -15,9 +15,9 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
 
-import {OlympusHeart} from "policies/Heart.sol";
+import {OlympusHeart} from "policies/RBS/Heart.sol";
 
-import {IOperator} from "policies/interfaces/IOperator.sol";
+import {IOperator} from "policies/RBS/interfaces/IOperator.sol";
 
 /**
  * @notice Mock Operator to test Heart

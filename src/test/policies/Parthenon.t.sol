@@ -10,7 +10,7 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 
 import {OlympusInstructions} from "src/modules/INSTR/OlympusInstructions.sol";
 import {OlympusVotes} from "src/modules/VOTES/OlympusVotes.sol";
-import {Parthenon} from "src/policies/Parthenon.sol";
+import {Parthenon} from "src/policies/Governance/Parthenon.sol";
 import "src/Kernel.sol";
 
 contract ParthenonTest is Test {

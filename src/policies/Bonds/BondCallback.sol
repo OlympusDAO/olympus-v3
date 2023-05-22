@@ -12,7 +12,7 @@ import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 
-import {Operator} from "policies/Operator.sol";
+import {Operator} from "policies/RBS/Operator.sol";
 import "src/Kernel.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
