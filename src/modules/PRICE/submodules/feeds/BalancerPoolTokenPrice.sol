@@ -139,7 +139,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint8 priceDecimals;
         {
             // Prevent overflow
-            priceDecimals = _PRICE().priceDecimals();
+            priceDecimals = _PRICE().decimals();
             if (priceDecimals > BASE_10_MAX_EXPONENT)
                 revert Balancer_PRICEDecimalsOutOfBounds(address(_PRICE()));
         }
@@ -254,7 +254,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint8 priceDecimals;
         {
             // Prevent overflow
-            priceDecimals = _PRICE().priceDecimals();
+            priceDecimals = _PRICE().decimals();
             if (priceDecimals > BASE_10_MAX_EXPONENT)
                 revert Balancer_PRICEDecimalsOutOfBounds(address(_PRICE()));
         }
@@ -347,7 +347,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         // Prevent overflow
         uint8 priceDecimals;
         {
-            priceDecimals = _PRICE().priceDecimals();
+            priceDecimals = _PRICE().decimals();
             if (priceDecimals > BASE_10_MAX_EXPONENT)
                 revert Balancer_PRICEDecimalsOutOfBounds(address(_PRICE()));
         }
@@ -507,7 +507,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         // Prevent overflow
         uint8 priceDecimals;
         {
-            priceDecimals = _PRICE().priceDecimals();
+            priceDecimals = _PRICE().decimals();
             if (priceDecimals > BASE_10_MAX_EXPONENT)
                 revert Balancer_PRICEDecimalsOutOfBounds(address(_PRICE()));
         }

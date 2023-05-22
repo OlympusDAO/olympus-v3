@@ -115,10 +115,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
             }
         }
 
-        uint256 priceAdjusted = price.mulDiv(
-            10 ** _PRICE().priceDecimals(),
-            10 ** feed_.decimals()
-        );
+        uint256 priceAdjusted = price.mulDiv(10 ** _PRICE().decimals(), 10 ** feed_.decimals());
         return priceAdjusted;
     }
 
@@ -134,7 +131,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         OneFeedParams memory params = abi.decode(params_, (OneFeedParams));
 
         // Ensure that no decimals would result in an underflow or overflow
-        uint8 priceDecimals = _PRICE().priceDecimals();
+        uint8 priceDecimals = _PRICE().decimals();
         if (priceDecimals > BASE_10_MAX_EXPONENT)
             revert Chainlink_PRICEDecimalsOutOfBounds(address(_PRICE()));
         if (params.feed.decimals() > BASE_10_MAX_EXPONENT)
@@ -159,7 +156,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
 
         // Ensure that no decimals would result in an underflow or overflow
-        uint8 priceDecimals = _PRICE().priceDecimals();
+        uint8 priceDecimals = _PRICE().decimals();
         if (priceDecimals > BASE_10_MAX_EXPONENT)
             revert Chainlink_PRICEDecimalsOutOfBounds(address(_PRICE()));
         if (params.numeratorFeed.decimals() > BASE_10_MAX_EXPONENT)
@@ -197,7 +194,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
 
         // Ensure that no decimals would result in an underflow or overflow
-        uint8 priceDecimals = _PRICE().priceDecimals();
+        uint8 priceDecimals = _PRICE().decimals();
         if (priceDecimals > BASE_10_MAX_EXPONENT)
             revert Chainlink_PRICEDecimalsOutOfBounds(address(_PRICE()));
         if (params.numeratorFeed.decimals() > BASE_10_MAX_EXPONENT)

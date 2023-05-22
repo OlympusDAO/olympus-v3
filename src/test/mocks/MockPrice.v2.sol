@@ -3,11 +3,16 @@ pragma solidity ^0.8.15;
 
 import "src/modules/PRICE/PRICE.v2.sol";
 
-contract MockPricev2 is PRICEv2 {
+contract MockPrice is PRICEv2 {
     mapping(address => uint256) internal prices;
+    mapping(address => uint256) internal movingAverages;
     uint48 internal timestamp;
 
-    constructor(Kernel kernel_) Module(kernel_) {}
+    constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) Module(kernel_) {
+        timestamp = uint48(block.timestamp);
+        observationFrequency = observationFrequency_;
+        decimals = decimals_;
+    }
 
     function setTimestamp(uint48 timestamp_) public {
         timestamp = timestamp_;
@@ -15,6 +20,10 @@ contract MockPricev2 is PRICEv2 {
 
     function setPrice(address asset, uint256 price) public {
         prices[asset] = price;
+    }
+
+    function setMovingAverage(address asset, uint256 movingAverage) public {
+        movingAverages[asset] = movingAverage;
     }
 
     function getPrice(address asset_) external view override returns (uint256) {
@@ -31,24 +40,26 @@ contract MockPricev2 is PRICEv2 {
         address asset_,
         Variant variant_
     ) public view override returns (uint256, uint48) {
-        uint256 price = prices[asset_];
+        uint256 price;
+        if (variant_ == Variant.CURRENT || variant_ == Variant.LAST) {
+            price = prices[asset_];
+        } else if (variant_ == Variant.MOVINGAVERAGE) {
+            price = movingAverages[asset_];
+        } else {
+            revert PRICE_InvalidParams(1, abi.encode(uint256(variant_)));
+        }
 
         // Mimic PRICE's behaviour of reverting
         if (price == 0) {
             revert PRICE_PriceZero(asset_);
         }
+
         return (price, timestamp);
     }
 
     function getPriceIn(address asset_, address base_) external view override returns (uint256) {
-        // Get asset price
-        uint256 assetPrice = prices[asset_];
-
-        // Get base price
-        uint256 basePrice = prices[base_];
-
-        // Return asset price / base price
-        return (assetPrice * priceDecimals) / basePrice;
+        (uint256 price, ) = getPriceIn(asset_, base_, Variant.CURRENT);
+        return price;
     }
 
     function getPriceIn(
@@ -56,29 +67,32 @@ contract MockPricev2 is PRICEv2 {
         address base_,
         uint48 maxAge_
     ) external view override returns (uint256) {
-        // Get asset price
-        uint256 assetPrice = prices[asset_];
-
-        // Get base price
-        uint256 basePrice = prices[base_];
-
-        // Return asset price / base price
-        return (assetPrice * priceDecimals) / basePrice;
+        (uint256 price, ) = getPriceIn(asset_, base_, Variant.CURRENT);
+        return price;
     }
 
     function getPriceIn(
         address asset_,
         address base_,
         Variant variant_
-    ) external view override returns (uint256, uint48) {
-        // Get asset price
-        uint256 assetPrice = prices[asset_];
+    ) public view override returns (uint256, uint48) {
+        uint256 assetPrice;
+        uint256 basePrice;
+        if (variant_ == Variant.CURRENT || variant_ == Variant.LAST) {
+            assetPrice = prices[asset_];
+            basePrice = prices[base_];
+        } else if (variant_ == Variant.MOVINGAVERAGE) {
+            assetPrice = movingAverages[asset_];
+            basePrice = movingAverages[base_];
+        } else {
+            revert PRICE_InvalidParams(1, abi.encode(uint256(variant_)));
+        }
 
-        // Get base price
-        uint256 basePrice = prices[base_];
+        if (assetPrice == 0) revert PRICE_PriceZero(asset_);
+        if (basePrice == 0) revert PRICE_PriceZero(base_);
 
         // Return asset price / base price
-        return ((assetPrice * priceDecimals) / basePrice, timestamp);
+        return ((assetPrice * decimals) / basePrice, timestamp);
     }
 
     function KEYCODE() public pure override returns (Keycode) {
@@ -86,7 +100,7 @@ contract MockPricev2 is PRICEv2 {
     }
 
     function setPriceDecimals(uint8 decimals_) public {
-        priceDecimals = decimals_;
+        decimals = decimals_;
     }
 
     // Required by interface, but not implemented

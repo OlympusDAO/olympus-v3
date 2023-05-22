@@ -45,7 +45,7 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     }
 
     uint32 public observationFrequency; // TODO should we be able to specify the observation frequency per Asset?
-    uint8 public priceDecimals;
+    uint8 public decimals;
     address[] public assets;
     mapping(address => Asset) internal _assetData;
 

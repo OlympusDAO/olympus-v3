@@ -6,7 +6,7 @@ import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import "src/Kernel.sol";
-import {MockPricev2} from "test/mocks/MockPrice.v2.sol";
+import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockBalancerPool, MockBalancerWeightedPool} from "test/mocks/MockBalancerPool.sol";
 import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -21,7 +21,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
     using FullMath for uint256;
     using ModuleTestFixtureGenerator for BalancerPoolTokenPrice;
 
-    MockPricev2 internal mockPrice;
+    MockPrice internal mockPrice;
     MockBalancerVault internal mockBalancerVault;
     MockBalancerWeightedPool internal mockWeightedPool;
 
@@ -85,7 +85,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         // Set up the Balancer submodule
         {
             Kernel kernel = new Kernel();
-            mockPrice = new MockPricev2(kernel);
+            mockPrice = new MockPrice(kernel, uint8(18), uint32(8 hours));
             mockPrice.setTimestamp(uint48(block.timestamp));
             mockPrice.setPriceDecimals(BALANCER_POOL_DECIMALS);
             balancerSubmodule = new BalancerPoolTokenPrice(mockPrice, mockBalancerVault);

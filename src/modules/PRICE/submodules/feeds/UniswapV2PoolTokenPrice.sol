@@ -116,7 +116,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         uint8 priceDecimals;
         {
             // Prevent overflow
-            priceDecimals = _PRICE().priceDecimals();
+            priceDecimals = _PRICE().decimals();
             if (priceDecimals > MAX_DECIMALS)
                 revert UniswapV2_PRICEDecimalsOutOfBounds(address(_PRICE()));
         }
@@ -217,7 +217,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         // Prevent overflow
         uint8 priceDecimals;
         {
-            priceDecimals = _PRICE().priceDecimals();
+            priceDecimals = _PRICE().decimals();
             if (priceDecimals > MAX_DECIMALS)
                 revert UniswapV2_PRICEDecimalsOutOfBounds(address(_PRICE()));
         }

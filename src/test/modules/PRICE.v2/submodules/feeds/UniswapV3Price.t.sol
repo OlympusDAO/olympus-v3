@@ -7,7 +7,7 @@ import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import "src/Kernel.sol";
-import {MockPricev2} from "test/mocks/MockPrice.v2.sol";
+import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
@@ -20,7 +20,7 @@ contract UniswapV3PriceTest is Test {
     using FullMath for uint256;
     using ModuleTestFixtureGenerator for UniswapV3Price;
 
-    MockPricev2 internal mockPrice;
+    MockPrice internal mockPrice;
     MockUniV3Pair internal mockUniPair;
 
     UniswapV3Price internal uniSubmodule;
@@ -57,7 +57,7 @@ contract UniswapV3PriceTest is Test {
         // Set up the submodule
         {
             Kernel kernel = new Kernel();
-            mockPrice = new MockPricev2(kernel);
+            mockPrice = new MockPrice(kernel, uint8(18), uint32(8 hours));
             mockPrice.setTimestamp(uint48(block.timestamp));
             mockPrice.setPriceDecimals(PRICE_DECIMALS);
             uniSubmodule = new UniswapV3Price(mockPrice);

@@ -6,7 +6,7 @@ import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import "src/Kernel.sol";
-import {MockPricev2} from "test/mocks/MockPrice.v2.sol";
+import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockUniswapV2Pool} from "test/mocks/MockUniswapV2Pool.sol";
 import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -20,7 +20,7 @@ contract UniswapV2PoolTokenPriceTest is Test {
     using FullMath for uint256;
     using ModuleTestFixtureGenerator for UniswapV2PoolTokenPrice;
 
-    MockPricev2 internal mockPrice;
+    MockPrice internal mockPrice;
     MockUniswapV2Pool internal mockPool;
 
     UniswapV2PoolTokenPrice internal uniswapSubmodule;
@@ -89,7 +89,7 @@ contract UniswapV2PoolTokenPriceTest is Test {
         // Set up the UniswapV2 submodule
         {
             Kernel kernel = new Kernel();
-            mockPrice = new MockPricev2(kernel);
+            mockPrice = new MockPrice(kernel, uint8(18), uint32(8 hours));
             mockPrice.setTimestamp(uint48(block.timestamp));
             mockPrice.setPriceDecimals(PRICE_DECIMALS);
             uniswapSubmodule = new UniswapV2PoolTokenPrice(mockPrice);

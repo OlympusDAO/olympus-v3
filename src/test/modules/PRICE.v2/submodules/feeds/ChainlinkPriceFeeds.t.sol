@@ -5,7 +5,7 @@ import {Test, stdError} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import {MockPricev2} from "test/mocks/MockPrice.v2.sol";
+import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -22,7 +22,7 @@ contract ChainlinkPriceFeedsTest is Test {
     MockPriceFeed internal ethDaiPriceFeed;
 
     Kernel internal kernel;
-    MockPricev2 internal mockPrice;
+    MockPrice internal mockPrice;
     ChainlinkPriceFeeds internal chainlinkSubmodule;
     uint256 internal ohmEthPrice = 0.01 * 1e18; // 1 OHM = 0.01 ETH
     uint256 internal daiEthPrice = 0.001 * 1e18; // 1 DAI = 0.001 ETH
@@ -50,7 +50,7 @@ contract ChainlinkPriceFeedsTest is Test {
             kernel = new Kernel();
 
             // Deploy mockPrice
-            mockPrice = new MockPricev2(kernel);
+            mockPrice = new MockPrice(kernel, uint8(18), uint32(8 hours));
             mockPrice.setTimestamp(uint48(block.timestamp));
             mockPrice.setPriceDecimals(PRICE_DECIMALS);
 

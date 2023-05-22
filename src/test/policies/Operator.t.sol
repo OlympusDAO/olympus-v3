@@ -11,7 +11,7 @@ import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockPrice} from "test/mocks/MockPrice.sol";
+import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
 
 import {IBondSDA} from "interfaces/IBondSDA.sol";
@@ -92,7 +92,7 @@ contract OperatorTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             /// Deploy modules (some mocks)
-            price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
+            price = new MockPrice(kernel, uint8(18), uint32(8 hours));
             range = new OlympusRange(
                 kernel,
                 ERC20(ohm),
@@ -106,10 +106,10 @@ contract OperatorTest is Test {
             roles = new OlympusRoles(kernel);
 
             /// Configure mocks
-            price.setMovingAverage(100 * 1e18);
-            price.setLastPrice(100 * 1e18);
-            price.setDecimals(18);
-            price.setLastTime(uint48(block.timestamp));
+            price.setPrice(address(ohm), 100e18);
+            price.setPrice(address(reserve), 1e18);
+            price.setMovingAverage(address(ohm), 100e18);
+            price.setMovingAverage(address(reserve), 1e18);
         }
 
         {
@@ -131,7 +131,6 @@ contract OperatorTest is Test {
                     uint32(1 hours), // regenWait
                     uint32(5), // regenThreshold
                     uint32(7) // regenObserve
-                    // uint32(8 hours) // observationFrequency
                 ]
             );
 
@@ -508,7 +507,7 @@ contract OperatorTest is Test {
         assertTrue(!auctioneer.isLive(range.market(true)));
 
         /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        price.setPrice(address(ohm), 111e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -541,7 +540,7 @@ contract OperatorTest is Test {
         assertTrue(!auctioneer.isLive(range.market(true)));
 
         /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        price.setPrice(address(ohm), 111e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -555,7 +554,7 @@ contract OperatorTest is Test {
         assertEq(marketCapacity, range.capacity(true).mulDiv(config.cushionFactor, 1e4));
 
         /// Set price on mock oracle below the high cushion
-        price.setLastPrice(105 * 1e18);
+        price.setPrice(address(ohm), 105e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -577,7 +576,7 @@ contract OperatorTest is Test {
         assertTrue(!auctioneer.isLive(range.market(true)));
 
         /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        price.setPrice(address(ohm), 111e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -591,7 +590,7 @@ contract OperatorTest is Test {
         assertEq(marketCapacity, range.capacity(true).mulDiv(config.cushionFactor, 1e4));
 
         /// Set price on mock oracle below the high cushion
-        price.setLastPrice(130 * 1e18);
+        price.setPrice(address(ohm), 130e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -613,7 +612,7 @@ contract OperatorTest is Test {
         assertTrue(!auctioneer.isLive(range.market(true)));
 
         /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        price.setPrice(address(ohm), 111e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -641,7 +640,7 @@ contract OperatorTest is Test {
         knockDownWall(true);
 
         /// Set price on mock oracle into the low cushion
-        price.setLastPrice(111 * 1e18);
+        price.setPrice(address(ohm), 111e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -660,7 +659,7 @@ contract OperatorTest is Test {
         assertTrue(!auctioneer.isLive(range.market(false)));
 
         /// Set price on mock oracle into the high cushion
-        price.setLastPrice(89 * 1e18);
+        price.setPrice(address(ohm), 89e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -693,7 +692,7 @@ contract OperatorTest is Test {
         assertTrue(!auctioneer.isLive(range.market(false)));
 
         /// Set price on mock oracle into the high cushion
-        price.setLastPrice(89 * 1e18);
+        price.setPrice(address(ohm), 89e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -707,7 +706,7 @@ contract OperatorTest is Test {
         assertEq(marketCapacity, range.capacity(false).mulDiv(config.cushionFactor, 1e4));
 
         /// Set price on mock oracle below the high cushion
-        price.setLastPrice(79 * 1e18);
+        price.setPrice(address(ohm), 79e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -729,7 +728,7 @@ contract OperatorTest is Test {
         assertTrue(!auctioneer.isLive(range.market(false)));
 
         /// Set price on mock oracle into the high cushion
-        price.setLastPrice(89 * 1e18);
+        price.setPrice(address(ohm), 89e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -743,7 +742,7 @@ contract OperatorTest is Test {
         assertEq(marketCapacity, range.capacity(false).mulDiv(config.cushionFactor, 1e4));
 
         /// Set price on mock oracle below the high cushion
-        price.setLastPrice(91 * 1e18);
+        price.setPrice(address(ohm), 91e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -765,7 +764,7 @@ contract OperatorTest is Test {
         assertTrue(!auctioneer.isLive(range.market(false)));
 
         /// Set price on mock oracle into the low cushion
-        price.setLastPrice(89 * 1e18);
+        price.setPrice(address(ohm), 89e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -793,7 +792,7 @@ contract OperatorTest is Test {
         knockDownWall(false);
 
         /// Set price on mock oracle into the low cushion
-        price.setLastPrice(89 * 1e18);
+        price.setPrice(address(ohm), 89e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -812,7 +811,7 @@ contract OperatorTest is Test {
         assertTrue(range.active(true));
 
         /// Set price below the moving average to almost regenerate high wall
-        price.setLastPrice(99 * 1e18);
+        price.setPrice(address(ohm), 99e18);
 
         /// Trigger the operator function enough times to almost regenerate the high wall
         for (uint256 i; i < 4; ++i) {
@@ -826,7 +825,7 @@ contract OperatorTest is Test {
 
         /// Cause price to spike to trigger high cushion
         uint256 cushionPrice = range.price(false, true);
-        price.setLastPrice(cushionPrice + 500);
+        price.setPrice(address(ohm), cushionPrice + 500);
         vm.prank(heart);
         operator.operate();
 
@@ -842,7 +841,7 @@ contract OperatorTest is Test {
         /// Will trigger regeneration of high wall
         /// Will set the operator market on high side to type(uint256).max
         /// However, the prior market will still be live when it's supposed to be deactivated
-        price.setLastPrice(95 * 1e18);
+        price.setPrice(address(ohm), 95e18);
         vm.prank(heart);
         operator.operate();
         /// Get latest market
@@ -863,7 +862,7 @@ contract OperatorTest is Test {
         assertTrue(range.active(true));
 
         /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        price.setPrice(address(ohm), 111e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -897,7 +896,7 @@ contract OperatorTest is Test {
         uint256 startCapacity = range.capacity(true);
 
         /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        price.setPrice(address(ohm), 111e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -939,7 +938,7 @@ contract OperatorTest is Test {
         uint256 startCapacity = range.capacity(false);
 
         /// Set price on mock oracle into the low cushion
-        price.setLastPrice(89 * 1e18);
+        price.setPrice(address(ohm), 89e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -1006,7 +1005,7 @@ contract OperatorTest is Test {
         assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price above the moving average to regenerate low wall
-        price.setLastPrice(101 * 1e18);
+        price.setPrice(address(ohm), 101e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
@@ -1050,7 +1049,7 @@ contract OperatorTest is Test {
         assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price below the moving average so regeneration doesn't start
-        price.setLastPrice(98 * 1e18);
+        price.setPrice(address(ohm), 98e18);
 
         /// Trigger the operator function with negative
         for (uint256 i; i < 8; ++i) {
@@ -1062,7 +1061,7 @@ contract OperatorTest is Test {
         assertTrue(!range.active(false));
 
         /// Set price above the moving average to regenerate low wall
-        price.setLastPrice(101 * 1e18);
+        price.setPrice(address(ohm), 101e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
@@ -1103,7 +1102,7 @@ contract OperatorTest is Test {
         assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price above the moving average to regenerate low wall
-        price.setLastPrice(101 * 1e18);
+        price.setPrice(address(ohm), 101e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 4; ++i) {
@@ -1148,14 +1147,14 @@ contract OperatorTest is Test {
         assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price above the moving average to regenerate low wall
-        price.setLastPrice(101 * 1e18);
+        price.setPrice(address(ohm), 101e18);
 
         /// Trigger the operator once to get a positive check
         vm.prank(heart);
         operator.operate();
 
         /// Set price below the moving average to get negative checks
-        price.setLastPrice(99 * 1e18);
+        price.setPrice(address(ohm), 99e18);
 
         /// Trigger the operator function several times with negative checks
         for (uint256 i; i < 3; ++i) {
@@ -1164,7 +1163,7 @@ contract OperatorTest is Test {
         }
 
         /// Set price above the moving average to regenerate low wall
-        price.setLastPrice(101 * 1e18);
+        price.setPrice(address(ohm), 101e18);
 
         /// Trigger the operator function several times with positive checks
         for (uint256 i; i < 4; ++i) {
@@ -1207,7 +1206,7 @@ contract OperatorTest is Test {
         assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price above the moving average to regenerate low wall
-        price.setLastPrice(101 * 1e18);
+        price.setPrice(address(ohm), 101e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
@@ -1231,7 +1230,7 @@ contract OperatorTest is Test {
         /// Tests that a manually regenerated wall will close the cushion that is deployed currently
 
         /// Trigger a cushion
-        price.setLastPrice(89 * 1e18);
+        price.setPrice(address(ohm), 89e18);
         vm.prank(heart);
         operator.operate();
 
@@ -1275,7 +1274,7 @@ contract OperatorTest is Test {
         assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price below the moving average to regenerate high wall
-        price.setLastPrice(99 * 1e18);
+        price.setPrice(address(ohm), 99e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
@@ -1319,7 +1318,7 @@ contract OperatorTest is Test {
         assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price above the moving average so regeneration doesn't start
-        price.setLastPrice(101 * 1e18);
+        price.setPrice(address(ohm), 101e18);
 
         /// Trigger the operator function with negative
         for (uint256 i; i < 8; ++i) {
@@ -1331,7 +1330,7 @@ contract OperatorTest is Test {
         assertTrue(!range.active(true));
 
         /// Set price below the moving average to regenerate high wall
-        price.setLastPrice(98 * 1e18);
+        price.setPrice(address(ohm), 98e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
@@ -1372,7 +1371,7 @@ contract OperatorTest is Test {
         assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price below the moving average to regenerate high wall
-        price.setLastPrice(98 * 1e18);
+        price.setPrice(address(ohm), 98e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 4; ++i) {
@@ -1417,14 +1416,14 @@ contract OperatorTest is Test {
         assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price below the moving average to regenerate low wall
-        price.setLastPrice(98 * 1e18);
+        price.setPrice(address(ohm), 98e18);
 
         /// Trigger the operator once to get a positive check
         vm.prank(heart);
         operator.operate();
 
         /// Set price above the moving average to get negative checks
-        price.setLastPrice(101 * 1e18);
+        price.setPrice(address(ohm), 101e18);
 
         /// Trigger the operator function several times with negative checks
         for (uint256 i; i < 3; ++i) {
@@ -1433,7 +1432,7 @@ contract OperatorTest is Test {
         }
 
         /// Set price below the moving average to regenerate high wall
-        price.setLastPrice(98 * 1e18);
+        price.setPrice(address(ohm), 98e18);
 
         /// Trigger the operator function several times with positive checks
         for (uint256 i; i < 4; ++i) {
@@ -1476,7 +1475,7 @@ contract OperatorTest is Test {
         assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
 
         /// Set price below the moving average to regenerate high wall
-        price.setLastPrice(99 * 1e18);
+        price.setPrice(address(ohm), 99e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
@@ -1500,7 +1499,7 @@ contract OperatorTest is Test {
         /// Tests that a manually regenerated wall will close the cushion that is deployed currently
 
         /// Trigger a cushion
-        price.setLastPrice(111 * 1e18);
+        price.setPrice(address(ohm), 111e18);
         vm.prank(heart);
         operator.operate();
 
@@ -2023,11 +2022,11 @@ contract OperatorTest is Test {
         assertEq(status.low.lastRegen, startTime);
 
         /// Call operate twice, at different price points, to make the regen counts higher than zero
-        price.setLastPrice(105 * 1e18);
+        price.setPrice(address(ohm), 105e18);
         vm.prank(heart);
         operator.operate();
 
-        price.setLastPrice(95 * 1e18);
+        price.setPrice(address(ohm), 95e18);
         vm.prank(heart);
         operator.operate();
 
@@ -2141,7 +2140,7 @@ contract OperatorTest is Test {
         assertTrue(range.active(true));
 
         /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        price.setPrice(address(ohm), 111e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -2167,7 +2166,7 @@ contract OperatorTest is Test {
         operator.activate();
 
         /// Set price on mock oracle into the low cushion
-        price.setLastPrice(89 * 1e18);
+        price.setPrice(address(ohm), 89e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
@@ -2268,7 +2267,7 @@ contract OperatorTest is Test {
         OlympusRange.Range memory startRange = range.range();
 
         /// Update moving average upwards and trigger the operator
-        price.setMovingAverage(105 * 1e18);
+        price.setMovingAverage(address(ohm), 105e18);
         vm.prank(heart);
         operator.operate();
 
@@ -2279,7 +2278,7 @@ contract OperatorTest is Test {
         assertGt(range.price(true, true), startRange.wall.high.price);
 
         /// Update moving average downwards and trigger the operator
-        price.setMovingAverage(95 * 1e18);
+        price.setMovingAverage(address(ohm), 95e18);
         vm.prank(heart);
         operator.operate();
 
@@ -2290,7 +2289,7 @@ contract OperatorTest is Test {
         assertLt(range.price(true, true), startRange.wall.high.price);
 
         /// Check that the bands do not get reduced further past the minimum target price
-        price.setMovingAverage(10 * 1e18); // At minimum price to get initial values
+        price.setMovingAverage(address(ohm), 10e18); // At minimum price to get initial values
         vm.prank(heart);
         operator.operate();
 
@@ -2298,7 +2297,7 @@ contract OperatorTest is Test {
         OlympusRange.Range memory currentRange = range.range();
 
         /// Move moving average below minimum target
-        price.setMovingAverage(5 * 1e18);
+        price.setMovingAverage(address(ohm), 5e18);
         vm.prank(heart);
         operator.operate();
 

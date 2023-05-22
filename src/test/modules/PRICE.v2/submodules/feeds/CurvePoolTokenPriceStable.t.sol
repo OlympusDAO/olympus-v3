@@ -6,7 +6,7 @@ import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import "src/Kernel.sol";
-import {MockPricev2} from "test/mocks/MockPrice.v2.sol";
+import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockCurvePool} from "test/mocks/MockCurvePool.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -18,7 +18,7 @@ contract CurvePoolTokenPriceStableTest is Test {
     using FullMath for uint256;
     using ModuleTestFixtureGenerator for CurvePoolTokenPrice;
 
-    MockPricev2 internal mockPrice;
+    MockPrice internal mockPrice;
     MockCurvePool internal mockPool;
 
     CurvePoolTokenPrice internal curveSubmodule;
@@ -49,7 +49,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         // Set up the Curve submodule
         {
             Kernel kernel = new Kernel();
-            mockPrice = new MockPricev2(kernel);
+            mockPrice = new MockPrice(kernel, uint8(18), uint32(8 hours));
             mockPrice.setTimestamp(uint48(block.timestamp));
             mockPrice.setPriceDecimals(PRICE_DECIMALS);
             curveSubmodule = new CurvePoolTokenPrice(mockPrice);

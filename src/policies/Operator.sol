@@ -199,7 +199,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     // =========  HEART FUNCTIONS ========= //
 
     /// @inheritdoc IOperator
-    function operate() external override onlyWhileActive onlyRole("scheduler") {
+    function operate() external override onlyWhileActive onlyRole("operator_operate") {
         // Revert if not initialized
         if (!initialized) revert Operator_NotInitialized();
 
@@ -380,7 +380,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             int8 scaleAdjustment = int8(ohmDecimals) - int8(reserveDecimals) + (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            uint256 oracleScale = 10 ** uint8(int8(PRICE.priceDecimals()) - priceDecimals);
+            uint256 oracleScale = 10 ** uint8(int8(PRICE.decimals()) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
                     36 + scaleAdjustment + int8(reserveDecimals) - int8(ohmDecimals) - priceDecimals
@@ -424,7 +424,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             RANGE.updateMarket(true, market, marketCapacity);
         } else {
             // Calculate inverse prices from the oracle feed for the low side
-            uint8 oracleDecimals = PRICE.priceDecimals();
+            uint8 oracleDecimals = PRICE.decimals();
             uint256 invCushionPrice = 10 ** (oracleDecimals * 2) / range.cushion.low.price;
             // Staleness checked before, TODO pass this in to avoid extra calls?
             uint256 currentPrice = PRICE.getPriceIn(address(_ohm), address(_reserve));
@@ -504,7 +504,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         // Subtract the stated decimals from the calculated decimals to get the relative price decimals.
         // Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
-        return decimals - int8(PRICE.priceDecimals());
+        return decimals - int8(PRICE.decimals());
     }
 
     // =========  INTERNAL FUNCTIONS ========= //
@@ -830,7 +830,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
                 10 ** reserveDecimals * RANGE.price(true, false),
-                10 ** ohmDecimals * 10 ** PRICE.priceDecimals()
+                10 ** ohmDecimals * 10 ** PRICE.decimals()
             );
 
             // Revert if amount out exceeds capacity
@@ -840,7 +840,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         } else if (tokenIn_ == _reserve) {
             // Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
-                10 ** ohmDecimals * 10 ** PRICE.priceDecimals(),
+                10 ** ohmDecimals * 10 ** PRICE.decimals(),
                 10 ** reserveDecimals * RANGE.price(true, true)
             );
 
@@ -860,7 +860,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (high_) {
             capacity =
                 (capacity.mulDiv(
-                    10 ** ohmDecimals * 10 ** PRICE.priceDecimals(),
+                    10 ** ohmDecimals * 10 ** PRICE.decimals(),
                     10 ** reserveDecimals * RANGE.price(true, true)
                 ) * (ONE_HUNDRED_PERCENT + RANGE.spread(true) * 2)) /
                 ONE_HUNDRED_PERCENT;

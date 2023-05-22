@@ -6,7 +6,7 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockPrice} from "test/mocks/MockPrice.sol";
+import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -53,6 +53,8 @@ contract HeartTest is Test {
     address internal bob;
     address internal policy;
 
+    MockERC20 internal ohm;
+    MockERC20 internal reserve;
     MockERC20 internal rewardToken;
 
     Kernel internal kernel;
@@ -74,6 +76,8 @@ contract HeartTest is Test {
         }
         {
             // Deploy token mocks
+            ohm = new MockERC20("Olympus", "OHM", 9);
+            reserve = new MockERC20("Reserve", "RSV", 18);
             rewardToken = new MockERC20("Reward Token", "RWD", 18);
         }
 
@@ -82,14 +86,14 @@ contract HeartTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy modules (some mocks)
-            price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
+            price = new MockPrice(kernel, uint8(18), uint32(8 hours));
             roles = new OlympusRoles(kernel);
 
-            // Configure mocks
-            price.setMovingAverage(100 * 1e18);
-            price.setLastPrice(100 * 1e18);
-            price.setCurrentPrice(100 * 1e18);
-            price.setDecimals(18);
+            // Configure prices on mock price module
+            price.setPrice(address(ohm), 100e18);
+            price.setPrice(address(reserve), 1e18);
+            price.setMovingAverage(address(ohm), 100e18);
+            price.setMovingAverage(address(reserve), 1e18);
         }
 
         {
@@ -197,8 +201,8 @@ contract HeartTest is Test {
         uint48 frequency = heart.frequency();
         vm.warp(block.timestamp + frequency);
 
-        // Set the price mock to return false
-        price.setResult(false);
+        // Set the price mock to revert with price zero
+        price.setPrice(address(ohm), 0);
 
         // Try to beat the heart and expect revert
         heart.beat();
@@ -209,7 +213,7 @@ contract HeartTest is Test {
         uint48 frequency = heart.frequency();
         vm.warp(block.timestamp + frequency);
 
-        // Set the price mock to return false
+        // Set the operator mock to return false
         operator.setResult(false);
 
         // Try to beat the heart and expect revert

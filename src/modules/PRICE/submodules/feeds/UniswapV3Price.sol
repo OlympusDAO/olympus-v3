@@ -133,7 +133,7 @@ contract UniswapV3Price is PriceSubmodule {
             {
                 // Get the price of {quoteToken} in USD
                 // Decimals: quotePriceDecimals
-                quotePriceDecimals = _PRICE().priceDecimals();
+                quotePriceDecimals = _PRICE().decimals();
                 if (quotePriceDecimals > BASE_10_MAX_EXPONENT)
                     revert UniswapV3_PRICEDecimalsOutOfBounds(address(_PRICE()));
 
@@ -148,7 +148,7 @@ contract UniswapV3Price is PriceSubmodule {
             }
 
             // Adjust to price decimals
-            uint8 priceDecimals = _PRICE().priceDecimals();
+            uint8 priceDecimals = _PRICE().decimals();
             tokenPrice = baseInUsdPrice.mulDiv(10 ** priceDecimals, 10 ** quotePriceDecimals);
         }
 

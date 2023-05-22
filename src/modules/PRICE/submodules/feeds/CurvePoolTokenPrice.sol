@@ -127,7 +127,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         uint256 value_,
         address token_
     ) internal view returns (uint256) {
-        return _convertERC20Decimals(value_, token_, _PRICE().priceDecimals());
+        return _convertERC20Decimals(value_, token_, _PRICE().decimals());
     }
 
     // ========== POOL TOKEN PRICE FUNCTIONS ========== //
@@ -146,7 +146,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param params_ Curve pool parameters of type ICurvePool
     /// @return uint256 Price in the scale of PRICE's priceDecimals
     function getPoolTokenPriceFromStablePool(bytes calldata params_) external returns (uint256) {
-        uint8 priceDecimals = _PRICE().priceDecimals();
+        uint8 priceDecimals = _PRICE().decimals();
         if (priceDecimals > BASE_10_MAX_EXPONENT)
             revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
 
@@ -229,7 +229,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         bytes calldata params_
     ) internal returns (uint256) {
         // Prevent overflow
-        uint8 priceDecimals = _PRICE().priceDecimals();
+        uint8 priceDecimals = _PRICE().decimals();
         if (priceDecimals > BASE_10_MAX_EXPONENT)
             revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
 
@@ -331,7 +331,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param params_ Curve pool parameters of type ICurvePoolTwoCrypto
     /// @return uint256 Price in the scale of PRICE's priceDecimals
     function getPoolTokenPriceFromTwoCryptoPool(bytes calldata params_) external returns (uint256) {
-        uint8 priceDecimals = _PRICE().priceDecimals();
+        uint8 priceDecimals = _PRICE().decimals();
         if (priceDecimals > BASE_10_MAX_EXPONENT)
             revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
 
@@ -383,7 +383,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param params_ Curve pool parameters of type ICurvePoolTriCrypto
     /// @return uint256 Price in the scale of PRICE's priceDecimals
     function getPoolTokenPriceFromTriCryptoPool(bytes calldata params_) external returns (uint256) {
-        uint8 priceDecimals = _PRICE().priceDecimals();
+        uint8 priceDecimals = _PRICE().decimals();
         if (priceDecimals > BASE_10_MAX_EXPONENT)
             revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
 
@@ -444,7 +444,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         address lookupToken_,
         bytes calldata params_
     ) external returns (uint256) {
-        uint8 priceDecimals = _PRICE().priceDecimals();
+        uint8 priceDecimals = _PRICE().decimals();
         // Prevent overflow
         if (priceDecimals > BASE_10_MAX_EXPONENT)
             revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
@@ -557,7 +557,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         bytes calldata params_
     ) external returns (uint256) {
         // Prevent overflow
-        uint8 priceDecimals = _PRICE().priceDecimals();
+        uint8 priceDecimals = _PRICE().decimals();
         if (priceDecimals > BASE_10_MAX_EXPONENT)
             revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
 
@@ -787,7 +787,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
 
                     lookupTokenPrice = swapQuantity.mulDiv(
                         destTokenPrice,
-                        10 ** _PRICE().priceDecimals()
+                        10 ** _PRICE().decimals()
                     );
                     break;
                 } catch (bytes memory) {

@@ -15,7 +15,7 @@ contract OlympusPricev2 is PRICEv2 {
 
     // ========== CONSTRUCTOR ========== //
     constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) Module(kernel_) {
-        priceDecimals = decimals_;
+        decimals = decimals_;
         observationFrequency = observationFrequency_;
     }
 
@@ -106,7 +106,7 @@ contract OlympusPricev2 is PRICEv2 {
         for (uint256 i; i < numFeeds; ) {
             (bool success_, bytes memory data_) = address(_getSubmoduleIfInstalled(feeds[i].target))
                 .staticcall(
-                    abi.encodeWithSelector(feeds[i].selector, priceDecimals, feeds[i].params)
+                    abi.encodeWithSelector(feeds[i].selector, asset_, decimals, feeds[i].params)
                 );
 
             // Store price if successful, otherwise leave as zero
@@ -186,13 +186,13 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Try to use the last price, both must be updated on the current timestamp
         if (assetTime == uint48(block.timestamp) && baseTime == uint48(block.timestamp))
-            return (assetPrice * 10 ** priceDecimals) / basePrice;
+            return (assetPrice * 10 ** decimals) / basePrice;
 
         // If last price is stale, use the current price
         (assetPrice, ) = _getCurrentPrice(asset_);
         (basePrice, ) = _getCurrentPrice(base_);
 
-        return (assetPrice * 10 ** priceDecimals) / basePrice;
+        return (assetPrice * 10 ** decimals) / basePrice;
     }
 
     /// @inheritdoc PRICEv2
@@ -209,13 +209,13 @@ contract OlympusPricev2 is PRICEv2 {
         if (
             assetTime >= uint48(block.timestamp) - maxAge_ &&
             baseTime >= uint48(block.timestamp) - maxAge_
-        ) return (assetPrice * 10 ** priceDecimals) / basePrice;
+        ) return (assetPrice * 10 ** decimals) / basePrice;
 
         // If last price is stale, use the current price
         (assetPrice, ) = _getCurrentPrice(asset_);
         (basePrice, ) = _getCurrentPrice(base_);
 
-        return (assetPrice * 10 ** priceDecimals) / basePrice;
+        return (assetPrice * 10 ** decimals) / basePrice;
     }
 
     /// @inheritdoc PRICEv2
@@ -236,7 +236,7 @@ contract OlympusPricev2 is PRICEv2 {
             : basePriceUpdated;
 
         // Calculate the price of the asset in the base
-        uint256 price = (assetPrice * 10 ** priceDecimals) / basePrice;
+        uint256 price = (assetPrice * 10 ** decimals) / basePrice;
 
         return (price, updatedAt);
     }

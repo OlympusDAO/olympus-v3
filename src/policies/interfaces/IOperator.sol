@@ -140,7 +140,7 @@ interface IOperator {
 
     /// @notice Set the minimum target price for the Operator
     /// @notice Access restricted
-    /// @param  minTargetPrice_ - Minimum target price in OHM/RESERVE with same units as PRICE.priceDecimals()
+    /// @param  minTargetPrice_ - Minimum target price in OHM/RESERVE with same units as PRICE.decimals()
     function setMinTargetPrice(uint256 minTargetPrice_) external;
 
     /// @notice Initialize the Operator to begin market operations
