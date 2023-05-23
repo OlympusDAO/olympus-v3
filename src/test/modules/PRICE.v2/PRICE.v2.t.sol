@@ -9,7 +9,8 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
+import {MockBalancerWeightedPool} from "test/mocks/MockBalancerPool.sol";
+import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
 import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 
 import "modules/PRICE/OlympusPrice.v2.sol";
@@ -32,9 +33,7 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [ ] current variant - dynamically calculates price from strategy and components
 //           [ ] no strategy submodule (only one price source)
 //              [ ] single price feed
-//              [ ] multiple price feeds
 //              [ ] single price feed with recursive calls
-//              [ ] multiple price feeds with recursive calls
 //              [ ] reverts if price is zero
 //           [ ] with strategy submodule
 //              [ ] two feeds (two separate feeds)
@@ -144,8 +143,8 @@ contract PriceV2Test is Test {
     MockPriceFeed internal twomaUsdPriceFeed;
     MockPriceFeed internal twomaEthPriceFeed;
     MockUniV3Pair internal ohmEthUniV3Pool;
-    MockBalancerPool internal bpt;
-    MockVault internal balVault;
+    MockBalancerWeightedPool internal bpt;
+    MockBalancerVault internal balVault;
 
     MockERC20 internal ohm;
     MockERC20 internal reserve;
@@ -179,8 +178,25 @@ contract PriceV2Test is Test {
             twoma = new MockERC20("Two + MA", "TWOMA", 18);
 
             // Balancer
-            bpt = new MockBalancerPool();
-            balVault = new MockVault(address(bpt), address(ohm), address(reserve));
+            bpt = new MockBalancerWeightedPool();
+            bpt.setDecimals(18);
+            bpt.setTotalSupply(1e24);
+            uint256[] memory weights = new uint256[](2);
+            weights[0] = 5e17;
+            weights[1] = 5e17;
+            bpt.setNormalizedWeights(weights);
+            // Target price: 10 reserves per OHM, balances are 1e7 Reserve and 1e6 OHM
+            // At 1 million LP token supply, LP price should be 20e18
+            bpt.setInvariant(uint256(3.16227766016838e24));
+            balVault = new MockBalancerVault();
+            address[] memory tokens = new address[](2);
+            tokens[0] = address(ohm);
+            tokens[1] = address(reserve);
+            balVault.setTokens(tokens);
+            uint256[] memory balances = new uint256[](2);
+            balances[0] = 1e6 * 1e9;
+            balances[1] = 1e7 * 1e18;
+            balVault.setBalances(balances);
 
             // Chainlink
             ethUsdPriceFeed = new MockPriceFeed();
@@ -213,7 +229,7 @@ contract PriceV2Test is Test {
 
             reserveEthPriceFeed = new MockPriceFeed();
             reserveEthPriceFeed.setDecimals(18);
-            reserveEthPriceFeed.setLatestAnswer(int256(1e18));
+            reserveEthPriceFeed.setLatestAnswer(int256(0.0005e18));
             reserveEthPriceFeed.setTimestamp(block.timestamp);
             reserveEthPriceFeed.setRoundId(1);
             reserveEthPriceFeed.setAnsweredInRound(1);
@@ -330,37 +346,39 @@ contract PriceV2Test is Test {
     //     price.initialize(observations, uint48(block.timestamp));
     // }
 
-    // function makeRandomObservations(
-    //     uint8 nonce,
-    //     uint256 observations
-    // ) internal returns (uint48 timeIncrease) {
-    //     /// Perform a random walk and update the moving average with the supplied number of observations
-    //     int256 change; // percentage with two decimals
-    //     int256 ohmEthPrice = ohmEthPriceFeed.latestAnswer();
-    //     uint48 observationFrequency = price.observationFrequency();
-    //     for (uint256 i; i < observations; ++i) {
-    //         /// Calculate a random percentage change from -10% to + 10% using the nonce and observation number
-    //         change = int256(uint256(keccak256(abi.encodePacked(nonce, i)))) % int256(1000);
+    function _makeRandomObservations(
+        MockERC20 asset,
+        PRICEv2.Component memory feed,
+        uint256 nonce,
+        uint256 numObs
+    ) internal view returns (uint256[] memory) {
+        // Get current price from feed
+        (bool success, bytes memory data) = address(price.getSubmoduleForKeycode(feed.target))
+            .staticcall(
+                abi.encodeWithSelector(feed.selector, address(asset), price.decimals(), feed.params)
+            );
 
-    //         /// Calculate the new ohmEth price
-    //         ohmEthPrice = (ohmEthPrice * (CHANGE_DECIMALS + change)) / CHANGE_DECIMALS;
+        require(success, "Price feed call failed");
+        int256 price = int256(abi.decode(data, (uint256)));
 
-    //         /// Update price feed
-    //         ohmEthPriceFeed.setLatestAnswer(ohmEthPrice);
-    //         ohmEthPriceFeed.setTimestamp(block.timestamp);
-    //         reserveEthPriceFeed.setTimestamp(block.timestamp);
+        /// Perform a random walk and create observations array
+        uint256[] memory obs = new uint256[](numObs);
+        int256 change; // percentage with two decimals
+        for (uint256 i = numObs; i > 0; --i) {
+            // Add current price to obs array
+            obs[i - 1] = uint256(price);
 
-    //         /// Call update moving average on the price module
-    //         vm.prank(writer);
-    //         price.updateMovingAverage();
+            /// Calculate a random percentage change from -10% to + 10% using the nonce and observation number
+            change = int256(uint256(keccak256(abi.encodePacked(nonce, i)))) % int256(1000);
 
-    //         /// Shift time forward by the observation frequency
-    //         timeIncrease += observationFrequency;
-    //         vm.warp(block.timestamp + observationFrequency);
-    //     }
-    // }
+            /// Calculate the new ohmEth price
+            price = (price * (CHANGE_DECIMALS + change)) / CHANGE_DECIMALS;
+        }
 
-    function _addBaseAssets() internal {
+        return obs;
+    }
+
+    function _addBaseAssets(uint256 nonce_) internal {
         // Configure price feed data and add asset to price module
         vm.startPrank(writer);
 
@@ -429,7 +447,7 @@ contract PriceV2Test is Test {
                 false, // bool useMovingAverage_ // do not use MA in strategy
                 uint32(30 days), // uint32 movingAverageDuration_
                 uint48(block.timestamp), // uint48 lastObservationTime_
-                new uint256[](90), // uint256[] memory observations_ // TODO
+                _makeRandomObservations(ohm, feeds[0], nonce_, uint256(90)), // uint256[] memory observations_
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
                     SimplePriceFeedStrategy.getMedianIfDeviation.selector,
@@ -470,7 +488,7 @@ contract PriceV2Test is Test {
                 false, // bool useMovingAverage_ // do not use MA in strategy
                 uint32(30 days), // uint32 movingAverageDuration_
                 uint48(block.timestamp), // uint48 lastObservationTime_
-                new uint256[](90), // uint256[] memory observations_ // TODO
+                _makeRandomObservations(reserve, feeds[0], nonce_, uint256(90)), // uint256[] memory observations_ // TODO
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
                     SimplePriceFeedStrategy.getAverageIfDeviation.selector,
@@ -524,7 +542,7 @@ contract PriceV2Test is Test {
                 true, // bool useMovingAverage_ // use MA in strategy
                 uint32(5 days), // uint32 movingAverageDuration_
                 uint48(block.timestamp), // uint48 lastObservationTime_
-                new uint256[](15), // uint256[] memory observations_ // TODO
+                _makeRandomObservations(onema, feeds[0], nonce_, uint256(15)), // uint256[] memory observations_
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
                     SimplePriceFeedStrategy.getPriceWithFallback.selector,
@@ -565,7 +583,7 @@ contract PriceV2Test is Test {
                 true, // bool useMovingAverage_ // use MA in strategy
                 uint32(5 days), // uint32 movingAverageDuration_
                 uint48(block.timestamp), // uint48 lastObservationTime_
-                new uint256[](15), // uint256[] memory observations_ // TODO
+                _makeRandomObservations(twoma, feeds[0], nonce_, uint256(15)), // uint256[] memory observations_ // TODO
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
                     SimplePriceFeedStrategy.getAveragePrice.selector,
@@ -620,9 +638,9 @@ contract PriceV2Test is Test {
         assertEq(assets.length, 1);
     }
 
-    function test_getAssets_many() public {
+    function test_getAssets_many(uint256 nonce_) public {
         // Add base assets to price module
-        _addBaseAssets();
+        _addBaseAssets(nonce_);
 
         // Get assets from price module and check that they match
         address[] memory assets = price.getAssets();
@@ -637,9 +655,9 @@ contract PriceV2Test is Test {
 
     // =========  getAssetData  ========= //
 
-    function test_getAssetData() public {
+    function test_getAssetData(uint256 nonce_) public {
         // Add base assets to price module
-        _addBaseAssets();
+        _addBaseAssets(nonce_);
 
         // Get asset data from price module and check that it matches
         PRICEv2.Asset memory assetData = price.getAssetData(address(ohm));
@@ -683,4 +701,24 @@ contract PriceV2Test is Test {
     }
 
     // =========  getPrice  ========= //
+
+    function test_getPrice_current_noStrat_oneFeed(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Get current price from price module and check that it matches
+        (uint256 price_, uint48 timestamp) = price.getPrice(address(weth), PRICEv2.Variant.CURRENT);
+        assertEq(price_, uint256(2000e18));
+        assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function test_getPrice_current_noStrat_oneFeedRecurvsive(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Get current price from price module and check that it matches
+        (uint256 price_, uint48 timestamp) = price.getPrice(address(bpt), PRICEv2.Variant.CURRENT);
+        assertApproxEqAbsDecimal(price_, uint256(20e18), 1e6, 18); // allow for some imprecision due to AMM math and imprecise inputs
+        assertEq(timestamp, uint48(block.timestamp));
+    }
 }
