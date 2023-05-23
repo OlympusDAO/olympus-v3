@@ -23,36 +23,36 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
 
     CurvePoolTokenPrice internal curveSubmodule;
 
-    address internal USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
-    address internal WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
-    address internal WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address internal constant USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+    address internal constant  WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
+    address internal constant  WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
-    uint256 internal USDT_PRICE = 1 * 1e18;
-    uint256 internal WETH_PRICE = 1_500 * 1e18;
-    uint256 internal WBTC_PRICE = 20_000 * 1e18;
+    uint256 internal constant  USDT_PRICE = 1 * 1e18;
+    uint256 internal constant  WETH_PRICE = 1_500 * 1e18;
+    uint256 internal constant  WBTC_PRICE = 20_000 * 1e18;
 
-    uint8 internal USDT_DECIMALS = 6;
-    uint8 internal WETH_DECIMALS = 18;
-    uint8 internal WBTC_DECIMALS = 18;
+    uint8 internal constant  USDT_DECIMALS = 6;
+    uint8 internal constant  WETH_DECIMALS = 18;
+    uint8 internal constant  WBTC_DECIMALS = 18;
 
-    uint256 internal USDT_BALANCE = 50_000_000 * 1e6;
-    uint256 internal WETH_BALANCE = 3_000 * 1e18;
-    uint256 internal WBTC_BALANCE = 40_000 * 1e18;
+    uint256 internal constant  USDT_BALANCE = 50_000_000 * 1e6;
+    uint256 internal constant  WETH_BALANCE = 3_000 * 1e18;
+    uint256 internal constant  WBTC_BALANCE = 40_000 * 1e18;
 
-    uint8 internal PRICE_DECIMALS = 18;
+    uint8 internal constant  PRICE_DECIMALS = 18;
 
-    address internal TRI_CRYPTO_TOKEN = 0xc4AD29ba4B3c580e6D59105FFf484999997675Ff;
-    uint8 internal TRI_CRYPTO_DECIMALS = 18;
-    uint256 internal TRI_CRYPTO_SUPPLY = 181486344521982698524711;
-    uint256 internal TRI_CRYPTO_PRICE =
+    address internal constant  TRI_CRYPTO_TOKEN = 0xc4AD29ba4B3c580e6D59105FFf484999997675Ff;
+    uint8 internal constant  TRI_CRYPTO_DECIMALS = 18;
+    uint256 internal constant  TRI_CRYPTO_SUPPLY = 181486344521982698524711;
+    uint256 internal constant  TRI_CRYPTO_PRICE =
         (USDT_BALANCE * 1e12 * USDT_PRICE + WETH_BALANCE * WETH_PRICE + WBTC_BALANCE * WBTC_PRICE) /
             TRI_CRYPTO_SUPPLY;
 
-    uint256 internal priceOracleWbtcUsdt = 21657103424510020784247; // Decimals: 18
-    uint256 internal priceOracleWethUsdt = 1530492432190963892950; // Decimals: 18
+    uint256 internal constant  priceOracleWbtcUsdt = 21657103424510020784247; // Decimals: 18
+    uint256 internal constant  priceOracleWethUsdt = 1530492432190963892950; // Decimals: 18
 
-    uint8 MIN_DECIMALS = 6;
-    uint8 MAX_DECIMALS = 60;
+    uint8 internal constant MIN_DECIMALS = 6;
+    uint8 internal constant MAX_DECIMALS = 60;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -130,7 +130,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
 
     function test_getPoolTokenPriceFromTriCryptoPool_threeCoins() public {
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
 
         assertApproxEqAbs(price, TRI_CRYPTO_PRICE, 1e9);
     }
@@ -142,7 +142,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         expectRevert_PriceZero(USDT);
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_revertsOnCoinBalanceOneZero() public {
@@ -154,7 +154,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_revertsOnCoinBalanceTwoZero() public {
@@ -166,7 +166,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_revertsOnCoinBalanceThreeZero() public {
@@ -178,7 +178,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_revertsOnCoinBalanceCountDifferent() public {
@@ -191,7 +191,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_lpTokenDecimalsFuzz(
@@ -206,7 +206,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
 
         // Simpler to check that the price to 2 decimal places (e.g. $10.01) is equal
         uint256 truncatedPrice = price.mulDiv(10 ** 2, 10 ** PRICE_DECIMALS);
@@ -224,7 +224,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_priceDecimalsFuzz(
@@ -233,13 +233,12 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
         // Mock a PRICE implementation with a fewer number of decimals
-        mockPrice.setPriceDecimals(priceDecimals);
         mockPrice.setPrice(USDT, USDT_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
         mockPrice.setPrice(WETH, WETH_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
         mockPrice.setPrice(WBTC, WBTC_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), priceDecimals, params);
 
         // Uses price decimals
         uint8 decimalDiff = priceDecimals > 18 ? priceDecimals - 18 : 18 - priceDecimals;
@@ -252,7 +251,6 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
 
     function test_getPoolTokenPriceFromTriCryptoPool_priceDecimalsMaximum() public {
         // Mock a PRICE implementation with a higher number of decimals
-        mockPrice.setPriceDecimals(100);
         mockPrice.setPrice(USDT, USDT_PRICE);
         mockPrice.setPrice(WETH, WETH_PRICE);
         mockPrice.setPrice(WBTC, WBTC_PRICE);
@@ -263,7 +261,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), MAX_DECIMALS + 1, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_fuzz(
@@ -279,13 +277,12 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
             TRI_CRYPTO_SUPPLY.mulDiv(10 ** lpTokenDecimals, 10 ** TRI_CRYPTO_DECIMALS)
         );
 
-        mockPrice.setPriceDecimals(priceDecimals);
         mockPrice.setPrice(USDT, USDT_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
         mockPrice.setPrice(WETH, WETH_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
         mockPrice.setPrice(WBTC, WBTC_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), priceDecimals, params);
 
         // Simpler to check that the price to 2 decimal places (e.g. $10.01) is equal
         uint256 truncatedPrice = price.mulDiv(10 ** 2, 10 ** priceDecimals);
@@ -304,7 +301,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_revertsOnCoinOneAddressZero() public {
@@ -316,7 +313,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_revertsOnCoinTwoAddressZero() public {
@@ -328,7 +325,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_revertsOnCoinThreeAddressZero() public {
@@ -340,7 +337,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_revertsOnMissingLpToken() public {
@@ -349,7 +346,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         expectRevert_address(CurvePoolTokenPrice.Curve_PoolTokenNotSet.selector, address(mockPool));
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_lpTokenSupplyZero() public {
@@ -361,7 +358,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTriCryptoPool_incorrectPoolType() public {
@@ -373,14 +370,14 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = abi.encode(mockStablePool);
-        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     // ========= TOKEN PRICE LOOKUP - TRI-CRYPTO POOL ========= //
 
     function test_getTokenPriceFromTriCryptoPool_coinTwo() public {
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, params);
+        uint256 price = curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, PRICE_DECIMALS, params);
 
         // 21657103424510020784247 * 1*10^18 / 10^18
         // 21657103424510020784247
@@ -390,7 +387,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
 
     function test_getTokenPriceFromTriCryptoPool_coinThree() public {
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromTriCryptoPool(WETH, params);
+        uint256 price = curveSubmodule.getTokenPriceFromTriCryptoPool(WETH, PRICE_DECIMALS, params);
 
         // 1530492432190963892950 * 1*10^18 / 10^18
         // 1530492432190963892950
@@ -401,20 +398,17 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
     function test_getTokenPriceFromTriCryptoPool_priceDecimalsFuzz(uint8 priceDecimals_) public {
         uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
-        mockPrice.setPriceDecimals(priceDecimals);
-
         uint256 usdtPrice = USDT_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS);
         mockPrice.setPrice(USDT, usdtPrice);
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, params);
+        uint256 price = curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, priceDecimals, params);
 
         // Will be normalised to price decimals
         assertEq(price, priceOracleWbtcUsdt.mulDiv(usdtPrice, 1e18));
     }
 
     function test_getTokenPriceFromTriCryptoPool_revertsOnPriceDecimalsMaximum() public {
-        mockPrice.setPriceDecimals(100);
         mockPrice.setPrice(USDT, (USDT_PRICE * 1e21) / 1e18);
 
         expectRevert_address(
@@ -423,7 +417,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, params);
+        curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, MAX_DECIMALS + 1, params);
     }
 
     function test_getTokenPriceFromTriCryptoPool_revertsOnUnknownToken() public {
@@ -432,7 +426,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         expectRevert_address(CurvePoolTokenPrice.Curve_LookupTokenNotFound.selector, DAI);
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTriCryptoPool(DAI, params);
+        curveSubmodule.getTokenPriceFromTriCryptoPool(DAI, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTriCryptoPool_otherPriceZero() public {
@@ -441,7 +435,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         mockPrice.setPrice(WETH, 0);
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, params);
+        uint256 price = curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, PRICE_DECIMALS, params);
 
         assertEq(price, priceOracleWbtcUsdt);
     }
@@ -454,7 +448,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         expectRevert_address(CurvePoolTokenPrice.Curve_PriceNotFound.selector, address(mockPool));
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, params);
+        curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTriCryptoPool_revertsOnCoinOneZero() public {
@@ -466,7 +460,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, params);
+        curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTriCryptoPool_revertsOnCoinTwoZero() public {
@@ -478,7 +472,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTriCryptoPool(WETH, params);
+        curveSubmodule.getTokenPriceFromTriCryptoPool(WETH, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTriCryptoPool_inverseOrientation() public {
@@ -486,7 +480,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         mockPrice.setPrice(WBTC, wbtcPrice);
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromTriCryptoPool(USDT, params);
+        uint256 price = curveSubmodule.getTokenPriceFromTriCryptoPool(USDT, PRICE_DECIMALS, params);
 
         // price_oracle = 21657103424510020784247 = 21,657.10342451
         // 1 WBTC = 21,657.10342451 USDT
@@ -508,7 +502,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTriCryptoPool(WETH, params);
+        curveSubmodule.getTokenPriceFromTriCryptoPool(WETH, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTriCryptoPool_inverseOrientation_revertsOnPriceOracleZero()
@@ -528,7 +522,7 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTriCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTriCryptoPool(USDT, params);
+        curveSubmodule.getTokenPriceFromTriCryptoPool(USDT, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTriCryptoPool_revertsOnIncorrectPoolType() public {
@@ -545,6 +539,6 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         );
 
         bytes memory params = abi.encode(mockStablePool);
-        curveSubmodule.getTokenPriceFromTriCryptoPool(WETH, params);
+        curveSubmodule.getTokenPriceFromTriCryptoPool(WETH, PRICE_DECIMALS, params);
     }
 }
