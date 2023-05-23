@@ -2,8 +2,6 @@
 pragma solidity 0.8.15;
 
 import "modules/PRICE/PRICE.v2.sol";
-import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
-import {Module, Keycode, toKeycode} from "src/Kernel.sol";
 import {QuickSort} from "libraries/QuickSort.sol";
 
 contract SimplePriceFeedStrategy is PriceSubmodule {
