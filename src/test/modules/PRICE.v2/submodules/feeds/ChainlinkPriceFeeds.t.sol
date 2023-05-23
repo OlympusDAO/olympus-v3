@@ -107,6 +107,11 @@ contract ChainlinkPriceFeedsTest is Test {
             );
     }
 
+    function expectRevert_uint8(bytes4 selector_, uint8 number_) internal {
+        bytes memory err = abi.encodeWithSelector(selector_, number_);
+        vm.expectRevert(err);
+    }
+
     function expectRevert_address(bytes4 selector_, address asset_) internal {
         bytes memory err = abi.encodeWithSelector(selector_, asset_);
         vm.expectRevert(err);
@@ -208,13 +213,14 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getOneFeedPrice_revertsOnPriceDecimalsMaximum() public {
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        uint8 priceDecimals = MAX_DECIMALS + 1;
+        expectRevert_uint8(
+            ChainlinkPriceFeeds.Chainlink_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
-        chainlinkSubmodule.getOneFeedPrice(address(0), MAX_DECIMALS + 1, params);
+        chainlinkSubmodule.getOneFeedPrice(address(0), priceDecimals, params);
     }
 
     function test_getOneFeedPrice_priceFeedDecimalsFuzz(uint8 priceFeedDecimals_) public {
@@ -520,9 +526,10 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceDiv_revertsOnPriceDecimalsMaximum() public {
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        uint8 priceDecimals = MAX_DECIMALS + 1;
+        expectRevert_uint8(
+            ChainlinkPriceFeeds.Chainlink_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeTwoFeedParams(
@@ -531,7 +538,7 @@ contract ChainlinkPriceFeedsTest is Test {
             daiEthPriceFeed,
             UPDATE_THRESHOLD
         );
-        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), MAX_DECIMALS + 1, params);
+        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), priceDecimals, params);
     }
 
     function test_getTwoFeedPriceDiv_priceFeedDecimalsFuzz(
@@ -936,9 +943,10 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceMul_revertsOnPriceDecimalsMaximum() public {
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        uint8 priceDecimals = MAX_DECIMALS + 1;
+        expectRevert_uint8(
+            ChainlinkPriceFeeds.Chainlink_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeTwoFeedParams(
@@ -947,6 +955,6 @@ contract ChainlinkPriceFeedsTest is Test {
             daiEthPriceFeed,
             UPDATE_THRESHOLD
         );
-        chainlinkSubmodule.getTwoFeedPriceMul(address(0), MAX_DECIMALS + 1, params);
+        chainlinkSubmodule.getTwoFeedPriceMul(address(0), priceDecimals, params);
     }
 }

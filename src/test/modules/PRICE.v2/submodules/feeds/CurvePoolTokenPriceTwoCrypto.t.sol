@@ -117,6 +117,11 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         vm.expectRevert(err);
     }
 
+    function expectRevert_uint8(bytes4 selector_, uint8 number_) internal {
+        bytes memory err = abi.encodeWithSelector(selector_, number_);
+        vm.expectRevert(err);
+    }
+
     // ========= LP TOKEN PRICE - TWO-CRYPTO POOL ========= //
 
     // Notes:
@@ -216,7 +221,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
         uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), priceDecimals, params);
 
-        // Uses price decimals
+        // Uses outputDecimals_
         uint8 decimalDiff = priceDecimals > PRICE_DECIMALS
             ? priceDecimals - PRICE_DECIMALS
             : PRICE_DECIMALS - priceDecimals;
@@ -229,13 +234,14 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
 
     function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnPriceDecimalsMaximum() public {
         // Mock a PRICE implementation with a higher number of decimals
-        expectRevert_address(
-            CurvePoolTokenPrice.Curve_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        uint8 priceDecimals = MAX_DECIMALS + 1;
+        expectRevert_uint8(
+            CurvePoolTokenPrice.Curve_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), MAX_DECIMALS + 1, params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), priceDecimals, params);
     }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_Fuzz(
@@ -387,22 +393,23 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
         uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, priceDecimals, params);
 
-        // Will be normalised to price decimals
+        // Will be normalised to outputDecimals_
         assertEq(price, priceOracleEthBtrfly.mulDiv(wethPrice, 10 ** PRICE_DECIMALS));
     }
 
     function test_getTokenPriceFromTwoCryptoPool_revertsOnPriceDecimalsMaximum() public {
         setUpWethBtrfly();
 
+        uint8 priceDecimals = MAX_DECIMALS + 1;
         mockAssetPrice(WETH, (WETH_PRICE * 1e21) / 10 ** PRICE_DECIMALS);
 
-        expectRevert_address(
-            CurvePoolTokenPrice.Curve_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        expectRevert_uint8(
+            CurvePoolTokenPrice.Curve_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, MAX_DECIMALS + 1, params);
+        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, priceDecimals, params);
     }
 
     function test_getTokenPriceFromTwoCryptoPool_revertsOnUnknownToken() public {

@@ -134,17 +134,22 @@ contract BalancerPoolTokenPriceStableTest is Test {
         vm.expectRevert(err);
     }
 
+    function expectRevert_uint8(bytes4 selector_, uint8 number_) internal {
+        bytes memory err = abi.encodeWithSelector(selector_, number_);
+        vm.expectRevert(err);
+    }
+
     function expectRevert_pool(bytes4 selector_, bytes32 poolId_) internal {
         bytes memory err = abi.encodeWithSelector(selector_, poolId_);
         vm.expectRevert(err);
     }
 
     function _getBalancerPoolTokenPrice(uint8 priceDecimals) internal view returns (uint256) {
-        uint256 rate = BALANCER_POOL_RATE.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS); // price decimals
+        uint256 rate = BALANCER_POOL_RATE.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS); // outputDecimals_
         uint256 baseTokenPrice = B_80BAL_20WETH_BALANCE_PRICE_EXPECTED.mulDiv(
             10 ** priceDecimals,
             10 ** BALANCER_POOL_DECIMALS
-        ); // price decimals
+        ); // outputDecimals_
 
         return rate.mulDiv(baseTokenPrice, 10 ** priceDecimals);
     }
@@ -185,7 +190,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
         bytes memory params = encodeBalancerPoolParams(mockStablePool);
         uint256 price = balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, priceDecimals, params);
 
-        // Will be normalised to price decimals
+        // Will be normalised to outputDecimals_
         uint8 decimalDiff = priceDecimals > 18 ? priceDecimals - 18 : 18 - priceDecimals;
         assertApproxEqAbs(
             price,
@@ -195,15 +200,16 @@ contract BalancerPoolTokenPriceStableTest is Test {
     }
 
     function test_getTokenPriceFromStablePool_priceDecimalsMaximum() public {
+        uint8 priceDecimals = MAX_DECIMALS + 1;
         mockAssetPrice(B_80BAL_20WETH, (B_80BAL_20WETH_BALANCE_PRICE * 1e21) / 1e18);
 
-        expectRevert_asset(
-            BalancerPoolTokenPrice.Balancer_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        expectRevert_uint8(
+            BalancerPoolTokenPrice.Balancer_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeBalancerPoolParams(mockStablePool);
-        balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, 100, params);
+        balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, priceDecimals, params);
     }
 
     /**
@@ -226,7 +232,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
     //     );
 
     //     assertTrue(success);
-    //     // Will be normalised to price decimals
+    //     // Will be normalised to outputDecimals_
     //     assertApproxEqAbs(price, AURA_BAL_PRICE_EXPECTED, 0);
     // }
     //
@@ -433,7 +439,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
         bytes memory params = encodeBalancerPoolParams(mockStablePool);
         uint256 price = balancerSubmodule.getStablePoolTokenPrice(address(0), priceDecimals, params);
 
-        // Uses price decimals parameter
+        // Uses outputDecimals_ parameter
         uint8 decimalDiff = priceDecimals > 18 ? priceDecimals - 18 : 18 - priceDecimals;
         assertApproxEqAbs(price, _getBalancerPoolTokenPrice(priceDecimals), 10 ** decimalDiff);
     }
@@ -441,16 +447,16 @@ contract BalancerPoolTokenPriceStableTest is Test {
     function test_getStablePoolTokenPrice_priceDecimalsMaximum() public {
         setUpStablePoolTokenPrice();
 
-        // Mock a PRICE implementation with a higher number of decimals
-        mockPrice.setPriceDecimals(100);
+        uint8 priceDecimals = MAX_DECIMALS + 1;
 
-        expectRevert_asset(
-            BalancerPoolTokenPrice.Balancer_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        // Mock a PRICE implementation with a higher number of decimals
+        expectRevert_uint8(
+            BalancerPoolTokenPrice.Balancer_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeBalancerPoolParams(mockStablePool);
-        balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, params);
+        balancerSubmodule.getStablePoolTokenPrice(address(0), priceDecimals, params);
     }
 
     function test_getStablePoolTokenPrice_fuzz(uint8 poolDecimals_, uint8 priceDecimals_) public {

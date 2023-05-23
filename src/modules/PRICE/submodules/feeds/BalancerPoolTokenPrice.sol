@@ -51,6 +51,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
     error Balancer_AssetDecimalsOutOfBounds(address asset_);
     error Balancer_LookupTokenNotFound(address asset_);
+    error Balancer_OutputDecimalsOutOfBounds(uint8 outputDecimals_);
     error Balancer_PoolDecimalsOutOfBounds(bytes32 poolId_);
     error Balancer_PoolStableRateInvalid(bytes32 poolId_);
     error Balancer_PoolSupplyInvalid(bytes32 poolId_);
@@ -59,7 +60,6 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     error Balancer_PoolTypeNotStable(bytes32 poolId_);
     error Balancer_PoolTypeNotWeighted(bytes32 poolId_);
     error Balancer_PoolWeightsInvalid(bytes32 poolId_);
-    error Balancer_PRICEDecimalsOutOfBounds(address price_);
     error Balancer_PriceNotFound(address asset_);
 
     // ========== STATE VARIABLES ========== //
@@ -226,11 +226,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @param asset_ the token to determine the price of (unused)
     /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerWeightedPoolParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getWeightedPoolTokenPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
-            revert Balancer_PRICEDecimalsOutOfBounds(address(_PRICE()));
+            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
 
         address[] memory tokens;
         uint256[] memory weights;
@@ -301,11 +301,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @param asset_ the token to determine the price of (unused)
     /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerStablePoolParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getStablePoolTokenPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
-            revert Balancer_PRICEDecimalsOutOfBounds(address(_PRICE()));
+            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
 
         address[] memory tokens;
         uint256 poolRate; // pool decimals
@@ -388,7 +388,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @param lookupToken_ the token to determine the price of
     /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getTokenPriceFromWeightedPool(
         address lookupToken_,
         uint8 outputDecimals_,
@@ -396,7 +396,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ) external returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
-            revert Balancer_PRICEDecimalsOutOfBounds(address(_PRICE()));
+            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         IWeightedPool pool;
@@ -525,7 +525,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @param lookupToken_ the token to determine the price of
     /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getTokenPriceFromStablePool(
         address lookupToken_,
         uint8 outputDecimals_,
@@ -533,7 +533,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ) external returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
-            revert Balancer_PRICEDecimalsOutOfBounds(address(_PRICE()));
+            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         IStablePool pool;

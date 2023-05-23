@@ -99,6 +99,11 @@ contract CurvePoolTokenPriceStableTest is Test {
         vm.expectRevert(err);
     }
 
+    function expectRevert_uint8(bytes4 selector_, uint8 number_) internal {
+        bytes memory err = abi.encodeWithSelector(selector_, number_);
+        vm.expectRevert(err);
+    }
+
     /// @notice Mocks the record for get_dy
     /// @dev get_dy returns the quantity q2 of t2 for the given quantity q1 of t1
     ///
@@ -176,22 +181,23 @@ contract CurvePoolTokenPriceStableTest is Test {
         bytes memory params = encodeCurvePoolParams(mockPool);
         uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), priceDecimals, params);
 
-        // Uses price decimals
+        // Uses outputDecimals_
         assertEq(price, VIRTUAL_PRICE.mulDiv(10 ** priceDecimals, 1e18));
     }
 
     function test_getPoolTokenPriceFromStablePool_revertsOnPriceDecimalsMaximum() public {
         // Mock a PRICE implementation with a higher number of decimals
+        uint8 priceDecimals = MAX_DECIMALS + 1;
         mockPrice.setPrice(DAI, 1e21);
         mockPrice.setPrice(USDC, 1e21);
 
-        expectRevert_address(
-            CurvePoolTokenPrice.Curve_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        expectRevert_uint8(
+            CurvePoolTokenPrice.Curve_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromStablePool(address(0), MAX_DECIMALS + 1, params);
+        curveSubmodule.getPoolTokenPriceFromStablePool(address(0), priceDecimals, params);
     }
 
     function test_getPoolTokenPriceFromStablePool_revertsOnZeroCoins() public {
@@ -336,7 +342,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         bytes memory params = encodeCurvePoolParams(mockPool);
         uint256 price = curveSubmodule.getTokenPriceFromStablePool(USDC, priceDecimals, params);
 
-        // Will be normalised to price decimals
+        // Will be normalised to outputDecimals_
         assertEq(price, quantityInDai.mulDiv(daiPrice, 1e18));
     }
 

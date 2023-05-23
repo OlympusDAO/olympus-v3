@@ -37,7 +37,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     error Chainlink_FeedPriceInvalid(address feed_);
     error Chainlink_FeedRoundMismatch(address feed_);
     error Chainlink_FeedRoundStale(address feed_);
-    error Chainlink_PRICEDecimalsOutOfBounds(address price_);
+    error Chainlink_OutputDecimalsOutOfBounds(uint8 outputDecimals_);
 
     // ========== CONSTRUCTOR ========== //
 
@@ -81,10 +81,12 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ///
     /// @param feed_ Chainlink price feed
     /// @param updateThreshold_ The maximum number of seconds elapsed since the last price feed update
-    /// @return The validated price in the scale of PRICE's priceDecimals
+    /// @param outputDecimals_ The number of decimals to return the price in
+    /// @return The validated price in the scale of outputDecimals_
     function _getFeedPrice(
         AggregatorV2V3Interface feed_,
-        uint256 updateThreshold_
+        uint256 updateThreshold_,
+        uint8 outputDecimals_
     ) internal view returns (uint256) {
         uint256 price;
         {
@@ -115,7 +117,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
             }
         }
 
-        uint256 priceAdjusted = price.mulDiv(10 ** _PRICE().decimals(), 10 ** feed_.decimals());
+        uint256 priceAdjusted = price.mulDiv(10 ** outputDecimals_, 10 ** feed_.decimals());
         return priceAdjusted;
     }
 
@@ -127,19 +129,18 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @param asset_ The asset to get the price of (unused)
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Chainlink pool parameters of type OneFeedParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals.
+    /// @return uint256 Price in the scale of outputDecimals_.
     function getOneFeedPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
         // Decode params
         OneFeedParams memory params = abi.decode(params_, (OneFeedParams));
 
         // Ensure that no decimals would result in an underflow or overflow
-        uint8 priceDecimals = _PRICE().decimals();
-        if (priceDecimals > BASE_10_MAX_EXPONENT)
-            revert Chainlink_PRICEDecimalsOutOfBounds(address(_PRICE()));
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert Chainlink_OutputDecimalsOutOfBounds(outputDecimals_);
         if (params.feed.decimals() > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(address(params.feed));
 
-        uint256 feedPrice = _getFeedPrice(params.feed, uint256(params.updateThreshold));
+        uint256 feedPrice = _getFeedPrice(params.feed, uint256(params.updateThreshold), outputDecimals_);
 
         return feedPrice;
     }
@@ -154,15 +155,14 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @param asset_ The asset to get the price of (unused)
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Chainlink pool parameters of type TwoFeedParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals.
+    /// @return uint256 Price in the scale of outputDecimals_.
     function getTwoFeedPriceDiv(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
 
         // Ensure that no decimals would result in an underflow or overflow
-        uint8 priceDecimals = _PRICE().decimals();
-        if (priceDecimals > BASE_10_MAX_EXPONENT)
-            revert Chainlink_PRICEDecimalsOutOfBounds(address(_PRICE()));
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert Chainlink_OutputDecimalsOutOfBounds(outputDecimals_);
         if (params.numeratorFeed.decimals() > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(address(params.numeratorFeed));
         if (params.denominatorFeed.decimals() > BASE_10_MAX_EXPONENT)
@@ -171,15 +171,17 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         // Get prices from feeds
         uint256 numeratorPrice = _getFeedPrice(
             params.numeratorFeed,
-            uint256(params.numeratorUpdateThreshold)
+            uint256(params.numeratorUpdateThreshold),
+            outputDecimals_
         );
         uint256 denominatorPrice = _getFeedPrice(
             params.denominatorFeed,
-            uint256(params.denominatorUpdateThreshold)
+            uint256(params.denominatorUpdateThreshold),
+            outputDecimals_
         );
 
         // Convert to numerator/denominator price and return
-        uint256 priceResult = numeratorPrice.mulDiv(10 ** priceDecimals, denominatorPrice);
+        uint256 priceResult = numeratorPrice.mulDiv(10 ** outputDecimals_, denominatorPrice);
 
         return priceResult;
     }
@@ -194,15 +196,14 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @param asset_ The asset to get the price of (unused)
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Chainlink pool parameters of type TwoFeedParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals.
+    /// @return uint256 Price in the scale of outputDecimals_.
     function getTwoFeedPriceMul(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
 
         // Ensure that no decimals would result in an underflow or overflow
-        uint8 priceDecimals = _PRICE().decimals();
-        if (priceDecimals > BASE_10_MAX_EXPONENT)
-            revert Chainlink_PRICEDecimalsOutOfBounds(address(_PRICE()));
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert Chainlink_OutputDecimalsOutOfBounds(outputDecimals_);
         if (params.numeratorFeed.decimals() > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(address(params.numeratorFeed));
         if (params.denominatorFeed.decimals() > BASE_10_MAX_EXPONENT)
@@ -211,15 +212,17 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         // Get prices from feeds
         uint256 numeratorPrice = _getFeedPrice(
             params.numeratorFeed,
-            uint256(params.numeratorUpdateThreshold)
+            uint256(params.numeratorUpdateThreshold),
+            outputDecimals_
         );
         uint256 denominatorPrice = _getFeedPrice(
             params.denominatorFeed,
-            uint256(params.denominatorUpdateThreshold)
+            uint256(params.denominatorUpdateThreshold),
+            outputDecimals_
         );
 
         // Convert to numerator * denominator price and return
-        uint256 priceResult = numeratorPrice.mulDiv(denominatorPrice, 10 ** priceDecimals);
+        uint256 priceResult = numeratorPrice.mulDiv(denominatorPrice, 10 ** outputDecimals_);
 
         // Convert to numerator * denominator price and return
         return priceResult;

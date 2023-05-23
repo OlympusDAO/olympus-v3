@@ -132,6 +132,11 @@ contract UniswapV2PoolTokenPriceTest is Test {
         vm.expectRevert(err);
     }
 
+    function expectRevert_uint8(bytes4 selector_, uint8 number_) internal {
+        bytes memory err = abi.encodeWithSelector(selector_, number_);
+        vm.expectRevert(err);
+    }
+
     function _assertEqTruncated(
         uint256 expected,
         uint8 expectedDecimals,
@@ -186,7 +191,7 @@ contract UniswapV2PoolTokenPriceTest is Test {
         bytes memory params = encodePoolParams(mockPool);
         uint256 price = uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
 
-        // Uses price decimals parameter
+        // Uses outputDecimals_ parameter
         assertEq(price, POOL_FAIR_PRICE_EXPECTED);
     }
 
@@ -212,13 +217,14 @@ contract UniswapV2PoolTokenPriceTest is Test {
 
     function test_getPoolTokenPrice_revertsOnPriceDecimalsMaximum() public {
         // Mock a PRICE implementation with a higher number of decimals
-        expectRevert_address(
-            UniswapV2PoolTokenPrice.UniswapV2_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        uint8 priceDecimals = MAX_DECIMALS + 1;
+        expectRevert_uint8(
+            UniswapV2PoolTokenPrice.UniswapV2_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodePoolParams(mockPool);
-        uniswapSubmodule.getPoolTokenPrice(address(0), MAX_DECIMALS + 1, params);
+        uniswapSubmodule.getPoolTokenPrice(address(0), priceDecimals, params);
     }
 
     function test_getPoolTokenPrice_tokenDecimalsFuzz(
@@ -346,7 +352,7 @@ contract UniswapV2PoolTokenPriceTest is Test {
         bytes memory params = encodePoolParams(mockPool);
         uint256 price = uniswapSubmodule.getTokenPrice(WETH, priceDecimals, params);
 
-        // Will be normalised to price decimals
+        // Will be normalised to outputDecimals_
         uint8 decimalDiff = priceDecimals > 18 ? priceDecimals - 18 : 18 - priceDecimals;
         assertApproxEqAbs(
             price,
@@ -360,13 +366,14 @@ contract UniswapV2PoolTokenPriceTest is Test {
 
         mockAssetPrice(USDC, (USDC_PRICE * 1e21) / 1e18);
 
-        expectRevert_address(
-            UniswapV2PoolTokenPrice.UniswapV2_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        uint8 priceDecimals = MAX_DECIMALS + 1;
+        expectRevert_uint8(
+            UniswapV2PoolTokenPrice.UniswapV2_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodePoolParams(mockPool);
-        uniswapSubmodule.getTokenPrice(WETH, MAX_DECIMALS + 1, params);
+        uniswapSubmodule.getTokenPrice(WETH, priceDecimals, params);
     }
 
     function test_getTokenPrice_tokenDecimalsFuzz(uint8 tokenDecimals_) public {
@@ -383,7 +390,7 @@ contract UniswapV2PoolTokenPriceTest is Test {
         bytes memory params = encodePoolParams(mockPool);
         uint256 price = uniswapSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, params);
 
-        // Will be normalised to price decimals
+        // Will be normalised to outputDecimals_
         assertEq(price, WETH_PRICE_EXPECTED);
     }
 

@@ -114,6 +114,11 @@ contract UniswapV3PriceTest is Test {
         vm.expectRevert(err);
     }
 
+    function expectRevert_uint8(bytes4 selector_, uint8 number_) internal {
+        bytes memory err = abi.encodeWithSelector(selector_, number_);
+        vm.expectRevert(err);
+    }
+
     // ========= TESTS ========= //
 
     function test_tokenTWAP_success_token0() public {
@@ -177,15 +182,16 @@ contract UniswapV3PriceTest is Test {
     }
 
     function test_tokenTWAP_revertsOnPriceDecimalsMaximum() public {
+        uint8 priceDecimals = MAX_DECIMALS + 1;
         mockAssetPrice(USDC, USDC_PRICE.mulDiv(10 ** MAX_DECIMALS, 10 ** PRICE_DECIMALS));
 
-        expectRevert_address(
-            UniswapV3Price.UniswapV3_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        expectRevert_uint8(
+            UniswapV3Price.UniswapV3_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
-        uniSubmodule.getTokenTWAP(LUSD, MAX_DECIMALS + 1, params);
+        uniSubmodule.getTokenTWAP(LUSD, priceDecimals, params);
     }
 
     // The other tests use LUSD and USDC, which have different token decimals. This tests tokens with the same decimals.

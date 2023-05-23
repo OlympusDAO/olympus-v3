@@ -60,6 +60,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
 
     error Curve_AssetDecimalsOutOfBounds(address asset_);
     error Curve_LookupTokenNotFound(address asset_);
+    error Curve_OutputDecimalsOutOfBounds(uint8 outputDecimals_);
     error Curve_PoolBalancesInvalid(address pool_);
     error Curve_PoolPriceOracleInvalid(address pool_);
     error Curve_PoolSupplyInvalid(address poolToken_);
@@ -69,7 +70,6 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     error Curve_PoolTokensInvalid(address pool_);
     error Curve_PoolTypeNotTriCrypto(address pool_);
     error Curve_PoolTypeNotTwoCrypto(address pool_);
-    error Curve_PRICEDecimalsOutOfBounds(address price_);
     error Curve_PriceNotFound(address asset_);
 
     // ========== CONSTANTS ========== //
@@ -123,13 +123,6 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         return value_.mulDiv(10 ** destinationDecimals_, 10 ** tokenDecimals);
     }
 
-    function _convertERC20ToPriceDecimals(
-        uint256 value_,
-        address token_
-    ) internal view returns (uint256) {
-        return _convertERC20Decimals(value_, token_, _PRICE().decimals());
-    }
-
     // ========== POOL TOKEN PRICE FUNCTIONS ========== //
 
     /// @notice Determines the price of the pool token for the Curve stable pool specified in {params_}.
@@ -146,16 +139,15 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param asset_ The asset to get the price of (unused)
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePool
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getPoolTokenPriceFromStablePool(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
-        uint8 priceDecimals = _PRICE().decimals();
-        if (priceDecimals > BASE_10_MAX_EXPONENT)
-            revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         CurveParams memory params = abi.decode(params_, (CurveParams));
         ICurvePool pool = ICurvePool(params.pool);
-        uint256 minimumPrice = type(uint256).max;
+        uint256 minimumPrice = type(uint256).max; // outputDecimals_
 
         /**
          * Iterate through all coins until the function reverts.
@@ -213,37 +205,34 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @notice Determines the price of the pool token for the Curve two- or three-crypto pool specified in {params_}.
     ///
     /// @dev Will revert upon the following:
-    /// - Decimal exponent too high
-    /// - Pool token total supply is 0
     /// - Pool balance is 0
     /// - This function is called on an unsupported pool type
     /// - 0x0 addresses in the pool
     /// - Unable to find a price for the tokens that are part of the pool
     /// - If the transaction involves reentrancy on the Curve pool
     ///
-    /// @param poolToken_ address of the pool token
+    /// Assumes the following have already been checked:
+    /// - outputDecimals_ is within bounds
+    /// - Pool token total supply is not 0
+    ///
     /// @param poolTokenTotalSupply_ total supply of the pool token
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePoolTriCrypto
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function _getPoolTokenPriceCrypto(
-        address poolToken_,
         uint256 poolTokenTotalSupply_,
+        uint8 outputDecimals_,
         bytes calldata params_
     ) internal returns (uint256) {
-        // Prevent overflow
-        uint8 priceDecimals = _PRICE().decimals();
-        if (priceDecimals > BASE_10_MAX_EXPONENT)
-            revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
-
         // Decode params
-        CurveTriCryptoParams memory params = abi.decode(params_, (CurveTriCryptoParams));
-        ICurvePoolTriCrypto pool = ICurvePoolTriCrypto(params.pool);
-
-        // Prevent divide by zero
-        if (poolTokenTotalSupply_ == 0) revert Curve_PoolSupplyInvalid(poolToken_);
+        ICurvePoolTriCrypto pool;
+        {
+            CurveTriCryptoParams memory params = abi.decode(params_, (CurveTriCryptoParams));
+            pool = ICurvePoolTriCrypto(params.pool);
+        }
 
         // Total value of the pool
-        // Decimals: priceDecimals
+        // Decimals: outputDecimals_
         uint256 poolValue = 0;
 
         uint8 numCoins = 0;
@@ -260,9 +249,6 @@ contract CurvePoolTokenPrice is PriceSubmodule {
          * - Calculate the value of the reserves
          */
         for (uint256 i = 0; i < 10; i++) {
-            uint256 currentCoinPrice;
-            uint8 currentCoinDecimals;
-
             address currentCoin;
             try pool.coins(i) returns (address currentCoin_) {
                 if (currentCoin_ == address(0)) revert Curve_PoolTokensInvalid(address(pool));
@@ -281,23 +267,23 @@ contract CurvePoolTokenPrice is PriceSubmodule {
              */
             (uint256 lookupCoinPrice, ) = _PRICE().getPrice(currentCoin, PRICEv2.Variant.CURRENT);
 
-            currentCoinPrice = lookupCoinPrice;
-            currentCoinDecimals = ERC20(currentCoin).decimals();
-
             try pool.balances(i) returns (uint256 currentBalance) {
                 // Under no circumstances should this be 0
                 if (currentBalance == 0) revert Curve_PoolBalancesInvalid(address(pool));
 
-                // Adjust to price decimals
-                uint256 currentBalanceConsistentDecimals = currentBalance.mulDiv(
-                    10 ** priceDecimals,
-                    10 ** currentCoinDecimals
-                );
+                // Adjust to outputDecimals_
+                uint256 currentBalanceConsistentDecimals;
+                {
+                    currentBalanceConsistentDecimals = currentBalance.mulDiv(
+                        10 ** outputDecimals_,
+                        10 ** ERC20(currentCoin).decimals()
+                    );
+                }
 
-                // Multiply and adjust to price decimals
-                uint256 currentCoinValue = currentCoinPrice.mulDiv(
+                // Multiply and adjust to outputDecimals_
+                uint256 currentCoinValue = lookupCoinPrice.mulDiv(
                     currentBalanceConsistentDecimals,
-                    10 ** priceDecimals
+                    10 ** outputDecimals_
                 );
 
                 poolValue += currentCoinValue;
@@ -314,7 +300,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         if (poolValue == 0) revert Curve_PoolTokensInvalid(address(pool));
 
         // Calculate per-token price
-        uint256 poolTokenPrice = poolValue.mulDiv(10 ** priceDecimals, poolTokenTotalSupply_);
+        uint256 poolTokenPrice = poolValue.mulDiv(10 ** outputDecimals_, poolTokenTotalSupply_);
         return poolTokenPrice;
     }
 
@@ -333,18 +319,17 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param asset_ The asset to get the price of (unused)
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePoolTwoCrypto
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getPoolTokenPriceFromTwoCryptoPool(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
-        uint8 priceDecimals = _PRICE().decimals();
-        if (priceDecimals > BASE_10_MAX_EXPONENT)
-            revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         CurveTwoCryptoParams memory params = abi.decode(params_, (CurveTwoCryptoParams));
         ICurvePoolTwoCrypto pool = ICurvePoolTwoCrypto(params.pool);
 
         // Get pool total supply
-        // Decimals: priceDecimals
+        // Decimals: outputDecimals_
         uint256 poolTokenTotalSupply;
         address poolTokenAddress;
         {
@@ -366,10 +351,12 @@ contract CurvePoolTokenPrice is PriceSubmodule {
             if (decimals > BASE_10_MAX_EXPONENT)
                 revert Curve_PoolTokenDecimalsOutOfBounds(address(poolTokenAddress));
 
-            poolTokenTotalSupply = poolTotalSupplyRaw.mulDiv(10 ** priceDecimals, 10 ** decimals);
+            poolTokenTotalSupply = poolTotalSupplyRaw.mulDiv(10 ** outputDecimals_, 10 ** decimals);
+            // Prevent divide by zero
+            if (poolTokenTotalSupply == 0) revert Curve_PoolSupplyInvalid(poolTokenAddress);
         }
 
-        return _getPoolTokenPriceCrypto(poolTokenAddress, poolTokenTotalSupply, params_);
+        return _getPoolTokenPriceCrypto(poolTokenTotalSupply, outputDecimals_, params_);
     }
 
     /// @notice Determines the price of the pool token for the Curve tri-crypto pool specified in {params_}.
@@ -387,18 +374,17 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param asset_ The asset to get the price of (unused)
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePoolTriCrypto
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getPoolTokenPriceFromTriCryptoPool(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
-        uint8 priceDecimals = _PRICE().decimals();
-        if (priceDecimals > BASE_10_MAX_EXPONENT)
-            revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         CurveTriCryptoParams memory params = abi.decode(params_, (CurveTriCryptoParams));
         ICurvePoolTriCrypto pool = ICurvePoolTriCrypto(params.pool);
 
         // Get pool total supply
-        // Decimals: priceDecimals
+        // Decimals: outputDecimals_
         uint256 poolTokenTotalSupply;
         address poolTokenAddress;
         {
@@ -420,10 +406,12 @@ contract CurvePoolTokenPrice is PriceSubmodule {
             if (decimals > BASE_10_MAX_EXPONENT)
                 revert Curve_PoolTokenDecimalsOutOfBounds(address(poolTokenAddress));
 
-            poolTokenTotalSupply = poolTotalSupplyRaw.mulDiv(10 ** priceDecimals, 10 ** decimals);
+            poolTokenTotalSupply = poolTotalSupplyRaw.mulDiv(10 ** outputDecimals_, 10 ** decimals);
+            // Prevent divide by zero
+            if (poolTokenTotalSupply == 0) revert Curve_PoolSupplyInvalid(poolTokenAddress);
         }
 
-        return _getPoolTokenPriceCrypto(poolTokenAddress, poolTokenTotalSupply, params_);
+        return _getPoolTokenPriceCrypto(poolTokenTotalSupply, outputDecimals_, params_);
     }
 
     // ========== TOKEN SPOT PRICE FUNCTIONS ========== //
@@ -446,16 +434,15 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param lookupToken_ the token to determine the price of
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePoolTwoCrypto
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getTokenPriceFromTwoCryptoPool(
         address lookupToken_,
         uint8 outputDecimals_,
         bytes calldata params_
     ) external returns (uint256) {
-        uint8 priceDecimals = _PRICE().decimals();
         // Prevent overflow
-        if (priceDecimals > BASE_10_MAX_EXPONENT)
-            revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         CurveTwoCryptoParams memory params = abi.decode(params_, (CurveTwoCryptoParams));
@@ -482,7 +469,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         // Check that pool tokens are valid
         uint8 numCoins = 2;
         bool lookupTokenIsToken0 = false;
-        uint256 destTokenPrice = 0; // Decimals: price decimals
+        uint256 destTokenPrice = 0; // Decimals: outputDecimals_
         {
             uint128 lookupTokenIndex = type(uint128).max;
             uint128 destTokenIndex = type(uint128).max;
@@ -535,7 +522,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
                 : price_oracle;
 
             // Get the price in USD
-            // Decimals: price decimals
+            // Decimals: outputDecimals_
             tokenInUsdPrice = lookupTokenInDestToken.mulDiv(destTokenPrice, 10 ** POOL_DECIMALS);
         }
 
@@ -560,16 +547,15 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param lookupToken_ the token to determine the price of
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePoolTriCrypto
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getTokenPriceFromTriCryptoPool(
         address lookupToken_,
         uint8 outputDecimals_,
         bytes calldata params_
     ) external returns (uint256) {
         // Prevent overflow
-        uint8 priceDecimals = _PRICE().decimals();
-        if (priceDecimals > BASE_10_MAX_EXPONENT)
-            revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         CurveTriCryptoParams memory params = abi.decode(params_, (CurveTriCryptoParams));
@@ -579,7 +565,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         uint8 numCoins = 3;
         uint128 lookupTokenIndex = type(uint128).max;
         uint128 destTokenIndex = type(uint128).max;
-        uint256 destTokenPrice = 0; // Decimals: price decimals
+        uint256 destTokenPrice = 0; // Decimals: outputDecimals_
         {
             // Iterate over all coins
             for (uint128 i = 0; i < numCoins; i++) {
@@ -662,7 +648,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
                 : price_oracle;
 
             // Get the price in USD
-            // Decimals: price decimals
+            // Decimals: outputDecimals_
             tokenInUsdPrice = lookupTokenInDestToken.mulDiv(destTokenPrice, 10 ** POOL_DECIMALS);
         }
 
@@ -675,18 +661,20 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param pool_ the Curve pool
     /// @param t1Index_ the index of the first token
     /// @param t2Index_ the index of the second token
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @return uint256 Quantity in PRICE's decimals, or 0
     function _getStablePoolSwapQuantity(
         ICurvePool pool_,
         uint128 t1Index_,
-        uint128 t2Index_
+        uint128 t2Index_,
+        uint8 outputDecimals_
     ) internal view returns (uint256) {
         address t1 = pool_.coins(t1Index_);
         address t2 = pool_.coins(t2Index_);
 
         // Returned in terms of t2's ERC20 decimals
         uint256 dyResult = pool_.get_dy(t1Index_, t2Index_, 10 ** _getERC20Decimals(t1));
-        uint256 swapResult = _convertERC20ToPriceDecimals(dyResult, t2);
+        uint256 swapResult = _convertERC20Decimals(dyResult, t2, outputDecimals_);
 
         return swapResult;
     }
@@ -711,7 +699,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param lookupToken_ the token to determine the price of
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePool
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getTokenPriceFromStablePool(
         address lookupToken_,
         uint8 outputDecimals_,
@@ -762,7 +750,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
             _reentrancyLock(pool, numCoins);
         }
 
-        uint256 lookupTokenPrice = 0; // Decimals: price decimals
+        uint256 lookupTokenPrice = 0; // Decimals: outputDecimals_
         {
             for (uint128 i = 0; i < 10; i++) {
                 /**
@@ -786,7 +774,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
                  * Input value is in the lookup token's ERC20 decimals.
                  * Output value is in the destination token's ERC20 decimals.
                  */
-                uint256 swapQuantity = _getStablePoolSwapQuantity(pool, lookupTokenIndex, i);
+                uint256 swapQuantity = _getStablePoolSwapQuantity(pool, lookupTokenIndex, i, outputDecimals_);
                 if (swapQuantity == 0) continue;
 
                 // Check if the price of the destination token can be resolved
@@ -799,7 +787,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
 
                     lookupTokenPrice = swapQuantity.mulDiv(
                         destTokenPrice,
-                        10 ** _PRICE().decimals()
+                        10 ** outputDecimals_
                     );
                     break;
                 } catch (bytes memory) {

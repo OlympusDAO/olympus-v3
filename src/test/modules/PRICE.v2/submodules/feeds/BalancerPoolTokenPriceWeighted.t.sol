@@ -193,6 +193,11 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         return abi.encode(pool);
     }
 
+    function expectRevert_uint8(bytes4 selector_, uint8 number_) internal {
+        bytes memory err = abi.encodeWithSelector(selector_, number_);
+        vm.expectRevert(err);
+    }
+
     function expectRevert_asset(bytes4 selector_, address asset_) internal {
         bytes memory err = abi.encodeWithSelector(selector_, asset_);
         vm.expectRevert(err);
@@ -210,7 +215,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         ).mulDiv(
                 10 ** priceDecimals,
                 BALANCER_POOL_TOTAL_SUPPLY.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS)
-            ); // price decimals
+            ); // outputDecimals__
 
         uint256 usdcComponent = LogExpMath.pow(
             USDC_PRICE.mulDiv(10 ** BALANCER_POOL_DECIMALS, USDC_WEIGHT), // Needs to be in terms of 1e18
@@ -224,7 +229,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
 
         uint256 mult = usdcComponent.mulDiv(wethComponent, 10 ** BALANCER_POOL_DECIMALS); // 1e18
 
-        uint256 result = (invariant).mulDiv(mult, 10 ** BALANCER_POOL_DECIMALS); // price decimals
+        uint256 result = (invariant).mulDiv(mult, 10 ** BALANCER_POOL_DECIMALS); // outputDecimals_
 
         return result;
     }
@@ -248,7 +253,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         uint8 poolDecimals = uint8(bound(poolDecimals_, MIN_DECIMALS, MAX_DECIMALS));
         uint8 tokenDecimals = uint8(bound(tokenDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
-        // price decimals
+        // outputDecimals_
         mockAssetPrice(USDC, USDC_PRICE.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS));
 
         // pool decimals
@@ -300,7 +305,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(WETH, priceDecimals, params);
 
-        // Uses price decimals parameter
+        // Uses outputDecimals__ parameter
         uint8 decimalDiff = priceDecimals > 18 ? priceDecimals - 18 : 18 - priceDecimals;
         assertApproxEqAbs(
             price,
@@ -313,9 +318,9 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         uint8 priceDecimals = MAX_DECIMALS + 1;
         mockAssetPrice(USDC, USDC_PRICE.mulDiv(10 ** priceDecimals, 1e18));
 
-        expectRevert_asset(
-            BalancerPoolTokenPrice.Balancer_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        expectRevert_uint8(
+            BalancerPoolTokenPrice.Balancer_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
@@ -370,7 +375,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(WETH, PRICE_DECIMALS, params);
 
-        // Will be normalised to price decimals
+        // Will be normalised to outputDecimals_
         assertEq(price, WETH_RATE);
     }
 
@@ -634,7 +639,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         uint8 poolDecimals = uint8(bound(poolDecimals_, MIN_DECIMALS, MAX_DECIMALS));
         uint8 tokenDecimals = uint8(bound(tokenDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
-        // price decimals
+        // outputDecimals_
         mockAssetPrice(USDC, USDC_PRICE.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS));
         mockAssetPrice(WETH, WETH_PRICE.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS));
 
@@ -722,21 +727,22 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         uint256 price = balancerSubmodule.getWeightedPoolTokenPrice(address(0), priceDecimals, params);
 
-        // Uses price decimals parameter
+        // Uses outputDecimals_ parameter
         assertEq(price, _getBalancerPoolTokenPrice(priceDecimals));
     }
 
     function test_getWeightedPoolTokenPrice_priceDecimalsMaximum() public {
         setUpWeightedPoolTokenPrice();
 
+        uint8 priceDecimals = MAX_DECIMALS + 1;
         // Mock a PRICE implementation with an out of bounds number of decimals
-        expectRevert_asset(
-            BalancerPoolTokenPrice.Balancer_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        expectRevert_uint8(
+            BalancerPoolTokenPrice.Balancer_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
-        balancerSubmodule.getWeightedPoolTokenPrice(address(0), MAX_DECIMALS + 1, params);
+        balancerSubmodule.getWeightedPoolTokenPrice(address(0), priceDecimals, params);
     }
 
     function test_getWeightedPoolTokenPrice_tokenDecimalsFuzz(uint8 tokenDecimals_) public {
