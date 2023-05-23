@@ -141,14 +141,19 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePool
     /// @return uint256 Price in the scale of outputDecimals_
-    function getPoolTokenPriceFromStablePool(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
+    function getPoolTokenPriceFromStablePool(
+        address asset_,
+        uint8 outputDecimals_,
+        bytes calldata params_
+    ) external returns (uint256) {
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         CurveParams memory params = abi.decode(params_, (CurveParams));
         {
-            if (address(params.pool) == address(0)) revert Curve_PoolTypeNotStable(address(params.pool));
+            if (address(params.pool) == address(0))
+                revert Curve_PoolTypeNotStable(address(params.pool));
         }
         ICurvePool pool = ICurvePool(params.pool);
         uint256 poolVirtualPrice;
@@ -208,10 +213,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
          * for the value returned from the Curve pool. The resulting number will
          * have the same decimal places as prices returned by PRICE.
          */
-        uint256 adjustedVirtualPrice = minimumPrice.mulDiv(
-            poolVirtualPrice,
-            10 ** POOL_DECIMALS
-        );
+        uint256 adjustedVirtualPrice = minimumPrice.mulDiv(poolVirtualPrice, 10 ** POOL_DECIMALS);
         return adjustedVirtualPrice;
     }
 
@@ -333,14 +335,19 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePoolTwoCrypto
     /// @return uint256 Price in the scale of outputDecimals_
-    function getPoolTokenPriceFromTwoCryptoPool(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
+    function getPoolTokenPriceFromTwoCryptoPool(
+        address asset_,
+        uint8 outputDecimals_,
+        bytes calldata params_
+    ) external returns (uint256) {
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         CurveTwoCryptoParams memory params = abi.decode(params_, (CurveTwoCryptoParams));
         {
-            if (address(params.pool) == address(0)) revert Curve_PoolTypeNotTwoCrypto(address(params.pool));
+            if (address(params.pool) == address(0))
+                revert Curve_PoolTypeNotTwoCrypto(address(params.pool));
         }
         ICurvePoolTwoCrypto pool = ICurvePoolTwoCrypto(params.pool);
 
@@ -391,14 +398,19 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePoolTriCrypto
     /// @return uint256 Price in the scale of outputDecimals_
-    function getPoolTokenPriceFromTriCryptoPool(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
+    function getPoolTokenPriceFromTriCryptoPool(
+        address asset_,
+        uint8 outputDecimals_,
+        bytes calldata params_
+    ) external returns (uint256) {
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         CurveTriCryptoParams memory params = abi.decode(params_, (CurveTriCryptoParams));
         {
-            if (address(params.pool) == address(0)) revert Curve_PoolTypeNotTriCrypto(address(params.pool));
+            if (address(params.pool) == address(0))
+                revert Curve_PoolTypeNotTriCrypto(address(params.pool));
         }
         ICurvePoolTriCrypto pool = ICurvePoolTriCrypto(params.pool);
 
@@ -466,7 +478,8 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         // Decode params
         CurveTwoCryptoParams memory params = abi.decode(params_, (CurveTwoCryptoParams));
         {
-            if (address(params.pool) == address(0)) revert Curve_PoolTypeNotTwoCrypto(address(params.pool));
+            if (address(params.pool) == address(0))
+                revert Curve_PoolTypeNotTwoCrypto(address(params.pool));
         }
         ICurvePoolTwoCrypto pool = ICurvePoolTwoCrypto(params.pool);
 
@@ -582,7 +595,8 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         // Decode params
         CurveTriCryptoParams memory params = abi.decode(params_, (CurveTriCryptoParams));
         {
-            if (address(params.pool) == address(0)) revert Curve_PoolTypeNotTriCrypto(address(params.pool));
+            if (address(params.pool) == address(0))
+                revert Curve_PoolTypeNotTriCrypto(address(params.pool));
         }
         ICurvePoolTriCrypto pool = ICurvePoolTriCrypto(params.pool);
 
@@ -735,7 +749,8 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         {
             CurveParams memory params = abi.decode(params_, (CurveParams));
             {
-                if (address(params.pool) == address(0)) revert Curve_PoolTypeNotStable(address(params.pool));
+                if (address(params.pool) == address(0))
+                    revert Curve_PoolTypeNotStable(address(params.pool));
             }
             pool = ICurvePool(params.pool);
             {
@@ -810,7 +825,12 @@ contract CurvePoolTokenPrice is PriceSubmodule {
                  * Input value is in the lookup token's ERC20 decimals.
                  * Output value is in the destination token's ERC20 decimals.
                  */
-                uint256 swapQuantity = _getStablePoolSwapQuantity(pool, lookupTokenIndex, i, outputDecimals_);
+                uint256 swapQuantity = _getStablePoolSwapQuantity(
+                    pool,
+                    lookupTokenIndex,
+                    i,
+                    outputDecimals_
+                );
                 if (swapQuantity == 0) continue;
 
                 // Check if the price of the destination token can be resolved
@@ -821,10 +841,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
                 ) {
                     if (destTokenPrice == 0) continue;
 
-                    lookupTokenPrice = swapQuantity.mulDiv(
-                        destTokenPrice,
-                        10 ** outputDecimals_
-                    );
+                    lookupTokenPrice = swapQuantity.mulDiv(destTokenPrice, 10 ** outputDecimals_);
                     break;
                 } catch (bytes memory) {
                     continue;

@@ -72,7 +72,8 @@ contract UniswapV3Price is PriceSubmodule {
     ) external view returns (uint256) {
         UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
         {
-            if (address(params.pool) == address(0)) revert UniswapV3_PoolTypeInvalid(address(params.pool));
+            if (address(params.pool) == address(0))
+                revert UniswapV3_PoolTypeInvalid(address(params.pool));
         }
         IUniswapV3Pool pool = IUniswapV3Pool(params.pool);
         {
@@ -103,7 +104,10 @@ contract UniswapV3Price is PriceSubmodule {
             observationWindow[0] = params.observationWindowSeconds;
             observationWindow[1] = 0;
 
-            try pool.observe(observationWindow) returns (int56[] memory tickCumulatives, uint160[] memory secondsPerLiquidityCumulativeX128s) {
+            try pool.observe(observationWindow) returns (
+                int56[] memory tickCumulatives,
+                uint160[] memory secondsPerLiquidityCumulativeX128s
+            ) {
                 timeWeightedTick =
                     (tickCumulatives[1] - tickCumulatives[0]) /
                     int56(int32(params.observationWindowSeconds));
@@ -152,10 +156,7 @@ contract UniswapV3Price is PriceSubmodule {
                 revert UniswapV3_OutputDecimalsOutOfBounds(outputDecimals_);
 
             // PRICE will revert if the price cannot be determined or is 0.
-            (uint256 quoteInUsdPrice, ) = _PRICE().getPrice(
-                quoteToken,
-                PRICEv2.Variant.CURRENT
-            );
+            (uint256 quoteInUsdPrice, ) = _PRICE().getPrice(quoteToken, PRICEv2.Variant.CURRENT);
 
             // Decimals: outputDecimals_
             tokenPrice = baseInQuotePrice.mulDiv(quoteInUsdPrice, 10 ** quoteTokenDecimals);

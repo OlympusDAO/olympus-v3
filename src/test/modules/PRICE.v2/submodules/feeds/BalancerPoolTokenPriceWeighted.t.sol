@@ -279,7 +279,11 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         );
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
-        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(WETH, priceDecimals, params);
+        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(
+            WETH,
+            priceDecimals,
+            params
+        );
 
         // Simpler to check that the price before the decimal point is equal
         uint256 truncatedPrice = price.mulDiv(1, 10 ** priceDecimals);
@@ -296,7 +300,11 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
 
     function test_getTokenPriceFromWeightedPool_priceDecimalsSame() public {
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
-        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(WETH, PRICE_DECIMALS, params);
+        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(
+            WETH,
+            PRICE_DECIMALS,
+            params
+        );
 
         // 187339411560870503*1500*10^18 / 10^18
         // 281009117341305754500
@@ -310,7 +318,11 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         mockAssetPrice(USDC, USDC_PRICE.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS));
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
-        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(WETH, priceDecimals, params);
+        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(
+            WETH,
+            priceDecimals,
+            params
+        );
 
         // Uses outputDecimals__ parameter
         uint8 decimalDiff = priceDecimals > 18 ? priceDecimals - 18 : 18 - priceDecimals;
@@ -351,7 +363,11 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         );
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
-        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(WETH, PRICE_DECIMALS, params);
+        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(
+            WETH,
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(price, WETH_RATE);
     }
@@ -380,7 +396,11 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         );
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
-        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(WETH, PRICE_DECIMALS, params);
+        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(
+            WETH,
+            PRICE_DECIMALS,
+            params
+        );
 
         // Will be normalised to outputDecimals_
         assertEq(price, WETH_RATE);
@@ -444,7 +464,11 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         mockAssetPrice(WETH, WETH_PRICE);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
-        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(USDC, PRICE_DECIMALS, params);
+        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(
+            USDC,
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(price, USDC_RATE);
     }
@@ -469,7 +493,11 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         );
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
-        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(USDC, PRICE_DECIMALS, params);
+        uint256 price = balancerSubmodule.getTokenPriceFromWeightedPool(
+            USDC,
+            PRICE_DECIMALS,
+            params
+        );
 
         uint256 usdcRate = (((WETH_BALANCE * 1e18) / WETH_WEIGHT) * WETH_PRICE) /
             (((USDC_BALANCE / 2) * 1e12 * 1e18) / stablecoinWeight);
@@ -680,7 +708,11 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         );
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
-        uint256 price = balancerSubmodule.getWeightedPoolTokenPrice(address(0), priceDecimals, params);
+        uint256 price = balancerSubmodule.getWeightedPoolTokenPrice(
+            address(0),
+            priceDecimals,
+            params
+        );
 
         // Simpler to check that the price before the decimal point is equal
         uint256 truncatedPrice = price.mulDiv(1, 10 ** priceDecimals);
@@ -710,7 +742,11 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         );
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
-        uint256 price = balancerSubmodule.getWeightedPoolTokenPrice(address(0), PRICE_DECIMALS, params);
+        uint256 price = balancerSubmodule.getWeightedPoolTokenPrice(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         uint8 decimalDiff = poolDecimals > 18 ? poolDecimals - 18 : 18 - poolDecimals;
         assertApproxEqAbs(price, _getBalancerPoolTokenPrice(18), 10 ** decimalDiff);
@@ -739,7 +775,11 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         mockAssetPrice(WETH, WETH_PRICE.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS));
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
-        uint256 price = balancerSubmodule.getWeightedPoolTokenPrice(address(0), priceDecimals, params);
+        uint256 price = balancerSubmodule.getWeightedPoolTokenPrice(
+            address(0),
+            priceDecimals,
+            params
+        );
 
         // Uses outputDecimals_ parameter
         assertEq(price, _getBalancerPoolTokenPrice(priceDecimals));
@@ -772,7 +812,11 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         );
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
-        uint256 price = balancerSubmodule.getWeightedPoolTokenPrice(address(0), PRICE_DECIMALS, params);
+        uint256 price = balancerSubmodule.getWeightedPoolTokenPrice(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         uint8 decimalDiff = tokenDecimals > 18 ? tokenDecimals - 18 : 18 - tokenDecimals;
         assertApproxEqAbs(price, _getBalancerPoolTokenPrice(18), 10 ** decimalDiff);

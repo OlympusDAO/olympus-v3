@@ -135,12 +135,18 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Chainlink pool parameters of type OneFeedParams
     /// @return uint256 Price in the scale of outputDecimals_.
-    function getOneFeedPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
+    function getOneFeedPrice(
+        address asset_,
+        uint8 outputDecimals_,
+        bytes calldata params_
+    ) external view returns (uint256) {
         // Decode params
         OneFeedParams memory params = abi.decode(params_, (OneFeedParams));
         {
-            if (address(params.feed) == address(0)) revert Chainlink_ParamsFeedInvalid(address(params.feed));
-            if (params.updateThreshold == 0) revert Chainlink_ParamsUpdateThresholdInvalid(params.updateThreshold);
+            if (address(params.feed) == address(0))
+                revert Chainlink_ParamsFeedInvalid(address(params.feed));
+            if (params.updateThreshold == 0)
+                revert Chainlink_ParamsUpdateThresholdInvalid(params.updateThreshold);
         }
 
         // Ensure that no decimals would result in an underflow or overflow
@@ -149,7 +155,11 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         if (params.feed.decimals() > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(address(params.feed));
 
-        uint256 feedPrice = _getFeedPrice(params.feed, uint256(params.updateThreshold), outputDecimals_);
+        uint256 feedPrice = _getFeedPrice(
+            params.feed,
+            uint256(params.updateThreshold),
+            outputDecimals_
+        );
 
         return feedPrice;
     }
@@ -165,14 +175,22 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Chainlink pool parameters of type TwoFeedParams
     /// @return uint256 Price in the scale of outputDecimals_.
-    function getTwoFeedPriceDiv(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
+    function getTwoFeedPriceDiv(
+        address asset_,
+        uint8 outputDecimals_,
+        bytes calldata params_
+    ) external view returns (uint256) {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
         {
-            if (address(params.numeratorFeed) == address(0)) revert Chainlink_ParamsFeedInvalid(address(params.numeratorFeed));
-            if (params.numeratorUpdateThreshold == 0) revert Chainlink_ParamsUpdateThresholdInvalid(params.numeratorUpdateThreshold);
-            if (address(params.denominatorFeed) == address(0)) revert Chainlink_ParamsFeedInvalid(address(params.denominatorFeed));
-            if (params.denominatorUpdateThreshold == 0) revert Chainlink_ParamsUpdateThresholdInvalid(params.denominatorUpdateThreshold);
+            if (address(params.numeratorFeed) == address(0))
+                revert Chainlink_ParamsFeedInvalid(address(params.numeratorFeed));
+            if (params.numeratorUpdateThreshold == 0)
+                revert Chainlink_ParamsUpdateThresholdInvalid(params.numeratorUpdateThreshold);
+            if (address(params.denominatorFeed) == address(0))
+                revert Chainlink_ParamsFeedInvalid(address(params.denominatorFeed));
+            if (params.denominatorUpdateThreshold == 0)
+                revert Chainlink_ParamsUpdateThresholdInvalid(params.denominatorUpdateThreshold);
         }
 
         // Ensure that no decimals would result in an underflow or overflow
@@ -212,14 +230,22 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Chainlink pool parameters of type TwoFeedParams
     /// @return uint256 Price in the scale of outputDecimals_.
-    function getTwoFeedPriceMul(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
+    function getTwoFeedPriceMul(
+        address asset_,
+        uint8 outputDecimals_,
+        bytes calldata params_
+    ) external view returns (uint256) {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
         {
-            if (address(params.numeratorFeed) == address(0)) revert Chainlink_ParamsFeedInvalid(address(params.numeratorFeed));
-            if (params.numeratorUpdateThreshold == 0) revert Chainlink_ParamsUpdateThresholdInvalid(params.numeratorUpdateThreshold);
-            if (address(params.denominatorFeed) == address(0)) revert Chainlink_ParamsFeedInvalid(address(params.denominatorFeed));
-            if (params.denominatorUpdateThreshold == 0) revert Chainlink_ParamsUpdateThresholdInvalid(params.denominatorUpdateThreshold);
+            if (address(params.numeratorFeed) == address(0))
+                revert Chainlink_ParamsFeedInvalid(address(params.numeratorFeed));
+            if (params.numeratorUpdateThreshold == 0)
+                revert Chainlink_ParamsUpdateThresholdInvalid(params.numeratorUpdateThreshold);
+            if (address(params.denominatorFeed) == address(0))
+                revert Chainlink_ParamsFeedInvalid(address(params.denominatorFeed));
+            if (params.denominatorUpdateThreshold == 0)
+                revert Chainlink_ParamsUpdateThresholdInvalid(params.denominatorUpdateThreshold);
         }
 
         // Ensure that no decimals would result in an underflow or overflow

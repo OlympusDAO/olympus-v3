@@ -151,20 +151,17 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getOneFeedPrice_revertsOnParamsFeedUndefined() public {
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
-            address(0)
-        );
+        expectRevert_address(ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector, address(0));
 
-        bytes memory params = encodeOneFeedParams(AggregatorV2V3Interface(address(0)), UPDATE_THRESHOLD);
+        bytes memory params = encodeOneFeedParams(
+            AggregatorV2V3Interface(address(0)),
+            UPDATE_THRESHOLD
+        );
         chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getOneFeedPrice_revertsOnParamsThresholdUndefined() public {
-        expectRevert_uint48(
-            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
-            0
-        );
+        expectRevert_uint48(ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector, 0);
 
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, 0);
         chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
@@ -303,16 +300,17 @@ contract ChainlinkPriceFeedsTest is Test {
             daiEthPriceFeed,
             UPDATE_THRESHOLD
         );
-        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(priceInt, ohmDaiPrice);
     }
 
     function test_getTwoFeedPriceDiv_revertsOnParamsNumeratorFeedUndefined() public {
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
-            address(0)
-        );
+        expectRevert_address(ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector, address(0));
 
         bytes memory params = encodeTwoFeedParams(
             AggregatorV2V3Interface(address(0)),
@@ -324,10 +322,7 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceDiv_revertsOnParamsNumeratorUpdateThresholdUndefined() public {
-        expectRevert_uint48(
-            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
-            0
-        );
+        expectRevert_uint48(ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector, 0);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -339,10 +334,7 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceDiv_revertsOnParamsDenominatorFeedUndefined() public {
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
-            address(0)
-        );
+        expectRevert_address(ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector, address(0));
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -354,10 +346,7 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceDiv_revertsOnParamsDenominatorUpdateThresholdUndefined() public {
-        expectRevert_uint48(
-            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
-            0
-        );
+        expectRevert_uint48(ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector, 0);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -382,7 +371,12 @@ contract ChainlinkPriceFeedsTest is Test {
             address(mockNonWeightedPool)
         );
 
-        bytes memory params = abi.encode(mockNonWeightedPool, UPDATE_THRESHOLD, daiEthPriceFeed, UPDATE_THRESHOLD);
+        bytes memory params = abi.encode(
+            mockNonWeightedPool,
+            UPDATE_THRESHOLD,
+            daiEthPriceFeed,
+            UPDATE_THRESHOLD
+        );
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
@@ -400,7 +394,12 @@ contract ChainlinkPriceFeedsTest is Test {
             address(mockNonWeightedPool)
         );
 
-        bytes memory params = abi.encode(ohmEthPriceFeed, UPDATE_THRESHOLD, mockNonWeightedPool, UPDATE_THRESHOLD);
+        bytes memory params = abi.encode(
+            ohmEthPriceFeed,
+            UPDATE_THRESHOLD,
+            mockNonWeightedPool,
+            UPDATE_THRESHOLD
+        );
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
@@ -463,7 +462,11 @@ contract ChainlinkPriceFeedsTest is Test {
             daiEthPriceFeed,
             UPDATE_THRESHOLD
         );
-        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(priceInt, ohmDaiPrice);
     }
@@ -512,7 +515,11 @@ contract ChainlinkPriceFeedsTest is Test {
             daiEthPriceFeed,
             UPDATE_THRESHOLD
         );
-        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(priceInt, ohmDaiPrice);
     }
@@ -553,7 +560,11 @@ contract ChainlinkPriceFeedsTest is Test {
             daiEthPriceFeed,
             UPDATE_THRESHOLD
         );
-        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(priceInt, ohmDaiPrice);
     }
@@ -590,7 +601,11 @@ contract ChainlinkPriceFeedsTest is Test {
             daiEthPriceFeed,
             UPDATE_THRESHOLD
         );
-        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(priceInt, ohmDaiPrice);
     }
@@ -707,7 +722,11 @@ contract ChainlinkPriceFeedsTest is Test {
             daiEthPriceFeed,
             UPDATE_THRESHOLD
         );
-        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(priceInt, 10 * 10 ** PRICE_DECIMALS); // Expected price is 10, adjusted with decimals
     }
@@ -755,16 +774,17 @@ contract ChainlinkPriceFeedsTest is Test {
             ethDaiPriceFeed,
             UPDATE_THRESHOLD
         );
-        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(priceInt, ohmDaiPrice);
     }
 
     function test_getTwoFeedPriceMul_revertsOnParamsNumeratorFeedUndefined() public {
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
-            address(0)
-        );
+        expectRevert_address(ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector, address(0));
 
         bytes memory params = encodeTwoFeedParams(
             AggregatorV2V3Interface(address(0)),
@@ -776,10 +796,7 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceMul_revertsOnParamsNumeratorUpdateThresholdUndefined() public {
-        expectRevert_uint48(
-            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
-            0
-        );
+        expectRevert_uint48(ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector, 0);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -791,10 +808,7 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceMul_revertsOnParamsDenominatorFeedUndefined() public {
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
-            address(0)
-        );
+        expectRevert_address(ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector, address(0));
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -806,10 +820,7 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceMul_revertsOnParamsDenominatorUpdateThresholdUndefined() public {
-        expectRevert_uint48(
-            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
-            0
-        );
+        expectRevert_uint48(ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector, 0);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -834,7 +845,12 @@ contract ChainlinkPriceFeedsTest is Test {
             address(mockNonWeightedPool)
         );
 
-        bytes memory params = abi.encode(mockNonWeightedPool, UPDATE_THRESHOLD, ethDaiPriceFeed, UPDATE_THRESHOLD);
+        bytes memory params = abi.encode(
+            mockNonWeightedPool,
+            UPDATE_THRESHOLD,
+            ethDaiPriceFeed,
+            UPDATE_THRESHOLD
+        );
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
@@ -852,7 +868,12 @@ contract ChainlinkPriceFeedsTest is Test {
             address(mockNonWeightedPool)
         );
 
-        bytes memory params = abi.encode(ohmEthPriceFeed, UPDATE_THRESHOLD, mockNonWeightedPool, UPDATE_THRESHOLD);
+        bytes memory params = abi.encode(
+            ohmEthPriceFeed,
+            UPDATE_THRESHOLD,
+            mockNonWeightedPool,
+            UPDATE_THRESHOLD
+        );
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
@@ -915,7 +936,11 @@ contract ChainlinkPriceFeedsTest is Test {
             ethDaiPriceFeed,
             UPDATE_THRESHOLD
         );
-        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(priceInt, ohmDaiPrice);
     }
@@ -962,7 +987,11 @@ contract ChainlinkPriceFeedsTest is Test {
             ethDaiPriceFeed,
             UPDATE_THRESHOLD
         );
-        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(priceInt, ohmDaiPrice);
     }
@@ -1001,7 +1030,11 @@ contract ChainlinkPriceFeedsTest is Test {
             ethDaiPriceFeed,
             UPDATE_THRESHOLD
         );
-        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(priceInt, ohmDaiPrice);
     }
@@ -1038,7 +1071,11 @@ contract ChainlinkPriceFeedsTest is Test {
             ethDaiPriceFeed,
             UPDATE_THRESHOLD
         );
-        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(priceInt, ohmDaiPrice);
     }
@@ -1106,7 +1143,11 @@ contract ChainlinkPriceFeedsTest is Test {
             ethDaiPriceFeed,
             UPDATE_THRESHOLD
         );
-        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+        uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(priceInt, 10 * 10 ** PRICE_DECIMALS); // Expected price is 10, adjusted with decimals
     }

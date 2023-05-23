@@ -146,10 +146,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
         uint8 poolDecimals = pool_.decimals();
         uint256[] memory weights = pool_.getNormalizedWeights();
-        uint256 tokenWeight = weights[index_].mulDiv(
-            10 ** outputDecimals_,
-            10 ** poolDecimals
-        );
+        uint256 tokenWeight = weights[index_].mulDiv(10 ** outputDecimals_, 10 ** poolDecimals);
 
         return tokenBalance.mulDiv(10 ** outputDecimals_, tokenWeight);
     }
@@ -198,7 +195,14 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint256 poolValue = 0; // pow decimals
         // PRICEv2 PRICE = _PRICE();
         for (uint256 i; i < len; ) {
-            uint256 currentValue = _getTokenValueInWeightedPool(tokens_[i], weights_[i], poolDecimals_, outputDecimals_, powDecimals_, poolId_);
+            uint256 currentValue = _getTokenValueInWeightedPool(
+                tokens_[i],
+                weights_[i],
+                poolDecimals_,
+                outputDecimals_,
+                powDecimals_,
+                poolId_
+            );
 
             if (poolValue == 0) {
                 poolValue = currentValue;
@@ -232,7 +236,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerWeightedPoolParams
     /// @return uint256 Price in the scale of outputDecimals_
-    function getWeightedPoolTokenPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
+    function getWeightedPoolTokenPrice(
+        address asset_,
+        uint8 outputDecimals_,
+        bytes calldata params_
+    ) external returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
@@ -289,7 +297,14 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
         // Scale: powDecimals
         uint8 powDecimals = 18;
-        uint256 poolValue = _getWeightedPoolRawValue(tokens, weights, poolDecimals, outputDecimals_, powDecimals, poolId);
+        uint256 poolValue = _getWeightedPoolRawValue(
+            tokens,
+            weights,
+            poolDecimals,
+            outputDecimals_,
+            powDecimals,
+            poolId
+        );
         // No coins or balances
         if (poolValue == 0) revert Balancer_PoolTokensInvalid(poolId);
 
@@ -314,7 +329,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerStablePoolParams
     /// @return uint256 Price in the scale of outputDecimals_
-    function getStablePoolTokenPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
+    function getStablePoolTokenPrice(
+        address asset_,
+        uint8 outputDecimals_,
+        bytes calldata params_
+    ) external returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
@@ -514,15 +533,25 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         {
             // Weightings
             // Scale: outputDecimals_
-            uint256 lookupTokenWeighting = _getTokenBalanceWeighting(poolId, pool, lookupTokenIndex, outputDecimals_);
-            uint256 destinationTokenWeighting = _getTokenBalanceWeighting(poolId, pool, destinationTokenIndex, outputDecimals_);
+            uint256 lookupTokenWeighting = _getTokenBalanceWeighting(
+                poolId,
+                pool,
+                lookupTokenIndex,
+                outputDecimals_
+            );
+            uint256 destinationTokenWeighting = _getTokenBalanceWeighting(
+                poolId,
+                pool,
+                destinationTokenIndex,
+                outputDecimals_
+            );
 
             // Get the lookupToken in terms of the destinationToken
             // Source: https://docs.balancer.fi/reference/math/weighted-math.html#spot-price
             lookupTokenUsdPrice = destinationTokenWeighting.mulDiv(
-                    destinationTokenPrice,
-                    lookupTokenWeighting
-                );
+                destinationTokenPrice,
+                lookupTokenWeighting
+            );
         }
 
         return lookupTokenUsdPrice;

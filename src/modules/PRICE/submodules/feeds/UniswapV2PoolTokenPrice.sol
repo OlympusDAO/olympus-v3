@@ -114,7 +114,11 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ UniswapV2 pool parameters of type UniswapV2PoolParams
     /// @return uint256 Price in the scale of outputDecimals_
-    function getPoolTokenPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
+    function getPoolTokenPrice(
+        address asset_,
+        uint8 outputDecimals_,
+        bytes calldata params_
+    ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > MAX_DECIMALS)
             revert UniswapV2_OutputDecimalsOutOfBounds(outputDecimals_);
@@ -128,7 +132,8 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
             {
                 // Decode params
                 UniswapV2PoolParams memory params = abi.decode(params_, (UniswapV2PoolParams));
-                if (address(params.pool) == address(0)) revert UniswapV2_PoolTypeInvalid(address(params.pool));
+                if (address(params.pool) == address(0))
+                    revert UniswapV2_PoolTypeInvalid(address(params.pool));
 
                 pool = IUniswapV2Pool(params.pool);
             }
@@ -148,23 +153,19 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
             uint256 balance0;
             {
                 uint8 token0Decimals = ERC20(token0).decimals();
-                if (token0Decimals > MAX_DECIMALS) revert UniswapV2_AssetDecimalsOutOfBounds(token0);
+                if (token0Decimals > MAX_DECIMALS)
+                    revert UniswapV2_AssetDecimalsOutOfBounds(token0);
 
-                balance0 = uint256(balances[0]).mulDiv(
-                    10 ** outputDecimals_,
-                    10 ** token0Decimals
-                );
+                balance0 = uint256(balances[0]).mulDiv(10 ** outputDecimals_, 10 ** token0Decimals);
             }
 
             uint256 balance1;
             {
                 uint8 token1Decimals = ERC20(token1).decimals();
-                if (token1Decimals > MAX_DECIMALS) revert UniswapV2_AssetDecimalsOutOfBounds(token1);
+                if (token1Decimals > MAX_DECIMALS)
+                    revert UniswapV2_AssetDecimalsOutOfBounds(token1);
 
-                balance1 = uint256(balances[1]).mulDiv(
-                    10 ** outputDecimals_,
-                    10 ** token1Decimals
-                );
+                balance1 = uint256(balances[1]).mulDiv(10 ** outputDecimals_, 10 ** token1Decimals);
             }
 
             if (balance0 == 0 || balance1 == 0) revert UniswapV2_PoolBalancesInvalid(address(pool));
@@ -235,7 +236,8 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         IUniswapV2Pool pool;
         {
             UniswapV2PoolParams memory params = abi.decode(params_, (UniswapV2PoolParams));
-            if (address(params.pool) == address(0)) revert UniswapV2_PoolTypeInvalid(address(params.pool));
+            if (address(params.pool) == address(0))
+                revert UniswapV2_PoolTypeInvalid(address(params.pool));
 
             pool = IUniswapV2Pool(params.pool);
         }

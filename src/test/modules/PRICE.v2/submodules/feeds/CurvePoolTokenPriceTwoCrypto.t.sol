@@ -24,28 +24,28 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
     CurvePoolTokenPrice internal curveSubmodule;
 
     address internal constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-    address internal constant  USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address internal constant  USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
-    address internal constant  WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address internal constant  BTRFLY = 0xc55126051B22eBb829D00368f4B12Bde432de5Da;
-    address internal constant  STG = 0xAf5191B0De278C7286d6C7CC6ab6BB8A73bA2Cd6;
+    address internal constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address internal constant USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+    address internal constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address internal constant BTRFLY = 0xc55126051B22eBb829D00368f4B12Bde432de5Da;
+    address internal constant STG = 0xAf5191B0De278C7286d6C7CC6ab6BB8A73bA2Cd6;
 
-    uint256 internal constant  USDT_PRICE = 1 * 1e18;
-    uint256 internal constant  WETH_PRICE = 1_500 * 1e18;
+    uint256 internal constant USDT_PRICE = 1 * 1e18;
+    uint256 internal constant WETH_PRICE = 1_500 * 1e18;
 
-    uint8 internal constant  USDT_DECIMALS = 6;
-    uint8 internal constant  WETH_DECIMALS = 18;
+    uint8 internal constant USDT_DECIMALS = 6;
+    uint8 internal constant WETH_DECIMALS = 18;
 
-    uint256 internal constant  USDT_BALANCE = 50_000_000 * 1e6;
-    uint256 internal constant  WETH_BALANCE = 3_000 * 1e18;
+    uint256 internal constant USDT_BALANCE = 50_000_000 * 1e6;
+    uint256 internal constant WETH_BALANCE = 3_000 * 1e18;
 
-    uint8 internal constant  PRICE_DECIMALS = 18;
+    uint8 internal constant PRICE_DECIMALS = 18;
 
-    address internal constant  TWO_CRYPTO_TOKEN = 0xc4AD29ba4B3c580e6D59105FFf484999997675Ff;
-    uint256 internal constant  TWO_CRYPTO_SUPPLY = 181486344521982698524711;
-    uint256 internal constant  TWO_CRYPTO_PRICE =
+    address internal constant TWO_CRYPTO_TOKEN = 0xc4AD29ba4B3c580e6D59105FFf484999997675Ff;
+    uint256 internal constant TWO_CRYPTO_SUPPLY = 181486344521982698524711;
+    uint256 internal constant TWO_CRYPTO_PRICE =
         (USDT_BALANCE * 1e12 * USDT_PRICE + WETH_BALANCE * WETH_PRICE) / TWO_CRYPTO_SUPPLY;
-    uint8 internal constant  TWO_CRYPTO_TOKEN_DECIMALS = 18;
+    uint8 internal constant TWO_CRYPTO_TOKEN_DECIMALS = 18;
 
     uint8 internal constant MIN_DECIMALS = 6;
     uint8 internal constant MAX_DECIMALS = 60;
@@ -195,7 +195,11 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         uint8 decimalDiff = lpTokenDecimals > PRICE_DECIMALS
             ? lpTokenDecimals - PRICE_DECIMALS
@@ -226,7 +230,11 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         mockPrice.setPrice(WETH, WETH_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), priceDecimals, params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(
+            address(0),
+            priceDecimals,
+            params
+        );
 
         // Uses outputDecimals_
         uint8 decimalDiff = priceDecimals > PRICE_DECIMALS
@@ -269,7 +277,11 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), priceDecimals, params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(
+            address(0),
+            priceDecimals,
+            params
+        );
 
         // Simpler to check that the price to 2 decimal places (e.g. $10.01) is equal
         uint256 truncatedPrice = price.mulDiv(10 ** 2, 10 ** priceDecimals);
@@ -381,7 +393,11 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         setUpWethBtrfly();
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, PRICE_DECIMALS, params);
+        uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(
+            BTRFLY,
+            PRICE_DECIMALS,
+            params
+        );
 
         // 187339411560870503*1500*10^18 / 10^18
         // 281009117341305754500
@@ -407,7 +423,11 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         mockPrice.setPrice(WETH, wethPrice);
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, priceDecimals, params);
+        uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(
+            BTRFLY,
+            priceDecimals,
+            params
+        );
 
         // Will be normalised to outputDecimals_
         assertEq(price, priceOracleEthBtrfly.mulDiv(wethPrice, 10 ** PRICE_DECIMALS));

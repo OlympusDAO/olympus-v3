@@ -169,7 +169,10 @@ contract UniswapV3PriceTest is Test {
             0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
         );
 
-        expectRevert_address(UniswapV3Price.UniswapV3_PoolTypeInvalid.selector, address(mockNonWeightedPool));
+        expectRevert_address(
+            UniswapV3Price.UniswapV3_PoolTypeInvalid.selector,
+            address(mockNonWeightedPool)
+        );
 
         bytes memory params = abi.encode(mockNonWeightedPool, OBSERVATION_SECONDS);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);

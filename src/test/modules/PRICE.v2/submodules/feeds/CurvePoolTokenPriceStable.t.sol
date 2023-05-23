@@ -144,7 +144,11 @@ contract CurvePoolTokenPriceStableTest is Test {
 
     function test_getPoolTokenPriceFromStablePool_threeCoins() public {
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(price, VIRTUAL_PRICE);
     }
@@ -154,16 +158,17 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockPool.setCoinsTwo(DAI, USDC);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(price, VIRTUAL_PRICE);
     }
 
     function test_getPoolTokenPriceFromStablePool_revertsOnParamsPoolUndefined() public {
-        expectRevert_address(
-            CurvePoolTokenPrice.Curve_PoolTypeNotStable.selector,
-            address(0)
-        );
+        expectRevert_address(CurvePoolTokenPrice.Curve_PoolTypeNotStable.selector, address(0));
 
         bytes memory params = encodeCurvePoolParams(ICurvePool(address(0)));
         curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
@@ -208,7 +213,11 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockPool.setCoinsTwo(DAI, USDC);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), priceDecimals, params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(
+            address(0),
+            priceDecimals,
+            params
+        );
 
         // Uses outputDecimals_
         assertEq(price, VIRTUAL_PRICE.mulDiv(10 ** priceDecimals, 1e18));
@@ -248,7 +257,11 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockPrice.setPrice(USDC, 0.98 * 1e18);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(price, VIRTUAL_PRICE.mulDiv(0.98 * 1e18, 1e18));
     }
@@ -274,7 +287,11 @@ contract CurvePoolTokenPriceStableTest is Test {
         uint256 minimumPrice = _minimumPrice.mulDiv(10 ** priceDecimals, 10 ** 2);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), priceDecimals, params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(
+            address(0),
+            priceDecimals,
+            params
+        );
 
         assertEq(price, VIRTUAL_PRICE.mulDiv(minimumPrice, 10 ** POOL_DECIMALS));
     }
@@ -291,7 +308,11 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockPrice.setPrice(THREE_POOL, 10 ** PRICE_DECIMALS);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
 
         assertEq(price, VIRTUAL_PRICE);
     }
@@ -336,10 +357,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         uint256 quantityInDai = 1.01 * 1e18;
         mockSwap(USDC, DAI, quantityInDai);
 
-        expectRevert_address(
-            CurvePoolTokenPrice.Curve_PoolTypeNotStable.selector,
-            address(0)
-        );
+        expectRevert_address(CurvePoolTokenPrice.Curve_PoolTypeNotStable.selector, address(0));
 
         bytes memory params = encodeCurvePoolParams(ICurvePool(address(0)));
         curveSubmodule.getTokenPriceFromStablePool(USDC, PRICE_DECIMALS, params);
