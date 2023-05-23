@@ -2,9 +2,9 @@
 pragma solidity 0.8.15;
 
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
-import {ReentrancyGuard} from "src/libraries/Balancer/contracts/ReentrancyGuard.sol";
+import {BalancerReentrancyGuard} from "src/libraries/Balancer/contracts/BalancerReentrancyGuard.sol";
 
-contract MockBalancerVault is IVault, ReentrancyGuard {
+contract MockBalancerVault is IVault, BalancerReentrancyGuard {
     address[] internal tokens;
     uint256[] internal balances;
     uint256 internal lastChangeBlock;
