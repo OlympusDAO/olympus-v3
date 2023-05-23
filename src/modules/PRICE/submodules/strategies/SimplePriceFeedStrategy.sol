@@ -60,7 +60,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     function getAverageIfDeviation(
         uint256[] memory prices_,
         bytes memory params_
-    ) public view returns (uint256) {
+    ) public pure returns (uint256) {
         // Can't work with  < 2 length
         if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
 
@@ -101,7 +101,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     function getMedianIfDeviation(
         uint256[] memory prices_,
         bytes memory params_
-    ) public view returns (uint256) {
+    ) public pure returns (uint256) {
         // Can't work with  < 2 length
         if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
 
