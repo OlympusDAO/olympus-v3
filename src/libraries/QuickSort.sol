@@ -8,11 +8,7 @@ library QuickSort {
         return array;
     }
 
-    function _quickSort(
-        uint256[] memory array,
-        uint256 i,
-        uint256 j
-    ) private pure {
+    function _quickSort(uint256[] memory array, uint256 i, uint256 j) private pure {
         if (j - i < 2) return;
 
         uint256 p = i;
@@ -26,11 +22,7 @@ library QuickSort {
         _quickSort(array, p + 1, j);
     }
 
-    function _swap(
-        uint256[] memory array,
-        uint256 i,
-        uint256 j
-    ) private pure {
+    function _swap(uint256[] memory array, uint256 i, uint256 j) private pure {
         (array[i], array[j]) = (array[j], array[i]);
     }
 }

@@ -31,11 +31,9 @@ contract SimplePriceFeedStrategyTest is Test {
 
     // =========  HELPER METHODS ========= //
 
-    function encodeDeviationParams(uint256 deviationBps)
-        internal
-        pure
-        returns (bytes memory params)
-    {
+    function encodeDeviationParams(
+        uint256 deviationBps
+    ) internal pure returns (bytes memory params) {
         return abi.encode(deviationBps);
     }
 
@@ -115,7 +113,7 @@ contract SimplePriceFeedStrategyTest is Test {
 
         uint256 price = strategy.getAveragePrice(prices, "");
 
-        assertEq(price, 15 * 10**17);
+        assertEq(price, 15 * 10 ** 17);
     }
 
     function test_getAveragePrice_lengthOdd() public {
@@ -220,10 +218,7 @@ contract SimplePriceFeedStrategyTest is Test {
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
 
-        strategy.getAverageIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
     }
 
     function test_getAverageIfDeviation_revertsOnPriceZeroFuzz(uint8 priceZeroIndex_) public {
@@ -240,10 +235,7 @@ contract SimplePriceFeedStrategyTest is Test {
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceZero.selector);
 
-        strategy.getAverageIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
     }
 
     function test_getAverageIfDeviation_threeItems_deviationIndexOne() public {
@@ -252,10 +244,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[1] = 1.2 * 1e18; // > 1% deviation
         prices[2] = 1.001 * 1e18;
 
-        uint256 price = strategy.getAverageIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        uint256 price = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, (1 * 1e18 + 1.2 * 1e18 + 1.001 * 1e18) / 3);
     }
 
@@ -265,10 +254,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[1] = 1.001 * 1e18;
         prices[2] = 1.2 * 1e18; // > 1% deviation
 
-        uint256 price = strategy.getAverageIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        uint256 price = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, (1 * 1e18 + 1.001 * 1e18 + 1.2 * 1e18) / 3);
     }
 
@@ -277,10 +263,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[0] = 1 * 1e18;
         prices[1] = 2 * 1e18; // > 1% deviation
 
-        uint256 price = strategy.getAverageIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        uint256 price = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, (1 * 1e18 + 2 * 1e18) / 2);
     }
 
@@ -309,10 +292,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18; // < 1% deviation
 
-        uint256 price = strategy.getAverageIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        uint256 price = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, 1 * 1e18);
     }
 
@@ -323,10 +303,7 @@ contract SimplePriceFeedStrategyTest is Test {
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
 
-        strategy.getMedianIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
     }
 
     function test_getMedianIfDeviation_revertsOnPriceZeroFuzz(uint8 priceZeroIndex_) public {
@@ -343,10 +320,7 @@ contract SimplePriceFeedStrategyTest is Test {
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceZero.selector);
 
-        strategy.getMedianIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
     }
 
     function test_getMedianIfDeviation_fourItems() public {
@@ -356,10 +330,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[2] = 1.001 * 1e18;
         prices[3] = 0.99 * 1e18;
 
-        uint256 price = strategy.getMedianIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, (1 * 1e18 + 1.001 * 1e18) / 2); // Average of the middle two
     }
 
@@ -369,10 +340,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[1] = 1.2 * 1e18; // > 1% deviation
         prices[2] = 1.001 * 1e18;
 
-        uint256 price = strategy.getMedianIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, 1.001 * 1e18);
     }
 
@@ -382,10 +350,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[1] = 1.001 * 1e18;
         prices[2] = 1.2 * 1e18; // > 1% deviation
 
-        uint256 price = strategy.getMedianIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, 1.001 * 1e18);
     }
 
@@ -394,10 +359,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[0] = 1 * 1e18;
         prices[1] = 2 * 1e18; // > 1% deviation
 
-        uint256 price = strategy.getMedianIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, (1 * 1e18 + 2 * 1e18) / 2); // Average of the middle two
     }
 
@@ -426,10 +388,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18; // < 1% deviation
 
-        uint256 price = strategy.getMedianIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, 1 * 1e18);
     }
 
@@ -439,9 +398,6 @@ contract SimplePriceFeedStrategyTest is Test {
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
 
-        strategy.getMedianIfDeviation(
-            prices,
-            encodeDeviationParams(100)
-        );
+        strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
     }
 }
