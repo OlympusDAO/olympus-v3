@@ -189,4 +189,23 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         // Otherwise return the median price
         return sortedPrices[(pricesLen - 1) / 2];
     }
+
+    /// @notice This strategy returns a second price if the first feed is zero.
+    /// @dev Likely most useful if you're falling back to a secondary feed or a moving average.
+    /// @param prices_ Array of prices
+    /// @param params_ Unused
+    /// @return price_ The resolved price
+    function getPriceWithFallback(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) public pure returns (uint256) {
+        // Requires two prices
+        if (prices_.length != 2) revert SimpleStrategy_PriceCountInvalid();
+
+        // Return the first price if it's not zero
+        if (prices_[0] != 0) return prices_[0];
+
+        // Otherwise, return the second
+        return prices_[1];
+    }
 }
