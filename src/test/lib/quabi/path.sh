@@ -6,7 +6,12 @@ for FOLDER in ./out/*; do
         if [ $NAME == $1 ]
         then
             cast abi-encode "result(string)" $FILE
+            FOUND=1
             break
         fi
     done
+    if [ $FOUND ]
+    then
+        break
+    fi
 done
