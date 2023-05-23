@@ -124,9 +124,11 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// - PRICE's priceDecimals or the feed's decimals are out of bounds and would lead to an overflow
     /// - The price feed's results are invalid
     ///
+    /// @param asset_ The asset to get the price of (unused)
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Chainlink pool parameters of type OneFeedParams
     /// @return uint256 Price in the scale of PRICE's priceDecimals.
-    function getOneFeedPrice(bytes calldata params_) external view returns (uint256) {
+    function getOneFeedPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
         // Decode params
         OneFeedParams memory params = abi.decode(params_, (OneFeedParams));
 
@@ -149,9 +151,11 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// - PRICE's priceDecimals or any of the feed's decimals are out of bounds and would lead to an overflow
     /// - Any of the price feeds' results are invalid
     ///
+    /// @param asset_ The asset to get the price of (unused)
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Chainlink pool parameters of type TwoFeedParams
     /// @return uint256 Price in the scale of PRICE's priceDecimals.
-    function getTwoFeedPriceDiv(bytes calldata params_) external view returns (uint256) {
+    function getTwoFeedPriceDiv(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
 
@@ -187,9 +191,11 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// - PRICE's priceDecimals or any of the feed's decimals are out of bounds and would lead to an overflow
     /// - Any of the price feeds' results are invalid
     ///
+    /// @param asset_ The asset to get the price of (unused)
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Chainlink pool parameters of type TwoFeedParams
     /// @return uint256 Price in the scale of PRICE's priceDecimals.
-    function getTwoFeedPriceMul(bytes calldata params_) external view returns (uint256) {
+    function getTwoFeedPriceMul(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
 

@@ -104,15 +104,17 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
 
     // ========== POOL TOKEN PRICE FUNCTIONS ========== //
 
-    /// Determines the unit price of the pool token for the UniswapV2 pool specified in {params_}.
+    /// @notice Determines the unit price of the pool token for the UniswapV2 pool specified in {params_}.
     ///
-    /// The pool token price is determined using the "fair LP pricing" described here: https://cmichel.io/pricing-lp-tokens/
+    /// @dev The pool token price is determined using the "fair LP pricing" described here: https://cmichel.io/pricing-lp-tokens/
     /// This approach is implemented in order to reduce the succeptibility to manipulation of the pool token price
     /// through the pool's reserves.
     ///
+    /// @param asset_ The asset to get the price of (unused)
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ UniswapV2 pool parameters of type UniswapV2PoolParams
     /// @return uint256 Price in the scale of PRICE's priceDecimals
-    function getPoolTokenPrice(bytes calldata params_) external view returns (uint256) {
+    function getPoolTokenPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
         uint8 priceDecimals;
         {
             // Prevent overflow
@@ -208,10 +210,12 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
     /// @param lookupToken_ the token to determine the price of
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ UniswapV2 pool parameters of type UniswapV2PoolParams
     /// @return uint256 Price in the scale of PRICE's priceDecimals
     function getTokenPrice(
         address lookupToken_,
+        uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
         // Prevent overflow

@@ -143,9 +143,11 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// NOTE: if a non-stable Curve pool is passed in the parameters, an incorrect price will be
     /// pool token price returned. Use the pool-specified pool token price function instead.
     ///
+    /// @param asset_ The asset to get the price of (unused)
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePool
     /// @return uint256 Price in the scale of PRICE's priceDecimals
-    function getPoolTokenPriceFromStablePool(bytes calldata params_) external returns (uint256) {
+    function getPoolTokenPriceFromStablePool(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
         uint8 priceDecimals = _PRICE().decimals();
         if (priceDecimals > BASE_10_MAX_EXPONENT)
             revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
@@ -328,9 +330,11 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// - Unable to find a price for the tokens that are part of the pool
     /// - If the transaction involves reentrancy on the Curve pool
     ///
+    /// @param asset_ The asset to get the price of (unused)
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePoolTwoCrypto
     /// @return uint256 Price in the scale of PRICE's priceDecimals
-    function getPoolTokenPriceFromTwoCryptoPool(bytes calldata params_) external returns (uint256) {
+    function getPoolTokenPriceFromTwoCryptoPool(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
         uint8 priceDecimals = _PRICE().decimals();
         if (priceDecimals > BASE_10_MAX_EXPONENT)
             revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
@@ -380,9 +384,11 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// - Unable to find a price for the tokens that are part of the pool
     /// - If the transaction involves reentrancy on the Curve pool
     ///
+    /// @param asset_ The asset to get the price of (unused)
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePoolTriCrypto
     /// @return uint256 Price in the scale of PRICE's priceDecimals
-    function getPoolTokenPriceFromTriCryptoPool(bytes calldata params_) external returns (uint256) {
+    function getPoolTokenPriceFromTriCryptoPool(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
         uint8 priceDecimals = _PRICE().decimals();
         if (priceDecimals > BASE_10_MAX_EXPONENT)
             revert Curve_PRICEDecimalsOutOfBounds(address(_PRICE()));
@@ -438,10 +444,12 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
     /// @param lookupToken_ the token to determine the price of
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePoolTwoCrypto
     /// @return uint256 Price in the scale of PRICE's priceDecimals
     function getTokenPriceFromTwoCryptoPool(
         address lookupToken_,
+        uint8 outputDecimals_,
         bytes calldata params_
     ) external returns (uint256) {
         uint8 priceDecimals = _PRICE().decimals();
@@ -550,10 +558,12 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
     /// @param lookupToken_ the token to determine the price of
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePoolTriCrypto
     /// @return uint256 Price in the scale of PRICE's priceDecimals
     function getTokenPriceFromTriCryptoPool(
         address lookupToken_,
+        uint8 outputDecimals_,
         bytes calldata params_
     ) external returns (uint256) {
         // Prevent overflow
@@ -699,10 +709,12 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
     /// @param lookupToken_ the token to determine the price of
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Curve pool parameters of type ICurvePool
     /// @return uint256 Price in the scale of PRICE's priceDecimals
     function getTokenPriceFromStablePool(
         address lookupToken_,
+        uint8 outputDecimals_,
         bytes calldata params_
     ) external returns (uint256) {
         // Decode params

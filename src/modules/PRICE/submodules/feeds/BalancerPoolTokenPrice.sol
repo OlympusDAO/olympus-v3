@@ -133,9 +133,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// - Obtains the prices of all tokens in the pool from PRICE (usually using price feeds)
     /// - Applies a guard to protect against re-entrancy attacks on the Balancer pool
     ///
+    /// @param asset_ the token to determine the price of (unused)
+    /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerWeightedPoolParams
     /// @return uint256 Price in the scale of PRICE's priceDecimals
-    function getWeightedPoolTokenPrice(bytes calldata params_) external returns (uint256) {
+    function getWeightedPoolTokenPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
         uint8 priceDecimals;
         {
             // Prevent overflow
@@ -248,9 +250,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// - Applies a guard to protect against re-entrancy attacks on the Balancer pool
     /// - Utilises the formula suggested by Balancer: https://docs.balancer.fi/concepts/advanced/valuing-bpt.html#on-chain-price-evaluation
     ///
+    /// @param asset_ the token to determine the price of (unused)
+    /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerStablePoolParams
     /// @return uint256 Price in the scale of PRICE's priceDecimals
-    function getStablePoolTokenPrice(bytes calldata params_) external returns (uint256) {
+    function getStablePoolTokenPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
         uint8 priceDecimals;
         {
             // Prevent overflow
@@ -338,10 +342,12 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
     /// @param lookupToken_ the token to determine the price of
+    /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerParams
     /// @return uint256 Price in the scale of PRICE's priceDecimals
     function getTokenPriceFromWeightedPool(
         address lookupToken_,
+        uint8 outputDecimals_,
         bytes calldata params_
     ) external returns (uint256) {
         // Prevent overflow
@@ -498,10 +504,12 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
     /// @param lookupToken_ the token to determine the price of
+    /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerParams
     /// @return uint256 Price in the scale of PRICE's priceDecimals
     function getTokenPriceFromStablePool(
         address lookupToken_,
+        uint8 outputDecimals_,
         bytes calldata params_
     ) external returns (uint256) {
         // Prevent overflow

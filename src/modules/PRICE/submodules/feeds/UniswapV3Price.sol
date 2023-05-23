@@ -61,10 +61,12 @@ contract UniswapV3Price is PriceSubmodule {
     /// - The calculated time-weighted tick is outside the bounds of int24
     ///
     /// @param lookupToken_ The token to determine the price of.
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ Pool parameters of type UniswapV3Params
     /// @return uint256 Price in the scale of PRICE's decimals
     function getTokenTWAP(
         address lookupToken_,
+        uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
         UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
