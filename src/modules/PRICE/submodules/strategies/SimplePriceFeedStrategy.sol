@@ -18,7 +18,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     // ========== SUBMODULE FUNCTIONS =========== //
 
     function SUBKEYCODE() public pure override returns (SubKeycode) {
-        return toSubKeycode("PRICE.SMPLSTRGY");
+        return toSubKeycode("PRICE.SIMPLESTRATEGY");
     }
 
     // ========== STRATEGY FUNCTIONS ========== //

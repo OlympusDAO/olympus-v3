@@ -40,8 +40,12 @@ function ensureValidSubKeycode(SubKeycode subKeycode_, Keycode parentKeycode_) p
             // 6th character must be a period
             if (char != 0x2e) revert InvalidSubKeycode(subKeycode_); // .
         } else {
-            if ((char < 0x41 || char > 0x5A) && char != 0x5f && char != 0x00)
-                revert InvalidSubKeycode(subKeycode_); // A-Z, _, or blank
+            if (
+                (char < 0x30 || char > 0x39) &&
+                (char < 0x41 || char > 0x5A) &&
+                char != 0x5f &&
+                char != 0x00
+            ) revert InvalidSubKeycode(subKeycode_); // 0-9, A-Z, _, or blank
         }
 
         unchecked {
