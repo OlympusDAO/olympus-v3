@@ -35,11 +35,11 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
 
     error UniswapV2_AssetDecimalsOutOfBounds(address asset_);
     error UniswapV2_LookupTokenNotFound(address asset_);
+    error UniswapV2_OutputDecimalsOutOfBounds(uint8 outputDecimals_);
     error UniswapV2_PoolBalancesInvalid(address pool_);
     error UniswapV2_PoolSupplyInvalid(address pool_);
     error UniswapV2_PoolTokensInvalid(address pool_);
     error UniswapV2_PoolTypeInvalid(address pool_);
-    error UniswapV2_PRICEDecimalsOutOfBounds(address price_);
     error UniswapV2_PriceNotFound(address asset_);
 
     // ========== CONSTRUCTOR ========== //
@@ -104,31 +104,34 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
 
     // ========== POOL TOKEN PRICE FUNCTIONS ========== //
 
-    /// Determines the unit price of the pool token for the UniswapV2 pool specified in {params_}.
+    /// @notice Determines the unit price of the pool token for the UniswapV2 pool specified in {params_}.
     ///
-    /// The pool token price is determined using the "fair LP pricing" described here: https://cmichel.io/pricing-lp-tokens/
+    /// @dev The pool token price is determined using the "fair LP pricing" described here: https://cmichel.io/pricing-lp-tokens/
     /// This approach is implemented in order to reduce the succeptibility to manipulation of the pool token price
     /// through the pool's reserves.
     ///
+    /// @param asset_ The asset to get the price of (unused)
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ UniswapV2 pool parameters of type UniswapV2PoolParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
-    function getPoolTokenPrice(bytes calldata params_) external view returns (uint256) {
-        uint8 priceDecimals;
-        {
-            // Prevent overflow
-            priceDecimals = _PRICE().decimals();
-            if (priceDecimals > MAX_DECIMALS)
-                revert UniswapV2_PRICEDecimalsOutOfBounds(address(_PRICE()));
-        }
+    /// @return uint256 Price in the scale of outputDecimals_
+    function getPoolTokenPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
+        // Prevent overflow
+        if (outputDecimals_ > MAX_DECIMALS)
+            revert UniswapV2_OutputDecimalsOutOfBounds(outputDecimals_);
 
         address token0;
         address token1;
-        uint256 k; // price decimals
-        uint256 poolSupply; // price decimals
+        uint256 k; // outputDecimals_
+        uint256 poolSupply; // outputDecimals_
         {
-            // Decode params
-            UniswapV2PoolParams memory params = abi.decode(params_, (UniswapV2PoolParams));
-            IUniswapV2Pool pool = IUniswapV2Pool(params.pool);
+            IUniswapV2Pool pool;
+            {
+                // Decode params
+                UniswapV2PoolParams memory params = abi.decode(params_, (UniswapV2PoolParams));
+                if (address(params.pool) == address(0)) revert UniswapV2_PoolTypeInvalid(address(params.pool));
+
+                pool = IUniswapV2Pool(params.pool);
+            }
 
             // Get balances
             // Call this first as it will check on whether the pool is valid, and exit
@@ -141,36 +144,44 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
             if (token0 == address(0) || token1 == address(0))
                 revert UniswapV2_PoolTokensInvalid(address(pool));
 
-            // Convert balances to price decimals
-            uint8 token0Decimals = ERC20(token0).decimals();
-            if (token0Decimals > MAX_DECIMALS) revert UniswapV2_AssetDecimalsOutOfBounds(token0);
+            // Convert balances to outputDecimals_
+            uint256 balance0;
+            {
+                uint8 token0Decimals = ERC20(token0).decimals();
+                if (token0Decimals > MAX_DECIMALS) revert UniswapV2_AssetDecimalsOutOfBounds(token0);
 
-            uint8 token1Decimals = ERC20(token1).decimals();
-            if (token1Decimals > MAX_DECIMALS) revert UniswapV2_AssetDecimalsOutOfBounds(token1);
+                balance0 = uint256(balances[0]).mulDiv(
+                    10 ** outputDecimals_,
+                    10 ** token0Decimals
+                );
+            }
 
-            uint256 balance0 = uint256(balances[0]).mulDiv(
-                10 ** priceDecimals,
-                10 ** token0Decimals
-            );
-            uint256 balance1 = uint256(balances[1]).mulDiv(
-                10 ** priceDecimals,
-                10 ** token1Decimals
-            );
+            uint256 balance1;
+            {
+                uint8 token1Decimals = ERC20(token1).decimals();
+                if (token1Decimals > MAX_DECIMALS) revert UniswapV2_AssetDecimalsOutOfBounds(token1);
+
+                balance1 = uint256(balances[1]).mulDiv(
+                    10 ** outputDecimals_,
+                    10 ** token1Decimals
+                );
+            }
+
             if (balance0 == 0 || balance1 == 0) revert UniswapV2_PoolBalancesInvalid(address(pool));
 
             // Determine balance0 * balance1 = k
-            k = balance0.mulDiv(balance1, 10 ** priceDecimals);
+            k = balance0.mulDiv(balance1, 10 ** outputDecimals_);
 
             uint256 poolSupply_ = pool.totalSupply();
             if (poolSupply_ == 0) revert UniswapV2_PoolSupplyInvalid(address(pool));
 
-            // Shift the pool supply into price decimals
+            // Shift the pool supply into outputDecimals_
             uint8 poolDecimals = pool.decimals(); // Always 18
-            poolSupply = poolSupply_.mulDiv(10 ** priceDecimals, 10 ** poolDecimals);
+            poolSupply = poolSupply_.mulDiv(10 ** outputDecimals_, 10 ** poolDecimals);
         }
 
-        uint256 price0; // price decimals
-        uint256 price1; // price decimals
+        uint256 price0; // outputDecimals_
+        uint256 price1; // outputDecimals_
         {
             PRICEv2 PRICE = _PRICE();
 
@@ -183,13 +194,13 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
             price1 = price1_;
         }
 
-        uint256 poolValue; // price decimals
+        uint256 poolValue; // outputDecimals_
         {
             uint256 priceMultiple = FixedPointMathLib.sqrt(
-                price0.mulDiv(price1, 10 ** priceDecimals) * k
-            ); // sqrt(price * price) = price decimals
+                price0.mulDiv(price1, 10 ** outputDecimals_) * k
+            ); // sqrt(price * price) = outputDecimals_
 
-            uint256 two = 2 * 10 ** priceDecimals;
+            uint256 two = 2 * 10 ** outputDecimals_;
             poolValue = two.mulDiv(priceMultiple, poolSupply);
         }
 
@@ -208,24 +219,24 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
     /// @param lookupToken_ the token to determine the price of
+    /// @param outputDecimals_ The number of decimals to return the price in
     /// @param params_ UniswapV2 pool parameters of type UniswapV2PoolParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getTokenPrice(
         address lookupToken_,
+        uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
         // Prevent overflow
-        uint8 priceDecimals;
-        {
-            priceDecimals = _PRICE().decimals();
-            if (priceDecimals > MAX_DECIMALS)
-                revert UniswapV2_PRICEDecimalsOutOfBounds(address(_PRICE()));
-        }
+        if (outputDecimals_ > MAX_DECIMALS)
+            revert UniswapV2_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         IUniswapV2Pool pool;
         {
             UniswapV2PoolParams memory params = abi.decode(params_, (UniswapV2PoolParams));
+            if (address(params.pool) == address(0)) revert UniswapV2_PoolTypeInvalid(address(params.pool));
+
             pool = IUniswapV2Pool(params.pool);
         }
 
@@ -241,7 +252,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
 
         uint256 lookupTokenIndex = type(uint256).max;
         uint256 destinationTokenIndex = type(uint256).max;
-        uint256 destinationTokenPrice; // Scale: price decimals
+        uint256 destinationTokenPrice; // Scale: outputDecimals_
         {
             address destinationToken;
 
@@ -288,12 +299,12 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
             uint256 lookupTokenBalance = _convertERC20Decimals(
                 balances_[lookupTokenIndex],
                 tokens_[lookupTokenIndex],
-                priceDecimals
+                outputDecimals_
             );
             uint256 destinationTokenBalance = _convertERC20Decimals(
                 balances_[destinationTokenIndex],
                 tokens_[destinationTokenIndex],
-                priceDecimals
+                outputDecimals_
             );
 
             // Get the lookupToken in terms of the destinationToken

@@ -23,32 +23,32 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
 
     CurvePoolTokenPrice internal curveSubmodule;
 
-    address internal DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-    address internal USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address internal USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
-    address internal WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address internal BTRFLY = 0xc55126051B22eBb829D00368f4B12Bde432de5Da;
-    address internal STG = 0xAf5191B0De278C7286d6C7CC6ab6BB8A73bA2Cd6;
+    address internal constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    address internal constant  USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address internal constant  USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+    address internal constant  WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address internal constant  BTRFLY = 0xc55126051B22eBb829D00368f4B12Bde432de5Da;
+    address internal constant  STG = 0xAf5191B0De278C7286d6C7CC6ab6BB8A73bA2Cd6;
 
-    uint256 internal USDT_PRICE = 1 * 1e18;
-    uint256 internal WETH_PRICE = 1_500 * 1e18;
+    uint256 internal constant  USDT_PRICE = 1 * 1e18;
+    uint256 internal constant  WETH_PRICE = 1_500 * 1e18;
 
-    uint8 internal USDT_DECIMALS = 6;
-    uint8 internal WETH_DECIMALS = 18;
+    uint8 internal constant  USDT_DECIMALS = 6;
+    uint8 internal constant  WETH_DECIMALS = 18;
 
-    uint256 internal USDT_BALANCE = 50_000_000 * 1e6;
-    uint256 internal WETH_BALANCE = 3_000 * 1e18;
+    uint256 internal constant  USDT_BALANCE = 50_000_000 * 1e6;
+    uint256 internal constant  WETH_BALANCE = 3_000 * 1e18;
 
-    uint8 internal PRICE_DECIMALS = 18;
+    uint8 internal constant  PRICE_DECIMALS = 18;
 
-    address internal TWO_CRYPTO_TOKEN = 0xc4AD29ba4B3c580e6D59105FFf484999997675Ff;
-    uint256 internal TWO_CRYPTO_SUPPLY = 181486344521982698524711;
-    uint256 internal TWO_CRYPTO_PRICE =
+    address internal constant  TWO_CRYPTO_TOKEN = 0xc4AD29ba4B3c580e6D59105FFf484999997675Ff;
+    uint256 internal constant  TWO_CRYPTO_SUPPLY = 181486344521982698524711;
+    uint256 internal constant  TWO_CRYPTO_PRICE =
         (USDT_BALANCE * 1e12 * USDT_PRICE + WETH_BALANCE * WETH_PRICE) / TWO_CRYPTO_SUPPLY;
-    uint8 internal TWO_CRYPTO_TOKEN_DECIMALS = 18;
+    uint8 internal constant  TWO_CRYPTO_TOKEN_DECIMALS = 18;
 
-    uint8 MIN_DECIMALS = 6;
-    uint8 MAX_DECIMALS = 60;
+    uint8 internal constant MIN_DECIMALS = 6;
+    uint8 internal constant MAX_DECIMALS = 60;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -117,10 +117,22 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         vm.expectRevert(err);
     }
 
+    function expectRevert_uint8(bytes4 selector_, uint8 number_) internal {
+        bytes memory err = abi.encodeWithSelector(selector_, number_);
+        vm.expectRevert(err);
+    }
+
     // ========= LP TOKEN PRICE - TWO-CRYPTO POOL ========= //
 
     // Notes:
     // - Pool decimals can't be set, so there's no point in testing them
+
+    function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnParamsPoolUndefined() public {
+        expectRevert_address(CurvePoolTokenPrice.Curve_PoolTypeNotTwoCrypto.selector, address(0));
+
+        bytes memory params = encodeCurvePoolTwoCryptoParams(ICurvePoolTwoCrypto(address(0)));
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
+    }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnPriceZero() public {
         mockAssetPrice(USDT, 0);
@@ -129,7 +141,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         expectRevert_PriceZero(USDT);
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnCoinBalanceOneZero() public {
@@ -141,7 +153,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnCoinBalanceTwoZero() public {
@@ -153,7 +165,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnCoinBalanceCountDifferent() public {
@@ -168,7 +180,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_lpTokenDecimalsFuzz(
@@ -183,7 +195,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
 
         uint8 decimalDiff = lpTokenDecimals > PRICE_DECIMALS
             ? lpTokenDecimals - PRICE_DECIMALS
@@ -201,7 +213,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_priceDecimalsFuzz(
@@ -210,14 +222,13 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
         // Mock a PRICE implementation with a higher number of decimals
-        mockPrice.setPriceDecimals(priceDecimals);
         mockPrice.setPrice(USDT, USDT_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
         mockPrice.setPrice(WETH, WETH_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), priceDecimals, params);
 
-        // Uses price decimals
+        // Uses outputDecimals_
         uint8 decimalDiff = priceDecimals > PRICE_DECIMALS
             ? priceDecimals - PRICE_DECIMALS
             : PRICE_DECIMALS - priceDecimals;
@@ -230,15 +241,14 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
 
     function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnPriceDecimalsMaximum() public {
         // Mock a PRICE implementation with a higher number of decimals
-        mockPrice.setPriceDecimals(100);
-
-        expectRevert_address(
-            CurvePoolTokenPrice.Curve_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        uint8 priceDecimals = MAX_DECIMALS + 1;
+        expectRevert_uint8(
+            CurvePoolTokenPrice.Curve_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), priceDecimals, params);
     }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_Fuzz(
@@ -249,7 +259,6 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         uint8 lpTokenDecimals = uint8(bound(lpTokenDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
         // Mock a PRICE implementation with a higher number of decimals
-        mockPrice.setPriceDecimals(priceDecimals);
         mockPrice.setPrice(USDT, USDT_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
         mockPrice.setPrice(WETH, WETH_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
 
@@ -260,7 +269,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), priceDecimals, params);
 
         // Simpler to check that the price to 2 decimal places (e.g. $10.01) is equal
         uint256 truncatedPrice = price.mulDiv(10 ** 2, 10 ** priceDecimals);
@@ -279,7 +288,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnCoinOneAddressZero() public {
@@ -291,7 +300,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnCoinTwoAddressZero() public {
@@ -303,7 +312,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnMissingLpToken() public {
@@ -312,7 +321,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         expectRevert_address(CurvePoolTokenPrice.Curve_PoolTokenNotSet.selector, address(mockPool));
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnLpTokenSupplyZero() public {
@@ -324,7 +333,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnIncorrectPoolType() public {
@@ -336,7 +345,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = abi.encode(mockStablePool);
-        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(params);
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
     }
 
     // ========= TOKEN PRICE LOOKUP - TWO-CRYPTO POOL ========= //
@@ -372,7 +381,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         setUpWethBtrfly();
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, params);
+        uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, PRICE_DECIMALS, params);
 
         // 187339411560870503*1500*10^18 / 10^18
         // 281009117341305754500
@@ -380,35 +389,43 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         assertEq(price, priceOracleEthBtrfly.mulDiv(WETH_PRICE, 10 ** PRICE_DECIMALS));
     }
 
+    function test_getTokenPriceFromTwoCryptoPool_revertsOnParamsPoolUndefined() public {
+        setUpWethBtrfly();
+
+        expectRevert_address(CurvePoolTokenPrice.Curve_PoolTypeNotTwoCrypto.selector, address(0));
+
+        bytes memory params = encodeCurvePoolTwoCryptoParams(ICurvePoolTwoCrypto(address(0)));
+        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, PRICE_DECIMALS, params);
+    }
+
     function test_getTokenPriceFromTwoCryptoPool_priceDecimalsFuzz(uint8 priceDecimals_) public {
         uint8 priceDecimals = uint8(bound(priceDecimals_, 2, MAX_DECIMALS));
 
         setUpWethBtrfly();
 
-        mockPrice.setPriceDecimals(priceDecimals);
-
         uint256 wethPrice = WETH_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS);
         mockPrice.setPrice(WETH, wethPrice);
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, params);
+        uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, priceDecimals, params);
 
-        // Will be normalised to price decimals
+        // Will be normalised to outputDecimals_
         assertEq(price, priceOracleEthBtrfly.mulDiv(wethPrice, 10 ** PRICE_DECIMALS));
     }
 
     function test_getTokenPriceFromTwoCryptoPool_revertsOnPriceDecimalsMaximum() public {
         setUpWethBtrfly();
-        mockPrice.setPriceDecimals(100);
+
+        uint8 priceDecimals = MAX_DECIMALS + 1;
         mockAssetPrice(WETH, (WETH_PRICE * 1e21) / 10 ** PRICE_DECIMALS);
 
-        expectRevert_address(
-            CurvePoolTokenPrice.Curve_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        expectRevert_uint8(
+            CurvePoolTokenPrice.Curve_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, params);
+        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, priceDecimals, params);
     }
 
     function test_getTokenPriceFromTwoCryptoPool_revertsOnUnknownToken() public {
@@ -417,7 +434,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         expectRevert_address(CurvePoolTokenPrice.Curve_LookupTokenNotFound.selector, DAI);
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTwoCryptoPool(DAI, params);
+        curveSubmodule.getTokenPriceFromTwoCryptoPool(DAI, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTwoCryptoPool_revertsOnNoPrice() public {
@@ -429,7 +446,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         expectRevert_address(CurvePoolTokenPrice.Curve_PriceNotFound.selector, address(mockPool));
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, params);
+        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTwoCryptoPool_revertsOnCoinOneZero() public {
@@ -442,7 +459,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, params);
+        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTwoCryptoPool_revertsOnCoinTwoZero() public {
@@ -455,14 +472,14 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, params);
+        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTwoCryptoPool_inverseOrientation() public {
         setUpStgUsdc();
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(STG, params);
+        uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(STG, PRICE_DECIMALS, params);
 
         // price_oracle = 1457965683083856087 = 1.4579656831
         // 1 USDC = 1.4579656831 STG
@@ -477,7 +494,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         mockAssetPrice(USDC, 1.01 * 1e18);
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(STG, params);
+        uint256 price = curveSubmodule.getTokenPriceFromTwoCryptoPool(STG, PRICE_DECIMALS, params);
 
         // price_oracle = 1457965683083856087 = 1.4579656831
         // 1 USDC = 1.4579656831 STG
@@ -497,7 +514,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, params);
+        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTwoCryptoPool_inverseOrientation_priceOracleZero() public {
@@ -510,7 +527,7 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = encodeCurvePoolTwoCryptoParams(mockPool);
-        curveSubmodule.getTokenPriceFromTwoCryptoPool(STG, params);
+        curveSubmodule.getTokenPriceFromTwoCryptoPool(STG, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTwoCryptoPool_incorrectPoolType() public {
@@ -523,6 +540,6 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         );
 
         bytes memory params = abi.encode(mockStablePool);
-        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, params);
+        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, PRICE_DECIMALS, params);
     }
 }

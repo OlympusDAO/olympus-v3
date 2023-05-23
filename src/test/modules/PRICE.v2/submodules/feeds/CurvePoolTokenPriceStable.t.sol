@@ -13,6 +13,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {CurvePoolTokenPrice, ICurvePool} from "modules/PRICE/submodules/feeds/CurvePoolTokenPrice.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
+import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 
 contract CurvePoolTokenPriceStableTest is Test {
     using FullMath for uint256;
@@ -23,25 +24,25 @@ contract CurvePoolTokenPriceStableTest is Test {
 
     CurvePoolTokenPrice internal curveSubmodule;
 
-    uint8 internal PRICE_DECIMALS = 18;
+    uint8 internal constant PRICE_DECIMALS = 18;
 
-    address internal DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-    address internal USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address internal USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+    address internal constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    address internal constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address internal constant USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
 
-    uint8 internal DAI_DECIMALS = 18;
-    uint8 internal USDC_DECIMALS = 6;
-    uint8 internal USDT_DECIMALS = 6;
+    uint8 internal constant DAI_DECIMALS = 18;
+    uint8 internal constant USDC_DECIMALS = 6;
+    uint8 internal constant USDT_DECIMALS = 6;
 
-    uint256 internal DAI_PRICE = 1e18;
-    uint256 internal USDC_PRICE = 1e18;
-    uint256 internal USDT_PRICE = 1e18;
+    uint256 internal constant DAI_PRICE = 1e18;
+    uint256 internal constant USDC_PRICE = 1e18;
+    uint256 internal constant USDT_PRICE = 1e18;
 
-    uint256 internal VIRTUAL_PRICE = 1023911043689987591;
-    uint8 internal POOL_DECIMALS = 18;
+    uint256 internal constant VIRTUAL_PRICE = 1023911043689987591;
+    uint8 internal constant POOL_DECIMALS = 18;
 
-    uint8 MIN_DECIMALS = 6;
-    uint8 MAX_DECIMALS = 60;
+    uint8 internal constant MIN_DECIMALS = 6;
+    uint8 internal constant MAX_DECIMALS = 60;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -99,6 +100,11 @@ contract CurvePoolTokenPriceStableTest is Test {
         vm.expectRevert(err);
     }
 
+    function expectRevert_uint8(bytes4 selector_, uint8 number_) internal {
+        bytes memory err = abi.encodeWithSelector(selector_, number_);
+        vm.expectRevert(err);
+    }
+
     /// @notice Mocks the record for get_dy
     /// @dev get_dy returns the quantity q2 of t2 for the given quantity q1 of t1
     ///
@@ -138,7 +144,7 @@ contract CurvePoolTokenPriceStableTest is Test {
 
     function test_getPoolTokenPriceFromStablePool_threeCoins() public {
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
 
         assertEq(price, VIRTUAL_PRICE);
     }
@@ -148,9 +154,37 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockPool.setCoinsTwo(DAI, USDC);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
 
         assertEq(price, VIRTUAL_PRICE);
+    }
+
+    function test_getPoolTokenPriceFromStablePool_revertsOnParamsPoolUndefined() public {
+        expectRevert_address(
+            CurvePoolTokenPrice.Curve_PoolTypeNotStable.selector,
+            address(0)
+        );
+
+        bytes memory params = encodeCurvePoolParams(ICurvePool(address(0)));
+        curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getPoolTokenPriceFromStablePool_revertsOnIncorrectPoolType() public {
+        // Set up a non-weighted pool
+        MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
+        mockNonWeightedPool.setDecimals(18);
+        mockNonWeightedPool.setTotalSupply(1e8);
+        mockNonWeightedPool.setPoolId(
+            0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
+        );
+
+        expectRevert_address(
+            CurvePoolTokenPrice.Curve_PoolTypeNotStable.selector,
+            address(mockNonWeightedPool)
+        );
+
+        bytes memory params = abi.encode(mockNonWeightedPool);
+        curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromStablePool_revertsOnPriceZero() public {
@@ -160,14 +194,13 @@ contract CurvePoolTokenPriceStableTest is Test {
         expectRevert_PriceZero(USDC);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromStablePool(params);
+        curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromStablePool_priceDecimalsFuzz(uint8 priceDecimals_) public {
         uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
         // Mock a PRICE implementation with a fewer number of decimals
-        mockPrice.setPriceDecimals(priceDecimals);
         mockPrice.setPrice(DAI, 1 * 10 ** priceDecimals);
         mockPrice.setPrice(USDC, 1 * 10 ** priceDecimals);
 
@@ -175,25 +208,25 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockPool.setCoinsTwo(DAI, USDC);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), priceDecimals, params);
 
-        // Uses price decimals
+        // Uses outputDecimals_
         assertEq(price, VIRTUAL_PRICE.mulDiv(10 ** priceDecimals, 1e18));
     }
 
     function test_getPoolTokenPriceFromStablePool_revertsOnPriceDecimalsMaximum() public {
         // Mock a PRICE implementation with a higher number of decimals
-        mockPrice.setPriceDecimals(100);
+        uint8 priceDecimals = MAX_DECIMALS + 1;
         mockPrice.setPrice(DAI, 1e21);
         mockPrice.setPrice(USDC, 1e21);
 
-        expectRevert_address(
-            CurvePoolTokenPrice.Curve_PRICEDecimalsOutOfBounds.selector,
-            address(mockPrice)
+        expectRevert_uint8(
+            CurvePoolTokenPrice.Curve_OutputDecimalsOutOfBounds.selector,
+            priceDecimals
         );
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromStablePool(params);
+        curveSubmodule.getPoolTokenPriceFromStablePool(address(0), priceDecimals, params);
     }
 
     function test_getPoolTokenPriceFromStablePool_revertsOnZeroCoins() public {
@@ -207,7 +240,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         );
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromStablePool(params);
+        curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromStablePool_threeCoins_minimumPrice() public {
@@ -215,7 +248,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockPrice.setPrice(USDC, 0.98 * 1e18);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
 
         assertEq(price, VIRTUAL_PRICE.mulDiv(0.98 * 1e18, 1e18));
     }
@@ -232,7 +265,6 @@ contract CurvePoolTokenPriceStableTest is Test {
         uint256 priceTwo = bound(priceTwo_, 1, 150);
         uint256 priceThree = bound(priceThree_, 1, 150);
 
-        mockPrice.setPriceDecimals(priceDecimals);
         mockPrice.setPrice(DAI, uint256(priceOne).mulDiv(10 ** priceDecimals, 10 ** 2));
         mockPrice.setPrice(USDC, uint256(priceTwo).mulDiv(10 ** priceDecimals, 10 ** 2));
         mockPrice.setPrice(USDT, uint256(priceThree).mulDiv(10 ** priceDecimals, 10 ** 2));
@@ -242,7 +274,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         uint256 minimumPrice = _minimumPrice.mulDiv(10 ** priceDecimals, 10 ** 2);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), priceDecimals, params);
 
         assertEq(price, VIRTUAL_PRICE.mulDiv(minimumPrice, 10 ** POOL_DECIMALS));
     }
@@ -259,7 +291,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockPrice.setPrice(THREE_POOL, 10 ** PRICE_DECIMALS);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(params);
+        uint256 price = curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
 
         assertEq(price, VIRTUAL_PRICE);
     }
@@ -273,7 +305,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         );
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromStablePool(params);
+        curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getPoolTokenPriceFromStablePool_revertsOnCoinTwoZero() public {
@@ -285,7 +317,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         );
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        curveSubmodule.getPoolTokenPriceFromStablePool(params);
+        curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
     }
 
     // ========= STABLE POOL - TOKEN SPOT PRICE ========= //
@@ -295,9 +327,40 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockSwap(USDC, DAI, quantityInDai);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromStablePool(USDC, params);
+        uint256 price = curveSubmodule.getTokenPriceFromStablePool(USDC, PRICE_DECIMALS, params);
 
         assertEq(price, quantityInDai.mulDiv(DAI_PRICE, 1e18));
+    }
+
+    function test_getTokenPriceFromStablePool_revertsOnParamsPoolUndefined() public {
+        uint256 quantityInDai = 1.01 * 1e18;
+        mockSwap(USDC, DAI, quantityInDai);
+
+        expectRevert_address(
+            CurvePoolTokenPrice.Curve_PoolTypeNotStable.selector,
+            address(0)
+        );
+
+        bytes memory params = encodeCurvePoolParams(ICurvePool(address(0)));
+        curveSubmodule.getTokenPriceFromStablePool(USDC, PRICE_DECIMALS, params);
+    }
+
+    function test_getTokenPriceFromStablePool_revertsOnIncorrectPoolType() public {
+        // Set up a non-weighted pool
+        MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
+        mockNonWeightedPool.setDecimals(18);
+        mockNonWeightedPool.setTotalSupply(1e8);
+        mockNonWeightedPool.setPoolId(
+            0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
+        );
+
+        expectRevert_address(
+            CurvePoolTokenPrice.Curve_PoolTypeNotStable.selector,
+            address(mockNonWeightedPool)
+        );
+
+        bytes memory params = abi.encode(mockNonWeightedPool);
+        curveSubmodule.getTokenPriceFromStablePool(USDC, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromStablePool_coinThree() public {
@@ -305,7 +368,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockSwap(USDT, DAI, quantityInDai);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromStablePool(USDT, params);
+        uint256 price = curveSubmodule.getTokenPriceFromStablePool(USDT, PRICE_DECIMALS, params);
 
         assertEq(price, quantityInDai.mulDiv(DAI_PRICE, 1e18));
     }
@@ -318,7 +381,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockPrice.setPrice(DAI, 0.98 * 1e18);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromStablePool(USDC, params);
+        uint256 price = curveSubmodule.getTokenPriceFromStablePool(USDC, PRICE_DECIMALS, params);
 
         assertEq(price, quantityInDai.mulDiv(0.98 * 1e18, 1e18));
     }
@@ -329,8 +392,6 @@ contract CurvePoolTokenPriceStableTest is Test {
         uint256 quantityInDai = 1.02 * 1e18;
         mockSwap(USDC, DAI, quantityInDai);
 
-        mockPrice.setPriceDecimals(priceDecimals);
-
         uint256 daiPrice = DAI_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS);
         mockPrice.setPrice(DAI, daiPrice);
         uint256 usdcPrice = USDC_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS);
@@ -339,9 +400,9 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockPrice.setPrice(USDT, usdtPrice);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromStablePool(USDC, params);
+        uint256 price = curveSubmodule.getTokenPriceFromStablePool(USDC, priceDecimals, params);
 
-        // Will be normalised to price decimals
+        // Will be normalised to outputDecimals_
         assertEq(price, quantityInDai.mulDiv(daiPrice, 1e18));
     }
 
@@ -351,7 +412,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         expectRevert_address(CurvePoolTokenPrice.Curve_LookupTokenNotFound.selector, WBTC);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        curveSubmodule.getTokenPriceFromStablePool(WBTC, params);
+        curveSubmodule.getTokenPriceFromStablePool(WBTC, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromStablePool_otherPriceZero() public {
@@ -363,7 +424,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         mockSwap(USDC, USDT, quantityInDai);
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        uint256 price = curveSubmodule.getTokenPriceFromStablePool(USDC, params);
+        uint256 price = curveSubmodule.getTokenPriceFromStablePool(USDC, PRICE_DECIMALS, params);
 
         assertEq(price, quantityInDai.mulDiv(USDT_PRICE, 1e18));
     }
@@ -377,7 +438,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         );
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        curveSubmodule.getTokenPriceFromStablePool(USDC, params);
+        curveSubmodule.getTokenPriceFromStablePool(USDC, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromStablePool_coinTwoZero() public {
@@ -389,7 +450,7 @@ contract CurvePoolTokenPriceStableTest is Test {
         );
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        curveSubmodule.getTokenPriceFromStablePool(USDC, params);
+        curveSubmodule.getTokenPriceFromStablePool(USDC, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromStablePool_dyZero() public {
@@ -398,6 +459,6 @@ contract CurvePoolTokenPriceStableTest is Test {
         expectRevert_address(CurvePoolTokenPrice.Curve_PriceNotFound.selector, address(mockPool));
 
         bytes memory params = encodeCurvePoolParams(mockPool);
-        curveSubmodule.getTokenPriceFromStablePool(USDC, params);
+        curveSubmodule.getTokenPriceFromStablePool(USDC, PRICE_DECIMALS, params);
     }
 }

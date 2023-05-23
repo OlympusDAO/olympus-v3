@@ -51,6 +51,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
     error Balancer_AssetDecimalsOutOfBounds(address asset_);
     error Balancer_LookupTokenNotFound(address asset_);
+    error Balancer_OutputDecimalsOutOfBounds(uint8 outputDecimals_);
     error Balancer_PoolDecimalsOutOfBounds(bytes32 poolId_);
     error Balancer_PoolStableRateInvalid(bytes32 poolId_);
     error Balancer_PoolSupplyInvalid(bytes32 poolId_);
@@ -59,7 +60,6 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     error Balancer_PoolTypeNotStable(bytes32 poolId_);
     error Balancer_PoolTypeNotWeighted(bytes32 poolId_);
     error Balancer_PoolWeightsInvalid(bytes32 poolId_);
-    error Balancer_PRICEDecimalsOutOfBounds(address price_);
     error Balancer_PriceNotFound(address asset_);
 
     // ========== STATE VARIABLES ========== //
@@ -124,6 +124,96 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         return _convertERC20Decimals(balances_[tokenIndex], tokens_[tokenIndex], outputDecimals);
     }
 
+    /// @notice Obtains the balance/weight ratio of token at the specified index in the pool
+    ///
+    /// @dev This function will revert if converting the pool's decimals would result in an overflow.
+    ///
+    /// As this function is accessing the balances of the pool, it is guarded by VaultReentrancyLib to
+    /// prevent re-entrancy attacks.
+    ///
+    /// @param poolId_ id of the Balancer pool
+    /// @param pool_ Balancer weighted pool
+    /// @param index_ index of the token in the Balancer pool
+    /// @param outputDecimals_ desired number of decimals
+    /// @return uint256 Balance in the scale of outputDecimals_
+    function _getTokenBalanceWeighting(
+        bytes32 poolId_,
+        IWeightedPool pool_,
+        uint256 index_,
+        uint8 outputDecimals_
+    ) internal returns (uint256) {
+        uint256 tokenBalance = _getTokenBalance(poolId_, index_, outputDecimals_);
+
+        uint8 poolDecimals = pool_.decimals();
+        uint256[] memory weights = pool_.getNormalizedWeights();
+        uint256 tokenWeight = weights[index_].mulDiv(
+            10 ** outputDecimals_,
+            10 ** poolDecimals
+        );
+
+        return tokenBalance.mulDiv(10 ** outputDecimals_, tokenWeight);
+    }
+
+    function _getTokenValueInWeightedPool(
+        address token_,
+        uint256 weight_,
+        uint8 poolDecimals_,
+        uint8 outputDecimals_,
+        uint8 powDecimals_,
+        bytes32 poolId_
+    ) internal view returns (uint256) {
+        if (token_ == address(0)) revert Balancer_PoolTokensInvalid(poolId_);
+        if (weight_ == 0) revert Balancer_PoolWeightsInvalid(poolId_);
+
+        uint256 price; // powDecimals_
+        {
+            /**
+             * PRICE will revert if there is an issue resolving the price, or if it is 0.
+             *
+             * As the value of the pool token is reliant on the price of every underlying token,
+             * the revert from PRICE is not caught.
+             */
+            (uint256 price_, ) = _PRICE().getPrice(token_, PRICEv2.Variant.CURRENT); // outputDecimals_
+
+            price = price_.mulDiv(10 ** powDecimals_, 10 ** outputDecimals_);
+        }
+
+        // powDecimals_
+        uint256 weight = weight_.mulDiv(10 ** powDecimals_, 10 ** poolDecimals_);
+
+        // All inputs to pow need to be in the scale of 1e18, so adjust for that
+        return LogExpMath.pow(price.mulDiv(10 ** powDecimals_, weight), weight); // pow decimals
+    }
+
+    function _getWeightedPoolRawValue(
+        address[] memory tokens_,
+        uint256[] memory weights_,
+        uint8 poolDecimals_,
+        uint8 outputDecimals_,
+        uint8 powDecimals_,
+        bytes32 poolId_
+    ) internal view returns (uint256) {
+        uint256 len = tokens_.length;
+
+        uint256 poolValue = 0; // pow decimals
+        // PRICEv2 PRICE = _PRICE();
+        for (uint256 i; i < len; ) {
+            uint256 currentValue = _getTokenValueInWeightedPool(tokens_[i], weights_[i], poolDecimals_, outputDecimals_, powDecimals_, poolId_);
+
+            if (poolValue == 0) {
+                poolValue = currentValue;
+            } else {
+                poolValue = poolValue.mulDiv(currentValue, 10 ** powDecimals_);
+            }
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return poolValue;
+    }
+
     // ========== POOL TOKEN PRICE FUNCTIONS ========== //
 
     /// @notice Determines the unit price of the pool token for the Balancer weighted pool specified in {params_}.
@@ -133,20 +223,23 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// - Obtains the prices of all tokens in the pool from PRICE (usually using price feeds)
     /// - Applies a guard to protect against re-entrancy attacks on the Balancer pool
     ///
+    /// This function will revert if:
+    /// - The scale of outputDecimals_ or the pool's decimals is too high
+    /// - The pool is mis-configured
+    /// - If the pool is not a weighted pool
+    ///
+    /// @param asset_ the token to determine the price of (unused)
+    /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerWeightedPoolParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
-    function getWeightedPoolTokenPrice(bytes calldata params_) external returns (uint256) {
-        uint8 priceDecimals;
-        {
-            // Prevent overflow
-            priceDecimals = _PRICE().decimals();
-            if (priceDecimals > BASE_10_MAX_EXPONENT)
-                revert Balancer_PRICEDecimalsOutOfBounds(address(_PRICE()));
-        }
+    /// @return uint256 Price in the scale of outputDecimals_
+    function getWeightedPoolTokenPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
+        // Prevent overflow
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
 
         address[] memory tokens;
         uint256[] memory weights;
-        uint256 poolMultiplier; // price decimals
+        uint256 poolMultiplier; // outputDecimals_
         uint8 poolDecimals;
         bytes32 poolId;
         {
@@ -155,6 +248,8 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                 params_,
                 (BalancerWeightedPoolParams)
             );
+            if (address(params.pool) == address(0)) revert Balancer_PoolTypeNotWeighted(bytes32(0));
+
             IWeightedPool pool = IWeightedPool(params.pool);
 
             // Get pool ID
@@ -184,59 +279,21 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
             if (poolDecimals > BASE_10_MAX_EXPONENT)
                 revert Balancer_PoolDecimalsOutOfBounds(poolId);
 
-            // The invariant and supply have the same scale, so we can shift the result into price decimals
-            poolMultiplier = poolInvariant_.mulDiv(10 ** priceDecimals, poolSupply_);
+            // The invariant and supply have the same scale, so we can shift the result into outputDecimals_
+            poolMultiplier = poolInvariant_.mulDiv(10 ** outputDecimals_, poolSupply_);
         }
 
         // Iterate through tokens, get prices, and determine pool value
         uint256 len = tokens.length;
         if (weights.length != len) revert Balancer_PoolTokenWeightMismatch(poolId);
 
+        // Scale: powDecimals
         uint8 powDecimals = 18;
-        uint256 poolValue = 0; // pow decimals
-        PRICEv2 PRICE = _PRICE();
-        for (uint256 i; i < len; ) {
-            address token = tokens[i];
-            if (token == address(0)) revert Balancer_PoolTokensInvalid(poolId);
-
-            uint256 price; // powDecimals
-            {
-                /**
-                 * PRICE will revert if there is an issue resolving the price, or if it is 0.
-                 *
-                 * As the value of the pool token is reliant on the price of every underlying token,
-                 * the revert from PRICE is not caught.
-                 */
-                (uint256 price_, ) = PRICE.getPrice(tokens[i], PRICEv2.Variant.CURRENT); // price decimals
-
-                price = price_.mulDiv(10 ** powDecimals, 10 ** priceDecimals);
-            }
-
-            uint256 weight; // powDecimals
-            {
-                uint256 weightUnadjusted = weights[i]; // pool decimals
-                if (weightUnadjusted == 0) revert Balancer_PoolWeightsInvalid(poolId);
-
-                weight = weightUnadjusted.mulDiv(10 ** powDecimals, 10 ** poolDecimals);
-            }
-
-            // All inputs to pow need to be in the scale of 1e18, so adjust for that
-            uint256 currentValue = LogExpMath.pow(price.mulDiv(10 ** powDecimals, weight), weight); // pow decimals
-
-            if (poolValue == 0) {
-                poolValue = currentValue;
-            } else {
-                poolValue = poolValue.mulDiv(currentValue, 10 ** powDecimals);
-            }
-
-            unchecked {
-                ++i;
-            }
-        }
+        uint256 poolValue = _getWeightedPoolRawValue(tokens, weights, poolDecimals, outputDecimals_, powDecimals, poolId);
         // No coins or balances
         if (poolValue == 0) revert Balancer_PoolTokensInvalid(poolId);
 
-        // Calculate price of pool token in terms of price decimals
+        // Calculate price of pool token in terms of outputDecimals_
         uint256 poolTokenPrice = poolMultiplier.mulDiv(poolValue, 10 ** powDecimals);
 
         return poolTokenPrice;
@@ -248,16 +305,19 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// - Applies a guard to protect against re-entrancy attacks on the Balancer pool
     /// - Utilises the formula suggested by Balancer: https://docs.balancer.fi/concepts/advanced/valuing-bpt.html#on-chain-price-evaluation
     ///
+    /// This function will revert if:
+    /// - The scale of outputDecimals_ or the pool's decimals is too high
+    /// - The pool is mis-configured
+    /// - The pool is not a stable pool
+    ///
+    /// @param asset_ the token to determine the price of (unused)
+    /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerStablePoolParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
-    function getStablePoolTokenPrice(bytes calldata params_) external returns (uint256) {
-        uint8 priceDecimals;
-        {
-            // Prevent overflow
-            priceDecimals = _PRICE().decimals();
-            if (priceDecimals > BASE_10_MAX_EXPONENT)
-                revert Balancer_PRICEDecimalsOutOfBounds(address(_PRICE()));
-        }
+    /// @return uint256 Price in the scale of outputDecimals_
+    function getStablePoolTokenPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external returns (uint256) {
+        // Prevent overflow
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
 
         address[] memory tokens;
         uint256 poolRate; // pool decimals
@@ -269,6 +329,8 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                 params_,
                 (BalancerStablePoolParams)
             );
+            if (address(params.pool) == address(0)) revert Balancer_PoolTypeNotStable(bytes32(0));
+
             IStablePool pool = IStablePool(params.pool);
 
             // Get pool ID
@@ -303,7 +365,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint256 len = tokens.length;
         if (len == 0) revert Balancer_PoolTokensInvalid(poolId);
 
-        uint256 baseTokenPrice; // price decimals
+        uint256 baseTokenPrice; // outputDecimals_
         {
             address token = tokens[0];
             if (token == address(0)) revert Balancer_PoolTokensInvalid(poolId);
@@ -314,11 +376,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
              * As the value of the pool token is reliant on the price of every underlying token,
              * the revert from PRICE is not caught.
              */
-            (uint256 price_, ) = PRICE.getPrice(tokens[0], PRICEv2.Variant.CURRENT); // price decimals
+            (uint256 price_, ) = PRICE.getPrice(tokens[0], PRICEv2.Variant.CURRENT); // outputDecimals_
             baseTokenPrice = price_;
         }
 
-        uint256 poolValue = poolRate.mulDiv(baseTokenPrice, 10 ** poolDecimals); // price decimals
+        uint256 poolValue = poolRate.mulDiv(baseTokenPrice, 10 ** poolDecimals); // outputDecimals_
 
         return poolValue;
     }
@@ -332,25 +394,25 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// - Determining the corresponding price of {lookupToken_}
     ///
     /// Will revert upon the following:
+    /// - If outputDecimals_ or the pool's decimals are too high
     /// - If the transaction involves reentrancy on the Balancer pool
+    /// - If the pool is not a weighted pool
     ///
     /// NOTE: as the reserves of Balancer pools can be manipulated using flash loans, the spot price
     /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
     /// @param lookupToken_ the token to determine the price of
+    /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getTokenPriceFromWeightedPool(
         address lookupToken_,
+        uint8 outputDecimals_,
         bytes calldata params_
     ) external returns (uint256) {
         // Prevent overflow
-        uint8 priceDecimals;
-        {
-            priceDecimals = _PRICE().decimals();
-            if (priceDecimals > BASE_10_MAX_EXPONENT)
-                revert Balancer_PRICEDecimalsOutOfBounds(address(_PRICE()));
-        }
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         IWeightedPool pool;
@@ -359,13 +421,14 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                 params_,
                 (BalancerWeightedPoolParams)
             );
+            if (address(params.pool) == address(0)) revert Balancer_PoolTypeNotWeighted(bytes32(0));
+
             pool = IWeightedPool(params.pool);
         }
 
         uint256 lookupTokenIndex = type(uint256).max;
         uint256 destinationTokenIndex = type(uint256).max;
-        uint256 destinationTokenPrice; // Scale: price decimals
-        address destinationToken;
+        uint256 destinationTokenPrice; // Scale: outputDecimals_
         bytes32 poolId;
         {
             // Prevent re-entrancy attacks
@@ -376,6 +439,12 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
             (address[] memory tokens_, uint256[] memory balances_, ) = balVault.getPoolTokens(
                 poolId
             );
+
+            {
+                uint8 poolDecimals = pool.decimals();
+                if (poolDecimals > BASE_10_MAX_EXPONENT)
+                    revert Balancer_PoolDecimalsOutOfBounds(poolId);
+            }
 
             // Check that the pool is not mis-configured
             {
@@ -394,91 +463,65 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
             }
 
             // Determine the index of the lookup token and an appropriate destination token
-            uint256 len = tokens_.length;
-            for (uint256 i; i < len; i++) {
-                // If address is zero, complain
-                if (tokens_[i] == address(0)) revert Balancer_PoolTokensInvalid(poolId);
+            {
+                uint256 len = tokens_.length;
+                address destinationToken;
+                for (uint256 i; i < len; i++) {
+                    // If address is zero, complain
+                    if (tokens_[i] == address(0)) revert Balancer_PoolTokensInvalid(poolId);
 
-                // If lookup token
-                if (lookupToken_ == tokens_[i]) {
-                    lookupTokenIndex = i;
-                    continue;
+                    // If lookup token
+                    if (lookupToken_ == tokens_[i]) {
+                        lookupTokenIndex = i;
+                        continue;
+                    }
+
+                    // Don't set the destination token again
+                    if (destinationTokenIndex != type(uint256).max) continue;
+
+                    /**
+                     * PRICE will revert if there is an issue resolving the price, or if it is 0.
+                     *
+                     * We catch this, so that other candidate tokens can be tested.
+                     */
+                    try _PRICE().getPrice(tokens_[i], PRICEv2.Variant.CURRENT) returns (
+                        uint256 currentPrice,
+                        uint48 timestamp
+                    ) {
+                        destinationTokenIndex = i;
+                        destinationTokenPrice = currentPrice;
+                        destinationToken = tokens_[i];
+                    } catch (bytes memory) {
+                        continue;
+                    }
                 }
 
-                // Don't set the destination token again
-                if (destinationTokenIndex != type(uint256).max) continue;
+                // Lookup token not found
+                if (lookupTokenIndex == type(uint256).max)
+                    revert Balancer_LookupTokenNotFound(lookupToken_);
 
-                /**
-                 * PRICE will revert if there is an issue resolving the price, or if it is 0.
-                 *
-                 * We catch this, so that other candidate tokens can be tested.
-                 */
-                try _PRICE().getPrice(tokens_[i], PRICEv2.Variant.CURRENT) returns (
-                    uint256 currentPrice,
-                    uint48 timestamp
-                ) {
-                    destinationTokenIndex = i;
-                    destinationTokenPrice = currentPrice;
-                    destinationToken = tokens_[i];
-                } catch (bytes memory) {
-                    continue;
-                }
+                // No destination token found with a price
+                if (
+                    destinationTokenPrice == 0 ||
+                    destinationTokenIndex == type(uint256).max ||
+                    destinationToken == address(0)
+                ) revert Balancer_PriceNotFound(lookupToken_);
             }
-
-            // Lookup token not found
-            if (lookupTokenIndex == type(uint256).max)
-                revert Balancer_LookupTokenNotFound(lookupToken_);
-
-            // No destination token found with a price
-            if (
-                destinationTokenPrice == 0 ||
-                destinationTokenIndex == type(uint256).max ||
-                destinationToken == address(0)
-            ) revert Balancer_PriceNotFound(lookupToken_);
         }
 
         // Calculate the rate of the lookup token
         uint256 lookupTokenUsdPrice;
         {
-            uint256 lookupTokenBalance;
-            uint256 destinationTokenBalance;
-            {
-                lookupTokenBalance = _getTokenBalance(poolId, lookupTokenIndex, priceDecimals);
-                destinationTokenBalance = _getTokenBalance(
-                    poolId,
-                    destinationTokenIndex,
-                    priceDecimals
-                );
-            }
-
             // Weightings
-            // Scale: price decimals
-            uint256 lookupTokenWeight;
-            uint256 destinationTokenWeight;
-            {
-                uint8 poolDecimals = pool.decimals();
-                if (poolDecimals > BASE_10_MAX_EXPONENT)
-                    revert Balancer_PoolDecimalsOutOfBounds(poolId);
-
-                // Convert from pool decimals to price decimals
-                uint256[] memory weights = pool.getNormalizedWeights();
-                lookupTokenWeight = weights[lookupTokenIndex].mulDiv(
-                    10 ** priceDecimals,
-                    10 ** poolDecimals
-                );
-                destinationTokenWeight = weights[destinationTokenIndex].mulDiv(
-                    10 ** priceDecimals,
-                    10 ** poolDecimals
-                );
-            }
+            // Scale: outputDecimals_
+            uint256 lookupTokenWeighting = _getTokenBalanceWeighting(poolId, pool, lookupTokenIndex, outputDecimals_);
+            uint256 destinationTokenWeighting = _getTokenBalanceWeighting(poolId, pool, destinationTokenIndex, outputDecimals_);
 
             // Get the lookupToken in terms of the destinationToken
             // Source: https://docs.balancer.fi/reference/math/weighted-math.html#spot-price
-            lookupTokenUsdPrice = (
-                destinationTokenBalance.mulDiv(10 ** priceDecimals, destinationTokenWeight)
-            ).mulDiv(
+            lookupTokenUsdPrice = destinationTokenWeighting.mulDiv(
                     destinationTokenPrice,
-                    lookupTokenBalance.mulDiv(10 ** priceDecimals, lookupTokenWeight)
+                    lookupTokenWeighting
                 );
         }
 
@@ -493,24 +536,23 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ///
     /// Will revert upon the following:
     /// - If the transaction involves reentrancy on the Balancer pool
+    /// - If the pool is not a stable pool
     ///
     /// NOTE: as the reserves of Balancer pools can be manipulated using flash loans, the spot price
     /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
     /// @param lookupToken_ the token to determine the price of
+    /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerParams
-    /// @return uint256 Price in the scale of PRICE's priceDecimals
+    /// @return uint256 Price in the scale of outputDecimals_
     function getTokenPriceFromStablePool(
         address lookupToken_,
+        uint8 outputDecimals_,
         bytes calldata params_
     ) external returns (uint256) {
         // Prevent overflow
-        uint8 priceDecimals;
-        {
-            priceDecimals = _PRICE().decimals();
-            if (priceDecimals > BASE_10_MAX_EXPONENT)
-                revert Balancer_PRICEDecimalsOutOfBounds(address(_PRICE()));
-        }
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
 
         // Decode params
         IStablePool pool;
@@ -519,12 +561,14 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                 params_,
                 (BalancerStablePoolParams)
             );
+            if (address(params.pool) == address(0)) revert Balancer_PoolTypeNotStable(bytes32(0));
+
             pool = IStablePool(params.pool);
         }
 
         uint256 lookupTokenIndex = type(uint256).max;
         uint256 destinationTokenIndex = type(uint256).max;
-        uint256 destinationTokenPrice; // Scale: price decimals
+        uint256 destinationTokenPrice; // Scale: outputDecimals_
         address destinationToken;
         bytes32 poolId;
         {
