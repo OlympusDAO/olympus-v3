@@ -179,6 +179,13 @@ contract BalancerPoolTokenPriceStableTest is Test {
         assertEq(price, AURA_BAL_PRICE_EXPECTED);
     }
 
+    function test_getTokenPriceFromStablePool_revertsOnParamsPoolUndefined() public {
+        expectRevert_pool(BalancerPoolTokenPrice.Balancer_PoolTypeNotStable.selector, bytes32(0));
+
+        bytes memory params = encodeBalancerPoolParams(IStablePool(address(0)));
+        balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, PRICE_DECIMALS, params);
+    }
+
     function test_getTokenPriceFromStablePool_priceDecimalsFuzz(uint8 priceDecimals_) public {
         uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
@@ -357,6 +364,15 @@ contract BalancerPoolTokenPriceStableTest is Test {
     function setUpStablePoolTokenPrice() internal {
         mockAssetPrice(AURA_BAL, AURA_BAL_PRICE_EXPECTED);
         mockAssetPrice(B_80BAL_20WETH, B_80BAL_20WETH_BALANCE_PRICE_EXPECTED);
+    }
+
+    function test_getStablePoolTokenPrice_revertsOnParamsPoolUndefined() public {
+        setUpStablePoolTokenPrice();
+
+        expectRevert_pool(BalancerPoolTokenPrice.Balancer_PoolTypeNotStable.selector, bytes32(0));
+
+        bytes memory params = encodeBalancerPoolParams(IStablePool(address(0)));
+        balancerSubmodule.getTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getStablePoolTokenPrice_baseTokenPriceZero() public {

@@ -13,6 +13,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {CurvePoolTokenPrice, ICurvePool} from "modules/PRICE/submodules/feeds/CurvePoolTokenPrice.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
+import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 
 contract CurvePoolTokenPriceStableTest is Test {
     using FullMath for uint256;
@@ -158,6 +159,34 @@ contract CurvePoolTokenPriceStableTest is Test {
         assertEq(price, VIRTUAL_PRICE);
     }
 
+    function test_getPoolTokenPriceFromStablePool_revertsOnParamsPoolUndefined() public {
+        expectRevert_address(
+            CurvePoolTokenPrice.Curve_PoolTypeNotStable.selector,
+            address(0)
+        );
+
+        bytes memory params = encodeCurvePoolParams(ICurvePool(address(0)));
+        curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getPoolTokenPriceFromStablePool_revertsOnIncorrectPoolType() public {
+        // Set up a non-weighted pool
+        MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
+        mockNonWeightedPool.setDecimals(18);
+        mockNonWeightedPool.setTotalSupply(1e8);
+        mockNonWeightedPool.setPoolId(
+            0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
+        );
+
+        expectRevert_address(
+            CurvePoolTokenPrice.Curve_PoolTypeNotStable.selector,
+            address(mockNonWeightedPool)
+        );
+
+        bytes memory params = abi.encode(mockNonWeightedPool);
+        curveSubmodule.getPoolTokenPriceFromStablePool(address(0), PRICE_DECIMALS, params);
+    }
+
     function test_getPoolTokenPriceFromStablePool_revertsOnPriceZero() public {
         mockPrice.setPrice(USDC, 0);
 
@@ -301,6 +330,37 @@ contract CurvePoolTokenPriceStableTest is Test {
         uint256 price = curveSubmodule.getTokenPriceFromStablePool(USDC, PRICE_DECIMALS, params);
 
         assertEq(price, quantityInDai.mulDiv(DAI_PRICE, 1e18));
+    }
+
+    function test_getTokenPriceFromStablePool_revertsOnParamsPoolUndefined() public {
+        uint256 quantityInDai = 1.01 * 1e18;
+        mockSwap(USDC, DAI, quantityInDai);
+
+        expectRevert_address(
+            CurvePoolTokenPrice.Curve_PoolTypeNotStable.selector,
+            address(0)
+        );
+
+        bytes memory params = encodeCurvePoolParams(ICurvePool(address(0)));
+        curveSubmodule.getTokenPriceFromStablePool(USDC, PRICE_DECIMALS, params);
+    }
+
+    function test_getTokenPriceFromStablePool_revertsOnIncorrectPoolType() public {
+        // Set up a non-weighted pool
+        MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
+        mockNonWeightedPool.setDecimals(18);
+        mockNonWeightedPool.setTotalSupply(1e8);
+        mockNonWeightedPool.setPoolId(
+            0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
+        );
+
+        expectRevert_address(
+            CurvePoolTokenPrice.Curve_PoolTypeNotStable.selector,
+            address(mockNonWeightedPool)
+        );
+
+        bytes memory params = abi.encode(mockNonWeightedPool);
+        curveSubmodule.getTokenPriceFromStablePool(USDC, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromStablePool_coinThree() public {

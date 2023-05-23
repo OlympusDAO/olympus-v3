@@ -223,6 +223,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// - Obtains the prices of all tokens in the pool from PRICE (usually using price feeds)
     /// - Applies a guard to protect against re-entrancy attacks on the Balancer pool
     ///
+    /// This function will revert if:
+    /// - The scale of outputDecimals_ or the pool's decimals is too high
+    /// - The pool is mis-configured
+    /// - If the pool is not a weighted pool
+    ///
     /// @param asset_ the token to determine the price of (unused)
     /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerWeightedPoolParams
@@ -243,6 +248,8 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                 params_,
                 (BalancerWeightedPoolParams)
             );
+            if (address(params.pool) == address(0)) revert Balancer_PoolTypeNotWeighted(bytes32(0));
+
             IWeightedPool pool = IWeightedPool(params.pool);
 
             // Get pool ID
@@ -298,6 +305,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// - Applies a guard to protect against re-entrancy attacks on the Balancer pool
     /// - Utilises the formula suggested by Balancer: https://docs.balancer.fi/concepts/advanced/valuing-bpt.html#on-chain-price-evaluation
     ///
+    /// This function will revert if:
+    /// - The scale of outputDecimals_ or the pool's decimals is too high
+    /// - The pool is mis-configured
+    /// - The pool is not a stable pool
+    ///
     /// @param asset_ the token to determine the price of (unused)
     /// @param outputDecimals_ the number of output decimals
     /// @param params_ Balancer pool parameters of type BalancerStablePoolParams
@@ -317,6 +329,8 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                 params_,
                 (BalancerStablePoolParams)
             );
+            if (address(params.pool) == address(0)) revert Balancer_PoolTypeNotStable(bytes32(0));
+
             IStablePool pool = IStablePool(params.pool);
 
             // Get pool ID
@@ -380,7 +394,9 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// - Determining the corresponding price of {lookupToken_}
     ///
     /// Will revert upon the following:
+    /// - If outputDecimals_ or the pool's decimals are too high
     /// - If the transaction involves reentrancy on the Balancer pool
+    /// - If the pool is not a weighted pool
     ///
     /// NOTE: as the reserves of Balancer pools can be manipulated using flash loans, the spot price
     /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
@@ -405,6 +421,8 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                 params_,
                 (BalancerWeightedPoolParams)
             );
+            if (address(params.pool) == address(0)) revert Balancer_PoolTypeNotWeighted(bytes32(0));
+
             pool = IWeightedPool(params.pool);
         }
 
@@ -518,6 +536,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ///
     /// Will revert upon the following:
     /// - If the transaction involves reentrancy on the Balancer pool
+    /// - If the pool is not a stable pool
     ///
     /// NOTE: as the reserves of Balancer pools can be manipulated using flash loans, the spot price
     /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
@@ -542,6 +561,8 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                 params_,
                 (BalancerStablePoolParams)
             );
+            if (address(params.pool) == address(0)) revert Balancer_PoolTypeNotStable(bytes32(0));
+
             pool = IStablePool(params.pool);
         }
 

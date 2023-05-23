@@ -37,6 +37,8 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     error Chainlink_FeedPriceInvalid(address feed_);
     error Chainlink_FeedRoundMismatch(address feed_);
     error Chainlink_FeedRoundStale(address feed_);
+    error Chainlink_ParamsFeedInvalid(address feed_);
+    error Chainlink_ParamsUpdateThresholdInvalid(uint48 updateThreshold_);
     error Chainlink_OutputDecimalsOutOfBounds(uint8 outputDecimals_);
 
     // ========== CONSTRUCTOR ========== //
@@ -92,18 +94,21 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         {
             FeedRoundData memory roundData;
             {
-                (
+                try feed_.latestRoundData() returns (
                     uint80 roundId,
                     int256 priceInt,
                     uint256 startedAt,
                     uint256 updatedAt,
                     uint80 answeredInRound
-                ) = feed_.latestRoundData();
-                roundData.roundId = roundId;
-                roundData.priceInt = priceInt;
-                roundData.startedAt = startedAt;
-                roundData.updatedAt = updatedAt;
-                roundData.answeredInRound = answeredInRound;
+                ) {
+                    roundData.roundId = roundId;
+                    roundData.priceInt = priceInt;
+                    roundData.startedAt = startedAt;
+                    roundData.updatedAt = updatedAt;
+                    roundData.answeredInRound = answeredInRound;
+                } catch (bytes memory) {
+                    revert Chainlink_ParamsFeedInvalid(address(feed_));
+                }
             }
             {
                 _validatePriceFeedResult(
@@ -133,6 +138,10 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     function getOneFeedPrice(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
         // Decode params
         OneFeedParams memory params = abi.decode(params_, (OneFeedParams));
+        {
+            if (address(params.feed) == address(0)) revert Chainlink_ParamsFeedInvalid(address(params.feed));
+            if (params.updateThreshold == 0) revert Chainlink_ParamsUpdateThresholdInvalid(params.updateThreshold);
+        }
 
         // Ensure that no decimals would result in an underflow or overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
@@ -159,6 +168,12 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     function getTwoFeedPriceDiv(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
+        {
+            if (address(params.numeratorFeed) == address(0)) revert Chainlink_ParamsFeedInvalid(address(params.numeratorFeed));
+            if (params.numeratorUpdateThreshold == 0) revert Chainlink_ParamsUpdateThresholdInvalid(params.numeratorUpdateThreshold);
+            if (address(params.denominatorFeed) == address(0)) revert Chainlink_ParamsFeedInvalid(address(params.denominatorFeed));
+            if (params.denominatorUpdateThreshold == 0) revert Chainlink_ParamsUpdateThresholdInvalid(params.denominatorUpdateThreshold);
+        }
 
         // Ensure that no decimals would result in an underflow or overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
@@ -200,6 +215,12 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     function getTwoFeedPriceMul(address asset_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
+        {
+            if (address(params.numeratorFeed) == address(0)) revert Chainlink_ParamsFeedInvalid(address(params.numeratorFeed));
+            if (params.numeratorUpdateThreshold == 0) revert Chainlink_ParamsUpdateThresholdInvalid(params.numeratorUpdateThreshold);
+            if (address(params.denominatorFeed) == address(0)) revert Chainlink_ParamsFeedInvalid(address(params.denominatorFeed));
+            if (params.denominatorUpdateThreshold == 0) revert Chainlink_ParamsUpdateThresholdInvalid(params.denominatorUpdateThreshold);
+        }
 
         // Ensure that no decimals would result in an underflow or overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)

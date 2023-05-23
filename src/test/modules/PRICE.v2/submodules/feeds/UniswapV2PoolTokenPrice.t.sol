@@ -154,7 +154,17 @@ contract UniswapV2PoolTokenPriceTest is Test {
 
     // ========= POOL TOKEN PRICE ========= //
 
-    function test_getPoolTokenPrice_pricePriceZero() public {
+    function test_getPoolTokenPrice_revertsOnParamsPoolUndefined() public {
+        expectRevert_address(
+            UniswapV2PoolTokenPrice.UniswapV2_PoolTypeInvalid.selector,
+            address(0)
+        );
+
+        bytes memory params = encodePoolParams(IUniswapV2Pool(address(0)));
+        uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getPoolTokenPrice_revertsOnPriceZero() public {
         mockAssetPrice(USDC, 0);
 
         expectRevert_PriceZero(USDC);
@@ -341,6 +351,26 @@ contract UniswapV2PoolTokenPriceTest is Test {
         uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
     }
 
+    function test_getPoolTokenPrice_revertsOnIncorrectPoolType() public {
+        mockAssetPrice(WETH, 0); // Stops lookup
+
+        // Set up a non-weighted pool
+        MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
+        mockNonWeightedPool.setDecimals(18);
+        mockNonWeightedPool.setTotalSupply(1e8);
+        mockNonWeightedPool.setPoolId(
+            0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
+        );
+
+        expectRevert_address(
+            UniswapV2PoolTokenPrice.UniswapV2_PoolTypeInvalid.selector,
+            address(mockNonWeightedPool)
+        );
+
+        bytes memory params = abi.encode(mockNonWeightedPool);
+        uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
+    }
+
     // ========= TOKEN PRICE ========= //
 
     function test_getTokenPrice_priceDecimalsFuzz(uint8 priceDecimals_) public {
@@ -359,6 +389,16 @@ contract UniswapV2PoolTokenPriceTest is Test {
             WETH_PRICE_EXPECTED.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS),
             10 ** decimalDiff
         );
+    }
+
+    function test_getTokenPrice_revertsOnParamsPoolUndefined() public {
+        expectRevert_address(
+            UniswapV2PoolTokenPrice.UniswapV2_PoolTypeInvalid.selector,
+            address(0)
+        );
+
+        bytes memory params = encodePoolParams(IUniswapV2Pool(address(0)));
+        uniswapSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPrice_revertsOnPriceDecimalsMaximum() public {

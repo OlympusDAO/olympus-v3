@@ -35,6 +35,7 @@ contract UniswapV3Price is PriceSubmodule {
     error UniswapV3_LookupTokenNotFound(address asset_);
     error UniswapV3_OutputDecimalsOutOfBounds(uint8 outputDecimals_);
     error UniswapV3_PoolTokensInvalid(address pool_);
+    error UniswapV3_PoolTypeInvalid(address pool_);
     error UniswapV3_TickOutOfBounds(address pool_);
     error UniswapV3_TWAPObservationWindowTooShort(address pool_);
 
@@ -70,7 +71,18 @@ contract UniswapV3Price is PriceSubmodule {
         bytes calldata params_
     ) external view returns (uint256) {
         UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
+        {
+            if (address(params.pool) == address(0)) revert UniswapV3_PoolTypeInvalid(address(params.pool));
+        }
         IUniswapV3Pool pool = IUniswapV3Pool(params.pool);
+        {
+            try pool.token0() returns (address token) {
+                // Do nothing
+            } catch (bytes memory) {
+                // Handle a non-UniswapV3 pool
+                revert UniswapV3_PoolTypeInvalid(address(pool));
+            }
+        }
 
         // Revert if the observation window is less than the minimum (which would not give manipulation-resistant results)
         if (params.observationWindowSeconds < TWAP_MINIMUM_OBSERVATION_SECONDS)
@@ -91,11 +103,15 @@ contract UniswapV3Price is PriceSubmodule {
             observationWindow[0] = params.observationWindowSeconds;
             observationWindow[1] = 0;
 
-            (int56[] memory tickCumulatives, ) = pool.observe(observationWindow);
-
-            timeWeightedTick =
-                (tickCumulatives[1] - tickCumulatives[0]) /
-                int56(int32(params.observationWindowSeconds));
+            try pool.observe(observationWindow) returns (int56[] memory tickCumulatives, uint160[] memory secondsPerLiquidityCumulativeX128s) {
+                timeWeightedTick =
+                    (tickCumulatives[1] - tickCumulatives[0]) /
+                    int56(int32(params.observationWindowSeconds));
+            } catch (bytes memory) {
+                // Handle a non-UniswapV3 pool
+                // A UniswapV2 pool could pass the above check, but would revert here
+                revert UniswapV3_PoolTypeInvalid(address(pool));
+            }
         }
 
         uint256 tokenPrice;

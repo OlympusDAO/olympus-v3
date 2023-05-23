@@ -127,6 +127,13 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
     // Notes:
     // - Pool decimals can't be set, so there's no point in testing them
 
+    function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnParamsPoolUndefined() public {
+        expectRevert_address(CurvePoolTokenPrice.Curve_PoolTypeNotTwoCrypto.selector, address(0));
+
+        bytes memory params = encodeCurvePoolTwoCryptoParams(ICurvePoolTwoCrypto(address(0)));
+        curveSubmodule.getPoolTokenPriceFromTwoCryptoPool(address(0), PRICE_DECIMALS, params);
+    }
+
     function test_getPoolTokenPriceFromTwoCryptoPool_revertsOnPriceZero() public {
         mockAssetPrice(USDT, 0);
 
@@ -380,6 +387,15 @@ contract CurvePoolTokenPriceTwoCryptoTest is Test {
         // 281009117341305754500
         // $281.0091173413
         assertEq(price, priceOracleEthBtrfly.mulDiv(WETH_PRICE, 10 ** PRICE_DECIMALS));
+    }
+
+    function test_getTokenPriceFromTwoCryptoPool_revertsOnParamsPoolUndefined() public {
+        setUpWethBtrfly();
+
+        expectRevert_address(CurvePoolTokenPrice.Curve_PoolTypeNotTwoCrypto.selector, address(0));
+
+        bytes memory params = encodeCurvePoolTwoCryptoParams(ICurvePoolTwoCrypto(address(0)));
+        curveSubmodule.getTokenPriceFromTwoCryptoPool(BTRFLY, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTwoCryptoPool_priceDecimalsFuzz(uint8 priceDecimals_) public {

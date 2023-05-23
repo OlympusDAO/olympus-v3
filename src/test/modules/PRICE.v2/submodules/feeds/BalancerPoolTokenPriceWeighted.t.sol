@@ -209,7 +209,7 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
     }
 
     // (25432168041089078866395 * 10^18 / 44828046497101022591963)  * (((1 * 10^18) / 500000000000000000)^0.5)  * (((1917.25 * 10^18) / 500000000000000000)^0.5) = 49,682,442,621,348,655,240.1843998201 = 49.6824426213486552401843998201 * 10^18
-    function _getBalancerPoolTokenPrice(uint8 priceDecimals) internal view returns (uint256) {
+    function _getBalancerPoolTokenPrice(uint8 priceDecimals) internal pure returns (uint256) {
         uint256 invariant = (
             BALANCER_POOL_INVARIANT.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS)
         ).mulDiv(
@@ -285,6 +285,13 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         uint256 truncatedPrice = price.mulDiv(1, 10 ** priceDecimals);
         uint256 truncatedExpectedPrice = WETH_RATE.mulDiv(1, 10 ** BALANCER_POOL_DECIMALS);
         assertEq(truncatedPrice, truncatedExpectedPrice);
+    }
+
+    function test_getTokenPriceFromWeightedPool_revertsOnParamsPoolUndefined() public {
+        expectRevert_pool(BalancerPoolTokenPrice.Balancer_PoolTypeNotWeighted.selector, bytes32(0));
+
+        bytes memory params = encodeBalancerPoolParams(IWeightedPool(address(0)));
+        balancerSubmodule.getTokenPriceFromWeightedPool(WETH, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromWeightedPool_priceDecimalsSame() public {
@@ -582,6 +589,13 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         expectRevert_asset(PRICEv2.PRICE_PriceZero.selector, USDC);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
+        balancerSubmodule.getWeightedPoolTokenPrice(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getWeightedPoolTokenPrice_revertsOnParamsPoolUndefined() public {
+        expectRevert_pool(BalancerPoolTokenPrice.Balancer_PoolTypeNotWeighted.selector, bytes32(0));
+
+        bytes memory params = encodeBalancerPoolParams(IWeightedPool(address(0)));
         balancerSubmodule.getWeightedPoolTokenPrice(address(0), PRICE_DECIMALS, params);
     }
 

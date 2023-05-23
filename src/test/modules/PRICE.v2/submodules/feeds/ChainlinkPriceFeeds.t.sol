@@ -12,6 +12,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import "src/Kernel.sol";
+import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 
 contract ChainlinkPriceFeedsTest is Test {
     using FullMath for uint256;
@@ -112,6 +113,11 @@ contract ChainlinkPriceFeedsTest is Test {
         vm.expectRevert(err);
     }
 
+    function expectRevert_uint48(bytes4 selector_, uint48 number_) internal {
+        bytes memory err = abi.encodeWithSelector(selector_, number_);
+        vm.expectRevert(err);
+    }
+
     function expectRevert_address(bytes4 selector_, address asset_) internal {
         bytes memory err = abi.encodeWithSelector(selector_, asset_);
         vm.expectRevert(err);
@@ -124,6 +130,44 @@ contract ChainlinkPriceFeedsTest is Test {
         uint256 priceInt = chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
 
         assertEq(daiEthPrice, priceInt);
+    }
+
+    function test_getOneFeedPrice_revertsOnIncorrectFeedType() public {
+        // Set up a non-weighted pool
+        MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
+        mockNonWeightedPool.setDecimals(18);
+        mockNonWeightedPool.setTotalSupply(1e8);
+        mockNonWeightedPool.setPoolId(
+            0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
+        );
+
+        expectRevert_address(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            address(mockNonWeightedPool)
+        );
+
+        bytes memory params = abi.encode(mockNonWeightedPool, UPDATE_THRESHOLD);
+        chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getOneFeedPrice_revertsOnParamsFeedUndefined() public {
+        expectRevert_address(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            address(0)
+        );
+
+        bytes memory params = encodeOneFeedParams(AggregatorV2V3Interface(address(0)), UPDATE_THRESHOLD);
+        chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getOneFeedPrice_revertsOnParamsThresholdUndefined() public {
+        expectRevert_uint48(
+            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
+            0
+        );
+
+        bytes memory params = encodeOneFeedParams(daiEthPriceFeed, 0);
+        chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getOneFeedPrice_revertsOnInvalidPriceFuzz(int256 latestAnswer_) public {
@@ -262,6 +306,102 @@ contract ChainlinkPriceFeedsTest is Test {
         uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
 
         assertEq(priceInt, ohmDaiPrice);
+    }
+
+    function test_getTwoFeedPriceDiv_revertsOnParamsNumeratorFeedUndefined() public {
+        expectRevert_address(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            address(0)
+        );
+
+        bytes memory params = encodeTwoFeedParams(
+            AggregatorV2V3Interface(address(0)),
+            UPDATE_THRESHOLD,
+            daiEthPriceFeed,
+            UPDATE_THRESHOLD
+        );
+        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getTwoFeedPriceDiv_revertsOnParamsNumeratorUpdateThresholdUndefined() public {
+        expectRevert_uint48(
+            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
+            0
+        );
+
+        bytes memory params = encodeTwoFeedParams(
+            ohmEthPriceFeed,
+            0,
+            daiEthPriceFeed,
+            UPDATE_THRESHOLD
+        );
+        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getTwoFeedPriceDiv_revertsOnParamsDenominatorFeedUndefined() public {
+        expectRevert_address(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            address(0)
+        );
+
+        bytes memory params = encodeTwoFeedParams(
+            ohmEthPriceFeed,
+            UPDATE_THRESHOLD,
+            AggregatorV2V3Interface(address(0)),
+            UPDATE_THRESHOLD
+        );
+        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getTwoFeedPriceDiv_revertsOnParamsDenominatorUpdateThresholdUndefined() public {
+        expectRevert_uint48(
+            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
+            0
+        );
+
+        bytes memory params = encodeTwoFeedParams(
+            ohmEthPriceFeed,
+            UPDATE_THRESHOLD,
+            daiEthPriceFeed,
+            0
+        );
+        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getTwoFeedPriceDiv_revertsOnNumeratorIncorrectFeedType() public {
+        // Set up a non-weighted pool
+        MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
+        mockNonWeightedPool.setDecimals(18);
+        mockNonWeightedPool.setTotalSupply(1e8);
+        mockNonWeightedPool.setPoolId(
+            0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
+        );
+
+        expectRevert_address(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            address(mockNonWeightedPool)
+        );
+
+        bytes memory params = abi.encode(mockNonWeightedPool, UPDATE_THRESHOLD, daiEthPriceFeed, UPDATE_THRESHOLD);
+        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getTwoFeedPriceDiv_revertsOnDenominatorIncorrectFeedType() public {
+        // Set up a non-weighted pool
+        MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
+        mockNonWeightedPool.setDecimals(18);
+        mockNonWeightedPool.setTotalSupply(1e8);
+        mockNonWeightedPool.setPoolId(
+            0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
+        );
+
+        expectRevert_address(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            address(mockNonWeightedPool)
+        );
+
+        bytes memory params = abi.encode(ohmEthPriceFeed, UPDATE_THRESHOLD, mockNonWeightedPool, UPDATE_THRESHOLD);
+        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getTwoFeedPriceDiv_revertsOnInvalidNumeratorPriceFuzz(
@@ -618,6 +758,102 @@ contract ChainlinkPriceFeedsTest is Test {
         uint256 priceInt = chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
 
         assertEq(priceInt, ohmDaiPrice);
+    }
+
+    function test_getTwoFeedPriceMul_revertsOnParamsNumeratorFeedUndefined() public {
+        expectRevert_address(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            address(0)
+        );
+
+        bytes memory params = encodeTwoFeedParams(
+            AggregatorV2V3Interface(address(0)),
+            UPDATE_THRESHOLD,
+            ethDaiPriceFeed,
+            UPDATE_THRESHOLD
+        );
+        chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getTwoFeedPriceMul_revertsOnParamsNumeratorUpdateThresholdUndefined() public {
+        expectRevert_uint48(
+            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
+            0
+        );
+
+        bytes memory params = encodeTwoFeedParams(
+            ohmEthPriceFeed,
+            0,
+            ethDaiPriceFeed,
+            UPDATE_THRESHOLD
+        );
+        chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getTwoFeedPriceMul_revertsOnParamsDenominatorFeedUndefined() public {
+        expectRevert_address(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            address(0)
+        );
+
+        bytes memory params = encodeTwoFeedParams(
+            ohmEthPriceFeed,
+            UPDATE_THRESHOLD,
+            AggregatorV2V3Interface(address(0)),
+            UPDATE_THRESHOLD
+        );
+        chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getTwoFeedPriceMul_revertsOnParamsDenominatorUpdateThresholdUndefined() public {
+        expectRevert_uint48(
+            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
+            0
+        );
+
+        bytes memory params = encodeTwoFeedParams(
+            ohmEthPriceFeed,
+            UPDATE_THRESHOLD,
+            ethDaiPriceFeed,
+            0
+        );
+        chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getTwoFeedPriceMul_revertsOnNumeratorIncorrectFeedType() public {
+        // Set up a non-weighted pool
+        MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
+        mockNonWeightedPool.setDecimals(18);
+        mockNonWeightedPool.setTotalSupply(1e8);
+        mockNonWeightedPool.setPoolId(
+            0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
+        );
+
+        expectRevert_address(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            address(mockNonWeightedPool)
+        );
+
+        bytes memory params = abi.encode(mockNonWeightedPool, UPDATE_THRESHOLD, ethDaiPriceFeed, UPDATE_THRESHOLD);
+        chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getTwoFeedPriceMul_revertsOnDenominatorIncorrectFeedType() public {
+        // Set up a non-weighted pool
+        MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
+        mockNonWeightedPool.setDecimals(18);
+        mockNonWeightedPool.setTotalSupply(1e8);
+        mockNonWeightedPool.setPoolId(
+            0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
+        );
+
+        expectRevert_address(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            address(mockNonWeightedPool)
+        );
+
+        bytes memory params = abi.encode(ohmEthPriceFeed, UPDATE_THRESHOLD, mockNonWeightedPool, UPDATE_THRESHOLD);
+        chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getTwoFeedPriceMul_revertsOnInvalidNumeratorPriceFuzz(

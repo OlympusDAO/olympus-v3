@@ -15,6 +15,7 @@ import {IUniswapV3Pool} from "src/interfaces/UniswapV3/IUniswapV3Pool.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {FixedPointMathLib} from "lib/solmate/src/utils/FixedPointMathLib.sol";
 import {TickMath} from "src/libraries/UniswapV3/TickMath.sol";
+import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
 
 contract UniswapV3PriceTest is Test {
     using FullMath for uint256;
@@ -150,6 +151,28 @@ contract UniswapV3PriceTest is Test {
         // 1 / $1.004412 USDC = 0.995607252620550200 = 995607252620550200 * 10^-18
         // For this to match, the decimal conversion will have been handled too
         assertEq(price, 995607252620550200);
+    }
+
+    function test_tokenTWAP_revertsOnParamsPoolUndefined() public {
+        expectRevert_address(UniswapV3Price.UniswapV3_PoolTypeInvalid.selector, address(0));
+
+        bytes memory params = encodeParams(IUniswapV3Pool(address(0)), OBSERVATION_SECONDS);
+        uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
+    }
+
+    function test_tokenTWAP_revertsOnIncorrectPoolType() public {
+        // Set up a non-weighted pool
+        MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
+        mockNonWeightedPool.setDecimals(18);
+        mockNonWeightedPool.setTotalSupply(1e8);
+        mockNonWeightedPool.setPoolId(
+            0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
+        );
+
+        expectRevert_address(UniswapV3Price.UniswapV3_PoolTypeInvalid.selector, address(mockNonWeightedPool));
+
+        bytes memory params = abi.encode(mockNonWeightedPool, OBSERVATION_SECONDS);
+        uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
     function test_tokenTWAP_usesPrice() public {

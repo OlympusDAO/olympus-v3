@@ -68,6 +68,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     error Curve_PoolTokenDecimalsOutOfBounds(address asset_);
     error Curve_PoolTokenNotSet(address pool_);
     error Curve_PoolTokensInvalid(address pool_);
+    error Curve_PoolTypeNotStable(address pool_);
     error Curve_PoolTypeNotTriCrypto(address pool_);
     error Curve_PoolTypeNotTwoCrypto(address pool_);
     error Curve_PriceNotFound(address asset_);
@@ -146,7 +147,19 @@ contract CurvePoolTokenPrice is PriceSubmodule {
 
         // Decode params
         CurveParams memory params = abi.decode(params_, (CurveParams));
+        {
+            if (address(params.pool) == address(0)) revert Curve_PoolTypeNotStable(address(params.pool));
+        }
         ICurvePool pool = ICurvePool(params.pool);
+        uint256 poolVirtualPrice;
+        {
+            // Ensure the pool is of the correct type
+            try pool.get_virtual_price() returns (uint256 _virtualPrice) {
+                poolVirtualPrice = _virtualPrice;
+            } catch (bytes memory) {
+                revert Curve_PoolTypeNotStable(address(pool));
+            }
+        }
         uint256 minimumPrice = type(uint256).max; // outputDecimals_
 
         /**
@@ -196,7 +209,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
          * have the same decimal places as prices returned by PRICE.
          */
         uint256 adjustedVirtualPrice = minimumPrice.mulDiv(
-            pool.get_virtual_price(),
+            poolVirtualPrice,
             10 ** POOL_DECIMALS
         );
         return adjustedVirtualPrice;
@@ -326,6 +339,9 @@ contract CurvePoolTokenPrice is PriceSubmodule {
 
         // Decode params
         CurveTwoCryptoParams memory params = abi.decode(params_, (CurveTwoCryptoParams));
+        {
+            if (address(params.pool) == address(0)) revert Curve_PoolTypeNotTwoCrypto(address(params.pool));
+        }
         ICurvePoolTwoCrypto pool = ICurvePoolTwoCrypto(params.pool);
 
         // Get pool total supply
@@ -381,6 +397,9 @@ contract CurvePoolTokenPrice is PriceSubmodule {
 
         // Decode params
         CurveTriCryptoParams memory params = abi.decode(params_, (CurveTriCryptoParams));
+        {
+            if (address(params.pool) == address(0)) revert Curve_PoolTypeNotTriCrypto(address(params.pool));
+        }
         ICurvePoolTriCrypto pool = ICurvePoolTriCrypto(params.pool);
 
         // Get pool total supply
@@ -446,6 +465,9 @@ contract CurvePoolTokenPrice is PriceSubmodule {
 
         // Decode params
         CurveTwoCryptoParams memory params = abi.decode(params_, (CurveTwoCryptoParams));
+        {
+            if (address(params.pool) == address(0)) revert Curve_PoolTypeNotTwoCrypto(address(params.pool));
+        }
         ICurvePoolTwoCrypto pool = ICurvePoolTwoCrypto(params.pool);
 
         uint256 price_oracle;
@@ -559,6 +581,9 @@ contract CurvePoolTokenPrice is PriceSubmodule {
 
         // Decode params
         CurveTriCryptoParams memory params = abi.decode(params_, (CurveTriCryptoParams));
+        {
+            if (address(params.pool) == address(0)) revert Curve_PoolTypeNotTriCrypto(address(params.pool));
+        }
         ICurvePoolTriCrypto pool = ICurvePoolTriCrypto(params.pool);
 
         // Determine which tokens we are dealing with
@@ -709,7 +734,18 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         ICurvePool pool;
         {
             CurveParams memory params = abi.decode(params_, (CurveParams));
+            {
+                if (address(params.pool) == address(0)) revert Curve_PoolTypeNotStable(address(params.pool));
+            }
             pool = ICurvePool(params.pool);
+            {
+                // Ensure the pool is of the correct type
+                try pool.get_virtual_price() returns (uint256 _virtualPrice) {
+                    // Do nothing
+                } catch (bytes memory) {
+                    revert Curve_PoolTypeNotStable(address(pool));
+                }
+            }
         }
 
         // Find the index of the lookup token

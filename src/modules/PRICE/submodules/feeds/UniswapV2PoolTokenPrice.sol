@@ -128,6 +128,8 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
             {
                 // Decode params
                 UniswapV2PoolParams memory params = abi.decode(params_, (UniswapV2PoolParams));
+                if (address(params.pool) == address(0)) revert UniswapV2_PoolTypeInvalid(address(params.pool));
+
                 pool = IUniswapV2Pool(params.pool);
             }
 
@@ -233,6 +235,8 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         IUniswapV2Pool pool;
         {
             UniswapV2PoolParams memory params = abi.decode(params_, (UniswapV2PoolParams));
+            if (address(params.pool) == address(0)) revert UniswapV2_PoolTypeInvalid(address(params.pool));
+
             pool = IUniswapV2Pool(params.pool);
         }
 

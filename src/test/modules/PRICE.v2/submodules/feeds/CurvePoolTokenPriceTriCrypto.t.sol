@@ -140,6 +140,16 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         assertApproxEqAbs(price, TRI_CRYPTO_PRICE, 1e9);
     }
 
+    function test_getPoolTokenPriceFromTriCryptoPool_revertsOnParamsPoolUndefined() public {
+        expectRevert_address(
+            CurvePoolTokenPrice.Curve_PoolTypeNotTriCrypto.selector,
+            address(0)
+        );
+
+        bytes memory params = encodeCurvePoolTriCryptoParams(ICurvePoolTriCrypto(address(0)));
+        curveSubmodule.getPoolTokenPriceFromTriCryptoPool(address(0), PRICE_DECIMALS, params);
+    }
+
     function test_getPoolTokenPriceFromTriCryptoPool_revertsOnPriceZero() public {
         mockPrice.setPrice(USDT, 0);
 
@@ -389,6 +399,16 @@ contract CurvePoolTokenPriceTriCryptoTest is Test {
         // 21657103424510020784247
         // $21,657.10342451
         assertEq(price, priceOracleWbtcUsdt.mulDiv(USDT_PRICE, 1e18));
+    }
+
+    function test_getTokenPriceFromTriCryptoPool_revertsOnParamsPoolUndefined() public {
+        expectRevert_address(
+            CurvePoolTokenPrice.Curve_PoolTypeNotTriCrypto.selector,
+            address(0)
+        );
+
+        bytes memory params = encodeCurvePoolTriCryptoParams(ICurvePoolTriCrypto(address(0)));
+        curveSubmodule.getTokenPriceFromTriCryptoPool(WBTC, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPriceFromTriCryptoPool_coinThree() public {
