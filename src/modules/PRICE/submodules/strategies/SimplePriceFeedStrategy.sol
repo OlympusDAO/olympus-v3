@@ -5,10 +5,6 @@ import "modules/PRICE/PRICE.v2.sol";
 import {QuickSort} from "libraries/QuickSort.sol";
 
 contract SimplePriceFeedStrategy is PriceSubmodule {
-    struct DeviationParams {
-        uint256 deviationBps;
-    }
-
     // ========== ERRORS ========== //
 
     error SimpleStrategy_PriceCountInvalid();
@@ -25,25 +21,6 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return toSubKeycode("PRICE.SMPLSTRGY");
     }
 
-    // ========== HELPER FUNCTIONS ========== //
-
-    /// @notice Decodes the DeviationParams struct
-    /// @dev Reverts if:
-    /// - The params_ length is 0
-    ///
-    /// @param params_ DeviationParams struct encoded as bytes
-    /// @return Decoded DeviationParams struct
-    /// @dev Declared as an external function, so that it can be used in a try/catch statement
-    function decodeAverageIfDeviationParams(bytes memory params_)
-        external
-        pure
-        returns (DeviationParams memory)
-    {
-        if (params_.length == 0) revert SimpleStrategy_ParamsRequired();
-
-        return abi.decode(params_, (DeviationParams));
-    }
-
     // ========== STRATEGY FUNCTIONS ========== //
 
     /// @notice Returns the first price in the array
@@ -53,11 +30,10 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @param prices_ Array of prices
     /// @param params_ Unused
     /// @return price_ The resolved price
-    function getFirstPrice(uint256[] memory prices_, bytes memory params_)
-        public
-        pure
-        returns (uint256)
-    {
+    function getFirstPrice(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) public pure returns (uint256) {
         // Can't work with 0 length
         if (prices_.length == 0) revert SimpleStrategy_PriceCountInvalid();
 
@@ -81,11 +57,10 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @param prices_ Array of prices
     /// @param params_ DeviationParams struct encoded as bytes
     /// @return price_ The resolved price
-    function getAverageIfDeviation(uint256[] memory prices_, bytes memory params_)
-        public
-        view
-        returns (uint256)
-    {
+    function getAverageIfDeviation(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) public view returns (uint256) {
         // Can't work with  < 2 length
         if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
 
@@ -93,8 +68,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory sortedPrices = QuickSort.sort(prices_);
         uint256 averagePrice = getAveragePrice(sortedPrices, params_);
 
-        DeviationParams memory params = this.decodeAverageIfDeviationParams(params_);
-        uint256 deviationBps = params.deviationBps;
+        if (params_.length == 0) revert SimpleStrategy_ParamsRequired();
+        uint256 deviationBps = abi.decode(params_, (uint256));
         if (deviationBps == 0) revert SimpleStrategy_ParamsRequired();
 
         // Check the deviation of the minimum from the average
@@ -123,11 +98,10 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @param prices_ Array of prices
     /// @param params_ DeviationParams struct encoded as bytes
     /// @return price_ The resolved price
-    function getMedianIfDeviation(uint256[] memory prices_, bytes memory params_)
-        public
-        view
-        returns (uint256)
-    {
+    function getMedianIfDeviation(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) public view returns (uint256) {
         // Can't work with  < 2 length
         if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
 
@@ -136,8 +110,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256 averagePrice = getAveragePrice(sortedPrices, params_);
         uint256 medianPrice = getMedianPrice(sortedPrices, params_);
 
-        DeviationParams memory params = this.decodeAverageIfDeviationParams(params_);
-        uint256 deviationBps = params.deviationBps;
+        if (params_.length == 0) revert SimpleStrategy_ParamsRequired();
+        uint256 deviationBps = abi.decode(params_, (uint256));
         if (deviationBps == 0) revert SimpleStrategy_ParamsRequired();
 
         // Check the deviation of the minimum from the average
@@ -160,11 +134,10 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @param prices_ Array of prices
     /// @param params_ Unused
     /// @return price_ The resolved price
-    function getAveragePrice(uint256[] memory prices_, bytes memory params_)
-        public
-        pure
-        returns (uint256)
-    {
+    function getAveragePrice(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) public pure returns (uint256) {
         uint256 pricesLen = prices_.length;
         // Can't calculate the average if there are no prices
         if (pricesLen == 0) revert SimpleStrategy_PriceCountInvalid();
@@ -190,11 +163,10 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @param prices_ Array of prices
     /// @param params_ Unused
     /// @return price_ The resolved price
-    function getMedianPrice(uint256[] memory prices_, bytes memory params_)
-        public
-        pure
-        returns (uint256)
-    {
+    function getMedianPrice(
+        uint256[] memory prices_,
+        bytes memory params_
+    ) public pure returns (uint256) {
         uint256 pricesLen = prices_.length;
         // Can only calculate a median if there are 3+ prices
         if (pricesLen < 3) return getAveragePrice(prices_, params_);
