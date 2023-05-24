@@ -45,13 +45,13 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [ ] last variant - loads price from cache
 //           [X] single observation stored
 //           [X] multiple observations stored
-//           [ ] reverts if cached value is zero
+//           [X] reverts if cached value is zero
 //           [X] reverts if asset not configured
 //      [ ] moving average variant - returns the moving average from stored observations
-//           [ ] single observation stored
-//           [ ] multiple observations stored
-//           [ ] reverts if moving average isn't stored
-//           [ ] reverts if cached value is zero
+//           [X] single observation stored
+//           [X] multiple observations stored
+//           [X] reverts if moving average isn't stored
+//           [X] reverts if cached value is zero
 //           [X] reverts if asset not configured
 //      [ ] reverts if invalid variant provided
 //      [X] reverts if asset not configured on PRICE module (not approved)
@@ -409,6 +409,33 @@ contract PriceV2Test is Test {
         );
     }
 
+    function _addOneMAAssetWithObservations(uint256[] memory observations_) internal {
+        ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
+            .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(onemaFeedParams) // bytes memory params_
+        );
+
+        price.addAsset(
+            address(onema), // address asset_
+            true, // bool storeMovingAverage_ // track ONEMA MA
+            true, // bool useMovingAverage_ // use MA in strategy
+            uint32(observations_.length) * OBSERVATION_FREQUENCY, // uint32 movingAverageDuration_
+            uint48(block.timestamp), // uint48 lastObservationTime_
+            observations_, // uint256[] memory observations_
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getPriceWithFallback.selector,
+                abi.encode("") // no params required
+            ), // Component memory strategy_
+            feeds // Component[] feeds_
+        );
+    }
+
     function _addBaseAssets(uint256 nonce_) internal {
         // Configure price feed data and add asset to price module
         vm.startPrank(writer);
@@ -708,7 +735,7 @@ contract PriceV2Test is Test {
         );
     }
 
-    // =========  getPrice (with variant) ========= //
+    // =========  getPrice (with current variant) ========= //
 
     function test_getPrice_current_noStrat_oneFeed(uint256 nonce_) public {
         // Add base assets to price module
@@ -960,6 +987,8 @@ contract PriceV2Test is Test {
         );
     }
 
+    // =========  getPrice (with last variant) ========= //
+
     function test_getPrice_last_singleObservation(uint256 nonce_) public {
         // Add base asset with only 1 observation stored
         vm.startPrank(writer);
@@ -998,6 +1027,26 @@ contract PriceV2Test is Test {
         assertEq(price_, storedObservation);
     }
 
+    function testRevert_getPrice_last_priceZero() public {
+        // Add base asset with multiple observations stored
+        vm.startPrank(writer);
+        uint256[] memory observations = new uint256[](1);
+        observations[0] = 0;
+        _addOneMAAssetWithObservations(observations);
+        vm.stopPrank();
+
+        // Try to call getPrice with the last variant and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_PriceZero(address)",
+            address(onema)
+        );
+        vm.expectRevert(err);
+        price.getPrice(
+            address(onema),
+            PRICEv2.Variant.LAST
+        );
+    }
+
     function testRevert_getPrice_last_unconfiguredAsset() public {
         // No base assets
 
@@ -1010,6 +1059,85 @@ contract PriceV2Test is Test {
         price.getPrice(
             address(twoma),
             PRICEv2.Variant.LAST
+        );
+    }
+
+    // =========  getPrice (with moving average variant) ========= //
+
+    function test_getPrice_movingAverage_singleObservation(uint256 nonce_) public {
+        // Add base asset with only 1 observation stored
+        vm.startPrank(writer);
+        _addOneMAAsset(nonce_, 1);
+        vm.stopPrank();
+
+        // Get the stored observation
+        PRICEv2.Asset memory asset = price.getAssetData(address(onema));
+        uint256 storedObservation = asset.obs[0];
+
+        // Get moving average price, expect the only observation to be returned
+        (uint256 price_, uint48 timestamp) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.MOVINGAVERAGE
+        );
+
+        assertEq(price_, storedObservation);
+    }
+
+    function test_getPrice_movingAverage_multipleObservations(uint256 nonce_) public {
+        // Add base asset with multiple observations stored
+        vm.startPrank(writer);
+        _addOneMAAsset(nonce_, 10);
+        vm.stopPrank();
+
+        // Get the stored observation
+        PRICEv2.Asset memory asset = price.getAssetData(address(onema));
+        uint256 cumulativeObservations;
+        for (uint256 i; i < asset.numObservations; i++) {
+            cumulativeObservations += asset.obs[i];
+        }
+        uint256 movingAverage = cumulativeObservations / asset.numObservations;
+
+        // Get moving average price, expect the only observation to be returned
+        (uint256 price_, uint48 timestamp) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.MOVINGAVERAGE
+        );
+
+        assertEq(price_, movingAverage);
+    }
+
+    function testRevert_getPrice_movingAverage_priceZero() public {
+        // Add base asset with multiple observations stored
+        vm.startPrank(writer);
+        uint256[] memory observations = new uint256[](1);
+        observations[0] = 0;
+        _addOneMAAssetWithObservations(observations);
+        vm.stopPrank();
+
+        // Try to call getPrice with the moving average variant and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_PriceZero(address)",
+            address(onema)
+        );
+        vm.expectRevert(err);
+        price.getPrice(
+            address(onema),
+            PRICEv2.Variant.MOVINGAVERAGE
+        );
+    }
+
+    function testRevert_getPrice_movingAverage_movingAverageNotStored(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Try to call getPrice with the moving average variant and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_MovingAverageNotStored(address)",
+            address(weth)
+        );
+        vm.expectRevert(err);
+        price.getPrice(
+            address(weth),
+            PRICEv2.Variant.MOVINGAVERAGE
         );
     }
 
