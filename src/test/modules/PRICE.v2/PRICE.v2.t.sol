@@ -43,14 +43,16 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //              [X] reverts if strategy fails
 //              [X] reverts if price is zero
 //      [ ] last variant - loads price from cache
-//           [ ] single observation stored
-//           [ ] multiple observations stored
+//           [X] single observation stored
+//           [X] multiple observations stored
 //           [ ] reverts if cached value is zero
+//           [X] reverts if asset not configured
 //      [ ] moving average variant - returns the moving average from stored observations
 //           [ ] single observation stored
 //           [ ] multiple observations stored
 //           [ ] reverts if moving average isn't stored
 //           [ ] reverts if cached value is zero
+//           [X] reverts if asset not configured
 //      [ ] reverts if invalid variant provided
 //      [X] reverts if asset not configured on PRICE module (not approved)
 //      [ ] reverts if no address is given
@@ -165,6 +167,7 @@ contract PriceV2Test is Test {
     address internal writer;
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
+    uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -278,7 +281,7 @@ contract PriceV2Test is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy price module
-            price = new OlympusPricev2(kernel, 18, uint32(8 hours));
+            price = new OlympusPricev2(kernel, 18, OBSERVATION_FREQUENCY);
 
             // Deploy mock module writer
             writer = price.generateGodmodeFixture(type(OlympusPricev2).name);
@@ -377,6 +380,33 @@ contract PriceV2Test is Test {
         }
 
         return obs;
+    }
+
+    function _addOneMAAsset(uint256 nonce_, uint256 numObs_) internal {
+        ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
+            .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(onemaFeedParams) // bytes memory params_
+        );
+
+        price.addAsset(
+            address(onema), // address asset_
+            true, // bool storeMovingAverage_ // track ONEMA MA
+            true, // bool useMovingAverage_ // use MA in strategy
+            uint32(numObs_) * OBSERVATION_FREQUENCY, // uint32 movingAverageDuration_
+            uint48(block.timestamp), // uint48 lastObservationTime_
+            _makeRandomObservations(onema, feeds[0], nonce_, uint256(numObs_)), // uint256[] memory observations_
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getPriceWithFallback.selector,
+                abi.encode("") // no params required
+            ), // Component memory strategy_
+            feeds // Component[] feeds_
+        );
     }
 
     function _addBaseAssets(uint256 nonce_) internal {
@@ -527,30 +557,7 @@ contract PriceV2Test is Test {
 
         // ONEMA - One feed + MA using the getPriceWithFallback strategy
         {
-            ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
-                .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
-
-            PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
-            feeds[0] = PRICEv2.Component(
-                toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
-                ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
-                abi.encode(onemaFeedParams) // bytes memory params_
-            );
-
-            price.addAsset(
-                address(onema), // address asset_
-                true, // bool storeMovingAverage_ // track ONEMA MA
-                true, // bool useMovingAverage_ // use MA in strategy
-                uint32(5 days), // uint32 movingAverageDuration_
-                uint48(block.timestamp), // uint48 lastObservationTime_
-                _makeRandomObservations(onema, feeds[0], nonce_, uint256(15)), // uint256[] memory observations_
-                PRICEv2.Component(
-                    toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                    SimplePriceFeedStrategy.getPriceWithFallback.selector,
-                    abi.encode("") // no params required
-                ), // Component memory strategy_
-                feeds // Component[] feeds_
-            );
+            _addOneMAAsset(nonce_, 15);
         }
 
         // TWOMA - Two feed + MA using the getAveragePrice strategy
@@ -701,7 +708,7 @@ contract PriceV2Test is Test {
         );
     }
 
-    // =========  getPrice  ========= //
+    // =========  getPrice (with variant) ========= //
 
     function test_getPrice_current_noStrat_oneFeed(uint256 nonce_) public {
         // Add base assets to price module
@@ -953,6 +960,76 @@ contract PriceV2Test is Test {
         );
     }
 
+    function test_getPrice_last_singleObservation(uint256 nonce_) public {
+        // Add base asset with only 1 observation stored
+        vm.startPrank(writer);
+        _addOneMAAsset(nonce_, 1);
+        vm.stopPrank();
+
+        // Get the stored observation
+        PRICEv2.Asset memory asset = price.getAssetData(address(onema));
+        uint256 storedObservation = asset.obs[0];
+
+        // Get last price, expect the only observation to be returned
+        (uint256 price_, uint48 timestamp) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.LAST
+        );
+
+        assertEq(price_, storedObservation);
+    }
+
+    function test_getPrice_last_multipleObservations(uint256 nonce_) public {
+        // Add base asset with multiple observations stored
+        vm.startPrank(writer);
+        _addOneMAAsset(nonce_, 10);
+        vm.stopPrank();
+
+        // Get the stored observation
+        PRICEv2.Asset memory asset = price.getAssetData(address(onema));
+        uint256 storedObservation = asset.obs[9];
+
+        // Get last price, expect the last observation to be returned
+        (uint256 price_, uint48 timestamp) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.LAST
+        );
+
+        assertEq(price_, storedObservation);
+    }
+
+    function testRevert_getPrice_last_unconfiguredAsset() public {
+        // No base assets
+
+        // Try to call getPrice with the last variant and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(twoma)
+        );
+        vm.expectRevert(err);
+        price.getPrice(
+            address(twoma),
+            PRICEv2.Variant.LAST
+        );
+    }
+
+    function testRevert_getPrice_movingAverage_unconfiguredAsset() public {
+        // No base assets
+
+        // Try to call getPrice with the moving average variant and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(twoma)
+        );
+        vm.expectRevert(err);
+        price.getPrice(
+            address(twoma),
+            PRICEv2.Variant.MOVINGAVERAGE
+        );
+    }
+
+    // =========  getPrice (with max age) ========= //
+
     function testRevert_getPrice_maxAge_unconfiguredAsset() public {
         // No base assets
 
@@ -967,6 +1044,8 @@ contract PriceV2Test is Test {
             1000
         );
     }
+
+    // =========  getPrice (convenience) ========= //
 
     function testRevert_getPrice_unconfiguredAsset() public {
         // No base assets
