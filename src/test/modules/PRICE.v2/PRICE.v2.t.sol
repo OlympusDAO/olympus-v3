@@ -53,6 +53,7 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //           [ ] reverts if cached value is zero
 //      [ ] reverts if invalid variant provided
 //      [ ] reverts if asset not configured on PRICE module (not approved)
+//      [ ] reverts if no address is given
 // [ ] getPrice(address) - convenience function for current price
 //      [ ] returns cached value if updated this timestamp
 //      [ ] calculates and returns current price if not updated this timestamp
@@ -357,20 +358,20 @@ contract PriceV2Test is Test {
             );
 
         require(success, "Price feed call failed");
-        int256 price = int256(abi.decode(data, (uint256)));
+        int256 fetchedPrice = int256(abi.decode(data, (uint256)));
 
         /// Perform a random walk and create observations array
         uint256[] memory obs = new uint256[](numObs);
         int256 change; // percentage with two decimals
         for (uint256 i = numObs; i > 0; --i) {
             // Add current price to obs array
-            obs[i - 1] = uint256(price);
+            obs[i - 1] = uint256(fetchedPrice);
 
             /// Calculate a random percentage change from -10% to + 10% using the nonce and observation number
             change = int256(uint256(keccak256(abi.encodePacked(nonce, i)))) % int256(1000);
 
             /// Calculate the new ohmEth price
-            price = (price * (CHANGE_DECIMALS + change)) / CHANGE_DECIMALS;
+            fetchedPrice = (fetchedPrice * (CHANGE_DECIMALS + change)) / CHANGE_DECIMALS;
         }
 
         return obs;
@@ -665,10 +666,10 @@ contract PriceV2Test is Test {
         assertEq(assetData.movingAverageDuration, uint32(30 days));
         assertEq(assetData.lastObservationTime, uint48(block.timestamp));
         assertEq(assetData.obs.length, 90);
-        PRICEv2.Component memory strategy = abi.decode(assetData.strategy, (PRICEv2.Component));
-        assertEq(fromSubKeycode(strategy.target), bytes20("PRICE.SIMPLESTRATEGY"));
-        assertEq(strategy.selector, SimplePriceFeedStrategy.getMedianIfDeviation.selector);
-        assertEq(strategy.params, abi.encode(uint256(300)));
+        PRICEv2.Component memory assetStrategy = abi.decode(assetData.strategy, (PRICEv2.Component));
+        assertEq(fromSubKeycode(assetStrategy.target), bytes20("PRICE.SIMPLESTRATEGY"));
+        assertEq(assetStrategy.selector, SimplePriceFeedStrategy.getMedianIfDeviation.selector);
+        assertEq(assetStrategy.params, abi.encode(uint256(300)));
         PRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (PRICEv2.Component[]));
         assertEq(feeds.length, 3);
         assertEq(fromSubKeycode(feeds[0].target), bytes20("PRICE.CHAINLINK"));
