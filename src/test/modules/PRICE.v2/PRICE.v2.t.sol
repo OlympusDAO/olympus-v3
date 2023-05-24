@@ -42,20 +42,22 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //              [X] three feeds (two feeds + MA)
 //              [X] reverts if strategy fails
 //              [X] reverts if price is zero
+//           [X] reverts if no address is given
 //      [ ] last variant - loads price from cache
 //           [X] single observation stored
 //           [X] multiple observations stored
 //           [X] reverts if cached value is zero
 //           [X] reverts if asset not configured
+//           [X] reverts if no address is given
 //      [ ] moving average variant - returns the moving average from stored observations
 //           [X] single observation stored
 //           [X] multiple observations stored
 //           [X] reverts if moving average isn't stored
 //           [X] reverts if cached value is zero
 //           [X] reverts if asset not configured
+//           [X] reverts if no address is given
 //      [ ] reverts if invalid variant provided
 //      [X] reverts if asset not configured on PRICE module (not approved)
-//      [ ] reverts if no address is given
 // [ ] getPrice(address) - convenience function for current price
 //      [ ] returns cached value if updated this timestamp
 //      [ ] calculates and returns current price if not updated this timestamp
@@ -987,6 +989,22 @@ contract PriceV2Test is Test {
         );
     }
 
+    function testRevert_getPrice_current_addressZero(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Try to call getPrice with the last variant and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(0)
+        );
+        vm.expectRevert(err);
+        price.getPrice(
+            address(0),
+            PRICEv2.Variant.CURRENT
+        );
+    }
+
     // =========  getPrice (with last variant) ========= //
 
     function test_getPrice_last_singleObservation(uint256 nonce_) public {
@@ -1058,6 +1076,22 @@ contract PriceV2Test is Test {
         vm.expectRevert(err);
         price.getPrice(
             address(twoma),
+            PRICEv2.Variant.LAST
+        );
+    }
+
+    function testRevert_getPrice_last_addressZero(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Try to call getPrice with the last variant and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(0)
+        );
+        vm.expectRevert(err);
+        price.getPrice(
+            address(0),
             PRICEv2.Variant.LAST
         );
     }
@@ -1152,6 +1186,22 @@ contract PriceV2Test is Test {
         vm.expectRevert(err);
         price.getPrice(
             address(twoma),
+            PRICEv2.Variant.MOVINGAVERAGE
+        );
+    }
+
+    function testRevert_getPrice_movingAverage_addressZero(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Try to call getPrice with the last variant and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(0)
+        );
+        vm.expectRevert(err);
+        price.getPrice(
+            address(0),
             PRICEv2.Variant.MOVINGAVERAGE
         );
     }
