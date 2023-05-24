@@ -96,9 +96,16 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @notice Activates a reentrancy lock on the Curve pool contract
     /// @dev This uses the same method as MakerDAO:
     /// https://github.com/makerdao/curve-lp-oracle/blob/302f5e6966fdbfebe0f7063c9d6f6bc1f6470f28/src/CurveLPOracle.sol#L228-L231
-    function _reentrancyLock(ICurvePool pool_, uint8 numCoins_) internal {
+    /// 
+    /// It also wraps the call in a staticcall to prevent any state changes, similar to VaultReentrancyLib
+    function _reentrancyLock(ICurvePool pool_, uint8 numCoins_) internal view {
         uint256[] memory amounts = new uint256[](numCoins_);
-        pool_.remove_liquidity(0, amounts);
+
+        (, bytes memory revertData) = address(pool_).staticcall{gas: 1_000}(
+            abi.encodeWithSelector(pool_.remove_liquidity.selector, 0, amounts)
+        );
+
+        require(revertData.length == 0, "reentrancy detected");
     }
 
     function _getERC20Decimals(address token_) internal view returns (uint8) {
@@ -145,7 +152,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         address asset_,
         uint8 outputDecimals_,
         bytes calldata params_
-    ) external returns (uint256) {
+    ) external view returns (uint256) {
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
 
@@ -238,7 +245,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         uint256 poolTokenTotalSupply_,
         uint8 outputDecimals_,
         bytes calldata params_
-    ) internal returns (uint256) {
+    ) internal view returns (uint256) {
         // Decode params
         ICurvePoolTriCrypto pool;
         {
@@ -339,7 +346,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         address asset_,
         uint8 outputDecimals_,
         bytes calldata params_
-    ) external returns (uint256) {
+    ) external view returns (uint256) {
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
 
@@ -402,7 +409,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         address asset_,
         uint8 outputDecimals_,
         bytes calldata params_
-    ) external returns (uint256) {
+    ) external view returns (uint256) {
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
 
@@ -470,7 +477,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         address lookupToken_,
         uint8 outputDecimals_,
         bytes calldata params_
-    ) external returns (uint256) {
+    ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
@@ -587,7 +594,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         address lookupToken_,
         uint8 outputDecimals_,
         bytes calldata params_
-    ) external returns (uint256) {
+    ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Curve_OutputDecimalsOutOfBounds(outputDecimals_);
@@ -743,7 +750,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         address lookupToken_,
         uint8 outputDecimals_,
         bytes calldata params_
-    ) external returns (uint256) {
+    ) external view returns (uint256) {
         // Decode params
         ICurvePool pool;
         {

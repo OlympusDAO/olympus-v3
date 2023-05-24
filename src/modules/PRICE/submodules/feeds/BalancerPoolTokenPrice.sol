@@ -114,7 +114,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         bytes32 poolId,
         uint256 tokenIndex,
         uint8 outputDecimals
-    ) internal returns (uint256) {
+    ) internal view returns (uint256) {
         // Prevent re-entrancy attacks
         VaultReentrancyLib.ensureNotInVaultContext(balVault);
 
@@ -141,7 +141,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         IWeightedPool pool_,
         uint256 index_,
         uint8 outputDecimals_
-    ) internal returns (uint256) {
+    ) internal view returns (uint256) {
         uint256 tokenBalance = _getTokenBalance(poolId_, index_, outputDecimals_);
 
         uint8 poolDecimals = pool_.decimals();
@@ -240,7 +240,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         address asset_,
         uint8 outputDecimals_,
         bytes calldata params_
-    ) external returns (uint256) {
+    ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
@@ -333,7 +333,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         address asset_,
         uint8 outputDecimals_,
         bytes calldata params_
-    ) external returns (uint256) {
+    ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
@@ -428,7 +428,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         address lookupToken_,
         uint8 outputDecimals_,
         bytes calldata params_
-    ) external returns (uint256) {
+    ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
@@ -578,7 +578,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         address lookupToken_,
         uint8 outputDecimals_,
         bytes calldata params_
-    ) external returns (uint256) {
+    ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
