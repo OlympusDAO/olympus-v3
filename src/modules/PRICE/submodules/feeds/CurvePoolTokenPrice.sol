@@ -99,6 +99,14 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     function _reentrancyLock(ICurvePool pool_, uint8 numCoins_) internal {
         uint256[] memory amounts = new uint256[](numCoins_);
         pool_.remove_liquidity(0, amounts);
+
+        // Attempts to make this a staticcall will fail since the function returns data
+        // and state is manipulated in the function. TODO: come up with a different view fix
+        // (, bytes memory revertData) = address(pool_).staticcall{gas: 1_000}(
+        //     abi.encodeWithSelector(pool_.remove_liquidity.selector, 0, amounts)
+        // );
+
+        // require(revertData.length == 0, "reentrancy detected");
     }
 
     function _getERC20Decimals(address token_) internal view returns (uint8) {

@@ -29,7 +29,7 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
         bool storeMovingAverage; // whether the moving average should be stored on heartbeats, TODO: create a way to store this data and get a list of assets that need to be stored
         bool useMovingAverage; // whether the moving average should be provided as an argument to the strategy
         uint32 movingAverageDuration; // the duration of the moving average
-        uint16 nextObsIndex;
+        uint16 nextObsIndex; // the index of obs at which the next observation will be stored
         uint16 numObservations;
         uint48 lastObservationTime; // the last time the moving average was updated
         uint256 cumulativeObs;
