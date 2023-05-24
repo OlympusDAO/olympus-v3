@@ -52,14 +52,16 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //           [ ] reverts if moving average isn't stored
 //           [ ] reverts if cached value is zero
 //      [ ] reverts if invalid variant provided
-//      [ ] reverts if asset not configured on PRICE module (not approved)
+//      [X] reverts if asset not configured on PRICE module (not approved)
 //      [ ] reverts if no address is given
 // [ ] getPrice(address) - convenience function for current price
 //      [ ] returns cached value if updated this timestamp
 //      [ ] calculates and returns current price if not updated this timestamp
+//      [X] reverts if asset not configured on PRICE module (not approved)
 // [ ] getPrice(address, uint48) - convenience function for price up to a certain age
 //      [ ] returns cached value if updated within the provided age
 //      [ ] calculates and returns current price if not updated within the provided age
+//      [X] reverts if asset not configured on PRICE module (not approved)
 // [ ] getPriceIn - returns the price of an asset in terms of another asset
 //      [ ] current variant - dynamically calculates price from strategy and components
 //      [ ] last variant - loads price from cache
@@ -933,6 +935,50 @@ contract PriceV2Test is Test {
         (uint256 price_, uint48 timestamp) = price.getPrice(
             address(twoma),
             PRICEv2.Variant.CURRENT
+        );
+    }
+
+    function testRevert_getPrice_current_unconfiguredAsset() public {
+        // No base assets
+
+        // Try to call getPrice with the current variant and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(twoma)
+        );
+        vm.expectRevert(err);
+        price.getPrice(
+            address(twoma),
+            PRICEv2.Variant.CURRENT
+        );
+    }
+
+    function testRevert_getPrice_maxAge_unconfiguredAsset() public {
+        // No base assets
+
+        // Try to call getPrice with a max age and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(twoma)
+        );
+        vm.expectRevert(err);
+        price.getPrice(
+            address(twoma),
+            1000
+        );
+    }
+
+    function testRevert_getPrice_unconfiguredAsset() public {
+        // No base assets
+
+        // Try to call the getPrice convenience method and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(twoma)
+        );
+        vm.expectRevert(err);
+        price.getPrice(
+            address(twoma)
         );
     }
 }
