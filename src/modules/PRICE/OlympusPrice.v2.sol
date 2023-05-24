@@ -456,6 +456,7 @@ contract OlympusPricev2 is PRICEv2 {
             asset.storeMovingAverage = false;
             asset.movingAverageDuration = 0;
             asset.nextObsIndex = 0;
+            asset.numObservations = 1;
             if (observations_.length == 0) {
                 asset.obs = new uint256[](1);
                 asset.lastObservationTime = 0;
@@ -464,8 +465,7 @@ contract OlympusPricev2 is PRICEv2 {
                 asset.lastObservationTime = lastObservationTime_;
             }
 
-            // We don't track cumulativeObs or numObservations when not storing the moving average, even though there is one data point in the array for caching
-            asset.numObservations = 0;
+            // We don't track cumulativeObs when not storing the moving average, even though there is one data point in the array for caching
             asset.cumulativeObs = 0;
         }
     }
