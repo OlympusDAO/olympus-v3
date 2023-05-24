@@ -46,6 +46,7 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [ ] last variant - loads price from cache
 //           [X] single observation stored
 //           [X] multiple observations stored
+//           [X] multiple observations stored, nextObsIndex != 0
 //           [X] reverts if cached value is zero
 //           [X] reverts if asset not configured
 //           [X] reverts if no address is given
@@ -1045,6 +1046,36 @@ contract PriceV2Test is Test {
         assertEq(price_, storedObservation);
     }
 
+    function test_getPrice_last_multipleObservations_nextObsIndexNotZero() public {
+        // Add base asset with multiple observations stored
+        vm.startPrank(writer);
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 1e18;
+        observations[1] = 2e18;
+        _addOneMAAssetWithObservations(observations);
+        vm.stopPrank();
+
+        // Get the current price, which is 5e8 from onemaUsdPriceFeed
+        (uint256 currentPrice_, uint48 currentTimestamp_) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.CURRENT
+        );
+        assertEq(currentPrice_, 5e18);
+
+        // Store the price, to increment nextObsIndex to 1
+        vm.startPrank(writer);
+        price.storePrice(address(onema));
+        vm.stopPrank();
+
+        // Get last price, expect the most recent observation to be returned
+        (uint256 price_, uint48 timestamp) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.LAST
+        );
+
+        assertEq(price_, 5e18);
+    }
+
     function testRevert_getPrice_last_priceZero() public {
         // Add base asset with multiple observations stored
         vm.startPrank(writer);
@@ -1205,6 +1236,24 @@ contract PriceV2Test is Test {
             PRICEv2.Variant.MOVINGAVERAGE
         );
     }
+
+    // function testRevert_getPrice_invalidVariant() public {
+    //     // No base assets
+
+    //     PRICEv2.Variant invalidVariant = PRICEv2.Variant(uint(10));
+
+    //     // Try to call getPrice with a max age and expect revert
+    //     bytes memory err = abi.encodeWithSignature(
+    //         "PRICE_InvalidParams(uint256,uint256)",
+    //         1,
+    //         invalidVariant
+    //     );
+    //     vm.expectRevert(err);
+    //     price.getPrice(
+    //         address(twoma),
+    //         invalidVariant
+    //     );
+    // }
 
     // =========  getPrice (with max age) ========= //
 
