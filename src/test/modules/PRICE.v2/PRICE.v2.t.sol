@@ -31,17 +31,17 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 // Asset Prices
 // [ ] getPrice(address, Variant) - returns the price of an asset in terms of the unit of account (USD)
 //      [ ] current variant - dynamically calculates price from strategy and components
-//           [ ] no strategy submodule (only one price source)
-//              [ ] single price feed
-//              [ ] single price feed with recursive calls
-//              [ ] reverts if price is zero
-//           [ ] with strategy submodule
-//              [ ] two feeds (two separate feeds)
-//              [ ] two feeds (one feed + MA)
-//              [ ] three feeds (three separate feeds)
-//              [ ] three feeds (two feeds + MA)
-//              [ ] reverts if strategy fails
-//              [ ] reverts if price is zero
+//           [X] no strategy submodule (only one price source)
+//              [X] single price feed
+//              [X] single price feed with recursive calls
+//              [X] reverts if price is zero
+//           [X] with strategy submodule
+//              [X] two feeds (two separate feeds)
+//              [X] two feeds (one feed + MA)
+//              [X] three feeds (three separate feeds)
+//              [X] three feeds (two feeds + MA)
+//              [X] reverts if strategy fails
+//              [X] reverts if price is zero
 //      [ ] last variant - loads price from cache
 //           [ ] single observation stored
 //           [ ] multiple observations stored
@@ -262,13 +262,11 @@ contract PriceV2Test is Test {
             ohmEthUniV3Pool.setToken1(ohmFirst ? address(weth) : address(ohm));
             // Create ticks for a 60 second observation period
             // Set to a price of 1 OHM = 0.005 ETH
-            // Weighted tick needs to be -52986 (if OHM is token0) or 52986 (if OHM is token1)
-            // Therefore, we need a tick difference of -3179149 (if OHM is token0) or 3179149 (if OHM is token1)
+            // Weighted tick needs to be 154257 (if OHM is token0) or -154257 (if OHM is token1) (as if 5,000,000 ETH per OHM because of the decimal difference)
+            // Therefore, we need a tick difference of 9255432 (if OHM is token0) or -9255432 (if OHM is token1)
             int56[] memory tickCumulatives = new int56[](2);
-            tickCumulatives[0] = ohmFirst
-                ? int56(100000000) - int56(3179149)
-                : int56(100000000) + int56(3179149);
-            tickCumulatives[1] = int56(100000000);
+            tickCumulatives[0] = ohmFirst ? int56(100000000) : -int56(100000000);
+            tickCumulatives[1] = ohmFirst ? int56(109255432) : -int56(109255432);
             ohmEthUniV3Pool.setTickCumulatives(tickCumulatives);
         }
 
@@ -712,6 +710,19 @@ contract PriceV2Test is Test {
         assertEq(timestamp, uint48(block.timestamp));
     }
 
+    function testRevert_getPrice_current_noStrat_oneFeed_priceZero(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Set price feed to zero
+        ethUsdPriceFeed.setLatestAnswer(int256(0));
+
+        // Try to get current price and expect revert
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(weth));
+        vm.expectRevert(err);
+        (uint256 price_, uint48 timestamp) = price.getPrice(address(weth), PRICEv2.Variant.CURRENT);
+    }
+
     function test_getPrice_current_noStrat_oneFeedRecurvsive(uint256 nonce_) public {
         // Add base assets to price module
         _addBaseAssets(nonce_);
@@ -720,5 +731,207 @@ contract PriceV2Test is Test {
         (uint256 price_, uint48 timestamp) = price.getPrice(address(bpt), PRICEv2.Variant.CURRENT);
         assertApproxEqAbsDecimal(price_, uint256(20e18), 1e6, 18); // allow for some imprecision due to AMM math and imprecise inputs
         assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function testRevert_getPrice_current_noStrat_oneFeedRecursive_priceZero(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Set price feeds to zero
+        ethUsdPriceFeed.setLatestAnswer(int256(0));
+        ohmEthPriceFeed.setLatestAnswer(int256(0));
+        ohmUsdPriceFeed.setLatestAnswer(int256(0));
+
+        // Try to get current price and expect revert
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(bpt));
+        vm.expectRevert(err);
+        (uint256 price_, uint48 timestamp) = price.getPrice(address(bpt), PRICEv2.Variant.CURRENT);
+    }
+
+    function test_getPrice_current_strat_twoFeed(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Price feeds are initialized with same value so there should be no deviation
+
+        // Get current price from price module and check that it matches
+        (uint256 price_, uint48 timestamp) = price.getPrice(
+            address(reserve),
+            PRICEv2.Variant.CURRENT
+        );
+        assertEq(price_, uint256(1e18));
+        assertEq(timestamp, uint48(block.timestamp));
+
+        // Set price feeds at a small deviation to each other
+        reserveUsdPriceFeed.setLatestAnswer(int256(1.1e8));
+        // Other price feed is still 1e18
+
+        // Get current price again, expect average of two feeds because deviation is more than 3%
+        (price_, timestamp) = price.getPrice(address(reserve), PRICEv2.Variant.CURRENT);
+        assertEq(price_, uint256(1.05e18));
+        assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function testRevert_getPrice_current_strat_twoFeed_stratFailed(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Set price feeds to zero
+        reserveUsdPriceFeed.setLatestAnswer(int256(0));
+        reserveEthPriceFeed.setLatestAnswer(int256(0));
+        ethUsdPriceFeed.setLatestAnswer(int256(0));
+
+        // Try to get current price and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_PriceCallFailed(address)",
+            address(reserve)
+        );
+        vm.expectRevert(err);
+        (uint256 price_, uint48 timestamp) = price.getPrice(
+            address(reserve),
+            PRICEv2.Variant.CURRENT
+        );
+    }
+
+    function test_getPrice_current_strat_oneFeedPlusMA(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // First feed is up so it should be returned on the first call
+        (uint256 price_, uint48 timestamp) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.CURRENT
+        );
+        assertEq(price_, uint256(5e18));
+        assertEq(timestamp, uint48(block.timestamp));
+
+        // Get moving average
+        (uint256 movingAverage, ) = price.getPrice(address(onema), PRICEv2.Variant.MOVINGAVERAGE);
+
+        // Set price feed to zero
+        onemaUsdPriceFeed.setLatestAnswer(int256(0));
+
+        // Get current price again, expect moving average because feed is down
+        (price_, timestamp) = price.getPrice(address(onema), PRICEv2.Variant.CURRENT);
+        assertEq(price_, movingAverage);
+    }
+
+    function testRevert_getPrice_current_strat_oneFeedPlusMA_priceZero() public {
+        // Add onema to price module initializing the moving average to zero
+        ChainlinkPriceFeeds.OneFeedParams memory feedParams = ChainlinkPriceFeeds.OneFeedParams(
+            onemaUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(feedParams) // bytes memory params_
+        );
+
+        vm.prank(writer);
+        price.addAsset(
+            address(onema), // address asset_
+            true, // bool storeMovingAverage_ // track ONEMA MA
+            true, // bool useMovingAverage_ // use MA in strategy
+            uint32(5 days), // uint32 movingAverageDuration_
+            uint48(block.timestamp), // uint48 lastObservationTime_
+            new uint256[](15), // uint256[] memory observations_ // initial observations as zero, which will set MA to zero
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getPriceWithFallback.selector,
+                abi.encode("") // no params required
+            ), // Component memory strategy_
+            feeds
+        );
+
+        // Set price feeds to zero
+        onemaUsdPriceFeed.setLatestAnswer(int256(0));
+
+        // Try to get current price and expect revert since both price and MA are zero
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(onema));
+        vm.expectRevert(err);
+        (uint256 price_, uint48 timestamp) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.CURRENT
+        );
+    }
+
+    function test_getPrice_current_strat_threeFeed(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Price feeds are initialized with same value so there should be no deviation
+
+        // Get current price from price module and check that it matches
+        (uint256 price_, uint48 timestamp) = price.getPrice(address(ohm), PRICEv2.Variant.CURRENT);
+        assertEq(price_, uint256(10e18));
+
+        // Set price feeds at a deviation to each other
+        ohmUsdPriceFeed.setLatestAnswer(int256(11e8)); // $11
+        ohmEthPriceFeed.setLatestAnswer(int256(0.0045e18)); // effectively $9
+
+        // Get current price again, expect median of the three feeds because deviation is more than 3%
+        // In this case, it should be the price of the UniV3 pool
+        (price_, timestamp) = price.getPrice(address(ohm), PRICEv2.Variant.CURRENT);
+        uint256 expectedPrice = univ3Price.getTokenTWAP(
+            address(ohm),
+            price.decimals(),
+            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, uint32(60)))
+        );
+        assertEq(price_, expectedPrice);
+    }
+
+    function testRevert_getPrice_current_strat_threeFeed_stratFailed(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Set price feeds to zero
+        ohmUsdPriceFeed.setLatestAnswer(int256(0));
+        ohmEthPriceFeed.setLatestAnswer(int256(0));
+        ethUsdPriceFeed.setLatestAnswer(int256(0));
+
+        // Try to get current price and expect revert
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceCallFailed(address)", address(ohm));
+        vm.expectRevert(err);
+        (uint256 price_, uint48 timestamp) = price.getPrice(address(ohm), PRICEv2.Variant.CURRENT);
+    }
+
+    function test_getPrice_current_strat_twoFeedPlusMA(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // All feeds are up, so the first call should return the average of all feeds & moving average
+        (uint256 price_, uint48 timestamp) = price.getPrice(
+            address(twoma),
+            PRICEv2.Variant.CURRENT
+        );
+
+        (uint256 movingAverage, ) = price.getPrice(address(twoma), PRICEv2.Variant.MOVINGAVERAGE);
+        uint256 expectedPrice = (uint256(20e18) + uint256(20e18) + movingAverage) / 3;
+        assertEq(price_, expectedPrice);
+        assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function testRevert_getPrice_current_strat_twoFeedPlusMA_stratFailed(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Set price feeds to zero
+        twomaUsdPriceFeed.setLatestAnswer(int256(0));
+        twomaEthPriceFeed.setLatestAnswer(int256(0));
+        ethUsdPriceFeed.setLatestAnswer(int256(0));
+
+        // Try to get current price and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_PriceCallFailed(address)",
+            address(twoma)
+        );
+        vm.expectRevert(err);
+        (uint256 price_, uint48 timestamp) = price.getPrice(
+            address(twoma),
+            PRICEv2.Variant.CURRENT
+        );
     }
 }
