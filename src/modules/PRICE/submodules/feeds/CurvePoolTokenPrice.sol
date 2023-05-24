@@ -715,7 +715,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         uint128 t1Index_,
         uint128 t2Index_,
         uint8 outputDecimals_
-    ) internal returns (uint256) {
+    ) internal view returns (uint256) {
         address t1 = pool_.coins(t1Index_);
         address t2 = pool_.coins(t2Index_);
 
