@@ -96,7 +96,7 @@ contract CurvePoolTokenPrice is PriceSubmodule {
     /// @notice Activates a reentrancy lock on the Curve pool contract
     /// @dev This uses the same method as MakerDAO:
     /// https://github.com/makerdao/curve-lp-oracle/blob/302f5e6966fdbfebe0f7063c9d6f6bc1f6470f28/src/CurveLPOracle.sol#L228-L231
-    /// 
+    ///
     /// It also wraps the call in a staticcall to prevent any state changes, similar to VaultReentrancyLib
     function _reentrancyLock(ICurvePool pool_, uint8 numCoins_) internal view {
         uint256[] memory amounts = new uint256[](numCoins_);

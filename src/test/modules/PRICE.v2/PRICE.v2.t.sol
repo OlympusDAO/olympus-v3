@@ -705,7 +705,10 @@ contract PriceV2Test is Test {
         assertEq(assetData.movingAverageDuration, uint32(30 days));
         assertEq(assetData.lastObservationTime, uint48(block.timestamp));
         assertEq(assetData.obs.length, 90);
-        PRICEv2.Component memory assetStrategy = abi.decode(assetData.strategy, (PRICEv2.Component));
+        PRICEv2.Component memory assetStrategy = abi.decode(
+            assetData.strategy,
+            (PRICEv2.Component)
+        );
         assertEq(fromSubKeycode(assetStrategy.target), bytes20("PRICE.SIMPLESTRATEGY"));
         assertEq(assetStrategy.selector, SimplePriceFeedStrategy.getMedianIfDeviation.selector);
         assertEq(assetStrategy.params, abi.encode(uint256(300)));
@@ -984,10 +987,7 @@ contract PriceV2Test is Test {
             address(twoma)
         );
         vm.expectRevert(err);
-        price.getPrice(
-            address(twoma),
-            PRICEv2.Variant.CURRENT
-        );
+        price.getPrice(address(twoma), PRICEv2.Variant.CURRENT);
     }
 
     function testRevert_getPrice_current_addressZero(uint256 nonce_) public {
@@ -995,15 +995,9 @@ contract PriceV2Test is Test {
         _addBaseAssets(nonce_);
 
         // Try to call getPrice with the last variant and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_AssetNotApproved(address)",
-            address(0)
-        );
+        bytes memory err = abi.encodeWithSignature("PRICE_AssetNotApproved(address)", address(0));
         vm.expectRevert(err);
-        price.getPrice(
-            address(0),
-            PRICEv2.Variant.CURRENT
-        );
+        price.getPrice(address(0), PRICEv2.Variant.CURRENT);
     }
 
     // =========  getPrice (with last variant) ========= //
@@ -1019,10 +1013,7 @@ contract PriceV2Test is Test {
         uint256 storedObservation = asset.obs[0];
 
         // Get last price, expect the only observation to be returned
-        (uint256 price_, uint48 timestamp) = price.getPrice(
-            address(onema),
-            PRICEv2.Variant.LAST
-        );
+        (uint256 price_, uint48 timestamp) = price.getPrice(address(onema), PRICEv2.Variant.LAST);
 
         assertEq(price_, storedObservation);
     }
@@ -1038,10 +1029,7 @@ contract PriceV2Test is Test {
         uint256 storedObservation = asset.obs[9];
 
         // Get last price, expect the last observation to be returned
-        (uint256 price_, uint48 timestamp) = price.getPrice(
-            address(onema),
-            PRICEv2.Variant.LAST
-        );
+        (uint256 price_, uint48 timestamp) = price.getPrice(address(onema), PRICEv2.Variant.LAST);
 
         assertEq(price_, storedObservation);
     }
@@ -1068,10 +1056,7 @@ contract PriceV2Test is Test {
         vm.stopPrank();
 
         // Get last price, expect the most recent observation to be returned
-        (uint256 price_, uint48 timestamp) = price.getPrice(
-            address(onema),
-            PRICEv2.Variant.LAST
-        );
+        (uint256 price_, uint48 timestamp) = price.getPrice(address(onema), PRICEv2.Variant.LAST);
 
         assertEq(price_, 5e18);
     }
@@ -1085,15 +1070,9 @@ contract PriceV2Test is Test {
         vm.stopPrank();
 
         // Try to call getPrice with the last variant and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_PriceZero(address)",
-            address(onema)
-        );
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(onema));
         vm.expectRevert(err);
-        price.getPrice(
-            address(onema),
-            PRICEv2.Variant.LAST
-        );
+        price.getPrice(address(onema), PRICEv2.Variant.LAST);
     }
 
     function testRevert_getPrice_last_unconfiguredAsset() public {
@@ -1105,10 +1084,7 @@ contract PriceV2Test is Test {
             address(twoma)
         );
         vm.expectRevert(err);
-        price.getPrice(
-            address(twoma),
-            PRICEv2.Variant.LAST
-        );
+        price.getPrice(address(twoma), PRICEv2.Variant.LAST);
     }
 
     function testRevert_getPrice_last_addressZero(uint256 nonce_) public {
@@ -1116,15 +1092,9 @@ contract PriceV2Test is Test {
         _addBaseAssets(nonce_);
 
         // Try to call getPrice with the last variant and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_AssetNotApproved(address)",
-            address(0)
-        );
+        bytes memory err = abi.encodeWithSignature("PRICE_AssetNotApproved(address)", address(0));
         vm.expectRevert(err);
-        price.getPrice(
-            address(0),
-            PRICEv2.Variant.LAST
-        );
+        price.getPrice(address(0), PRICEv2.Variant.LAST);
     }
 
     // =========  getPrice (with moving average variant) ========= //
@@ -1180,15 +1150,9 @@ contract PriceV2Test is Test {
         vm.stopPrank();
 
         // Try to call getPrice with the moving average variant and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_PriceZero(address)",
-            address(onema)
-        );
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(onema));
         vm.expectRevert(err);
-        price.getPrice(
-            address(onema),
-            PRICEv2.Variant.MOVINGAVERAGE
-        );
+        price.getPrice(address(onema), PRICEv2.Variant.MOVINGAVERAGE);
     }
 
     function testRevert_getPrice_movingAverage_movingAverageNotStored(uint256 nonce_) public {
@@ -1200,10 +1164,7 @@ contract PriceV2Test is Test {
             address(weth)
         );
         vm.expectRevert(err);
-        price.getPrice(
-            address(weth),
-            PRICEv2.Variant.MOVINGAVERAGE
-        );
+        price.getPrice(address(weth), PRICEv2.Variant.MOVINGAVERAGE);
     }
 
     function testRevert_getPrice_movingAverage_unconfiguredAsset() public {
@@ -1215,10 +1176,7 @@ contract PriceV2Test is Test {
             address(twoma)
         );
         vm.expectRevert(err);
-        price.getPrice(
-            address(twoma),
-            PRICEv2.Variant.MOVINGAVERAGE
-        );
+        price.getPrice(address(twoma), PRICEv2.Variant.MOVINGAVERAGE);
     }
 
     function testRevert_getPrice_movingAverage_addressZero(uint256 nonce_) public {
@@ -1226,15 +1184,9 @@ contract PriceV2Test is Test {
         _addBaseAssets(nonce_);
 
         // Try to call getPrice with the last variant and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_AssetNotApproved(address)",
-            address(0)
-        );
+        bytes memory err = abi.encodeWithSignature("PRICE_AssetNotApproved(address)", address(0));
         vm.expectRevert(err);
-        price.getPrice(
-            address(0),
-            PRICEv2.Variant.MOVINGAVERAGE
-        );
+        price.getPrice(address(0), PRICEv2.Variant.MOVINGAVERAGE);
     }
 
     // function testRevert_getPrice_invalidVariant() public {
@@ -1266,10 +1218,7 @@ contract PriceV2Test is Test {
             address(twoma)
         );
         vm.expectRevert(err);
-        price.getPrice(
-            address(twoma),
-            1000
-        );
+        price.getPrice(address(twoma), 1000);
     }
 
     // =========  getPrice (convenience) ========= //
@@ -1283,8 +1232,6 @@ contract PriceV2Test is Test {
             address(twoma)
         );
         vm.expectRevert(err);
-        price.getPrice(
-            address(twoma)
-        );
+        price.getPrice(address(twoma));
     }
 }
