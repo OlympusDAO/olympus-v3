@@ -5,7 +5,7 @@ import "src/Submodules.sol";
 
 abstract contract PRICEv2 is ModuleWithSubmodules {
     // ========== EVENTS ========== //
-    event PriceStored(address asset_, uint256 price_, uint48 timestamp_);
+    event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
 
     // ========== ERRORS ========== //
     error PRICE_AssetNotApproved(address asset_);

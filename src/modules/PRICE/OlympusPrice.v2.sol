@@ -156,7 +156,7 @@ contract OlympusPricev2 is PRICEv2 {
             asset.nextObsIndex == 0 ? asset.numObservations - 1 : asset.nextObsIndex - 1
         ];
 
-        if (lastPrice == 0) revert PRICE_PriceZero(asset_);
+        // Last price doesn't have to be checked for zero because it is checked before being stored
 
         // Return last price and time
         return (lastPrice, asset.lastObservationTime);
@@ -172,7 +172,7 @@ contract OlympusPricev2 is PRICEv2 {
         // Calculate moving average
         uint256 movingAverage = asset.cumulativeObs / asset.numObservations;
 
-        if (movingAverage == 0) revert PRICE_PriceZero(asset_);
+        // Moving average doesn't have to be checked for zero because each value is checked before being stored
 
         // Return moving average and time
         return (movingAverage, asset.lastObservationTime);
@@ -184,14 +184,16 @@ contract OlympusPricev2 is PRICEv2 {
         (uint256 assetPrice, uint48 assetTime) = getPrice(asset_, Variant.LAST);
         (uint256 basePrice, uint48 baseTime) = getPrice(base_, Variant.LAST);
 
-        // Try to use the last price, both must be updated on the current timestamp
-        if (assetTime == uint48(block.timestamp) && baseTime == uint48(block.timestamp))
-            return (assetPrice * 10 ** decimals) / basePrice;
+        // Try to use the last prices, timestamp must be current
+        // If stale, get current price
+        if (assetTime != uint48(block.timestamp)) {
+            (assetPrice, ) = _getCurrentPrice(asset_);
+        }
+        if (baseTime != uint48(block.timestamp)) {
+            (basePrice, ) = _getCurrentPrice(base_);
+        }
 
-        // If last price is stale, use the current price
-        (assetPrice, ) = _getCurrentPrice(asset_);
-        (basePrice, ) = _getCurrentPrice(base_);
-
+        // Calculate the price of the asset in the base and return
         return (assetPrice * 10 ** decimals) / basePrice;
     }
 
@@ -205,16 +207,16 @@ contract OlympusPricev2 is PRICEv2 {
         (uint256 assetPrice, uint48 assetTime) = getPrice(asset_, Variant.LAST);
         (uint256 basePrice, uint48 baseTime) = getPrice(base_, Variant.LAST);
 
-        // Try to use the last price, both must be no older than maxAge_
-        if (
-            assetTime >= uint48(block.timestamp) - maxAge_ &&
-            baseTime >= uint48(block.timestamp) - maxAge_
-        ) return (assetPrice * 10 ** decimals) / basePrice;
+        // Try to use the last prices, timestamp must be no older than maxAge_
+        // If stale, get current price
+        if (assetTime < uint48(block.timestamp) - maxAge_) {
+            (assetPrice, ) = _getCurrentPrice(asset_);
+        }
+        if (baseTime < uint48(block.timestamp) - maxAge_) {
+            (basePrice, ) = _getCurrentPrice(base_);
+        }
 
-        // If last price is stale, use the current price
-        (assetPrice, ) = _getCurrentPrice(asset_);
-        (basePrice, ) = _getCurrentPrice(base_);
-
+        // Calculate the price of the asset in the base and return
         return (assetPrice * 10 ** decimals) / basePrice;
     }
 
@@ -252,11 +254,16 @@ contract OlympusPricev2 is PRICEv2 {
         (uint256 price, ) = _getCurrentPrice(asset_);
 
         // Store the data in the obs index
+        uint256 oldestPrice = asset.obs[asset.nextObsIndex];
         asset.obs[asset.nextObsIndex] = price;
 
         // Update the last observation time and increment the next index
         asset.lastObservationTime = uint48(block.timestamp);
         asset.nextObsIndex = (asset.nextObsIndex + 1) % asset.numObservations;
+
+        // Update the cumulative observation, if storing the moving average
+        if (asset.storeMovingAverage)
+            asset.cumulativeObs = asset.cumulativeObs + price - oldestPrice;
 
         // Emit event
         emit PriceStored(asset_, price, uint48(block.timestamp));
@@ -420,7 +427,7 @@ contract OlympusPricev2 is PRICEv2 {
     ) internal {
         Asset storage asset = _assetData[asset_];
 
-        // Remove existing moving average data, if any
+        // Remove existing cached or moving average data, if any
         if (asset.obs.length > 0) delete asset.obs;
 
         // Ensure last observation time is not in the future
@@ -442,6 +449,7 @@ contract OlympusPricev2 is PRICEv2 {
             asset.numObservations = numObservations;
             asset.lastObservationTime = lastObservationTime_;
             for (uint256 i; i < numObservations; ) {
+                if (observations_[i] == 0) revert PRICE_InvalidParams(5, abi.encode(observations_));
                 asset.cumulativeObs += observations_[i];
                 asset.obs.push(observations_[i]);
                 unchecked {
@@ -458,9 +466,15 @@ contract OlympusPricev2 is PRICEv2 {
             asset.nextObsIndex = 0;
             asset.numObservations = 1;
             if (observations_.length == 0) {
-                asset.obs = new uint256[](1);
-                asset.lastObservationTime = 0;
+                // If no observation provided, get the current price and store it
+                // We can do this here because we know the moving average isn't being stored
+                // and therefore, it is not being used in the strategy to calculate the price
+                (uint256 currentPrice, uint48 timestamp) = _getCurrentPrice(asset_);
+                asset.obs.push(currentPrice);
+                asset.lastObservationTime = timestamp;
             } else {
+                // If an observation is provided, validate it and store it
+                if (observations_[0] == 0) revert PRICE_InvalidParams(5, abi.encode(observations_));
                 asset.obs.push(observations_[0]);
                 asset.lastObservationTime = lastObservationTime_;
             }
