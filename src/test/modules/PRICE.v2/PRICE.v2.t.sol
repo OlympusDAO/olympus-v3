@@ -47,14 +47,12 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //           [X] single observation stored
 //           [X] multiple observations stored
 //           [X] multiple observations stored, nextObsIndex != 0
-//           [X] reverts if cached value is zero
 //           [X] reverts if asset not configured
 //           [X] reverts if no address is given
 //      [X] moving average variant - returns the moving average from stored observations
 //           [X] single observation stored
 //           [X] multiple observations stored
 //           [X] reverts if moving average isn't stored
-//           [X] reverts if cached value is zero
 //           [X] reverts if asset not configured
 //           [X] reverts if no address is given
 //      [X] reverts if invalid variant provided
@@ -67,27 +65,27 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [X] returns cached value if updated within the provided age
 //      [X] calculates and returns current price if not updated within the provided age
 //      [X] reverts if asset not configured on PRICE module (not approved)
-// [X] getPriceIn - returns the price of an asset in terms of another asset
+// [X] getPriceIn(asset, base, Variant) - returns the price of an asset in terms of another asset
 //      [X] current variant - dynamically calculates price from strategy and components
 //      [X] last variant - loads price from cache
 //      [X] moving average variant - returns the moving average from stored observations
 //      [X] reverts if invalid variant provided for either asset
 //      [X] reverts if either asset price is zero
 //      [X] reverts if either asset is not configured on PRICE module (not approved)
-// [ ] getPriceIn(address) - returns cached value if updated this timestamp, otherwise calculates dynamically
-//      [ ] returns cached value if both assets updated this timestamp
-//      [ ] calculates and returns current price if either asset not updated this timestamp
-// [ ] getPriceIn(address, uint48) - returns cached value if updated within the provided age, otherwise calculates dynamically
-//      [ ] returns cached value if both assets updated within the provided age
-//      [ ] calculates and returns current price if either asset not updated within the provided age
-// [ ] storePrice - caches the price of an asset (stores a new observation if the asset uses a moving average)
-//      [ ] reverts if asset not configured on PRICE module (not approved)
-//      [ ] reverts if price is zero
-//      [ ] reverts if caller is not permissioned
-//      [ ] updates stored observations
-//           [ ] single observation stored (no moving average)
-//           [ ] multiple observations stored (moving average configured)
-//      [ ] price stored event emitted
+// [X] getPriceIn(asset, base) - returns cached value if updated this timestamp, otherwise calculates dynamically
+//      [X] returns cached value if both assets updated this timestamp
+//      [X] calculates and returns current price if either asset not updated this timestamp
+// [X] getPriceIn(asset, base, uint48) - returns cached value if updated within the provided age, otherwise calculates dynamically
+//      [X] returns cached value if both assets updated within the provided age
+//      [X] calculates and returns current price if either asset not updated within the provided age
+// [X] storePrice - caches the price of an asset (stores a new observation if the asset uses a moving average)
+//      [X] reverts if asset not configured on PRICE module (not approved)
+//      [X] reverts if price is zero
+//      [X] reverts if caller is not permissioned
+//      [X] updates stored observations
+//           [X] single observation stored (no moving average)
+//           [X] multiple observations stored (moving average configured)
+//      [X] price stored event emitted
 //
 // Asset Management
 // [ ] addAsset - add an asset to the PRICE module
@@ -97,6 +95,9 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [ ] reverts if caller is not permissioned
 //      [ ] all asset data is stored correctly
 //      [ ] asset added to assets array
+//      [ ] reverts if moving average contains any zero observations
+//      [ ] if not storing moving average, reverts if zero cached value provided
+//      [ ] if not storing moving average and no cached value provided, dynamically calculates cache and stores so no zero cache values are stored
 // [ ] removeAsset
 //      [ ] reverts if asset not configured (not approved)
 //      [ ] reverts if caller is not permissioned
@@ -135,6 +136,7 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 // - OHM: Three feed using the getMedianIfDeviation strategy
 // - RSV: Two feed using the getAverageIfDeviation strategy
 // - WETH: One feed with no strategy
+// - ALPHA: One feed with no strategy
 // - BPT: One feed (has recursive calls) with no strategy
 // - ONEMA: One feed + MA using the getPriceWithFallback strategy
 // - TWOMA: Two feed + MA using the getAveragePrice strategy
@@ -148,6 +150,7 @@ contract PriceV2Test is Test {
     MockPriceFeed internal reserveUsdPriceFeed;
     MockPriceFeed internal reserveEthPriceFeed;
     MockPriceFeed internal ethUsdPriceFeed;
+    MockPriceFeed internal alphaUsdPriceFeed;
     MockPriceFeed internal onemaUsdPriceFeed;
     MockPriceFeed internal twomaUsdPriceFeed;
     MockPriceFeed internal twomaEthPriceFeed;
@@ -158,6 +161,7 @@ contract PriceV2Test is Test {
     MockERC20 internal ohm;
     MockERC20 internal reserve;
     MockERC20 internal weth;
+    MockERC20 internal alpha;
     MockERC20 internal onema;
     MockERC20 internal twoma;
 
@@ -183,7 +187,7 @@ contract PriceV2Test is Test {
             ohm = new MockERC20("Olympus", "OHM", 9);
             reserve = new MockERC20("Reserve", "RSV", 18);
             weth = new MockERC20("Wrapped ETH", "WETH", 18);
-
+            alpha = new MockERC20("Alpha", "ALPHA", 18);
             onema = new MockERC20("One + MA", "ONEMA", 18);
             twoma = new MockERC20("Two + MA", "TWOMA", 18);
 
@@ -215,6 +219,13 @@ contract PriceV2Test is Test {
             ethUsdPriceFeed.setTimestamp(block.timestamp);
             ethUsdPriceFeed.setRoundId(1);
             ethUsdPriceFeed.setAnsweredInRound(1);
+
+            alphaUsdPriceFeed = new MockPriceFeed();
+            alphaUsdPriceFeed.setDecimals(8);
+            alphaUsdPriceFeed.setLatestAnswer(int256(50e8));
+            alphaUsdPriceFeed.setTimestamp(block.timestamp);
+            alphaUsdPriceFeed.setRoundId(1);
+            alphaUsdPriceFeed.setAnsweredInRound(1);
 
             ohmUsdPriceFeed = new MockPriceFeed();
             ohmUsdPriceFeed.setDecimals(8);
@@ -425,6 +436,30 @@ contract PriceV2Test is Test {
 
             price.addAsset(
                 address(weth), // address asset_
+                false, // bool storeMovingAverage_ // don't track WETH MA
+                false, // bool useMovingAverage_
+                uint32(0), // uint32 movingAverageDuration_
+                uint48(0), // uint48 lastObservationTime_
+                new uint256[](0), // uint256[] memory observations_
+                PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+                feeds //
+            );
+        }
+
+        // ALPHA - One feed with no strategy (simplifies testing certain cases)
+        {
+            ChainlinkPriceFeeds.OneFeedParams memory alphaParams = ChainlinkPriceFeeds
+                .OneFeedParams(alphaUsdPriceFeed, uint48(24 hours));
+
+            PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+            feeds[0] = PRICEv2.Component(
+                toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+                ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+                abi.encode(alphaParams) // bytes memory params_
+            );
+
+            price.addAsset(
+                address(alpha), // address asset_
                 false, // bool storeMovingAverage_ // don't track WETH MA
                 false, // bool useMovingAverage_
                 uint32(0), // uint32 movingAverageDuration_
@@ -672,12 +707,13 @@ contract PriceV2Test is Test {
         // Get assets from price module and check that they match
         address[] memory assets = price.getAssets();
         assertEq(assets[0], address(weth));
-        assertEq(assets[1], address(ohm));
-        assertEq(assets[2], address(reserve));
-        assertEq(assets[3], address(bpt));
-        assertEq(assets[4], address(onema));
-        assertEq(assets[5], address(twoma));
-        assertEq(assets.length, 6);
+        assertEq(assets[1], address(alpha));
+        assertEq(assets[2], address(ohm));
+        assertEq(assets[3], address(reserve));
+        assertEq(assets[4], address(bpt));
+        assertEq(assets[5], address(onema));
+        assertEq(assets[6], address(twoma));
+        assertEq(assets.length, 7);
     }
 
     // =========  getAssetData  ========= //
@@ -752,7 +788,7 @@ contract PriceV2Test is Test {
         // Try to get current price and expect revert
         bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(weth));
         vm.expectRevert(err);
-        (uint256 price_, uint48 timestamp) = price.getPrice(address(weth), PRICEv2.Variant.CURRENT);
+        price.getPrice(address(weth), PRICEv2.Variant.CURRENT);
     }
 
     function test_getPrice_current_noStrat_oneFeedRecurvsive(uint256 nonce_) public {
@@ -777,7 +813,7 @@ contract PriceV2Test is Test {
         // Try to get current price and expect revert
         bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(bpt));
         vm.expectRevert(err);
-        (uint256 price_, uint48 timestamp) = price.getPrice(address(bpt), PRICEv2.Variant.CURRENT);
+        price.getPrice(address(bpt), PRICEv2.Variant.CURRENT);
     }
 
     function test_getPrice_current_strat_twoFeed(uint256 nonce_) public {
@@ -819,10 +855,7 @@ contract PriceV2Test is Test {
             address(reserve)
         );
         vm.expectRevert(err);
-        (uint256 price_, uint48 timestamp) = price.getPrice(
-            address(reserve),
-            PRICEv2.Variant.CURRENT
-        );
+        price.getPrice(address(reserve), PRICEv2.Variant.CURRENT);
     }
 
     function test_getPrice_current_strat_oneFeedPlusMA(uint256 nonce_) public {
@@ -848,47 +881,7 @@ contract PriceV2Test is Test {
         assertEq(price_, movingAverage);
     }
 
-    function testRevert_getPrice_current_strat_oneFeedPlusMA_priceZero() public {
-        // Add onema to price module initializing the moving average to zero
-        ChainlinkPriceFeeds.OneFeedParams memory feedParams = ChainlinkPriceFeeds.OneFeedParams(
-            onemaUsdPriceFeed,
-            uint48(24 hours)
-        );
-
-        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
-        feeds[0] = PRICEv2.Component(
-            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
-            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
-            abi.encode(feedParams) // bytes memory params_
-        );
-
-        vm.prank(writer);
-        price.addAsset(
-            address(onema), // address asset_
-            true, // bool storeMovingAverage_ // track ONEMA MA
-            true, // bool useMovingAverage_ // use MA in strategy
-            uint32(5 days), // uint32 movingAverageDuration_
-            uint48(block.timestamp), // uint48 lastObservationTime_
-            new uint256[](15), // uint256[] memory observations_ // initial observations as zero, which will set MA to zero
-            PRICEv2.Component(
-                toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getPriceWithFallback.selector,
-                abi.encode("") // no params required
-            ), // Component memory strategy_
-            feeds
-        );
-
-        // Set price feeds to zero
-        onemaUsdPriceFeed.setLatestAnswer(int256(0));
-
-        // Try to get current price and expect revert since both price and MA are zero
-        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(onema));
-        vm.expectRevert(err);
-        (uint256 price_, uint48 timestamp) = price.getPrice(
-            address(onema),
-            PRICEv2.Variant.CURRENT
-        );
-    }
+    // MA cannot be zero so we cannot test PriceZero error on assets that use MA in a fallback strategy
 
     function test_getPrice_current_strat_threeFeed(uint256 nonce_) public {
         // Add base assets to price module
@@ -927,7 +920,7 @@ contract PriceV2Test is Test {
         // Try to get current price and expect revert
         bytes memory err = abi.encodeWithSignature("PRICE_PriceCallFailed(address)", address(ohm));
         vm.expectRevert(err);
-        (uint256 price_, uint48 timestamp) = price.getPrice(address(ohm), PRICEv2.Variant.CURRENT);
+        price.getPrice(address(ohm), PRICEv2.Variant.CURRENT);
     }
 
     function test_getPrice_current_strat_twoFeedPlusMA(uint256 nonce_) public {
@@ -961,10 +954,7 @@ contract PriceV2Test is Test {
             address(twoma)
         );
         vm.expectRevert(err);
-        (uint256 price_, uint48 timestamp) = price.getPrice(
-            address(twoma),
-            PRICEv2.Variant.CURRENT
-        );
+        price.getPrice(address(twoma), PRICEv2.Variant.CURRENT);
     }
 
     function testRevert_getPrice_current_unconfiguredAsset() public {
@@ -1045,32 +1035,21 @@ contract PriceV2Test is Test {
         _addOneMAAssetWithObservations(observations);
 
         // Get the current price, which is 5e8 from onemaUsdPriceFeed
-        (uint256 currentPrice_, uint48 currentTimestamp_) = price.getPrice(
-            address(onema),
-            PRICEv2.Variant.CURRENT
-        );
-        assertEq(currentPrice_, 5e18);
+        (uint256 price_, ) = price.getPrice(address(onema), PRICEv2.Variant.CURRENT);
+        assertEq(price_, 5e18);
+
+        // Get the last price, which should be 2e18 from the stored observations
+        (price_, ) = price.getPrice(address(onema), PRICEv2.Variant.LAST);
+        assertEq(price_, 2e18);
 
         // Store the price, to increment nextObsIndex to 1
         vm.prank(writer);
         price.storePrice(address(onema));
 
         // Get last price, expect the most recent observation to be returned
-        (uint256 price_, uint48 timestamp) = price.getPrice(address(onema), PRICEv2.Variant.LAST);
+        (price_, ) = price.getPrice(address(onema), PRICEv2.Variant.LAST);
 
         assertEq(price_, 5e18);
-    }
-
-    function testRevert_getPrice_last_priceZero() public {
-        // Add base asset with multiple observations stored
-        uint256[] memory observations = new uint256[](1);
-        observations[0] = 0;
-        _addOneMAAssetWithObservations(observations);
-
-        // Try to call getPrice with the last variant and expect revert
-        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(onema));
-        vm.expectRevert(err);
-        price.getPrice(address(onema), PRICEv2.Variant.LAST);
     }
 
     function testRevert_getPrice_last_unconfiguredAsset() public {
@@ -1106,10 +1085,7 @@ contract PriceV2Test is Test {
         uint256 storedObservation = asset.obs[0];
 
         // Get moving average price, expect the only observation to be returned
-        (uint256 price_, uint48 timestamp) = price.getPrice(
-            address(onema),
-            PRICEv2.Variant.MOVINGAVERAGE
-        );
+        (uint256 price_, ) = price.getPrice(address(onema), PRICEv2.Variant.MOVINGAVERAGE);
 
         assertEq(price_, storedObservation);
     }
@@ -1127,24 +1103,9 @@ contract PriceV2Test is Test {
         uint256 movingAverage = cumulativeObservations / asset.numObservations;
 
         // Get moving average price, expect the only observation to be returned
-        (uint256 price_, uint48 timestamp) = price.getPrice(
-            address(onema),
-            PRICEv2.Variant.MOVINGAVERAGE
-        );
+        (uint256 price_, ) = price.getPrice(address(onema), PRICEv2.Variant.MOVINGAVERAGE);
 
         assertEq(price_, movingAverage);
-    }
-
-    function testRevert_getPrice_movingAverage_priceZero() public {
-        // Add base asset with multiple observations stored
-        uint256[] memory observations = new uint256[](1);
-        observations[0] = 0;
-        _addOneMAAssetWithObservations(observations);
-
-        // Try to call getPrice with the moving average variant and expect revert
-        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(onema));
-        vm.expectRevert(err);
-        price.getPrice(address(onema), PRICEv2.Variant.MOVINGAVERAGE);
     }
 
     function testRevert_getPrice_movingAverage_movingAverageNotStored(uint256 nonce_) public {
@@ -1284,7 +1245,7 @@ contract PriceV2Test is Test {
         price.getPrice(address(twoma));
     }
 
-    // ==========  getPriceIn (variant version)  ========== //
+    // ==========  getPriceIn (asset, base, variant)  ========== //
 
     function test_getPriceIn_current(uint256 nonce_) public {
         // Add base assets to price module
@@ -1376,20 +1337,6 @@ contract PriceV2Test is Test {
 
         assertEq(price_, uint256(200e18));
         assertEq(timestamp, uint48(start));
-    }
-
-    function testRevert_getPriceIn_last_priceZero(uint256 nonce_) public {
-        // Add base assets to price module
-        _addBaseAssets(nonce_);
-
-        // WETH is not stored at the beginning, so it should revert
-        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(weth));
-        vm.expectRevert(err);
-        price.getPriceIn(address(weth), address(ohm), PRICEv2.Variant.LAST);
-
-        // Try with positions reversed
-        vm.expectRevert(err);
-        price.getPriceIn(address(ohm), address(weth), PRICEv2.Variant.LAST);
     }
 
     function testRevert_getPriceIn_last_unconfiguredAsset() public {
@@ -1485,47 +1432,483 @@ contract PriceV2Test is Test {
         price.getPriceIn(address(onema), address(twoma), PRICEv2.Variant.MOVINGAVERAGE);
     }
 
-    function testRevert_getPriceIn_movingAverage_priceZero(uint256 nonce_) public {
+    // ==========  getPriceIn (asset, base) ========== //
+
+    function testRevert_getPriceIn_conv_unconfiguredAssets() public {
+        // No base assets
+
+        // Add onema so it is approved
+        _addOneMAAsset(1, 10);
+
+        // Try to call getPriceIn and expect revert on the second asset
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(twoma)
+        );
+        vm.expectRevert(err);
+        price.getPriceIn(address(onema), address(twoma));
+
+        // Reverse positions
+        vm.expectRevert(err);
+        price.getPriceIn(address(twoma), address(onema));
+    }
+
+    function testRevert_getPriceIn_conv_priceZero(uint256 nonce_) public {
         // Add base assets to price module
         _addBaseAssets(nonce_);
 
-        // Initialize asset with a moving average of zero
-        MockERC20 zeroma = new MockERC20("Zero MA", "ZMA", 18);
-        ChainlinkPriceFeeds.OneFeedParams memory feedParams = ChainlinkPriceFeeds.OneFeedParams(
-            onemaUsdPriceFeed,
-            uint48(24 hours)
-        );
+        // Timestamp is the same as initialized so it should return the stored (last) value, which would be the current one
 
-        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
-        feeds[0] = PRICEv2.Component(
-            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
-            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
-            abi.encode(feedParams) // bytes memory params_
-        );
+        // Move forward in time so that the stored value is stale for both assets
+        vm.warp(uint256(block.timestamp) + 1);
 
-        vm.prank(writer);
-        price.addAsset(
-            address(zeroma), // address asset_
-            true, // bool storeMovingAverage_ // track MA
-            false, // bool useMovingAverage_ //
-            uint32(5 days), // uint32 movingAverageDuration_
-            uint48(block.timestamp), // uint48 lastObservationTime_
-            new uint256[](15), // uint256[] memory observations_ // initial observations as zero, which will set MA to zero
-            PRICEv2.Component(
-                toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getPriceWithFallback.selector,
-                abi.encode("") // no params required
-            ), // Component memory strategy_
-            feeds
-        );
+        // Set WETH price to zero
+        ethUsdPriceFeed.setLatestAnswer(int256(0));
 
-        // Try to call getPriceIn with the moving average variant and expect revert on the first asset
-        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(zeroma));
+        // Try to call getPriceIn and expect revert on the first
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(weth));
         vm.expectRevert(err);
-        price.getPriceIn(address(zeroma), address(onema), PRICEv2.Variant.MOVINGAVERAGE);
+        price.getPriceIn(address(weth), address(alpha));
+
+        // Reverse positions
+        vm.expectRevert(err);
+        price.getPriceIn(address(alpha), address(weth));
+
+        // Set ALPHA price to zero
+        alphaUsdPriceFeed.setLatestAnswer(int256(0));
+
+        // Try to call getPriceIn and expect revert on whichever asset is first
+        vm.expectRevert(err);
+        price.getPriceIn(address(weth), address(alpha));
+
+        // Reverse positions
+        err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(alpha));
+        vm.expectRevert(err);
+        price.getPriceIn(address(alpha), address(weth));
+    }
+
+    // Cases to check for getPriceIn (asset, base):
+    // 1. Both assets have a cached price at current timestamp
+    // 2. Both assets don't have a cached price at current timestamp
+    // 3. Asset has a cached price, base doesn't
+    // 4. Base has a cached price, asset doesn't
+
+    function test_getPriceIn_conv_case1(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // WETH and ALPHA have values cached on creation
+
+        // Get price of weth in alpha (current price and last are the same)
+        uint256 price_ = price.getPriceIn(address(weth), address(alpha));
+
+        assertEq(price_, uint256(40e18));
+
+        // Change price of both assets
+        ethUsdPriceFeed.setLatestAnswer(int256(1600e8));
+        alphaUsdPriceFeed.setLatestAnswer(int256(20e8));
+
+        // Get price of weth in alpha, expect stored value since it has the current timestamp
+        price_ = price.getPriceIn(address(weth), address(alpha));
+        assertEq(price_, uint256(40e18));
+    }
+
+    function test_getPriceIn_conv_case2(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // WETH and ALPHA have values cached on creation
+
+        // Warp forward in time so that the stored prices are stale (but non-zero)
+        vm.warp(block.timestamp + 1);
+
+        // Change price of both assets
+        ethUsdPriceFeed.setLatestAnswer(int256(1600e8));
+        alphaUsdPriceFeed.setLatestAnswer(int256(20e8));
+
+        // Get price of weth in ohm, expect new value since stored values are stale
+        uint256 price_ = price.getPriceIn(address(weth), address(alpha));
+        assertEq(price_, uint256(80e18));
+    }
+
+    function test_getPriceIn_conv_case3(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Warp forward in time to ignore initialized cache prices
+        vm.warp(uint256(block.timestamp) + 1);
+
+        // Store the price of one asset
+        vm.startPrank(writer);
+        price.storePrice(address(weth));
+        vm.stopPrank();
+
+        // Set a different value for both assets
+        ethUsdPriceFeed.setLatestAnswer(int256(1600e8));
+        alphaUsdPriceFeed.setLatestAnswer(int256(20e8));
+
+        // Get current price of
+        uint256 price_ = price.getPriceIn(address(weth), address(alpha));
+
+        // Will be the stored weth value divided by the new alpha value
+        assertEq(price_, uint256(100e18));
+    }
+
+    function test_getPriceIn_conv_case4(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Warp forward in time to ignore initialized cache prices
+        vm.warp(uint256(block.timestamp) + 1);
+
+        // Store the price of one asset
+        vm.startPrank(writer);
+        price.storePrice(address(alpha));
+        vm.stopPrank();
+
+        // Set a different value for both assets
+        ethUsdPriceFeed.setLatestAnswer(int256(1600e8));
+        alphaUsdPriceFeed.setLatestAnswer(int256(20e8));
+
+        // Get current price of
+        uint256 price_ = price.getPriceIn(address(weth), address(alpha));
+
+        // Will be the new weth value divided by the stored alpha value
+        assertEq(price_, uint256(32e18));
+    }
+
+    // ==========  getPriceIn (asset, base, maxAge) ========== //
+
+    function testRevert_getPriceIn_maxAge_unconfiguredAssets() public {
+        // No base assets
+
+        // Try to call getPriceIn and expect revert on the first asset
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(onema)
+        );
+        vm.expectRevert(err);
+        price.getPriceIn(address(onema), address(twoma), uint48(60));
+
+        // Add onema so it is approved
+        _addOneMAAsset(1, 10);
+
+        // Try to call getPriceIn and expect revert on the second asset
+        err = abi.encodeWithSignature("PRICE_AssetNotApproved(address)", address(twoma));
+        vm.expectRevert(err);
+        price.getPriceIn(address(onema), address(twoma), uint48(60));
+
+        // Reverse positions
+        vm.expectRevert(err);
+        price.getPriceIn(address(twoma), address(onema), uint48(60));
+    }
+
+    function testRevert_getPriceIn_maxAge_priceZero(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Warp forward in time to ignore initialized cache prices
+        vm.warp(uint256(block.timestamp) + 61);
+
+        // Change WETH price to zero
+        ethUsdPriceFeed.setLatestAnswer(int256(0));
+
+        // WETH is not stored at the beginning, so it should revert
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(weth));
+        vm.expectRevert(err);
+        price.getPriceIn(address(weth), address(alpha), uint48(60));
 
         // Try with positions reversed
         vm.expectRevert(err);
-        price.getPriceIn(address(onema), address(zeroma), PRICEv2.Variant.MOVINGAVERAGE);
+        price.getPriceIn(address(alpha), address(weth), uint48(60));
     }
+
+    // Cases to check for getPriceIn (asset, base, maxAge):
+    // 1. Both assets have a cached price within maxAge
+    // 2. Both assets don't have a cached price within maxAge
+    // 3. Asset has a cached price, base doesn't
+    // 4. Base has a cached price, asset doesn't
+
+    function test_getPriceIn_maxAge_case1(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // WETH and ALPHA both have a cached value on creation
+        uint48 start = uint48(block.timestamp);
+
+        // Get current price of weth in alpha, expect stored value / current value since they are the same
+        uint256 price_ = price.getPriceIn(address(weth), address(alpha), uint48(60));
+        assertEq(price_, uint256(40e18));
+
+        // Move forward in time so that the stored value is still valid for both assets
+        vm.warp(uint256(start + 60));
+
+        // Change price of both assets
+        ethUsdPriceFeed.setLatestAnswer(int256(1600e8));
+        alphaUsdPriceFeed.setLatestAnswer(int256(20e8));
+
+        // Get price of weth in alpha, expect stored value since is within the maxAge
+        price_ = price.getPriceIn(address(weth), address(alpha), uint48(60));
+        assertEq(price_, uint256(40e18));
+    }
+
+    function test_getPriceIn_maxAge_case2(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // WETH and ALPHA both have a cached value on creation
+
+        // Change price of both assets
+        ethUsdPriceFeed.setLatestAnswer(int256(1600e8));
+        alphaUsdPriceFeed.setLatestAnswer(int256(20e8));
+
+        // Get current price of weth in alpha, expect stored value / current value since they are the same
+        uint256 price_ = price.getPriceIn(address(weth), address(alpha), uint48(60));
+        assertEq(price_, uint256(40e18));
+
+        // Move forward in time so that the stored values are stale
+        vm.warp(uint256(block.timestamp + 61));
+
+        // Get price of weth in alpha, expect current value since stored values are stale
+        price_ = price.getPriceIn(address(weth), address(alpha), uint48(60));
+        assertEq(price_, uint256(80e18));
+    }
+
+    function test_getPriceIn_maxAge_case3(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Warp forward in time to ignore initialized cache prices
+        uint48 start = uint48(block.timestamp);
+        vm.warp(uint256(start) + 120);
+
+        // Store the price of one asset
+        vm.startPrank(writer);
+        price.storePrice(address(weth));
+        vm.stopPrank();
+
+        // Set a different value for both assets
+        ethUsdPriceFeed.setLatestAnswer(int256(1600e8));
+        alphaUsdPriceFeed.setLatestAnswer(int256(20e8));
+
+        // Get price of weth in alpha
+        uint256 price_ = price.getPriceIn(address(weth), address(alpha), uint48(60));
+
+        // Will be the stored weth value divided by the new alpha value
+        assertEq(price_, uint256(100e18));
+
+        // Warp forward in time so that the stored value for weth is still within maxAge
+        vm.warp(uint256(start) + 180);
+
+        // Get price of weth in alpha, expect same value since it is within maxAge
+        price_ = price.getPriceIn(address(weth), address(alpha), uint48(60));
+        assertEq(price_, uint256(100e18));
+
+        // Warp forward in time so that the stored value for weth is stale
+        vm.warp(uint256(start) + 181);
+
+        // Get price of weth in alpha, expect new value since it is outside of maxAge
+        price_ = price.getPriceIn(address(weth), address(alpha), uint48(60));
+        assertEq(price_, uint256(80e18));
+    }
+
+    function test_getPriceIn_maxAge_case4(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Warp forward in time to ignore initialized cache prices
+        uint48 start = uint48(block.timestamp);
+        vm.warp(uint256(start) + 120);
+
+        // Store the price of base asset
+        vm.startPrank(writer);
+        price.storePrice(address(alpha));
+        vm.stopPrank();
+
+        // Set a different value for both assets
+        ethUsdPriceFeed.setLatestAnswer(int256(1600e8));
+        alphaUsdPriceFeed.setLatestAnswer(int256(20e8));
+
+        // Get price of weth in alpha
+        uint256 price_ = price.getPriceIn(address(weth), address(alpha), uint48(60));
+
+        // Will be the new weth value divided by the stored alpha value
+        assertEq(price_, uint256(32e18));
+
+        // Warp forward in time so that the stored value for alpha is still within maxAge
+        vm.warp(uint256(start) + 180);
+
+        // Get price of weth in alpha, expect same value since it is within maxAge
+        price_ = price.getPriceIn(address(weth), address(alpha), uint48(60));
+        assertEq(price_, uint256(32e18));
+
+        // Warp forward in time so that the stored value for alpha is stale
+        vm.warp(uint256(start) + 181);
+
+        // Get price of weth in alpha, expect new value since it is outside of maxAge
+        price_ = price.getPriceIn(address(weth), address(alpha), uint48(60));
+        assertEq(price_, uint256(80e18));
+    }
+
+    // ==========  storePrice  ========== //
+    function testRevert_storePrice_unconfiguredAsset() public {
+        // No base assets
+
+        // Try to call storePrice for an asset not added and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(twoma)
+        );
+        vm.expectRevert(err);
+        vm.prank(writer);
+        price.storePrice(address(twoma));
+    }
+
+    function testRevert_storePrice_priceZero(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Set weth price feed to zero
+        ethUsdPriceFeed.setLatestAnswer(int256(0));
+
+        // Try to call storePrice with weth and expect revert (single feed)
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(weth));
+        vm.expectRevert(err);
+        vm.prank(writer);
+        price.storePrice(address(weth));
+
+        // Set ohm price to zero
+        ohmUsdPriceFeed.setLatestAnswer(int256(0));
+        ohmEthPriceFeed.setLatestAnswer(int256(0));
+
+        // Try to get current price and expect revert
+        err = abi.encodeWithSignature("PRICE_PriceCallFailed(address)", address(ohm));
+        vm.expectRevert(err);
+        vm.prank(writer);
+        price.storePrice(address(ohm));
+    }
+
+    function testRevert_storePrice_onlyPermissioned(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Try to call storePrice with non-permissioned address (this contract) and expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+        price.storePrice(address(weth));
+
+        // Try to call storePrice with permissioned address (writer) and expect to succeed
+        vm.prank(writer);
+        price.storePrice(address(weth));
+    }
+
+    event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
+
+    function test_storePrice_noMovingAverage(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Get current cached data for weth from initialization
+        uint48 start = uint48(block.timestamp);
+        PRICEv2.Asset memory asset = price.getAssetData(address(weth));
+        assertEq(asset.obs[0], uint256(2000e18));
+        assertEq(asset.obs.length, 1);
+        assertEq(asset.numObservations, 1);
+        assertEq(asset.cumulativeObs, uint256(0)); // zero since no moving average
+        assertEq(asset.lastObservationTime, start);
+        assertEq(asset.nextObsIndex, 0); // always 0 when no moving average
+
+        // Warp forward in time and store a new price
+        vm.warp(uint256(start) + 1);
+        ethUsdPriceFeed.setLatestAnswer(int256(2001e8));
+
+        vm.prank(writer);
+        price.storePrice(address(weth));
+
+        // Get updated cached data for weth
+        asset = price.getAssetData(address(weth));
+        assertEq(asset.obs[0], uint256(2001e18));
+        assertEq(asset.obs.length, 1);
+        assertEq(asset.numObservations, 1);
+        assertEq(asset.cumulativeObs, uint256(0)); // zero since no moving average
+        assertEq(asset.lastObservationTime, uint48(start + 1));
+        assertEq(asset.nextObsIndex, 0); // always 0 when no moving average
+
+        // Store price again and check that event is emitted
+        vm.prank(writer);
+        vm.expectEmit(true, false, false, true);
+        emit PriceStored(address(weth), uint256(2001e18), uint48(start + 1));
+        price.storePrice(address(weth));
+    }
+
+    function test_storePrice_movingAverage(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Get current cached data for onema from initialization
+        uint48 start = uint48(block.timestamp);
+        PRICEv2.Asset memory asset = price.getAssetData(address(onema));
+        assertEq(asset.obs[14], uint256(5e18));
+        assertEq(asset.obs.length, 15);
+        assertEq(asset.numObservations, 15);
+        // cumulative obs is random based on the nonce, store for comparison after new value added (which will be larger)
+        uint256 cumulativeObs = asset.cumulativeObs;
+        assertEq(asset.lastObservationTime, start);
+        assertEq(asset.nextObsIndex, 0); // starts at zero after initialization since that is the oldest data point
+
+        // Warp forward in time and store a new price
+        vm.warp(uint256(start) + 1);
+        onemaUsdPriceFeed.setLatestAnswer(int256(50e8));
+
+        vm.prank(writer);
+        price.storePrice(address(onema));
+
+        // Get updated cached data for onema
+        asset = price.getAssetData(address(onema));
+        assertEq(asset.obs[0], uint256(50e18));
+        assertEq(asset.obs[14], uint256(5e18));
+        assertEq(asset.obs.length, 15);
+        assertEq(asset.numObservations, 15);
+        assertGt(asset.cumulativeObs, cumulativeObs); // new cumulative obs is larger than the previous one due to adding a high ob
+        assertEq(asset.lastObservationTime, uint48(start + 1));
+        assertEq(asset.nextObsIndex, 1); // next index is 1 since we added a new value
+
+        // Add several new values to test ring buffer
+        for (uint256 i; i < 14; i++) {
+            vm.warp(uint256(start) + 2 + i);
+            vm.prank(writer);
+            price.storePrice(address(onema));
+        }
+
+        // Get updated cached data for onema
+        asset = price.getAssetData(address(onema));
+        assertEq(asset.obs[14], uint256(50e18));
+        assertEq(asset.obs.length, 15);
+        assertEq(asset.numObservations, 15);
+        assertEq(asset.cumulativeObs, uint256(50e18) * 15); // all data points should be 50e18 now
+        assertEq(asset.lastObservationTime, uint48(start + 15));
+        assertEq(asset.nextObsIndex, 0); // next index should be zero since the ring buffer should wrap back around
+
+        // Warp forward in time and store a new price
+        vm.warp(uint256(start) + 16);
+        vm.prank(writer);
+        price.storePrice(address(onema));
+
+        // Get updated cached data for onema
+        asset = price.getAssetData(address(onema));
+        assertEq(asset.nextObsIndex, 1); // next index should be 1 since we added a new value
+    }
+
+    // ========== addAsset ========== //
+
+    // ========== removeAsset ========== //
+
+    // ========== updateAssetPriceFeeds ========== //
+
+    // ========== updateAssetPriceStrategy ========== //
+
+    // ========== updateAssetMovingAverage =========== //
 }
