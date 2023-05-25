@@ -21,11 +21,36 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return toSubKeycode("PRICE.SIMPLESTRATEGY");
     }
 
+    // ========== HELPER FUNCTIONS ========== //
+
+    function _getNonZeroArray(
+        uint256[] memory array_
+    ) internal pure returns (uint256[] memory) {
+        // Determine the number of non-zero array elements
+        uint256 nonZeroCount = 0;
+        for (uint256 i = 0; i < array_.length; i++) {
+            if (array_[i] != 0) nonZeroCount++;
+        }
+
+        // Create a new array with only the non-zero elements
+        uint256[] memory nonZeroArray = new uint256[](nonZeroCount);
+        uint256 nonZeroIndex = 0;
+        for (uint256 i = 0; i < array_.length; i++) {
+            if (array_[i] != 0) {
+                nonZeroArray[nonZeroIndex] = array_[i];
+                nonZeroIndex++;
+            }
+        }
+
+        return nonZeroArray;
+    }
+
     // ========== STRATEGY FUNCTIONS ========== //
 
-    /// @notice Returns the first price in the array
+    /// @notice Returns the first non-zero price in the array
+    /// 
     /// @dev Reverts if:
-    /// - The prices_ array is empty
+    /// - The prices_ array does not contain any non-zero values
     ///
     /// @param prices_ Array of prices
     /// @param params_ Unused
@@ -34,24 +59,25 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
+        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+
         // Can't work with 0 length
-        if (prices_.length == 0) revert SimpleStrategy_PriceCountInvalid();
+        if (nonZeroPrices.length == 0) revert SimpleStrategy_PriceCountInvalid();
 
         // Return error if price is 0
-        if (prices_[0] == 0) revert SimpleStrategy_PriceZero();
+        if (nonZeroPrices[0] == 0) revert SimpleStrategy_PriceZero();
 
-        return prices_[0];
+        return nonZeroPrices[0];
     }
 
-    /// @notice This strategy returns the average of the prices in the array if
+    /// @notice This strategy returns the average of the non-zero prices in the array if
     /// the deviation from the average is greater than the deviationBps (specified in params_).
     ///
     /// @dev If no deviation is detected, the first price in the array is returned.
     /// This strategy is useful to smooth out price volatility
     ///
     /// Will revert if:
-    /// - The number of elements in the prices_ array is less than 2
-    /// - Any price in the array is 0 (since it uses getAveragePrice)
+    /// - The number of non-zero elements in the prices_ array is less than 2
     /// - The deviationBps is 0
     ///
     /// @param prices_ Array of prices
@@ -61,11 +87,13 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
+        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+
         // Can't work with  < 2 length
-        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
+        if (nonZeroPrices.length < 2) revert SimpleStrategy_PriceCountInvalid();
 
         // Get the average and abort if there's a problem
-        uint256[] memory sortedPrices = QuickSort.sort(prices_);
+        uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
         uint256 averagePrice = getAveragePrice(sortedPrices, params_);
 
         if (params_.length == 0) revert SimpleStrategy_ParamsRequired();
@@ -81,18 +109,17 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         if (((maxPrice - averagePrice) * 10000) / maxPrice > deviationBps) return averagePrice;
 
         // Otherwise, return the first value
-        return prices_[0];
+        return nonZeroPrices[0];
     }
 
-    /// @notice This strategy returns the median of the prices in the array if
+    /// @notice This strategy returns the median of the non-zero prices in the array if
     /// the deviation from the average is greater than the deviationBps (specified in params_).
     ///
     /// @dev If no deviation is detected, the first price in the array is returned.
     /// This strategy is useful to smooth out price volatility
     ///
     /// Will revert if:
-    /// - The number of elements in the prices_ array is less than 2
-    /// - Any price in the array is 0 (since it uses getAveragePrice)
+    /// - The number of non-zero elements in the prices_ array is less than 2
     /// - The deviationBps is 0
     ///
     /// @param prices_ Array of prices
@@ -102,11 +129,13 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
+        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+
         // Can't work with  < 2 length
-        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
+        if (nonZeroPrices.length < 2) revert SimpleStrategy_PriceCountInvalid();
 
         // Get the average and median and abort if there's a problem
-        uint256[] memory sortedPrices = QuickSort.sort(prices_);
+        uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
         uint256 averagePrice = getAveragePrice(sortedPrices, params_);
         uint256 medianPrice = getMedianPrice(sortedPrices, params_);
 
@@ -126,10 +155,10 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return prices_[0];
     }
 
-    /// @notice This strategy returns the average of the prices in the array.
+    /// @notice This strategy returns the average of the non-zero prices in the array.
+    ///
     /// @dev Will revert if:
-    /// - The number of elements in the prices_ array is 0
-    /// - Any price in the array is 0
+    /// - The number of non-zero elements in the prices_ array is 0
     ///
     /// @param prices_ Array of prices
     /// @param params_ Unused
@@ -138,27 +167,26 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
-        uint256 pricesLen = prices_.length;
+        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+
+        uint256 pricesLen = nonZeroPrices.length;
         // Can't calculate the average if there are no prices
         if (pricesLen == 0) revert SimpleStrategy_PriceCountInvalid();
 
         uint256 priceTotal;
         for (uint256 i = 0; i < pricesLen; i++) {
-            // Can't calculate the average if a price feed has not returned a value
-            if (prices_[i] == 0) revert SimpleStrategy_PriceZero();
-
-            priceTotal += prices_[i];
+            priceTotal += nonZeroPrices[i];
         }
 
         return priceTotal / pricesLen;
     }
 
-    /// @notice This strategy returns the median of the prices in the array.
+    /// @notice This strategy returns the median of the non-zeroprices in the array.
+    ///
     /// @dev If the array has an even number of prices, the average of the two middle prices is returned.
     ///
     /// Will revert if:
-    /// - The number of elements in the prices_ array is 0
-    /// - Any price in the array is 0
+    /// - The number of non-zero elements in the prices_ array is 0
     ///
     /// @param prices_ Array of prices
     /// @param params_ Unused
@@ -167,17 +195,14 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
-        uint256 pricesLen = prices_.length;
+        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+
+        uint256 pricesLen = nonZeroPrices.length;
         // Can only calculate a median if there are 3+ prices
-        if (pricesLen < 3) return getAveragePrice(prices_, params_);
+        if (pricesLen < 3) return getAveragePrice(nonZeroPrices, params_);
 
         // Sort the prices
-        uint256[] memory sortedPrices = QuickSort.sort(prices_);
-
-        // Abort if there are zero prices
-        for (uint256 i = 0; i < pricesLen; i++) {
-            if (sortedPrices[i] == 0) revert SimpleStrategy_PriceZero();
-        }
+        uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
 
         // If there are an even number of prices, return the average of the two middle prices
         if (pricesLen % 2 == 0) {
@@ -199,6 +224,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
+        // TODO redundant now? Since getFirstPrice will strip out non-zero values
+        
         // Requires two prices
         if (prices_.length != 2) revert SimpleStrategy_PriceCountInvalid();
 
