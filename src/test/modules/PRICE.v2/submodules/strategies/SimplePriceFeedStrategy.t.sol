@@ -44,28 +44,28 @@ contract SimplePriceFeedStrategyTest is Test {
 
     // =========  TESTS - FIRST PRICE ========= //
 
-    function test_getFirstPrice_revertsOnArrayLengthZero() public {
+    function test_getFirstNonZeroPrice_revertsOnArrayLengthZero() public {
         uint256[] memory prices = new uint256[](0);
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
 
-        strategy.getFirstPrice(prices, "");
+        strategy.getFirstNonZeroPrice(prices, "");
     }
 
-    function test_getFirstPrice_revertsOnPriceZero() public {
+    function test_getFirstNonZeroPrice_revertsOnPriceZero() public {
         uint256[] memory prices = new uint256[](1);
         prices[0] = 0;
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
 
-        strategy.getFirstPrice(prices, "");
+        strategy.getFirstNonZeroPrice(prices, "");
     }
 
-    function test_getFirstPrice_success() public {
+    function test_getFirstNonZeroPrice_success() public {
         uint256[] memory prices = new uint256[](1);
         prices[0] = 1e18;
 
-        uint256 price = strategy.getFirstPrice(prices, "");
+        uint256 price = strategy.getFirstNonZeroPrice(prices, "");
 
         assertEq(price, 1e18);
     }

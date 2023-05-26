@@ -55,7 +55,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @param prices_ Array of prices
     /// @param params_ Unused
     /// @return price_ The resolved price
-    function getFirstPrice(
+    function getFirstNonZeroPrice(
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
@@ -224,8 +224,6 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
-        // TODO redundant now? Since getFirstPrice will strip out non-zero values
-        
         // Requires two prices
         if (prices_.length != 2) revert SimpleStrategy_PriceCountInvalid();
 
