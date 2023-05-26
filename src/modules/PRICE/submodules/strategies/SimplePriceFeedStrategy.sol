@@ -47,14 +47,19 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
     // ========== STRATEGY FUNCTIONS ========== //
 
-    /// @notice Returns the first non-zero price in the array
+    /// @notice         Returns the first non-zero price in the array.
     /// 
-    /// @dev Reverts if:
-    /// - The prices_ array does not contain any non-zero values
+    /// @dev            Reverts if:
+    ///                 - The prices_ array does not contain any non-zero values
     ///
-    /// @param prices_ Array of prices
-    /// @param params_ Unused
-    /// @return price_ The resolved price
+    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 handling of price lookup sources that return errors.
+    ///                 Otherwise, an asset with any zero price would result in
+    ///                 no price being returned at all.
+    ///
+    /// @param prices_  Array of prices
+    /// @param params_  Unused
+    /// @return uint256 The resolved price
     function getFirstNonZeroPrice(
         uint256[] memory prices_,
         bytes memory params_
@@ -70,19 +75,24 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return nonZeroPrices[0];
     }
 
-    /// @notice This strategy returns the average of the non-zero prices in the array if
-    /// the deviation from the average is greater than the deviationBps (specified in params_).
+    /// @notice         This strategy returns the average of the non-zero prices in the array if
+    ///                 the deviation from the average is greater than the deviationBps (specified in params_).
     ///
-    /// @dev If no deviation is detected, the first price in the array is returned.
-    /// This strategy is useful to smooth out price volatility
+    ///                 @dev If no deviation is detected, the first non-zero price in the array is returned.
+    ///                 This strategy is useful to smooth out price volatility.
     ///
-    /// Will revert if:
-    /// - The number of non-zero elements in the prices_ array is less than 2
-    /// - The deviationBps is 0
+    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 handling of price lookup sources that return errors.
+    ///                 Otherwise, an asset with any zero price would result in
+    ///                 no price being returned at all.
     ///
-    /// @param prices_ Array of prices
-    /// @param params_ DeviationParams struct encoded as bytes
-    /// @return price_ The resolved price
+    ///                 Will revert if:
+    ///                 - The number of non-zero elements in the prices_ array is less than 2
+    ///                 - The deviationBps is 0
+    ///
+    /// @param prices_  Array of prices
+    /// @param params_  DeviationParams struct encoded as bytes
+    /// @return uint256 The resolved price
     function getAverageIfDeviation(
         uint256[] memory prices_,
         bytes memory params_
@@ -112,19 +122,24 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return nonZeroPrices[0];
     }
 
-    /// @notice This strategy returns the median of the non-zero prices in the array if
-    /// the deviation from the average is greater than the deviationBps (specified in params_).
+    /// @notice         This strategy returns the median of the non-zero prices in the array if
+    ///                 the deviation from the average is greater than the deviationBps (specified in params_).
     ///
-    /// @dev If no deviation is detected, the first price in the array is returned.
-    /// This strategy is useful to smooth out price volatility
+    /// @dev            If no deviation is detected, the first price in the array is returned.
+    ///                 This strategy is useful to smooth out price volatility.
     ///
-    /// Will revert if:
-    /// - The number of non-zero elements in the prices_ array is less than 2
-    /// - The deviationBps is 0
+    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 handling of price lookup sources that return errors.
+    ///                 Otherwise, an asset with any zero price would result in
+    ///                 no price being returned at all.
     ///
-    /// @param prices_ Array of prices
-    /// @param params_ DeviationParams struct encoded as bytes
-    /// @return price_ The resolved price
+    ///                 Will revert if:
+    ///                 - The number of non-zero elements in the prices_ array is less than 2
+    ///                 - The deviationBps is 0
+    ///
+    /// @param prices_  Array of prices
+    /// @param params_  DeviationParams struct encoded as bytes
+    /// @return uint256 The resolved price
     function getMedianIfDeviation(
         uint256[] memory prices_,
         bytes memory params_
@@ -155,14 +170,19 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return prices_[0];
     }
 
-    /// @notice This strategy returns the average of the non-zero prices in the array.
+    /// @notice         This strategy returns the average of the non-zero prices in the array.
     ///
-    /// @dev Will revert if:
-    /// - The number of non-zero elements in the prices_ array is 0
+    /// @dev            Will revert if:
+    ///                 - The number of non-zero elements in the prices_ array is 0
     ///
-    /// @param prices_ Array of prices
-    /// @param params_ Unused
-    /// @return price_ The resolved price
+    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 handling of price lookup sources that return errors.
+    ///                 Otherwise, an asset with any zero price would result in
+    ///                 no price being returned at all.
+    ///
+    /// @param prices_  Array of prices
+    /// @param params_  Unused
+    /// @return uint256 The resolved price
     function getAveragePrice(
         uint256[] memory prices_,
         bytes memory params_
@@ -181,16 +201,22 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return priceTotal / pricesLen;
     }
 
-    /// @notice This strategy returns the median of the non-zeroprices in the array.
+    /// @notice         This strategy returns the median of the non-zero prices in the array.
     ///
-    /// @dev If the array has an even number of prices, the average of the two middle prices is returned.
+    /// @dev            If the array has an even number of non-zero prices, the average of the two middle 
+    ///                 prices is returned.
     ///
-    /// Will revert if:
-    /// - The number of non-zero elements in the prices_ array is 0
+    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 handling of price lookup sources that return errors.
+    ///                 Otherwise, an asset with any zero price would result in
+    ///                 no price being returned at all.
     ///
-    /// @param prices_ Array of prices
-    /// @param params_ Unused
-    /// @return price_ The resolved price
+    ///                 Will revert if:
+    ///                 - The number of non-zero elements in the prices_ array is 0
+    ///
+    /// @param prices_  Array of prices
+    /// @param params_  Unused
+    /// @return uint256 The resolved price
     function getMedianPrice(
         uint256[] memory prices_,
         bytes memory params_
@@ -215,11 +241,19 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return sortedPrices[(pricesLen - 1) / 2];
     }
 
-    /// @notice This strategy returns a second price if the first feed is zero.
-    /// @dev Likely most useful if you're falling back to a secondary feed or a moving average.
-    /// @param prices_ Array of prices
-    /// @param params_ Unused
-    /// @return price_ The resolved price
+    /// @notice         This strategy returns a second price if the first feed is zero.
+    ///
+    /// @dev            Likely most useful if you're falling back to a secondary feed or a moving average.
+    ///
+    ///                 Due to its nature, this strategy does consider zero prices and does not strip them 
+    ///                 from the prices_ array.
+    ///
+    ///                 Will revert if:
+    ///                 - The number of elements in the prices_ array is not 2
+    ///
+    /// @param prices_  Array of prices
+    /// @param params_  Unused
+    /// @return uint256 The resolved price
     function getPriceWithFallback(
         uint256[] memory prices_,
         bytes memory params_
