@@ -89,14 +89,20 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //
 // Asset Management
 // [ ] addAsset - add an asset to the PRICE module
-//      [ ] reverts if asset already configured (approved)
-//      [ ] reverts if asset address is not a contract
+//      [X] reverts if asset already configured (approved)
+//      [X] reverts if asset address is not a contract
 //      [ ] reverts if moving average is being used by strategy but not being stored on the contract
-//      [ ] reverts if caller is not permissioned
+//      [X] reverts if no strategy is set, moving average is disabled and multiple feeds (MA + feeds > 1)
+//      [X] reverts if no strategy is set, moving average is enabled and single feed (MA + feeds > 1)
+//      [X] reverts if caller is not permissioned
+//      [X] reverts if moving average is used, but not stored
 //      [ ] all asset data is stored correctly
 //      [ ] asset added to assets array
+//      [X] asset added with no strategy, moving average disabled, single feed
+//      [ ] asset added with strategy, moving average enabled, single feed
+//      [ ] asset added with strategy, moving average enabled, mutiple feeds
 //      [ ] reverts if moving average contains any zero observations
-//      [ ] if not storing moving average, reverts if zero cached value provided
+//      [ ] reverts if zero cached value provided, if not storing moving average
 //      [ ] if not storing moving average and no cached value provided, dynamically calculates cache and stores so no zero cache values are stored
 // [ ] removeAsset
 //      [ ] reverts if asset not configured (not approved)
@@ -1903,6 +1909,262 @@ contract PriceV2Test is Test {
     }
 
     // ========== addAsset ========== //
+
+    function testRevert_addAsset_exists(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            ethUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(ethParams) // bytes memory params_
+        );
+
+        // Try and add the an asset again
+        vm.startPrank(writer);
+
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetAlreadyApproved(address)",
+            address(weth)
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(weth), // address asset_
+            false, // bool storeMovingAverage_ // don't track WETH MA
+            false, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            new uint256[](0), // uint256[] memory observations_
+            PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+            feeds //
+        );
+    }
+
+    function testRevert_addAsset_notContract() public {
+        address eoa = 0x3040351e0D8EAf89A0F1b958Fa62915d804B2405;
+        
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            ethUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(ethParams) // bytes memory params_
+        );
+
+        // Try and add the asset
+        vm.startPrank(writer);
+
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotContract(address)",
+            address(eoa)
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(eoa), // address asset_
+            false, // bool storeMovingAverage_ // don't track WETH MA
+            false, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            new uint256[](0), // uint256[] memory observations_
+            PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+            feeds //
+        );
+    }
+
+    function testRevert_addAsset_notPermissioned() public {
+        MockERC20 asset = new MockERC20("Asset", "ASSET", 18);
+
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            ethUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(ethParams) // bytes memory params_
+        );
+
+        // Try and add the asset
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(asset), // address asset_
+            false, // bool storeMovingAverage_ // don't track WETH MA
+            false, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            new uint256[](0), // uint256[] memory observations_
+            PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+            feeds //
+        );
+    }
+
+    function testRevert_addAsset_noStrategy_noMovingAverage_multiplePriceFeeds() public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
+        .TwoFeedParams(
+            ohmEthPriceFeed,
+            uint48(24 hours),
+            ethUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](2);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+        feeds[1] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector, // bytes4 selector
+            abi.encode(ohmFeedTwoParams) // bytes memory params
+        );
+
+        // Try and add the asset
+        vm.startPrank(writer);
+
+        // Reverts as there is no strategy, but no MA + 2 price feeds > 1 requires a strategy
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            3,
+            abi.encode(PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)))
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(weth), // address asset_
+            false, // bool storeMovingAverage_
+            false, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            new uint256[](0), // uint256[] memory observations_
+            PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+            feeds //
+        );
+    }
+
+    function testRevert_addAsset_useMovingAverage_noStoreMovingAverage() public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+
+        // Try and add the asset
+        vm.startPrank(writer);
+
+        // Reverts as useMovingAverage is enabled, but storeMovingAverage is not
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            2,
+            abi.encode(true)
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(weth), // address asset_
+            false, // bool storeMovingAverage_
+            true, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            new uint256[](0), // uint256[] memory observations_
+            PRICEv2.Component( // Add a strategy so that addAsset has no other reason to revert
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getAveragePrice.selector,
+                abi.encode("") // no params required
+            ), // Component memory strategy_
+            feeds //
+        );
+    }
+
+    function testRevert_addAsset_noStrategy_movingAverage_singlePriceFeed() public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+
+        // Try and add the asset
+        vm.startPrank(writer);
+
+        // Reverts as there is no strategy, but MA + single price feed > 1 requires a strategy
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            3,
+            abi.encode(PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)))
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(weth), // address asset_
+            true, // bool storeMovingAverage_
+            true, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            new uint256[](0), // uint256[] memory observations_
+            PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+            feeds //
+        );
+    }
+
+    function test_addAsset_noStrategy_noMovingAverage_singlePriceFeed() public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+
+        // Try and add the asset
+        vm.startPrank(writer);
+
+        price.addAsset(
+            address(weth), // address asset_
+            false, // bool storeMovingAverage_
+            false, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            new uint256[](0), // uint256[] memory observations_
+            PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+            feeds //
+        );
+
+        // Should have a cached result
+        (uint256 price_, ) = price.getPrice(address(weth), PRICEv2.Variant.LAST);
+        assertEq(price_, 10e18);
+    }
 
     // ========== removeAsset ========== //
 
