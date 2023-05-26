@@ -1949,7 +1949,7 @@ contract PriceV2Test is Test {
 
     function testRevert_addAsset_notContract() public {
         address eoa = 0x3040351e0D8EAf89A0F1b958Fa62915d804B2405;
-        
+
         ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
             ethUsdPriceFeed,
             uint48(24 hours)
@@ -1965,10 +1965,7 @@ contract PriceV2Test is Test {
         // Try and add the asset
         vm.startPrank(writer);
 
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_AssetNotContract(address)",
-            address(eoa)
-        );
+        bytes memory err = abi.encodeWithSignature("PRICE_AssetNotContract(address)", address(eoa));
         vm.expectRevert(err);
 
         price.addAsset(
@@ -2019,15 +2016,10 @@ contract PriceV2Test is Test {
 
     function testRevert_addAsset_noStrategy_noMovingAverage_multiplePriceFeeds() public {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
-        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 
         ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
-        .TwoFeedParams(
-            ohmEthPriceFeed,
-            uint48(24 hours),
-            ethUsdPriceFeed,
-            uint48(24 hours)
-        );
+            .TwoFeedParams(ohmEthPriceFeed, uint48(24 hours), ethUsdPriceFeed, uint48(24 hours));
 
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](2);
         feeds[0] = PRICEv2.Component(
@@ -2066,7 +2058,7 @@ contract PriceV2Test is Test {
 
     function testRevert_addAsset_useMovingAverage_noStoreMovingAverage() public {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
-        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         feeds[0] = PRICEv2.Component(
@@ -2104,7 +2096,7 @@ contract PriceV2Test is Test {
 
     function testRevert_addAsset_noStrategy_movingAverage_singlePriceFeed() public {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
-        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         feeds[0] = PRICEv2.Component(
@@ -2138,7 +2130,7 @@ contract PriceV2Test is Test {
 
     function test_addAsset_noStrategy_noMovingAverage_singlePriceFeed() public {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
-        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         feeds[0] = PRICEv2.Component(
@@ -2168,15 +2160,10 @@ contract PriceV2Test is Test {
 
     function test_addAsset_strategy_movingAverage_multiplePriceFeeds(uint256 nonce_) public {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
-        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 
         ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
-            .TwoFeedParams(
-                ohmEthPriceFeed,
-                uint48(24 hours),
-                ethUsdPriceFeed,
-                uint48(24 hours)
-            );
+            .TwoFeedParams(ohmEthPriceFeed, uint48(24 hours), ethUsdPriceFeed, uint48(24 hours));
 
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](2);
         feeds[0] = PRICEv2.Component(
@@ -2215,7 +2202,7 @@ contract PriceV2Test is Test {
 
     function test_addAsset_strategy_movingAverage_singlePriceFeed(uint256 nonce_) public {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
-        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         feeds[0] = PRICEv2.Component(
