@@ -23,9 +23,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
     // ========== HELPER FUNCTIONS ========== //
 
-    function _getNonZeroArray(
-        uint256[] memory array_
-    ) internal pure returns (uint256[] memory) {
+    function _getNonZeroArray(uint256[] memory array_) internal pure returns (uint256[] memory) {
         // Determine the number of non-zero array elements
         uint256 nonZeroCount = 0;
         for (uint256 i = 0; i < array_.length; i++) {
@@ -48,7 +46,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     // ========== STRATEGY FUNCTIONS ========== //
 
     /// @notice         Returns the first non-zero price in the array.
-    /// 
+    ///
     /// @dev            Reverts if:
     ///                 - The prices_ array does not contain any non-zero values
     ///
@@ -203,7 +201,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
     /// @notice         This strategy returns the median of the non-zero prices in the array.
     ///
-    /// @dev            If the array has an even number of non-zero prices, the average of the two middle 
+    /// @dev            If the array has an even number of non-zero prices, the average of the two middle
     ///                 prices is returned.
     ///
     ///                 Non-zero prices in the array are ignored, to allow for
@@ -245,7 +243,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///
     /// @dev            Likely most useful if you're falling back to a secondary feed or a moving average.
     ///
-    ///                 Due to its nature, this strategy does consider zero prices and does not strip them 
+    ///                 Due to its nature, this strategy does consider zero prices and does not strip them
     ///                 from the prices_ array.
     ///
     ///                 Will revert if:
