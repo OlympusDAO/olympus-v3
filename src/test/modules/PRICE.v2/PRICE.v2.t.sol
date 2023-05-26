@@ -99,8 +99,8 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [ ] all asset data is stored correctly
 //      [ ] asset added to assets array
 //      [X] asset added with no strategy, moving average disabled, single feed
-//      [ ] asset added with strategy, moving average enabled, single feed
-//      [ ] asset added with strategy, moving average enabled, mutiple feeds
+//      [X] asset added with strategy, moving average enabled, single feed
+//      [X] asset added with strategy, moving average enabled, mutiple feeds
 //      [ ] reverts if moving average contains any zero observations
 //      [ ] reverts if zero cached value provided, if not storing moving average
 //      [ ] if not storing moving average and no cached value provided, dynamically calculates cache and stores so no zero cache values are stored
@@ -2164,6 +2164,87 @@ contract PriceV2Test is Test {
         // Should have a cached result
         (uint256 price_, ) = price.getPrice(address(weth), PRICEv2.Variant.LAST);
         assertEq(price_, 10e18);
+    }
+
+    function test_addAsset_strategy_movingAverage_multiplePriceFeeds(uint256 nonce_) public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
+            .TwoFeedParams(
+                ohmEthPriceFeed,
+                uint48(24 hours),
+                ethUsdPriceFeed,
+                uint48(24 hours)
+            );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](2);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+        feeds[1] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector, // bytes4 selector
+            abi.encode(ohmFeedTwoParams) // bytes memory params
+        );
+
+        // Try and add the asset
+        vm.startPrank(writer);
+
+        price.addAsset(
+            address(weth), // address asset_
+            true, // bool storeMovingAverage_
+            true, // bool useMovingAverage_
+            uint32(8 hours), // uint32 movingAverageDuration_
+            uint48(block.timestamp), // uint48 lastObservationTime_
+            _makeRandomObservations(weth, feeds[0], nonce_, uint256(1)), // uint256[] memory observations_
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getAveragePrice.selector,
+                abi.encode("") // no params required
+            ), // Component memory strategy_
+            feeds //
+        );
+
+        // Should have a cached result
+        (uint256 price_, ) = price.getPrice(address(weth), PRICEv2.Variant.LAST);
+        assertEq(price_, 10e18);
+    }
+
+    function test_addAsset_strategy_movingAverage_singlePriceFeed(uint256 nonce_) public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+
+        // Try and add the asset
+        vm.startPrank(writer);
+
+        price.addAsset(
+            address(weth), // address asset_
+            true, // bool storeMovingAverage_
+            true, // bool useMovingAverage_
+            uint32(8 hours), // uint32 movingAverageDuration_
+            uint48(block.timestamp), // uint48 lastObservationTime_
+            _makeRandomObservations(weth, feeds[0], nonce_, uint256(1)), // uint256[] memory observations_
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getAveragePrice.selector,
+                abi.encode("") // no params required
+            ), // Component memory strategy_
+            feeds //
+        );
+
+        // Should have a cached result
+        (uint256 price_, ) = price.getPrice(address(weth), PRICEv2.Variant.LAST);
+        assertEq(price_, 10e18); // Average of 10, 10, 10
     }
 
     // ========== removeAsset ========== //
