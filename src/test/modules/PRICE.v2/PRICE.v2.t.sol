@@ -125,7 +125,7 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [ ] reverts if asset not configured (not approved)
 //      [ ] reverts if caller is not permissioned
 //      [ ] reverts if last observation time is in the future
-//      [ ] previous configuratio and observations cleared
+//      [ ] previous configuration and observations cleared
 //      [ ] if storing moving average
 //           [ ] reverts if moving average duration and observation frequency are invalid
 //           [ ] reverts if implied observations does not equal the amount of observations provided
