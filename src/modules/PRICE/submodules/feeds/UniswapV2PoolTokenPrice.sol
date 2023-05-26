@@ -62,11 +62,11 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         return tokens;
     }
 
-    /// @notice Returns the reserves of a UniswapV2 pool
-    /// @dev This function reverts if the pool does not have the getReserves() function.
+    /// @notice             Returns the reserves of a UniswapV2 pool
+    /// @dev                This function reverts if the pool does not have the getReserves() function.
     ///
-    /// @param pool_ UniswapV2 pool
-    /// @return uint112[] Reserves of the pool in their native decimals
+    /// @param pool_        UniswapV2 pool
+    /// @return uint112[]   Reserves of the pool in their native decimals
     function _getReserves(IUniswapV2Pool pool_) internal view returns (uint112[] memory) {
         try pool_.getReserves() returns (
             uint112 token0Reserves,
@@ -83,14 +83,14 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         }
     }
 
-    /// @notice Converts the given value from the ERC20 token's decimals to the destination decimals
+    /// @notice                     Converts the given value from the ERC20 token's decimals to the destination decimals
     ///
-    /// @dev This function will revert if converting the token's decimals would result in an overflow.
+    /// @dev                        This function will revert if converting the token's decimals would result in an overflow.
     ///
-    /// @param value_ value in native ERC20 token decimals
-    /// @param token_ the address of the ERC20 token
-    /// @param destinationDecimals_ the resulting number of decimals
-    /// @return uint256 Value in the scale of destinationDecimals
+    /// @param value_               Value in native ERC20 token decimals
+    /// @param token_               The address of the ERC20 token
+    /// @param destinationDecimals_ The resulting number of decimals
+    /// @return uint256             Value in the scale of destinationDecimals_
     function _convertERC20Decimals(
         uint112 value_,
         address token_,
@@ -104,16 +104,16 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
 
     // ========== POOL TOKEN PRICE FUNCTIONS ========== //
 
-    /// @notice Determines the unit price of the pool token for the UniswapV2 pool specified in {params_}.
+    /// @notice                 Determines the unit price of the pool token for the UniswapV2 pool specified in {params_}.
     ///
-    /// @dev The pool token price is determined using the "fair LP pricing" described here: https://cmichel.io/pricing-lp-tokens/
-    /// This approach is implemented in order to reduce the succeptibility to manipulation of the pool token price
-    /// through the pool's reserves.
+    /// @dev                    The pool token price is determined using the "fair LP pricing" described here: https://cmichel.io/pricing-lp-tokens/
+    ///                         This approach is implemented in order to reduce the succeptibility to manipulation of the pool token price
+    ///                         through the pool's reserves.
     ///
-    /// @param asset_ The asset to get the price of (unused)
-    /// @param outputDecimals_ The number of decimals to return the price in
-    /// @param params_ UniswapV2 pool parameters of type UniswapV2PoolParams
-    /// @return uint256 Price in the scale of outputDecimals_
+    /// @param asset_           The asset to get the price of (unused)
+    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param params_          UniswapV2 pool parameters of type UniswapV2PoolParams
+    /// @return uint256         Price in the scale of outputDecimals_
     function getPoolTokenPrice(
         address asset_,
         uint8 outputDecimals_,
@@ -210,19 +210,19 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
 
     // ========== TOKEN SPOT PRICE FUNCTIONS ========== //
 
-    /// Determines the spot price of the specified token from the UniswapV2 pool specified in {params_}.
+    /// @notice                 Determines the spot price of the specified token from the UniswapV2 pool specified in {params_}.
     ///
-    /// It does this by:
-    /// - Determining the price and reserves of the token paired with {lookupToken_}
-    /// - Determining the corresponding price of {lookupToken_}
+    /// @dev                    It does this by:
+    ///                         - Determining the price and reserves of the token paired with {lookupToken_}
+    ///                         - Determining the corresponding price of {lookupToken_}
     ///
-    /// NOTE: as the reserves of UniswapV2 pools can be manipulated using flash loans, the spot price
-    /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
+    ///                         NOTE: as the reserves of UniswapV2 pools can be manipulated using flash loans, the spot price
+    ///                         can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
-    /// @param lookupToken_ the token to determine the price of
-    /// @param outputDecimals_ The number of decimals to return the price in
-    /// @param params_ UniswapV2 pool parameters of type UniswapV2PoolParams
-    /// @return uint256 Price in the scale of outputDecimals_
+    /// @param lookupToken_     The token to determine the price of
+    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param params_          UniswapV2 pool parameters of type UniswapV2PoolParams
+    /// @return uint256         Price in the scale of outputDecimals_
     function getTokenPrice(
         address lookupToken_,
         uint8 outputDecimals_,

@@ -93,9 +93,9 @@ contract CurvePoolTokenPrice is PriceSubmodule {
 
     // ========== HELPER FUNCTIONS ========== //
 
-    /// @notice Activates a reentrancy lock on the Curve pool contract
-    /// @dev This uses the same method as MakerDAO:
-    /// https://github.com/makerdao/curve-lp-oracle/blob/302f5e6966fdbfebe0f7063c9d6f6bc1f6470f28/src/CurveLPOracle.sol#L228-L231
+    /// @notice     Activates a reentrancy lock on the Curve pool contract
+    /// @dev        This uses the same method as MakerDAO:
+    ///             https://github.com/makerdao/curve-lp-oracle/blob/302f5e6966fdbfebe0f7063c9d6f6bc1f6470f28/src/CurveLPOracle.sol#L228-L231
     function _reentrancyLock(ICurvePool pool_, uint8 numCoins_) internal {
         uint256[] memory amounts = new uint256[](numCoins_);
         pool_.remove_liquidity(0, amounts);
@@ -113,14 +113,15 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         return ERC20(token_).decimals();
     }
 
-    /// @notice Converts the given value from the ERC20 token's decimals to the destination decimals
+    /// @notice                     Converts the given value from the ERC20 token's decimals to the destination decimals
     ///
-    /// @dev This function will return (false, 0) if converting the token's decimals would result in an overflow.
+    /// @dev                        This function will revert if:
+    ///                             - converting the token's decimals would result in an overflow.
     ///
-    /// @param value_ value in native ERC20 token decimals
-    /// @param token_ the address of the ERC20 token
-    /// @param destinationDecimals_ the resulting number of decimals
-    /// @return uint256 Value in the scale of destinationDecimals
+    /// @param value_               Value in native ERC20 token decimals
+    /// @param token_               The address of the ERC20 token
+    /// @param destinationDecimals_ The resulting number of decimals
+    /// @return uint256             Value in the scale of destinationDecimals
     function _convertERC20Decimals(
         uint256 value_,
         address token_,
@@ -134,21 +135,21 @@ contract CurvePoolTokenPrice is PriceSubmodule {
 
     // ========== POOL TOKEN PRICE FUNCTIONS ========== //
 
-    /// @notice Determines the price of the pool token for the Curve stable pool specified in {params_}.
+    /// @notice                     Determines the price of the pool token for the Curve stable pool specified in {params_}.
     ///
-    /// @dev Will revert upon the following:
-    /// - Decimal exponent too high
-    /// - 0x0 addresses in the pool
-    /// - Unable to find a price for the tokens that are part of the pool
-    /// - If the transaction involves reentrancy on the Curve pool
+    ///                             @dev Will revert upon the following:
+    ///                             - Decimal exponent too high
+    ///                             - 0x0 addresses in the pool
+    ///                             - Unable to find a price for the tokens that are part of the pool
+    ///                             - If the transaction involves reentrancy on the Curve pool
     ///
-    /// NOTE: if a non-stable Curve pool is passed in the parameters, an incorrect price will be
-    /// pool token price returned. Use the pool-specified pool token price function instead.
+    ///                             NOTE: if a non-stable Curve pool is passed in the parameters, an incorrect price will be
+    ///                             pool token price returned. Use the pool-specified pool token price function instead.
     ///
-    /// @param asset_ The asset to get the price of (unused)
-    /// @param outputDecimals_ The number of decimals to return the price in
-    /// @param params_ Curve pool parameters of type ICurvePool
-    /// @return uint256 Price in the scale of outputDecimals_
+    /// @param asset_               The asset to get the price of (unused)
+    /// @param outputDecimals_      The number of decimals to return the price in
+    /// @param params_              Curve pool parameters of type ICurvePool
+    /// @return uint256             Price in the scale of outputDecimals_
     function getPoolTokenPriceFromStablePool(
         address asset_,
         uint8 outputDecimals_,
@@ -225,23 +226,23 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         return adjustedVirtualPrice;
     }
 
-    /// @notice Determines the price of the pool token for the Curve two- or three-crypto pool specified in {params_}.
+    /// @notice                         Determines the price of the pool token for the Curve two- or three-crypto pool specified in {params_}.
     ///
-    /// @dev Will revert upon the following:
-    /// - Pool balance is 0
-    /// - This function is called on an unsupported pool type
-    /// - 0x0 addresses in the pool
-    /// - Unable to find a price for the tokens that are part of the pool
-    /// - If the transaction involves reentrancy on the Curve pool
+    /// @dev                            Will revert upon the following:
+    ///                                 - Pool balance is 0
+    ///                                 - This function is called on an unsupported pool type
+    ///                                 - 0x0 addresses in the pool
+    ///                                 - Unable to find a price for the tokens that are part of the pool
+    ///                                 - If the transaction involves reentrancy on the Curve pool
     ///
-    /// Assumes the following have already been checked:
-    /// - outputDecimals_ is within bounds
-    /// - Pool token total supply is not 0
+    ///                                 Assumes the following have already been checked:
+    ///                                 - outputDecimals_ is within bounds
+    ///                                 - Pool token total supply is not 0
     ///
-    /// @param poolTokenTotalSupply_ total supply of the pool token
-    /// @param outputDecimals_ The number of decimals to return the price in
-    /// @param params_ Curve pool parameters of type ICurvePoolTriCrypto
-    /// @return uint256 Price in the scale of outputDecimals_
+    /// @param poolTokenTotalSupply_    Total supply of the pool token
+    /// @param outputDecimals_          The number of decimals to return the price in
+    /// @param params_                  Curve pool parameters of type ICurvePoolTriCrypto
+    /// @return uint256                 Price in the scale of outputDecimals_
     function _getPoolTokenPriceCrypto(
         uint256 poolTokenTotalSupply_,
         uint8 outputDecimals_,
@@ -327,22 +328,22 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         return poolTokenPrice;
     }
 
-    /// @notice Determines the price of the pool token for the Curve two-crypto pool specified in {params_}.
+    /// @notice                 Determines the price of the pool token for the Curve two-crypto pool specified in {params_}.
     ///
-    /// @dev Will revert upon the following:
-    /// - Decimal exponent too high
-    /// - Pool token is not set or is 0x0
-    /// - Pool token total supply is 0
-    /// - Pool balance is 0
-    /// - Incorrect pool type
-    /// - 0x0 addresses in the pool
-    /// - Unable to find a price for the tokens that are part of the pool
-    /// - If the transaction involves reentrancy on the Curve pool
+    /// @dev                    Will revert upon the following:
+    ///                         - Decimal exponent too high
+    ///                         - Pool token is not set or is 0x0
+    ///                         - Pool token total supply is 0
+    ///                         - Pool balance is 0
+    ///                         - Incorrect pool type
+    ///                         - 0x0 addresses in the pool
+    ///                         - Unable to find a price for the tokens that are part of the pool
+    ///                         - If the transaction involves reentrancy on the Curve pool
     ///
-    /// @param asset_ The asset to get the price of (unused)
-    /// @param outputDecimals_ The number of decimals to return the price in
-    /// @param params_ Curve pool parameters of type ICurvePoolTwoCrypto
-    /// @return uint256 Price in the scale of outputDecimals_
+    /// @param asset_           The asset to get the price of (unused)
+    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param params_          Curve pool parameters of type ICurvePoolTwoCrypto
+    /// @return uint256         Price in the scale of outputDecimals_
     function getPoolTokenPriceFromTwoCryptoPool(
         address asset_,
         uint8 outputDecimals_,
@@ -390,22 +391,22 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         return _getPoolTokenPriceCrypto(poolTokenTotalSupply, outputDecimals_, params_);
     }
 
-    /// @notice Determines the price of the pool token for the Curve tri-crypto pool specified in {params_}.
+    /// @notice                 Determines the price of the pool token for the Curve tri-crypto pool specified in {params_}.
     ///
-    /// @dev Will revert upon the following:
-    /// - Decimal exponent too high
-    /// - Pool token is not set or is 0x0
-    /// - Pool token total supply is 0
-    /// - Pool balance is 0
-    /// - Incorrect pool type
-    /// - 0x0 addresses in the pool
-    /// - Unable to find a price for the tokens that are part of the pool
-    /// - If the transaction involves reentrancy on the Curve pool
+    /// @dev                    Will revert upon the following:
+    ///                         - Decimal exponent too high
+    ///                         - Pool token is not set or is 0x0
+    ///                         - Pool token total supply is 0
+    ///                         - Pool balance is 0
+    ///                         - Incorrect pool type
+    ///                         - 0x0 addresses in the pool
+    ///                         - Unable to find a price for the tokens that are part of the pool
+    ///                         - If the transaction involves reentrancy on the Curve pool
     ///
-    /// @param asset_ The asset to get the price of (unused)
-    /// @param outputDecimals_ The number of decimals to return the price in
-    /// @param params_ Curve pool parameters of type ICurvePoolTriCrypto
-    /// @return uint256 Price in the scale of outputDecimals_
+    /// @param asset_           The asset to get the price of (unused)
+    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param params_          Curve pool parameters of type ICurvePoolTriCrypto
+    /// @return uint256         Price in the scale of outputDecimals_
     function getPoolTokenPriceFromTriCryptoPool(
         address asset_,
         uint8 outputDecimals_,
@@ -455,25 +456,25 @@ contract CurvePoolTokenPrice is PriceSubmodule {
 
     // ========== TOKEN SPOT PRICE FUNCTIONS ========== //
 
-    /// @notice Determines the price of the specified token, using the two-crypto Curve pool specified in {params_}.
+    /// @notice                 Determines the price of the specified token, using the two-crypto Curve pool specified in {params_}.
     ///
-    /// @dev Will revert upon the following:
-    /// - Decimal exponent too high
-    /// - 0x0 addresses in the pool
-    /// - Incorrect pool type
-    /// - The price_oracle() function on the Curve pool returns 0
-    /// - Unable to find the price of a second token in the pool
-    /// - If the transaction involves reentrancy on the Curve pool
+    /// @dev                    Will revert upon the following:
+    ///                         - Decimal exponent too high
+    ///                         - 0x0 addresses in the pool
+    ///                         - Incorrect pool type
+    ///                         - The price_oracle() function on the Curve pool returns 0
+    ///                         - Unable to find the price of a second token in the pool
+    ///                         - If the transaction involves reentrancy on the Curve pool
     ///
-    /// This function utilises the price_oracle() function on the Curve pool to provide resistance to price manipulation.
+    ///                         This function utilises the price_oracle() function on the Curve pool to provide resistance to price manipulation.
     ///
-    /// NOTE: as the reserves of Curve pools can be manipulated using flash loans, the spot price
-    /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
+    ///                         NOTE: as the reserves of Curve pools can be manipulated using flash loans, the spot price
+    ///                         can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
-    /// @param lookupToken_ the token to determine the price of
-    /// @param outputDecimals_ The number of decimals to return the price in
-    /// @param params_ Curve pool parameters of type ICurvePoolTwoCrypto
-    /// @return uint256 Price in the scale of outputDecimals_
+    /// @param lookupToken_     The token to determine the price of
+    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param params_          Curve pool parameters of type ICurvePoolTwoCrypto
+    /// @return uint256         Price in the scale of outputDecimals_
     function getTokenPriceFromTwoCryptoPool(
         address lookupToken_,
         uint8 outputDecimals_,
@@ -572,25 +573,25 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         return tokenInUsdPrice;
     }
 
-    /// @notice Determines the price of the specified token, using the tri-crypto Curve pool specified in {params_}.
+    /// @notice                 Determines the price of the specified token, using the tri-crypto Curve pool specified in {params_}.
     ///
-    /// @dev Will revert upon the following:
-    /// - Decimal exponent too high
-    /// - 0x0 addresses in the pool
-    /// - Incorrect pool type
-    /// - The price_oracle() function on the Curve pool returns 0
-    /// - Unable to find the price of a second token in the pool
-    /// - If the transaction involves reentrancy on the Curve pool
+    /// @dev                    Will revert upon the following:
+    ///                         - Decimal exponent too high
+    ///                         - 0x0 addresses in the pool
+    ///                         - Incorrect pool type
+    ///                         - The price_oracle() function on the Curve pool returns 0
+    ///                         - Unable to find the price of a second token in the pool
+    ///                         - If the transaction involves reentrancy on the Curve pool
     ///
-    /// This function utilises the price_oracle() function on the Curve pool to provide resistance to price manipulation.
+    ///                         This function utilises the price_oracle() function on the Curve pool to provide resistance to price manipulation.
     ///
-    /// NOTE: as the reserves of Curve pools can be manipulated using flash loans, the spot price
-    /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
+    ///                         NOTE: as the reserves of Curve pools can be manipulated using flash loans, the spot price
+    ///                         can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
-    /// @param lookupToken_ the token to determine the price of
-    /// @param outputDecimals_ The number of decimals to return the price in
-    /// @param params_ Curve pool parameters of type ICurvePoolTriCrypto
-    /// @return uint256 Price in the scale of outputDecimals_
+    /// @param lookupToken_     The token to determine the price of
+    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param params_          Curve pool parameters of type ICurvePoolTriCrypto
+    /// @return uint256         Price in the scale of outputDecimals_
     function getTokenPriceFromTriCryptoPool(
         address lookupToken_,
         uint8 outputDecimals_,
@@ -702,14 +703,14 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         return tokenInUsdPrice;
     }
 
-    /// @notice Determine the quantity of t2 received in return for 1 unit of t1
-    /// @dev Uses get_dy in the Curve pool
+    /// @notice                 Determine the quantity of t2 received in return for 1 unit of t1
+    /// @dev                    Uses get_dy in the Curve pool
     ///
-    /// @param pool_ the Curve pool
-    /// @param t1Index_ the index of the first token
-    /// @param t2Index_ the index of the second token
-    /// @param outputDecimals_ The number of decimals to return the price in
-    /// @return uint256 Quantity in PRICE's decimals, or 0
+    /// @param pool_            The Curve pool
+    /// @param t1Index_         The index of the first token
+    /// @param t2Index_         The index of the second token
+    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @return uint256         Quantity in terms of outputDecimals_, or 0
     function _getStablePoolSwapQuantity(
         ICurvePool pool_,
         uint128 t1Index_,
@@ -726,27 +727,27 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         return swapResult;
     }
 
-    /// @notice Determines the price of the specified token, using the stable Curve pool specified in {params_}.
+    /// @notice                 Determines the price of the specified token, using the stable Curve pool specified in {params_}.
     ///
-    /// @dev Will revert upon the following:
-    /// - Decimal exponent too high
-    /// - 0x0 addresses in the pool
-    /// - Incorrect pool type
-    /// - Unable to find the price of a second token in the pool
-    /// - If the transaction involves reentrancy on the Curve pool
+    /// @dev                    Will revert upon the following:
+    ///                         - Decimal exponent too high
+    ///                         - 0x0 addresses in the pool
+    ///                         - Incorrect pool type
+    ///                         - Unable to find the price of a second token in the pool
+    ///                         - If the transaction involves reentrancy on the Curve pool
     ///
-    /// To determine the price of the lookupToken_ (t1), this function uses the following process:
-    /// - Determine the price of a second token (t2) in the pool
-    /// - Use get_dy to determine the quantity (q2) of t2 received in return for 1 unit of t1
-    /// - Multiply q2 * t2 to determine the price of t1 in USD
+    ///                         To determine the price of the lookupToken_ (t1), this function uses the following process:
+    ///                         - Determine the price of a second token (t2) in the pool
+    ///                         - Use get_dy to determine the quantity (q2) of t2 received in return for 1 unit of t1
+    ///                         - Multiply q2 * t2 to determine the price of t1 in USD
     ///
-    /// NOTE: as the reserves of Curve pools can be manipulated using flash loans, the spot price
-    /// can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
+    ///                         NOTE: as the reserves of Curve pools can be manipulated using flash loans, the spot price
+    ///                         can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
-    /// @param lookupToken_ the token to determine the price of
-    /// @param outputDecimals_ The number of decimals to return the price in
-    /// @param params_ Curve pool parameters of type ICurvePool
-    /// @return uint256 Price in the scale of outputDecimals_
+    /// @param lookupToken_     The token to determine the price of
+    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param params_          Curve pool parameters of type ICurvePool
+    /// @return uint256         Price in the scale of outputDecimals_
     function getTokenPriceFromStablePool(
         address lookupToken_,
         uint8 outputDecimals_,

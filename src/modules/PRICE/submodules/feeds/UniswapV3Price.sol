@@ -53,18 +53,18 @@ contract UniswapV3Price is PriceSubmodule {
 
     // ========== TOKEN PRICE FUNCTIONS ========== //
 
-    /// @notice Obtains the price of {lookupToken_} in USD, using the TWAP from the specified Uniswap V3 oracle.
-    /// @dev This function will revert if:
-    /// - The value of params.observationWindowSeconds is less than TWAP_MINIMUM_OBSERVATION_SECONDS
-    /// - Any token decimals or outputDecimals_ are high enough to cause an overflow
-    /// - Any tokens in the pool are not set
-    /// - token_ is not in the pool
-    /// - The calculated time-weighted tick is outside the bounds of int24
+    /// @notice                 Obtains the price of {lookupToken_} in USD, using the TWAP from the specified Uniswap V3 oracle.
+    /// @dev                    This function will revert if:
+    ///                         - The value of params.observationWindowSeconds is less than TWAP_MINIMUM_OBSERVATION_SECONDS
+    ///                         - Any token decimals or outputDecimals_ are high enough to cause an overflow
+    ///                         - Any tokens in the pool are not set
+    ///                         - lookupToken_ is not in the pool
+    ///                         - The calculated time-weighted tick is outside the bounds of int24
     ///
-    /// @param lookupToken_ The token to determine the price of.
-    /// @param outputDecimals_ The number of decimals to return the price in
-    /// @param params_ Pool parameters of type UniswapV3Params
-    /// @return uint256 Price in the scale of outputDecimals_
+    /// @param lookupToken_     The token to determine the price of.
+    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param params_          Pool parameters of type UniswapV3Params
+    /// @return uint256         Price in the scale of outputDecimals_
     function getTokenTWAP(
         address lookupToken_,
         uint8 outputDecimals_,
