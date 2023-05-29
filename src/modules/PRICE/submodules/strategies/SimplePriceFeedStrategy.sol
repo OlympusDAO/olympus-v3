@@ -8,7 +8,6 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     // ========== ERRORS ========== //
 
     error SimpleStrategy_PriceCountInvalid();
-    error SimpleStrategy_PriceZero();
     error SimpleStrategy_ParamsRequired();
 
     // ========== CONSTRUCTOR ========== //
