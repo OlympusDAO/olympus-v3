@@ -135,12 +135,12 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getAveragePrice(prices, "");
     }
 
-    function test_getAveragePrice_revertsOnArrayPriceZero() public {
-        uint256[] memory prices = new uint256[](2);
+    function test_getAveragePrice_arrayPriceZero(uint8 len_) public {
+        uint8 len = uint8(bound(len_, 1, 10));
+        uint256[] memory prices = new uint256[](len);
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
-
-        strategy.getAveragePrice(prices, "");
+        uint256 returnedPrice = strategy.getAveragePrice(prices, "");
+        assertEq(returnedPrice, 0);
     }
 
     function test_getAveragePrice_priceZeroFuzz(uint8 priceZeroIndex_) public {
