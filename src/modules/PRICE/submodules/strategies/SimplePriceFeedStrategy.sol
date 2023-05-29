@@ -136,10 +136,10 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///                 no price being returned at all.
     ///
     ///                 If no deviation is detected, the first non-zero price in the array is returned.
-    ///                 If there are not enough non-zero array elements to calculate a median (< 2), the first non-zero price in the array (or 0) is returned.
+    ///                 If there are not enough non-zero array elements to calculate a median (< 3), the average (or 0) is returned.
     ///
     ///                 Will revert if:
-    ///                 - The number of elements in the prices_ array is less than 2, since it would represent a mis-configuration.
+    ///                 - The number of elements in the prices_ array is less than 3, since it would represent a mis-configuration.
     ///                 - The deviationBps is 0.
     ///
     /// @param prices_  Array of prices
@@ -149,16 +149,16 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
-        // Can't work with  < 2 length
-        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
+        // Misconfiguration
+        if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid();
 
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
         // If there are no non-zero prices, return 0
         if (nonZeroPrices.length == 0) return 0;
 
-        // If there are not enough non-zero prices to calculate an average, return the first non-zero price
-        if (nonZeroPrices.length == 1) return nonZeroPrices[0];
+        // If there are not enough non-zero prices to calculate a median, return the average (or 0)
+        if (nonZeroPrices.length < 3) return getAveragePrice(prices_, params_);
 
         // Get the average and median and abort if there's a problem
         uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
@@ -228,8 +228,10 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///                 Otherwise, an asset with any zero price would result in
     ///                 no price being returned at all.
     ///
+    ///                 If there are not enough non-zero array elements to calculate a median (< 3), the average is returned.
+    ///
     ///                 Will revert if:
-    ///                 - The number of non-zero elements in the prices_ array is 0
+    ///                 - The number of elements in the prices_ array is less than 3, since it would represent a mis-configuration.
     ///
     /// @param prices_  Array of prices
     /// @param params_  Unused
@@ -238,23 +240,26 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
+        // Misconfiguration
+        if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid();
+
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
-        uint256 pricesLen = nonZeroPrices.length;
-        // Can only calculate a median if there are 3+ prices
-        if (pricesLen < 3) return getAveragePrice(nonZeroPrices, params_);
+        uint256 nonZeroPricesLen = nonZeroPrices.length;
+        // Can only calculate a median if there are 3+ non-zero prices
+        if (nonZeroPricesLen < 3) return getAveragePrice(prices_, params_);
 
         // Sort the prices
         uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
 
         // If there are an even number of prices, return the average of the two middle prices
-        if (pricesLen % 2 == 0) {
-            uint256 middlePrice1 = sortedPrices[pricesLen / 2 - 1];
-            uint256 middlePrice2 = sortedPrices[pricesLen / 2];
+        if (nonZeroPricesLen % 2 == 0) {
+            uint256 middlePrice1 = sortedPrices[nonZeroPricesLen / 2 - 1];
+            uint256 middlePrice2 = sortedPrices[nonZeroPricesLen / 2];
             return (middlePrice1 + middlePrice2) / 2;
         }
 
         // Otherwise return the median price
-        return sortedPrices[(pricesLen - 1) / 2];
+        return sortedPrices[(nonZeroPricesLen - 1) / 2];
     }
 }
