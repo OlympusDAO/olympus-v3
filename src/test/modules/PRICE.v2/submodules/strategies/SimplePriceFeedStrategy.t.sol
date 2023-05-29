@@ -70,6 +70,58 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1e18);
     }
 
+    function testFuzz_getFirstNonZeroPrice_arrayLengthGreaterThanTwo(uint8 len) public {
+        vm.assume(len > 2 && len <= 10);
+        uint256[] memory prices = new uint256[](len);
+        for (uint8 i; i < len; i++) {
+            prices[i] = 1e18;
+        }
+
+        uint256 price = strategy.getFirstNonZeroPrice(prices, "");
+
+        assertEq(price, 1e18);
+    }
+
+    function test_getFirstNonZeroPrice_validFirstPrice() public {
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 11e18;
+        prices[1] = 10e18;
+
+        uint256 price = strategy.getFirstNonZeroPrice(prices, encodeDeviationParams(100));
+        assertEq(price, 11e18);
+    }
+
+    function test_getFirstNonZeroPrice_invalidFirstPrice() public {
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 0;
+        prices[1] = 10e18;
+
+        uint256 price = strategy.getFirstNonZeroPrice(prices, encodeDeviationParams(100));
+        assertEq(price, 10e18);
+    }
+
+    function test_getFirstNonZeroPrice_invalidSecondPrice() public {
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 11e18;
+        prices[1] = 0;
+
+        uint256 price = strategy.getFirstNonZeroPrice(prices, encodeDeviationParams(100));
+        assertEq(price, 11e18);
+    }
+
+    function testFuzz_getFirstNonZeroPrice(uint256 firstPrice_, uint256 secondPrice_) public {
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = firstPrice_;
+        prices[1] = secondPrice_;
+
+        uint256 price = strategy.getFirstNonZeroPrice(prices, encodeDeviationParams(100));
+        if (firstPrice_ == 0) {
+            assertEq(price, secondPrice_);
+        } else {
+            assertEq(price, firstPrice_);
+        }
+    }
+
     // =========  TESTS - AVERAGE ========= //
 
     function test_getAveragePrice_revertsOnArrayLengthZero() public {
@@ -565,68 +617,5 @@ contract SimplePriceFeedStrategyTest is Test {
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
 
         strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
-    }
-
-    // =========  TESTS - GET PRICE WITH FALLBACK ========= //
-
-    function testFuzz_getPriceWithFallback_revertsOnLengthNotTwo(uint8 len) public {
-        vm.assume(len <= 10 && len != 2);
-        uint256[] memory prices = new uint256[](len);
-        for (uint8 i; i < len; i++) {
-            prices[i] = 1e18;
-        }
-
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
-
-        strategy.getPriceWithFallback(prices, encodeDeviationParams(100));
-    }
-
-    function test_getPriceWithFallback_validFirstPrice() public {
-        uint256[] memory prices = new uint256[](2);
-        prices[0] = 11e18;
-        prices[1] = 10e18;
-
-        uint256 price = strategy.getPriceWithFallback(prices, encodeDeviationParams(100));
-        assertEq(price, 11e18);
-    }
-
-    function test_getPriceWithFallback_invalidFirstPrice() public {
-        uint256[] memory prices = new uint256[](2);
-        prices[0] = 0;
-        prices[1] = 10e18;
-
-        uint256 price = strategy.getPriceWithFallback(prices, encodeDeviationParams(100));
-        assertEq(price, 10e18);
-    }
-
-    function test_getPriceWithFallback_invalidSecondPrice() public {
-        uint256[] memory prices = new uint256[](2);
-        prices[0] = 11e18;
-        prices[1] = 0;
-
-        uint256 price = strategy.getPriceWithFallback(prices, encodeDeviationParams(100));
-        assertEq(price, 11e18);
-    }
-
-    function test_getPriceWithFallback_bothPricesInvalid() public {
-        uint256[] memory prices = new uint256[](2);
-        prices[0] = 0;
-        prices[1] = 0;
-
-        uint256 price = strategy.getPriceWithFallback(prices, encodeDeviationParams(100));
-        assertEq(price, 0);
-    }
-
-    function testFuzz_getPriceWithFallback(uint256 firstPrice_, uint256 secondPrice_) public {
-        uint256[] memory prices = new uint256[](2);
-        prices[0] = firstPrice_;
-        prices[1] = secondPrice_;
-
-        uint256 price = strategy.getPriceWithFallback(prices, encodeDeviationParams(100));
-        if (firstPrice_ == 0) {
-            assertEq(price, secondPrice_);
-        } else {
-            assertEq(price, firstPrice_);
-        }
     }
 }

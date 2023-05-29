@@ -62,6 +62,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
+        // TODO return first non-zero price instead
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
         // Can't work with 0 length
@@ -237,32 +238,5 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         // Otherwise return the median price
         return sortedPrices[(pricesLen - 1) / 2];
-    }
-
-    /// @notice         This strategy returns a second price if the first feed is zero.
-    ///
-    /// @dev            Likely most useful if you're falling back to a secondary feed or a moving average.
-    ///
-    ///                 Due to its nature, this strategy does consider zero prices and does not strip them
-    ///                 from the prices_ array.
-    ///
-    ///                 Will revert if:
-    ///                 - The number of elements in the prices_ array is not 2
-    ///
-    /// @param prices_  Array of prices
-    /// @param params_  Unused
-    /// @return uint256 The resolved price
-    function getPriceWithFallback(
-        uint256[] memory prices_,
-        bytes memory params_
-    ) public pure returns (uint256) {
-        // Requires two prices
-        if (prices_.length != 2) revert SimpleStrategy_PriceCountInvalid();
-
-        // Return the first price if it's not zero
-        if (prices_[0] != 0) return prices_[0];
-
-        // Otherwise, return the second
-        return prices_[1];
     }
 }

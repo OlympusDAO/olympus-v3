@@ -153,7 +153,7 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 // - WETH: One feed with no strategy
 // - ALPHA: One feed with no strategy
 // - BPT: One feed (has recursive calls) with no strategy
-// - ONEMA: One feed + MA using the getPriceWithFallback strategy
+// - ONEMA: One feed + MA using the getFirstNonZeroPrice strategy
 // - TWOMA: Two feed + MA using the getAveragePrice strategy
 
 contract PriceV2Test is Test {
@@ -393,7 +393,7 @@ contract PriceV2Test is Test {
             _makeRandomObservations(onema, feeds[0], nonce_, uint256(numObs_)), // uint256[] memory observations_
             PRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getPriceWithFallback.selector,
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds // Component[] feeds_
@@ -422,7 +422,7 @@ contract PriceV2Test is Test {
             observations_, // uint256[] memory observations_
             PRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getPriceWithFallback.selector,
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds // Component[] feeds_
@@ -601,7 +601,7 @@ contract PriceV2Test is Test {
             );
         }
 
-        // ONEMA - One feed + MA using the getPriceWithFallback strategy
+        // ONEMA - One feed + MA using the getFirstNonZeroPrice strategy
         {
             ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
                 .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
@@ -622,7 +622,7 @@ contract PriceV2Test is Test {
                 _makeRandomObservations(onema, feeds[0], nonce_, uint256(15)), // uint256[] memory observations_
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                    SimplePriceFeedStrategy.getPriceWithFallback.selector,
+                    SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
                     abi.encode(0) // no params required
                 ), // Component memory strategy_
                 feeds // Component[] feeds_
@@ -2658,7 +2658,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         PRICEv2.Component memory averageStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstPrice.selector,
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -2685,7 +2685,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         PRICEv2.Component memory averageStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstPrice.selector,
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -2705,7 +2705,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         PRICEv2.Component memory averageStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstPrice.selector,
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -2726,7 +2726,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         PRICEv2.Component memory averageStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLENEW"),
-            SimplePriceFeedStrategy.getFirstPrice.selector,
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -2848,7 +2848,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         PRICEv2.Component memory firstPriceStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstPrice.selector,
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0)
         );
 
