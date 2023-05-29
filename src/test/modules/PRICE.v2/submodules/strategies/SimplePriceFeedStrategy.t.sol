@@ -370,14 +370,24 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
     }
 
-    function test_getAverageIfDeviation_revertsOnLengthOne_priceZero() public {
+    function test_getAverageIfDeviation_arrayLengthTwo_empty() public {
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 0;
+        prices[1] = 0;
+
+        uint256 returnedPrice = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
+        assertEq(returnedPrice, 0);
+    }
+
+    function test_getAverageIfDeviation_arrayLengthTwo_singlePriceZero() public {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 0;
         prices[1] = 1 * 1e18;
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
+        uint256 returnedPrice = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
 
-        strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
+        // Ignores the zero price
+        assertEq(returnedPrice, 1e18);
     }
 
     function test_getAverageIfDeviation_priceZeroFuzz(uint8 priceZeroIndex_) public {
