@@ -865,10 +865,7 @@ contract PriceV2Test is Test {
         ethUsdPriceFeed.setLatestAnswer(int256(0));
 
         // Try to get current price and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_PriceZero(address)",
-            address(reserve)
-        );
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(reserve));
         vm.expectRevert(err);
         price.getPrice(address(reserve), PRICEv2.Variant.CURRENT);
     }
