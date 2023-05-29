@@ -148,10 +148,16 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
+        // Can't work with  < 2 length
+        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
+
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
-        // Can't work with  < 2 length
-        if (nonZeroPrices.length < 2) revert SimpleStrategy_PriceCountInvalid();
+        // If there are no non-zero prices, return 0
+        if (nonZeroPrices.length == 0) return 0;
+
+        // If there are not enough non-zero prices to calculate an average, return the first non-zero price
+        if (nonZeroPrices.length == 1) return nonZeroPrices[0];
 
         // Get the average and median and abort if there's a problem
         uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
