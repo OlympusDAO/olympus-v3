@@ -52,11 +52,15 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getFirstNonZeroPrice(prices, "");
     }
 
-    function test_getFirstNonZeroPrice_revertsOnPriceZero() public {
-        uint256[] memory prices = new uint256[](1);
-        prices[0] = 0;
+    function test_getFirstNonZeroPrice_revertsOnPriceZero(uint8 len_) public {
+        uint8 len = uint8(bound(len_, 1, 10));
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
+        uint256[] memory prices = new uint256[](len);
+        for (uint8 i; i < len; i++) {
+            prices[i] = 0;
+        }
+
+        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceZero.selector);
 
         strategy.getFirstNonZeroPrice(prices, "");
     }

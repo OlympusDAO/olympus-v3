@@ -62,16 +62,16 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
-        // TODO return first non-zero price instead
-        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
-
         // Can't work with 0 length
-        if (nonZeroPrices.length == 0) revert SimpleStrategy_PriceCountInvalid();
+        if (prices_.length == 0) revert SimpleStrategy_PriceCountInvalid();
 
-        // Return error if price is 0
-        if (nonZeroPrices[0] == 0) revert SimpleStrategy_PriceZero();
+        // Iterate through the array and return the first non-zero price
+        for (uint256 i = 0; i < prices_.length; i++) {
+            if (prices_[i] != 0) return prices_[i];
+        }
 
-        return nonZeroPrices[0];
+        // If we have reached this far, there are only 0 prices in the array
+        revert SimpleStrategy_PriceZero();
     }
 
     /// @notice         This strategy returns the average of the non-zero prices in the array if
