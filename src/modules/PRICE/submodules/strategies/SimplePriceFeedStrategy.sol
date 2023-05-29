@@ -48,12 +48,9 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @notice         Returns the first non-zero price in the array.
     ///
     /// @dev            Reverts if:
-    ///                 - The prices_ array does not contain any non-zero values
+    ///                 - The length of prices_ array is 0, which would represent a mis-configuration.
     ///
-    ///                 Non-zero prices in the array are ignored, to allow for
-    ///                 handling of price lookup sources that return errors.
-    ///                 Otherwise, an asset with any zero price would result in
-    ///                 no price being returned at all.
+    ///                 If a non-zero price cannot be found, 0 will be returned.
     ///
     /// @param prices_  Array of prices
     /// @param params_  Unused
@@ -71,7 +68,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         }
 
         // If we have reached this far, there are only 0 prices in the array
-        revert SimpleStrategy_PriceZero();
+        return 0;
     }
 
     /// @notice         This strategy returns the average of the non-zero prices in the array if

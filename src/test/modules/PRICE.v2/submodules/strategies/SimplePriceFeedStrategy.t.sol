@@ -52,7 +52,7 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getFirstNonZeroPrice(prices, "");
     }
 
-    function test_getFirstNonZeroPrice_revertsOnPriceZero(uint8 len_) public {
+    function test_getFirstNonZeroPrice_pricesInvalid(uint8 len_) public {
         uint8 len = uint8(bound(len_, 1, 10));
 
         uint256[] memory prices = new uint256[](len);
@@ -60,9 +60,8 @@ contract SimplePriceFeedStrategyTest is Test {
             prices[i] = 0;
         }
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceZero.selector);
-
-        strategy.getFirstNonZeroPrice(prices, "");
+        uint256 returnedPrice = strategy.getFirstNonZeroPrice(prices, "");
+        assertEq(returnedPrice, 0);
     }
 
     function test_getFirstNonZeroPrice_success() public {
