@@ -187,7 +187,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     //                  where all price feeds are down is handled gracefully.
     ///
     ///                 Will revert if:
-    ///                 - The number of elements in the prices_ array is 0 (which would represent a mis-configuration)
+    ///                 - The number of elements in the prices_ array is less than 2 (which would represent a mis-configuration)
     ///
     ///                 Non-zero prices in the array are ignored, to allow for
     ///                 handling of price lookup sources that return errors.
@@ -202,20 +202,20 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         bytes memory params_
     ) public pure returns (uint256) {
         // Handle misconfiguration
-        if (prices_.length == 0) revert SimpleStrategy_PriceCountInvalid();
+        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
 
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
-        uint256 pricesLen = nonZeroPrices.length;
+        uint256 nonZeroPricesLen = nonZeroPrices.length;
 
         // If all price feeds are down, no average can be calculated
-        if (pricesLen == 0) return 0;
+        if (nonZeroPricesLen == 0) return 0;
 
         uint256 priceTotal;
-        for (uint256 i = 0; i < pricesLen; i++) {
+        for (uint256 i = 0; i < nonZeroPricesLen; i++) {
             priceTotal += nonZeroPrices[i];
         }
 
-        return priceTotal / pricesLen;
+        return priceTotal / nonZeroPricesLen;
     }
 
     /// @notice         This strategy returns the median of the non-zero prices in the array.

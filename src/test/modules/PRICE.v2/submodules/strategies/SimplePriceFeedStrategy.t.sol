@@ -127,8 +127,9 @@ contract SimplePriceFeedStrategyTest is Test {
 
     // =========  TESTS - AVERAGE ========= //
 
-    function test_getAveragePrice_revertsOnArrayLengthZero() public {
-        uint256[] memory prices = new uint256[](0);
+    function test_getAveragePrice_revertsOnArrayLengthInvalid(uint8 len_) public {
+        uint8 len = uint8(bound(len_, 0, 1));
+        uint256[] memory prices = new uint256[](len);
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
 
@@ -136,7 +137,7 @@ contract SimplePriceFeedStrategyTest is Test {
     }
 
     function test_getAveragePrice_arrayPriceZero(uint8 len_) public {
-        uint8 len = uint8(bound(len_, 1, 10));
+        uint8 len = uint8(bound(len_, 2, 10));
         uint256[] memory prices = new uint256[](len);
 
         uint256 returnedPrice = strategy.getAveragePrice(prices, "");
@@ -161,15 +162,6 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(averagePrice, 1e18);
     }
 
-    function test_getAveragePrice_lengthOne() public {
-        uint256[] memory prices = new uint256[](1);
-        prices[0] = 1e18;
-
-        uint256 price = strategy.getAveragePrice(prices, "");
-
-        assertEq(price, 1e18);
-    }
-
     function test_getAveragePrice_lengthEven() public {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1e18;
@@ -191,7 +183,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 2e18);
     }
 
-    function test_getAveragePrice_lengthOdd_priceZero() public {
+    function test_getAveragePrice_lengthEven_priceZero() public {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 1e18;
         prices[1] = 2e18;
