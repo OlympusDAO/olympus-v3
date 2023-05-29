@@ -954,7 +954,7 @@ contract PriceV2Test is Test {
         assertEq(timestamp, uint48(block.timestamp));
     }
 
-    function testRevert_getPrice_current_strat_twoFeedPlusMA_stratFailed(uint256 nonce_) public {
+    function test_getPrice_current_strat_twoFeedPlusMA_priceZero(uint256 nonce_) public {
         // Add base assets to price module
         _addBaseAssets(nonce_);
 
@@ -963,13 +963,14 @@ contract PriceV2Test is Test {
         twomaEthPriceFeed.setLatestAnswer(int256(0));
         ethUsdPriceFeed.setLatestAnswer(int256(0));
 
-        // Try to get current price and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_PriceZero(address)",
-            address(twoma)
-        );
-        vm.expectRevert(err);
-        price.getPrice(address(twoma), PRICEv2.Variant.CURRENT);
+        // Try to get current price
+        (uint256 returnedPrice, ) = price.getPrice(address(twoma), PRICEv2.Variant.CURRENT);
+
+        // Grab the historical moving average
+        (uint256 movingAverage, ) = price.getPrice(address(twoma), PRICEv2.Variant.MOVINGAVERAGE);
+
+        // As all price feeds are down, the moving average is returned
+        assertEq(returnedPrice, movingAverage);
     }
 
     function testRevert_getPrice_current_unconfiguredAsset() public {
