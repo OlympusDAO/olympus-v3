@@ -2137,7 +2137,11 @@ contract PriceV2Test is Test {
             abi.encode(ohmFeedOneParams) // bytes memory params
         );
 
-        PRICEv2.Component memory strategyEmpty = PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0));
+        PRICEv2.Component memory strategyEmpty = PRICEv2.Component(
+            toSubKeycode(bytes20(0)),
+            bytes4(0),
+            abi.encode(0)
+        );
 
         // Try and add the asset
         vm.startPrank(writer);
@@ -2154,7 +2158,10 @@ contract PriceV2Test is Test {
         );
 
         // Should have a cached result
-        (uint256 price_, uint48 priceTimestamp_) = price.getPrice(address(weth), PRICEv2.Variant.LAST);
+        (uint256 price_, uint48 priceTimestamp_) = price.getPrice(
+            address(weth),
+            PRICEv2.Variant.LAST
+        );
         assertEq(price_, 10e18);
 
         uint256[] memory expectedObs = new uint256[](1);
@@ -2177,7 +2184,7 @@ contract PriceV2Test is Test {
 
     function test_addAsset_noStrategy_noMovingAverage_singlePriceFeed_singleObservation() public {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
-        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         feeds[0] = PRICEv2.Component(
@@ -2208,9 +2215,11 @@ contract PriceV2Test is Test {
         assertEq(price_, 9e18);
     }
 
-    function testRevert_addAsset_noStrategy_noMovingAverage_singlePriceFeed_multipleObservations() public {
+    function testRevert_addAsset_noStrategy_noMovingAverage_singlePriceFeed_multipleObservations()
+        public
+    {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
-        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         feeds[0] = PRICEv2.Component(
@@ -2246,9 +2255,11 @@ contract PriceV2Test is Test {
         );
     }
 
-    function testRevert_addAsset_noStrategy_noMovingAverage_singlePriceFeed_singleObservationZero() public {
+    function testRevert_addAsset_noStrategy_noMovingAverage_singlePriceFeed_singleObservationZero()
+        public
+    {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
-        .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         feeds[0] = PRICEv2.Component(
@@ -2337,10 +2348,10 @@ contract PriceV2Test is Test {
         );
 
         PRICEv2.Component memory averageStrategy = PRICEv2.Component(
-                toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getAveragePrice.selector,
-                abi.encode("") // no params required
-            );
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            SimplePriceFeedStrategy.getAveragePrice.selector,
+            abi.encode("") // no params required
+        );
 
         uint256[] memory observations = _makeRandomObservations(weth, feeds[0], nonce_, uint256(1));
         uint256 expectedCumulativeObservations = observations[0];
@@ -2360,7 +2371,10 @@ contract PriceV2Test is Test {
         );
 
         // Should have a cached result
-        (uint256 price_, uint48 priceTimestamp_) = price.getPrice(address(weth), PRICEv2.Variant.LAST);
+        (uint256 price_, uint48 priceTimestamp_) = price.getPrice(
+            address(weth),
+            PRICEv2.Variant.LAST
+        );
         assertEq(price_, 10e18); // Average of 10, 10, 10
 
         // Configuration should be stored correctly
