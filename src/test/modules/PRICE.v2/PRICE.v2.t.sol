@@ -2037,7 +2037,7 @@ contract PriceV2Test is Test {
         // Reverts as there is no strategy, but no MA + 2 price feeds > 1 requires a strategy
         bytes memory err = abi.encodeWithSignature(
             "PRICE_InvalidParams(uint256,bytes)",
-            3,
+            6,
             abi.encode(PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)))
         );
         vm.expectRevert(err);
@@ -2109,7 +2109,7 @@ contract PriceV2Test is Test {
         // Reverts as there is no strategy, but MA + single price feed > 1 requires a strategy
         bytes memory err = abi.encodeWithSignature(
             "PRICE_InvalidParams(uint256,bytes)",
-            3,
+            6,
             abi.encode(PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)))
         );
         vm.expectRevert(err);
@@ -2276,7 +2276,7 @@ contract PriceV2Test is Test {
         // Reverts as the observations input should not contain 0
         bytes memory err = abi.encodeWithSignature(
             "PRICE_InvalidParams(uint256,bytes)",
-            5,
+            4,
             abi.encode(observations)
         );
         vm.expectRevert(err);

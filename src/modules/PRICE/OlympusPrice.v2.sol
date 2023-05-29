@@ -298,7 +298,7 @@ contract OlympusPricev2 is PRICEv2 {
         if (
             (feeds_.length + (useMovingAverage_ ? 1 : 0)) > 1 &&
             fromSubKeycode(strategy_.target) == bytes20(0)
-        ) revert PRICE_InvalidParams(3, abi.encode(strategy_));
+        ) revert PRICE_InvalidParams(6, abi.encode(strategy_));
 
         // Update asset strategy data
         _updateAssetPriceStrategy(asset_, strategy_);
@@ -449,7 +449,7 @@ contract OlympusPricev2 is PRICEv2 {
             asset.numObservations = numObservations;
             asset.lastObservationTime = lastObservationTime_;
             for (uint256 i; i < numObservations; ) {
-                if (observations_[i] == 0) revert PRICE_InvalidParams(5, abi.encode(observations_));
+                if (observations_[i] == 0) revert PRICE_InvalidParams(4, abi.encode(observations_));
                 asset.cumulativeObs += observations_[i];
                 asset.obs.push(observations_[i]);
                 unchecked {
@@ -474,7 +474,7 @@ contract OlympusPricev2 is PRICEv2 {
                 asset.lastObservationTime = timestamp;
             } else {
                 // If an observation is provided, validate it and store it
-                if (observations_[0] == 0) revert PRICE_InvalidParams(5, abi.encode(observations_));
+                if (observations_[0] == 0) revert PRICE_InvalidParams(4, abi.encode(observations_));
                 asset.obs.push(observations_[0]);
                 asset.lastObservationTime = lastObservationTime_;
             }
