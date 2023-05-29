@@ -866,7 +866,7 @@ contract PriceV2Test is Test {
 
         // Try to get current price and expect revert
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_PriceCallFailed(address)",
+            "PRICE_PriceZero(address)",
             address(reserve)
         );
         vm.expectRevert(err);
@@ -933,7 +933,7 @@ contract PriceV2Test is Test {
         ethUsdPriceFeed.setLatestAnswer(int256(0));
 
         // Try to get current price and expect revert
-        bytes memory err = abi.encodeWithSignature("PRICE_PriceCallFailed(address)", address(ohm));
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(ohm));
         vm.expectRevert(err);
         price.getPrice(address(ohm), PRICEv2.Variant.CURRENT);
     }
@@ -965,7 +965,7 @@ contract PriceV2Test is Test {
 
         // Try to get current price and expect revert
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_PriceCallFailed(address)",
+            "PRICE_PriceZero(address)",
             address(twoma)
         );
         vm.expectRevert(err);
@@ -1292,14 +1292,13 @@ contract PriceV2Test is Test {
         // Set weth price back to normal
         ethUsdPriceFeed.setLatestAnswer(int256(2000e8));
 
-        // Set ohm price to zero
-        ohmUsdPriceFeed.setLatestAnswer(int256(0));
-        ohmEthPriceFeed.setLatestAnswer(int256(0));
+        // Set alpha price to zero
+        alphaUsdPriceFeed.setLatestAnswer(int256(0));
 
         // Try to get current price and expect revert
-        err = abi.encodeWithSignature("PRICE_PriceCallFailed(address)", address(ohm));
+        err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(alpha));
         vm.expectRevert(err);
-        price.getPriceIn(address(weth), address(ohm), PRICEv2.Variant.CURRENT);
+        price.getPriceIn(address(weth), address(alpha), PRICEv2.Variant.CURRENT);
     }
 
     function testRevert_getPriceIn_current_unconfiguredAsset() public {
@@ -1797,7 +1796,7 @@ contract PriceV2Test is Test {
         ohmEthPriceFeed.setLatestAnswer(int256(0));
 
         // Try to get current price and expect revert
-        err = abi.encodeWithSignature("PRICE_PriceCallFailed(address)", address(ohm));
+        err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(ohm));
         vm.expectRevert(err);
         vm.prank(writer);
         price.storePrice(address(ohm));
