@@ -2425,10 +2425,7 @@ contract PriceV2Test is Test {
 
         // Try and add the asset
         vm.startPrank(writer);
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_PriceZero(address)",
-            address(weth)
-        );
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(weth));
         vm.expectRevert(err);
 
         price.addAsset(
@@ -2509,15 +2506,15 @@ contract PriceV2Test is Test {
 
         // Update the asset's price feeds
         vm.startPrank(writer);
-        price.updateAssetPriceFeeds(
-            address(weth),
-            feeds
-        );
+        price.updateAssetPriceFeeds(address(weth), feeds);
         vm.stopPrank();
 
         // Check that the feeds were updated
         PRICEv2.Asset memory receivedAsset = price.getAssetData(address(weth));
-        PRICEv2.Component[] memory receivedFeeds = abi.decode(receivedAsset.feeds, (PRICEv2.Component[]));
+        PRICEv2.Component[] memory receivedFeeds = abi.decode(
+            receivedAsset.feeds,
+            (PRICEv2.Component[])
+        );
         PRICEv2.Component memory receivedFeedOne = receivedFeeds[0];
 
         assertEq(fromSubKeycode(receivedFeedOne.target), fromSubKeycode(feeds[0].target));
@@ -2549,10 +2546,7 @@ contract PriceV2Test is Test {
         );
         vm.expectRevert(err);
 
-        price.updateAssetPriceFeeds(
-            address(weth),
-            feeds
-        );
+        price.updateAssetPriceFeeds(address(weth), feeds);
     }
 
     function testRevert_updateAssetPriceFeeds_notApproved() public {
@@ -2579,10 +2573,7 @@ contract PriceV2Test is Test {
         );
         vm.expectRevert(err);
 
-        price.updateAssetPriceFeeds(
-            address(weth),
-            feeds
-        );
+        price.updateAssetPriceFeeds(address(weth), feeds);
     }
 
     function testRevert_updateAssetPriceFeeds_feedsEmpty(uint256 nonce_) public {
@@ -2600,10 +2591,7 @@ contract PriceV2Test is Test {
         );
         vm.expectRevert(err);
 
-        price.updateAssetPriceFeeds(
-            address(weth),
-            feeds
-        );
+        price.updateAssetPriceFeeds(address(weth), feeds);
     }
 
     function testRevert_updateAssetPriceFeeds_submoduleNotInstalled(uint256 nonce_) public {
@@ -2631,10 +2619,7 @@ contract PriceV2Test is Test {
         );
         vm.expectRevert(err);
 
-        price.updateAssetPriceFeeds(
-            address(weth),
-            feeds
-        );
+        price.updateAssetPriceFeeds(address(weth), feeds);
     }
 
     function testRevert_updateAssetPriceFeeds_invalidPriceFeed(uint256 nonce_) public {
@@ -2655,16 +2640,10 @@ contract PriceV2Test is Test {
 
         // Try and update the asset
         vm.startPrank(writer);
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_PriceZero(address)",
-            address(weth)
-        );
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(weth));
         vm.expectRevert(err);
 
-        price.updateAssetPriceFeeds(
-            address(weth),
-            feeds
-        );
+        price.updateAssetPriceFeeds(address(weth), feeds);
     }
 
     // ========== updateAssetPriceStrategy ========== //
@@ -2681,16 +2660,15 @@ contract PriceV2Test is Test {
 
         // Update the asset's strategy
         vm.startPrank(writer);
-        price.updateAssetPriceStrategy(
-            address(weth),
-            averageStrategy,
-            false
-        );
+        price.updateAssetPriceStrategy(address(weth), averageStrategy, false);
         vm.stopPrank();
 
         // Check that the feeds were updated
         PRICEv2.Asset memory receivedAsset = price.getAssetData(address(weth));
-        PRICEv2.Component memory receivedStrategy = abi.decode(receivedAsset.strategy, (PRICEv2.Component));
+        PRICEv2.Component memory receivedStrategy = abi.decode(
+            receivedAsset.strategy,
+            (PRICEv2.Component)
+        );
 
         assertEq(fromSubKeycode(receivedStrategy.target), fromSubKeycode(averageStrategy.target));
         assertEq(receivedStrategy.selector, averageStrategy.selector);
@@ -2714,11 +2692,7 @@ contract PriceV2Test is Test {
         );
         vm.expectRevert(err);
 
-        price.updateAssetPriceStrategy(
-            address(weth),
-            averageStrategy,
-            false
-        );
+        price.updateAssetPriceStrategy(address(weth), averageStrategy, false);
     }
 
     function testRevert_updateAssetPriceStrategy_notApproved() public {
@@ -2739,11 +2713,7 @@ contract PriceV2Test is Test {
         );
         vm.expectRevert(err);
 
-        price.updateAssetPriceStrategy(
-            address(weth),
-            averageStrategy,
-            false
-        );
+        price.updateAssetPriceStrategy(address(weth), averageStrategy, false);
     }
 
     function testRevert_updateAssetPriceStrategy_submoduleNotInstalled(uint256 nonce_) public {
@@ -2765,11 +2735,7 @@ contract PriceV2Test is Test {
         );
         vm.expectRevert(err);
 
-        price.updateAssetPriceStrategy(
-            address(weth),
-            averageStrategy,
-            false
-        );
+        price.updateAssetPriceStrategy(address(weth), averageStrategy, false);
     }
 
     function test_updateAssetPriceStrategy_noStrategy_singleFeed(uint256 nonce_) public {
@@ -2784,16 +2750,15 @@ contract PriceV2Test is Test {
 
         // Update the asset's strategy
         vm.startPrank(writer);
-        price.updateAssetPriceStrategy(
-            address(weth),
-            strategyEmpty,
-            false
-        );
+        price.updateAssetPriceStrategy(address(weth), strategyEmpty, false);
         vm.stopPrank();
 
         // Check that the feeds were updated
         PRICEv2.Asset memory receivedAsset = price.getAssetData(address(weth));
-        PRICEv2.Component memory receivedStrategy = abi.decode(receivedAsset.strategy, (PRICEv2.Component));
+        PRICEv2.Component memory receivedStrategy = abi.decode(
+            receivedAsset.strategy,
+            (PRICEv2.Component)
+        );
 
         assertEq(fromSubKeycode(receivedStrategy.target), fromSubKeycode(strategyEmpty.target));
         assertEq(receivedStrategy.selector, strategyEmpty.selector);
@@ -2819,14 +2784,12 @@ contract PriceV2Test is Test {
         );
         vm.expectRevert(err);
 
-        price.updateAssetPriceStrategy(
-            address(reserve),
-            strategyEmpty,
-            false
-        );
+        price.updateAssetPriceStrategy(address(reserve), strategyEmpty, false);
     }
 
-    function testRevert_updateAssetPriceStrategy_noStrategy_useMovingAverage_singleFeed(uint256 nonce_) public {
+    function testRevert_updateAssetPriceStrategy_noStrategy_useMovingAverage_singleFeed(
+        uint256 nonce_
+    ) public {
         _addBaseAssets(nonce_);
 
         // Set up a new strategy
@@ -2845,11 +2808,7 @@ contract PriceV2Test is Test {
         );
         vm.expectRevert(err);
 
-        price.updateAssetPriceStrategy(
-            address(onema),
-            strategyEmpty,
-            true
-        );
+        price.updateAssetPriceStrategy(address(onema), strategyEmpty, true);
     }
 
     function testRevert_updateAssetPriceStrategy_invalidStrategy(uint256 nonce_) public {
@@ -2877,7 +2836,9 @@ contract PriceV2Test is Test {
         );
     }
 
-    function testRevert_updateAssetPriceStrategy_movingAverage_storeMovingAverageDisabled(uint256 nonce_) public {
+    function testRevert_updateAssetPriceStrategy_movingAverage_storeMovingAverageDisabled(
+        uint256 nonce_
+    ) public {
         _addBaseAssets(nonce_);
 
         // Set up a new strategy
@@ -2899,7 +2860,7 @@ contract PriceV2Test is Test {
         price.updateAssetPriceStrategy(
             address(weth),
             firstPriceStrategy,
-            true // Will revert as weth does not store the moving average 
+            true // Will revert as weth does not store the moving average
         );
     }
 
