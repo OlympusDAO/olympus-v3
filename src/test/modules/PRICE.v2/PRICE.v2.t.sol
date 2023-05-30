@@ -387,7 +387,7 @@ contract PriceV2Test is Test {
             PRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
                 SimplePriceFeedStrategy.getPriceWithFallback.selector,
-                abi.encode("") // no params required
+                abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds // Component[] feeds_
         );
@@ -416,7 +416,7 @@ contract PriceV2Test is Test {
             PRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
                 SimplePriceFeedStrategy.getPriceWithFallback.selector,
-                abi.encode("") // no params required
+                abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds // Component[] feeds_
         );
@@ -616,7 +616,7 @@ contract PriceV2Test is Test {
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
                     SimplePriceFeedStrategy.getPriceWithFallback.selector,
-                    abi.encode("") // no params required
+                    abi.encode(0) // no params required
                 ), // Component memory strategy_
                 feeds // Component[] feeds_
             );
@@ -657,7 +657,7 @@ contract PriceV2Test is Test {
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
                     SimplePriceFeedStrategy.getAveragePrice.selector,
-                    abi.encode("") // no params required
+                    abi.encode(0) // no params required
                 ), // Component memory strategy_
                 feeds // Component[] feeds_
             );
@@ -2090,7 +2090,7 @@ contract PriceV2Test is Test {
             PRICEv2.Component( // Add a strategy so that addAsset has no other reason to revert
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
                 SimplePriceFeedStrategy.getAveragePrice.selector,
-                abi.encode("") // no params required
+                abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds //
         );
@@ -2330,7 +2330,7 @@ contract PriceV2Test is Test {
             PRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
                 SimplePriceFeedStrategy.getAveragePrice.selector,
-                abi.encode("") // no params required
+                abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds //
         );
@@ -2354,7 +2354,7 @@ contract PriceV2Test is Test {
         PRICEv2.Component memory averageStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
             SimplePriceFeedStrategy.getAveragePrice.selector,
-            abi.encode("") // no params required
+            abi.encode(0) // no params required
         );
 
         uint256[] memory observations = _makeRandomObservations(weth, feeds[0], nonce_, uint256(1));
