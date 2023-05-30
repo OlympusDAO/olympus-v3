@@ -564,9 +564,10 @@ contract SimplePriceFeedStrategyTest is Test {
     }
 
     function test_getMedianIfDeviation_revertsOnMissingParamsDeviationBpsEmpty() public {
-        uint256[] memory prices = new uint256[](2);
+        uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
+        prices[2] = 1.002 * 1e18;
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
 
