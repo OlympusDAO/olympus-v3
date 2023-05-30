@@ -102,11 +102,11 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [X] asset added with strategy, moving average enabled, mutiple feeds
 //      [X] reverts if moving average contains any zero observations
 //      [X] if not storing moving average and no cached value provided, dynamically calculates cache and stores so no zero cache values are stored
-// [ ] removeAsset
-//      [ ] reverts if asset not configured (not approved)
-//      [ ] reverts if caller is not permissioned
-//      [ ] all asset data is removed
-//      [ ] asset removed from assets array
+// [X] removeAsset
+//      [X] reverts if asset not configured (not approved)
+//      [X] reverts if caller is not permissioned
+//      [X] all asset data is removed
+//      [X] asset removed from assets array
 // [ ] updateAssetPriceFeeds
 //      [ ] reverts if asset not configured (not approved)
 //      [ ] reverts if caller is not permissioned
@@ -2393,6 +2393,50 @@ contract PriceV2Test is Test {
     }
 
     // ========== removeAsset ========== //
+
+    function testRevert_removeAsset_notPermissioned(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Try and remove the asset
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        price.removeAsset(address(weth));
+    }
+
+    function testRevert_removeAsset_notApproved() public {
+        // No assets registered
+
+        // Try and remove the asset
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(weth)
+        );
+        vm.expectRevert(err);
+
+        price.removeAsset(address(weth));
+    }
+
+    function test_removeAsset(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Remove the asset
+        vm.startPrank(writer);
+        price.removeAsset(address(weth));
+
+        // Asset data is removed
+        PRICEv2.Asset memory asset = price.getAssetData(address(weth));
+        assertEq(asset.approved, false);
+
+        address[] memory assetAddresses = price.getAssets();
+        for (uint256 i; i < assetAddresses.length; i++) {
+            assertFalse(assetAddresses[i] == address(weth));
+        }
+    }
 
     // ========== updateAssetPriceFeeds ========== //
 
