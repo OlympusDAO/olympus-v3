@@ -108,21 +108,25 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [X] all asset data is removed
 //      [X] asset removed from assets array
 // [ ] updateAssetPriceFeeds
-//      [ ] reverts if asset not configured (not approved)
-//      [ ] reverts if caller is not permissioned
-//      [ ] reverts if no feeds are provided
-//      [ ] reverts if any feed is not installed as a submodule
-//      [ ] stores new feeds in asset data as abi-encoded bytes of the feed address array
+//      [X] reverts if asset not configured (not approved)
+//      [X] reverts if caller is not permissioned
+//      [X] reverts if no feeds are provided
+//      [X] reverts if any feed is not installed as a submodule
+//      [ ] reverts if incorrect component type is given
+//      [ ] reverts if a non-functioning configuration is provided
+//      [X] stores new feeds in asset data as abi-encoded bytes of the feed address array
 // [ ] updateAssetPriceStrategy
 //      [ ] reverts if asset not configured (not approved)
 //      [ ] reverts if caller is not permissioned
 //      [ ] reverts if strategy is not installed as a submodule
 //      [ ] reverts if uses moving average but moving average is not stored for asset
+//      [ ] reverts if a non-functioning configuration is provided
 //      [ ] stores new strategy in asset data as abi-encoded bytes of the strategy component
 // [ ] updateAssetMovingAverage
 //      [ ] reverts if asset not configured (not approved)
 //      [ ] reverts if caller is not permissioned
 //      [ ] reverts if last observation time is in the future
+//      [ ] reverts if a non-functioning configuration is provided
 //      [ ] previous configuration and observations cleared
 //      [ ] if storing moving average
 //           [ ] reverts if moving average duration and observation frequency are invalid
@@ -2439,6 +2443,152 @@ contract PriceV2Test is Test {
     }
 
     // ========== updateAssetPriceFeeds ========== //
+
+    function test_updateAssetPriceFeeds(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new feed
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            alphaUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(ethParams) // bytes memory params_
+        );
+
+        // Update the asset's price feeds
+        vm.startPrank(writer);
+        price.updateAssetPriceFeeds(
+            address(weth),
+            feeds
+        );
+        vm.stopPrank();
+
+        // Check that the feeds were updated
+        PRICEv2.Asset memory receivedAsset = price.getAssetData(address(weth));
+        PRICEv2.Component[] memory receivedFeeds = abi.decode(receivedAsset.feeds, (PRICEv2.Component[]));
+        PRICEv2.Component memory receivedFeedOne = receivedFeeds[0];
+
+        assertEq(fromSubKeycode(receivedFeedOne.target), fromSubKeycode(feeds[0].target));
+        assertEq(receivedFeedOne.selector, feeds[0].selector);
+        assertEq(receivedFeedOne.params, feeds[0].params);
+        assertEq(receivedFeeds.length, 1);
+    }
+
+    function testRevert_updateAssetPriceFeeds_notPermissioned(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new feed
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            alphaUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(ethParams) // bytes memory params_
+        );
+
+        // Try and update the asset
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceFeeds(
+            address(weth),
+            feeds
+        );
+    }
+
+    function testRevert_updateAssetPriceFeeds_notApproved() public {
+        // No existing assets
+
+        // Set up a new feed
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            alphaUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(ethParams) // bytes memory params_
+        );
+
+        // Try and update the asset
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(weth)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceFeeds(
+            address(weth),
+            feeds
+        );
+    }
+
+    function testRevert_updateAssetPriceFeeds_feedsEmpty(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up an empty feeds array
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](0);
+
+        // Try and update the asset
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            1,
+            abi.encode(feeds)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceFeeds(
+            address(weth),
+            feeds
+        );
+    }
+
+    function testRevert_updateAssetPriceFeeds_submoduleNotInstalled(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new feed
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            alphaUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINKNEW"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(ethParams) // bytes memory params_
+        );
+
+        // Try and update the asset
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            1,
+            abi.encode(fromSubKeycode(feeds[0].target))
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceFeeds(
+            address(weth),
+            feeds
+        );
+    }
 
     // ========== updateAssetPriceStrategy ========== //
 
