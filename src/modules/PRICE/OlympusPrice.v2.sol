@@ -292,7 +292,6 @@ contract OlympusPricev2 is PRICEv2 {
         // If not storing the moving average, validate that it's not being used by the strategy
         if (useMovingAverage_ && !storeMovingAverage_)
             revert PRICE_InvalidParams(2, abi.encode(useMovingAverage_));
-        asset.useMovingAverage = useMovingAverage_;
 
         // Strategy cannot be zero if number of feeds + useMovingAverage is greater than 1
         if (
@@ -301,7 +300,7 @@ contract OlympusPricev2 is PRICEv2 {
         ) revert PRICE_InvalidParams(6, abi.encode(strategy_));
 
         // Update asset strategy data
-        _updateAssetPriceStrategy(asset_, strategy_);
+        _updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
 
         // Update asset price feed data
         _updateAssetPriceFeeds(asset_, feeds_);
@@ -391,13 +390,17 @@ contract OlympusPricev2 is PRICEv2 {
             fromSubKeycode(strategy_.target) == bytes20(0)
         ) revert PRICE_InvalidParams(1, abi.encode(strategy_));
 
-        _updateAssetPriceStrategy(asset_, strategy_);
+        _updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
 
         // Validate
         _getCurrentPrice(asset_);
     }
 
-    function _updateAssetPriceStrategy(address asset_, Component memory strategy_) internal {
+    function _updateAssetPriceStrategy(
+        address asset_,
+        Component memory strategy_,
+        bool useMovingAverage_
+    ) internal {
         // Validate strategy component submodule is installed
         if (
             fromSubKeycode(strategy_.target) != bytes20(0) &&
@@ -406,6 +409,9 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Update the asset price strategy
         _assetData[asset_].strategy = abi.encode(strategy_);
+
+        // Update whether the strategy uses a moving average (should be checked that the moving average is stored for the asset prior to sending to this function)
+        _assetData[asset_].useMovingAverage = useMovingAverage_;
     }
 
     function updateAssetMovingAverage(
