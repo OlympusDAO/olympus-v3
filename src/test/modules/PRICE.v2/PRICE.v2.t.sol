@@ -112,7 +112,6 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [X] reverts if caller is not permissioned
 //      [X] reverts if no feeds are provided
 //      [X] reverts if any feed is not installed as a submodule
-//      [ ] reverts if incorrect component type is given
 //      [ ] reverts if a non-functioning configuration is provided
 //      [X] stores new feeds in asset data as abi-encoded bytes of the feed address array
 // [ ] updateAssetPriceStrategy
@@ -2581,6 +2580,36 @@ contract PriceV2Test is Test {
             "PRICE_InvalidParams(uint256,bytes)",
             1,
             abi.encode(fromSubKeycode(feeds[0].target))
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceFeeds(
+            address(weth),
+            feeds
+        );
+    }
+
+    function testRevert_updateAssetPriceFeeds_invalidPriceFeed(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new feed that will revert when run
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            alphaUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector, // bytes4 functionSelector_
+            abi.encode(ethParams) // bytes memory params_ // Will revert as these parameters are not sufficient
+        );
+
+        // Try and update the asset
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_PriceZero(address)",
+            address(weth)
         );
         vm.expectRevert(err);
 

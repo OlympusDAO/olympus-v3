@@ -349,6 +349,9 @@ contract OlympusPricev2 is PRICEv2 {
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
 
         _updateAssetPriceFeeds(asset_, feeds_);
+
+        // Validate the configuration
+        _getCurrentPrice(asset_);
     }
 
     function _updateAssetPriceFeeds(address asset_, Component[] memory feeds_) internal {
