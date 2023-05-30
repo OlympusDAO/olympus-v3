@@ -115,13 +115,16 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [X] reverts if any feed is not installed as a submodule
 //      [X] reverts if a non-functioning configuration is provided
 //      [X] stores new feeds in asset data as abi-encoded bytes of the feed address array
-// [ ] updateAssetPriceStrategy
-//      [ ] reverts if asset not configured (not approved)
-//      [ ] reverts if caller is not permissioned
-//      [ ] reverts if strategy is not installed as a submodule
-//      [ ] reverts if uses moving average but moving average is not stored for asset
-//      [ ] reverts if a non-functioning configuration is provided
-//      [ ] stores new strategy in asset data as abi-encoded bytes of the strategy component
+// [X] updateAssetPriceStrategy
+//      [X] reverts if asset not configured (not approved)
+//      [X] reverts if caller is not permissioned
+//      [X] reverts if strategy is not installed as a submodule
+//      [X] reverts if uses moving average but moving average is not stored for asset
+//      [X] reverts if no strategy is provided, but feeds > 1
+//      [X] reverts if no strategy is provided, but MA + feeds > 1
+//      [X] reverts if a non-functioning configuration is provided
+//      [X] stores empty strategy when feeds = 1
+//      [X] stores new strategy in asset data as abi-encoded bytes of the strategy component
 // [ ] updateAssetMovingAverage
 //      [ ] reverts if asset not configured (not approved)
 //      [ ] reverts if caller is not permissioned
@@ -2665,6 +2668,240 @@ contract PriceV2Test is Test {
     }
 
     // ========== updateAssetPriceStrategy ========== //
+
+    function test_updateAssetPriceStrategy(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new strategy
+        PRICEv2.Component memory averageStrategy = PRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            SimplePriceFeedStrategy.getFirstPrice.selector,
+            abi.encode(0) // no params required
+        );
+
+        // Update the asset's strategy
+        vm.startPrank(writer);
+        price.updateAssetPriceStrategy(
+            address(weth),
+            averageStrategy,
+            false
+        );
+        vm.stopPrank();
+
+        // Check that the feeds were updated
+        PRICEv2.Asset memory receivedAsset = price.getAssetData(address(weth));
+        PRICEv2.Component memory receivedStrategy = abi.decode(receivedAsset.strategy, (PRICEv2.Component));
+
+        assertEq(fromSubKeycode(receivedStrategy.target), fromSubKeycode(averageStrategy.target));
+        assertEq(receivedStrategy.selector, averageStrategy.selector);
+        assertEq(receivedStrategy.params, averageStrategy.params);
+    }
+
+    function testRevert_updateAssetPriceStrategy_notPermissioned(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new strategy
+        PRICEv2.Component memory averageStrategy = PRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            SimplePriceFeedStrategy.getFirstPrice.selector,
+            abi.encode(0) // no params required
+        );
+
+        // Try and update the asset
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceStrategy(
+            address(weth),
+            averageStrategy,
+            false
+        );
+    }
+
+    function testRevert_updateAssetPriceStrategy_notApproved() public {
+        // No existing assets
+
+        // Set up a new strategy
+        PRICEv2.Component memory averageStrategy = PRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            SimplePriceFeedStrategy.getFirstPrice.selector,
+            abi.encode(0) // no params required
+        );
+
+        // Try and update the asset
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(weth)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceStrategy(
+            address(weth),
+            averageStrategy,
+            false
+        );
+    }
+
+    function testRevert_updateAssetPriceStrategy_submoduleNotInstalled(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new strategy
+        PRICEv2.Component memory averageStrategy = PRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLENEW"),
+            SimplePriceFeedStrategy.getFirstPrice.selector,
+            abi.encode(0) // no params required
+        );
+
+        // Try and update the asset
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            1,
+            abi.encode(fromSubKeycode(averageStrategy.target))
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceStrategy(
+            address(weth),
+            averageStrategy,
+            false
+        );
+    }
+
+    function test_updateAssetPriceStrategy_noStrategy_singleFeed(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new strategy
+        PRICEv2.Component memory strategyEmpty = PRICEv2.Component(
+            toSubKeycode(bytes20(0)),
+            bytes4(0),
+            abi.encode(0)
+        );
+
+        // Update the asset's strategy
+        vm.startPrank(writer);
+        price.updateAssetPriceStrategy(
+            address(weth),
+            strategyEmpty,
+            false
+        );
+        vm.stopPrank();
+
+        // Check that the feeds were updated
+        PRICEv2.Asset memory receivedAsset = price.getAssetData(address(weth));
+        PRICEv2.Component memory receivedStrategy = abi.decode(receivedAsset.strategy, (PRICEv2.Component));
+
+        assertEq(fromSubKeycode(receivedStrategy.target), fromSubKeycode(strategyEmpty.target));
+        assertEq(receivedStrategy.selector, strategyEmpty.selector);
+        assertEq(receivedStrategy.params, strategyEmpty.params);
+    }
+
+    function testRevert_updateAssetPriceStrategy_noStrategy_multipleFeeds(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new strategy
+        PRICEv2.Component memory strategyEmpty = PRICEv2.Component(
+            toSubKeycode(bytes20(0)),
+            bytes4(0),
+            abi.encode(0)
+        );
+
+        // Update the asset's strategy
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            1,
+            abi.encode(strategyEmpty)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceStrategy(
+            address(reserve),
+            strategyEmpty,
+            false
+        );
+    }
+
+    function testRevert_updateAssetPriceStrategy_noStrategy_useMovingAverage_singleFeed(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new strategy
+        PRICEv2.Component memory strategyEmpty = PRICEv2.Component(
+            toSubKeycode(bytes20(0)),
+            bytes4(0),
+            abi.encode(0)
+        );
+
+        // Update the asset's strategy
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            1,
+            abi.encode(strategyEmpty)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceStrategy(
+            address(onema),
+            strategyEmpty,
+            true
+        );
+    }
+
+    function testRevert_updateAssetPriceStrategy_invalidStrategy(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new strategy
+        PRICEv2.Component memory averageStrategy = PRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            SimplePriceFeedStrategy.getAverageIfDeviation.selector,
+            abi.encode(0) // will revert due to missing parameters
+        );
+
+        // Update the asset's strategy
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_PriceCallFailed(address)",
+            address(reserve)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceStrategy(
+            address(reserve), // The strategy will only be used if the number of feeds is > 1
+            averageStrategy,
+            false
+        );
+    }
+
+    function testRevert_updateAssetPriceStrategy_movingAverage_storeMovingAverageDisabled(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new strategy
+        PRICEv2.Component memory firstPriceStrategy = PRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            SimplePriceFeedStrategy.getFirstPrice.selector,
+            abi.encode(0)
+        );
+
+        // Update the asset's strategy
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            2,
+            abi.encode(true)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceStrategy(
+            address(weth),
+            firstPriceStrategy,
+            true // Will revert as weth does not store the moving average 
+        );
+    }
 
     // ========== updateAssetMovingAverage =========== //
 }

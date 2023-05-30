@@ -392,6 +392,9 @@ contract OlympusPricev2 is PRICEv2 {
         ) revert PRICE_InvalidParams(1, abi.encode(strategy_));
 
         _updateAssetPriceStrategy(asset_, strategy_);
+
+        // Validate
+        _getCurrentPrice(asset_);
     }
 
     function _updateAssetPriceStrategy(address asset_, Component memory strategy_) internal {
