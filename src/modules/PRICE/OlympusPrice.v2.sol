@@ -315,6 +315,9 @@ contract OlympusPricev2 is PRICEv2 {
             observations_
         );
 
+        // Validate configuration
+        _getCurrentPrice(asset_);
+
         // Set asset as approved and add to array
         asset.approved = true;
         assets.push(asset_);
