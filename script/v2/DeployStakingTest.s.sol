@@ -31,7 +31,7 @@ contract StakingTestDeploy is Script {
     xGDAO xGdao = xGDAO(xgdao);
     // xGdao.migrate(stakingA, sgdao);
     // staking.setDistributor(distributor);
-    // GDAO Gdao = GDAO(gdao);
+    GDAO Gdao = GDAO(gdao);
     // GdaoAuthority gdaoAuth = GdaoAuthority(authority);
     // gdaoAuth.pushVault(vm.envAddress("GOERLI_MINTR"), true);
     sGDAO sGdao = sGDAO(sgdao);
@@ -39,10 +39,11 @@ contract StakingTestDeploy is Script {
     // sGdao.setxGDAO(xgdao);
     // sGdao.initialize(stakingA, vm.envAddress("GOERLI_DEPLOYER"));
 
-    sGDAO(gdao).approve(stakingA, 1000000000);
-
+    // sGDAO(gdao).approve(stakingA, 10000000000000000);
+    // gdao.approve(vm.envAddress("STAKING_TEST"), 100000000000000000000);
+    // gdao.mint(vm.envAddress("STAKING_TEST"), 100000000000000000000);
     //staking.unstake(0x525D98F9B0F4b011cC01720aE1d31d240729D6Ba, 100, false, false);
-    staking.stake(vm.envAddress("GOERLI_DEPLOYER"), 1000000000, true, false);
+    staking.stake(vm.envAddress("STAKING_TEST"), 10000000000000, true, false);
     //Distributor(distributor).triggerRebase();
 
     vm.stopBroadcast();

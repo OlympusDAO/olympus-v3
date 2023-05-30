@@ -51,6 +51,10 @@ contract V2Deploy is Script {
     address migrator = vm.envAddress("GOERLI_DEPLOYER");
     xgdao = new xGDAO(migrator, sgdao_addr);
     address xgdao_addr = address(xgdao); //update env
+
+    // Mint and Approve 1000000.000000000000000000 GDAO and send it to deployer
+    gdao.approve(newVault, 1000000000000000000);
+    gdao.mint(newVault, 1000000000000000000);
     
     vm.stopBroadcast();
     return xgdao;

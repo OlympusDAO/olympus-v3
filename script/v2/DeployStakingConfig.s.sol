@@ -39,10 +39,10 @@ contract ConfigureGDAOStaking is Script {
     sGdao.setxGDAO(xgdao);
     sGdao.initialize(stakingA, vm.envAddress("GOERLI_DEPLOYER"));
 
-    sGDAO(gdao).approve(stakingA, 10000000000);
+    sGDAO(gdao).approve(stakingA, 10000000000000);
 
     //staking.unstake(0x525D98F9B0F4b011cC01720aE1d31d240729D6Ba, 100, false, false);
-    staking.stake(vm.envAddress("GOERLI_DEPLOYER"), 100000, false, true);
+    staking.stake(vm.envAddress("GOERLI_DEPLOYER"), 100000000000, false, true);
     //Distributor(distributor).triggerRebase();
 
     vm.stopBroadcast();
