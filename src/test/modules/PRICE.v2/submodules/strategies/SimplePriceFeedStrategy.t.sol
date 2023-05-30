@@ -446,6 +446,16 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getAverageIfDeviation(prices, encodeDeviationParams(0));
     }
 
+    function test_getAverageIfDeviation_revertsOnMissingParamsDeviationBpsEmpty() public {
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 1 * 1e18;
+        prices[1] = 1.001 * 1e18;
+
+        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
+
+        strategy.getAverageIfDeviation(prices, abi.encode(""));
+    }
+
     function test_getAverageIfDeviation_withoutDeviation() public {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1 * 1e18;
@@ -551,6 +561,16 @@ contract SimplePriceFeedStrategyTest is Test {
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
 
         strategy.getMedianIfDeviation(prices, "");
+    }
+
+    function test_getMedianIfDeviation_revertsOnMissingParamsDeviationBpsEmpty() public {
+        uint256[] memory prices = new uint256[](2);
+        prices[0] = 1 * 1e18;
+        prices[1] = 1.001 * 1e18;
+
+        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
+
+        strategy.getMedianIfDeviation(prices, abi.encode(""));
     }
 
     function test_getMedianIfDeviation_revertsOnMissingParamsDeviationBpsZero() public {
