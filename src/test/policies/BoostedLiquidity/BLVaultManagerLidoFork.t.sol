@@ -80,9 +80,8 @@ contract BLVaultManagerLidoTest is Test {
     function setUp() public {
         {
             // Set up mainnet fork
-            forkId = vm.createSelectFork(
-                "https://mainnet.infura.io/v3/2e1ea2c05a584b26b09b9567994c1cb2"
-            );
+            string forkRpc = vm.envString("FORK_TEST_RPC");
+            forkId = vm.createSelectFork(forkRpc);
         }
 
         {
