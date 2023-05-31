@@ -424,6 +424,12 @@ contract OlympusPricev2 is PRICEv2 {
         // Ensure asset is already added
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
 
+        // If not storing the moving average, validate that it's not being used by the strategy.
+        // If it is, then you are moving from storing a moving average to not storing a moving average.
+        // First, change the strategy to not use the moving average, then update the moving average data.
+        if (_assetData[asset_].useMovingAverage && !storeMovingAverage_)
+            revert PRICE_InvalidParams(1, abi.encode(storeMovingAverage_));
+
         _updateAssetMovingAverage(
             asset_,
             storeMovingAverage_,
@@ -463,6 +469,7 @@ contract OlympusPricev2 is PRICEv2 {
             asset.nextObsIndex = 0;
             asset.numObservations = numObservations;
             asset.lastObservationTime = lastObservationTime_;
+            asset.cumulativeObs = 0; // reset to zero before adding new observations
             for (uint256 i; i < numObservations; ) {
                 if (observations_[i] == 0) revert PRICE_InvalidParams(4, abi.encode(observations_));
                 asset.cumulativeObs += observations_[i];
@@ -471,6 +478,9 @@ contract OlympusPricev2 is PRICEv2 {
                     ++i;
                 }
             }
+
+            // Emit Price Stored event for new cached value
+            emit PriceStored(asset_, observations_[numObservations - 1], lastObservationTime_);
         } else {
             // If not storing the moving average, validate that the array has at most one value (for caching)
             if (observations_.length > 1)
@@ -487,11 +497,17 @@ contract OlympusPricev2 is PRICEv2 {
                 (uint256 currentPrice, uint48 timestamp) = _getCurrentPrice(asset_);
                 asset.obs.push(currentPrice);
                 asset.lastObservationTime = timestamp;
+
+                // Emit Price Stored event for new cached value
+                emit PriceStored(asset_, currentPrice, timestamp);
             } else {
                 // If an observation is provided, validate it and store it
                 if (observations_[0] == 0) revert PRICE_InvalidParams(4, abi.encode(observations_));
                 asset.obs.push(observations_[0]);
                 asset.lastObservationTime = lastObservationTime_;
+
+                // Emit Price Stored event for new cached value
+                emit PriceStored(asset_, observations_[0], lastObservationTime_);
             }
 
             // We don't track cumulativeObs when not storing the moving average, even though there is one data point in the array for caching
