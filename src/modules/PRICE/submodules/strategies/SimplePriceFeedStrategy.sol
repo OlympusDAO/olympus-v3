@@ -5,6 +5,9 @@ import "modules/PRICE/PRICE.v2.sol";
 import {QuickSort} from "libraries/QuickSort.sol";
 
 contract SimplePriceFeedStrategy is PriceSubmodule {
+    // Length of an encoded uint256 value
+    uint8 internal constant DEVIATION_PARAMS_LENGTH = 32;
+
     // ========== ERRORS ========== //
 
     error SimpleStrategy_PriceCountInvalid();
@@ -109,7 +112,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
         uint256 averagePrice = getAveragePrice(sortedPrices, params_);
 
-        if (params_.length == 0) revert SimpleStrategy_ParamsRequired();
+        if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsRequired();
         uint256 deviationBps = abi.decode(params_, (uint256));
         if (deviationBps == 0) revert SimpleStrategy_ParamsRequired();
 
@@ -165,7 +168,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256 averagePrice = getAveragePrice(sortedPrices, params_);
         uint256 medianPrice = getMedianPrice(sortedPrices, params_);
 
-        if (params_.length == 0) revert SimpleStrategy_ParamsRequired();
+        if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsRequired();
         uint256 deviationBps = abi.decode(params_, (uint256));
         if (deviationBps == 0) revert SimpleStrategy_ParamsRequired();
 
