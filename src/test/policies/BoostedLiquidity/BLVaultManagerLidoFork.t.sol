@@ -36,7 +36,7 @@ interface IWsteth {
 }
 
 // solhint-disable-next-line max-states-count
-contract BLVaultManagerLidoTest is Test {
+contract BLVaultManagerLidoTestFork is Test {
     using FullMath for uint256;
 
     address internal alice;
@@ -75,15 +75,7 @@ contract BLVaultManagerLidoTest is Test {
     BLVaultManagerLido internal vaultManager;
     BLVaultLido internal vaultImplementation;
 
-    uint256 internal forkId;
-
     function setUp() public {
-        {
-            // Set up mainnet fork
-            string forkRpc = vm.envString("FORK_TEST_RPC");
-            forkId = vm.createSelectFork(forkRpc);
-        }
-
         {
             // Set up users
             alice = payable(address(uint160(uint256(keccak256(abi.encodePacked("alice"))))));
