@@ -363,7 +363,10 @@ contract SimplePriceFeedStrategyTest is Test {
 
         uint256[] memory prices = new uint256[](len);
 
-        uint256 returnedPrice = strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
+        uint256 returnedPrice = strategy.getAveragePriceIfDeviation(
+            prices,
+            encodeDeviationParams(100)
+        );
         assertEq(returnedPrice, 0);
     }
 
@@ -372,7 +375,10 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[0] = 0;
         prices[1] = 1 * 1e18;
 
-        uint256 returnedPrice = strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
+        uint256 returnedPrice = strategy.getAveragePriceIfDeviation(
+            prices,
+            encodeDeviationParams(100)
+        );
 
         // Ignores the zero price
         assertEq(returnedPrice, 1e18);
@@ -390,7 +396,10 @@ contract SimplePriceFeedStrategyTest is Test {
             }
         }
 
-        uint256 averagePrice = strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
+        uint256 averagePrice = strategy.getAveragePriceIfDeviation(
+            prices,
+            encodeDeviationParams(100)
+        );
 
         // Ignores the zero price
         assertEq(averagePrice, 1e18);
@@ -500,7 +509,10 @@ contract SimplePriceFeedStrategyTest is Test {
             }
         }
 
-        uint256 medianPrice = strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
+        uint256 medianPrice = strategy.getMedianPriceIfDeviation(
+            prices,
+            encodeDeviationParams(100)
+        );
 
         // Ignores the zero price
         assertEq(medianPrice, 1e18);
@@ -510,7 +522,10 @@ contract SimplePriceFeedStrategyTest is Test {
         uint8 len = uint8(bound(len_, 3, 10));
         uint256[] memory prices = new uint256[](len);
 
-        uint256 medianPrice = strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
+        uint256 medianPrice = strategy.getMedianPriceIfDeviation(
+            prices,
+            encodeDeviationParams(100)
+        );
 
         // Handles the zero price
         assertEq(medianPrice, 0);

@@ -750,7 +750,10 @@ contract PriceV2Test is Test {
             (PRICEv2.Component)
         );
         assertEq(fromSubKeycode(assetStrategy.target), bytes20("PRICE.SIMPLESTRATEGY"));
-        assertEq(assetStrategy.selector, SimplePriceFeedStrategy.getMedianPriceIfDeviation.selector);
+        assertEq(
+            assetStrategy.selector,
+            SimplePriceFeedStrategy.getMedianPriceIfDeviation.selector
+        );
         assertEq(assetStrategy.params, abi.encode(uint256(300)));
         PRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (PRICEv2.Component[]));
         assertEq(feeds.length, 3);
