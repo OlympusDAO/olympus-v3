@@ -2917,7 +2917,7 @@ contract PriceV2Test is Test {
         // Update the asset's strategy (since there will be 1 price value + 1 MA)
         PRICEv2.Component memory firstStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstPrice.selector,
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
         price.updateAssetPriceStrategy(address(weth), firstStrategy, false);
