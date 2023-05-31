@@ -29,5 +29,5 @@ jobs:
             - name: Run lint check
               run: npm run lint:check
 
-            - name: Run tests
-              run: forge test
+            - name: Run tests (no fork tests)
+              run: forge test --nmc Fork

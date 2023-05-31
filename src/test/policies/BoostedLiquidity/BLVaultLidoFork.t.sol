@@ -36,7 +36,7 @@ interface IWsteth {
 }
 
 // solhint-disable-next-line max-states-count
-contract BLVaultLidoTest is Test {
+contract BLVaultLidoForkTest is Test {
     using FullMath for uint256;
 
     address internal alice;
