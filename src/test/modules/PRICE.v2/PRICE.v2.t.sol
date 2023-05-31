@@ -126,22 +126,26 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [X] stores empty strategy when feeds = 1
 //      [X] stores new strategy in asset data as abi-encoded bytes of the strategy component
 // [ ] updateAssetMovingAverage
-//      [ ] reverts if asset not configured (not approved)
-//      [ ] reverts if caller is not permissioned
-//      [ ] reverts if last observation time is in the future
-//      [ ] reverts if a non-functioning configuration is provided
-//      [ ] previous configuration and observations cleared
-//      [ ] if storing moving average
-//           [ ] reverts if moving average duration and observation frequency are invalid
-//           [ ] reverts if implied observations does not equal the amount of observations provided
-//           [ ] stores moving average data, including observations, in asset data
+//      [X] reverts if asset not configured (not approved)
+//      [X] reverts if caller is not permissioned
+//      [X] reverts if last observation time is in the future
+//      [X] reverts if a non-functioning configuration is provided
+//      [X] previous configuration and observations cleared
+//      [X] if storing moving average
+//           [X] reverts if moving average duration and observation frequency are invalid
+//           [X] reverts if implied observations does not equal the amount of observations provided
+//           [X] reverts if a zero value is provided
+//           [X] if storeMovingAverage was previously enabled, stores moving average data, including observations, in asset data
+//           [X] if storeMovingAverage was previously disabled, stores moving average data, including observations, in asset data
 //      [ ] if not storing moving average
-//           [ ] reverts if more than one observation is provided
+//           [X] reverts if more than one observation is provided
+//           [X] reverts if movingAverageDuration is provided
 //           [ ] one observation provided
-//              [ ] stores observation and last observation time in asset data
+//              [X] stores observation and last observation time in asset data
 //              [ ] emits price stored event
-//           [ ] no observations provided
-//              [ ] stores last observation time in asset data
+//              [X] reverts if a zero value is provided
+//           [X] no observations provided
+//              [X] stores last observation time in asset data
 
 // In order to create the necessary configuration to test above scenarios, the following assets/feed combinations are created on the price module:
 // - OHM: Three feed using the getMedianIfDeviation strategy
@@ -2865,4 +2869,431 @@ contract PriceV2Test is Test {
     }
 
     // ========== updateAssetMovingAverage =========== //
+
+    function test_updateAssetMovingAverage_storeMovingAverage_existingObservations(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        // Observations
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 2e18;
+        observations[1] = 3e18;
+
+        // Update the asset's moving average
+        vm.startPrank(writer);
+        price.updateAssetMovingAverage(
+            address(reserve),
+            true, // Enable storeMovingAverage (previously enabled)
+            uint32(observations.length * 8 hours), // movingAverageDuration_
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_
+        );
+        vm.stopPrank();
+
+        // Check that the feeds were updated
+        PRICEv2.Asset memory receivedAsset = price.getAssetData(address(reserve));
+
+        assertEq(receivedAsset.storeMovingAverage, true);
+        assertEq(receivedAsset.movingAverageDuration, uint32(observations.length * 8 hours));
+        assertEq(receivedAsset.nextObsIndex, 0);
+        assertEq(receivedAsset.numObservations, observations.length);
+        assertEq(receivedAsset.lastObservationTime, uint48(block.timestamp));
+        assertEq(receivedAsset.cumulativeObs, 2e18 + 3e18); // Overwrites existing value
+        assertEq(receivedAsset.obs, observations); // Overwrites existing observations
+        assertEq(receivedAsset.obs.length, observations.length); // Overwrites existing observations
+    }
+
+    function test_updateAssetMovingAverage_storeMovingAverage(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Observations
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 2e18;
+        observations[1] = 3e18;
+
+        vm.startPrank(writer);
+
+        // Update the asset's strategy (since there will be 1 price value + 1 MA)
+        PRICEv2.Component memory firstStrategy = PRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            SimplePriceFeedStrategy.getFirstPrice.selector,
+            abi.encode(0) // no params required
+        );
+        price.updateAssetPriceStrategy(address(weth), firstStrategy, false);
+
+        // Update the asset's moving average
+        price.updateAssetMovingAverage(
+            address(weth),
+            true, // Enable storeMovingAverage (previously disabled)
+            uint32(observations.length * 8 hours), // movingAverageDuration_
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_
+        );
+        vm.stopPrank();
+
+        // Check that the feeds were updated
+        PRICEv2.Asset memory receivedAsset = price.getAssetData(address(weth));
+
+        assertEq(receivedAsset.storeMovingAverage, true);
+        assertEq(receivedAsset.movingAverageDuration, uint32(observations.length * 8 hours));
+        assertEq(receivedAsset.nextObsIndex, 0);
+        assertEq(receivedAsset.numObservations, observations.length);
+        assertEq(receivedAsset.lastObservationTime, uint48(block.timestamp));
+        assertEq(receivedAsset.cumulativeObs, 2e18 + 3e18);
+        assertEq(receivedAsset.obs, observations);
+        assertEq(receivedAsset.obs.length, observations.length);
+    }
+
+    function testRevert_updateAssetMovingAverage_storeMovingAverage_invalidConfiguration(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        // Observations
+        uint256[] memory observations = new uint256[](1);
+        observations[0] = 2e18;
+
+        PRICEv2.Component memory strategyEmpty = PRICEv2.Component(
+            toSubKeycode(bytes20(0)),
+            bytes4(0),
+            abi.encode(0)
+        );
+
+        // No update to strategy, which will lead to a failure
+
+        vm.startPrank(writer);
+
+        // Will trigger a revert as an empty strategy is no longer valid
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            1,
+            abi.encode(strategyEmpty)
+        );
+        vm.expectRevert(err);
+
+        // Update the asset's moving average
+        price.updateAssetMovingAverage(
+            address(weth),
+            true, // Enable storeMovingAverage (previously disabled)
+            uint32(8 hours), // movingAverageDuration_
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_
+        );
+    }
+
+    function testRevert_updateAssetMovingAverage_notPermissioned(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Observations
+        uint256[] memory observations = new uint256[](1);
+        observations[0] = 2e18;
+
+        // Try and update the asset
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetMovingAverage(
+            address(reserve),
+            true, // Enable storeMovingAverage
+            uint32(8 hours), // movingAverageDuration_
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_
+        );
+    }
+
+    function testRevert_updateAssetMovingAverage_notApproved() public {
+        // No existing assets
+
+        // Observations
+        uint256[] memory observations = new uint256[](1);
+        observations[0] = 2e18;
+
+        // Try and update the asset
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_AssetNotApproved(address)",
+            address(reserve)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetMovingAverage(
+            address(reserve),
+            true, // Enable storeMovingAverage
+            uint32(8 hours), // movingAverageDuration_
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_
+        );
+    }
+
+    function testRevert_updateAssetMovingAverage_storeMovingAverage_lastObservationTimeInFuture(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        // Observations
+        uint256[] memory observations = new uint256[](1);
+        observations[0] = 2e18;
+
+        // Update the asset's moving average
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            3,
+            abi.encode(uint48(block.timestamp + 1))
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetMovingAverage(
+            address(reserve),
+            true, // Enable storeMovingAverage
+            uint32(8 hours), // movingAverageDuration_
+            uint48(block.timestamp + 1), // lastObservationTime_ // timestamp in the future
+            observations // observations_
+        );
+    }
+
+    function testRevert_updateAssetMovingAverage_storeMovingAverage_inconsistentDuration(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        // Observations
+        uint256[] memory observations = new uint256[](1);
+        observations[0] = 2e18;
+
+        // Update the asset's moving average
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            2,
+            abi.encode(uint32(9 hours))
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetMovingAverage(
+            address(reserve),
+            true, // Enable storeMovingAverage
+            uint32(9 hours), // movingAverageDuration_ // 9 hours / 8 hours doesn't work
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_
+        );
+    }
+
+    function testRevert_updateAssetMovingAverage_storeMovingAverage_observationZeroPrice(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        // Observations
+        uint256 zeroIndex = bound(nonce_, 0, 9);
+        uint256[] memory observations = new uint256[](10);
+        for (uint256 i; i < observations.length; i++) {
+            if (i == zeroIndex) {
+                observations[i] = 0;
+            } else {
+                observations[i] = 2e18;
+            }
+        }
+
+        // Update the asset's moving average
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            4,
+            abi.encode(observations)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetMovingAverage(
+            address(reserve),
+            true, // Enable storeMovingAverage
+            uint32(10 * 8 hours), // movingAverageDuration_ // 9 hours / 8 hours doesn't work
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_ // Will revert as there is a zero value
+        );
+    }
+
+    function testRevert_updateAssetMovingAverage_storeMovingAverage_inconsistentObservationsLength(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        // Observations
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 2e18;
+        observations[1] = 3e18;
+
+        // Update the asset's moving average
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            4,
+            abi.encode(observations.length)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetMovingAverage(
+            address(reserve),
+            true, // Enable storeMovingAverage
+            uint32(8 hours), // movingAverageDuration_
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_ // should be length 1, but has 2
+        );
+    }
+
+    function testRevert_updateAssetMovingAverage_storeMovingAverageFalse_inconsistentObservationsLength(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        // Observations
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 2e18;
+        observations[1] = 3e18;
+
+        // Update the asset's moving average
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            4,
+            abi.encode(observations.length)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetMovingAverage(
+            address(reserve),
+            false, // Disable storeMovingAverage
+            uint32(8 hours), // movingAverageDuration_
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_ // should be length 1, but has 2
+        );
+    }
+
+    function testRevert_updateAssetMovingAverage_storeMovingAverageFalse_observationsEmpty(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        // Observations
+        uint256[] memory observations = new uint256[](1);
+
+        // Update the asset's moving average
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            4,
+            abi.encode(observations)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetMovingAverage(
+            address(reserve),
+            false, // Disable storeMovingAverage
+            uint32(8 hours), // movingAverageDuration_
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_ // 0 value
+        );
+    }
+
+    function testRevert_updateAssetMovingAverage_storeMovingAverageFalse_movingDurationNotZero(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+        uint32 movingAverageDuration = uint32(bound(nonce_, 1, 10) * 8 hours);
+
+        // Observations
+        uint256[] memory observations = new uint256[](1);
+
+        // Update the asset's moving average
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_InvalidParams(uint256,bytes)",
+            4,
+            abi.encode(observations)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetMovingAverage(
+            address(reserve),
+            false, // Disable storeMovingAverage
+            movingAverageDuration, // movingAverageDuration_ // multiple of 8 hours (which would be valid), but it should be 0
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_ // 0 value
+        );
+    }
+
+    function test_updateAssetMovingAverage_storeMovingAverageFalse(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Observations
+        uint256[] memory observations = new uint256[](1);
+        observations[0] = 2e18;
+
+        // Update the asset's moving average
+        vm.startPrank(writer);
+        price.updateAssetMovingAverage(
+            address(reserve),
+            false, // Disable storeMovingAverage
+            uint32(0), // movingAverageDuration_
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_
+        );
+        vm.stopPrank();
+
+        // Check that the asset was updated
+        PRICEv2.Asset memory receivedAsset = price.getAssetData(address(reserve));
+
+        assertEq(receivedAsset.storeMovingAverage, false);
+        assertEq(receivedAsset.movingAverageDuration, uint32(0));
+        assertEq(receivedAsset.nextObsIndex, 0);
+        assertEq(receivedAsset.numObservations, observations.length);
+        assertEq(receivedAsset.lastObservationTime, uint48(block.timestamp));
+        assertEq(receivedAsset.cumulativeObs, 0); // Not tracked
+        assertEq(receivedAsset.obs, observations); // Overwrites existing observations
+        assertEq(receivedAsset.obs.length, observations.length); // Overwrites existing observations
+    }
+
+    function test_updateAssetMovingAverage_storeMovingAverageFalse_observationsEmpty(
+        uint256 nonce_
+    ) public {
+        _addBaseAssets(nonce_);
+
+        // Observations
+        uint256[] memory observations = new uint256[](0);
+
+        // Update the asset's moving average
+        vm.startPrank(writer);
+        price.updateAssetMovingAverage(
+            address(reserve),
+            false, // Disable storeMovingAverage
+            uint32(0), // movingAverageDuration_
+            uint48(block.timestamp), // lastObservationTime_
+            observations // observations_
+        );
+        vm.stopPrank();
+
+        // Get the current price for the asset
+        (uint256 price_, uint48 timestamp_) = price.getPrice(
+            address(reserve),
+            PRICEv2.Variant.CURRENT
+        );
+        uint256[] memory expectedObservations = new uint256[](1);
+        expectedObservations[0] = price_;
+
+        // Check that the asset was updated
+        PRICEv2.Asset memory receivedAsset = price.getAssetData(address(reserve));
+
+        assertEq(receivedAsset.storeMovingAverage, false);
+        assertEq(receivedAsset.movingAverageDuration, uint32(0));
+        assertEq(receivedAsset.nextObsIndex, 0);
+        assertEq(receivedAsset.numObservations, 1);
+        assertEq(receivedAsset.lastObservationTime, timestamp_);
+        assertEq(receivedAsset.cumulativeObs, 0); // Not tracked
+        assertEq(receivedAsset.obs, expectedObservations);
+        assertEq(receivedAsset.obs.length, 1);
+    }
 }
