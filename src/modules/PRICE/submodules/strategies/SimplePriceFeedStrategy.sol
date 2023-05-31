@@ -5,10 +5,12 @@ import "modules/PRICE/PRICE.v2.sol";
 import {QuickSort} from "libraries/QuickSort.sol";
 
 contract SimplePriceFeedStrategy is PriceSubmodule {
+    // Length of an encoded uint256 value
+    uint8 internal constant DEVIATION_PARAMS_LENGTH = 32;
+
     // ========== ERRORS ========== //
 
     error SimpleStrategy_PriceCountInvalid();
-    error SimpleStrategy_PriceZero();
     error SimpleStrategy_ParamsRequired();
 
     // ========== CONSTRUCTOR ========== //
@@ -21,54 +23,142 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return toSubKeycode("PRICE.SIMPLESTRATEGY");
     }
 
+    // ========== HELPER FUNCTIONS ========== //
+
+    function _getNonZeroArray(uint256[] memory array_) internal pure returns (uint256[] memory) {
+        // Determine the number of non-zero array elements
+        uint256 nonZeroCount = 0;
+        for (uint256 i = 0; i < array_.length; i++) {
+            if (array_[i] != 0) nonZeroCount++;
+        }
+
+        // Create a new array with only the non-zero elements
+        uint256[] memory nonZeroArray = new uint256[](nonZeroCount);
+        uint256 nonZeroIndex = 0;
+        for (uint256 i = 0; i < array_.length; i++) {
+            if (array_[i] != 0) {
+                nonZeroArray[nonZeroIndex] = array_[i];
+                nonZeroIndex++;
+            }
+        }
+
+        return nonZeroArray;
+    }
+
+    /// @notice         Returns the average of the prices in the array
+    /// @dev            This function will calculate the average of all values in the array.
+    ///                 If non-zero values should not be included in the average, filter them prior.
+    ///
+    /// @param prices_  Array of prices
+    /// @return uint256 The average price or 0
+    function _getAveragePrice(uint256[] memory prices_) internal pure returns (uint256) {
+        uint256 pricesLen = prices_.length;
+
+        // If all price feeds are down, no average can be calculated
+        if (pricesLen == 0) return 0;
+
+        uint256 priceTotal;
+        for (uint256 i = 0; i < pricesLen; i++) {
+            priceTotal += prices_[i];
+        }
+
+        return priceTotal / pricesLen;
+    }
+
+    /// @notice         Returns the median of the prices in the array
+    /// @dev            This function will calculate the median of all values in the array.
+    ///                 If non-zero values should not be included in the median, filter them prior.
+    ///
+    /// @param prices_  Array of prices
+    /// @return uint256 The median price or 0
+    function _getMedianPrice(uint256[] memory prices_) internal pure returns (uint256) {
+        uint256 pricesLen = prices_.length;
+
+        // If all price feeds are down, no median can be calculated
+        if (pricesLen == 0) return 0;
+
+        // If there is only one price, return it
+        if (pricesLen == 1) return prices_[0];
+
+        // If there are an even number of prices, return the average of the two middle prices
+        if (pricesLen % 2 == 0) {
+            uint256 middlePrice1 = prices_[pricesLen / 2 - 1];
+            uint256 middlePrice2 = prices_[pricesLen / 2];
+            return (middlePrice1 + middlePrice2) / 2;
+        }
+
+        // Otherwise return the median price
+        return prices_[(pricesLen - 1) / 2];
+    }
+
     // ========== STRATEGY FUNCTIONS ========== //
 
-    /// @notice Returns the first price in the array
-    /// @dev Reverts if:
-    /// - The prices_ array is empty
+    /// @notice         Returns the first non-zero price in the array.
     ///
-    /// @param prices_ Array of prices
-    /// @param params_ Unused
-    /// @return price_ The resolved price
-    function getFirstPrice(
+    /// @dev            Reverts if:
+    ///                 - The length of prices_ array is 0, which would represent a mis-configuration.
+    ///
+    ///                 If a non-zero price cannot be found, 0 will be returned.
+    ///
+    /// @param prices_  Array of prices
+    /// @param params_  Unused
+    /// @return uint256 The resolved price
+    function getFirstNonZeroPrice(
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
         // Can't work with 0 length
         if (prices_.length == 0) revert SimpleStrategy_PriceCountInvalid();
 
-        // Return error if price is 0
-        if (prices_[0] == 0) revert SimpleStrategy_PriceZero();
+        // Iterate through the array and return the first non-zero price
+        for (uint256 i = 0; i < prices_.length; i++) {
+            if (prices_[i] != 0) return prices_[i];
+        }
 
-        return prices_[0];
+        // If we have reached this far, there are only 0 prices in the array
+        return 0;
     }
 
-    /// @notice This strategy returns the average of the prices in the array if
-    /// the deviation from the average is greater than the deviationBps (specified in params_).
+    /// @notice         This strategy returns the average of the non-zero prices in the array if
+    ///                 the deviation from the average is greater than the deviationBps (specified in params_).
     ///
-    /// @dev If no deviation is detected, the first price in the array is returned.
-    /// This strategy is useful to smooth out price volatility
+    /// @dev            This strategy is useful to smooth out price volatility.
     ///
-    /// Will revert if:
-    /// - The number of elements in the prices_ array is less than 2
-    /// - Any price in the array is 0 (since it uses getAveragePrice)
-    /// - The deviationBps is 0
+    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 handling of price lookup sources that return errors.
+    ///                 Otherwise, an asset with any zero price would result in
+    ///                 no price being returned at all.
     ///
-    /// @param prices_ Array of prices
-    /// @param params_ DeviationParams struct encoded as bytes
-    /// @return price_ The resolved price
-    function getAverageIfDeviation(
+    ///                 If no deviation is detected, the first non-zero price in the array is returned.
+    ///                 If there are not enough non-zero array elements to calculate an average (< 2), the first non-zero price in the array (or 0) is returned.
+    ///
+    ///                 Will revert if:
+    ///                 - The number of elements in the prices_ array is less than 2, since it would represent a mis-configuration.
+    ///                 - The deviationBps is 0.
+    ///
+    /// @param prices_  Array of prices
+    /// @param params_  DeviationParams struct encoded as bytes
+    /// @return uint256 The resolved price
+    function getAveragePriceIfDeviation(
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
         // Can't work with  < 2 length
         if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
 
-        // Get the average and abort if there's a problem
-        uint256[] memory sortedPrices = QuickSort.sort(prices_);
-        uint256 averagePrice = getAveragePrice(sortedPrices, params_);
+        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
-        if (params_.length == 0) revert SimpleStrategy_ParamsRequired();
+        // If there are no non-zero prices, return 0
+        if (nonZeroPrices.length == 0) return 0;
+
+        // If there are not enough non-zero prices to calculate an average, return the first non-zero price
+        if (nonZeroPrices.length == 1) return nonZeroPrices[0];
+
+        // Get the average and abort if there's a problem
+        uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
+        uint256 averagePrice = _getAveragePrice(sortedPrices);
+
+        if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsRequired();
         uint256 deviationBps = abi.decode(params_, (uint256));
         if (deviationBps == 0) revert SimpleStrategy_ParamsRequired();
 
@@ -81,36 +171,52 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         if (((maxPrice - averagePrice) * 10000) / maxPrice > deviationBps) return averagePrice;
 
         // Otherwise, return the first value
-        return prices_[0];
+        return nonZeroPrices[0];
     }
 
-    /// @notice This strategy returns the median of the prices in the array if
-    /// the deviation from the average is greater than the deviationBps (specified in params_).
+    /// @notice         This strategy returns the median of the non-zero prices in the array if
+    ///                 the deviation from the average is greater than the deviationBps (specified in params_).
     ///
-    /// @dev If no deviation is detected, the first price in the array is returned.
-    /// This strategy is useful to smooth out price volatility
+    /// @dev            This strategy is useful to smooth out price volatility.
     ///
-    /// Will revert if:
-    /// - The number of elements in the prices_ array is less than 2
-    /// - Any price in the array is 0 (since it uses getAveragePrice)
-    /// - The deviationBps is 0
+    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 handling of price lookup sources that return errors.
+    ///                 Otherwise, an asset with any zero price would result in
+    ///                 no price being returned at all.
     ///
-    /// @param prices_ Array of prices
-    /// @param params_ DeviationParams struct encoded as bytes
-    /// @return price_ The resolved price
-    function getMedianIfDeviation(
+    ///                 If no deviation is detected, the first non-zero price in the array is returned.
+    ///                 If there are not enough non-zero array elements to calculate a median (< 3), the first non-zero price in the array (or 0) is returned.
+    ///
+    ///                 Will revert if:
+    ///                 - The number of elements in the prices_ array is less than 3, since it would represent a mis-configuration.
+    ///                 - The deviationBps is 0.
+    ///
+    /// @param prices_  Array of prices
+    /// @param params_  DeviationParams struct encoded as bytes
+    /// @return uint256 The resolved price
+    function getMedianPriceIfDeviation(
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
-        // Can't work with  < 2 length
-        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
+        // Misconfiguration
+        if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid();
+
+        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+
+        // If there are no non-zero prices, return 0
+        if (nonZeroPrices.length == 0) return 0;
+
+        // If there are not enough non-zero prices to calculate a median, return the first non-zero price
+        if (nonZeroPrices.length < 3) return nonZeroPrices[0];
 
         // Get the average and median and abort if there's a problem
-        uint256[] memory sortedPrices = QuickSort.sort(prices_);
-        uint256 averagePrice = getAveragePrice(sortedPrices, params_);
-        uint256 medianPrice = getMedianPrice(sortedPrices, params_);
+        uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
 
-        if (params_.length == 0) revert SimpleStrategy_ParamsRequired();
+        // The following two values are guaranteed to not be 0 since sortedPrices only contains non-zero values and has a length of 3+
+        uint256 averagePrice = _getAveragePrice(sortedPrices);
+        uint256 medianPrice = _getMedianPrice(sortedPrices);
+
+        if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsRequired();
         uint256 deviationBps = abi.decode(params_, (uint256));
         if (deviationBps == 0) revert SimpleStrategy_ParamsRequired();
 
@@ -126,86 +232,69 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return prices_[0];
     }
 
-    /// @notice This strategy returns the average of the prices in the array.
-    /// @dev Will revert if:
-    /// - The number of elements in the prices_ array is 0
-    /// - Any price in the array is 0
+    /// @notice         This strategy returns the average of the non-zero prices in the array.
     ///
-    /// @param prices_ Array of prices
-    /// @param params_ Unused
-    /// @return price_ The resolved price
+    /// @dev            If there are no non-zero prices in the array, 0 will be returned. This ensures that a situation
+    //                  where all price feeds are down is handled gracefully.
+    ///
+    ///                 Will revert if:
+    ///                 - The number of elements in the prices_ array is less than 2 (which would represent a mis-configuration)
+    ///
+    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 handling of price lookup sources that return errors.
+    ///                 Otherwise, an asset with any zero price would result in
+    ///                 no price being returned at all.
+    ///
+    /// @param prices_  Array of prices
+    /// @param params_  Unused
+    /// @return uint256 The resolved price
     function getAveragePrice(
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
-        uint256 pricesLen = prices_.length;
-        // Can't calculate the average if there are no prices
-        if (pricesLen == 0) revert SimpleStrategy_PriceCountInvalid();
+        // Handle misconfiguration
+        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
 
-        uint256 priceTotal;
-        for (uint256 i = 0; i < pricesLen; i++) {
-            // Can't calculate the average if a price feed has not returned a value
-            if (prices_[i] == 0) revert SimpleStrategy_PriceZero();
+        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
-            priceTotal += prices_[i];
-        }
-
-        return priceTotal / pricesLen;
+        return _getAveragePrice(nonZeroPrices);
     }
 
-    /// @notice This strategy returns the median of the prices in the array.
-    /// @dev If the array has an even number of prices, the average of the two middle prices is returned.
+    /// @notice         This strategy returns the median of the non-zero prices in the array.
     ///
-    /// Will revert if:
-    /// - The number of elements in the prices_ array is 0
-    /// - Any price in the array is 0
+    /// @dev            If the array has an even number of non-zero prices, the average of the two middle
+    ///                 prices is returned.
     ///
-    /// @param prices_ Array of prices
-    /// @param params_ Unused
-    /// @return price_ The resolved price
+    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 handling of price lookup sources that return errors.
+    ///                 Otherwise, an asset with any zero price would result in
+    ///                 no price being returned at all.
+    ///
+    ///                 If there are not enough non-zero array elements to calculate a median (< 3), the first non-zero price is returned.
+    ///
+    ///                 Will revert if:
+    ///                 - The number of elements in the prices_ array is less than 3, since it would represent a mis-configuration.
+    ///
+    /// @param prices_  Array of prices
+    /// @param params_  Unused
+    /// @return uint256 The resolved price
     function getMedianPrice(
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
-        uint256 pricesLen = prices_.length;
-        // Can only calculate a median if there are 3+ prices
-        if (pricesLen < 3) return getAveragePrice(prices_, params_);
+        // Misconfiguration
+        if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid();
+
+        uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
+
+        uint256 nonZeroPricesLen = nonZeroPrices.length;
+        // Can only calculate a median if there are 3+ non-zero prices
+        if (nonZeroPricesLen == 0) return 0;
+        if (nonZeroPricesLen < 3) return nonZeroPrices[0];
 
         // Sort the prices
-        uint256[] memory sortedPrices = QuickSort.sort(prices_);
+        uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
 
-        // Abort if there are zero prices
-        for (uint256 i = 0; i < pricesLen; i++) {
-            if (sortedPrices[i] == 0) revert SimpleStrategy_PriceZero();
-        }
-
-        // If there are an even number of prices, return the average of the two middle prices
-        if (pricesLen % 2 == 0) {
-            uint256 middlePrice1 = sortedPrices[pricesLen / 2 - 1];
-            uint256 middlePrice2 = sortedPrices[pricesLen / 2];
-            return (middlePrice1 + middlePrice2) / 2;
-        }
-
-        // Otherwise return the median price
-        return sortedPrices[(pricesLen - 1) / 2];
-    }
-
-    /// @notice This strategy returns a second price if the first feed is zero.
-    /// @dev Likely most useful if you're falling back to a secondary feed or a moving average.
-    /// @param prices_ Array of prices
-    /// @param params_ Unused
-    /// @return price_ The resolved price
-    function getPriceWithFallback(
-        uint256[] memory prices_,
-        bytes memory params_
-    ) public pure returns (uint256) {
-        // Requires two prices
-        if (prices_.length != 2) revert SimpleStrategy_PriceCountInvalid();
-
-        // Return the first price if it's not zero
-        if (prices_[0] != 0) return prices_[0];
-
-        // Otherwise, return the second
-        return prices_[1];
+        return _getMedianPrice(sortedPrices);
     }
 }

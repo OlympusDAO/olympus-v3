@@ -148,12 +148,12 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //              [X] stores last observation time in asset data
 
 // In order to create the necessary configuration to test above scenarios, the following assets/feed combinations are created on the price module:
-// - OHM: Three feed using the getMedianIfDeviation strategy
-// - RSV: Two feed using the getAverageIfDeviation strategy
+// - OHM: Three feed using the getMedianPriceIfDeviation strategy
+// - RSV: Two feed using the getAveragePriceIfDeviation strategy
 // - WETH: One feed with no strategy
 // - ALPHA: One feed with no strategy
 // - BPT: One feed (has recursive calls) with no strategy
-// - ONEMA: One feed + MA using the getPriceWithFallback strategy
+// - ONEMA: One feed + MA using the getFirstNonZeroPrice strategy
 // - TWOMA: Two feed + MA using the getAveragePrice strategy
 
 contract PriceV2Test is Test {
@@ -393,7 +393,7 @@ contract PriceV2Test is Test {
             _makeRandomObservations(onema, feeds[0], nonce_, uint256(numObs_)), // uint256[] memory observations_
             PRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getPriceWithFallback.selector,
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds // Component[] feeds_
@@ -422,7 +422,7 @@ contract PriceV2Test is Test {
             observations_, // uint256[] memory observations_
             PRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getPriceWithFallback.selector,
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds // Component[] feeds_
@@ -485,7 +485,7 @@ contract PriceV2Test is Test {
             );
         }
 
-        // OHM - Three feeds using the getMedianIfDeviation strategy
+        // OHM - Three feeds using the getMedianPriceIfDeviation strategy
         {
             ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
                 .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
@@ -527,14 +527,14 @@ contract PriceV2Test is Test {
                 _makeRandomObservations(ohm, feeds[0], nonce_, uint256(90)), // uint256[] memory observations_
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                    SimplePriceFeedStrategy.getMedianIfDeviation.selector,
+                    SimplePriceFeedStrategy.getMedianPriceIfDeviation.selector,
                     abi.encode(uint256(300)) // 3% deviation
                 ), // Component memory strategy_
                 feeds // Component[] feeds_
             );
         }
 
-        // RSV - Two feeds using the getAverageIfDeviation strategy
+        // RSV - Two feeds using the getAveragePriceIfDeviation strategy
         {
             ChainlinkPriceFeeds.OneFeedParams memory reserveFeedOneParams = ChainlinkPriceFeeds
                 .OneFeedParams(reserveUsdPriceFeed, uint48(24 hours));
@@ -568,7 +568,7 @@ contract PriceV2Test is Test {
                 _makeRandomObservations(reserve, feeds[0], nonce_, uint256(90)), // uint256[] memory observations_ // TODO
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                    SimplePriceFeedStrategy.getAverageIfDeviation.selector,
+                    SimplePriceFeedStrategy.getAveragePriceIfDeviation.selector,
                     abi.encode(uint256(300)) // 3% deviation
                 ), // Component memory strategy_
                 feeds // Component[] feeds_
@@ -601,7 +601,7 @@ contract PriceV2Test is Test {
             );
         }
 
-        // ONEMA - One feed + MA using the getPriceWithFallback strategy
+        // ONEMA - One feed + MA using the getFirstNonZeroPrice strategy
         {
             ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
                 .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
@@ -622,7 +622,7 @@ contract PriceV2Test is Test {
                 _makeRandomObservations(onema, feeds[0], nonce_, uint256(15)), // uint256[] memory observations_
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                    SimplePriceFeedStrategy.getPriceWithFallback.selector,
+                    SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
                     abi.encode(0) // no params required
                 ), // Component memory strategy_
                 feeds // Component[] feeds_
@@ -750,7 +750,10 @@ contract PriceV2Test is Test {
             (PRICEv2.Component)
         );
         assertEq(fromSubKeycode(assetStrategy.target), bytes20("PRICE.SIMPLESTRATEGY"));
-        assertEq(assetStrategy.selector, SimplePriceFeedStrategy.getMedianIfDeviation.selector);
+        assertEq(
+            assetStrategy.selector,
+            SimplePriceFeedStrategy.getMedianPriceIfDeviation.selector
+        );
         assertEq(assetStrategy.params, abi.encode(uint256(300)));
         PRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (PRICEv2.Component[]));
         assertEq(feeds.length, 3);
@@ -865,10 +868,7 @@ contract PriceV2Test is Test {
         ethUsdPriceFeed.setLatestAnswer(int256(0));
 
         // Try to get current price and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_PriceCallFailed(address)",
-            address(reserve)
-        );
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(reserve));
         vm.expectRevert(err);
         price.getPrice(address(reserve), PRICEv2.Variant.CURRENT);
     }
@@ -933,7 +933,7 @@ contract PriceV2Test is Test {
         ethUsdPriceFeed.setLatestAnswer(int256(0));
 
         // Try to get current price and expect revert
-        bytes memory err = abi.encodeWithSignature("PRICE_PriceCallFailed(address)", address(ohm));
+        bytes memory err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(ohm));
         vm.expectRevert(err);
         price.getPrice(address(ohm), PRICEv2.Variant.CURRENT);
     }
@@ -954,7 +954,7 @@ contract PriceV2Test is Test {
         assertEq(timestamp, uint48(block.timestamp));
     }
 
-    function testRevert_getPrice_current_strat_twoFeedPlusMA_stratFailed(uint256 nonce_) public {
+    function test_getPrice_current_strat_twoFeedPlusMA_priceZero(uint256 nonce_) public {
         // Add base assets to price module
         _addBaseAssets(nonce_);
 
@@ -963,13 +963,14 @@ contract PriceV2Test is Test {
         twomaEthPriceFeed.setLatestAnswer(int256(0));
         ethUsdPriceFeed.setLatestAnswer(int256(0));
 
-        // Try to get current price and expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_PriceCallFailed(address)",
-            address(twoma)
-        );
-        vm.expectRevert(err);
-        price.getPrice(address(twoma), PRICEv2.Variant.CURRENT);
+        // Try to get current price
+        (uint256 returnedPrice, ) = price.getPrice(address(twoma), PRICEv2.Variant.CURRENT);
+
+        // Grab the historical moving average
+        (uint256 movingAverage, ) = price.getPrice(address(twoma), PRICEv2.Variant.MOVINGAVERAGE);
+
+        // As all price feeds are down, the moving average is returned
+        assertEq(returnedPrice, movingAverage);
     }
 
     function testRevert_getPrice_current_unconfiguredAsset() public {
@@ -1292,14 +1293,13 @@ contract PriceV2Test is Test {
         // Set weth price back to normal
         ethUsdPriceFeed.setLatestAnswer(int256(2000e8));
 
-        // Set ohm price to zero
-        ohmUsdPriceFeed.setLatestAnswer(int256(0));
-        ohmEthPriceFeed.setLatestAnswer(int256(0));
+        // Set alpha price to zero
+        alphaUsdPriceFeed.setLatestAnswer(int256(0));
 
         // Try to get current price and expect revert
-        err = abi.encodeWithSignature("PRICE_PriceCallFailed(address)", address(ohm));
+        err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(alpha));
         vm.expectRevert(err);
-        price.getPriceIn(address(weth), address(ohm), PRICEv2.Variant.CURRENT);
+        price.getPriceIn(address(weth), address(alpha), PRICEv2.Variant.CURRENT);
     }
 
     function testRevert_getPriceIn_current_unconfiguredAsset() public {
@@ -1797,7 +1797,7 @@ contract PriceV2Test is Test {
         ohmEthPriceFeed.setLatestAnswer(int256(0));
 
         // Try to get current price and expect revert
-        err = abi.encodeWithSignature("PRICE_PriceCallFailed(address)", address(ohm));
+        err = abi.encodeWithSignature("PRICE_PriceZero(address)", address(ohm));
         vm.expectRevert(err);
         vm.prank(writer);
         price.storePrice(address(ohm));
@@ -2658,7 +2658,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         PRICEv2.Component memory averageStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstPrice.selector,
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -2685,7 +2685,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         PRICEv2.Component memory averageStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstPrice.selector,
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -2705,7 +2705,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         PRICEv2.Component memory averageStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstPrice.selector,
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -2726,7 +2726,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         PRICEv2.Component memory averageStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLENEW"),
-            SimplePriceFeedStrategy.getFirstPrice.selector,
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
 
@@ -2821,7 +2821,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         PRICEv2.Component memory averageStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getAverageIfDeviation.selector,
+            SimplePriceFeedStrategy.getAveragePriceIfDeviation.selector,
             abi.encode(0) // will revert due to missing parameters
         );
 
@@ -2848,7 +2848,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         PRICEv2.Component memory firstPriceStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstPrice.selector,
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0)
         );
 
@@ -2917,7 +2917,7 @@ contract PriceV2Test is Test {
         // Update the asset's strategy (since there will be 1 price value + 1 MA)
         PRICEv2.Component memory firstStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstPrice.selector,
+            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
             abi.encode(0) // no params required
         );
         price.updateAssetPriceStrategy(address(weth), firstStrategy, false);
