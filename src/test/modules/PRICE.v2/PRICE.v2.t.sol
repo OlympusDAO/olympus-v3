@@ -20,7 +20,7 @@ import {BalancerPoolTokenPrice, IVault, IWeightedPool} from "modules/PRICE/submo
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 
 // Tests for OlympusPrice v2
-// TODO
+//
 // Asset Information
 // [X] getAssets - returns all assets configured on the PRICE module
 //      [X] zero assets
@@ -137,15 +137,15 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //           [X] reverts if a zero value is provided
 //           [X] if storeMovingAverage was previously enabled, stores moving average data, including observations, in asset data
 //           [X] if storeMovingAverage was previously disabled, stores moving average data, including observations, in asset data
-//      [ ] if not storing moving average
+//      [X] if not storing moving average
 //           [X] reverts if more than one observation is provided
 //           [X] reverts if movingAverageDuration is provided
-//           [ ] one observation provided
+//           [X] one observation provided
 //              [X] stores observation and last observation time in asset data
-//              [ ] emits price stored event
 //              [X] reverts if a zero value is provided
 //           [X] no observations provided
 //              [X] stores last observation time in asset data
+//              [X] calculates current price and stores as cached value
 
 // In order to create the necessary configuration to test above scenarios, the following assets/feed combinations are created on the price module:
 // - OHM: Three feed using the getMedianPriceIfDeviation strategy
@@ -2914,14 +2914,6 @@ contract PriceV2Test is Test {
 
         vm.startPrank(writer);
 
-        // Update the asset's strategy (since there will be 1 price value + 1 MA)
-        PRICEv2.Component memory firstStrategy = PRICEv2.Component(
-            toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
-            abi.encode(0) // no params required
-        );
-        price.updateAssetPriceStrategy(address(weth), firstStrategy, false);
-
         // Update the asset's moving average
         price.updateAssetMovingAverage(
             address(weth),
@@ -2952,31 +2944,24 @@ contract PriceV2Test is Test {
 
         // Observations
         uint256[] memory observations = new uint256[](1);
-        observations[0] = 2e18;
+        observations[0] = 6e18; // new cached value for onema
 
-        PRICEv2.Component memory strategyEmpty = PRICEv2.Component(
-            toSubKeycode(bytes20(0)),
-            bytes4(0),
-            abi.encode(0)
-        );
+        // We're removing the moving average from onema, but it's used by the strategy, so the update should fail
+        bool storeMovingAverage = false;
 
-        // No update to strategy, which will lead to a failure
-
-        vm.startPrank(writer);
-
-        // Will trigger a revert as an empty strategy is no longer valid
+        // Try to update onema's moving average to disable it
+        // Will trigger a revert as the moving average is used by the strategy
         bytes memory err = abi.encodeWithSignature(
             "PRICE_InvalidParams(uint256,bytes)",
             1,
-            abi.encode(strategyEmpty)
+            abi.encode(storeMovingAverage)
         );
         vm.expectRevert(err);
-
-        // Update the asset's moving average
+        vm.prank(writer);
         price.updateAssetMovingAverage(
-            address(weth),
-            true, // Enable storeMovingAverage (previously disabled)
-            uint32(8 hours), // movingAverageDuration_
+            address(onema),
+            storeMovingAverage, // disable storeMovingAverage (previously enabled)
+            uint32(0), // movingAverageDuration_
             uint48(block.timestamp), // lastObservationTime_
             observations // observations_
         );
