@@ -148,8 +148,8 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //              [X] stores last observation time in asset data
 
 // In order to create the necessary configuration to test above scenarios, the following assets/feed combinations are created on the price module:
-// - OHM: Three feed using the getMedianIfDeviation strategy
-// - RSV: Two feed using the getAverageIfDeviation strategy
+// - OHM: Three feed using the getMedianPriceIfDeviation strategy
+// - RSV: Two feed using the getAveragePriceIfDeviation strategy
 // - WETH: One feed with no strategy
 // - ALPHA: One feed with no strategy
 // - BPT: One feed (has recursive calls) with no strategy
@@ -485,7 +485,7 @@ contract PriceV2Test is Test {
             );
         }
 
-        // OHM - Three feeds using the getMedianIfDeviation strategy
+        // OHM - Three feeds using the getMedianPriceIfDeviation strategy
         {
             ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
                 .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
@@ -527,14 +527,14 @@ contract PriceV2Test is Test {
                 _makeRandomObservations(ohm, feeds[0], nonce_, uint256(90)), // uint256[] memory observations_
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                    SimplePriceFeedStrategy.getMedianIfDeviation.selector,
+                    SimplePriceFeedStrategy.getMedianPriceIfDeviation.selector,
                     abi.encode(uint256(300)) // 3% deviation
                 ), // Component memory strategy_
                 feeds // Component[] feeds_
             );
         }
 
-        // RSV - Two feeds using the getAverageIfDeviation strategy
+        // RSV - Two feeds using the getAveragePriceIfDeviation strategy
         {
             ChainlinkPriceFeeds.OneFeedParams memory reserveFeedOneParams = ChainlinkPriceFeeds
                 .OneFeedParams(reserveUsdPriceFeed, uint48(24 hours));
@@ -568,7 +568,7 @@ contract PriceV2Test is Test {
                 _makeRandomObservations(reserve, feeds[0], nonce_, uint256(90)), // uint256[] memory observations_ // TODO
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                    SimplePriceFeedStrategy.getAverageIfDeviation.selector,
+                    SimplePriceFeedStrategy.getAveragePriceIfDeviation.selector,
                     abi.encode(uint256(300)) // 3% deviation
                 ), // Component memory strategy_
                 feeds // Component[] feeds_
@@ -750,7 +750,7 @@ contract PriceV2Test is Test {
             (PRICEv2.Component)
         );
         assertEq(fromSubKeycode(assetStrategy.target), bytes20("PRICE.SIMPLESTRATEGY"));
-        assertEq(assetStrategy.selector, SimplePriceFeedStrategy.getMedianIfDeviation.selector);
+        assertEq(assetStrategy.selector, SimplePriceFeedStrategy.getMedianPriceIfDeviation.selector);
         assertEq(assetStrategy.params, abi.encode(uint256(300)));
         PRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (PRICEv2.Component[]));
         assertEq(feeds.length, 3);
@@ -2818,7 +2818,7 @@ contract PriceV2Test is Test {
         // Set up a new strategy
         PRICEv2.Component memory averageStrategy = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
-            SimplePriceFeedStrategy.getAverageIfDeviation.selector,
+            SimplePriceFeedStrategy.getAveragePriceIfDeviation.selector,
             abi.encode(0) // will revert due to missing parameters
         );
 

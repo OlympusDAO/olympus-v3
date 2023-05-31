@@ -139,7 +139,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @param prices_  Array of prices
     /// @param params_  DeviationParams struct encoded as bytes
     /// @return uint256 The resolved price
-    function getAverageIfDeviation(
+    function getAveragePriceIfDeviation(
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {
@@ -194,7 +194,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @param prices_  Array of prices
     /// @param params_  DeviationParams struct encoded as bytes
     /// @return uint256 The resolved price
-    function getMedianIfDeviation(
+    function getMedianPriceIfDeviation(
         uint256[] memory prices_,
         bytes memory params_
     ) public pure returns (uint256) {

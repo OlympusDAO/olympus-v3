@@ -341,44 +341,44 @@ contract SimplePriceFeedStrategyTest is Test {
 
     // =========  TESTS - AVERAGE IF DEVIATION ========= //
 
-    function test_getAverageIfDeviation_revertsOnArrayLengthZero() public {
+    function test_getAveragePriceIfDeviation_revertsOnArrayLengthZero() public {
         uint256[] memory prices = new uint256[](0);
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
 
-        strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
+        strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
     }
 
-    function test_getAverageIfDeviation_revertsOnArrayLengthOne() public {
+    function test_getAveragePriceIfDeviation_revertsOnArrayLengthOne() public {
         uint256[] memory prices = new uint256[](1);
         prices[0] = 1 * 1e18;
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
 
-        strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
+        strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
     }
 
-    function test_getAverageIfDeviation_empty_fuzz(uint8 len_) public {
+    function test_getAveragePriceIfDeviation_empty_fuzz(uint8 len_) public {
         uint8 len = uint8(bound(len_, 2, 10));
 
         uint256[] memory prices = new uint256[](len);
 
-        uint256 returnedPrice = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
+        uint256 returnedPrice = strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
         assertEq(returnedPrice, 0);
     }
 
-    function test_getAverageIfDeviation_arrayLengthTwo_singlePriceZero() public {
+    function test_getAveragePriceIfDeviation_arrayLengthTwo_singlePriceZero() public {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 0;
         prices[1] = 1 * 1e18;
 
-        uint256 returnedPrice = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
+        uint256 returnedPrice = strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
 
         // Ignores the zero price
         assertEq(returnedPrice, 1e18);
     }
 
-    function test_getAverageIfDeviation_priceZeroFuzz(uint8 priceZeroIndex_) public {
+    function test_getAveragePriceIfDeviation_priceZeroFuzz(uint8 priceZeroIndex_) public {
         uint8 priceZeroIndex = uint8(bound(priceZeroIndex_, 2, 9));
 
         uint256[] memory prices = new uint256[](10);
@@ -390,105 +390,105 @@ contract SimplePriceFeedStrategyTest is Test {
             }
         }
 
-        uint256 averagePrice = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
+        uint256 averagePrice = strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
 
         // Ignores the zero price
         assertEq(averagePrice, 1e18);
     }
 
-    function test_getAverageIfDeviation_threeItems_deviationIndexOne() public {
+    function test_getAveragePriceIfDeviation_threeItems_deviationIndexOne() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
         prices[2] = 1.001 * 1e18;
 
-        uint256 price = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, (1 * 1e18 + 1.2 * 1e18 + 1.001 * 1e18) / 3);
     }
 
-    function test_getAverageIfDeviation_threeItems_priceZero() public {
+    function test_getAveragePriceIfDeviation_threeItems_priceZero() public {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
         prices[2] = 0;
         prices[3] = 1.001 * 1e18;
 
-        uint256 price = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
 
         // Ignores the zero price
         assertEq(price, (1 * 1e18 + 1.2 * 1e18 + 1.001 * 1e18) / 3);
     }
 
-    function test_getAverageIfDeviation_threeItems_deviationIndexTwo() public {
+    function test_getAveragePriceIfDeviation_threeItems_deviationIndexTwo() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
         prices[2] = 1.2 * 1e18; // > 1% deviation
 
-        uint256 price = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, (1 * 1e18 + 1.001 * 1e18 + 1.2 * 1e18) / 3);
     }
 
-    function test_getAverageIfDeviation_twoItems() public {
+    function test_getAveragePriceIfDeviation_twoItems() public {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1 * 1e18;
         prices[1] = 2 * 1e18; // > 1% deviation
 
-        uint256 price = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, (1 * 1e18 + 2 * 1e18) / 2);
     }
 
-    function test_getAverageIfDeviation_revertsOnMissingParams() public {
+    function test_getAveragePriceIfDeviation_revertsOnMissingParams() public {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
 
-        strategy.getAverageIfDeviation(prices, "");
+        strategy.getAveragePriceIfDeviation(prices, "");
     }
 
-    function test_getAverageIfDeviation_revertsOnMissingParamsDeviationBpsZero() public {
+    function test_getAveragePriceIfDeviation_revertsOnMissingParamsDeviationBpsZero() public {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
 
-        strategy.getAverageIfDeviation(prices, encodeDeviationParams(0));
+        strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(0));
     }
 
-    function test_getAverageIfDeviation_revertsOnMissingParamsDeviationBpsEmpty() public {
+    function test_getAveragePriceIfDeviation_revertsOnMissingParamsDeviationBpsEmpty() public {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
 
-        strategy.getAverageIfDeviation(prices, abi.encode(""));
+        strategy.getAveragePriceIfDeviation(prices, abi.encode(""));
     }
 
-    function test_getAverageIfDeviation_withoutDeviation() public {
+    function test_getAveragePriceIfDeviation_withoutDeviation() public {
         uint256[] memory prices = new uint256[](2);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18; // < 1% deviation
 
-        uint256 price = strategy.getAverageIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, 1 * 1e18);
     }
 
     // =========  TESTS - MEDIAN IF DEVIATION ========= //
 
-    function test_getMedianIfDeviation_revertsOnArrayLengthInvalid(uint8 len_) public {
+    function test_getMedianPriceIfDeviation_revertsOnArrayLengthInvalid(uint8 len_) public {
         uint8 len = uint8(bound(len_, 0, 2));
         uint256[] memory prices = new uint256[](len);
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
 
-        strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
     }
 
-    function test_getMedianIfDeviation_priceZero_indexFuzz(uint8 priceZeroIndex_) public {
+    function test_getMedianPriceIfDeviation_priceZero_indexFuzz(uint8 priceZeroIndex_) public {
         uint8 priceZeroIndex = uint8(bound(priceZeroIndex_, 2, 9));
 
         uint256[] memory prices = new uint256[](10);
@@ -500,34 +500,34 @@ contract SimplePriceFeedStrategyTest is Test {
             }
         }
 
-        uint256 medianPrice = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        uint256 medianPrice = strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
 
         // Ignores the zero price
         assertEq(medianPrice, 1e18);
     }
 
-    function test_getMedianIfDeviation_empty_fuzz(uint8 len_) public {
+    function test_getMedianPriceIfDeviation_empty_fuzz(uint8 len_) public {
         uint8 len = uint8(bound(len_, 3, 10));
         uint256[] memory prices = new uint256[](len);
 
-        uint256 medianPrice = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        uint256 medianPrice = strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
 
         // Handles the zero price
         assertEq(medianPrice, 0);
     }
 
-    function test_getMedianIfDeviation_fourItems() public {
+    function test_getMedianPriceIfDeviation_fourItems() public {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
         prices[2] = 1.001 * 1e18;
         prices[3] = 0.99 * 1e18;
 
-        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, (1 * 1e18 + 1.001 * 1e18) / 2); // Average of the middle two
     }
 
-    function test_getMedianIfDeviation_fiveItems_priceZero() public {
+    function test_getMedianPriceIfDeviation_fiveItems_priceZero() public {
         uint256[] memory prices = new uint256[](5);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
@@ -535,66 +535,66 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[3] = 1.001 * 1e18;
         prices[4] = 0.99 * 1e18;
 
-        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
 
         // Ignores the zero price
         assertEq(price, (1 * 1e18 + 1.001 * 1e18) / 2); // Average of the middle two
     }
 
-    function test_getMedianIfDeviation_threeItems_deviationIndexOne() public {
+    function test_getMedianPriceIfDeviation_threeItems_deviationIndexOne() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
         prices[2] = 1.001 * 1e18;
 
-        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, 1.001 * 1e18);
     }
 
-    function test_getMedianIfDeviation_threeItems_priceZero() public {
+    function test_getMedianPriceIfDeviation_threeItems_priceZero() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 0;
         prices[2] = 1.001 * 1e18;
 
-        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, 1e18); // < 3 non-zero items, returns first non-zero item
     }
 
-    function test_getMedianIfDeviation_threeItems_priceZero_indexZero() public {
+    function test_getMedianPriceIfDeviation_threeItems_priceZero_indexZero() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 0;
         prices[1] = 1 * 1e18;
         prices[2] = 1.001 * 1e18;
 
-        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, 1e18); // < 3 non-zero items, returns first non-zero item
     }
 
-    function test_getMedianIfDeviation_fourItems_deviationIndexOne_priceZero() public {
+    function test_getMedianPriceIfDeviation_fourItems_deviationIndexOne_priceZero() public {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
         prices[2] = 0;
         prices[3] = 1.001 * 1e18;
 
-        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
 
         // Ignores the zero price
         assertEq(price, 1.001 * 1e18);
     }
 
-    function test_getMedianIfDeviation_threeItems_deviationIndexTwo() public {
+    function test_getMedianPriceIfDeviation_threeItems_deviationIndexTwo() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
         prices[2] = 1.2 * 1e18; // > 1% deviation
 
-        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
         assertEq(price, 1.001 * 1e18);
     }
 
-    function test_getMedianIfDeviation_revertsOnMissingParams() public {
+    function test_getMedianPriceIfDeviation_revertsOnMissingParams() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
@@ -602,10 +602,10 @@ contract SimplePriceFeedStrategyTest is Test {
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
 
-        strategy.getMedianIfDeviation(prices, "");
+        strategy.getMedianPriceIfDeviation(prices, "");
     }
 
-    function test_getMedianIfDeviation_revertsOnMissingParamsDeviationBpsEmpty() public {
+    function test_getMedianPriceIfDeviation_revertsOnMissingParamsDeviationBpsEmpty() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
@@ -613,10 +613,10 @@ contract SimplePriceFeedStrategyTest is Test {
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
 
-        strategy.getMedianIfDeviation(prices, abi.encode(""));
+        strategy.getMedianPriceIfDeviation(prices, abi.encode(""));
     }
 
-    function test_getMedianIfDeviation_revertsOnMissingParamsDeviationBpsZero() public {
+    function test_getMedianPriceIfDeviation_revertsOnMissingParamsDeviationBpsZero() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
@@ -624,16 +624,16 @@ contract SimplePriceFeedStrategyTest is Test {
 
         expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
 
-        strategy.getMedianIfDeviation(prices, encodeDeviationParams(0));
+        strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(0));
     }
 
-    function test_getMedianIfDeviation_withoutDeviation() public {
+    function test_getMedianPriceIfDeviation_withoutDeviation() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18; // < 1% deviation
         prices[2] = 1.002 * 1e18;
 
-        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        uint256 price = strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
         // No deviation, so returns the first price
         assertEq(price, 1 * 1e18);
     }
