@@ -505,7 +505,7 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, (1 * 1e18 + 1.001 * 1e18) / 2); // Average of the middle two
     }
 
-    function test_getMedianIfDeviation_fourItems_priceZero() public {
+    function test_getMedianIfDeviation_fiveItems_priceZero() public {
         uint256[] memory prices = new uint256[](5);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation
@@ -529,7 +529,27 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, 1.001 * 1e18);
     }
 
-    function test_getMedianIfDeviation_threeItems_deviationIndexOne_priceZero() public {
+    function test_getMedianIfDeviation_threeItems_priceZero() public {
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 1 * 1e18;
+        prices[1] = 0;
+        prices[2] = 1.001 * 1e18;
+
+        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        assertEq(price, 1e18); // < 3 non-zero items, returns first non-zero item
+    }
+
+    function test_getMedianIfDeviation_threeItems_priceZero_indexZero() public {
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = 0;
+        prices[1] = 1 * 1e18;
+        prices[2] = 1.001 * 1e18;
+
+        uint256 price = strategy.getMedianIfDeviation(prices, encodeDeviationParams(100));
+        assertEq(price, 1e18); // < 3 non-zero items, returns first non-zero item
+    }
+
+    function test_getMedianIfDeviation_fourItems_deviationIndexOne_priceZero() public {
         uint256[] memory prices = new uint256[](4);
         prices[0] = 1 * 1e18;
         prices[1] = 1.2 * 1e18; // > 1% deviation

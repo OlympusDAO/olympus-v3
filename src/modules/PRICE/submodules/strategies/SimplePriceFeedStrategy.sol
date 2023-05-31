@@ -139,7 +139,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///                 no price being returned at all.
     ///
     ///                 If no deviation is detected, the first non-zero price in the array is returned.
-    ///                 If there are not enough non-zero array elements to calculate a median (< 3), the average (or 0) is returned.
+    ///                 If there are not enough non-zero array elements to calculate a median (< 3), the first non-zero price in the array (or 0) is returned.
     ///
     ///                 Will revert if:
     ///                 - The number of elements in the prices_ array is less than 3, since it would represent a mis-configuration.
@@ -160,8 +160,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         // If there are no non-zero prices, return 0
         if (nonZeroPrices.length == 0) return 0;
 
-        // If there are not enough non-zero prices to calculate a median, return the average (or 0)
-        if (nonZeroPrices.length < 3) return getAveragePrice(prices_, params_);
+        // If there are not enough non-zero prices to calculate a median, return the first non-zero price
+        if (nonZeroPrices.length < 3) return nonZeroPrices[0];
 
         // Get the average and median and abort if there's a problem
         uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
