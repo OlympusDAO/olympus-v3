@@ -45,6 +45,52 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return nonZeroArray;
     }
 
+    /// @notice         Returns the average of the prices in the array
+    /// @dev            This function will calculate the average of all values in the array.
+    ///                 If non-zero values should not be included in the average, filter them prior.
+    ///
+    /// @param prices_  Array of prices
+    /// @return uint256 The average price or 0
+    function _getAveragePrice(uint256[] memory prices_) internal pure returns (uint256) {
+        uint256 pricesLen = prices_.length;
+
+        // If all price feeds are down, no average can be calculated
+        if (pricesLen == 0) return 0;
+
+        uint256 priceTotal;
+        for (uint256 i = 0; i < pricesLen; i++) {
+            priceTotal += prices_[i];
+        }
+
+        return priceTotal / pricesLen;
+    }
+
+    /// @notice         Returns the median of the prices in the array
+    /// @dev            This function will calculate the median of all values in the array.
+    ///                 If non-zero values should not be included in the median, filter them prior.
+    ///
+    /// @param prices_  Array of prices
+    /// @return uint256 The median price or 0
+    function _getMedianPrice(uint256[] memory prices_) internal pure returns (uint256) {
+        uint256 pricesLen = prices_.length;
+
+        // If all price feeds are down, no median can be calculated
+        if (pricesLen == 0) return 0;
+
+        // If there is only one price, return it
+        if (pricesLen == 1) return prices_[0];
+
+        // If there are an even number of prices, return the average of the two middle prices
+        if (pricesLen % 2 == 0) {
+            uint256 middlePrice1 = prices_[pricesLen / 2 - 1];
+            uint256 middlePrice2 = prices_[pricesLen / 2];
+            return (middlePrice1 + middlePrice2) / 2;
+        }
+
+        // Otherwise return the median price
+        return prices_[(pricesLen - 1) / 2];
+    }
+
     // ========== STRATEGY FUNCTIONS ========== //
 
     /// @notice         Returns the first non-zero price in the array.
@@ -110,7 +156,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         // Get the average and abort if there's a problem
         uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
-        uint256 averagePrice = getAveragePrice(sortedPrices, params_);
+        uint256 averagePrice = _getAveragePrice(sortedPrices);
 
         if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsRequired();
         uint256 deviationBps = abi.decode(params_, (uint256));
@@ -165,8 +211,10 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         // Get the average and median and abort if there's a problem
         uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
-        uint256 averagePrice = getAveragePrice(sortedPrices, params_);
-        uint256 medianPrice = getMedianPrice(sortedPrices, params_);
+
+        // The following two values are guaranteed to not be 0 since sortedPrices only contains non-zero values and has a length of 3+
+        uint256 averagePrice = _getAveragePrice(sortedPrices);
+        uint256 medianPrice = _getMedianPrice(sortedPrices);
 
         if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsRequired();
         uint256 deviationBps = abi.decode(params_, (uint256));
@@ -208,17 +256,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
 
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
-        uint256 nonZeroPricesLen = nonZeroPrices.length;
 
-        // If all price feeds are down, no average can be calculated
-        if (nonZeroPricesLen == 0) return 0;
-
-        uint256 priceTotal;
-        for (uint256 i = 0; i < nonZeroPricesLen; i++) {
-            priceTotal += nonZeroPrices[i];
-        }
-
-        return priceTotal / nonZeroPricesLen;
+        return _getAveragePrice(nonZeroPrices);
     }
 
     /// @notice         This strategy returns the median of the non-zero prices in the array.
@@ -231,7 +270,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///                 Otherwise, an asset with any zero price would result in
     ///                 no price being returned at all.
     ///
-    ///                 If there are not enough non-zero array elements to calculate a median (< 3), the average is returned.
+    ///                 If there are not enough non-zero array elements to calculate a median (< 3), the first non-zero price is returned.
     ///
     ///                 Will revert if:
     ///                 - The number of elements in the prices_ array is less than 3, since it would represent a mis-configuration.
@@ -250,19 +289,12 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         uint256 nonZeroPricesLen = nonZeroPrices.length;
         // Can only calculate a median if there are 3+ non-zero prices
-        if (nonZeroPricesLen < 3) return getAveragePrice(prices_, params_);
+        if (nonZeroPricesLen == 0) return 0;
+        if (nonZeroPricesLen < 3) return nonZeroPrices[0];
 
         // Sort the prices
         uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
 
-        // If there are an even number of prices, return the average of the two middle prices
-        if (nonZeroPricesLen % 2 == 0) {
-            uint256 middlePrice1 = sortedPrices[nonZeroPricesLen / 2 - 1];
-            uint256 middlePrice2 = sortedPrices[nonZeroPricesLen / 2];
-            return (middlePrice1 + middlePrice2) / 2;
-        }
-
-        // Otherwise return the median price
-        return sortedPrices[(nonZeroPricesLen - 1) / 2];
+        return _getMedianPrice(sortedPrices);
     }
 }
