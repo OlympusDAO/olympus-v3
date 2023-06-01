@@ -120,38 +120,11 @@ contract Bookkeeper is Policy, RolesConsumer {
     //                                      SUBMODULE MANAGEMENT                                        //
     //==================================================================================================//
 
-    function installSubmodule(
-        Keycode moduleKeycode_,
-        Submodule submodule_
-    ) external onlyRole("bookkeeper_admin") {
-        if (fromKeycode(moduleKeycode_) == bytes5("PRICE")) {
-            PRICE.installSubmodule(submodule_);
-        } else {
-            revert Bookkeeper_InvalidModule(moduleKeycode_);
-        }
+    function installSubmodule(Submodule submodule_) external onlyRole("bookkeeper_admin") {
+        PRICE.installSubmodule(submodule_);
     }
 
-    function upgradeSubmodule(
-        Keycode moduleKeycode_,
-        Submodule submodule_
-    ) external onlyRole("bookkeeper_admin") {
-        if (fromKeycode(moduleKeycode_) == bytes5("PRICE")) {
-            PRICE.upgradeSubmodule(submodule_);
-        } else {
-            revert Bookkeeper_InvalidModule(moduleKeycode_);
-        }
-    }
-
-    function execOnSubmodule(
-        SubKeycode subKeycode_,
-        bytes calldata data_
-    ) external onlyRole("bookkeeper_policy") {
-        bytes20 subKeycode = fromSubKeycode(subKeycode_);
-        bytes5 moduleKeycode = bytes5(subKeycode >> (15 * 8));
-        if (moduleKeycode == bytes5("PRICE")) {
-            PRICE.execOnSubmodule(subKeycode_, data_);
-        } else {
-            revert Bookkeeper_InvalidModule(toKeycode(moduleKeycode));
-        }
+    function upgradeSubmodule(Submodule submodule_) external onlyRole("bookkeeper_admin") {
+        PRICE.upgradeSubmodule(submodule_);
     }
 }
