@@ -125,7 +125,7 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [X] reverts if a non-functioning configuration is provided
 //      [X] stores empty strategy when feeds = 1
 //      [X] stores new strategy in asset data as abi-encoded bytes of the strategy component
-// [ ] updateAssetMovingAverage
+// [X] updateAssetMovingAverage
 //      [X] reverts if asset not configured (not approved)
 //      [X] reverts if caller is not permissioned
 //      [X] reverts if last observation time is in the future
@@ -2880,8 +2880,13 @@ contract PriceV2Test is Test {
         observations[0] = 2e18;
         observations[1] = 3e18;
 
-        // Update the asset's moving average
         vm.startPrank(writer);
+
+        // Expect an event when the configuration is updated
+        vm.expectEmit(true, false, false, true);
+        emit PriceStored(address(reserve), 3e18, uint48(block.timestamp));
+
+        // Update the asset's moving average
         price.updateAssetMovingAverage(
             address(reserve),
             true, // Enable storeMovingAverage (previously enabled)
@@ -2913,6 +2918,10 @@ contract PriceV2Test is Test {
         observations[1] = 3e18;
 
         vm.startPrank(writer);
+
+        // Expect an event when the configuration is updated
+        vm.expectEmit(true, false, false, true);
+        emit PriceStored(address(weth), 3e18, uint48(block.timestamp));
 
         // Update the asset's moving average
         price.updateAssetMovingAverage(
@@ -3218,8 +3227,13 @@ contract PriceV2Test is Test {
         uint256[] memory observations = new uint256[](1);
         observations[0] = 2e18;
 
-        // Update the asset's moving average
         vm.startPrank(writer);
+
+        // Expect an event when the configuration is updated
+        vm.expectEmit(true, false, false, true);
+        emit PriceStored(address(reserve), 2e18, uint48(block.timestamp));
+
+        // Update the asset's moving average
         price.updateAssetMovingAverage(
             address(reserve),
             false, // Disable storeMovingAverage
@@ -3250,8 +3264,21 @@ contract PriceV2Test is Test {
         // Observations
         uint256[] memory observations = new uint256[](0);
 
-        // Update the asset's moving average
+        // Get the current price for the asset
+        (uint256 price_, uint48 timestamp_) = price.getPrice(
+            address(reserve),
+            PRICEv2.Variant.CURRENT
+        );
+        uint256[] memory expectedObservations = new uint256[](1);
+        expectedObservations[0] = price_;
+
         vm.startPrank(writer);
+
+        // Expect an event when the configuration is updated
+        vm.expectEmit(true, false, false, true);
+        emit PriceStored(address(reserve), price_, uint48(block.timestamp));
+
+        // Update the asset's moving average
         price.updateAssetMovingAverage(
             address(reserve),
             false, // Disable storeMovingAverage
@@ -3260,14 +3287,6 @@ contract PriceV2Test is Test {
             observations // observations_
         );
         vm.stopPrank();
-
-        // Get the current price for the asset
-        (uint256 price_, uint48 timestamp_) = price.getPrice(
-            address(reserve),
-            PRICEv2.Variant.CURRENT
-        );
-        uint256[] memory expectedObservations = new uint256[](1);
-        expectedObservations[0] = price_;
 
         // Check that the asset was updated
         PRICEv2.Asset memory receivedAsset = price.getAssetData(address(reserve));
