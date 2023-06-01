@@ -8,6 +8,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 import {TickMath} from "libraries/UniswapV3/TickMath.sol";
 
+/// @title      UniswapV3Price
+/// @notice     Provides prices derived from the TWAP of a Uniswap V3 pool
 contract UniswapV3Price is PriceSubmodule {
     using FullMath for uint256;
 
