@@ -441,7 +441,12 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         // PRICE not configured to handle the asset, returns 0
         mockAssetPrice(USDC, 0);
 
-        expectRevert_asset(BalancerPoolTokenPrice.Balancer_PriceNotFound.selector, WETH);
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_PriceNotFound.selector,
+            BALANCER_POOL_ID,
+            WETH
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         balancerSubmodule.getTokenPriceFromWeightedPool(WETH, PRICE_DECIMALS, params);
@@ -450,10 +455,13 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
     function test_getTokenPriceFromWeightedPool_coinOneZero() public {
         setTokensTwo(mockBalancerVault, address(0), WETH);
 
-        expectRevert_pool(
-            BalancerPoolTokenPrice.Balancer_PoolTokensInvalid.selector,
-            BALANCER_POOL_ID
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_PoolTokenInvalid.selector,
+            BALANCER_POOL_ID,
+            0,
+            address(0)
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         balancerSubmodule.getTokenPriceFromWeightedPool(WETH, PRICE_DECIMALS, params);
@@ -462,10 +470,13 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
     function test_getTokenPriceFromWeightedPool_coinTwoZero() public {
         setTokensTwo(mockBalancerVault, WETH, address(0));
 
-        expectRevert_pool(
-            BalancerPoolTokenPrice.Balancer_PoolTokensInvalid.selector,
-            BALANCER_POOL_ID
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_PoolTokenInvalid.selector,
+            BALANCER_POOL_ID,
+            1,
+            address(0)
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         balancerSubmodule.getTokenPriceFromWeightedPool(WETH, PRICE_DECIMALS, params);
@@ -531,10 +542,14 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         setTokensThree(mockBalancerVault, USDC, WETH, DAI);
         setNormalizedWeightsTwo(mockWeightedPool, stablecoinWeight, WETH_WEIGHT);
 
-        expectRevert_pool(
-            BalancerPoolTokenPrice.Balancer_PoolTokensInvalid.selector,
-            BALANCER_POOL_ID
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_PoolTokenBalanceWeightMismatch.selector,
+            BALANCER_POOL_ID,
+            3,
+            3,
+            2
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         balancerSubmodule.getTokenPriceFromWeightedPool(USDC, PRICE_DECIMALS, params);
@@ -559,10 +574,14 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
             stablecoinWeight
         );
 
-        expectRevert_pool(
-            BalancerPoolTokenPrice.Balancer_PoolTokensInvalid.selector,
-            BALANCER_POOL_ID
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_PoolTokenBalanceWeightMismatch.selector,
+            BALANCER_POOL_ID,
+            3,
+            2,
+            3
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         balancerSubmodule.getTokenPriceFromWeightedPool(USDC, PRICE_DECIMALS, params);
@@ -587,10 +606,14 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
             stablecoinWeight
         );
 
-        expectRevert_pool(
-            BalancerPoolTokenPrice.Balancer_PoolTokensInvalid.selector,
-            BALANCER_POOL_ID
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_PoolTokenBalanceWeightMismatch.selector,
+            BALANCER_POOL_ID,
+            2,
+            3,
+            3
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         balancerSubmodule.getTokenPriceFromWeightedPool(USDC, PRICE_DECIMALS, params);
@@ -644,10 +667,13 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
 
         setNormalizedWeightsTwo(mockWeightedPool, 0, WETH_WEIGHT);
 
-        expectRevert_pool(
-            BalancerPoolTokenPrice.Balancer_PoolWeightsInvalid.selector,
-            BALANCER_POOL_ID
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_PoolWeightInvalid.selector,
+            BALANCER_POOL_ID,
+            0,
+            0
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         balancerSubmodule.getWeightedPoolTokenPrice(address(0), PRICE_DECIMALS, params);
@@ -658,10 +684,13 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
 
         setNormalizedWeightsTwo(mockWeightedPool, USDC_WEIGHT, 0);
 
-        expectRevert_pool(
-            BalancerPoolTokenPrice.Balancer_PoolWeightsInvalid.selector,
-            BALANCER_POOL_ID
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_PoolWeightInvalid.selector,
+            BALANCER_POOL_ID,
+            1,
+            0
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         balancerSubmodule.getWeightedPoolTokenPrice(address(0), PRICE_DECIMALS, params);
@@ -867,10 +896,13 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
 
         setTokensTwo(mockBalancerVault, address(0), WETH);
 
-        expectRevert_pool(
-            BalancerPoolTokenPrice.Balancer_PoolTokensInvalid.selector,
-            BALANCER_POOL_ID
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_PoolTokenInvalid.selector,
+            BALANCER_POOL_ID,
+            0,
+            address(0)
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         balancerSubmodule.getWeightedPoolTokenPrice(address(0), PRICE_DECIMALS, params);
@@ -881,10 +913,13 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
 
         setTokensTwo(mockBalancerVault, USDC, address(0));
 
-        expectRevert_pool(
-            BalancerPoolTokenPrice.Balancer_PoolTokensInvalid.selector,
-            BALANCER_POOL_ID
+        bytes memory err = abi.encodeWithSelector(
+            BalancerPoolTokenPrice.Balancer_PoolTokenInvalid.selector,
+            BALANCER_POOL_ID,
+            1,
+            address(0)
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeBalancerPoolParams(mockWeightedPool);
         balancerSubmodule.getWeightedPoolTokenPrice(address(0), PRICE_DECIMALS, params);
