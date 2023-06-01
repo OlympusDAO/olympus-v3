@@ -108,21 +108,6 @@ contract ChainlinkPriceFeedsTest is Test {
             );
     }
 
-    function expectRevert_uint8(bytes4 selector_, uint8 number_) internal {
-        bytes memory err = abi.encodeWithSelector(selector_, number_);
-        vm.expectRevert(err);
-    }
-
-    function expectRevert_uint48(bytes4 selector_, uint48 number_) internal {
-        bytes memory err = abi.encodeWithSelector(selector_, number_);
-        vm.expectRevert(err);
-    }
-
-    function expectRevert_address(bytes4 selector_, address asset_) internal {
-        bytes memory err = abi.encodeWithSelector(selector_, asset_);
-        vm.expectRevert(err);
-    }
-
     // =========  ONE FEED TESTS ========= //
 
     function test_getOneFeedPrice_success() public {
@@ -141,17 +126,23 @@ contract ChainlinkPriceFeedsTest is Test {
             0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
         );
 
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_FeedInvalid.selector,
             address(mockNonWeightedPool)
         );
+        vm.expectRevert(err);
 
         bytes memory params = abi.encode(mockNonWeightedPool, UPDATE_THRESHOLD);
         chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getOneFeedPrice_revertsOnParamsFeedUndefined() public {
-        expectRevert_address(ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector, address(0));
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            0,
+            address(0)
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodeOneFeedParams(
             AggregatorV2V3Interface(address(0)),
@@ -161,7 +152,12 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getOneFeedPrice_revertsOnParamsThresholdUndefined() public {
-        expectRevert_uint48(ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector, 0);
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
+            1,
+            0
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, 0);
         chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
@@ -171,10 +167,12 @@ contract ChainlinkPriceFeedsTest is Test {
         int256 latestAnswer = bound(latestAnswer_, int256(type(int256).min), int256(0));
         daiEthPriceFeed.setLatestAnswer(latestAnswer);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedPriceInvalid.selector,
-            address(daiEthPriceFeed)
+            address(daiEthPriceFeed),
+            latestAnswer
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
         chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
@@ -208,10 +206,13 @@ contract ChainlinkPriceFeedsTest is Test {
         uint256 timestamp = bound(timestamp_, 0, block.timestamp - UPDATE_THRESHOLD - 1);
         daiEthPriceFeed.setTimestamp(timestamp);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedRoundStale.selector,
-            address(daiEthPriceFeed)
+            address(daiEthPriceFeed),
+            timestamp,
+            block.timestamp - UPDATE_THRESHOLD
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
         chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
@@ -235,10 +236,13 @@ contract ChainlinkPriceFeedsTest is Test {
         // Mock answeredInRound > roundId
         daiEthPriceFeed.setRoundId(roundId);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedRoundMismatch.selector,
-            address(daiEthPriceFeed)
+            address(daiEthPriceFeed),
+            roundId,
+            PRICE_FEED_ROUND_ID
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
         chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
@@ -255,10 +259,13 @@ contract ChainlinkPriceFeedsTest is Test {
 
     function test_getOneFeedPrice_revertsOnPriceDecimalsMaximum() public {
         uint8 priceDecimals = MAX_DECIMALS + 1;
-        expectRevert_uint8(
+
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_OutputDecimalsOutOfBounds.selector,
-            priceDecimals
+            priceDecimals,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
         chainlinkSubmodule.getOneFeedPrice(address(0), priceDecimals, params);
@@ -282,10 +289,13 @@ contract ChainlinkPriceFeedsTest is Test {
         // Force an overflow for any calculations involving the decimals
         daiEthPriceFeed.setDecimals(MAX_DECIMALS + 1);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedDecimalsOutOfBounds.selector,
-            address(daiEthPriceFeed)
+            address(daiEthPriceFeed),
+            MAX_DECIMALS + 1,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
         chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
@@ -310,7 +320,12 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceDiv_revertsOnParamsNumeratorFeedUndefined() public {
-        expectRevert_address(ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector, address(0));
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            0,
+            address(0)
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             AggregatorV2V3Interface(address(0)),
@@ -322,7 +337,12 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceDiv_revertsOnParamsNumeratorUpdateThresholdUndefined() public {
-        expectRevert_uint48(ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector, 0);
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
+            1,
+            0
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -334,7 +354,12 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceDiv_revertsOnParamsDenominatorFeedUndefined() public {
-        expectRevert_address(ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector, address(0));
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            2,
+            address(0)
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -346,7 +371,12 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceDiv_revertsOnParamsDenominatorUpdateThresholdUndefined() public {
-        expectRevert_uint48(ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector, 0);
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
+            3,
+            0
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -366,10 +396,11 @@ contract ChainlinkPriceFeedsTest is Test {
             0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
         );
 
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_FeedInvalid.selector,
             address(mockNonWeightedPool)
         );
+        vm.expectRevert(err);
 
         bytes memory params = abi.encode(
             mockNonWeightedPool,
@@ -389,10 +420,11 @@ contract ChainlinkPriceFeedsTest is Test {
             0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
         );
 
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_FeedInvalid.selector,
             address(mockNonWeightedPool)
         );
+        vm.expectRevert(err);
 
         bytes memory params = abi.encode(
             ohmEthPriceFeed,
@@ -409,10 +441,12 @@ contract ChainlinkPriceFeedsTest is Test {
         int256 latestAnswer = bound(latestAnswer_, int256(type(int256).min), int256(0));
         ohmEthPriceFeed.setLatestAnswer(latestAnswer);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedPriceInvalid.selector,
-            address(ohmEthPriceFeed)
+            address(ohmEthPriceFeed),
+            latestAnswer
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -429,10 +463,12 @@ contract ChainlinkPriceFeedsTest is Test {
         int256 latestAnswer = bound(latestAnswer_, int256(type(int256).min), int256(0));
         daiEthPriceFeed.setLatestAnswer(latestAnswer);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedPriceInvalid.selector,
-            address(daiEthPriceFeed)
+            address(daiEthPriceFeed),
+            latestAnswer
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -482,10 +518,13 @@ contract ChainlinkPriceFeedsTest is Test {
         uint256 timestamp = bound(timestamp_, 0, block.timestamp - UPDATE_THRESHOLD - 1);
         ohmEthPriceFeed.setTimestamp(timestamp);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedRoundStale.selector,
-            address(ohmEthPriceFeed)
+            address(ohmEthPriceFeed),
+            timestamp,
+            block.timestamp - UPDATE_THRESHOLD
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -535,10 +574,13 @@ contract ChainlinkPriceFeedsTest is Test {
         uint256 timestamp = bound(timestamp_, 0, block.timestamp - UPDATE_THRESHOLD - 1);
         daiEthPriceFeed.setTimestamp(timestamp);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedRoundStale.selector,
-            address(daiEthPriceFeed)
+            address(daiEthPriceFeed),
+            timestamp,
+            block.timestamp - UPDATE_THRESHOLD
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -576,10 +618,13 @@ contract ChainlinkPriceFeedsTest is Test {
         // Mock answeredInRound > roundId
         ohmEthPriceFeed.setRoundId(roundId);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedRoundMismatch.selector,
-            address(ohmEthPriceFeed)
+            address(ohmEthPriceFeed),
+            roundId,
+            PRICE_FEED_ROUND_ID
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -619,10 +664,13 @@ contract ChainlinkPriceFeedsTest is Test {
         // Mock answeredInRound > roundId
         daiEthPriceFeed.setRoundId(roundId);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedRoundMismatch.selector,
-            address(daiEthPriceFeed)
+            address(daiEthPriceFeed),
+            roundId,
+            PRICE_FEED_ROUND_ID
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -682,10 +730,13 @@ contract ChainlinkPriceFeedsTest is Test {
 
     function test_getTwoFeedPriceDiv_revertsOnPriceDecimalsMaximum() public {
         uint8 priceDecimals = MAX_DECIMALS + 1;
-        expectRevert_uint8(
+
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_OutputDecimalsOutOfBounds.selector,
-            priceDecimals
+            priceDecimals,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -734,10 +785,13 @@ contract ChainlinkPriceFeedsTest is Test {
     function test_getTwoFeedPriceDiv_revertsOnNumeratorDecimalsMaximum() public {
         ohmEthPriceFeed.setDecimals(255);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedDecimalsOutOfBounds.selector,
-            address(ohmEthPriceFeed)
+            address(ohmEthPriceFeed),
+            255,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -751,10 +805,13 @@ contract ChainlinkPriceFeedsTest is Test {
     function test_getTwoFeedPriceDiv_revertsOnDenominatorDecimalsMaximum() public {
         daiEthPriceFeed.setDecimals(255);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedDecimalsOutOfBounds.selector,
-            address(daiEthPriceFeed)
+            address(daiEthPriceFeed),
+            255,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -784,7 +841,12 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceMul_revertsOnParamsNumeratorFeedUndefined() public {
-        expectRevert_address(ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector, address(0));
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            0,
+            address(0)
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             AggregatorV2V3Interface(address(0)),
@@ -796,7 +858,12 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceMul_revertsOnParamsNumeratorUpdateThresholdUndefined() public {
-        expectRevert_uint48(ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector, 0);
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
+            1,
+            0
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -808,7 +875,12 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceMul_revertsOnParamsDenominatorFeedUndefined() public {
-        expectRevert_address(ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector, address(0));
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+            2,
+            address(0)
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -820,7 +892,12 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function test_getTwoFeedPriceMul_revertsOnParamsDenominatorUpdateThresholdUndefined() public {
-        expectRevert_uint48(ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector, 0);
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
+            3,
+            0
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -840,10 +917,11 @@ contract ChainlinkPriceFeedsTest is Test {
             0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
         );
 
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_FeedInvalid.selector,
             address(mockNonWeightedPool)
         );
+        vm.expectRevert(err);
 
         bytes memory params = abi.encode(
             mockNonWeightedPool,
@@ -863,10 +941,11 @@ contract ChainlinkPriceFeedsTest is Test {
             0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
         );
 
-        expectRevert_address(
-            ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
+        bytes memory err = abi.encodeWithSelector(
+            ChainlinkPriceFeeds.Chainlink_FeedInvalid.selector,
             address(mockNonWeightedPool)
         );
+        vm.expectRevert(err);
 
         bytes memory params = abi.encode(
             ohmEthPriceFeed,
@@ -883,10 +962,12 @@ contract ChainlinkPriceFeedsTest is Test {
         int256 latestAnswer = bound(latestAnswer_, int256(type(int256).min), int256(0));
         ohmEthPriceFeed.setLatestAnswer(latestAnswer);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedPriceInvalid.selector,
-            address(ohmEthPriceFeed)
+            address(ohmEthPriceFeed),
+            latestAnswer
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -903,10 +984,12 @@ contract ChainlinkPriceFeedsTest is Test {
         int256 latestAnswer = bound(latestAnswer_, int256(type(int256).min), int256(0));
         ethDaiPriceFeed.setLatestAnswer(latestAnswer);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedPriceInvalid.selector,
-            address(ethDaiPriceFeed)
+            address(ethDaiPriceFeed),
+            latestAnswer
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -954,10 +1037,13 @@ contract ChainlinkPriceFeedsTest is Test {
         uint256 timestamp = bound(timestamp_, 0, block.timestamp - UPDATE_THRESHOLD - 1);
         ohmEthPriceFeed.setTimestamp(timestamp);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedRoundStale.selector,
-            address(ohmEthPriceFeed)
+            address(ohmEthPriceFeed),
+            timestamp,
+            block.timestamp - UPDATE_THRESHOLD
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -1005,10 +1091,13 @@ contract ChainlinkPriceFeedsTest is Test {
         uint256 timestamp = bound(timestamp_, 0, block.timestamp - UPDATE_THRESHOLD - 1);
         ethDaiPriceFeed.setTimestamp(timestamp);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedRoundStale.selector,
-            address(ethDaiPriceFeed)
+            address(ethDaiPriceFeed),
+            timestamp,
+            block.timestamp - UPDATE_THRESHOLD
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -1046,10 +1135,13 @@ contract ChainlinkPriceFeedsTest is Test {
         // Mock answeredInRound > roundId
         ohmEthPriceFeed.setRoundId(roundId);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedRoundMismatch.selector,
-            address(ohmEthPriceFeed)
+            address(ohmEthPriceFeed),
+            roundId,
+            PRICE_FEED_ROUND_ID
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -1089,10 +1181,13 @@ contract ChainlinkPriceFeedsTest is Test {
         // Mock answeredInRound > roundId
         ethDaiPriceFeed.setRoundId(roundId);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedRoundMismatch.selector,
-            address(ethDaiPriceFeed)
+            address(ethDaiPriceFeed),
+            roundId,
+            PRICE_FEED_ROUND_ID
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -1188,10 +1283,13 @@ contract ChainlinkPriceFeedsTest is Test {
     function test_getTwoFeedPriceMul_revertsOnNumeratorDecimalsMaximum() public {
         ohmEthPriceFeed.setDecimals(255);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedDecimalsOutOfBounds.selector,
-            address(ohmEthPriceFeed)
+            address(ohmEthPriceFeed),
+            255,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -1205,10 +1303,13 @@ contract ChainlinkPriceFeedsTest is Test {
     function test_getTwoFeedPriceMul_revertsOnDenominatorDecimalsMaximum() public {
         daiEthPriceFeed.setDecimals(255);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_FeedDecimalsOutOfBounds.selector,
-            address(daiEthPriceFeed)
+            address(daiEthPriceFeed),
+            255,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
@@ -1221,10 +1322,13 @@ contract ChainlinkPriceFeedsTest is Test {
 
     function test_getTwoFeedPriceMul_revertsOnPriceDecimalsMaximum() public {
         uint8 priceDecimals = MAX_DECIMALS + 1;
-        expectRevert_uint8(
+
+        bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_OutputDecimalsOutOfBounds.selector,
-            priceDecimals
+            priceDecimals,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodeTwoFeedParams(
             ohmEthPriceFeed,
