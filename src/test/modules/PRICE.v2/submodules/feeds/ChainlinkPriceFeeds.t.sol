@@ -94,18 +94,12 @@ contract ChainlinkPriceFeedsTest is Test {
     }
 
     function encodeTwoFeedParams(
-        AggregatorV2V3Interface numeratorFeed,
-        uint48 numeratorUpdateThreshold,
-        AggregatorV2V3Interface denominatorFeed,
-        uint48 denominatorUpdateThreshold
+        AggregatorV2V3Interface firstFeed,
+        uint48 firstUpdateThreshold,
+        AggregatorV2V3Interface secondFeed,
+        uint48 secondUpdateThreshold
     ) internal pure returns (bytes memory params) {
-        return
-            abi.encode(
-                numeratorFeed,
-                numeratorUpdateThreshold,
-                denominatorFeed,
-                denominatorUpdateThreshold
-            );
+        return abi.encode(firstFeed, firstUpdateThreshold, secondFeed, secondUpdateThreshold);
     }
 
     // =========  ONE FEED TESTS ========= //
@@ -319,7 +313,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, ohmDaiPrice);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnParamsNumeratorFeedUndefined() public {
+    function test_getTwoFeedPriceDiv_revertsOnParamsFirstFeedUndefined() public {
         bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
             0,
@@ -336,7 +330,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnParamsNumeratorUpdateThresholdUndefined() public {
+    function test_getTwoFeedPriceDiv_revertsOnParamsFirstUpdateThresholdUndefined() public {
         bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
             1,
@@ -353,7 +347,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnParamsDenominatorFeedUndefined() public {
+    function test_getTwoFeedPriceDiv_revertsOnParamsSecondFeedUndefined() public {
         bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
             2,
@@ -370,7 +364,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnParamsDenominatorUpdateThresholdUndefined() public {
+    function test_getTwoFeedPriceDiv_revertsOnParamsSecondUpdateThresholdUndefined() public {
         bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
             3,
@@ -387,7 +381,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnNumeratorIncorrectFeedType() public {
+    function test_getTwoFeedPriceDiv_revertsOnFirstIncorrectFeedType() public {
         // Set up a non-weighted pool
         MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
         mockNonWeightedPool.setDecimals(18);
@@ -411,7 +405,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnDenominatorIncorrectFeedType() public {
+    function test_getTwoFeedPriceDiv_revertsOnSecondIncorrectFeedType() public {
         // Set up a non-weighted pool
         MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
         mockNonWeightedPool.setDecimals(18);
@@ -435,9 +429,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnInvalidNumeratorPriceFuzz(
-        int256 latestAnswer_
-    ) public {
+    function test_getTwoFeedPriceDiv_revertsOnInvalidFirstPriceFuzz(int256 latestAnswer_) public {
         int256 latestAnswer = bound(latestAnswer_, int256(type(int256).min), int256(0));
         ohmEthPriceFeed.setLatestAnswer(latestAnswer);
 
@@ -457,9 +449,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnInvalidDenominatorPriceFuzz(
-        int256 latestAnswer_
-    ) public {
+    function test_getTwoFeedPriceDiv_revertsOnInvalidSecondPriceFuzz(int256 latestAnswer_) public {
         int256 latestAnswer = bound(latestAnswer_, int256(type(int256).min), int256(0));
         daiEthPriceFeed.setLatestAnswer(latestAnswer);
 
@@ -479,7 +469,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceDiv_numeratorRoundTimestampFuzz(uint256 timestamp_) public {
+    function test_getTwoFeedPriceDiv_firstRoundTimestampFuzz(uint256 timestamp_) public {
         /**
          * If roundData.updatedAt (priceFeed.timestamp) < blockTimestamp - paramsUpdateThreshold,
          * then the price feed is considered stale and the function should revert.
@@ -507,7 +497,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, ohmDaiPrice);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnStaleNumeratorRoundTimestampFuzz(
+    function test_getTwoFeedPriceDiv_revertsOnStaleFirstRoundTimestampFuzz(
         uint256 timestamp_
     ) public {
         /**
@@ -535,7 +525,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceDiv_denominatorRoundTimestampFuzz(uint256 timestamp_) public {
+    function test_getTwoFeedPriceDiv_secondRoundTimestampFuzz(uint256 timestamp_) public {
         /**
          * If roundData.updatedAt (priceFeed.timestamp) < blockTimestamp - paramsUpdateThreshold,
          * then the price feed is considered stale and the function should revert.
@@ -563,7 +553,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, ohmDaiPrice);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnStaleDenominatorRoundTimestampFuzz(
+    function test_getTwoFeedPriceDiv_revertsOnStaleSecondRoundTimestampFuzz(
         uint256 timestamp_
     ) public {
         /**
@@ -591,7 +581,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceDiv_numeratorRoundIdValid() public {
+    function test_getTwoFeedPriceDiv_firstRoundIdValid() public {
         // Mock answeredInRound = roundId
         ohmEthPriceFeed.setRoundId(PRICE_FEED_ROUND_ID);
         ohmEthPriceFeed.setAnsweredInRound(PRICE_FEED_ROUND_ID);
@@ -611,7 +601,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, ohmDaiPrice);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnNumeratorRoundIdMismatchFuzz(uint80 roundId_) public {
+    function test_getTwoFeedPriceDiv_revertsOnFirstRoundIdMismatchFuzz(uint80 roundId_) public {
         uint80 roundId = uint80(bound(roundId_, 0, type(uint80).max));
         vm.assume(roundId != PRICE_FEED_ROUND_ID);
 
@@ -635,7 +625,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceDiv_denominatorRoundIdValid() public {
+    function test_getTwoFeedPriceDiv_secondRoundIdValid() public {
         // Mock answeredInRound = roundId
         daiEthPriceFeed.setRoundId(PRICE_FEED_ROUND_ID);
         daiEthPriceFeed.setAnsweredInRound(PRICE_FEED_ROUND_ID);
@@ -655,9 +645,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, ohmDaiPrice);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnDenominatorRoundIdMismatchFuzz(
-        uint80 roundId_
-    ) public {
+    function test_getTwoFeedPriceDiv_revertsOnSecondRoundIdMismatchFuzz(uint80 roundId_) public {
         uint80 roundId = uint80(bound(roundId_, 0, type(uint80).max));
         vm.assume(roundId != PRICE_FEED_ROUND_ID);
 
@@ -782,7 +770,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, 10 * 10 ** PRICE_DECIMALS); // Expected price is 10, adjusted with decimals
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnNumeratorDecimalsMaximum() public {
+    function test_getTwoFeedPriceDiv_revertsOnFirstDecimalsMaximum() public {
         ohmEthPriceFeed.setDecimals(255);
 
         bytes memory err = abi.encodeWithSelector(
@@ -802,7 +790,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnDenominatorDecimalsMaximum() public {
+    function test_getTwoFeedPriceDiv_revertsOnSecondDecimalsMaximum() public {
         daiEthPriceFeed.setDecimals(255);
 
         bytes memory err = abi.encodeWithSelector(
@@ -840,7 +828,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, ohmDaiPrice);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnParamsNumeratorFeedUndefined() public {
+    function test_getTwoFeedPriceMul_revertsOnParamsFirstFeedUndefined() public {
         bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
             0,
@@ -857,7 +845,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnParamsNumeratorUpdateThresholdUndefined() public {
+    function test_getTwoFeedPriceMul_revertsOnParamsFirstUpdateThresholdUndefined() public {
         bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
             1,
@@ -874,7 +862,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnParamsDenominatorFeedUndefined() public {
+    function test_getTwoFeedPriceMul_revertsOnParamsSecondFeedUndefined() public {
         bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_ParamsFeedInvalid.selector,
             2,
@@ -891,7 +879,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnParamsDenominatorUpdateThresholdUndefined() public {
+    function test_getTwoFeedPriceMul_revertsOnParamsSecondUpdateThresholdUndefined() public {
         bytes memory err = abi.encodeWithSelector(
             ChainlinkPriceFeeds.Chainlink_ParamsUpdateThresholdInvalid.selector,
             3,
@@ -908,7 +896,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnNumeratorIncorrectFeedType() public {
+    function test_getTwoFeedPriceMul_revertsOnFirstIncorrectFeedType() public {
         // Set up a non-weighted pool
         MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
         mockNonWeightedPool.setDecimals(18);
@@ -932,7 +920,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnDenominatorIncorrectFeedType() public {
+    function test_getTwoFeedPriceMul_revertsOnSecondIncorrectFeedType() public {
         // Set up a non-weighted pool
         MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
         mockNonWeightedPool.setDecimals(18);
@@ -956,9 +944,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnInvalidNumeratorPriceFuzz(
-        int256 latestAnswer_
-    ) public {
+    function test_getTwoFeedPriceMul_revertsOnInvalidFirstPriceFuzz(int256 latestAnswer_) public {
         int256 latestAnswer = bound(latestAnswer_, int256(type(int256).min), int256(0));
         ohmEthPriceFeed.setLatestAnswer(latestAnswer);
 
@@ -978,9 +964,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnInvalidDenominatorPriceFuzz(
-        int256 latestAnswer_
-    ) public {
+    function test_getTwoFeedPriceMul_revertsOnInvalidSecondPriceFuzz(int256 latestAnswer_) public {
         int256 latestAnswer = bound(latestAnswer_, int256(type(int256).min), int256(0));
         ethDaiPriceFeed.setLatestAnswer(latestAnswer);
 
@@ -1000,7 +984,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceMul_numeratorRoundFuzz(uint256 timestamp_) public {
+    function test_getTwoFeedPriceMul_firstRoundFuzz(uint256 timestamp_) public {
         /**
          * If roundData.updatedAt (priceFeed.timestamp) < blockTimestamp - paramsUpdateThreshold,
          * then the price feed is considered stale and the function should revert.
@@ -1028,7 +1012,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, ohmDaiPrice);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnStaleNumeratorRoundFuzz(uint256 timestamp_) public {
+    function test_getTwoFeedPriceMul_revertsOnStaleFirstRoundFuzz(uint256 timestamp_) public {
         /**
          * If roundData.updatedAt (priceFeed.timestamp) < blockTimestamp - paramsUpdateThreshold,
          * then the price feed is considered stale and the function should revert.
@@ -1054,7 +1038,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceMul_denominatorRoundFuzz(uint256 timestamp_) public {
+    function test_getTwoFeedPriceMul_secondRoundFuzz(uint256 timestamp_) public {
         /**
          * If roundData.updatedAt (priceFeed.timestamp) < blockTimestamp - paramsUpdateThreshold,
          * then the price feed is considered stale and the function should revert.
@@ -1082,7 +1066,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, ohmDaiPrice);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnStaleDenominatorRoundFuzz(uint256 timestamp_) public {
+    function test_getTwoFeedPriceMul_revertsOnStaleSecondRoundFuzz(uint256 timestamp_) public {
         /**
          * If roundData.updatedAt (priceFeed.timestamp) < blockTimestamp - paramsUpdateThreshold,
          * then the price feed is considered stale and the function should revert.
@@ -1108,7 +1092,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceMul_numeratorRoundIdValid() public {
+    function test_getTwoFeedPriceMul_firstRoundIdValid() public {
         // Mock answeredInRound = roundId
         ohmEthPriceFeed.setRoundId(PRICE_FEED_ROUND_ID);
         ohmEthPriceFeed.setAnsweredInRound(PRICE_FEED_ROUND_ID);
@@ -1128,7 +1112,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, ohmDaiPrice);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnNumeratorRoundIdMismatchFuzz(uint80 roundId_) public {
+    function test_getTwoFeedPriceMul_revertsOnFirstRoundIdMismatchFuzz(uint80 roundId_) public {
         uint80 roundId = uint80(bound(roundId_, 0, type(uint80).max));
         vm.assume(roundId != PRICE_FEED_ROUND_ID);
 
@@ -1152,7 +1136,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceMul_denominatorRoundIdValid() public {
+    function test_getTwoFeedPriceMul_secondRoundIdValid() public {
         // Mock answeredInRound = roundId
         ethDaiPriceFeed.setRoundId(PRICE_FEED_ROUND_ID);
         ethDaiPriceFeed.setAnsweredInRound(PRICE_FEED_ROUND_ID);
@@ -1172,9 +1156,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, ohmDaiPrice);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnDenominatorRoundIdMismatchFuzz(
-        uint80 roundId_
-    ) public {
+    function test_getTwoFeedPriceMul_revertsOnSecondRoundIdMismatchFuzz(uint80 roundId_) public {
         uint80 roundId = uint80(bound(roundId_, 0, type(uint80).max));
         vm.assume(roundId != PRICE_FEED_ROUND_ID);
 
@@ -1280,7 +1262,7 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, 10 * 10 ** priceDecimals); // Expected price is 10, adjusted with decimals
     }
 
-    function test_getTwoFeedPriceMul_revertsOnNumeratorDecimalsMaximum() public {
+    function test_getTwoFeedPriceMul_revertsOnFirstDecimalsMaximum() public {
         ohmEthPriceFeed.setDecimals(255);
 
         bytes memory err = abi.encodeWithSelector(
@@ -1300,7 +1282,7 @@ contract ChainlinkPriceFeedsTest is Test {
         chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnDenominatorDecimalsMaximum() public {
+    function test_getTwoFeedPriceMul_revertsOnSecondDecimalsMaximum() public {
         daiEthPriceFeed.setDecimals(255);
 
         bytes memory err = abi.encodeWithSelector(

@@ -10,19 +10,27 @@ import {FullMath} from "libraries/FullMath.sol";
 contract ChainlinkPriceFeeds is PriceSubmodule {
     using FullMath for uint256;
 
-    // 50 seems to be the maximum exponent that can be used without overflowing
+    /// @dev    Any token or pool with a decimal precision great than this would result in an overflow
     uint8 internal constant BASE_10_MAX_EXPONENT = 50;
 
+    /// @notice                 Parameters for a single Chainlink price feed
+    /// @param feed             Address of the Chainlink price feed
+    /// @param updateThreshold  The maximum number of seconds elapsed since the last price feed update
     struct OneFeedParams {
         AggregatorV2V3Interface feed;
         uint48 updateThreshold;
     }
 
+    /// @notice                         Parameters for a two Chainlink price feeds
+    /// @param firstFeed                First: Address of the Chainlink price feed
+    /// @param firstUpdateThreshold     First: The maximum number of seconds elapsed since the last price feed update
+    /// @param secondFeed               Second: Address of the Chainlink price feed
+    /// @param secondUpdateThreshold    Second: The maximum number of seconds elapsed since the last price feed update
     struct TwoFeedParams {
-        AggregatorV2V3Interface numeratorFeed;
-        uint48 numeratorUpdateThreshold;
-        AggregatorV2V3Interface denominatorFeed;
-        uint48 denominatorUpdateThreshold;
+        AggregatorV2V3Interface firstFeed;
+        uint48 firstUpdateThreshold;
+        AggregatorV2V3Interface secondFeed;
+        uint48 secondUpdateThreshold;
     }
 
     struct FeedRoundData {
@@ -250,41 +258,41 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
         {
-            if (address(params.numeratorFeed) == address(0))
-                revert Chainlink_ParamsFeedInvalid(0, address(params.numeratorFeed));
-            if (params.numeratorUpdateThreshold == 0)
-                revert Chainlink_ParamsUpdateThresholdInvalid(1, params.numeratorUpdateThreshold);
-            if (address(params.denominatorFeed) == address(0))
-                revert Chainlink_ParamsFeedInvalid(2, address(params.denominatorFeed));
-            if (params.denominatorUpdateThreshold == 0)
-                revert Chainlink_ParamsUpdateThresholdInvalid(3, params.denominatorUpdateThreshold);
+            if (address(params.firstFeed) == address(0))
+                revert Chainlink_ParamsFeedInvalid(0, address(params.firstFeed));
+            if (params.firstUpdateThreshold == 0)
+                revert Chainlink_ParamsUpdateThresholdInvalid(1, params.firstUpdateThreshold);
+            if (address(params.secondFeed) == address(0))
+                revert Chainlink_ParamsFeedInvalid(2, address(params.secondFeed));
+            if (params.secondUpdateThreshold == 0)
+                revert Chainlink_ParamsUpdateThresholdInvalid(3, params.secondUpdateThreshold);
         }
 
         // Ensure that no decimals would result in an underflow or overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Chainlink_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
-        if (params.numeratorFeed.decimals() > BASE_10_MAX_EXPONENT)
+        if (params.firstFeed.decimals() > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(
-                address(params.numeratorFeed),
-                params.numeratorFeed.decimals(),
+                address(params.firstFeed),
+                params.firstFeed.decimals(),
                 BASE_10_MAX_EXPONENT
             );
-        if (params.denominatorFeed.decimals() > BASE_10_MAX_EXPONENT)
+        if (params.secondFeed.decimals() > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(
-                address(params.denominatorFeed),
-                params.denominatorFeed.decimals(),
+                address(params.secondFeed),
+                params.secondFeed.decimals(),
                 BASE_10_MAX_EXPONENT
             );
 
         // Get prices from feeds
         uint256 numeratorPrice = _getFeedPrice(
-            params.numeratorFeed,
-            uint256(params.numeratorUpdateThreshold),
+            params.firstFeed,
+            uint256(params.firstUpdateThreshold),
             outputDecimals_
         );
         uint256 denominatorPrice = _getFeedPrice(
-            params.denominatorFeed,
-            uint256(params.denominatorUpdateThreshold),
+            params.secondFeed,
+            uint256(params.secondUpdateThreshold),
             outputDecimals_
         );
 
@@ -313,48 +321,47 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
         {
-            if (address(params.numeratorFeed) == address(0))
-                revert Chainlink_ParamsFeedInvalid(0, address(params.numeratorFeed));
-            if (params.numeratorUpdateThreshold == 0)
-                revert Chainlink_ParamsUpdateThresholdInvalid(1, params.numeratorUpdateThreshold);
-            if (address(params.denominatorFeed) == address(0))
-                revert Chainlink_ParamsFeedInvalid(2, address(params.denominatorFeed));
-            if (params.denominatorUpdateThreshold == 0)
-                revert Chainlink_ParamsUpdateThresholdInvalid(3, params.denominatorUpdateThreshold);
+            if (address(params.firstFeed) == address(0))
+                revert Chainlink_ParamsFeedInvalid(0, address(params.firstFeed));
+            if (params.firstUpdateThreshold == 0)
+                revert Chainlink_ParamsUpdateThresholdInvalid(1, params.firstUpdateThreshold);
+            if (address(params.secondFeed) == address(0))
+                revert Chainlink_ParamsFeedInvalid(2, address(params.secondFeed));
+            if (params.secondUpdateThreshold == 0)
+                revert Chainlink_ParamsUpdateThresholdInvalid(3, params.secondUpdateThreshold);
         }
 
         // Ensure that no decimals would result in an underflow or overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Chainlink_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
-        if (params.numeratorFeed.decimals() > BASE_10_MAX_EXPONENT)
+        if (params.firstFeed.decimals() > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(
-                address(params.numeratorFeed),
-                params.numeratorFeed.decimals(),
+                address(params.firstFeed),
+                params.firstFeed.decimals(),
                 BASE_10_MAX_EXPONENT
             );
-        if (params.denominatorFeed.decimals() > BASE_10_MAX_EXPONENT)
+        if (params.secondFeed.decimals() > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(
-                address(params.denominatorFeed),
-                params.denominatorFeed.decimals(),
+                address(params.secondFeed),
+                params.secondFeed.decimals(),
                 BASE_10_MAX_EXPONENT
             );
 
         // Get prices from feeds
-        uint256 numeratorPrice = _getFeedPrice(
-            params.numeratorFeed,
-            uint256(params.numeratorUpdateThreshold),
+        uint256 firstPrice = _getFeedPrice(
+            params.firstFeed,
+            uint256(params.firstUpdateThreshold),
             outputDecimals_
         );
-        uint256 denominatorPrice = _getFeedPrice(
-            params.denominatorFeed,
-            uint256(params.denominatorUpdateThreshold),
+        uint256 secondPrice = _getFeedPrice(
+            params.secondFeed,
+            uint256(params.secondUpdateThreshold),
             outputDecimals_
         );
 
-        // Convert to numerator * denominator price and return
-        uint256 priceResult = numeratorPrice.mulDiv(denominatorPrice, 10 ** outputDecimals_);
+        // Convert to first * second price and return
+        uint256 priceResult = firstPrice.mulDiv(secondPrice, 10 ** outputDecimals_);
 
-        // Convert to numerator * denominator price and return
         return priceResult;
     }
 }

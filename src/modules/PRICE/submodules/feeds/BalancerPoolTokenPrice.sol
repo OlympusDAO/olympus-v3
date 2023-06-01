@@ -40,14 +40,14 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @dev    Used when calculating the value of a token in a weighted pool
     uint8 internal constant WEIGHTED_POOL_POW_DECIMALS = 18;
 
-    struct BalancerBasePoolParams {
-        IBasePool pool;
-    }
-
+    /// @notice             Parameters for a Balancer weighted pool
+    /// @param pool         Address of the Balancer pool
     struct BalancerWeightedPoolParams {
         IWeightedPool pool;
     }
 
+    /// @notice             Parameters for a Balancer stable pool
+    /// @param pool         Address of the Balancer pool
     struct BalancerStablePoolParams {
         IStablePool pool;
     }
