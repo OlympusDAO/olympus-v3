@@ -155,10 +155,12 @@ contract UniswapV2PoolTokenPriceTest is Test {
     // ========= POOL TOKEN PRICE ========= //
 
     function test_getPoolTokenPrice_revertsOnParamsPoolUndefined() public {
-        expectRevert_address(
-            UniswapV2PoolTokenPrice.UniswapV2_PoolTypeInvalid.selector,
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV2PoolTokenPrice.UniswapV2_ParamsPoolInvalid.selector,
+            0,
             address(0)
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(IUniswapV2Pool(address(0)));
         uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
@@ -176,10 +178,13 @@ contract UniswapV2PoolTokenPriceTest is Test {
     function test_getPoolTokenPrice_revertsOnCoinBalanceOneZero() public {
         mockPool.setReserves(0, POOL_RESERVES_WETH);
 
-        expectRevert_address(
-            UniswapV2PoolTokenPrice.UniswapV2_PoolBalancesInvalid.selector,
-            address(mockPool)
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV2PoolTokenPrice.UniswapV2_PoolTokenBalanceInvalid.selector,
+            address(mockPool),
+            0,
+            0
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
@@ -188,10 +193,13 @@ contract UniswapV2PoolTokenPriceTest is Test {
     function test_getPoolTokenPrice_revertsOnCoinBalanceTwoZero() public {
         mockPool.setReserves(POOL_RESERVES_USDC, 0);
 
-        expectRevert_address(
-            UniswapV2PoolTokenPrice.UniswapV2_PoolBalancesInvalid.selector,
-            address(mockPool)
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV2PoolTokenPrice.UniswapV2_PoolTokenBalanceInvalid.selector,
+            address(mockPool),
+            1,
+            0
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
@@ -228,10 +236,13 @@ contract UniswapV2PoolTokenPriceTest is Test {
     function test_getPoolTokenPrice_revertsOnPriceDecimalsMaximum() public {
         // Mock a PRICE implementation with a higher number of decimals
         uint8 priceDecimals = MAX_DECIMALS + 1;
-        expectRevert_uint8(
+
+        bytes memory err = abi.encodeWithSelector(
             UniswapV2PoolTokenPrice.UniswapV2_OutputDecimalsOutOfBounds.selector,
-            priceDecimals
+            priceDecimals,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getPoolTokenPrice(address(0), priceDecimals, params);
@@ -294,10 +305,13 @@ contract UniswapV2PoolTokenPriceTest is Test {
     function test_getPoolTokenPrice_revertsOnToken0DecimalsMaximum() public {
         mockERC20Decimals(USDC, 100);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             UniswapV2PoolTokenPrice.UniswapV2_AssetDecimalsOutOfBounds.selector,
-            address(USDC)
+            address(USDC),
+            100,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
@@ -306,10 +320,13 @@ contract UniswapV2PoolTokenPriceTest is Test {
     function test_getPoolTokenPrice_revertsOnToken1DecimalsMaximum() public {
         mockERC20Decimals(WETH, 100);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             UniswapV2PoolTokenPrice.UniswapV2_AssetDecimalsOutOfBounds.selector,
-            address(WETH)
+            address(WETH),
+            100,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
@@ -318,10 +335,13 @@ contract UniswapV2PoolTokenPriceTest is Test {
     function test_getPoolTokenPrice_revertsOnToken0AddressZero() public {
         mockPool.setToken0(address(0));
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             UniswapV2PoolTokenPrice.UniswapV2_PoolTokensInvalid.selector,
-            address(mockPool)
+            address(mockPool),
+            0,
+            address(0)
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
@@ -330,10 +350,13 @@ contract UniswapV2PoolTokenPriceTest is Test {
     function test_getPoolTokenPrice_revertsOnToken1AddressZero() public {
         mockPool.setToken1(address(0));
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             UniswapV2PoolTokenPrice.UniswapV2_PoolTokensInvalid.selector,
-            address(mockPool)
+            address(mockPool),
+            1,
+            address(0)
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
@@ -342,10 +365,12 @@ contract UniswapV2PoolTokenPriceTest is Test {
     function test_getPoolTokenPrice_revertsOnPoolTokenSupplyZero() public {
         mockPool.setTotalSupply(0);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             UniswapV2PoolTokenPrice.UniswapV2_PoolSupplyInvalid.selector,
-            address(mockPool)
+            address(mockPool),
+            0
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getPoolTokenPrice(address(0), PRICE_DECIMALS, params);
@@ -392,10 +417,12 @@ contract UniswapV2PoolTokenPriceTest is Test {
     }
 
     function test_getTokenPrice_revertsOnParamsPoolUndefined() public {
-        expectRevert_address(
-            UniswapV2PoolTokenPrice.UniswapV2_PoolTypeInvalid.selector,
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV2PoolTokenPrice.UniswapV2_ParamsPoolInvalid.selector,
+            0,
             address(0)
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(IUniswapV2Pool(address(0)));
         uniswapSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, params);
@@ -407,10 +434,13 @@ contract UniswapV2PoolTokenPriceTest is Test {
         mockAssetPrice(USDC, (USDC_PRICE * 1e21) / 1e18);
 
         uint8 priceDecimals = MAX_DECIMALS + 1;
-        expectRevert_uint8(
+
+        bytes memory err = abi.encodeWithSelector(
             UniswapV2PoolTokenPrice.UniswapV2_OutputDecimalsOutOfBounds.selector,
-            priceDecimals
+            priceDecimals,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getTokenPrice(WETH, priceDecimals, params);
@@ -439,10 +469,13 @@ contract UniswapV2PoolTokenPriceTest is Test {
 
         mockERC20Decimals(USDC, 100);
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             UniswapV2PoolTokenPrice.UniswapV2_AssetDecimalsOutOfBounds.selector,
-            USDC
+            address(USDC),
+            100,
+            MAX_DECIMALS
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, params);
@@ -453,7 +486,12 @@ contract UniswapV2PoolTokenPriceTest is Test {
 
         address DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
 
-        expectRevert_address(UniswapV2PoolTokenPrice.UniswapV2_LookupTokenNotFound.selector, DAI);
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV2PoolTokenPrice.UniswapV2_LookupTokenNotFound.selector,
+            address(mockPool),
+            DAI
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getTokenPrice(DAI, PRICE_DECIMALS, params);
@@ -476,10 +514,13 @@ contract UniswapV2PoolTokenPriceTest is Test {
 
         mockPool.setToken0(address(0));
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             UniswapV2PoolTokenPrice.UniswapV2_PoolTokensInvalid.selector,
-            address(mockPool)
+            address(mockPool),
+            0,
+            address(0)
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, params);
@@ -490,10 +531,13 @@ contract UniswapV2PoolTokenPriceTest is Test {
 
         mockPool.setToken1(address(0));
 
-        expectRevert_address(
+        bytes memory err = abi.encodeWithSelector(
             UniswapV2PoolTokenPrice.UniswapV2_PoolTokensInvalid.selector,
-            address(mockPool)
+            address(mockPool),
+            1,
+            address(0)
         );
+        vm.expectRevert(err);
 
         bytes memory params = encodePoolParams(mockPool);
         uniswapSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, params);

@@ -21,26 +21,85 @@ interface IUniswapV2Pool {
     function totalSupply() external view returns (uint256);
 }
 
+/// @title      UniswapV2PoolTokenPrice
+/// @notice     Provides prices derived from a Uniswap V2 pool
 contract UniswapV2PoolTokenPrice is PriceSubmodule {
     using FullMath for uint256;
 
-    // UniswapV2 uses uint112 to store token balances. Token decimals over this number will result in truncated balances.
+    /// @dev    Any token or pool with a decimal precision great than this would result in an overflow
+    ///         UniswapV2 uses uint112 to store token balances. Token decimals over this number will result in truncated balances.
     uint8 internal constant MAX_DECIMALS = 26;
 
+    /// @dev    The number of balances expected to be in the pool
+    uint256 internal constant BALANCES_COUNT = 2;
+
+    /// @dev            UniswapV2 pool parameters
+    /// @param pool    Address of the UniswapV2 pool
     struct UniswapV2PoolParams {
         IUniswapV2Pool pool;
     }
 
     // ========== ERRORS ========== //
 
-    error UniswapV2_AssetDecimalsOutOfBounds(address asset_);
-    error UniswapV2_LookupTokenNotFound(address asset_);
-    error UniswapV2_OutputDecimalsOutOfBounds(uint8 outputDecimals_);
-    error UniswapV2_PoolBalancesInvalid(address pool_);
-    error UniswapV2_PoolSupplyInvalid(address pool_);
-    error UniswapV2_PoolTokensInvalid(address pool_);
+    /// @notice                 The decimals of the asset are out of bounds
+    /// @param asset_           The address of the asset
+    /// @param assetDecimals_   The number of decimals of the asset
+    /// @param maxDecimals_     The maximum number of decimals allowed
+    error UniswapV2_AssetDecimalsOutOfBounds(
+        address asset_,
+        uint8 assetDecimals_,
+        uint8 maxDecimals_
+    );
+
+    /// @notice                 The lookup token was not found in the pool
+    /// @param pool_            The address of the pool
+    /// @param asset_           The address of the asset
+    error UniswapV2_LookupTokenNotFound(address pool_, address asset_);
+
+    /// @notice                 The output decimals are out of bounds
+    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param maxDecimals_     The maximum number of decimals allowed
+    error UniswapV2_OutputDecimalsOutOfBounds(uint8 outputDecimals_, uint8 maxDecimals_);
+
+    /// @notice                 The token balance of a pool is invalid
+    /// @param pool_            The address of the pool
+    /// @param balanceIndex_    The index of the balance
+    /// @param balance_         The balance of the token
+    error UniswapV2_PoolTokenBalanceInvalid(address pool_, uint8 balanceIndex_, uint256 balance_);
+
+    /// @notice                         The pool balances are invalid
+    /// @param pool_                    The address of the pool
+    /// @param balanceCount_            The number of balances returned by the pool
+    /// @param expectedBalanceCount_    The number of balances expected
+    error UniswapV2_PoolBalancesInvalid(
+        address pool_,
+        uint256 balanceCount_,
+        uint256 expectedBalanceCount_
+    );
+
+    /// @notice                 The pool specified in the parameters is invalid
+    /// @param paramsIndex_     The index of the parameter
+    /// @param pool_            The address of the pool
+    error UniswapV2_ParamsPoolInvalid(uint8 paramsIndex_, address pool_);
+
+    /// @notice             The total supply returned by the pool is invalid
+    /// @dev                This currently only occurs if the total supply is 0
+    /// @param pool_        The address of the pool
+    /// @param supply_      The total supply returned by the pool
+    error UniswapV2_PoolSupplyInvalid(address pool_, uint256 supply_);
+
+    /// @notice                 The pool tokens are invalid
+    /// @param pool_            The address of the pool
+    /// @param tokenIndex_      The index of the token
+    /// @param token_           The address of the token
+    error UniswapV2_PoolTokensInvalid(address pool_, uint256 tokenIndex_, address token_);
+
+    /// @notice                 The pool is invalid
+    /// @dev                    This is triggered if the pool reverted when called,
+    ///                         and indicates that the feed address is not a UniswapV2 pool.
+    ///
+    /// @param pool_            The address of the pool
     error UniswapV2_PoolTypeInvalid(address pool_);
-    error UniswapV2_PriceNotFound(address asset_);
 
     // ========== CONSTRUCTOR ========== //
 
@@ -97,7 +156,8 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         uint8 destinationDecimals_
     ) internal view returns (uint256) {
         uint8 tokenDecimals = ERC20(token_).decimals();
-        if (tokenDecimals > MAX_DECIMALS) revert UniswapV2_AssetDecimalsOutOfBounds(token_);
+        if (tokenDecimals > MAX_DECIMALS)
+            revert UniswapV2_AssetDecimalsOutOfBounds(token_, tokenDecimals, MAX_DECIMALS);
 
         return (uint256(value_)).mulDiv(10 ** destinationDecimals_, 10 ** tokenDecimals);
     }
@@ -121,7 +181,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > MAX_DECIMALS)
-            revert UniswapV2_OutputDecimalsOutOfBounds(outputDecimals_);
+            revert UniswapV2_OutputDecimalsOutOfBounds(outputDecimals_, MAX_DECIMALS);
 
         address token0;
         address token1;
@@ -133,7 +193,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
                 // Decode params
                 UniswapV2PoolParams memory params = abi.decode(params_, (UniswapV2PoolParams));
                 if (address(params.pool) == address(0))
-                    revert UniswapV2_PoolTypeInvalid(address(params.pool));
+                    revert UniswapV2_ParamsPoolInvalid(0, address(params.pool));
 
                 pool = IUniswapV2Pool(params.pool);
             }
@@ -141,20 +201,25 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
             // Get balances
             // Call this first as it will check on whether the pool is valid, and exit
             uint112[] memory balances = _getReserves(pool);
-            if (balances.length == 0) revert UniswapV2_PoolBalancesInvalid(address(pool));
+            if (balances.length < BALANCES_COUNT)
+                revert UniswapV2_PoolBalancesInvalid(
+                    address(pool),
+                    balances.length,
+                    BALANCES_COUNT
+                );
 
             // Get tokens
             token0 = pool.token0();
             token1 = pool.token1();
-            if (token0 == address(0) || token1 == address(0))
-                revert UniswapV2_PoolTokensInvalid(address(pool));
+            if (token0 == address(0)) revert UniswapV2_PoolTokensInvalid(address(pool), 0, token0);
+            if (token1 == address(0)) revert UniswapV2_PoolTokensInvalid(address(pool), 1, token1);
 
             // Convert balances to outputDecimals_
             uint256 balance0;
             {
                 uint8 token0Decimals = ERC20(token0).decimals();
                 if (token0Decimals > MAX_DECIMALS)
-                    revert UniswapV2_AssetDecimalsOutOfBounds(token0);
+                    revert UniswapV2_AssetDecimalsOutOfBounds(token0, token0Decimals, MAX_DECIMALS);
 
                 balance0 = uint256(balances[0]).mulDiv(10 ** outputDecimals_, 10 ** token0Decimals);
             }
@@ -163,18 +228,19 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
             {
                 uint8 token1Decimals = ERC20(token1).decimals();
                 if (token1Decimals > MAX_DECIMALS)
-                    revert UniswapV2_AssetDecimalsOutOfBounds(token1);
+                    revert UniswapV2_AssetDecimalsOutOfBounds(token1, token1Decimals, MAX_DECIMALS);
 
                 balance1 = uint256(balances[1]).mulDiv(10 ** outputDecimals_, 10 ** token1Decimals);
             }
 
-            if (balance0 == 0 || balance1 == 0) revert UniswapV2_PoolBalancesInvalid(address(pool));
+            if (balance0 == 0) revert UniswapV2_PoolTokenBalanceInvalid(address(pool), 0, balance0);
+            if (balance1 == 0) revert UniswapV2_PoolTokenBalanceInvalid(address(pool), 1, balance1);
 
             // Determine balance0 * balance1 = k
             k = balance0.mulDiv(balance1, 10 ** outputDecimals_);
 
             uint256 poolSupply_ = pool.totalSupply();
-            if (poolSupply_ == 0) revert UniswapV2_PoolSupplyInvalid(address(pool));
+            if (poolSupply_ == 0) revert UniswapV2_PoolSupplyInvalid(address(pool), poolSupply_);
 
             // Shift the pool supply into outputDecimals_
             uint8 poolDecimals = pool.decimals(); // Always 18
@@ -230,14 +296,14 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > MAX_DECIMALS)
-            revert UniswapV2_OutputDecimalsOutOfBounds(outputDecimals_);
+            revert UniswapV2_OutputDecimalsOutOfBounds(outputDecimals_, MAX_DECIMALS);
 
         // Decode params
         IUniswapV2Pool pool;
         {
             UniswapV2PoolParams memory params = abi.decode(params_, (UniswapV2PoolParams));
             if (address(params.pool) == address(0))
-                revert UniswapV2_PoolTypeInvalid(address(params.pool));
+                revert UniswapV2_ParamsPoolInvalid(0, address(params.pool));
 
             pool = IUniswapV2Pool(params.pool);
         }
@@ -246,7 +312,12 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         address[] memory tokens_;
         {
             uint112[] memory balances = _getReserves(pool);
-            if (balances.length == 0) revert UniswapV2_PoolBalancesInvalid(address(pool));
+            if (balances.length < BALANCES_COUNT)
+                revert UniswapV2_PoolBalancesInvalid(
+                    address(pool),
+                    balances.length,
+                    BALANCES_COUNT
+                );
 
             balances_ = balances;
             tokens_ = _getTokens(pool);
@@ -262,7 +333,8 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
             uint256 len = tokens_.length;
             for (uint256 i; i < len; i++) {
                 // If address is zero, complain
-                if (tokens_[i] == address(0)) revert UniswapV2_PoolTokensInvalid(address(pool));
+                if (tokens_[i] == address(0))
+                    revert UniswapV2_PoolTokensInvalid(address(pool), i, tokens_[i]);
 
                 // If lookup token
                 if (lookupToken_ == tokens_[i]) {
@@ -285,14 +357,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
 
             // Lookup token not found
             if (lookupTokenIndex == type(uint256).max)
-                revert UniswapV2_LookupTokenNotFound(lookupToken_);
-
-            // No destination token found with a price
-            if (
-                destinationTokenPrice == 0 ||
-                destinationTokenIndex == type(uint256).max ||
-                destinationToken == address(0)
-            ) revert UniswapV2_PriceNotFound(address(pool));
+                revert UniswapV2_LookupTokenNotFound(address(pool), lookupToken_);
         }
 
         // Calculate the rate of the lookup token
