@@ -54,17 +54,67 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
     // ========== ERRORS ========== //
 
-    error Balancer_AssetDecimalsOutOfBounds(address asset_);
-    error Balancer_LookupTokenNotFound(address asset_);
-    error Balancer_OutputDecimalsOutOfBounds(uint8 outputDecimals_);
-    error Balancer_PoolDecimalsOutOfBounds(bytes32 poolId_);
-    error Balancer_PoolStableRateInvalid(bytes32 poolId_);
-    error Balancer_PoolSupplyInvalid(bytes32 poolId_);
+    /// @notice             The number of decimals of the asset is greater than the maximum allowed
+    /// @param asset_       The address of the asset
+    /// @param decimals_    The number of decimals of the asset
+    /// @param maxDecimals_ The maximum number of decimals allowed
+    error Balancer_AssetDecimalsOutOfBounds(address asset_, uint8 decimals_, uint8 maxDecimals_);
+
+    /// @notice             The provided token was not found in the Balancer pool
+    /// @param poolId_      The id of the Balancer pool
+    /// @param asset_       The address of the token
+    error Balancer_LookupTokenNotFound(bytes32 poolId_, address asset_);
+
+    /// @notice                 The desired number of output decimals is greater than the maximum allowed
+    /// @param outputDecimals_  The desired number of output decimals
+    /// @param maxDecimals_     The maximum number of decimals allowed
+    error Balancer_OutputDecimalsOutOfBounds(uint8 outputDecimals_, uint8 maxDecimals_);
+
+    /// @notice                 The number of decimals of the pool is greater than the maximum allowed
+    /// @param poolId_          The id of the Balancer pool
+    /// @param poolDecimals_    The number of decimals of the pool
+    /// @param maxDecimals_     The maximum number of decimals allowed
+    error Balancer_PoolDecimalsOutOfBounds(
+        bytes32 poolId_,
+        uint8 poolDecimals_,
+        uint8 maxDecimals_
+    );
+
+    /// @notice             The stable rate returned by the pool is invalid
+    /// @dev                This currently only occurs if the rate is 0
+    /// @param poolId_      The id of the Balancer pool
+    /// @param rate_        The stable rate returned by the pool
+    error Balancer_PoolStableRateInvalid(bytes32 poolId_, uint256 rate_);
+
+    /// @notice             The total supply returned by the pool is invalid
+    /// @dev                This currently only occurs if the total supply is 0
+    /// @param poolId_      The id of the Balancer pool
+    /// @param supply_      The total supply returned by the pool
+    error Balancer_PoolSupplyInvalid(bytes32 poolId_, uint256 supply_);
     error Balancer_PoolTokensInvalid(bytes32 poolId_);
-    error Balancer_PoolTokenWeightMismatch(bytes32 poolId_);
+
+    /// @notice             There is a mismatch between the number of tokens and weights
+    /// @dev                This is unlikely to occur, but is in place to be defensive
+    /// @param poolId_      The id of the Balancer pool
+    /// @param tokenCount_  The number of tokens in the Balancer pool
+    /// @param weightCount_ The number of weights in the Balancer pool
+    error Balancer_PoolTokenWeightMismatch(
+        bytes32 poolId_,
+        uint256 tokenCount_,
+        uint256 weightCount_
+    );
+
+    /// @notice             The pool is not a stable pool
+    /// @param poolId_      The id of the Balancer pool
     error Balancer_PoolTypeNotStable(bytes32 poolId_);
+
+    /// @notice             The pool is not a weighted pool
+    /// @param poolId_      The id of the Balancer pool
     error Balancer_PoolTypeNotWeighted(bytes32 poolId_);
     error Balancer_PoolWeightsInvalid(bytes32 poolId_);
+
+    /// @notice             The price of the token could not be found
+    /// @dev                This occurs if there is no definition for the token in PRICE
     error Balancer_PriceNotFound(address asset_);
 
     // ========== STATE VARIABLES ========== //
@@ -99,7 +149,8 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint8 destinationDecimals
     ) internal view returns (uint256) {
         uint8 tokenDecimals = ERC20(token).decimals();
-        if (tokenDecimals > BASE_10_MAX_EXPONENT) revert Balancer_AssetDecimalsOutOfBounds(token);
+        if (tokenDecimals > BASE_10_MAX_EXPONENT)
+            revert Balancer_AssetDecimalsOutOfBounds(token, tokenDecimals, BASE_10_MAX_EXPONENT);
 
         return value.mulDiv(10 ** destinationDecimals, 10 ** tokenDecimals);
     }
@@ -270,7 +321,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
-            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
+            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
 
         address[] memory tokens;
         uint256[] memory weights;
@@ -306,13 +357,13 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
             }
 
             uint256 poolSupply_ = pool.totalSupply(); // pool decimals
-            if (poolSupply_ == 0) revert Balancer_PoolSupplyInvalid(poolId);
+            if (poolSupply_ == 0) revert Balancer_PoolSupplyInvalid(poolId, 0);
 
             uint256 poolInvariant_ = pool.getInvariant(); // pool decimals
 
             poolDecimals = pool.decimals();
             if (poolDecimals > BASE_10_MAX_EXPONENT)
-                revert Balancer_PoolDecimalsOutOfBounds(poolId);
+                revert Balancer_PoolDecimalsOutOfBounds(poolId, poolDecimals, BASE_10_MAX_EXPONENT);
 
             // The invariant and supply have the same scale, so we can shift the result into outputDecimals_
             poolMultiplier = poolInvariant_.mulDiv(10 ** outputDecimals_, poolSupply_);
@@ -320,7 +371,8 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
         // Iterate through tokens, get prices, and determine pool value
         uint256 len = tokens.length;
-        if (weights.length != len) revert Balancer_PoolTokenWeightMismatch(poolId);
+        if (weights.length != len)
+            revert Balancer_PoolTokenWeightMismatch(poolId, len, weights.length);
 
         uint256 poolValue = _getWeightedPoolRawValue(
             tokens,
@@ -360,7 +412,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
-            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
+            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
 
         address[] memory tokens;
         uint256 poolRate; // pool decimals
@@ -389,7 +441,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
             // Get rate
             try pool.getRate() returns (uint256 rate_) {
                 if (rate_ == 0) {
-                    revert Balancer_PoolStableRateInvalid(poolId);
+                    revert Balancer_PoolStableRateInvalid(poolId, 0);
                 }
 
                 poolRate = rate_;
@@ -400,7 +452,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
             poolDecimals = pool.decimals();
             if (poolDecimals > BASE_10_MAX_EXPONENT)
-                revert Balancer_PoolDecimalsOutOfBounds(poolId);
+                revert Balancer_PoolDecimalsOutOfBounds(poolId, poolDecimals, BASE_10_MAX_EXPONENT);
         }
 
         // Get the base token price
@@ -455,7 +507,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
-            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
+            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
 
         // Decode params
         IWeightedPool pool;
@@ -486,7 +538,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
             {
                 uint8 poolDecimals = pool.decimals();
                 if (poolDecimals > BASE_10_MAX_EXPONENT)
-                    revert Balancer_PoolDecimalsOutOfBounds(poolId);
+                    revert Balancer_PoolDecimalsOutOfBounds(
+                        poolId,
+                        poolDecimals,
+                        BASE_10_MAX_EXPONENT
+                    );
             }
 
             // Check that the pool is not mis-configured
@@ -541,7 +597,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
                 // Lookup token not found
                 if (lookupTokenIndex == type(uint256).max)
-                    revert Balancer_LookupTokenNotFound(lookupToken_);
+                    revert Balancer_LookupTokenNotFound(poolId, lookupToken_);
 
                 // No destination token found with a price
                 if (
@@ -605,7 +661,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ) external view returns (uint256) {
         // Prevent overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
-            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_);
+            revert Balancer_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
 
         // Decode params
         IStablePool pool;
@@ -670,7 +726,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
             // Lookup token not found
             if (lookupTokenIndex == type(uint256).max)
-                revert Balancer_LookupTokenNotFound(lookupToken_);
+                revert Balancer_LookupTokenNotFound(poolId, lookupToken_);
 
             // No destination token found with a price
             if (
@@ -682,7 +738,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
         uint256 lookupTokenPrice;
         {
-            (, uint256[] memory balances_, ) = balVault.getPoolTokens(pool.getPoolId());
+            (, uint256[] memory balances_, ) = balVault.getPoolTokens(poolId);
 
             try pool.getLastInvariant() returns (uint256 invariant, uint256 ampFactor) {
                 // Calculate the quantity of lookupTokens returned by swapping 1 destinationToken
