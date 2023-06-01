@@ -29,11 +29,16 @@ interface IStablePool is IBasePool {
     function getRate() external view returns (uint256);
 }
 
+/// @title      BalancerPoolTokenPrice
+/// @notice     Provides prices related to Balancer pools
 contract BalancerPoolTokenPrice is PriceSubmodule {
     using FullMath for uint256;
 
-    // 50 seems to be the maximum exponent that can be used without overflowing
+    /// @dev    Any token or pool with a decimal precision great than this would result in an overflow
     uint8 internal constant BASE_10_MAX_EXPONENT = 50;
+
+    /// @dev    Used when calculating the value of a token in a weighted pool
+    uint8 internal constant WEIGHTED_POOL_POW_DECIMALS = 18;
 
     struct BalancerBasePoolParams {
         IBasePool pool;
@@ -151,18 +156,28 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         return tokenBalance.mulDiv(10 ** outputDecimals_, tokenWeight);
     }
 
+    /// @notice                     Calculates the value of a token in a Balancer weighted pool
+    ///
+    /// @dev                        This function will revert if:
+    ///                             - The provided token is address(0)
+    ///                             - The provided weight is 0
+    ///
+    /// @param token_               Address of the token
+    /// @param weight_              Weight of the token in the Balancer pool
+    /// @param poolDecimals_        The number of decimals of the Balancer pool
+    /// @param outputDecimals_      The desired number of decimals
+    /// @return uint256             Value in the scale of outputDecimals_
     function _getTokenValueInWeightedPool(
         address token_,
         uint256 weight_,
         uint8 poolDecimals_,
         uint8 outputDecimals_,
-        uint8 powDecimals_,
         bytes32 poolId_
     ) internal view returns (uint256) {
         if (token_ == address(0)) revert Balancer_PoolTokensInvalid(poolId_);
         if (weight_ == 0) revert Balancer_PoolWeightsInvalid(poolId_);
 
-        uint256 price; // powDecimals_
+        uint256 price; // Precision: WEIGHTED_POOL_POW_DECIMALS
         {
             /**
              * PRICE will revert if there is an issue resolving the price, or if it is 0.
@@ -172,42 +187,54 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
              */
             (uint256 price_, ) = _PRICE().getPrice(token_, PRICEv2.Variant.CURRENT); // outputDecimals_
 
-            price = price_.mulDiv(10 ** powDecimals_, 10 ** outputDecimals_);
+            price = price_.mulDiv(10 ** WEIGHTED_POOL_POW_DECIMALS, 10 ** outputDecimals_);
         }
 
-        // powDecimals_
-        uint256 weight = weight_.mulDiv(10 ** powDecimals_, 10 ** poolDecimals_);
+        // Precision: WEIGHTED_POOL_POW_DECIMALS
+        uint256 weight = weight_.mulDiv(10 ** WEIGHTED_POOL_POW_DECIMALS, 10 ** poolDecimals_);
 
-        // All inputs to pow need to be in the scale of 1e18, so adjust for that
-        return LogExpMath.pow(price.mulDiv(10 ** powDecimals_, weight), weight); // pow decimals
+        // All inputs to pow need to be in the scale of WEIGHTED_POOL_POW_DECIMALS, so adjust for that
+        uint256 value = LogExpMath.pow(
+            price.mulDiv(10 ** WEIGHTED_POOL_POW_DECIMALS, weight),
+            weight
+        ); // Precision: WEIGHTED_POOL_POW_DECIMALS
+
+        // Adjust for the output decimals
+        return value.mulDiv(10 ** outputDecimals_, 10 ** WEIGHTED_POOL_POW_DECIMALS);
     }
 
+    /// @notice                     Calculates the value of a Balancer weighted pool
+    ///
+    /// @dev                        This function calculates the value of each token and returns the sum.
+    ///
+    /// @param tokens_              Array of tokens in the Balancer pool
+    /// @param weights_             Array of weights of the tokens in the Balancer pool
+    /// @param poolDecimals_        The number of decimals of the Balancer pool
+    /// @param outputDecimals_      The desired number of decimals
+    /// @return uint256             Value in the scale of outputDecimals_
     function _getWeightedPoolRawValue(
         address[] memory tokens_,
         uint256[] memory weights_,
         uint8 poolDecimals_,
         uint8 outputDecimals_,
-        uint8 powDecimals_,
         bytes32 poolId_
     ) internal view returns (uint256) {
         uint256 len = tokens_.length;
 
-        uint256 poolValue = 0; // pow decimals
-        // PRICEv2 PRICE = _PRICE();
+        uint256 poolValue = 0; // Precision: outputDecimals_
         for (uint256 i; i < len; ) {
             uint256 currentValue = _getTokenValueInWeightedPool(
                 tokens_[i],
                 weights_[i],
                 poolDecimals_,
                 outputDecimals_,
-                powDecimals_,
                 poolId_
             );
 
             if (poolValue == 0) {
                 poolValue = currentValue;
             } else {
-                poolValue = poolValue.mulDiv(currentValue, 10 ** powDecimals_);
+                poolValue = poolValue.mulDiv(currentValue, 10 ** outputDecimals_);
             }
 
             unchecked {
@@ -295,21 +322,18 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint256 len = tokens.length;
         if (weights.length != len) revert Balancer_PoolTokenWeightMismatch(poolId);
 
-        // Scale: powDecimals
-        uint8 powDecimals = 18;
         uint256 poolValue = _getWeightedPoolRawValue(
             tokens,
             weights,
             poolDecimals,
             outputDecimals_,
-            powDecimals,
             poolId
         );
         // No coins or balances
         if (poolValue == 0) revert Balancer_PoolTokensInvalid(poolId);
 
         // Calculate price of pool token in terms of outputDecimals_
-        uint256 poolTokenPrice = poolMultiplier.mulDiv(poolValue, 10 ** powDecimals);
+        uint256 poolTokenPrice = poolMultiplier.mulDiv(poolValue, 10 ** outputDecimals_);
 
         return poolTokenPrice;
     }

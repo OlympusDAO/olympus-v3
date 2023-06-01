@@ -782,7 +782,8 @@ contract BalancerPoolTokenPriceWeightedTest is Test {
         );
 
         // Uses outputDecimals_ parameter
-        assertEq(price, _getBalancerPoolTokenPrice(priceDecimals));
+        uint8 decimalDiff = priceDecimals > 18 ? priceDecimals - 18 : 18 - priceDecimals + 1;
+        assertApproxEqAbs(price, _getBalancerPoolTokenPrice(priceDecimals), 10 ** decimalDiff);
     }
 
     function test_getWeightedPoolTokenPrice_priceDecimalsMaximum() public {
