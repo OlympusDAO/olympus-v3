@@ -113,6 +113,11 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         return toSubKeycode("PRICE.CHAINLINK");
     }
 
+    function VERSION() public pure override returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+    }
+
     // ========== PRICE FEED FUNCTIONS ========== //
 
     /// @notice                         Validates the result of the price feed

@@ -91,6 +91,11 @@ contract CurvePoolTokenPrice is PriceSubmodule {
         return toSubKeycode("PRICE.CRV");
     }
 
+    function VERSION() public pure override returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+    }
+
     // ========== HELPER FUNCTIONS ========== //
 
     /// @notice     Activates a reentrancy lock on the Curve pool contract

@@ -178,6 +178,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         return toSubKeycode("PRICE.BPT");
     }
 
+    function VERSION() public pure override returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+    }
+
     // ========== HELPER FUNCTIONS ========== //
 
     /// @notice                     Converts the given value from the ERC20 token's decimals to the destination decimals

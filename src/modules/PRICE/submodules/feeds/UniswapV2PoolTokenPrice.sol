@@ -111,6 +111,11 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         return toSubKeycode("PRICE.UNIV2");
     }
 
+    function VERSION() public pure override returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+    }
+
     // ========== HELPER FUNCTIONS ========== //
 
     function _getTokens(IUniswapV2Pool pool) internal view returns (address[] memory) {
