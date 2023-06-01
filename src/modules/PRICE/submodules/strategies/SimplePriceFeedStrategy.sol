@@ -4,14 +4,23 @@ pragma solidity 0.8.15;
 import "modules/PRICE/PRICE.v2.sol";
 import {QuickSort} from "libraries/QuickSort.sol";
 
+/// @title      SimplePriceFeedStrategy
+/// @notice     The functions in this contract provide PRICEv2 strategies that can be used to handle
+///             the results from multiple price feeds
 contract SimplePriceFeedStrategy is PriceSubmodule {
-    // Length of an encoded uint256 value
+    /// @notice     This is the expected length of bytes for the parameters to the deviation strategies
     uint8 internal constant DEVIATION_PARAMS_LENGTH = 32;
 
     // ========== ERRORS ========== //
 
-    error SimpleStrategy_PriceCountInvalid();
-    error SimpleStrategy_ParamsRequired();
+    /// @notice                 Indicates that the number of prices provided to the strategy is invalid
+    /// @param priceCount_      The number of prices provided to the strategy
+    /// @param minPriceCount_   The minimum number of prices required by the strategy
+    error SimpleStrategy_PriceCountInvalid(uint256 priceCount_, uint256 minPriceCount_);
+
+    /// @notice                 Indicates that the parameters provided to the strategy are invalid
+    /// @param params_          The parameters provided to the strategy
+    error SimpleStrategy_ParamsInvalid(bytes params_);
 
     // ========== CONSTRUCTOR ========== //
 
@@ -25,6 +34,9 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
     // ========== HELPER FUNCTIONS ========== //
 
+    /// @notice        Returns a new array with only the non-zero elements of the input array
+    /// @param array_  Array of uint256 values
+    /// @return        Array of non-zero uint256 values
     function _getNonZeroArray(uint256[] memory array_) internal pure returns (uint256[] memory) {
         // Determine the number of non-zero array elements
         uint256 nonZeroCount = 0;
@@ -108,10 +120,11 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         bytes memory params_
     ) public pure returns (uint256) {
         // Can't work with 0 length
-        if (prices_.length == 0) revert SimpleStrategy_PriceCountInvalid();
+        uint256 pricesLen = prices_.length;
+        if (pricesLen == 0) revert SimpleStrategy_PriceCountInvalid(pricesLen, 1);
 
         // Iterate through the array and return the first non-zero price
-        for (uint256 i = 0; i < prices_.length; i++) {
+        for (uint256 i = 0; i < pricesLen; i++) {
             if (prices_[i] != 0) return prices_[i];
         }
 
@@ -144,7 +157,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         bytes memory params_
     ) public pure returns (uint256) {
         // Can't work with  < 2 length
-        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
+        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid(prices_.length, 2);
 
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
@@ -158,9 +171,9 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
         uint256 averagePrice = _getAveragePrice(sortedPrices);
 
-        if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsRequired();
+        if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsInvalid(params_);
         uint256 deviationBps = abi.decode(params_, (uint256));
-        if (deviationBps == 0) revert SimpleStrategy_ParamsRequired();
+        if (deviationBps == 0) revert SimpleStrategy_ParamsInvalid(params_);
 
         // Check the deviation of the minimum from the average
         uint256 minPrice = sortedPrices[0];
@@ -199,7 +212,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         bytes memory params_
     ) public pure returns (uint256) {
         // Misconfiguration
-        if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid();
+        if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid(prices_.length, 3);
 
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
@@ -216,9 +229,9 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256 averagePrice = _getAveragePrice(sortedPrices);
         uint256 medianPrice = _getMedianPrice(sortedPrices);
 
-        if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsRequired();
+        if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsInvalid(params_);
         uint256 deviationBps = abi.decode(params_, (uint256));
-        if (deviationBps == 0) revert SimpleStrategy_ParamsRequired();
+        if (deviationBps == 0) revert SimpleStrategy_ParamsInvalid(params_);
 
         // Check the deviation of the minimum from the average
         uint256 minPrice = sortedPrices[0];
@@ -253,7 +266,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         bytes memory params_
     ) public pure returns (uint256) {
         // Handle misconfiguration
-        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid();
+        if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid(prices_.length, 2);
 
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
@@ -283,7 +296,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         bytes memory params_
     ) public pure returns (uint256) {
         // Misconfiguration
-        if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid();
+        if (prices_.length < 3) revert SimpleStrategy_PriceCountInvalid(prices_.length, 3);
 
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 

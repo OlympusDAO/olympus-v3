@@ -37,8 +37,20 @@ contract SimplePriceFeedStrategyTest is Test {
         return abi.encode(deviationBps);
     }
 
-    function expectRevert(bytes4 selector_) internal {
-        bytes memory err = abi.encodeWithSelector(selector_);
+    function expectRevertParams(bytes memory params_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            SimplePriceFeedStrategy.SimpleStrategy_ParamsInvalid.selector,
+            params_
+        );
+        vm.expectRevert(err);
+    }
+
+    function expectRevertPriceCount(uint256 pricesLen_, uint256 minPricesLen_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector,
+            pricesLen_,
+            minPricesLen_
+        );
         vm.expectRevert(err);
     }
 
@@ -47,7 +59,7 @@ contract SimplePriceFeedStrategyTest is Test {
     function test_getFirstNonZeroPrice_revertsOnArrayLengthZero() public {
         uint256[] memory prices = new uint256[](0);
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
+        expectRevertPriceCount(0, 1);
 
         strategy.getFirstNonZeroPrice(prices, "");
     }
@@ -131,7 +143,7 @@ contract SimplePriceFeedStrategyTest is Test {
         uint8 len = uint8(bound(len_, 0, 1));
         uint256[] memory prices = new uint256[](len);
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
+        expectRevertPriceCount(len, 2);
 
         strategy.getAveragePrice(prices, "");
     }
@@ -220,7 +232,7 @@ contract SimplePriceFeedStrategyTest is Test {
         uint8 len = uint8(bound(len_, 0, 2));
         uint256[] memory prices = new uint256[](len);
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
+        expectRevertPriceCount(len, 3);
         strategy.getMedianPrice(prices, "");
     }
 
@@ -344,7 +356,7 @@ contract SimplePriceFeedStrategyTest is Test {
     function test_getAveragePriceIfDeviation_revertsOnArrayLengthZero() public {
         uint256[] memory prices = new uint256[](0);
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
+        expectRevertPriceCount(0, 2);
 
         strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
     }
@@ -353,7 +365,7 @@ contract SimplePriceFeedStrategyTest is Test {
         uint256[] memory prices = new uint256[](1);
         prices[0] = 1 * 1e18;
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
+        expectRevertPriceCount(1, 2);
 
         strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(100));
     }
@@ -452,7 +464,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
+        expectRevertParams("");
 
         strategy.getAveragePriceIfDeviation(prices, "");
     }
@@ -462,7 +474,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
+        expectRevertParams(encodeDeviationParams(0));
 
         strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(0));
     }
@@ -472,7 +484,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
+        expectRevertParams(abi.encode(""));
 
         strategy.getAveragePriceIfDeviation(prices, abi.encode(""));
     }
@@ -492,7 +504,7 @@ contract SimplePriceFeedStrategyTest is Test {
         uint8 len = uint8(bound(len_, 0, 2));
         uint256[] memory prices = new uint256[](len);
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_PriceCountInvalid.selector);
+        expectRevertPriceCount(len, 3);
 
         strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(100));
     }
@@ -615,7 +627,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[1] = 1.001 * 1e18;
         prices[2] = 1.002 * 1e18;
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
+        expectRevertParams("");
 
         strategy.getMedianPriceIfDeviation(prices, "");
     }
@@ -626,7 +638,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[1] = 1.001 * 1e18;
         prices[2] = 1.002 * 1e18;
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
+        expectRevertParams(abi.encode(""));
 
         strategy.getMedianPriceIfDeviation(prices, abi.encode(""));
     }
@@ -637,7 +649,7 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[1] = 1.001 * 1e18;
         prices[2] = 1.002 * 1e18;
 
-        expectRevert(SimplePriceFeedStrategy.SimpleStrategy_ParamsRequired.selector);
+        expectRevertParams(encodeDeviationParams(0));
 
         strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(0));
     }
