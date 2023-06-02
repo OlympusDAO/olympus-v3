@@ -26,14 +26,14 @@ interface IUniswapV2Pool {
 contract UniswapV2PoolTokenPrice is PriceSubmodule {
     using FullMath for uint256;
 
-    /// @dev    Any token or pool with a decimal scale greater than this would result in an overflow
-    ///         UniswapV2 uses uint112 to store token balances. Token decimals over this number will result in truncated balances.
+    /// @notice     Any token or pool with a decimal scale greater than this would result in an overflow
+    ///             UniswapV2 uses uint112 to store token balances. Token decimals over this number will result in truncated balances.
     uint8 internal constant MAX_DECIMALS = 26;
 
-    /// @dev    The number of balances expected to be in the pool
+    /// @notice     The number of balances expected to be in the pool
     uint256 internal constant BALANCES_COUNT = 2;
 
-    /// @dev            UniswapV2 pool parameters
+    /// @notice        UniswapV2 pool parameters
     /// @param pool    Address of the UniswapV2 pool
     struct UniswapV2PoolParams {
         IUniswapV2Pool pool;

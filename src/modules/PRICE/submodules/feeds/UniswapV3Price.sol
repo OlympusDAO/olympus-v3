@@ -15,10 +15,10 @@ contract UniswapV3Price is PriceSubmodule {
 
     // ========== CONSTANTS ========== //
 
-    /// @dev        The maximum number of decimals allowed for a token in order to prevent overflows
+    /// @notice     The maximum number of decimals allowed for a token in order to prevent overflows
     uint8 internal constant BASE_10_MAX_EXPONENT = 50;
 
-    /// @dev        The minimum length of the TWAP observation window in seconds
+    /// @notice     The minimum length of the TWAP observation window in seconds
     ///             From testing, a value under 19 seconds is rejected by `OracleLibrary.getQuoteAtTick()`
     uint32 internal constant TWAP_MINIMUM_OBSERVATION_SECONDS = 19;
 
@@ -30,9 +30,9 @@ contract UniswapV3Price is PriceSubmodule {
         uint32 observationWindowSeconds;
     }
 
-    /// @dev        The minimum tick that can be used in a pool, as defined by UniswapV3 libraries
+    /// @notice     The minimum tick that can be used in a pool, as defined by UniswapV3 libraries
     int24 internal constant MIN_TICK = -887272;
-    /// @dev        The maximum tick that can be used in a pool, as defined by UniswapV3 libraries
+    /// @notice     The maximum tick that can be used in a pool, as defined by UniswapV3 libraries
     int24 internal constant MAX_TICK = -MIN_TICK;
 
     // ========== ERRORS ========== //

@@ -34,10 +34,10 @@ interface IStablePool is IBasePool {
 contract BalancerPoolTokenPrice is PriceSubmodule {
     using FullMath for uint256;
 
-    /// @dev    Any token or pool with a decimal scale greater than this would result in an overflow
+    /// @notice     Any token or pool with a decimal scale greater than this would result in an overflow
     uint8 internal constant BASE_10_MAX_EXPONENT = 50;
 
-    /// @dev    Used when calculating the value of a token in a weighted pool
+    /// @notice     Used when calculating the value of a token in a weighted pool
     uint8 internal constant WEIGHTED_POOL_POW_DECIMALS = 18;
 
     /// @notice             Parameters for a Balancer weighted pool

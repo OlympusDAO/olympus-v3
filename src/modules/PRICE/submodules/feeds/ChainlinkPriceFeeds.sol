@@ -10,7 +10,7 @@ import {FullMath} from "libraries/FullMath.sol";
 contract ChainlinkPriceFeeds is PriceSubmodule {
     using FullMath for uint256;
 
-    /// @dev    Any token or pool with a decimal scale greater than this would result in an overflow
+    /// @notice     Any token or pool with a decimal scale greater than this would result in an overflow
     uint8 internal constant BASE_10_MAX_EXPONENT = 50;
 
     /// @notice                 Parameters for a single Chainlink price feed
