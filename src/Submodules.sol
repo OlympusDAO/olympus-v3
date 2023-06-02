@@ -28,7 +28,7 @@ function fromSubKeycode(SubKeycode key_) pure returns (bytes20) {
 // solhint-disable-next-line func-visibility
 function ensureValidSubKeycode(SubKeycode subKeycode_, Keycode parentKeycode_) pure {
     // The SubKeycode must have the parent Keycode as its first 5 bytes
-    // Additionally, the SubKeycode must only contain A-Z, _, or space characters
+    // Additionally, the SubKeycode must only contain A-Z, _, or blank characters
     bytes5 unwrappedParent = Keycode.unwrap(parentKeycode_);
     bytes20 unwrappedSub = SubKeycode.unwrap(subKeycode_);
     for (uint256 i; i < 20; ) {
@@ -91,9 +91,8 @@ abstract contract ModuleWithSubmodules is Module {
         if (address(getSubmoduleForKeycode[subKeycode]) != address(0))
             revert Module_SubmoduleAlreadyInstalled(subKeycode);
 
-        // Store submodule in kernel
+        // Store submodule in module
         getSubmoduleForKeycode[subKeycode] = newSubmodule_;
-        // getKeycodeForSubmodule[newSubmodule_] = subKeycode;
         submodules.push(subKeycode);
 
         // Initialize the submodule
@@ -132,14 +131,18 @@ abstract contract ModuleWithSubmodules is Module {
         return returnData;
     }
 
+    function getSubmodules() external view returns (SubKeycode[] memory) {
+        return submodules;
+    }
+
     function _submoduleIsInstalled(SubKeycode subKeycode_) internal view returns (bool) {
         Submodule submodule = getSubmoduleForKeycode[subKeycode_];
-        return submodule != Submodule(address(0));
+        return address(submodule) != address(0);
     }
 
     function _getSubmoduleIfInstalled(SubKeycode subKeycode_) internal view returns (Submodule) {
         Submodule submodule = getSubmoduleForKeycode[subKeycode_];
-        if (submodule == Submodule(address(0))) revert Module_SubmoduleNotInstalled(subKeycode_);
+        if (address(submodule) == address(0)) revert Module_SubmoduleNotInstalled(subKeycode_);
         return submodule;
     }
 }
