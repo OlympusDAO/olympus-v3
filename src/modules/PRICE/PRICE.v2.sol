@@ -26,6 +26,21 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param asset_   The address of the asset
     error PRICE_AssetAlreadyApproved(address asset_);
 
+    /// @notice                     A strategy must be defined for the asset
+    /// @dev                        This will be triggered if strategy specified is insufficient for
+    ///                             the configured price feeds and moving average.
+    ///
+    /// @param asset_               The address of the asset
+    /// @param strategy_            The provided strategy, as an encoded `Component` struct
+    /// @param feedCount_           The number of price feeds configured for the asset
+    /// @param useMovingAverage_    Whether the moving average should be used as an argument to the strategy
+    error PRICE_ParamsStrategyInsufficient(
+        address asset_,
+        bytes strategy_,
+        uint256 feedCount_,
+        bool useMovingAverage_
+    );
+
     /// @notice         The variant provided in the parameters is invalid
     /// @dev            See the `Variant` enum for valid variants
     /// @param variant_ The variant that was provided

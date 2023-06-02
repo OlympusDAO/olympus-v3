@@ -306,7 +306,13 @@ contract OlympusPricev2 is PRICEv2 {
         if (
             (feeds_.length + (useMovingAverage_ ? 1 : 0)) > 1 &&
             fromSubKeycode(strategy_.target) == bytes20(0)
-        ) revert PRICE_InvalidParams(6, abi.encode(strategy_));
+        )
+            revert PRICE_ParamsStrategyInsufficient(
+                asset_,
+                abi.encode(strategy_),
+                feeds_.length,
+                useMovingAverage_
+            );
 
         // Update asset strategy data
         _updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
@@ -397,7 +403,13 @@ contract OlympusPricev2 is PRICEv2 {
         if (
             (feeds.length + (useMovingAverage_ ? 1 : 0)) > 1 &&
             fromSubKeycode(strategy_.target) == bytes20(0)
-        ) revert PRICE_InvalidParams(1, abi.encode(strategy_));
+        )
+            revert PRICE_ParamsStrategyInsufficient(
+                asset_,
+                abi.encode(strategy_),
+                feeds.length,
+                useMovingAverage_
+            );
 
         _updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
 

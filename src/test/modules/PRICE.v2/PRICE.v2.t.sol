@@ -2047,9 +2047,11 @@ contract PriceV2Test is Test {
 
         // Reverts as there is no strategy, but no MA + 2 price feeds > 1 requires a strategy
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            6,
-            abi.encode(PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)))
+            "PRICE_ParamsStrategyInsufficient(address,bytes,uint256,bool)",
+            address(weth),
+            abi.encode(PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0))),
+            2,
+            false
         );
         vm.expectRevert(err);
 
@@ -2119,9 +2121,11 @@ contract PriceV2Test is Test {
 
         // Reverts as there is no strategy, but MA + single price feed > 1 requires a strategy
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            6,
-            abi.encode(PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)))
+            "PRICE_ParamsStrategyInsufficient(address,bytes,uint256,bool)",
+            address(weth),
+            abi.encode(PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0))),
+            1,
+            true
         );
         vm.expectRevert(err);
 
@@ -2782,9 +2786,11 @@ contract PriceV2Test is Test {
         // Update the asset's strategy
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            1,
-            abi.encode(strategyEmpty)
+            "PRICE_ParamsStrategyInsufficient(address,bytes,uint256,bool)",
+            address(reserve),
+            abi.encode(strategyEmpty),
+            2,
+            false
         );
         vm.expectRevert(err);
 
@@ -2806,9 +2812,11 @@ contract PriceV2Test is Test {
         // Update the asset's strategy
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
+            "PRICE_ParamsStrategyInsufficient(address,bytes,uint256,bool)",
+            address(onema),
+            abi.encode(strategyEmpty),
             1,
-            abi.encode(strategyEmpty)
+            true
         );
         vm.expectRevert(err);
 
