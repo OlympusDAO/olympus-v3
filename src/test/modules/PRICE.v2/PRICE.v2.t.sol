@@ -2828,7 +2828,7 @@ contract PriceV2Test is Test {
         // Update the asset's strategy
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_PriceCallFailed(address)",
+            "PRICE_StrategyFailed(address)",
             address(reserve)
         );
         vm.expectRevert(err);

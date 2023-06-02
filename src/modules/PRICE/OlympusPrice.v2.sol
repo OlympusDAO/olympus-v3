@@ -5,6 +5,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import "src/modules/PRICE/PRICE.v2.sol";
 
+/// @title      OlympusPriceV2
+/// @notice     Provides current and historical prices for assets
 contract OlympusPricev2 is PRICEv2 {
     // DONE
     // [X] Update functions for asset price feeds, strategies, etc.
@@ -14,12 +16,18 @@ contract OlympusPricev2 is PRICEv2 {
     // [X] Update existing view functions to use new data structures
 
     // ========== CONSTRUCTOR ========== //
+
+    /// @notice                         Constructor to create OlympusPrice V2
+    /// @param kernel_                  Kernel address
+    /// @param decimals_                Decimals that all prices will be returned with
+    /// @param observationFrequency_    Frequency at which prices are stored for moving average
     constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) Module(kernel_) {
         decimals = decimals_;
         observationFrequency = observationFrequency_;
     }
 
     // ========== KERNEL FUNCTIONS ========== //
+
     /// @inheritdoc Module
     function KEYCODE() public pure override returns (Keycode) {
         return toKeycode("PRICE");
@@ -38,6 +46,7 @@ contract OlympusPricev2 is PRICEv2 {
     ////////////////////////////////////////////////////////////////
 
     // ========== ASSET INFORMATION ========== //
+
     /// @inheritdoc PRICEv2
     function getAssets() external view override returns (address[] memory) {
         return assets;
@@ -78,7 +87,7 @@ contract OlympusPricev2 is PRICEv2 {
     function getPrice(
         address asset_,
         Variant variant_
-    ) public view override returns (uint256, uint48) {
+    ) public view override returns (uint256 _price, uint48 _timestamp) {
         // Check if asset is approved
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
 
@@ -135,7 +144,7 @@ contract OlympusPricev2 is PRICEv2 {
                 .staticcall(abi.encodeWithSelector(strategy.selector, prices, strategy.params));
 
             // Ensure call was successful
-            if (!success) revert PRICE_PriceCallFailed(asset_);
+            if (!success) revert PRICE_StrategyFailed(asset_);
 
             // Decode asset price
             uint256 price = abi.decode(data, (uint256));
