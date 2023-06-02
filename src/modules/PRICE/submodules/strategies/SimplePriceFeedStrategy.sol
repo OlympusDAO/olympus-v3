@@ -67,7 +67,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///                 If non-zero values should not be included in the average, filter them prior.
     ///
     /// @param prices_  Array of prices
-    /// @return uint256 The average price or 0
+    /// @return         The average price or 0
     function _getAveragePrice(uint256[] memory prices_) internal pure returns (uint256) {
         uint256 pricesLen = prices_.length;
 
@@ -87,7 +87,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///                 If non-zero values should not be included in the median, filter them prior.
     ///
     /// @param prices_  Array of prices
-    /// @return uint256 The median price or 0
+    /// @return         The median price or 0
     function _getMedianPrice(uint256[] memory prices_) internal pure returns (uint256) {
         uint256 pricesLen = prices_.length;
 
@@ -119,7 +119,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///
     /// @param prices_  Array of prices
     /// @param params_  Unused
-    /// @return uint256 The resolved price
+    /// @return         The resolved price
     function getFirstNonZeroPrice(
         uint256[] memory prices_,
         bytes memory params_
@@ -138,7 +138,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     }
 
     /// @notice         This strategy returns the average of the non-zero prices in the array if
-    ///                 the deviation from the average is greater than the deviationBps (specified in params_).
+    ///                 the deviation from the average is greater than the deviationBps (specified in `params_`).
     ///
     /// @dev            This strategy is useful to smooth out price volatility.
     ///
@@ -151,12 +151,12 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///                 If there are not enough non-zero array elements to calculate an average (< 2), the first non-zero price in the array (or 0) is returned.
     ///
     ///                 Will revert if:
-    ///                 - The number of elements in the prices_ array is less than 2, since it would represent a mis-configuration.
+    ///                 - The number of elements in the `prices_` array is less than 2, since it would represent a mis-configuration.
     ///                 - The deviationBps is 0.
     ///
     /// @param prices_  Array of prices
-    /// @param params_  DeviationParams struct encoded as bytes
-    /// @return uint256 The resolved price
+    /// @param params_  uint256 encoded as bytes
+    /// @return         The resolved price
     function getAveragePriceIfDeviation(
         uint256[] memory prices_,
         bytes memory params_
@@ -193,7 +193,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     }
 
     /// @notice         This strategy returns the median of the non-zero prices in the array if
-    ///                 the deviation from the average is greater than the deviationBps (specified in params_).
+    ///                 the deviation from the average is greater than the deviationBps (specified in `params_`).
     ///
     /// @dev            This strategy is useful to smooth out price volatility.
     ///
@@ -206,12 +206,12 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///                 If there are not enough non-zero array elements to calculate a median (< 3), the first non-zero price in the array (or 0) is returned.
     ///
     ///                 Will revert if:
-    ///                 - The number of elements in the prices_ array is less than 3, since it would represent a mis-configuration.
+    ///                 - The number of elements in the `prices_` array is less than 3, since it would represent a mis-configuration.
     ///                 - The deviationBps is 0.
     ///
     /// @param prices_  Array of prices
-    /// @param params_  DeviationParams struct encoded as bytes
-    /// @return uint256 The resolved price
+    /// @param params_  uint256 encoded as bytes
+    /// @return         The resolved price
     function getMedianPriceIfDeviation(
         uint256[] memory prices_,
         bytes memory params_
@@ -256,7 +256,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     //                  where all price feeds are down is handled gracefully.
     ///
     ///                 Will revert if:
-    ///                 - The number of elements in the prices_ array is less than 2 (which would represent a mis-configuration)
+    ///                 - The number of elements in the `prices_` array is less than 2 (which would represent a mis-configuration)
     ///
     ///                 Non-zero prices in the array are ignored, to allow for
     ///                 handling of price lookup sources that return errors.
@@ -265,7 +265,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///
     /// @param prices_  Array of prices
     /// @param params_  Unused
-    /// @return uint256 The resolved price
+    /// @return         The resolved price
     function getAveragePrice(
         uint256[] memory prices_,
         bytes memory params_
@@ -291,11 +291,11 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///                 If there are not enough non-zero array elements to calculate a median (< 3), the first non-zero price is returned.
     ///
     ///                 Will revert if:
-    ///                 - The number of elements in the prices_ array is less than 3, since it would represent a mis-configuration.
+    ///                 - The number of elements in the `prices_` array is less than 3, since it would represent a mis-configuration.
     ///
     /// @param prices_  Array of prices
     /// @param params_  Unused
-    /// @return uint256 The resolved price
+    /// @return         The resolved price
     function getMedianPrice(
         uint256[] memory prices_,
         bytes memory params_

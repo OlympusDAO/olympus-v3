@@ -10,7 +10,7 @@ import {FullMath} from "libraries/FullMath.sol";
 contract ChainlinkPriceFeeds is PriceSubmodule {
     using FullMath for uint256;
 
-    /// @dev    Any token or pool with a decimal precision great than this would result in an overflow
+    /// @dev    Any token or pool with a decimal scale greater than this would result in an overflow
     uint8 internal constant BASE_10_MAX_EXPONENT = 50;
 
     /// @notice                 Parameters for a single Chainlink price feed
@@ -155,12 +155,12 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     }
 
     /// @notice                         Retrieves the latest price returned by the specified Chainlink price feed.
-    /// @dev                            The result is validated using _validatePriceFeedResult, and will revert if invalid
+    /// @dev                            The result is validated using `_validatePriceFeedResult`, and will revert if invalid
     ///
     /// @param feed_                    Chainlink price feed
     /// @param updateThreshold_         The maximum number of seconds elapsed since the last price feed update
     /// @param outputDecimals_          The number of decimals to return the price in
-    /// @return uint256                 The validated price in the scale of outputDecimals_
+    /// @return                         The validated price in the scale of `outputDecimals_`
     function _getFeedPrice(
         AggregatorV2V3Interface feed_,
         uint256 updateThreshold_,
@@ -202,15 +202,15 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         return priceAdjusted;
     }
 
-    /// @notice                 Returns the price from a single Chainlink feed, as specified in {params_}.
+    /// @notice                 Returns the price from a single Chainlink feed, as specified in `params_`.
     /// @dev                    This function will revert if:
     ///                         - PRICE's priceDecimals or the feed's decimals are out of bounds and would lead to an overflow
     ///                         - The price feed's results are invalid
     ///
-    /// @param asset_           The asset to get the price of (unused)
+    /// @param asset_           Unused
     /// @param outputDecimals_  The number of decimals to return the price in
-    /// @param params_          Chainlink pool parameters of type OneFeedParams
-    /// @return uint256         Price in the scale of outputDecimals_.
+    /// @param params_          Chainlink pool parameters of type `OneFeedParams`
+    /// @return                 Price in the scale of `outputDecimals_`
     function getOneFeedPrice(
         address asset_,
         uint8 outputDecimals_,
@@ -251,10 +251,10 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ///                         - PRICE's priceDecimals or any of the feed's decimals are out of bounds and would lead to an overflow
     ///                         - Any of the price feeds' results are invalid
     ///
-    /// @param asset_           The asset to get the price of (unused)
+    /// @param asset_           Unused
     /// @param outputDecimals_  The number of decimals to return the price in
-    /// @param params_          Chainlink pool parameters of type TwoFeedParams
-    /// @return uint256         Price in the scale of outputDecimals_.
+    /// @param params_          Chainlink pool parameters of type `TwoFeedParams`
+    /// @return                 Price in the scale of `outputDecimals_`.
     function getTwoFeedPriceDiv(
         address asset_,
         uint8 outputDecimals_,
@@ -314,10 +314,10 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ///                         - PRICE's priceDecimals or any of the feed's decimals are out of bounds and would lead to an overflow
     ///                         - Any of the price feeds' results are invalid
     ///
-    /// @param asset_           The asset to get the price of (unused)
+    /// @param asset_           Unused
     /// @param outputDecimals_  The number of decimals to return the price in
-    /// @param params_          Chainlink pool parameters of type TwoFeedParams
-    /// @return uint256         Price in the scale of outputDecimals_.
+    /// @param params_          Chainlink pool parameters of type `TwoFeedParams`
+    /// @return                 Price in the scale of `outputDecimals_`.
     function getTwoFeedPriceMul(
         address asset_,
         uint8 outputDecimals_,

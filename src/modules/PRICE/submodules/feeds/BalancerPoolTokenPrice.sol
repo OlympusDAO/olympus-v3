@@ -34,7 +34,7 @@ interface IStablePool is IBasePool {
 contract BalancerPoolTokenPrice is PriceSubmodule {
     using FullMath for uint256;
 
-    /// @dev    Any token or pool with a decimal precision great than this would result in an overflow
+    /// @dev    Any token or pool with a decimal scale greater than this would result in an overflow
     uint8 internal constant BASE_10_MAX_EXPONENT = 50;
 
     /// @dev    Used when calculating the value of a token in a weighted pool
@@ -185,52 +185,52 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
     // ========== HELPER FUNCTIONS ========== //
 
-    /// @notice                     Converts the given value from the ERC20 token's decimals to the destination decimals
+    /// @notice                     Converts `value_` from the ERC20 token's decimals to `outputDecimals_`
     ///
     /// @dev                        This function will revert if converting the token's decimals would result in an overflow.
     ///
-    /// @param value                Value in native ERC20 token decimals
-    /// @param token                The address of the ERC20 token
-    /// @param destinationDecimals  The desired number of decimals
-    /// @return uint256             Number in the scale of destinationDecimals
+    /// @param value_               Value in native ERC20 token decimals
+    /// @param token_               The address of the ERC20 token
+    /// @param outputDecimals_      The desired number of decimals
+    /// @return                     Number in the scale of `outputDecimals_`
     function _convertERC20Decimals(
-        uint256 value,
-        address token,
-        uint8 destinationDecimals
+        uint256 value_,
+        address token_,
+        uint8 outputDecimals_
     ) internal view returns (uint256) {
-        uint8 tokenDecimals = ERC20(token).decimals();
+        uint8 tokenDecimals = ERC20(token_).decimals();
         if (tokenDecimals > BASE_10_MAX_EXPONENT)
-            revert Balancer_AssetDecimalsOutOfBounds(token, tokenDecimals, BASE_10_MAX_EXPONENT);
+            revert Balancer_AssetDecimalsOutOfBounds(token_, tokenDecimals, BASE_10_MAX_EXPONENT);
 
-        return value.mulDiv(10 ** destinationDecimals, 10 ** tokenDecimals);
+        return value_.mulDiv(10 ** outputDecimals_, 10 ** tokenDecimals);
     }
 
-    /// @notice                     Obtains the balance of the token at the specified index in the pool
+    /// @notice                     Obtains the balance of the token at index `tokenIndex_` in the pool
     ///
     /// @dev                        This function will revert if converting the token's balance would result in an overflow.
     ///
     ///                             As this function is accessing the balances of the pool, it is guarded by VaultReentrancyLib to
     ///                             prevent re-entrancy attacks.
     ///
-    /// @param poolId               Id of the Balancer pool
-    /// @param tokenIndex           Index of the token in the Balancer pool
-    /// @param outputDecimals       The desired number of decimals
-    /// @return uint256             Balance in the scale of outputDecimals
+    /// @param poolId_              id of the Balancer pool
+    /// @param tokenIndex_          Index of the token in the Balancer pool
+    /// @param outputDecimals_      The desired number of decimals
+    /// @return                     Balance in the scale of `outputDecimals_`
     function _getTokenBalance(
-        bytes32 poolId,
-        uint256 tokenIndex,
-        uint8 outputDecimals
+        bytes32 poolId_,
+        uint256 tokenIndex_,
+        uint8 outputDecimals_
     ) internal view returns (uint256) {
         // Prevent re-entrancy attacks
         VaultReentrancyLib.ensureNotInVaultContext(balVault);
 
-        (address[] memory tokens_, uint256[] memory balances_, ) = balVault.getPoolTokens(poolId);
+        (address[] memory tokens_, uint256[] memory balances_, ) = balVault.getPoolTokens(poolId_);
 
-        // Balances are in the scale of the ERC20 token, so adjust those to outputDecimals
-        return _convertERC20Decimals(balances_[tokenIndex], tokens_[tokenIndex], outputDecimals);
+        // Balances are in the scale of the ERC20 token, so adjust those to `outputDecimals_`
+        return _convertERC20Decimals(balances_[tokenIndex_], tokens_[tokenIndex_], outputDecimals_);
     }
 
-    /// @notice                     Obtains the balance/weight ratio of token at the specified index in the pool
+    /// @notice                     Obtains the balance/weight ratio of the token at index `index_` in the pool
     ///
     /// @dev                        This function will revert if converting the pool's decimals would result in an overflow.
     ///
@@ -241,7 +241,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @param pool_                Balancer weighted pool
     /// @param index_               Index of the token in the Balancer pool
     /// @param outputDecimals_      The desired number of decimals
-    /// @return uint256             Balance in the scale of outputDecimals_
+    /// @return                     Balance in the scale of `outputDecimals_`
     function _getTokenBalanceWeighting(
         bytes32 poolId_,
         IWeightedPool pool_,
@@ -267,9 +267,9 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @param weight_              Weight of the token in the Balancer pool
     /// @param poolDecimals_        The number of decimals of the Balancer pool
     /// @param outputDecimals_      The desired number of decimals
-    /// @param poolId_              Id of the Balancer pool
+    /// @param poolId_              id of the Balancer pool
     /// @param index_               Index of the token in the Balancer pool
-    /// @return uint256             Value in the scale of outputDecimals_
+    /// @return                     Value in the scale of `outputDecimals_`
     function _getTokenValueInWeightedPool(
         address token_,
         uint256 weight_,
@@ -281,7 +281,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         if (token_ == address(0)) revert Balancer_PoolTokenInvalid(poolId_, index_, token_);
         if (weight_ == 0) revert Balancer_PoolWeightInvalid(poolId_, index_, weight_);
 
-        uint256 price; // Precision: WEIGHTED_POOL_POW_DECIMALS
+        uint256 price; // Scale: `WEIGHTED_POOL_POW_DECIMALS`
         {
             /**
              * PRICE will revert if there is an issue resolving the price, or if it is 0.
@@ -289,21 +289,21 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
              * As the value of the pool token is reliant on the price of every underlying token,
              * the revert from PRICE is not caught.
              */
-            (uint256 price_, ) = _PRICE().getPrice(token_, PRICEv2.Variant.CURRENT); // outputDecimals_
+            (uint256 price_, ) = _PRICE().getPrice(token_, PRICEv2.Variant.CURRENT); // Scale: `outputDecimals_`
 
             price = price_.mulDiv(10 ** WEIGHTED_POOL_POW_DECIMALS, 10 ** outputDecimals_);
         }
 
-        // Precision: WEIGHTED_POOL_POW_DECIMALS
+        // Scale: `WEIGHTED_POOL_POW_DECIMALS`
         uint256 weight = weight_.mulDiv(10 ** WEIGHTED_POOL_POW_DECIMALS, 10 ** poolDecimals_);
 
         // All inputs to pow need to be in the scale of WEIGHTED_POOL_POW_DECIMALS, so adjust for that
         uint256 value = LogExpMath.pow(
             price.mulDiv(10 ** WEIGHTED_POOL_POW_DECIMALS, weight),
             weight
-        ); // Precision: WEIGHTED_POOL_POW_DECIMALS
+        ); // Scale: `WEIGHTED_POOL_POW_DECIMALS`
 
-        // Adjust for the output decimals
+        // Adjust for `outputDecimals_`
         return value.mulDiv(10 ** outputDecimals_, 10 ** WEIGHTED_POOL_POW_DECIMALS);
     }
 
@@ -315,7 +315,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @param weights_             Array of weights of the tokens in the Balancer pool
     /// @param poolDecimals_        The number of decimals of the Balancer pool
     /// @param outputDecimals_      The desired number of decimals
-    /// @return uint256             Value in the scale of outputDecimals_
+    /// @return                     Value in the scale of `outputDecimals_`
     function _getWeightedPoolRawValue(
         address[] memory tokens_,
         uint256[] memory weights_,
@@ -325,7 +325,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ) internal view returns (uint256) {
         uint256 len = tokens_.length;
 
-        uint256 poolValue = 0; // Precision: outputDecimals_
+        uint256 poolValue = 0; // Scale: `outputDecimals_`
         for (uint256 i; i < len; ) {
             uint256 currentValue = _getTokenValueInWeightedPool(
                 tokens_[i],
@@ -352,7 +352,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
     // ========== POOL TOKEN PRICE FUNCTIONS ========== //
 
-    /// @notice                 Determines the unit price of the pool token for the Balancer weighted pool specified in {params_}.
+    /// @notice                 Determines the unit price of the pool token for the Balancer weighted pool specified in `params_`.
     ///
     /// @dev                    To avoid price manipulation, this function calculated the pool token price in the manner recommended by
     ///                         Balancer at https://docs.balancer.fi/concepts/advanced/valuing-bpt.html#on-chain-price-evaluation :
@@ -360,14 +360,14 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ///                         - Applies a guard to protect against re-entrancy attacks on the Balancer pool
     ///
     ///                         This function will revert if:
-    ///                         - The scale of outputDecimals_ or the pool's decimals is too high
+    ///                         - The scale of `outputDecimals_` or the pool's decimals is too high
     ///                         - The pool is mis-configured
     ///                         - If the pool is not a weighted pool
     ///
-    /// @param asset_           The token to determine the price of (unused)
+    /// @param asset_           Unused
     /// @param outputDecimals_  The number of output decimals
-    /// @param params_          Balancer pool parameters of type BalancerWeightedPoolParams
-    /// @return uint256         Price in the scale of outputDecimals_
+    /// @param params_          Balancer pool parameters of type `BalancerWeightedPoolParams`
+    /// @return                 Price in the scale of `outputDecimals_`
     function getWeightedPoolTokenPrice(
         address asset_,
         uint8 outputDecimals_,
@@ -444,21 +444,21 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         return poolTokenPrice;
     }
 
-    /// @notice                 Determines the unit price of the pool token for the Balancer stable pool specified in {params_}.
+    /// @notice                 Determines the unit price of the pool token for the Balancer stable pool specified in `params_`.
     ///
     /// @dev                    To avoid price manipulation, this function calculated the pool token price in the following manner:
     ///                         - Applies a guard to protect against re-entrancy attacks on the Balancer pool
     ///                         - Utilises the formula suggested by Balancer: https://docs.balancer.fi/concepts/advanced/valuing-bpt.html#on-chain-price-evaluation
     ///
     ///                         This function will revert if:
-    ///                         - The scale of outputDecimals_ or the pool's decimals is too high
+    ///                         - The scale of `outputDecimals_` or the pool's decimals is too high
     ///                         - The pool is mis-configured
     ///                         - The pool is not a stable pool
     ///
-    /// @param asset_           The token to determine the price of (unused)
+    /// @param asset_           Unused
     /// @param outputDecimals_  The number of output decimals
-    /// @param params_          Balancer pool parameters of type BalancerStablePoolParams
-    /// @return uint256         Price in the scale of outputDecimals_
+    /// @param params_          Balancer pool parameters of type `BalancerStablePoolParams`
+    /// @return                 Price in the scale of outputDecimals_
     function getStablePoolTokenPrice(
         address asset_,
         uint8 outputDecimals_,
@@ -535,14 +535,14 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
     // ========== TOKEN SPOT PRICE FUNCTIONS ========== //
 
-    /// @notice                 Determines the spot price of the specified token from the Balancer pool specified in {params_}.
+    /// @notice                 Determines the spot price of the specified token from the Balancer pool specified in `params_`.
     ///
     /// @dev                    It does this by:
-    ///                         - Determining the price and reserves of the token paired with {lookupToken_}
-    ///                         - Determining the corresponding price of {lookupToken_}
+    ///                         - Determining the price and reserves of the token paired with `lookupToken_`
+    ///                         - Determining the corresponding price of `lookupToken_`
     ///
     ///                         Will revert upon the following:
-    ///                         - If outputDecimals_ or the pool's decimals are too high
+    ///                         - If `outputDecimals_` or the pool's decimals are too high
     ///                         - If the transaction involves reentrancy on the Balancer pool
     ///                         - If the pool is not a weighted pool
     ///
@@ -551,8 +551,8 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ///
     /// @param lookupToken_     The token to determine the price of
     /// @param outputDecimals_  The number of output decimals
-    /// @param params_          Balancer pool parameters of type BalancerParams
-    /// @return uint256         Price in the scale of outputDecimals_
+    /// @param params_          Balancer pool parameters of type `BalancerWeightedPoolParams`
+    /// @return                 Price in the scale of `outputDecimals_`
     function getTokenPriceFromWeightedPool(
         address lookupToken_,
         uint8 outputDecimals_,
@@ -695,11 +695,11 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         return lookupTokenUsdPrice;
     }
 
-    /// @notice                 Determines the spot price of the specified token from the Balancer pool specified in {params_}.
+    /// @notice                 Determines the spot price of the specified token from the Balancer pool specified in `params_`.
     ///
     /// @dev                    It does this by:
-    ///                         - Using the Balancer StableMath library to determine the quantity of {lookupToken_} returned for 1 of
-    ///                         any token paired with {lookupToken_} for which a price is available
+    ///                         - Using the Balancer StableMath library to determine the quantity of `lookupToken_` returned for 1 of
+    ///                         any token paired with `lookupToken_` for which a price is available
     ///
     ///                         Will revert upon the following:
     ///                         - If the transaction involves reentrancy on the Balancer pool
@@ -710,8 +710,8 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ///
     /// @param lookupToken_     The token to determine the price of
     /// @param outputDecimals_  The number of output decimals
-    /// @param params_          Balancer pool parameters of type BalancerParams
-    /// @return uint256         Price in the scale of outputDecimals_
+    /// @param params_          Balancer pool parameters of type `BalancerStablePoolParams`
+    /// @return                 Price in the scale of `outputDecimals_`
     function getTokenPriceFromStablePool(
         address lookupToken_,
         uint8 outputDecimals_,
