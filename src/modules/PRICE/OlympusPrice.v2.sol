@@ -377,7 +377,7 @@ contract OlympusPricev2 is PRICEv2 {
         if (len == 0) revert PRICE_InvalidParams(1, abi.encode(feeds_));
         for (uint256 i; i < len; ) {
             if (!_submoduleIsInstalled(feeds_[i].target))
-                revert PRICE_InvalidParams(1, abi.encode(feeds_[i].target));
+                revert PRICE_SubmoduleNotInstalled(asset_, abi.encode(feeds_[i].target));
             unchecked {
                 ++i;
             }
@@ -426,7 +426,7 @@ contract OlympusPricev2 is PRICEv2 {
         if (
             fromSubKeycode(strategy_.target) != bytes20(0) &&
             !_submoduleIsInstalled(strategy_.target)
-        ) revert PRICE_InvalidParams(1, abi.encode(strategy_.target));
+        ) revert PRICE_SubmoduleNotInstalled(asset_, abi.encode(strategy_.target));
 
         // Update the asset price strategy
         _assetData[asset_].strategy = abi.encode(strategy_);

@@ -2621,9 +2621,9 @@ contract PriceV2Test is Test {
         // Try and update the asset
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            1,
-            abi.encode(fromSubKeycode(feeds[0].target))
+            "PRICE_SubmoduleNotInstalled(address,bytes)",
+            address(weth),
+            abi.encode(feeds[0].target)
         );
         vm.expectRevert(err);
 
@@ -2737,9 +2737,9 @@ contract PriceV2Test is Test {
         // Try and update the asset
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            1,
-            abi.encode(fromSubKeycode(averageStrategy.target))
+            "PRICE_SubmoduleNotInstalled(address,bytes)",
+            address(weth),
+            abi.encode(averageStrategy.target)
         );
         vm.expectRevert(err);
 

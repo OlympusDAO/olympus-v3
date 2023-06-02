@@ -58,6 +58,11 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param asset_   The address of the asset
     error PRICE_StrategyFailed(address asset_); // TODO consider adding more information about the failure
 
+    /// @notice         The specified submodule is not installed
+    /// @param asset_   The address of the asset that triggered the submodule lookup
+    /// @param target_  The encoded SubKeycode of the submodule
+    error PRICE_SubmoduleNotInstalled(address asset_, bytes target_);
+
     /// @notice         The parameters provided are invalid
     /// @param index    The index of the parameter that is invalid
     /// @param params   The parameters that were provided
