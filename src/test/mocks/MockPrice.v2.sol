@@ -46,7 +46,7 @@ contract MockPrice is PRICEv2 {
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             price = movingAverages[asset_];
         } else {
-            revert PRICE_InvalidParams(1, abi.encode(uint256(variant_)));
+            revert PRICE_ParamsVariantInvalid(variant_);
         }
 
         // Mimic PRICE's behaviour of reverting
@@ -85,7 +85,7 @@ contract MockPrice is PRICEv2 {
             assetPrice = movingAverages[asset_];
             basePrice = movingAverages[base_];
         } else {
-            revert PRICE_InvalidParams(1, abi.encode(uint256(variant_)));
+            revert PRICE_ParamsVariantInvalid(variant_);
         }
 
         if (assetPrice == 0) revert PRICE_PriceZero(asset_);

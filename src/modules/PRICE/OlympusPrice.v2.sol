@@ -99,7 +99,7 @@ contract OlympusPricev2 is PRICEv2 {
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             return _getMovingAveragePrice(asset_);
         } else {
-            revert PRICE_InvalidParams(1, abi.encode(variant_));
+            revert PRICE_ParamsVariantInvalid(variant_);
         }
     }
 

@@ -26,6 +26,11 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param asset_   The address of the asset
     error PRICE_AssetAlreadyApproved(address asset_);
 
+    /// @notice         The variant provided in the parameters is invalid
+    /// @dev            See the `Variant` enum for valid variants
+    /// @param variant_ The variant that was provided
+    error PRICE_ParamsVariantInvalid(Variant variant_);
+
     /// @notice         The asset returned a price of zero
     /// @dev            This indicates a problem with the configured price feeds for `asset_`.
     ///                 Consider adding more price feeds or using a different price aggregation strategy.
