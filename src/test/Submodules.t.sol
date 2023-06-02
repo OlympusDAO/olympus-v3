@@ -654,6 +654,8 @@ contract SubmodulesTest is Test {
     }
 
     function testRevert_INIT_onlyParent(address other_) public {
+        vm.assume(other_ != address(module));
+
         // Try to call INIT with non-parent address, expect revert
         bytes memory err = abi.encodeWithSignature(
             "Submodule_OnlyParent(address)",
