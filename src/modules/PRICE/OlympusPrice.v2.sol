@@ -14,6 +14,9 @@ contract OlympusPricev2 is PRICEv2 {
     // [X] Add "store" functions that call a view function, store the result, and return the value
     // [X] Update add asset functions to account for new data structures
     // [X] Update existing view functions to use new data structures
+    // [ ] custom errors
+    // [ ] implementation details in function comments
+    // [ ] define and emit events: addAsset, removeAsset, update price feeds, update price strategy, update moving average
 
     // ========== CONSTRUCTOR ========== //
 
@@ -300,7 +303,7 @@ contract OlympusPricev2 is PRICEv2 {
 
         // If not storing the moving average, validate that it's not being used by the strategy
         if (useMovingAverage_ && !storeMovingAverage_)
-            revert PRICE_InvalidParams(2, abi.encode(useMovingAverage_));
+            revert PRICE_InvalidParams(2, abi.encode(useMovingAverage_)); // TODO custom error
 
         // Strategy cannot be zero if number of feeds + useMovingAverage is greater than 1
         if (
@@ -374,7 +377,7 @@ contract OlympusPricev2 is PRICEv2 {
     function _updateAssetPriceFeeds(address asset_, Component[] memory feeds_) internal {
         // Validate feed component submodules are installed and update feed array
         uint256 len = feeds_.length;
-        if (len == 0) revert PRICE_InvalidParams(1, abi.encode(feeds_));
+        if (len == 0) revert PRICE_InvalidParams(1, abi.encode(feeds_)); // TODO custom error
         for (uint256 i; i < len; ) {
             if (!_submoduleIsInstalled(feeds_[i].target))
                 revert PRICE_SubmoduleNotInstalled(asset_, abi.encode(feeds_[i].target));
@@ -396,7 +399,7 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Validate that the moving average is stored for the asset to use in strategy
         if (useMovingAverage_ && !_assetData[asset_].storeMovingAverage)
-            revert PRICE_InvalidParams(2, abi.encode(useMovingAverage_));
+            revert PRICE_InvalidParams(2, abi.encode(useMovingAverage_)); // TODO custom error
 
         // Strategy cannot be zero if number of feeds + useMovingAverage is greater than 1
         Component[] memory feeds = abi.decode(_assetData[asset_].feeds, (Component[]));
@@ -449,7 +452,7 @@ contract OlympusPricev2 is PRICEv2 {
         // If it is, then you are moving from storing a moving average to not storing a moving average.
         // First, change the strategy to not use the moving average, then update the moving average data.
         if (_assetData[asset_].useMovingAverage && !storeMovingAverage_)
-            revert PRICE_InvalidParams(1, abi.encode(storeMovingAverage_));
+            revert PRICE_InvalidParams(1, abi.encode(storeMovingAverage_)); // TODO custom error
 
         _updateAssetMovingAverage(
             asset_,
@@ -474,15 +477,15 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Ensure last observation time is not in the future
         if (lastObservationTime_ > block.timestamp)
-            revert PRICE_InvalidParams(3, abi.encode(lastObservationTime_));
+            revert PRICE_InvalidParams(3, abi.encode(lastObservationTime_)); // TODO custom error
 
         if (storeMovingAverage_) {
             // If storing a moving average, validate params
             if (movingAverageDuration_ == 0 || movingAverageDuration_ % observationFrequency != 0)
-                revert PRICE_InvalidParams(2, abi.encode(movingAverageDuration_));
+                revert PRICE_InvalidParams(2, abi.encode(movingAverageDuration_)); // TODO custom error
             uint16 numObservations = uint16(movingAverageDuration_ / observationFrequency);
             if (observations_.length != numObservations)
-                revert PRICE_InvalidParams(4, abi.encode(observations_.length));
+                revert PRICE_InvalidParams(4, abi.encode(observations_.length)); // TODO custom error
 
             asset.storeMovingAverage = true;
 
@@ -492,7 +495,7 @@ contract OlympusPricev2 is PRICEv2 {
             asset.lastObservationTime = lastObservationTime_;
             asset.cumulativeObs = 0; // reset to zero before adding new observations
             for (uint256 i; i < numObservations; ) {
-                if (observations_[i] == 0) revert PRICE_InvalidParams(4, abi.encode(observations_));
+                if (observations_[i] == 0) revert PRICE_InvalidParams(4, abi.encode(observations_)); // TODO custom error
                 asset.cumulativeObs += observations_[i];
                 asset.obs.push(observations_[i]);
                 unchecked {
@@ -505,7 +508,7 @@ contract OlympusPricev2 is PRICEv2 {
         } else {
             // If not storing the moving average, validate that the array has at most one value (for caching)
             if (observations_.length > 1)
-                revert PRICE_InvalidParams(4, abi.encode(observations_.length));
+                revert PRICE_InvalidParams(4, abi.encode(observations_.length)); // TODO custom error
 
             asset.storeMovingAverage = false;
             asset.movingAverageDuration = 0;
@@ -523,7 +526,7 @@ contract OlympusPricev2 is PRICEv2 {
                 emit PriceStored(asset_, currentPrice, timestamp);
             } else {
                 // If an observation is provided, validate it and store it
-                if (observations_[0] == 0) revert PRICE_InvalidParams(4, abi.encode(observations_));
+                if (observations_[0] == 0) revert PRICE_InvalidParams(4, abi.encode(observations_)); // TODO custom error
                 asset.obs.push(observations_[0]);
                 asset.lastObservationTime = lastObservationTime_;
 
