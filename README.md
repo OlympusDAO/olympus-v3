@@ -95,3 +95,7 @@ Set up a foundry config in foundry.toml.
 -   Guardian - 0x84C0C005cF574D0e5C602EA7b366aE9c707381E0
 -   Policy - 0x3dC18017cf8d8F4219dB7A8B93315fEC2d15B8a7
 -   Emergency - 0x3dC18017cf8d8F4219dB7A8B93315fEC2d15B8a7
+
+## Documentation
+
+To generate documentation, run `forge doc`

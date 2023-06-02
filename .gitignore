@@ -8,3 +8,4 @@ src/test/sim/in/*.json
 src/test/sim/out/*.json
 src/test/sim/sims/*.t.sol
 # deployments/* idea is that deployments should be saved for each chain, you can manually delete them from sims
+docs/
