@@ -19,12 +19,19 @@ import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiq
 
 import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
+import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
+
+import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+import {BalancerPoolTokenPrice, IVault as IBalancerVault} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
+import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
+import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 
 import {Operator} from "policies/RBS/Operator.sol";
 import {OlympusHeart} from "policies/RBS/Heart.sol";
@@ -38,8 +45,8 @@ import {BondManager} from "policies/Bonds/BondManager.sol";
 import {Burner} from "policies/OHM/Burner.sol";
 import {BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
 import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
-
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
+import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "test/mocks/AuraMocks.sol";
@@ -55,8 +62,9 @@ contract OlympusDeploy is Script {
     using TransferHelper for ERC20;
     Kernel public kernel;
 
-    /// Modules
+    // Modules
     OlympusPrice public PRICE;
+    OlympusPricev2 public PRICEv2;
     OlympusRange public RANGE;
     OlympusTreasury public TRSRY;
     OlympusMinter public MINTR;
@@ -64,7 +72,14 @@ contract OlympusDeploy is Script {
     OlympusRoles public ROLES;
     OlympusBoostedLiquidityRegistry public BLREG;
 
-    /// Policies
+    // PRICEv2 Submodules
+    SimplePriceFeedStrategy public simplePriceFeedStrategy;
+    BalancerPoolTokenPrice public balancerPoolTokenPrice;
+    ChainlinkPriceFeeds public chainlinkPriceFeeds;
+    UniswapV2PoolTokenPrice public uniswapV2PoolTokenPrice;
+    UniswapV3Price public uniswapV3Price;
+
+    // Policies
     Operator public operator;
     OlympusHeart public heart;
     BondCallback public callback;
@@ -77,38 +92,39 @@ contract OlympusDeploy is Script {
     Burner public burner;
     BLVaultManagerLido public lidoVaultManager;
     BLVaultLido public lidoVault;
+    Bookkeeper public bookkeeper;
 
-    /// Construction variables
+    // Construction variables
 
-    /// Token addresses
+    // Token addresses
     ERC20 public ohm;
     ERC20 public reserve;
     ERC20 public wsteth;
     ERC20 public aura;
     ERC20 public bal;
 
-    /// Bond system addresses
+    // Bond system addresses
     IBondSDA public bondAuctioneer;
     IBondSDA public bondFixedExpiryAuctioneer;
     IBondTeller public bondFixedExpiryTeller;
     IBondAggregator public bondAggregator;
 
-    /// Chainlink price feed addresses
+    // Chainlink price feed addresses
     AggregatorV2V3Interface public ohmEthPriceFeed;
     AggregatorV2V3Interface public reserveEthPriceFeed;
     AggregatorV2V3Interface public ethUsdPriceFeed;
     AggregatorV2V3Interface public stethUsdPriceFeed;
 
-    /// External contracts
+    // External contracts
     address public staking;
     address public gnosisEasyAuction;
 
-    /// Balancer Contracts
+    // Balancer Contracts
     IVault public balancerVault;
     IBalancerHelper public balancerHelper;
     IBasePool public ohmWstethPool;
 
-    /// Aura Contracts
+    // Aura Contracts
     IAuraBooster public auraBooster;
     IAuraMiningLib public auraMiningLib;
     IAuraRewardPool public ohmWstethRewardsPool;
@@ -122,6 +138,7 @@ contract OlympusDeploy is Script {
     function _setUp(string calldata chain_) internal {
         // Setup contract -> selector mappings
         selectorMap["OlympusPrice"] = this._deployPrice.selector;
+        selectorMap["OlympusPricev2"] = this._deployPricev2.selector;
         selectorMap["OlympusRange"] = this._deployRange.selector;
         selectorMap["OlympusTreasury"] = this._deployTreasury.selector;
         selectorMap["OlympusMinter"] = this._deployMinter.selector;
@@ -139,6 +156,12 @@ contract OlympusDeploy is Script {
         selectorMap["Burner"] = this._deployBurner.selector;
         selectorMap["BLVaultLido"] = this._deployBLVaultLido.selector;
         selectorMap["BLVaultManagerLido"] = this._deployBLVaultManagerLido.selector;
+        selectorMap["Bookkeeper"] = this._deployBookkeeper.selector;
+        selectorMap["SimplePriceFeedStrategy"] = this._deploySimplePriceFeedStrategy.selector;
+        selectorMap["BalancerPoolTokenPrice"] = this._deployBalancerPoolTokenPrice.selector;
+        selectorMap["ChainlinkPriceFeeds"] = this._deployChainlinkPriceFeeds.selector;
+        selectorMap["UniswapV2PoolTokenPrice"] = this._deployUniswapV2PoolTokenPrice.selector;
+        selectorMap["UniswapV3Price"] = this._deployUniswapV3Price.selector;
 
         // Load environment addresses
         string memory env = vm.readFile("./src/scripts/env.json");
@@ -169,6 +192,7 @@ contract OlympusDeploy is Script {
         // Bophades contracts
         kernel = Kernel(env.readAddress(string.concat(".", chain_, ".olympus.Kernel")));
         PRICE = OlympusPrice(env.readAddress(string.concat(".", chain_, ".olympus.modules.OlympusPrice")));
+        PRICEv2 = OlympusPricev2(env.readAddress(string.concat(".", chain_, ".olympus.modules.OlympusPricev2")));
         RANGE = OlympusRange(env.readAddress(string.concat(".", chain_, ".olympus.modules.OlympusRange")));
         TRSRY = OlympusTreasury(env.readAddress(string.concat(".", chain_, ".olympus.modules.OlympusTreasury")));
         MINTR = OlympusMinter(env.readAddress(string.concat(".", chain_, ".olympus.modules.OlympusMinter")));
@@ -187,25 +211,19 @@ contract OlympusDeploy is Script {
         burner = Burner(env.readAddress(string.concat(".", chain_, ".olympus.policies.Burner")));
         lidoVaultManager = BLVaultManagerLido(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultManagerLido")));
         lidoVault = BLVaultLido(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultLido")));
+        bookkeeper = Bookkeeper(env.readAddress(string.concat(".", chain_, ".olympus.policies.Bookkeeper")));
+        simplePriceFeedStrategy = SimplePriceFeedStrategy(env.readAddress(string.concat(".", chain_, ".olympus.submodules.PRICE.SimplePriceFeedStrategy")));
+        balancerPoolTokenPrice = BalancerPoolTokenPrice(env.readAddress(string.concat(".", chain_, ".olympus.submodules.PRICE.BalancerPoolTokenPrice")));
+        chainlinkPriceFeeds = ChainlinkPriceFeeds(env.readAddress(string.concat(".", chain_, ".olympus.submodules.PRICE.ChainlinkPriceFeeds")));
+        uniswapV2PoolTokenPrice = UniswapV2PoolTokenPrice(env.readAddress(string.concat(".", chain_, ".olympus.submodules.PRICE.UniswapV2PoolTokenPrice")));
+        uniswapV3Price = UniswapV3Price(env.readAddress(string.concat(".", chain_, ".olympus.submodules.PRICE.UniswapV3Price")));
 
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy.json");
 
-        // Have to use a hack with jq to get the length of the deployment sequence since the json lib used by forge doesn't have a length operation
-        string[] memory inputs = new string[](3);
-        inputs[0] = "sh";
-        inputs[1] = "-c";
-        inputs[2] = 'jq -c ".sequence | length" ./src/scripts/deploy.json | cast --to-uint256';
-        uint256 len = abi.decode(vm.ffi(inputs), (uint256));
-
-        // Forge doesn't correctly parse a string[] from a json array so we have to do it manually
-        string[] memory names = abi.decode(bytes.concat(bytes32(uint256(32)),bytes32(len),data.parseRaw(".sequence..name")),(string[]));
-
-        // uint256 len = 3;
-        // string[] memory names = new string[](len);
-        // names[0] = "OlympusBoostedLiquidityRegistry";
-        // names[1] = "BLVaultLido";
-        // names[2] = "BLVaultManagerLido";
+        // Parse deployment sequence and names
+        string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
+        uint256 len = names.length;
 
         // Iterate through deployment sequence and set deployment args
         for (uint256 i = 0; i < len; i++) {
@@ -589,6 +607,91 @@ contract OlympusDeploy is Script {
         console2.log("BLVaultManagerLido deployed at:", address(lidoVaultManager));
 
         return address(lidoVaultManager);
+    }
+
+    function _deployBookkeeper(bytes memory args) public returns (address) {
+        // No additional arguments for Bookkeeper policy
+
+        // Deploy Bookkeeper policy
+        vm.broadcast();
+        bookkeeper = new Bookkeeper(kernel);
+        console2.log("Bookkeeper deployed at:", address(bookkeeper));
+
+        return address(bookkeeper);
+    }
+
+    function _deployPricev2(bytes memory args) public returns (address) {
+        // Decode arguments for PRICEv2 module
+        (
+            uint8 decimals,
+            uint32 observationFrequency
+        ) = abi.decode(args, (uint8, uint32));
+
+        // Deploy V2 Price module
+        vm.broadcast();
+        PRICEv2 = new OlympusPricev2(
+            kernel,
+            decimals,
+            observationFrequency
+        );
+        console2.log("OlympusPricev2 deployed at:", address(PRICEv2));
+
+        return address(PRICEv2);
+    }
+
+    function _deploySimplePriceFeedStrategy(bytes memory args) public returns (address) {
+        // No additional arguments for SimplePriceFeedStrategy submodule
+
+        // Deploy SimplePriceFeedStrategy submodule
+        vm.broadcast();
+        simplePriceFeedStrategy = new SimplePriceFeedStrategy(PRICEv2);
+        console2.log("SimplePriceFeedStrategy deployed at:", address(simplePriceFeedStrategy));
+
+        return address(simplePriceFeedStrategy);
+    }
+
+    function _deployBalancerPoolTokenPrice(bytes memory args) public returns (address) {
+        // No additional arguments for BalancerPoolTokenPrice submodule
+
+        // Deploy BalancerPoolTokenPrice submodule
+        vm.broadcast();
+        balancerPoolTokenPrice = new BalancerPoolTokenPrice(PRICEv2, IBalancerVault(address(balancerVault)));
+        console2.log("BalancerPoolTokenPrice deployed at:", address(balancerPoolTokenPrice));
+
+        return address(balancerPoolTokenPrice);
+    }
+
+    function _deployChainlinkPriceFeeds(bytes memory args) public returns (address) {
+        // No additional arguments for ChainlinkPriceFeeds submodule
+
+        // Deploy ChainlinkPriceFeeds submodule
+        vm.broadcast();
+        chainlinkPriceFeeds = new ChainlinkPriceFeeds(PRICEv2);
+        console2.log("ChainlinkPriceFeeds deployed at:", address(chainlinkPriceFeeds));
+
+        return address(chainlinkPriceFeeds);
+    }
+
+    function _deployUniswapV2PoolTokenPrice(bytes memory args) public returns (address) {
+        // No additional arguments for UniswapV2PoolTokenPrice submodule
+
+        // Deploy UniswapV2PoolTokenPrice submodule
+        vm.broadcast();
+        uniswapV2PoolTokenPrice = new UniswapV2PoolTokenPrice(PRICEv2);
+        console2.log("UniswapV2PoolTokenPrice deployed at:", address(uniswapV2PoolTokenPrice));
+
+        return address(uniswapV2PoolTokenPrice);
+    }
+
+    function _deployUniswapV3Price(bytes memory args) public returns (address) {
+        // No additional arguments for UniswapV3Price submodule
+
+        // Deploy UniswapV3Price submodule
+        vm.broadcast();
+        uniswapV3Price = new UniswapV3Price(PRICEv2);
+        console2.log("UniswapV3Price deployed at:", address(uniswapV3Price));
+
+        return address(uniswapV3Price);
     }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment

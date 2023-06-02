@@ -1,11 +1,35 @@
 {
     "sequence": [
         {
-            "name": "OlympusHeart",
+            "name": "OlympusPricev2",
             "args": {
-                "auctionDuration": 1200,
-                "maxReward": 40000000000
+                "decimals": 18,
+                "observationFrequency": 28800
             }
+        },
+        {
+            "name": "Bookkeeper",
+            "args": {}
+        },
+        {
+            "name": "SimplePriceFeedStrategy",
+            "args": {}
+        },
+        {
+            "name": "BalancerPoolTokenPrice",
+            "args": {}
+        },
+        {
+            "name": "ChainlinkPriceFeeds",
+            "args": {}
+        },
+        {
+            "name": "UniswapV2PoolTokenPrice",
+            "args": {}
+        },
+        {
+            "name": "UniswapV3Price",
+            "args": {}
         }
     ]
 }
