@@ -176,10 +176,12 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     // ========== ASSET INFORMATION ========== //
 
     /// @notice         Provides a list of registered assets
+    ///
     /// @return         The addresses of registered assets
     function getAssets() external view virtual returns (address[] memory);
 
     /// @notice         Provides the configuration of a specific asset
+    ///
     /// @param asset_   The address of the asset
     /// @return         The asset configuration as an `Asset` struct
     function getAssetData(address asset_) external view virtual returns (Asset memory);
@@ -188,17 +190,20 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
 
     /// @notice         Returns the current price of an asset in the system unit of account
     /// @dev            Optimistically uses the cached price if it has been updated this block, otherwise calculates price dynamically
+    ///
     /// @param asset_   The address of the asset
     /// @return         The USD price of the asset in the scale of `decimals`
     function getPrice(address asset_) external view virtual returns (uint256);
 
     /// @notice         Returns a price no older than the provided age in the system unit of account
+    ///
     /// @param asset_   The address of the asset
     /// @param maxAge_  The maximum age (seconds) of the price
     /// @return         The USD price of the asset in the scale of `decimals`
     function getPrice(address asset_, uint48 maxAge_) external view virtual returns (uint256);
 
     /// @notice         Returns the requested variant of the asset price in the system unit of account and the timestamp at which it was calculated
+    ///
     /// @param asset_   The address of the asset
     /// @param variant_ The variant of the price to return
     /// @return _price      The USD price of the asset in the scale of `decimals`
@@ -210,12 +215,14 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
 
     /// @notice         Returns the current price of an asset in terms of the base asset
     /// @dev            Optimistically uses the cached price if it has been updated this block, otherwise calculates price dynamically
+    ///
     /// @param asset_   The address of the asset
     /// @param base_    The address of the base asset that the price will be calculated in
     /// @return         The price of the asset in units of `base_`
     function getPriceIn(address asset_, address base_) external view virtual returns (uint256);
 
     /// @notice             Returns the price of the asset in terms of the base asset, no older than the max age
+    ///
     /// @param asset_       The address of the asset
     /// @param base_        The address of the base asset that the price will be calculated in
     /// @param maxAge_      The maximum age (seconds) of the price
@@ -227,6 +234,7 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     ) external view virtual returns (uint256);
 
     /// @notice             Returns the requested variant of the asset price in terms of the base asset
+    ///
     /// @param asset_       The address of the asset
     /// @param base_        The address of the base asset that the price will be calculated in
     /// @param variant_     The variant of the price to return
@@ -240,12 +248,14 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
 
     /// @notice         Calculates and stores the current price of an asset
     /// @dev            Emits the PriceStored event
+    ///
     /// @param asset_   The address of the asset
     function storePrice(address asset_) external virtual;
 
     // ========== ASSET MANAGEMENT ========== //
 
     /// @notice                         Adds a new asset definition
+    ///
     /// @param asset_                   The address of the asset
     /// @param storeMovingAverage_      Whether the moving average should be stored periodically
     /// @param useMovingAverage_        Whether the moving average should be used as an argument to the strategy
@@ -266,15 +276,18 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     ) external virtual;
 
     /// @notice         Removes an asset definition
+    ///
     /// @param asset_   The address of the asset
     function removeAsset(address asset_) external virtual;
 
     /// @notice             Updates the price feeds for an asset
+    ///
     /// @param asset_       The address of the asset
     /// @param feeds_       The new price feeds to be used to calculate the price
     function updateAssetPriceFeeds(address asset_, Component[] memory feeds_) external virtual;
 
     /// @notice                     Updates the price aggregation strategy for an asset
+    ///
     /// @param asset_               The address of the asset
     /// @param strategy_            The new strategy to be used to aggregate price feeds
     /// @param useMovingAverage_    Whether the moving average should be used as an argument to the strategy
@@ -285,6 +298,7 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     ) external virtual;
 
     /// @notice                         Updates the moving average configuration for an asset
+    ///
     /// @param asset_                   The address of the asset
     /// @param storeMovingAverage_      Whether the moving average should be stored periodically
     /// @param movingAverageDuration_   The duration of the moving average in seconds

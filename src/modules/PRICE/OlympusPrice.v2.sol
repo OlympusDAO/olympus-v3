@@ -15,12 +15,13 @@ contract OlympusPricev2 is PRICEv2 {
     // [X] Update add asset functions to account for new data structures
     // [X] Update existing view functions to use new data structures
     // [X] custom errors
-    // [ ] implementation details in function comments
+    // [X] implementation details in function comments
     // [ ] define and emit events: addAsset, removeAsset, update price feeds, update price strategy, update moving average
 
     // ========== CONSTRUCTOR ========== //
 
     /// @notice                         Constructor to create OlympusPrice V2
+    ///
     /// @param kernel_                  Kernel address
     /// @param decimals_                Decimals that all prices will be returned with
     /// @param observationFrequency_    Frequency at which prices are stored for moving average
@@ -87,6 +88,9 @@ contract OlympusPricev2 is PRICEv2 {
     }
 
     /// @inheritdoc PRICEv2
+    /// @dev        Will revert if:
+    ///             - `asset_` is not approved
+    ///             - An invalid variant is requested
     function getPrice(
         address asset_,
         Variant variant_
@@ -106,6 +110,19 @@ contract OlympusPricev2 is PRICEv2 {
         }
     }
 
+    /// @notice         Gets the current price of the asset
+    /// @dev            This function follows this logic:
+    ///                 - Get the price from each feed
+    ///                 - If using the moving average, append the moving average to the results
+    ///                 - If there is only one price and it is not zero, return it
+    ///                 - Process the prices with the configured strategy
+    ///
+    ///                 Will revert if:
+    ///                 - The resulting price is zero
+    ///                 - The configured strategy cannot aggregate the prices
+    ///
+    /// @param asset_   Asset to get the price of
+    /// @return         The price of the asset and the current block timestamp
     function _getCurrentPrice(address asset_) internal view returns (uint256, uint48) {
         Asset storage asset = _assetData[asset_];
 
@@ -159,6 +176,15 @@ contract OlympusPricev2 is PRICEv2 {
         }
     }
 
+    /// @notice         Gets the last cached price of the asset
+    /// @dev            This function follows this logic:
+    ///                 - Get the last observation stored for the asset and return it
+    ///
+    ///                 If no price has been ever cached, this function will automatically
+    ///                 return (0, 0).
+    ///
+    /// @param asset_   Asset to get the price of
+    /// @return         The price of the asset and asset's last observation time
     function _getLastPrice(address asset_) internal view returns (uint256, uint48) {
         // Load asset data
         Asset memory asset = _assetData[asset_];
@@ -174,6 +200,15 @@ contract OlympusPricev2 is PRICEv2 {
         return (lastPrice, asset.lastObservationTime);
     }
 
+    /// @notice         Gets the moving average price of the asset
+    /// @dev            This function follows this logic:
+    ///                 - Calculate the moving average using the `cumulativeObs` / `numObservations`
+    ///
+    ///                 Will revert if:
+    ///                 - The moving average is not stored for the asset
+    ///
+    /// @param asset_   Asset to get the price of
+    /// @return         The price of the asset and asset's last observation time
     function _getMovingAveragePrice(address asset_) internal view returns (uint256, uint48) {
         // Load asset data
         Asset memory asset = _assetData[asset_];
@@ -256,6 +291,16 @@ contract OlympusPricev2 is PRICEv2 {
     }
 
     /// @inheritdoc PRICEv2
+    /// @dev        Implements the following logic:
+    ///             - Get the current price using `_getCurrentPrice()`
+    ///             - Store the price in the asset's observation array at the index corresponding to the asset's value of `nextObsIndex`
+    ///             - Updates the asset's `lastObservationTime` to the current block timestamp
+    ///             - Increments the asset's `nextObsIndex` by 1, wrapping around to 0 if necessary
+    ///             - If the asset is configured to store the moving average, update the `cumulativeObs` value subtracting the previous value and adding the new one
+    ///             - Emit a `PriceStored` event
+    ///
+    ///             Will revert if:
+    ///             - The asset is not approved
     function storePrice(address asset_) public override permissioned {
         Asset storage asset = _assetData[asset_];
 
@@ -283,6 +328,20 @@ contract OlympusPricev2 is PRICEv2 {
 
     // ========== ASSET MANAGEMENT ========== //
 
+    /// @inheritdoc PRICEv2
+    /// @dev        Implements the following logic:
+    ///             - Performs basic checks on the parameters
+    ///             - Sets the price strategy using `_updateAssetPriceStrategy()`
+    ///             - Sets the price feeds using `_updateAssetPriceFeeds()`
+    ///             - Sets the moving average data using `_updateAssetMovingAverage()`
+    ///             - Validates the configuration using `_getCurrentPrice()`, which will revert if there is a mis-configuration
+    ///             - Adds the asset to the `assets` array and marks it as approved
+    ///
+    ///             Will revert if:
+    ///             - `asset_` is not a contract
+    ///             - `asset_` is already approved
+    ///             - The moving average is being used, but not stored
+    ///             - An empty strategy was specified, but the number of feeds requires a strategy
     function addAsset(
         address asset_,
         bool storeMovingAverage_,
@@ -340,6 +399,9 @@ contract OlympusPricev2 is PRICEv2 {
         assets.push(asset_);
     }
 
+    /// @inheritdoc PRICEv2
+    /// @dev        Will revert if:
+    ///             - `asset_` is not approved
     function removeAsset(address asset_) external override permissioned {
         // Ensure asset is already added
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
@@ -361,6 +423,16 @@ contract OlympusPricev2 is PRICEv2 {
         delete _assetData[asset_];
     }
 
+    /// @inheritdoc PRICEv2
+    /// @dev        Implements the following logic:
+    ///             - Performs basic checks on the parameters
+    ///             - Sets the price feeds using `_updateAssetPriceFeeds()`
+    ///             - Validates the configuration using `_getCurrentPrice()`, which will revert if there is a mis-configuration
+    ///
+    ///             Will revert if:
+    ///             - `asset_` is not approved
+    ///             - `_updateAssetPriceFeeds()` reverts
+    ///             - `_getCurrentPrice()` reverts
     function updateAssetPriceFeeds(
         address asset_,
         Component[] memory feeds_
@@ -374,6 +446,17 @@ contract OlympusPricev2 is PRICEv2 {
         _getCurrentPrice(asset_);
     }
 
+    /// @notice         Updates the price feeds for the asset
+    /// @dev            Implements the following logic:
+    ///                 - Performs basic checks on the parameters
+    ///                 - Sets the price feeds for the asset
+    ///
+    ///                 Will revert if:
+    ///                 - The number of feeds is zero
+    ///                 - Any feed has a submodule that is not installed
+    ///
+    /// @param asset_   Asset to update the price feeds for
+    /// @param feeds_   Array of price feed components
     function _updateAssetPriceFeeds(address asset_, Component[] memory feeds_) internal {
         // Validate feed component submodules are installed and update feed array
         uint256 len = feeds_.length;
@@ -390,6 +473,16 @@ contract OlympusPricev2 is PRICEv2 {
         _assetData[asset_].feeds = abi.encode(feeds_);
     }
 
+    /// @inheritdoc PRICEv2
+    /// @dev        Implements the following logic:
+    ///             - Performs basic checks on the parameters
+    ///             - Sets the price strategy using `_updateAssetPriceStrategy()`
+    ///             - Validates the configuration using `_getCurrentPrice()`, which will revert if there is a mis-configuration
+    ///
+    ///             Will revert if:
+    ///             - `asset_` is not approved
+    ///             - The moving average is used, but is not stored
+    ///             - An empty strategy was specified, but the number of feeds requires a strategy
     function updateAssetPriceStrategy(
         address asset_,
         Component memory strategy_,
@@ -421,6 +514,18 @@ contract OlympusPricev2 is PRICEv2 {
         _getCurrentPrice(asset_);
     }
 
+    /// @notice                     Updates the price strategy for the asset
+    /// @dev                        Implements the following logic:
+    ///                             - Performs basic checks on the parameters
+    ///                             - Sets the price strategy for the asset
+    ///                             - Sets the `useMovingAverage` flag for the asset
+    ///
+    ///                             Will revert if:
+    ///                             - The submodule used by the strategy is not installed
+    ///
+    /// @param asset_               Asset to update the price strategy for
+    /// @param strategy_            Price strategy component
+    /// @param useMovingAverage_    Flag to indicate if the moving average should be used in the strategy
     function _updateAssetPriceStrategy(
         address asset_,
         Component memory strategy_,
@@ -439,6 +544,20 @@ contract OlympusPricev2 is PRICEv2 {
         _assetData[asset_].useMovingAverage = useMovingAverage_;
     }
 
+    /// @inheritdoc                     PRICEv2
+    /// @dev                            Implements the following logic:
+    ///                                 - Performs basic checks on the parameters
+    ///                                 - Sets the moving average data using `_updateAssetMovingAverage()`
+    ///
+    ///                                 Will revert if:
+    ///                                 - `asset_` is not approved
+    ///                                 - The moving average is used, but is not stored
+    ///
+    /// @param asset_                   Asset to update the moving average data for
+    /// @param storeMovingAverage_      Flag to indicate if the moving average should be stored
+    /// @param movingAverageDuration_   Duration of the moving average
+    /// @param lastObservationTime_     Timestamp of the last observation
+    /// @param observations_            Array of observations to store
     function updateAssetMovingAverage(
         address asset_,
         bool storeMovingAverage_,
@@ -464,6 +583,23 @@ contract OlympusPricev2 is PRICEv2 {
         );
     }
 
+    /// @notice                         Updates the moving average data for the asset
+    /// @dev                            Implements the following logic:
+    ///                                 - Removes existing moving average data
+    ///                                 - Performs basic checks on the parameters
+    ///                                 - Sets the moving average data for the asset
+    ///                                 - If the moving average is not stored, gets the current price and stores it so that every asset has at least one cached value
+    ///
+    ///                                 Will revert if:
+    ///                                 - `lastObservationTime_` is in the future
+    ///                                 - Any observation is zero
+    ///                                 - The number of observations provided is insufficient
+    ///
+    /// @param asset_                   Asset to update the moving average data for
+    /// @param storeMovingAverage_      Flag to indicate if the moving average should be stored
+    /// @param movingAverageDuration_   Duration of the moving average
+    /// @param lastObservationTime_     Timestamp of the last observation
+    /// @param observations_            Array of observations to store
     function _updateAssetMovingAverage(
         address asset_,
         bool storeMovingAverage_,
