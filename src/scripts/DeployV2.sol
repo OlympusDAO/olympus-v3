@@ -389,18 +389,8 @@ contract OlympusDeploy is Script {
     // Policy deployment functions
     function _deployOperator(bytes memory args) public returns (address) {
         // Decode arguments for Operator policy
-        // Must use a dynamic array to parse correctly since the json lib defaults to this
-        (uint32[] memory configParams_, uint256 minTargetPrice_) = abi.decode(args, (uint32[], uint256));
-        uint32[8] memory configParams = [
-            configParams_[0],
-            configParams_[1],
-            configParams_[2],
-            configParams_[3],
-            configParams_[4],
-            configParams_[5],
-            configParams_[6],
-            configParams_[7]
-        ];
+        // JSON encoding for this one is weird. We have to omit certain "bytes" position arguments because one of the arguments is a fixed length array
+        (, , uint256 minTargetPrice_, , uint32[8] memory configParams_) = abi.decode(args, (bytes32, bytes32, uint256, bytes32, uint32[8]));
 
         // Deploy Operator policy
         vm.broadcast();
@@ -409,7 +399,7 @@ contract OlympusDeploy is Script {
             bondAuctioneer,
             callback,
             [ohm, reserve],
-            configParams,
+            configParams_,
             minTargetPrice_
         );
         console2.log("Operator deployed at:", address(operator));
