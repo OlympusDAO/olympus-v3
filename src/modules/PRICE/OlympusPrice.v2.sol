@@ -147,7 +147,7 @@ contract OlympusPricev2 is PRICEv2 {
                 .staticcall(abi.encodeWithSelector(strategy.selector, prices, strategy.params));
 
             // Ensure call was successful
-            if (!success) revert PRICE_StrategyFailed(asset_);
+            if (!success) revert PRICE_StrategyFailed(asset_, data);
 
             // Decode asset price
             uint256 price = abi.decode(data, (uint256));

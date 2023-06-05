@@ -56,7 +56,8 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @notice         Executing the price strategy failed
     /// @dev            This indicates a problem with the configured price feeds or strategy for `asset_`.
     /// @param asset_   The address of the asset
-    error PRICE_StrategyFailed(address asset_); // TODO consider adding more information about the failure
+    /// @param data_    The data returned when calling the strategy
+    error PRICE_StrategyFailed(address asset_, bytes data_);
 
     /// @notice         The specified submodule is not installed
     /// @param asset_   The address of the asset that triggered the submodule lookup
