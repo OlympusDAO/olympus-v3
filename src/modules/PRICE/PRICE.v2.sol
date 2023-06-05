@@ -26,6 +26,16 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param asset_   The address of the asset
     error PRICE_AssetAlreadyApproved(address asset_);
 
+    /// @notice                 The number of provided price feeds is insufficient
+    /// @param asset_           The address of the asset
+    /// @param feedCount_       The number of price feeds provided
+    /// @param feedRequired_    The minimum number of price feeds required
+    error PRICE_ParamsPriceFeedInsufficient(
+        address asset_,
+        uint256 feedCount_,
+        uint256 feedRequired_
+    );
+
     /// @notice         The asset requires storeMovingAverage to be enabled
     /// @dev            This will usually be triggered if the asset is configured to use a moving average
     /// @param asset_   The address of the asset

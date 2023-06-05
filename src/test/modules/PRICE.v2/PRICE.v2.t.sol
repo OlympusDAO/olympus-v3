@@ -2592,9 +2592,10 @@ contract PriceV2Test is Test {
         // Try and update the asset
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            1,
-            abi.encode(feeds)
+            "PRICE_ParamsPriceFeedInsufficient(address,uint256,uint256)",
+            address(weth),
+            0,
+            1
         );
         vm.expectRevert(err);
 

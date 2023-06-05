@@ -377,7 +377,8 @@ contract OlympusPricev2 is PRICEv2 {
     function _updateAssetPriceFeeds(address asset_, Component[] memory feeds_) internal {
         // Validate feed component submodules are installed and update feed array
         uint256 len = feeds_.length;
-        if (len == 0) revert PRICE_InvalidParams(1, abi.encode(feeds_)); // TODO custom error
+        if (len == 0) revert PRICE_ParamsPriceFeedInsufficient(asset_, len, 1);
+
         for (uint256 i; i < len; ) {
             if (!_submoduleIsInstalled(feeds_[i].target))
                 revert PRICE_SubmoduleNotInstalled(asset_, abi.encode(feeds_[i].target));
