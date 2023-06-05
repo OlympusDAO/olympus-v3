@@ -573,7 +573,7 @@ contract PriceV2Test is Test {
                 false, // bool useMovingAverage_ // do not use MA in strategy
                 uint32(30 days), // uint32 movingAverageDuration_
                 uint48(block.timestamp), // uint48 lastObservationTime_
-                _makeRandomObservations(reserve, feeds[0], nonce_, uint256(90)), // uint256[] memory observations_ // TODO
+                _makeRandomObservations(reserve, feeds[0], nonce_, uint256(90)), // uint256[] memory observations_
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
                     SimplePriceFeedStrategy.getAveragePriceIfDeviation.selector,
@@ -668,7 +668,7 @@ contract PriceV2Test is Test {
                 true, // bool useMovingAverage_ // use MA in strategy
                 uint32(5 days), // uint32 movingAverageDuration_
                 uint48(block.timestamp), // uint48 lastObservationTime_
-                _makeRandomObservations(twoma, feeds[0], nonce_, uint256(15)), // uint256[] memory observations_ // TODO
+                _makeRandomObservations(twoma, feeds[0], nonce_, uint256(15)), // uint256[] memory observations_
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
                     SimplePriceFeedStrategy.getAveragePrice.selector,

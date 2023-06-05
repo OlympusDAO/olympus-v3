@@ -16,7 +16,7 @@ contract OlympusPricev2 is PRICEv2 {
     // [X] Update existing view functions to use new data structures
     // [X] custom errors
     // [X] implementation details in function comments
-    // [ ] define and emit events: addAsset, removeAsset, update price feeds, update price strategy, update moving average
+    // [X] define and emit events: addAsset, removeAsset, update price feeds, update price strategy, update moving average
 
     // ========== CONSTRUCTOR ========== //
 
