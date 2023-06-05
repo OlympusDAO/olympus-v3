@@ -192,6 +192,14 @@ contract PriceV2Test is Test {
     int256 internal constant CHANGE_DECIMALS = 1e4;
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
 
+    // Re-declare events from PRICE.v2.sol
+    event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
+    event AssetAdded(address indexed asset_);
+    event AssetRemoved(address indexed asset_);
+    event AssetPriceFeedsUpdated(address indexed asset_);
+    event AssetPriceStrategyUpdated(address indexed asset_);
+    event AssetMovingAverageUpdated(address indexed asset_);
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
 
@@ -1766,6 +1774,7 @@ contract PriceV2Test is Test {
     }
 
     // ==========  storePrice  ========== //
+
     function testRevert_storePrice_unconfiguredAsset() public {
         // No base assets
 
@@ -1819,8 +1828,6 @@ contract PriceV2Test is Test {
         vm.prank(writer);
         price.storePrice(address(weth));
     }
-
-    event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
 
     function test_storePrice_noMovingAverage(uint256 nonce_) public {
         // Add base assets to price module
@@ -1915,6 +1922,12 @@ contract PriceV2Test is Test {
         // Get updated cached data for onema
         asset = price.getAssetData(address(onema));
         assertEq(asset.nextObsIndex, 1); // next index should be 1 since we added a new value
+
+        // Store price again and check that event is emitted
+        vm.prank(writer);
+        vm.expectEmit(true, false, false, true);
+        emit PriceStored(address(onema), uint256(50e18), uint48(start + 16));
+        price.storePrice(address(onema));
     }
 
     // ========== addAsset ========== //
@@ -2160,6 +2173,10 @@ contract PriceV2Test is Test {
         // Try and add the asset
         vm.startPrank(writer);
 
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetAdded(address(weth));
+
         price.addAsset(
             address(weth), // address asset_
             false, // bool storeMovingAverage_
@@ -2212,6 +2229,10 @@ contract PriceV2Test is Test {
 
         // Try and add the asset
         vm.startPrank(writer);
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetAdded(address(weth));
 
         price.addAsset(
             address(weth), // address asset_
@@ -2332,6 +2353,10 @@ contract PriceV2Test is Test {
         // Try and add the asset
         vm.startPrank(writer);
 
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetAdded(address(weth));
+
         price.addAsset(
             address(weth), // address asset_
             true, // bool storeMovingAverage_
@@ -2374,6 +2399,10 @@ contract PriceV2Test is Test {
 
         // Try and add the asset
         vm.startPrank(writer);
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetAdded(address(weth));
 
         price.addAsset(
             address(weth), // address asset_
@@ -2483,6 +2512,11 @@ contract PriceV2Test is Test {
 
         // Remove the asset
         vm.startPrank(writer);
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetRemoved(address(weth));
+
         price.removeAsset(address(weth));
 
         // Asset data is removed
@@ -2515,7 +2549,13 @@ contract PriceV2Test is Test {
 
         // Update the asset's price feeds
         vm.startPrank(writer);
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetPriceFeedsUpdated(address(weth));
+
         price.updateAssetPriceFeeds(address(weth), feeds);
+
         vm.stopPrank();
 
         // Check that the feeds were updated
@@ -2670,7 +2710,13 @@ contract PriceV2Test is Test {
 
         // Update the asset's strategy
         vm.startPrank(writer);
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetPriceStrategyUpdated(address(weth));
+
         price.updateAssetPriceStrategy(address(weth), averageStrategy, false);
+
         vm.stopPrank();
 
         // Check that the feeds were updated
@@ -2760,7 +2806,13 @@ contract PriceV2Test is Test {
 
         // Update the asset's strategy
         vm.startPrank(writer);
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetPriceStrategyUpdated(address(weth));
+
         price.updateAssetPriceStrategy(address(weth), strategyEmpty, false);
+
         vm.stopPrank();
 
         // Check that the feeds were updated
@@ -2896,6 +2948,10 @@ contract PriceV2Test is Test {
         vm.expectEmit(true, false, false, true);
         emit PriceStored(address(reserve), 3e18, uint48(block.timestamp));
 
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetMovingAverageUpdated(address(reserve));
+
         // Update the asset's moving average
         price.updateAssetMovingAverage(
             address(reserve),
@@ -2932,6 +2988,10 @@ contract PriceV2Test is Test {
         // Expect an event when the configuration is updated
         vm.expectEmit(true, false, false, true);
         emit PriceStored(address(weth), 3e18, uint48(block.timestamp));
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetMovingAverageUpdated(address(weth));
 
         // Update the asset's moving average
         price.updateAssetMovingAverage(
@@ -3249,6 +3309,10 @@ contract PriceV2Test is Test {
         vm.expectEmit(true, false, false, true);
         emit PriceStored(address(reserve), 2e18, uint48(block.timestamp));
 
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetMovingAverageUpdated(address(reserve));
+
         // Update the asset's moving average
         price.updateAssetMovingAverage(
             address(reserve),
@@ -3293,6 +3357,10 @@ contract PriceV2Test is Test {
         // Expect an event when the configuration is updated
         vm.expectEmit(true, false, false, true);
         emit PriceStored(address(reserve), price_, uint48(block.timestamp));
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit AssetMovingAverageUpdated(address(reserve));
 
         // Update the asset's moving average
         price.updateAssetMovingAverage(

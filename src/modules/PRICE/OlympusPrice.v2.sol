@@ -397,6 +397,9 @@ contract OlympusPricev2 is PRICEv2 {
         // Set asset as approved and add to array
         asset.approved = true;
         assets.push(asset_);
+
+        // Emit event
+        emit AssetAdded(asset_);
     }
 
     /// @inheritdoc PRICEv2
@@ -421,6 +424,9 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Remove asset from mapping
         delete _assetData[asset_];
+
+        // Emit event
+        emit AssetRemoved(asset_);
     }
 
     /// @inheritdoc PRICEv2
@@ -444,6 +450,9 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Validate the configuration
         _getCurrentPrice(asset_);
+
+        // Emit event
+        emit AssetPriceFeedsUpdated(asset_);
     }
 
     /// @notice         Updates the price feeds for the asset
@@ -512,6 +521,9 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Validate
         _getCurrentPrice(asset_);
+
+        // Emit event
+        emit AssetPriceStrategyUpdated(asset_);
     }
 
     /// @notice                     Updates the price strategy for the asset
@@ -581,6 +593,9 @@ contract OlympusPricev2 is PRICEv2 {
             lastObservationTime_,
             observations_
         );
+
+        // Emit event
+        emit AssetMovingAverageUpdated(asset_);
     }
 
     /// @notice                         Updates the moving average data for the asset

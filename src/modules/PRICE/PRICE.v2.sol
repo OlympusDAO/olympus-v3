@@ -6,7 +6,37 @@ import "src/Submodules.sol";
 abstract contract PRICEv2 is ModuleWithSubmodules {
     // ========== EVENTS ========== //
 
+    /// @notice             An asset's price is stored
+    ///
+    /// @param asset_       The address of the asset
+    /// @param price_       The price of the asset in the system unit of account
+    /// @param timestamp_   The timestamp at which the price was calculated
     event PriceStored(address indexed asset_, uint256 price_, uint48 timestamp_);
+
+    /// @notice             An asset's definition is added
+    ///
+    /// @param asset_       The address of the asset
+    event AssetAdded(address indexed asset_);
+
+    /// @notice             An asset's definition is removed
+    ///
+    /// @param asset_       The address of the asset
+    event AssetRemoved(address indexed asset_);
+
+    /// @notice             The price feeds of an asset are updated
+    ///
+    /// @param asset_       The address of the asset
+    event AssetPriceFeedsUpdated(address indexed asset_);
+
+    /// @notice             The price aggregation strategy of an asset is updated
+    ///
+    /// @param asset_       The address of the asset
+    event AssetPriceStrategyUpdated(address indexed asset_);
+
+    /// @notice             The moving average data of an asset is updated
+    ///
+    /// @param asset_       The address of the asset
+    event AssetMovingAverageUpdated(address indexed asset_);
 
     // ========== ERRORS ========== //
 
