@@ -2250,9 +2250,11 @@ contract PriceV2Test is Test {
 
         // Reverts as there should only be 1 observation (cached result) when no moving average is being stored
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            4,
-            abi.encode(observations.length)
+            "PRICE_ParamsObservationInsufficient(address,uint256,uint256,uint256)",
+            address(weth),
+            observations.length,
+            0,
+            1
         );
         vm.expectRevert(err);
 
@@ -2289,9 +2291,9 @@ contract PriceV2Test is Test {
 
         // Reverts as the observations input should not contain 0
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            4,
-            abi.encode(observations)
+            "PRICE_ParamsObservationZero(address,uint256)",
+            address(weth),
+            0
         );
         vm.expectRevert(err);
 
@@ -3042,9 +3044,11 @@ contract PriceV2Test is Test {
         // Update the asset's moving average
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            3,
-            abi.encode(uint48(block.timestamp + 1))
+            "PRICE_ParamsLastObservationTimeInvalid(address,uint48,uint48,uint48)",
+            address(reserve),
+            uint48(block.timestamp + 1),
+            uint48(0),
+            uint48(block.timestamp)
         );
         vm.expectRevert(err);
 
@@ -3069,9 +3073,10 @@ contract PriceV2Test is Test {
         // Update the asset's moving average
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            2,
-            abi.encode(uint32(9 hours))
+            "PRICE_ParamsMovingAverageDurationInvalid(address,uint32,uint32)",
+            address(reserve),
+            uint32(9 hours),
+            uint32(8 hours)
         );
         vm.expectRevert(err);
 
@@ -3103,9 +3108,9 @@ contract PriceV2Test is Test {
         // Update the asset's moving average
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            4,
-            abi.encode(observations)
+            "PRICE_ParamsObservationZero(address,uint256)",
+            address(reserve),
+            zeroIndex
         );
         vm.expectRevert(err);
 
@@ -3131,9 +3136,11 @@ contract PriceV2Test is Test {
         // Update the asset's moving average
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            4,
-            abi.encode(observations.length)
+            "PRICE_ParamsObservationInsufficient(address,uint256,uint256,uint256)",
+            address(reserve),
+            observations.length,
+            1,
+            1
         );
         vm.expectRevert(err);
 
@@ -3159,9 +3166,11 @@ contract PriceV2Test is Test {
         // Update the asset's moving average
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            4,
-            abi.encode(observations.length)
+            "PRICE_ParamsObservationInsufficient(address,uint256,uint256,uint256)",
+            address(reserve),
+            observations.length,
+            0,
+            1
         );
         vm.expectRevert(err);
 
@@ -3185,9 +3194,9 @@ contract PriceV2Test is Test {
         // Update the asset's moving average
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            4,
-            abi.encode(observations)
+            "PRICE_ParamsObservationZero(address,uint256)",
+            address(reserve),
+            0
         );
         vm.expectRevert(err);
 
@@ -3212,9 +3221,9 @@ contract PriceV2Test is Test {
         // Update the asset's moving average
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            4,
-            abi.encode(observations)
+            "PRICE_ParamsObservationZero(address,uint256)",
+            address(reserve),
+            0
         );
         vm.expectRevert(err);
 

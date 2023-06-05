@@ -11,6 +11,7 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     // ========== ERRORS ========== //
 
     /// @notice         The asset is not approved for use
+    ///
     /// @param asset_   The address of the asset
     error PRICE_AssetNotApproved(address asset_);
 
@@ -26,6 +27,58 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param asset_   The address of the asset
     error PRICE_AssetAlreadyApproved(address asset_);
 
+    /// @notice         The moving average for an asset was requested when it is not stored
+    ///
+    /// @param asset_   The address of the asset
+    error PRICE_MovingAverageNotStored(address asset_);
+
+    /// @notice                     The last observation time is invalid
+    /// @dev                        The last observation time must be less than the latest timestamp
+    ///
+    /// @param asset_               The address of the asset
+    /// @param lastObservationTime_ The last observation time that was provided
+    /// @param earliestTimestamp_   The earliest permissible timestamp
+    /// @param latestTimestamp_     The latest permissible timestamp
+    error PRICE_ParamsLastObservationTimeInvalid(
+        address asset_,
+        uint48 lastObservationTime_,
+        uint48 earliestTimestamp_,
+        uint48 latestTimestamp_
+    );
+
+    /// @notice                         The provided moving average duration is invalid
+    /// @dev                            The moving average duration must be a integer multiple
+    ///                                 of the `observationFrequency_`
+    ///
+    /// @param asset_                   The address of the asset
+    /// @param movingAverageDuration_   The moving average duration that was provided
+    /// @param observationFrequency_    The observation frequency that was provided
+    error PRICE_ParamsMovingAverageDurationInvalid(
+        address asset_,
+        uint32 movingAverageDuration_,
+        uint32 observationFrequency_
+    );
+
+    /// @notice                     The provided observation value is zero
+    /// @dev                        Observation values should not be zero
+    ///
+    /// @param asset_               The address of the asset
+    /// @param observationIndex_    The index of the observation that was invalid
+    error PRICE_ParamsObservationZero(address asset_, uint256 observationIndex_);
+
+    /// @notice                         The provided observation count is invalid
+    ///
+    /// @param asset_                   The address of the asset
+    /// @param observationCount_        The number of observations that was provided
+    /// @param minimumObservationCount_ The minimum number of observations that is permissible
+    /// @param maximumObservationCount_ The maximum number of observations that is permissible
+    error PRICE_ParamsObservationInsufficient(
+        address asset_,
+        uint256 observationCount_,
+        uint256 minimumObservationCount_,
+        uint256 maximumObservationCount_
+    );
+
     /// @notice                 The number of provided price feeds is insufficient
     /// @param asset_           The address of the asset
     /// @param feedCount_       The number of price feeds provided
@@ -38,6 +91,7 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
 
     /// @notice         The asset requires storeMovingAverage to be enabled
     /// @dev            This will usually be triggered if the asset is configured to use a moving average
+    ///
     /// @param asset_   The address of the asset
     error PRICE_ParamsStoreMovingAverageRequired(address asset_);
 
@@ -58,6 +112,7 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
 
     /// @notice         The variant provided in the parameters is invalid
     /// @dev            See the `Variant` enum for valid variants
+    ///
     /// @param variant_ The variant that was provided
     error PRICE_ParamsVariantInvalid(Variant variant_);
 
@@ -70,23 +125,16 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
 
     /// @notice         Executing the price strategy failed
     /// @dev            This indicates a problem with the configured price feeds or strategy for `asset_`.
+    ///
     /// @param asset_   The address of the asset
     /// @param data_    The data returned when calling the strategy
     error PRICE_StrategyFailed(address asset_, bytes data_);
 
     /// @notice         The specified submodule is not installed
+    ///
     /// @param asset_   The address of the asset that triggered the submodule lookup
     /// @param target_  The encoded SubKeycode of the submodule
     error PRICE_SubmoduleNotInstalled(address asset_, bytes target_);
-
-    /// @notice         The parameters provided are invalid
-    /// @param index    The index of the parameter that is invalid
-    /// @param params   The parameters that were provided
-    error PRICE_InvalidParams(uint256 index, bytes params); // TODO add asset
-
-    /// @notice         The moving average for an asset was requested when it is not stored
-    /// @param asset_   The address of the asset
-    error PRICE_MovingAverageNotStored(address asset_);
 
     // ========== STATE ========== //
 

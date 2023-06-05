@@ -14,7 +14,7 @@ contract OlympusPricev2 is PRICEv2 {
     // [X] Add "store" functions that call a view function, store the result, and return the value
     // [X] Update add asset functions to account for new data structures
     // [X] Update existing view functions to use new data structures
-    // [ ] custom errors
+    // [X] custom errors
     // [ ] implementation details in function comments
     // [ ] define and emit events: addAsset, removeAsset, update price feeds, update price strategy, update moving average
 
@@ -478,15 +478,30 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Ensure last observation time is not in the future
         if (lastObservationTime_ > block.timestamp)
-            revert PRICE_InvalidParams(3, abi.encode(lastObservationTime_)); // TODO custom error
+            revert PRICE_ParamsLastObservationTimeInvalid(
+                asset_,
+                lastObservationTime_,
+                0,
+                uint48(block.timestamp)
+            );
 
         if (storeMovingAverage_) {
             // If storing a moving average, validate params
             if (movingAverageDuration_ == 0 || movingAverageDuration_ % observationFrequency != 0)
-                revert PRICE_InvalidParams(2, abi.encode(movingAverageDuration_)); // TODO custom error
+                revert PRICE_ParamsMovingAverageDurationInvalid(
+                    asset_,
+                    movingAverageDuration_,
+                    observationFrequency
+                );
+
             uint16 numObservations = uint16(movingAverageDuration_ / observationFrequency);
             if (observations_.length != numObservations)
-                revert PRICE_InvalidParams(4, abi.encode(observations_.length)); // TODO custom error
+                revert PRICE_ParamsObservationInsufficient(
+                    asset_,
+                    observations_.length,
+                    numObservations,
+                    numObservations
+                );
 
             asset.storeMovingAverage = true;
 
@@ -496,7 +511,8 @@ contract OlympusPricev2 is PRICEv2 {
             asset.lastObservationTime = lastObservationTime_;
             asset.cumulativeObs = 0; // reset to zero before adding new observations
             for (uint256 i; i < numObservations; ) {
-                if (observations_[i] == 0) revert PRICE_InvalidParams(4, abi.encode(observations_)); // TODO custom error
+                if (observations_[i] == 0) revert PRICE_ParamsObservationZero(asset_, i);
+
                 asset.cumulativeObs += observations_[i];
                 asset.obs.push(observations_[i]);
                 unchecked {
@@ -509,7 +525,7 @@ contract OlympusPricev2 is PRICEv2 {
         } else {
             // If not storing the moving average, validate that the array has at most one value (for caching)
             if (observations_.length > 1)
-                revert PRICE_InvalidParams(4, abi.encode(observations_.length)); // TODO custom error
+                revert PRICE_ParamsObservationInsufficient(asset_, observations_.length, 0, 1);
 
             asset.storeMovingAverage = false;
             asset.movingAverageDuration = 0;
@@ -527,7 +543,8 @@ contract OlympusPricev2 is PRICEv2 {
                 emit PriceStored(asset_, currentPrice, timestamp);
             } else {
                 // If an observation is provided, validate it and store it
-                if (observations_[0] == 0) revert PRICE_InvalidParams(4, abi.encode(observations_)); // TODO custom error
+                if (observations_[0] == 0) revert PRICE_ParamsObservationZero(asset_, 0);
+
                 asset.obs.push(observations_[0]);
                 asset.lastObservationTime = lastObservationTime_;
 
