@@ -2083,9 +2083,8 @@ contract PriceV2Test is Test {
 
         // Reverts as useMovingAverage is enabled, but storeMovingAverage is not
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            2,
-            abi.encode(true)
+            "PRICE_ParamsStoreMovingAverageRequired(address)",
+            address(weth)
         );
         vm.expectRevert(err);
 
@@ -2864,9 +2863,8 @@ contract PriceV2Test is Test {
         // Update the asset's strategy
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            2,
-            abi.encode(true)
+            "PRICE_ParamsStoreMovingAverageRequired(address)",
+            address(weth)
         );
         vm.expectRevert(err);
 
@@ -2970,9 +2968,8 @@ contract PriceV2Test is Test {
         // Try to update onema's moving average to disable it
         // Will trigger a revert as the moving average is used by the strategy
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_InvalidParams(uint256,bytes)",
-            1,
-            abi.encode(storeMovingAverage)
+            "PRICE_ParamsStoreMovingAverageRequired(address)",
+            address(onema)
         );
         vm.expectRevert(err);
         vm.prank(writer);

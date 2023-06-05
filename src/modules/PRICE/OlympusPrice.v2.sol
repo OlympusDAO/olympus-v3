@@ -303,7 +303,7 @@ contract OlympusPricev2 is PRICEv2 {
 
         // If not storing the moving average, validate that it's not being used by the strategy
         if (useMovingAverage_ && !storeMovingAverage_)
-            revert PRICE_InvalidParams(2, abi.encode(useMovingAverage_)); // TODO custom error
+            revert PRICE_ParamsStoreMovingAverageRequired(asset_);
 
         // Strategy cannot be zero if number of feeds + useMovingAverage is greater than 1
         if (
@@ -399,7 +399,7 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Validate that the moving average is stored for the asset to use in strategy
         if (useMovingAverage_ && !_assetData[asset_].storeMovingAverage)
-            revert PRICE_InvalidParams(2, abi.encode(useMovingAverage_)); // TODO custom error
+            revert PRICE_ParamsStoreMovingAverageRequired(asset_);
 
         // Strategy cannot be zero if number of feeds + useMovingAverage is greater than 1
         Component[] memory feeds = abi.decode(_assetData[asset_].feeds, (Component[]));
@@ -452,7 +452,7 @@ contract OlympusPricev2 is PRICEv2 {
         // If it is, then you are moving from storing a moving average to not storing a moving average.
         // First, change the strategy to not use the moving average, then update the moving average data.
         if (_assetData[asset_].useMovingAverage && !storeMovingAverage_)
-            revert PRICE_InvalidParams(1, abi.encode(storeMovingAverage_)); // TODO custom error
+            revert PRICE_ParamsStoreMovingAverageRequired(asset_);
 
         _updateAssetMovingAverage(
             asset_,

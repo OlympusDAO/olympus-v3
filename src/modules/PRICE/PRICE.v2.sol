@@ -26,6 +26,11 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param asset_   The address of the asset
     error PRICE_AssetAlreadyApproved(address asset_);
 
+    /// @notice         The asset requires storeMovingAverage to be enabled
+    /// @dev            This will usually be triggered if the asset is configured to use a moving average
+    /// @param asset_   The address of the asset
+    error PRICE_ParamsStoreMovingAverageRequired(address asset_);
+
     /// @notice                     A strategy must be defined for the asset
     /// @dev                        This will be triggered if strategy specified is insufficient for
     ///                             the configured price feeds and moving average.
