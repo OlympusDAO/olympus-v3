@@ -8,6 +8,8 @@ import {QuickSort} from "libraries/QuickSort.sol";
 /// @notice     The functions in this contract provide PRICEv2 strategies that can be used to handle
 ///             the results from multiple price feeds
 contract SimplePriceFeedStrategy is PriceSubmodule {
+    using QuickSort for uint256[];
+
     /// @notice     This is the expected length of bytes for the parameters to the deviation strategies
     uint8 internal constant DEVIATION_PARAMS_LENGTH = 32;
 
@@ -173,7 +175,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         if (nonZeroPrices.length == 1) return nonZeroPrices[0];
 
         // Get the average and abort if there's a problem
-        uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
+        uint256[] memory sortedPrices = nonZeroPrices.sort();
         uint256 averagePrice = _getAveragePrice(sortedPrices);
 
         if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsInvalid(params_);
@@ -228,7 +230,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         if (nonZeroPrices.length < 3) return nonZeroPrices[0];
 
         // Get the average and median and abort if there's a problem
-        uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
+        uint256[] memory sortedPrices = nonZeroPrices.sort();
 
         // The following two values are guaranteed to not be 0 since sortedPrices only contains non-zero values and has a length of 3+
         uint256 averagePrice = _getAveragePrice(sortedPrices);
@@ -311,7 +313,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         if (nonZeroPricesLen < 3) return nonZeroPrices[0];
 
         // Sort the prices
-        uint256[] memory sortedPrices = QuickSort.sort(nonZeroPrices);
+        uint256[] memory sortedPrices = nonZeroPrices.sort();
 
         return _getMedianPrice(sortedPrices);
     }

@@ -3,7 +3,7 @@ pragma solidity >=0.8.0;
 
 // Source: https://gist.github.com/Amxx/d3a99fcb79abbe3c76a2f2a5773b3815
 library QuickSort {
-    function sort(uint256[] memory array) public pure returns (uint256[] memory) {
+    function sort(uint256[] memory array) internal pure returns (uint256[] memory) {
         _quickSort(array, 0, array.length);
         return array;
     }
