@@ -73,8 +73,8 @@ abstract contract OlyBatch is BatchScript {
         executeBatch(emergencyMS, send_);
     }
 
-    function envAddress(string memory key) internal returns (address) {
-        return env.readAddress(string.concat(".", chain, ".", key));
+    function envAddress(string memory version, string memory key) internal returns (address) {
+        return env.readAddress(string.concat(".", version, ".", chain, ".", key));
     }
 
     function loadEnv() internal virtual;
