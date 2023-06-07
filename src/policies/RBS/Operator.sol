@@ -45,6 +45,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice    Whether the Operator is active
     bool public active;
 
+    /// @notice    The minimum price for establishing an updated range
     uint256 public minTargetPrice;
 
     // Modules
@@ -60,16 +61,14 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     IBondCallback public callback;
 
     // Tokens
-    /// @notice OHM token contract
-    ERC20 public immutable _ohm;
-    uint8 public immutable ohmDecimals;
-    /// @notice Reserve token contract
-    ERC20 public immutable _reserve;
-    uint8 public immutable reserveDecimals;
+    ERC20 internal immutable _ohm;
+    uint8 internal immutable ohmDecimals;
+    ERC20 internal immutable _reserve;
+    uint8 internal immutable reserveDecimals;
 
     // Constants
-    uint32 public constant ONE_HUNDRED_PERCENT = 100e2;
-    uint32 public constant ONE_PERCENT = 1e2;
+    uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
+    uint32 internal constant ONE_PERCENT = 1e2;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -189,21 +188,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @dev Checks to see if the policy is active and ensures the range data isn't stale before performing market operations.
-    ///      This check is different from the price feed staleness checks in the PRICE module.
-    ///      The PRICE module checks new price feed data for staleness when storing a new observations,
-    ///      whereas this check ensures that the range data is using a recent observation.
-    modifier onlyWhileActive() {
-        (, uint48 lastObservation) = PRICE.getPrice(address(_ohm), PRICEv2.Variant.LAST);
-        if (!active || uint48(block.timestamp) > lastObservation + 3 * PRICE.observationFrequency())
-            revert Operator_Inactive();
-        _;
-    }
-
     // =========  HEART FUNCTIONS ========= //
 
     /// @inheritdoc IOperator
-    function operate() external override onlyWhileActive onlyRole("operator_operate") {
+    function operate() external override onlyRole("operator_operate") {
+        // Call internal function to check that the operator is active
+        _onlyWhileActive();
+
         // Revert if not initialized
         if (!initialized) revert Operator_NotInitialized();
 
@@ -285,7 +276,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         ERC20 tokenIn_,
         uint256 amountIn_,
         uint256 minAmountOut_
-    ) external override onlyWhileActive nonReentrant returns (uint256 amountOut) {
+    ) external override nonReentrant returns (uint256 amountOut) {
+        // Call internal function to check that the operator is active
+        _onlyWhileActive();
+
         if (tokenIn_ == _ohm) {
             // Revert if lower wall is inactive
             if (!RANGE.active(false)) revert Operator_WallDown();
@@ -356,10 +350,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice             Access restricted (BondCallback)
     /// @param id_          ID of the bond market
     /// @param amountOut_   Amount of capacity expended
-    function bondPurchase(
-        uint256 id_,
-        uint256 amountOut_
-    ) external onlyWhileActive onlyRole("operator_reporter") {
+    function bondPurchase(uint256 id_, uint256 amountOut_) external onlyRole("operator_reporter") {
+        // Call internal function to check that the operator is active
+        _onlyWhileActive();
+
         if (id_ == RANGE.market(true)) {
             _updateCapacity(true, amountOut_);
             _checkCushion(true);
@@ -642,6 +636,20 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         ) {
             _deactivate(high_);
         }
+    }
+
+    /// @dev Checks to see if the policy is active and ensures the range data isn't stale before performing market operations.
+    ///      This check is different from the price feed staleness checks in the PRICE module.
+    ///      The PRICE module checks new price feed data for staleness when storing a new observations,
+    ///      whereas this check ensures that the range data is using a recent observation.
+    function _onlyWhileActive() internal view {
+        (, uint48 lastObservation) = PRICE.getPriceIn(
+            address(_ohm),
+            address(_reserve),
+            PRICEv2.Variant.LAST
+        );
+        if (!active || uint48(block.timestamp) > lastObservation + 3 * PRICE.observationFrequency())
+            revert Operator_Inactive();
     }
 
     //============================================================================================//
