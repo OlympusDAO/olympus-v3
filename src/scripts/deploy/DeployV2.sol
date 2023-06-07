@@ -130,12 +130,16 @@ contract OlympusDeploy is Script {
     IAuraRewardPool public ohmWstethRewardsPool;
 
     // Deploy system storage
+    string public chain;
+    string public env;
     mapping(string => bytes4) public selectorMap;
     mapping(string => bytes) public argsMap;
     string[] public deployments;
     mapping(string => address) public deployedTo;
 
     function _setUp(string calldata chain_) internal {
+        chain = chain_;
+
         // Setup contract -> selector mappings
         selectorMap["OlympusPrice"] = this._deployPrice.selector;
         selectorMap["OlympusPricev2"] = this._deployPricev2.selector;
@@ -166,155 +170,77 @@ contract OlympusDeploy is Script {
         selectorMap["UniswapV3Price"] = this._deployUniswapV3Price.selector;
 
         // Load environment addresses
-        string memory env = vm.readFile("./src/scripts/env.json");
+        env = vm.readFile("./src/scripts/env.json");
 
         // Non-bophades contracts
-        ohm = ERC20(env.readAddress(string.concat(".", chain_, ".olympus.legacy.OHM")));
-        reserve = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.DAI")));
-        wsteth = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.WSTETH")));
-        aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
-        bal = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.BAL")));
-        bondAuctioneer = IBondSDA(
-            env.readAddress(
-                string.concat(".", chain_, ".external.bond-protocol.BondFixedTermAuctioneer")
-            )
-        );
+        ohm = ERC20(envAddress("olympus.legacy.OHM"));
+        reserve = ERC20(envAddress("external.tokens.DAI"));
+        wsteth = ERC20(envAddress("external.tokens.WSTETH"));
+        aura = ERC20(envAddress("external.tokens.AURA"));
+        bal = ERC20(envAddress("external.tokens.BAL"));
+        bondAuctioneer = IBondSDA(envAddress("external.bond-protocol.BondFixedTermAuctioneer"));
         bondFixedExpiryAuctioneer = IBondSDA(
-            env.readAddress(
-                string.concat(".", chain_, ".external.bond-protocol.BondFixedExpiryAuctioneer")
-            )
+            envAddress("external.bond-protocol.BondFixedExpiryAuctioneer")
         );
         bondFixedExpiryTeller = IBondTeller(
-            env.readAddress(
-                string.concat(".", chain_, ".external.bond-protocol.BondFixedExpiryTeller")
-            )
+            envAddress("external.bond-protocol.BondFixedExpiryTeller")
         );
-        bondAggregator = IBondAggregator(
-            env.readAddress(string.concat(".", chain_, ".external.bond-protocol.BondAggregator"))
-        );
-        ohmEthPriceFeed = AggregatorV2V3Interface(
-            env.readAddress(string.concat(".", chain_, ".external.chainlink.ohmEthPriceFeed"))
-        );
+        bondAggregator = IBondAggregator(envAddress("external.bond-protocol.BondAggregator"));
+        ohmEthPriceFeed = AggregatorV2V3Interface(envAddress("external.chainlink.ohmEthPriceFeed"));
         reserveEthPriceFeed = AggregatorV2V3Interface(
-            env.readAddress(string.concat(".", chain_, ".external.chainlink.daiEthPriceFeed"))
+            envAddress("external.chainlink.daiEthPriceFeed")
         );
-        ethUsdPriceFeed = AggregatorV2V3Interface(
-            env.readAddress(string.concat(".", chain_, ".external.chainlink.ethUsdPriceFeed"))
-        );
+        ethUsdPriceFeed = AggregatorV2V3Interface(envAddress("external.chainlink.ethUsdPriceFeed"));
         stethUsdPriceFeed = AggregatorV2V3Interface(
-            env.readAddress(string.concat(".", chain_, ".external.chainlink.stethUsdPriceFeed"))
+            envAddress("external.chainlink.stethUsdPriceFeed")
         );
-        staking = env.readAddress(string.concat(".", chain_, ".olympus.legacy.Staking"));
-        gnosisEasyAuction = env.readAddress(
-            string.concat(".", chain_, ".external.gnosis.EasyAuction")
-        );
-        balancerVault = IVault(
-            env.readAddress(string.concat(".", chain_, ".external.balancer.BalancerVault"))
-        );
-        balancerHelper = IBalancerHelper(
-            env.readAddress(string.concat(".", chain_, ".external.balancer.BalancerHelper"))
-        );
-        ohmWstethPool = IBasePool(
-            env.readAddress(string.concat(".", chain_, ".external.balancer.OhmWstethPool"))
-        );
-        auraBooster = IAuraBooster(
-            env.readAddress(string.concat(".", chain_, ".external.aura.AuraBooster"))
-        );
-        auraMiningLib = IAuraMiningLib(
-            env.readAddress(string.concat(".", chain_, ".external.aura.AuraMiningLib"))
-        );
-        ohmWstethRewardsPool = IAuraRewardPool(
-            env.readAddress(string.concat(".", chain_, ".external.aura.OhmWstethRewardsPool"))
-        );
+        staking = envAddress("olympus.legacy.Staking");
+        gnosisEasyAuction = envAddress("external.gnosis.EasyAuction");
+        balancerVault = IVault(envAddress("external.balancer.BalancerVault"));
+        balancerHelper = IBalancerHelper(envAddress("external.balancer.BalancerHelper"));
+        ohmWstethPool = IBasePool(envAddress("external.balancer.OhmWstethPool"));
+        auraBooster = IAuraBooster(envAddress("external.aura.AuraBooster"));
+        auraMiningLib = IAuraMiningLib(envAddress("external.aura.AuraMiningLib"));
+        ohmWstethRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmWstethRewardsPool"));
 
         // Bophades contracts
-        kernel = Kernel(env.readAddress(string.concat(".", chain_, ".olympus.Kernel")));
-        PRICE = OlympusPrice(
-            env.readAddress(string.concat(".", chain_, ".olympus.modules.OlympusPrice"))
-        );
-        PRICEv2 = OlympusPricev2(
-            env.readAddress(string.concat(".", chain_, ".olympus.modules.OlympusPricev2"))
-        );
-        RANGE = OlympusRange(
-            env.readAddress(string.concat(".", chain_, ".olympus.modules.OlympusRange"))
-        );
-        TRSRY = OlympusTreasury(
-            env.readAddress(string.concat(".", chain_, ".olympus.modules.OlympusTreasury"))
-        );
-        MINTR = OlympusMinter(
-            env.readAddress(string.concat(".", chain_, ".olympus.modules.OlympusMinter"))
-        );
-        INSTR = OlympusInstructions(
-            env.readAddress(string.concat(".", chain_, ".olympus.modules.OlympusInstructions"))
-        );
-        ROLES = OlympusRoles(
-            env.readAddress(string.concat(".", chain_, ".olympus.modules.OlympusRoles"))
-        );
+        kernel = Kernel(envAddress("olympus.Kernel"));
+        PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPrice"));
+        PRICEv2 = OlympusPricev2(envAddress("olympus.modules.OlympusPricev2"));
+        RANGE = OlympusRange(envAddress("olympus.modules.OlympusRange"));
+        TRSRY = OlympusTreasury(envAddress("olympus.modules.OlympusTreasury"));
+        MINTR = OlympusMinter(envAddress("olympus.modules.OlympusMinter"));
+        INSTR = OlympusInstructions(envAddress("olympus.modules.OlympusInstructions"));
+        ROLES = OlympusRoles(envAddress("olympus.modules.OlympusRoles"));
         BLREG = OlympusBoostedLiquidityRegistry(
-            env.readAddress(
-                string.concat(".", chain_, ".olympus.modules.OlympusBoostedLiquidityRegistry")
-            )
+            envAddress("olympus.modules.OlympusBoostedLiquidityRegistry")
         );
-        operator = Operator(
-            env.readAddress(string.concat(".", chain_, ".olympus.policies.Operator"))
-        );
-        heart = OlympusHeart(
-            env.readAddress(string.concat(".", chain_, ".olympus.policies.OlympusHeart"))
-        );
-        callback = BondCallback(
-            env.readAddress(string.concat(".", chain_, ".olympus.policies.BondCallback"))
-        );
-        priceConfig = OlympusPriceConfig(
-            env.readAddress(string.concat(".", chain_, ".olympus.policies.OlympusPriceConfig"))
-        );
-        rolesAdmin = RolesAdmin(
-            env.readAddress(string.concat(".", chain_, ".olympus.policies.RolesAdmin"))
-        );
-        treasuryCustodian = TreasuryCustodian(
-            env.readAddress(string.concat(".", chain_, ".olympus.policies.TreasuryCustodian"))
-        );
-        distributor = Distributor(
-            env.readAddress(string.concat(".", chain_, ".olympus.policies.Distributor"))
-        );
-        emergency = Emergency(
-            env.readAddress(string.concat(".", chain_, ".olympus.policies.Emergency"))
-        );
-        bondManager = BondManager(
-            env.readAddress(string.concat(".", chain_, ".olympus.policies.BondManager"))
-        );
-        burner = Burner(env.readAddress(string.concat(".", chain_, ".olympus.policies.Burner")));
-        lidoVaultManager = BLVaultManagerLido(
-            env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultManagerLido"))
-        );
-        lidoVault = BLVaultLido(
-            env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultLido"))
-        );
-        bookkeeper = Bookkeeper(
-            env.readAddress(string.concat(".", chain_, ".olympus.policies.Bookkeeper"))
-        );
+        operator = Operator(envAddress("olympus.policies.Operator"));
+        heart = OlympusHeart(envAddress("olympus.policies.OlympusHeart"));
+        callback = BondCallback(envAddress("olympus.policies.BondCallback"));
+        priceConfig = OlympusPriceConfig(envAddress("olympus.policies.OlympusPriceConfig"));
+        rolesAdmin = RolesAdmin(envAddress("olympus.policies.RolesAdmin"));
+        treasuryCustodian = TreasuryCustodian(envAddress("olympus.policies.TreasuryCustodian"));
+        distributor = Distributor(envAddress("olympus.policies.Distributor"));
+        emergency = Emergency(envAddress("olympus.policies.Emergency"));
+        bondManager = BondManager(envAddress("olympus.policies.BondManager"));
+        burner = Burner(envAddress("olympus.policies.Burner"));
+        lidoVaultManager = BLVaultManagerLido(envAddress("olympus.policies.BLVaultManagerLido"));
+        lidoVault = BLVaultLido(envAddress("olympus.policies.BLVaultLido"));
+        bookkeeper = Bookkeeper(envAddress("olympus.policies.Bookkeeper"));
         simplePriceFeedStrategy = SimplePriceFeedStrategy(
-            env.readAddress(
-                string.concat(".", chain_, ".olympus.submodules.PRICE.SimplePriceFeedStrategy")
-            )
+            envAddress("olympus.submodules.PRICE.SimplePriceFeedStrategy")
         );
         balancerPoolTokenPrice = BalancerPoolTokenPrice(
-            env.readAddress(
-                string.concat(".", chain_, ".olympus.submodules.PRICE.BalancerPoolTokenPrice")
-            )
+            envAddress("olympus.submodules.PRICE.BalancerPoolTokenPrice")
         );
         chainlinkPriceFeeds = ChainlinkPriceFeeds(
-            env.readAddress(
-                string.concat(".", chain_, ".olympus.submodules.PRICE.ChainlinkPriceFeeds")
-            )
+            envAddress("olympus.submodules.PRICE.ChainlinkPriceFeeds")
         );
         uniswapV2PoolTokenPrice = UniswapV2PoolTokenPrice(
-            env.readAddress(
-                string.concat(".", chain_, ".olympus.submodules.PRICE.UniswapV2PoolTokenPrice")
-            )
+            envAddress("olympus.submodules.PRICE.UniswapV2PoolTokenPrice")
         );
-        uniswapV3Price = UniswapV3Price(
-            env.readAddress(string.concat(".", chain_, ".olympus.submodules.PRICE.UniswapV3Price"))
-        );
+        uniswapV3Price = UniswapV3Price(envAddress("olympus.submodules.PRICE.UniswapV3Price"));
 
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy/deploy.json");
@@ -338,6 +264,10 @@ contract OlympusDeploy is Script {
                 );
             }
         }
+    }
+
+    function envAddress(string memory key_) internal returns (address) {
+        return env.readAddress(string.concat(".current.", chain, ".", key_));
     }
 
     /// @dev Installs, upgrades, activations, and deactivations as well as access control settings must be done via olymsig batches since DAO MS is multisig executor on mainnet
