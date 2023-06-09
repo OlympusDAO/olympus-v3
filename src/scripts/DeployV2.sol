@@ -885,6 +885,8 @@ contract DependencyDeploy is Script {
     MockERC20 public aura;
     MockERC20 public ldo;
 
+    MockPriceFeed public lusdUsdPriceFeed;
+
     MockAuraBooster public auraBooster;
     MockAuraMiningLib public auraMiningLib;
     MockAuraRewardPool public ohmWstethRewardPool;
@@ -904,6 +906,17 @@ contract DependencyDeploy is Script {
 
         // ldo = new MockERC20("Lido", "LDO", 18);
         // console2.log("LDO deployed to:", address(ldo));
+
+        // Deploy the LUSD price feed
+        lusdUsdPriceFeed = new MockPriceFeed();
+        lusdUsdPriceFeed.setDecimals(8);
+        lusdUsdPriceFeed.setPrice(1e8);
+        lusdUsdPriceFeed.setRoundId(1);
+        lusdUsdPriceFeed.setAnsweredInRound(1);
+        lusdUsdPriceFeed.setTimestamp(block.timestamp); // Will be good for 1 year from now
+        console2.log("LUSD-USD Price Feed deployed to:", address(lusdUsdPriceFeed));
+
+        // TODO Deploy the OHM-LUSD LP
 
         // Deploy the Aura Reward Pools
         ohmWstethRewardPool = new MockAuraRewardPool(
