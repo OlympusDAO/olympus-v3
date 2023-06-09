@@ -5,10 +5,10 @@ print_test_event() {
 	echo
 }
 
-source ../.env
+source .env
 
-forge run src/policies/test/LockingVault.t.sol -t LockingVaultTest --sig "Integrative1(int32)" 103072000 -vvv >src/policies/test/logs/LockingVault1.log
+print_test_event "Running non-fork tests"
+forge test --no-match-contract ".*Fork$"
 
-print_test_event "Integrative1 test for LockingVault printed to logs."
-
-forge test
+print_test_event "Running fork tests"
+forge test --match-contract ".*Fork$" --fork-url $FORK_TEST_RPC_URL
