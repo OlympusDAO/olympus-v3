@@ -539,7 +539,6 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
         netBurnedOhm = circulatingOhmBurned;
     }
 
-    // TODO: Change this to just PRICEV2.getPriceIn(wsteth, ohm) / 1e9 when PRICEv2 is deployed
     /// @inheritdoc IBLVaultManager
     function getOhmTknPrice() public view override returns (uint256) {
         // Get ETH per OHM (18 Decimals)
@@ -558,7 +557,6 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
         return (usdPerLusd * 1e27) / (ethPerOhm * usdPerEth);
     }
 
-    // TODO: Change this to just PRICEV2.getPriceIn(ohm, wsteth) when PRICEv2 is deployed
     /// @inheritdoc IBLVaultManager
     function getTknOhmPrice() public view override returns (uint256) {
         // Get ETH per OHM (18 Decimals)
