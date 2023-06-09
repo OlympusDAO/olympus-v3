@@ -36,7 +36,7 @@ interface IWsteth {
 }
 
 // solhint-disable-next-line max-states-count
-contract BLVaultLidoTest is Test {
+contract BLVaultLidoTestFork is Test {
     using FullMath for uint256;
 
     address internal alice;
@@ -79,16 +79,7 @@ contract BLVaultLidoTest is Test {
 
     uint256[] internal minAmountsOut = [0, 0];
 
-    uint256 internal forkId;
-
     function setUp() public {
-        {
-            // Set up mainnet fork
-            forkId = vm.createSelectFork(
-                "https://mainnet.infura.io/v3/2e1ea2c05a584b26b09b9567994c1cb2"
-            );
-        }
-
         {
             // Set up users
             alice = payable(address(uint160(uint256(keccak256(abi.encodePacked("alice"))))));
