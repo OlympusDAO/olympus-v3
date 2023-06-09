@@ -790,6 +790,29 @@ contract BLVaultManagerLusdTest is Test {
         assertEq(price, 100e18);
     }
 
+    /// [X] getOhmTknPoolPrice
+    ///     [X] returns correct OHM per LUSD
+    ///     [X] returns 0 if pool is empty
+
+    function testCorrectness_getOhmTknPoolPrice() public {
+        // Base case
+        uint256 price = vaultManager.getOhmTknPoolPrice();
+        // 100e9 * 1e18 / 1000e18 = 0.1e9 = 1e8
+        assertEq(price, 1e8);
+
+        // Increase OHM value
+        vault.setPoolAmounts(100e8, 1000e18); // 0.1 ETH
+        price = vaultManager.getOhmTknPoolPrice();
+        assertEq(price, 1e7);
+    }
+
+    function testCorrectness_getOhmTknPoolPrice_empty() public {
+        vault.setPoolAmounts(100e9, 0);
+
+        uint256 price = vaultManager.getOhmTknPoolPrice();
+        assertEq(price, 0);
+    }
+
     //============================================================================================//
     //                                        ADMIN FUNCTIONS                                     //
     //============================================================================================//
