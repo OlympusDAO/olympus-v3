@@ -244,7 +244,7 @@ contract PRICEv2Install is OlyBatch {
                     AggregatorV2V3Interface(ohmEthPriceFeed),
                     uint48(24 hours),
                     AggregatorV2V3Interface(ethUsdPriceFeed),
-                    uint48(1 hours)
+                    uint48(24 hours)
                 )
             )
         );
@@ -274,7 +274,7 @@ contract PRICEv2Install is OlyBatch {
                     AggregatorV2V3Interface(daiEthPriceFeed),
                     uint48(24 hours),
                     AggregatorV2V3Interface(ethUsdPriceFeed),
-                    uint48(1 hours)
+                    uint48(24 hours)
                 )
             )
         );
@@ -284,7 +284,7 @@ contract PRICEv2Install is OlyBatch {
             abi.encode(
                 ChainlinkPriceFeeds.OneFeedParams(
                     AggregatorV2V3Interface(daiUsdPriceFeed),
-                    uint48(1 hours)
+                    uint48(24 hours)
                 )
             )
         );
