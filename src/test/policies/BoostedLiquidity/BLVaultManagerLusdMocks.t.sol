@@ -685,6 +685,7 @@ contract BLVaultManagerLusdTest is Test {
 
     /// [X]  getPoolOhmShare
     ///     [X]  returns correct pool OHM share
+    ///     [X]  0 total supply
 
     function testCorrectness_getPoolOhmShare() public {
         // Test base case
@@ -706,6 +707,31 @@ contract BLVaultManagerLusdTest is Test {
         // Check state after
         poolOhmShare = vaultManager.getPoolOhmShare();
         assertEq(poolOhmShare, 1e9);
+    }
+
+    function testCorrectness_getPoolOhmShare_zeroTotalSupply() public {
+        // Test base case
+        uint256 poolOhmShare = vaultManager.getPoolOhmShare();
+        assertEq(poolOhmShare, 0);
+
+        // Deposit
+        address validVault = _createVault();
+
+        vm.startPrank(alice);
+        lusd.approve(validVault, type(uint256).max);
+        BLVaultLusd(validVault).deposit(10e18, 0);
+        vm.stopPrank();
+
+        // Set pool amounts to current balance
+        uint256 vaultOhmBalance = ohm.balanceOf(address(vault));
+        vault.setPoolAmounts(vaultOhmBalance, 1000e18);
+
+        // Set total supply to 0
+        liquidityPool.setTotalSupply(0);
+
+        // Check state after
+        poolOhmShare = vaultManager.getPoolOhmShare();
+        assertEq(poolOhmShare, 0); // Instead of 1e9
     }
 
     /// [X]  getOhmSupplyChangeData

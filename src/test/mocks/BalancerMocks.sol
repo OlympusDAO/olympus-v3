@@ -74,4 +74,8 @@ contract MockBalancerPool is MockERC20 {
     function getPoolId() external pure returns (bytes32) {
         return bytes32(0);
     }
+
+    function setTotalSupply(uint256 totalSupply_) external {
+        totalSupply = totalSupply_;
+    }
 }
