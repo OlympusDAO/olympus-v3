@@ -104,3 +104,4 @@ Add `FORK_TEST_RPC_URL` to the .env file in order to run fork tests
 
 - Modify `src/scripts/deploy.json` with the details of the contract(s) that need to be deployed, along with arguments
 - Ensure that the deploy script (`src/scripts/DeployV2.sol`) has function(s) for deploying the contract(s), and the correct mapping from the contract name in `src/scripts/deploy.json` and the selector added to `selectorMap`
+- Uncomment broadcast after testing in order to push the changes to the wider blockchain. Not uncommenting will only do local fork testing.
