@@ -351,14 +351,20 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
             : ohmTknPoolPrice;
         uint256 ohmMintAmount = (amount_ * ohmTknPrice) / 1e18;
 
+        // Determine token indexes
+        IVault vault = IVault(balancerData.vault);
+        (address[] memory tokens, , ) = vault.getPoolTokens(pool.getPoolId());
+        uint256 ohmIndex = _getTokenIndex(address(ohm), tokens);
+        uint256 pairTokenIndex = _getTokenIndex(address(pairToken), tokens);
+
         // Build join pool request
         address[] memory assets = new address[](2);
-        assets[0] = ohm;
-        assets[1] = pairToken;
+        assets[ohmIndex] = ohm;
+        assets[pairTokenIndex] = pairToken;
 
         uint256[] memory maxAmountsIn = new uint256[](2);
-        maxAmountsIn[0] = ohmMintAmount;
-        maxAmountsIn[1] = amount_;
+        maxAmountsIn[ohmIndex] = ohmMintAmount;
+        maxAmountsIn[pairTokenIndex] = amount_;
 
         JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
             assets: assets,
@@ -385,10 +391,16 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
         IBasePool pool = IBasePool(balancerData.liquidityPool);
         IBalancerHelper balancerHelper = IBalancerHelper(balancerData.balancerHelper);
 
+        // Determine token indexes
+        IVault vault = IVault(balancerData.vault);
+        (address[] memory tokens, , ) = vault.getPoolTokens(pool.getPoolId());
+        uint256 ohmIndex = _getTokenIndex(address(ohm), tokens);
+        uint256 pairTokenIndex = _getTokenIndex(address(pairToken), tokens);
+
         // Build exit pool request
         address[] memory assets = new address[](2);
-        assets[0] = ohm;
-        assets[1] = pairToken;
+        assets[ohmIndex] = ohm;
+        assets[pairTokenIndex] = pairToken;
 
         uint256[] memory minAmountsOut = new uint256[](2);
         minAmountsOut[0] = 0;
@@ -418,10 +430,16 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
         IBasePool pool = IBasePool(balancerData.liquidityPool);
         IBalancerHelper balancerHelper = IBalancerHelper(balancerData.balancerHelper);
 
+        // Determine token indexes
+        IVault vault = IVault(balancerData.vault);
+        (address[] memory tokens, , ) = vault.getPoolTokens(pool.getPoolId());
+        uint256 ohmIndex = _getTokenIndex(address(ohm), tokens);
+        uint256 pairTokenIndex = _getTokenIndex(address(pairToken), tokens);
+
         // Build exit pool request
         address[] memory assets = new address[](2);
-        assets[0] = ohm;
-        assets[1] = pairToken;
+        assets[ohmIndex] = ohm;
+        assets[pairTokenIndex] = pairToken;
 
         uint256[] memory minAmountsOut = new uint256[](2);
         minAmountsOut[0] = 0;
@@ -575,18 +593,21 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
         return (ethPerOhm * usdPerEth) / (usdPerLusd);
     }
 
-    // TODO: Update
     /// @inheritdoc IBLVaultManager
     function getOhmTknPoolPrice() public view override returns (uint256) {
         IBasePool pool = IBasePool(balancerData.liquidityPool);
         IVault vault = IVault(balancerData.vault);
 
         // Get token balances
-        (, uint256[] memory balances, ) = vault.getPoolTokens(pool.getPoolId());
+        (address[] memory tokens, uint256[] memory balances, ) = vault.getPoolTokens(
+            pool.getPoolId()
+        );
+        uint256 ohmIndex = _getTokenIndex(address(ohm), tokens);
+        uint256 pairTokenIndex = _getTokenIndex(address(pairToken), tokens);
 
         // Get OHM per LUSD (9 decimals)
-        if (balances[1] == 0) return 0;
-        else return (balances[0] * 1e18) / balances[1];
+        if (balances[pairTokenIndex] == 0) return 0;
+        else return (balances[ohmIndex] * 1e18) / balances[pairTokenIndex];
     }
 
     //============================================================================================//
@@ -667,5 +688,27 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
         ) revert BLManagerLusd_BadPriceFeed();
 
         return uint256(priceInt);
+    }
+
+    /// @notice         Get token index in array of tokens
+    /// @dev            Will revert if the token cannot be found
+    ///
+    /// @param token_   Address of token to find
+    /// @param tokens_  Array of tokens to search
+    /// @return         Index of token in array
+    function _getTokenIndex(
+        address token_,
+        address[] memory tokens_
+    ) internal pure returns (uint256) {
+        uint256 numTokens = tokens_.length;
+        for (uint256 i; i < numTokens; ) {
+            if (token_ == tokens_[i]) return i;
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        revert BLManagerLusd_InvalidVault();
     }
 }

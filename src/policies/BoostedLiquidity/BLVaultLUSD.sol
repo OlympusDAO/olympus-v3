@@ -34,6 +34,7 @@ contract BLVaultLusd is IBLVault, Clone {
     error BLVaultLusd_AuraWithdrawalFailed();
     error BLVaultLusd_WithdrawFailedPriceImbalance();
     error BLVaultLusd_WithdrawalDelay();
+    error BLVaultLusd_InvalidVault();
 
     // ========= EVENTS ========= //
 
@@ -419,14 +420,19 @@ contract BLVaultLusd is IBLVault, Clone {
         ERC20 lusd = lusd();
         IVault vault = vault();
 
+        // Determine token indexes
+        (address[] memory tokens, , ) = vault.getPoolTokens(liquidityPool().getPoolId());
+        uint256 ohmIndex = _getTokenIndex(address(ohm), tokens);
+        uint256 pairTokenIndex = _getTokenIndex(address(lusd), tokens);
+
         // Build join pool request
         address[] memory assets = new address[](2);
-        assets[0] = address(ohm);
-        assets[1] = address(lusd);
+        assets[ohmIndex] = address(ohm);
+        assets[pairTokenIndex] = address(lusd);
 
         uint256[] memory maxAmountsIn = new uint256[](2);
-        maxAmountsIn[0] = ohmAmount_;
-        maxAmountsIn[1] = lusdAmount_;
+        maxAmountsIn[ohmIndex] = ohmAmount_;
+        maxAmountsIn[pairTokenIndex] = lusdAmount_;
 
         JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
             assets: assets,
@@ -448,10 +454,15 @@ contract BLVaultLusd is IBLVault, Clone {
         IBasePool liquidityPool = liquidityPool();
         IVault vault = vault();
 
+        // Determine token indexes
+        (address[] memory tokens, , ) = vault.getPoolTokens(liquidityPool.getPoolId());
+        uint256 ohmIndex = _getTokenIndex(address(ohm), tokens);
+        uint256 pairTokenIndex = _getTokenIndex(address(lusd), tokens);
+
         // Build exit pool request
         address[] memory assets = new address[](2);
-        assets[0] = address(ohm);
-        assets[1] = address(lusd);
+        assets[ohmIndex] = address(ohm);
+        assets[pairTokenIndex] = address(lusd);
 
         ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
             assets: assets,
@@ -518,5 +529,27 @@ contract BLVaultLusd is IBLVault, Clone {
                 }
             }
         }
+    }
+
+    /// @notice         Get token index in array of tokens
+    /// @dev            Will revert if the token cannot be found
+    ///
+    /// @param token_   Address of token to find
+    /// @param tokens_  Array of tokens to search
+    /// @return         Index of token in array
+    function _getTokenIndex(
+        address token_,
+        address[] memory tokens_
+    ) internal pure returns (uint256) {
+        uint256 numTokens = tokens_.length;
+        for (uint256 i; i < numTokens; ) {
+            if (token_ == tokens_[i]) return i;
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        revert BLVaultLusd_InvalidVault();
     }
 }
