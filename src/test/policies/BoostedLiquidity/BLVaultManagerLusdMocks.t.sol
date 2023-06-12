@@ -321,9 +321,9 @@ contract BLVaultManagerLusdTest is Test {
         vaultManager.mintOhmToVault(1e9);
     }
 
-    function testCorrectness_mintOhmToVaultCanOnlyBeCalledByApprovedVault(address attacker_)
-        public
-    {
+    function testCorrectness_mintOhmToVaultCanOnlyBeCalledByApprovedVault(
+        address attacker_
+    ) public {
         address validVault = _createVault();
 
         vm.prank(validVault);
@@ -401,9 +401,9 @@ contract BLVaultManagerLusdTest is Test {
         vaultManager.burnOhmFromVault(1e9);
     }
 
-    function testCorrectness_burnOhmFromVaultCanOnlyBeCalledByAnApprovedVault(address attacker_)
-        public
-    {
+    function testCorrectness_burnOhmFromVaultCanOnlyBeCalledByAnApprovedVault(
+        address attacker_
+    ) public {
         // Setup
         address validVault = _createVault();
         vm.prank(validVault);
@@ -492,9 +492,9 @@ contract BLVaultManagerLusdTest is Test {
         vaultManager.increaseTotalLp(1e18);
     }
 
-    function testCorrectness_increaseTotalLpCanOnlyBeCalledByAnApprovedVault(address attacker_)
-        public
-    {
+    function testCorrectness_increaseTotalLpCanOnlyBeCalledByAnApprovedVault(
+        address attacker_
+    ) public {
         // Setup
         address validVault = _createVault();
 
@@ -540,9 +540,9 @@ contract BLVaultManagerLusdTest is Test {
         vaultManager.decreaseTotalLp(1e18);
     }
 
-    function testCorrectness_decreaseTotalLpCanOnlyBeCalledByAnApprovedVault(address attacker_)
-        public
-    {
+    function testCorrectness_decreaseTotalLpCanOnlyBeCalledByAnApprovedVault(
+        address attacker_
+    ) public {
         // Setup
         address validVault = _createVault();
 
@@ -949,9 +949,9 @@ contract BLVaultManagerLusdTest is Test {
     ///     [X]  can only be called by liquidityvault_admin
     ///     [X]  correctly sets price feed update thresholds
 
-    function testCorrectness_changeUpdateThresholdsCanOnlyBeCalledByAdmin(address attacker_)
-        public
-    {
+    function testCorrectness_changeUpdateThresholdsCanOnlyBeCalledByAdmin(
+        address attacker_
+    ) public {
         vm.assume(attacker_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
