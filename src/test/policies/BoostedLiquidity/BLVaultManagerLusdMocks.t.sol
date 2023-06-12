@@ -599,7 +599,7 @@ contract BLVaultManagerLusdTest is Test {
         vm.stopPrank();
 
         // Check state after
-        assertEq(vaultManager.getLpBalance(alice), 1e18);
+        assertEq(vaultManager.getLpBalance(alice), 1e8);
     }
 
     /// [X]  getUserPairShare

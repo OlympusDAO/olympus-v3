@@ -513,7 +513,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
         (, uint256[] memory balances_, ) = vault.getPoolTokens(pool.getPoolId());
 
         // Balancer pool tokens are sorted alphabetically by token address. In the case of this
-        // deployment, OHM is the first token in the pool. Therefore, the OHM balance is at index 0.
+        // deployment, OHM is the second token in the pool. Therefore, the OHM balance is at index 1.
         if (poolTotalSupply == 0) return 0;
         else return (balances_[_ohmIndex] * totalLp) / poolTotalSupply;
     }
