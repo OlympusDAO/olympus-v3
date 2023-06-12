@@ -38,14 +38,15 @@ import {BondManager} from "policies/BondManager.sol";
 import {Burner} from "policies/Burner.sol";
 import {BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
 import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
-import {BLVaultManagerLUSD} from "policies/BoostedLiquidity/BLVaultManagerLUSD.sol";
-import {BLVaultLUSD} from "policies/BoostedLiquidity/BLVaultLUSD.sol";
+import {BLVaultManagerLusd} from "policies/BoostedLiquidity/BLVaultManagerLUSD.sol";
+import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLUSD.sol";
 
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "test/mocks/AuraMocks.sol";
+import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
 
@@ -80,8 +81,8 @@ contract OlympusDeploy is Script {
     Burner public burner;
     BLVaultManagerLido public lidoVaultManager;
     BLVaultLido public lidoVault;
-    BLVaultManagerLUSD public lusdVaultManager;
-    BLVaultLUSD public lusdVault;
+    BLVaultManagerLusd public lusdVaultManager;
+    BLVaultLusd public lusdVault;
 
     /// Construction variables
 
@@ -202,8 +203,8 @@ contract OlympusDeploy is Script {
         burner = Burner(env.readAddress(string.concat(".", chain_, ".olympus.policies.Burner")));
         lidoVaultManager = BLVaultManagerLido(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultManagerLido")));
         lidoVault = BLVaultLido(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultLido")));
-        lusdVaultManager = BLVaultManagerLido(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultManagerLUSD")));
-        lusdVault = BLVaultLido(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultLUSD")));
+        lusdVaultManager = BLVaultManagerLusd(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultManagerLUSD")));
+        lusdVault = BLVaultLusd(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultLUSD")));
 
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy.json");
@@ -533,7 +534,7 @@ contract OlympusDeploy is Script {
 
         // Deploy BLVaultLUSD policy
         vm.broadcast();
-        lusdVault = new BLVaultLUSD();
+        lusdVault = new BLVaultLusd();
         console2.log("BLVaultLUSD deployed at:", address(lusdVault));
 
         return address(lusdVault);
@@ -682,7 +683,7 @@ contract OlympusDeploy is Script {
 
         // Deploy BLVaultManagerLUSD policy
         vm.broadcast();
-        lusdVaultManager = new BLVaultManagerLUSD(
+        lusdVaultManager = new BLVaultManagerLusd(
             kernel,
             tokenData,
             balancerData,
@@ -885,8 +886,6 @@ contract DependencyDeploy is Script {
     MockERC20 public aura;
     MockERC20 public ldo;
 
-    MockPriceFeed public lusdUsdPriceFeed;
-
     MockAuraBooster public auraBooster;
     MockAuraMiningLib public auraMiningLib;
     MockAuraRewardPool public ohmWstethRewardPool;
@@ -907,26 +906,13 @@ contract DependencyDeploy is Script {
         // ldo = new MockERC20("Lido", "LDO", 18);
         // console2.log("LDO deployed to:", address(ldo));
 
-        // Deploy the LUSD price feed
-        lusdUsdPriceFeed = new MockPriceFeed();
-        lusdUsdPriceFeed.setDecimals(8);
-        lusdUsdPriceFeed.setPrice(1e8);
-        lusdUsdPriceFeed.setRoundId(1);
-        lusdUsdPriceFeed.setAnsweredInRound(1);
-        lusdUsdPriceFeed.setTimestamp(block.timestamp); // Will be good for 1 year from now
-        console2.log("LUSD-USD Price Feed deployed to:", address(lusdUsdPriceFeed));
-
-        // TODO Deploy the OHM-LUSD LP
-
-        // Deploy the Aura Reward Pools
+        // Deploy the Aura Reward Pools for OHM-wstETH
         ohmWstethRewardPool = new MockAuraRewardPool(
             0x3F50E8018bC26668F5cd59B3e5be5257615F83A3, // Goerli OHM-wstETH LP
             0xd517A8E45771a40B29eCDa347634bD62051F91B9, // Goerli BAL
             0x4a92f7C880f14c2a06FfCf56C7849739B0E492f5 // Goerli AURA
         );
         console2.log("OHM-WSTETH Reward Pool deployed to:", address(ohmWstethRewardPool));
-
-        // TODO ohmLusdRewardPool
 
         // ohmWstethExtraRewardPool = new MockAuraRewardPool(
         //     0x3F50E8018bC26668F5cd59B3e5be5257615F83A3,
@@ -936,13 +922,10 @@ contract DependencyDeploy is Script {
         // console2.log("OHM-WSTETH Extra Reward Pool deployed to:", address(ohmWstethExtraRewardPool));
 
         ohmWstethRewardPool.addExtraReward(0x31abFacE787376c9C7c1173106D9f6D64779c32F);
-        // TODO ohmLusdRewardPool.addExtraReward
 
         // Deploy Aura Booster
         auraBooster = new MockAuraBooster(0x3F50E8018bC26668F5cd59B3e5be5257615F83A3, address(ohmWstethRewardPool));
         console2.log("Aura Booster deployed to:", address(auraBooster));
-
-        // TODO aura booster for LUSD
 
         // Deploy the Aura Mining Library
         // auraMiningLib = new MockAuraMiningLib();
@@ -957,6 +940,78 @@ contract DependencyDeploy is Script {
         // // Set the decimals of the price feeds
         // ohmEthPriceFeed.setDecimals(18);
         // reserveEthPriceFeed.setDecimals(18);
+
+        vm.stopBroadcast();
+    }
+}
+
+contract DependencyDeployLUSD is Script {
+    using stdJson for string;
+
+    ERC20 public bal;
+    ERC20 public aura;
+    ERC20 public ldo;
+    ERC20 public ohm;
+    ERC20 public lusd;
+
+    MockPriceFeed public lusdUsdPriceFeed;
+    MockBalancerPool public ohmLusdPool;
+    MockVault public ohmLusdVault;
+    MockAuraBooster public ohmLusdAuraBooster;
+    MockAuraRewardPool public ohmLusdRewardPool;
+    MockAuraRewardPool public ohmLusdExtraRewardPool;
+
+    MockAuraMiningLib public auraMiningLib;
+
+    function deploy(string calldata chain_) external {
+        // Load environment addresses
+        string memory env = vm.readFile("./src/scripts/env.json");
+        bal = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.BAL")));
+        aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
+        ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
+        ohm = ERC20(env.readAddress(string.concat(".", chain_, ".olympus.legacy.OHM")));
+        lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD")));
+
+        vm.startBroadcast();
+
+        // Deploy the LUSD price feed
+        lusdUsdPriceFeed = new MockPriceFeed();
+        lusdUsdPriceFeed.setDecimals(8);
+        lusdUsdPriceFeed.setLatestAnswer(1e8);
+        lusdUsdPriceFeed.setRoundId(1);
+        lusdUsdPriceFeed.setAnsweredInRound(1);
+        lusdUsdPriceFeed.setTimestamp(block.timestamp); // Will be good for 1 year from now
+        console2.log("LUSD-USD Price Feed deployed to:", address(lusdUsdPriceFeed));
+
+        // Deploy the OHM-LUSD LP
+        ohmLusdPool = new MockBalancerPool(); // pool id is 0, which is fine as this will have its own vault
+        console2.log("OHM-LUSD LP deployed to: ", address(ohmLusdPool));
+
+        // Deploy the Balancer Vault for OHM-LUSD
+        ohmLusdVault = new MockVault(address(ohmLusdPool), address(ohm), address(lusd));
+        ohmLusdVault.setPoolAmounts(100e9, 1000e18); // 1000 LUSD = 100 OHM, 1 OHM = 10 LUSD
+        console2.log("Mock Balancer Vault deployed to: ", address(ohmLusdVault));
+
+        // Deploy the Aura Reward Pools for OHM-LUSD
+        ohmLusdRewardPool = new MockAuraRewardPool(
+            address(ohmLusdPool), // OHM-LUSD LP
+            address(bal), // BAL
+            address(aura) // AURA
+        );
+        console2.log("OHM-LUSD LP reward pool deployed to: ", address(ohmLusdRewardPool));
+
+        // Deploy the Aura extra reward pool
+        ohmLusdExtraRewardPool = new MockAuraRewardPool(
+            address(ohmLusdPool), // OHM-LUSD LP
+            address(ldo), // LIDO
+            address(0)
+        );
+        ohmLusdRewardPool.addExtraReward(address(ohmLusdExtraRewardPool));
+        console2.log("OHM-LUSD LP extra reward pool deployed to: ", address(ohmLusdExtraRewardPool));
+
+        // Deploy the Aura Booster
+        ohmLusdAuraBooster = new MockAuraBooster(address(ohmLusdPool), address(ohmLusdRewardPool));
+        console2.log("OHM-LUSD Aura Booster deployed to:", address(ohmLusdAuraBooster));
 
         vm.stopBroadcast();
     }

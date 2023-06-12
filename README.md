@@ -99,3 +99,8 @@ Set up a foundry config in foundry.toml.
 ## Setup
 
 Add `FORK_TEST_RPC_URL` to the .env file in order to run fork tests
+
+## How To Deploy
+
+- Modify `src/scripts/deploy.json` with the details of the contract(s) that need to be deployed, along with arguments
+- Ensure that the deploy script (`src/scripts/DeployV2.sol`) has function(s) for deploying the contract(s), and the correct mapping from the contract name in `src/scripts/deploy.json` and the selector added to `selectorMap`

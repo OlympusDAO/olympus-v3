@@ -1,0 +1,12 @@
+{
+    "sequence": [
+        {
+            "name": "BLVaultLUSD",
+            "args": {}
+        },
+        {
+            "name": "BLVaultManagerLUSD",
+            "args": {}
+        }
+    ]
+}
