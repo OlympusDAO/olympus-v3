@@ -138,6 +138,15 @@ contract BLVaultLusdTest is Test {
             auth.vault.larp(address(minter));
         }
 
+        // Initialize timestamps on mock price feeds
+        {
+            ohmEthPriceFeed.setTimestamp(block.timestamp);
+            ethUsdPriceFeed.setTimestamp(block.timestamp);
+            lusdUsdPriceFeed.setTimestamp(block.timestamp);
+        }
+    }
+
+    function deployPolicies(MockVault vault_) internal {
         // Deploy policies
         {
             vaultImplementation = new BLVaultLusd();
@@ -150,7 +159,7 @@ contract BLVaultLusdTest is Test {
             });
 
             IBLVaultManager.BalancerData memory balancerData = IBLVaultManager.BalancerData({
-                vault: address(vault),
+                vault: address(vault_),
                 liquidityPool: address(liquidityPool),
                 balancerHelper: address(0)
             });
@@ -217,13 +226,6 @@ contract BLVaultLusdTest is Test {
             vaultManager.activate();
         }
 
-        // Initialize timestamps on mock price feeds
-        {
-            ohmEthPriceFeed.setTimestamp(block.timestamp);
-            ethUsdPriceFeed.setTimestamp(block.timestamp);
-            lusdUsdPriceFeed.setTimestamp(block.timestamp);
-        }
-
         // Prepare alice's account
         {
             // Mint LUSD to alice
@@ -252,6 +254,8 @@ contract BLVaultLusdTest is Test {
     ///     [X]  correctly deploys liquidity when oracle price > pool price
 
     function testCorrectness_depositCanOnlyBeCalledWhenManagerIsActive() public {
+        deployPolicies(vault);
+
         // Deactivate vault manager
         vaultManager.deactivate();
 
@@ -264,6 +268,8 @@ contract BLVaultLusdTest is Test {
     }
 
     function testCorrectness_depositCanOnlyBeCalledByTheVaultOwner(address attacker_) public {
+        deployPolicies(vault);
+
         if (attacker_ == alice) {
             vm.prank(alice);
             aliceVault.deposit(1e18, 0);
@@ -277,7 +283,21 @@ contract BLVaultLusdTest is Test {
         }
     }
 
-    function testCorrectness_depositCorrectlyIncreasesState(uint256 depositAmount_) public {
+    function testCorrectness_depositCorrectlyIncreasesState(
+        uint256 depositAmount_,
+        uint256 ohmIndex_
+    ) public {
+        // Set up the vault based on the fuzzing
+        uint256 ohmIndex = bound(ohmIndex_, 0, 1);
+        vault = new MockVault(
+            address(liquidityPool),
+            ohmIndex == 0 ? address(ohm) : address(lusd),
+            ohmIndex == 0 ? address(lusd) : address(ohm)
+        );
+        vault.setPoolAmounts(ohmIndex == 0 ? 1e9 : 10e18, ohmIndex == 0 ? 10e18 : 1e9);
+
+        deployPolicies(vault);
+
         vm.assume(depositAmount_ > 1e16 && depositAmount_ < 1_000_000_000_000e18);
 
         // Set limit based on deposit amount
@@ -304,7 +324,18 @@ contract BLVaultLusdTest is Test {
         assertEq(vaultManager.totalLp(), depositAmount_);
     }
 
-    function testCorrectness_depositCorrectlyDeploysLiquidity() public {
+    function testCorrectness_depositCorrectlyDeploysLiquidity(uint256 ohmIndex_) public {
+        // Set up the vault based on the fuzzing
+        uint256 ohmIndex = bound(ohmIndex_, 0, 1);
+        vault = new MockVault(
+            address(liquidityPool),
+            ohmIndex == 0 ? address(ohm) : address(lusd),
+            ohmIndex == 0 ? address(lusd) : address(ohm)
+        );
+        vault.setPoolAmounts(ohmIndex == 0 ? 1e9 : 10e18, ohmIndex == 0 ? 10e18 : 1e9);
+
+        deployPolicies(vault);
+
         // Verify state before
         assertEq(ohm.balanceOf(address(vault)), 0);
         assertEq(lusd.balanceOf(address(vault)), 0);
@@ -321,7 +352,20 @@ contract BLVaultLusdTest is Test {
         assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
     }
 
-    function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueLow() public {
+    function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueLow(uint256 ohmIndex_)
+        public
+    {
+        // Set up the vault based on the fuzzing
+        uint256 ohmIndex = bound(ohmIndex_, 0, 1);
+        vault = new MockVault(
+            address(liquidityPool),
+            ohmIndex == 0 ? address(ohm) : address(lusd),
+            ohmIndex == 0 ? address(lusd) : address(ohm)
+        );
+        vault.setPoolAmounts(ohmIndex == 0 ? 1e9 : 10e18, ohmIndex == 0 ? 10e18 : 1e9);
+
+        deployPolicies(vault);
+
         // Set oracle price to 0.5
         ohmEthPriceFeed.setLatestAnswer(0.5e18);
 
@@ -341,7 +385,20 @@ contract BLVaultLusdTest is Test {
         assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
     }
 
-    function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueHigh() public {
+    function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueHigh(uint256 ohmIndex_)
+        public
+    {
+        // Set up the vault based on the fuzzing
+        uint256 ohmIndex = bound(ohmIndex_, 0, 1);
+        vault = new MockVault(
+            address(liquidityPool),
+            ohmIndex == 0 ? address(ohm) : address(lusd),
+            ohmIndex == 0 ? address(lusd) : address(ohm)
+        );
+        vault.setPoolAmounts(ohmIndex == 0 ? 1e9 : 10e18, ohmIndex == 0 ? 10e18 : 1e9);
+
+        deployPolicies(vault);
+
         // Set oracle price to 0.001
         ohmEthPriceFeed.setLatestAnswer(1e15);
 
@@ -379,6 +436,8 @@ contract BLVaultLusdTest is Test {
     }
 
     function testCorrectness_withdrawFailsIfCooldownPeriodHasNotPassed() public {
+        deployPolicies(vault);
+
         // Deposit LUSD
         vm.prank(alice);
         aliceVault.deposit(100e18, 0);
@@ -392,6 +451,8 @@ contract BLVaultLusdTest is Test {
     }
 
     function testCorrectness_withdrawCanOnlyBeCalledByTheVaultOwner(address attacker_) public {
+        deployPolicies(vault);
+
         _withdrawSetup();
 
         if (attacker_ == alice) {
@@ -408,6 +469,8 @@ contract BLVaultLusdTest is Test {
     }
 
     function testCorrectness_withdrawFailsIfNotEnoughLusdWillBeSent() public {
+        deployPolicies(vault);
+
         _withdrawSetup();
 
         // Set price to 0.001
@@ -421,7 +484,21 @@ contract BLVaultLusdTest is Test {
         aliceVault.withdraw(1e18, minAmountsOut, 900e18, true);
     }
 
-    function testCorrectness_withdrawCorrectlyDecreasesState(uint256 withdrawAmount_) public {
+    function testCorrectness_withdrawCorrectlyDecreasesState(
+        uint256 withdrawAmount_,
+        uint256 ohmIndex_
+    ) public {
+        // Set up the vault based on the fuzzing
+        uint256 ohmIndex = bound(ohmIndex_, 0, 1);
+        vault = new MockVault(
+            address(liquidityPool),
+            ohmIndex == 0 ? address(ohm) : address(lusd),
+            ohmIndex == 0 ? address(lusd) : address(ohm)
+        );
+        vault.setPoolAmounts(ohmIndex == 0 ? 1e9 : 10e18, ohmIndex == 0 ? 10e18 : 1e9);
+
+        deployPolicies(vault);
+
         _withdrawSetup();
 
         // Get alice vault's Lp balance
@@ -441,7 +518,18 @@ contract BLVaultLusdTest is Test {
         assertEq(vaultManager.totalLp(), aliceLpBalance - withdrawAmount_);
     }
 
-    function testCorrectness_withdrawCorrectlyWithdrawsLiquidity() public {
+    function testCorrectness_withdrawCorrectlyWithdrawsLiquidity(uint256 ohmIndex_) public {
+        // Set up the vault based on the fuzzing
+        uint256 ohmIndex = bound(ohmIndex_, 0, 1);
+        vault = new MockVault(
+            address(liquidityPool),
+            ohmIndex == 0 ? address(ohm) : address(lusd),
+            ohmIndex == 0 ? address(lusd) : address(ohm)
+        );
+        vault.setPoolAmounts(ohmIndex == 0 ? 1e9 : 10e18, ohmIndex == 0 ? 10e18 : 1e9);
+
+        deployPolicies(vault);
+
         _withdrawSetup();
 
         // Get alice vault's LP balance
@@ -462,7 +550,20 @@ contract BLVaultLusdTest is Test {
         assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 0);
     }
 
-    function testCorrectness_withdrawCorrectlyWithdrawsLiquidityPriceDiff() public {
+    function testCorrectness_withdrawCorrectlyWithdrawsLiquidityPriceDiff(uint256 ohmIndex_)
+        public
+    {
+        // Set up the vault based on the fuzzing
+        uint256 ohmIndex = bound(ohmIndex_, 0, 1);
+        vault = new MockVault(
+            address(liquidityPool),
+            ohmIndex == 0 ? address(ohm) : address(lusd),
+            ohmIndex == 0 ? address(lusd) : address(ohm)
+        );
+        vault.setPoolAmounts(ohmIndex == 0 ? 1e9 : 10e18, ohmIndex == 0 ? 10e18 : 1e9);
+
+        deployPolicies(vault);
+
         _withdrawSetup();
 
         // Set oracle price to 0.001
@@ -501,6 +602,8 @@ contract BLVaultLusdTest is Test {
     ///     [X]  correctly claims rewards from Aura
 
     function testCorrectness_claimRewardsCanOnlyBeCalledWhenManagerIsActive() public {
+        deployPolicies(vault);
+
         // Deactivate vault manager
         vaultManager.deactivate();
 
@@ -513,6 +616,8 @@ contract BLVaultLusdTest is Test {
     }
 
     function testCorrectness_claimRewardsCanOnlyBeCalledByTheVaultOwner(address attacker_) public {
+        deployPolicies(vault);
+
         if (attacker_ == alice) {
             vm.prank(alice);
             aliceVault.claimRewards();
@@ -526,7 +631,18 @@ contract BLVaultLusdTest is Test {
         }
     }
 
-    function testCorrectness_claimRewardsCorrectlyClaims() public {
+    function testCorrectness_claimRewardsCorrectlyClaims(uint256 ohmIndex_) public {
+        // Set up the vault based on the fuzzing
+        uint256 ohmIndex = bound(ohmIndex_, 0, 1);
+        vault = new MockVault(
+            address(liquidityPool),
+            ohmIndex == 0 ? address(ohm) : address(lusd),
+            ohmIndex == 0 ? address(lusd) : address(ohm)
+        );
+        vault.setPoolAmounts(ohmIndex == 0 ? 1e9 : 10e18, ohmIndex == 0 ? 10e18 : 1e9);
+
+        deployPolicies(vault);
+
         // Deposit LUSD
         _withdrawSetup();
 
@@ -548,7 +664,18 @@ contract BLVaultLusdTest is Test {
     /// [X]  getLpBalance
     ///     [X]  returns the correct LP balance
 
-    function testCorrectness_getLpBalance(uint256 depositAmount_) public {
+    function testCorrectness_getLpBalance(uint256 depositAmount_, uint256 ohmIndex_) public {
+        // Set up the vault based on the fuzzing
+        uint256 ohmIndex = bound(ohmIndex_, 0, 1);
+        vault = new MockVault(
+            address(liquidityPool),
+            ohmIndex == 0 ? address(ohm) : address(lusd),
+            ohmIndex == 0 ? address(lusd) : address(ohm)
+        );
+        vault.setPoolAmounts(ohmIndex == 0 ? 1e9 : 10e18, ohmIndex == 0 ? 10e18 : 1e9);
+
+        deployPolicies(vault);
+
         vm.assume(depositAmount_ > 1e15 && depositAmount_ < 1_000_000_000_000e18);
 
         // Set limit based on deposit amount
@@ -576,7 +703,18 @@ contract BLVaultLusdTest is Test {
     /// [X]  getUserPairShare
     ///     [X]  returns the correct user LUSD share
 
-    function testCorrectness_getUserPairShare(uint256 depositAmount_) public {
+    function testCorrectness_getUserPairShare(uint256 depositAmount_, uint256 ohmIndex_) public {
+        // Set up the vault based on the fuzzing
+        uint256 ohmIndex = bound(ohmIndex_, 0, 1);
+        vault = new MockVault(
+            address(liquidityPool),
+            ohmIndex == 0 ? address(ohm) : address(lusd),
+            ohmIndex == 0 ? address(lusd) : address(ohm)
+        );
+        vault.setPoolAmounts(ohmIndex == 0 ? 1e9 : 10e18, ohmIndex == 0 ? 10e18 : 1e9);
+
+        deployPolicies(vault);
+
         vm.assume(depositAmount_ > 1e15 && depositAmount_ < 1_000_000_000_000e18);
 
         // Set limit based on deposit amount

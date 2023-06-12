@@ -12,7 +12,11 @@ contract MockVault {
     uint256 public token0Amount;
     uint256 public token1Amount;
 
-    constructor(address bpt_, address token0_, address token1_) {
+    constructor(
+        address bpt_,
+        address token0_,
+        address token1_
+    ) {
         bpt = MockERC20(bpt_);
         token0 = token0_;
         token1 = token1_;
@@ -47,9 +51,15 @@ contract MockVault {
         );
     }
 
-    function getPoolTokens(
-        bytes32 poolId
-    ) external view returns (address[] memory, uint256[] memory, uint256) {
+    function getPoolTokens(bytes32 poolId)
+        external
+        view
+        returns (
+            address[] memory,
+            uint256[] memory,
+            uint256
+        )
+    {
         address[] memory tokens = new address[](2);
         tokens[0] = token0;
         tokens[1] = token1;
@@ -73,5 +83,9 @@ contract MockBalancerPool is MockERC20 {
 
     function getPoolId() external pure returns (bytes32) {
         return bytes32(0);
+    }
+
+    function setTotalSupply(uint256 totalSupply_) external {
+        totalSupply = totalSupply_;
     }
 }
