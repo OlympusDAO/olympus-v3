@@ -166,40 +166,25 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         uint256 updateThreshold_,
         uint8 outputDecimals_
     ) internal view returns (uint256) {
-        uint256 price;
+        FeedRoundData memory roundData;
         {
-            FeedRoundData memory roundData;
-            {
-                try feed_.latestRoundData() returns (
-                    uint80 roundId,
-                    int256 priceInt,
-                    uint256 startedAt,
-                    uint256 updatedAt,
-                    uint80 answeredInRound
-                ) {
-                    roundData.roundId = roundId;
-                    roundData.priceInt = priceInt;
-                    roundData.startedAt = startedAt;
-                    roundData.updatedAt = updatedAt;
-                    roundData.answeredInRound = answeredInRound;
-                } catch (bytes memory) {
-                    revert Chainlink_FeedInvalid(address(feed_));
-                }
-            }
-            {
-                _validatePriceFeedResult(
-                    feed_,
-                    roundData,
-                    block.timestamp,
-                    uint256(updateThreshold_)
-                );
-
-                price = uint256(roundData.priceInt);
+            try feed_.latestRoundData() returns (
+                uint80 roundId,
+                int256 priceInt,
+                uint256 startedAt,
+                uint256 updatedAt,
+                uint80 answeredInRound
+            ) {
+                roundData = FeedRoundData(roundId, priceInt, startedAt, updatedAt, answeredInRound);
+            } catch (bytes memory) {
+                revert Chainlink_FeedInvalid(address(feed_));
             }
         }
+        _validatePriceFeedResult(feed_, roundData, block.timestamp, uint256(updateThreshold_));
 
-        uint256 priceAdjusted = price.mulDiv(10 ** outputDecimals_, 10 ** feed_.decimals());
-        return priceAdjusted;
+        uint256 price = uint256(roundData.priceInt);
+
+        return price.mulDiv(10 ** outputDecimals_, 10 ** feed_.decimals());
     }
 
     /// @notice                 Returns the price from a single Chainlink feed, as specified in `params_`.
@@ -218,12 +203,10 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ) external view returns (uint256) {
         // Decode params
         OneFeedParams memory params = abi.decode(params_, (OneFeedParams));
-        {
-            if (address(params.feed) == address(0))
-                revert Chainlink_ParamsFeedInvalid(0, address(params.feed));
-            if (params.updateThreshold == 0)
-                revert Chainlink_ParamsUpdateThresholdInvalid(1, params.updateThreshold);
-        }
+        if (address(params.feed) == address(0))
+            revert Chainlink_ParamsFeedInvalid(0, address(params.feed));
+        if (params.updateThreshold == 0)
+            revert Chainlink_ParamsUpdateThresholdInvalid(1, params.updateThreshold);
 
         // Ensure that no decimals would result in an underflow or overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
@@ -262,16 +245,14 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ) external view returns (uint256) {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
-        {
-            if (address(params.firstFeed) == address(0))
-                revert Chainlink_ParamsFeedInvalid(0, address(params.firstFeed));
-            if (params.firstUpdateThreshold == 0)
-                revert Chainlink_ParamsUpdateThresholdInvalid(1, params.firstUpdateThreshold);
-            if (address(params.secondFeed) == address(0))
-                revert Chainlink_ParamsFeedInvalid(2, address(params.secondFeed));
-            if (params.secondUpdateThreshold == 0)
-                revert Chainlink_ParamsUpdateThresholdInvalid(3, params.secondUpdateThreshold);
-        }
+        if (address(params.firstFeed) == address(0))
+            revert Chainlink_ParamsFeedInvalid(0, address(params.firstFeed));
+        if (params.firstUpdateThreshold == 0)
+            revert Chainlink_ParamsUpdateThresholdInvalid(1, params.firstUpdateThreshold);
+        if (address(params.secondFeed) == address(0))
+            revert Chainlink_ParamsFeedInvalid(2, address(params.secondFeed));
+        if (params.secondUpdateThreshold == 0)
+            revert Chainlink_ParamsUpdateThresholdInvalid(3, params.secondUpdateThreshold);
 
         // Ensure that no decimals would result in an underflow or overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
@@ -325,16 +306,14 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ) external view returns (uint256) {
         // Decode params
         TwoFeedParams memory params = abi.decode(params_, (TwoFeedParams));
-        {
-            if (address(params.firstFeed) == address(0))
-                revert Chainlink_ParamsFeedInvalid(0, address(params.firstFeed));
-            if (params.firstUpdateThreshold == 0)
-                revert Chainlink_ParamsUpdateThresholdInvalid(1, params.firstUpdateThreshold);
-            if (address(params.secondFeed) == address(0))
-                revert Chainlink_ParamsFeedInvalid(2, address(params.secondFeed));
-            if (params.secondUpdateThreshold == 0)
-                revert Chainlink_ParamsUpdateThresholdInvalid(3, params.secondUpdateThreshold);
-        }
+        if (address(params.firstFeed) == address(0))
+            revert Chainlink_ParamsFeedInvalid(0, address(params.firstFeed));
+        if (params.firstUpdateThreshold == 0)
+            revert Chainlink_ParamsUpdateThresholdInvalid(1, params.firstUpdateThreshold);
+        if (address(params.secondFeed) == address(0))
+            revert Chainlink_ParamsFeedInvalid(2, address(params.secondFeed));
+        if (params.secondUpdateThreshold == 0)
+            revert Chainlink_ParamsUpdateThresholdInvalid(3, params.secondUpdateThreshold);
 
         // Ensure that no decimals would result in an underflow or overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)

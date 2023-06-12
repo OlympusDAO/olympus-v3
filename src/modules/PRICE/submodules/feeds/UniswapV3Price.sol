@@ -136,19 +136,15 @@ contract UniswapV3Price is PriceSubmodule {
         bytes calldata params_
     ) external view returns (uint256) {
         UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
-        {
-            if (address(params.pool) == address(0))
-                revert UniswapV3_ParamsPoolInvalid(0, address(params.pool));
-        }
+        if (address(params.pool) == address(0))
+            revert UniswapV3_ParamsPoolInvalid(0, address(params.pool));
 
         IUniswapV3Pool pool = IUniswapV3Pool(params.pool);
-        {
-            try pool.token0() returns (address token) {
-                // Do nothing
-            } catch (bytes memory) {
-                // Handle a non-UniswapV3 pool
-                revert UniswapV3_PoolTypeInvalid(address(pool));
-            }
+        try pool.token0() returns (address token) {
+            // Do nothing
+        } catch (bytes memory) {
+            // Handle a non-UniswapV3 pool
+            revert UniswapV3_PoolTypeInvalid(address(pool));
         }
 
         // Revert if the observation window is less than the minimum (which would not give manipulation-resistant results)
