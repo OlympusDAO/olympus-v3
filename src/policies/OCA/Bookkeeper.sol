@@ -59,6 +59,16 @@ contract Bookkeeper is Policy, RolesConsumer {
     //                                      PRICE MANAGEMENT                                            //
     //==================================================================================================//
 
+    /// @notice Configure a new asset on the PRICE module
+    /// @dev see PRICEv2 for more details on caching behavior when no moving average is stored and component interface
+    /// @param asset_ The address of the asset to add
+    /// @param storeMovingAverage_ Whether to store the moving average for this asset
+    /// @param useMovingAverage_ Whether to use the moving average as part of the price resolution strategy for this asset
+    /// @param movingAverageDuration_ The duration of the moving average in seconds, only used if `storeMovingAverage_` is true
+    /// @param lastObservationTime_ The timestamp of the last observation
+    /// @param observations_ The array of observations to add - the number of observations must match the moving average duration divided by the PRICEv2 observation frequency
+    /// @param strategy_ The price resolution strategy to use for this asset
+    /// @param feeds_ The array of price feeds to use for this asset
     function addAssetPrice(
         address asset_,
         bool storeMovingAverage_,
@@ -81,10 +91,16 @@ contract Bookkeeper is Policy, RolesConsumer {
         );
     }
 
+    /// @notice Remove an asset from the PRICE module
+    /// @dev After removal, calls to PRICEv2 for the asset's price will revert
     function removeAssetPrice(address asset_) external onlyRole("bookkeeper_policy") {
         PRICE.removeAsset(asset_);
     }
 
+    /// @notice Update the price feeds for an asset on the PRICE module
+    /// @dev see PRICEv2 for more details on the Component struct
+    /// @param asset_ The address of the asset to update
+    /// @param feeds_ The array of price feeds to use for this asset
     function updateAssetPriceFeeds(
         address asset_,
         PRICEv2.Component[] memory feeds_
@@ -92,6 +108,11 @@ contract Bookkeeper is Policy, RolesConsumer {
         PRICE.updateAssetPriceFeeds(asset_, feeds_);
     }
 
+    /// @notice Update the price resolution strategy for an asset on the PRICE module
+    /// @dev see PRICEv2 for more details on the Component struct
+    /// @param asset_ The address of the asset to update
+    /// @param strategy_ The price resolution strategy to use for this asset
+    /// @param useMovingAverage_ Whether to use the moving average as part of the price resolution strategy for this asset - moving average must be stored to use
     function updateAssetPriceStrategy(
         address asset_,
         PRICEv2.Component memory strategy_,
@@ -100,6 +121,13 @@ contract Bookkeeper is Policy, RolesConsumer {
         PRICE.updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
     }
 
+    /// @notice Update the moving average data for an asset on the PRICE module
+    /// @dev see PRICEv2 for more details on the caching behavior when no moving average is stored and component interface
+    /// @param asset_ The address of the asset to update
+    /// @param storeMovingAverage_ Whether to store the moving average for this asset - cannot remove moving average if being used by strategy (change strategy first)
+    /// @param movingAverageDuration_ The duration of the moving average in seconds, only used if `storeMovingAverage_` is true
+    /// @param lastObservationTime_ The timestamp of the last observation
+    /// @param observations_ The array of observations to add - the number of observations must match the moving average duration divided by the PRICEv2 observation frequency
     function updateAssetMovingAverage(
         address asset_,
         bool storeMovingAverage_,
@@ -120,10 +148,14 @@ contract Bookkeeper is Policy, RolesConsumer {
     //                                      SUBMODULE MANAGEMENT                                        //
     //==================================================================================================//
 
+    /// @notice Install a new submodule on the PRICE module, which can be a new strategy or feed
     function installSubmodule(Submodule submodule_) external onlyRole("bookkeeper_admin") {
         PRICE.installSubmodule(submodule_);
     }
 
+    /// @notice Upgrade a submodule on the PRICE module
+    /// @dev The upgraded submodule must have the same SubKeycode as an existing submodule that it is replacing,
+    /// otherwise use installSubmodule
     function upgradeSubmodule(Submodule submodule_) external onlyRole("bookkeeper_admin") {
         PRICE.upgradeSubmodule(submodule_);
     }
