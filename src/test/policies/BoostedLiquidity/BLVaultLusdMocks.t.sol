@@ -352,9 +352,9 @@ contract BLVaultLusdTest is Test {
         assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
     }
 
-    function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueLow(
-        uint256 ohmIndex_
-    ) public {
+    function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueLow(uint256 ohmIndex_)
+        public
+    {
         // Set up the vault based on the fuzzing
         uint256 ohmIndex = bound(ohmIndex_, 0, 1);
         vault = new MockVault(
@@ -385,9 +385,9 @@ contract BLVaultLusdTest is Test {
         assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
     }
 
-    function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueHigh(
-        uint256 ohmIndex_
-    ) public {
+    function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueHigh(uint256 ohmIndex_)
+        public
+    {
         // Set up the vault based on the fuzzing
         uint256 ohmIndex = bound(ohmIndex_, 0, 1);
         vault = new MockVault(
@@ -550,9 +550,9 @@ contract BLVaultLusdTest is Test {
         assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 0);
     }
 
-    function testCorrectness_withdrawCorrectlyWithdrawsLiquidityPriceDiff(
-        uint256 ohmIndex_
-    ) public {
+    function testCorrectness_withdrawCorrectlyWithdrawsLiquidityPriceDiff(uint256 ohmIndex_)
+        public
+    {
         // Set up the vault based on the fuzzing
         uint256 ohmIndex = bound(ohmIndex_, 0, 1);
         vault = new MockVault(
