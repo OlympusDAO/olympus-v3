@@ -968,7 +968,7 @@ contract DependencyDeployLUSD is Script {
         aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
         ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
         ohm = ERC20(env.readAddress(string.concat(".", chain_, ".olympus.legacy.OHM")));
-        lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD")));
+        lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD"))); // Requires the address of LUSD to be less than the address of OHM, in order to reflect the conditions on mainnet
 
         vm.startBroadcast();
 
@@ -986,8 +986,8 @@ contract DependencyDeployLUSD is Script {
         console2.log("OHM-LUSD LP deployed to: ", address(ohmLusdPool));
 
         // Deploy the Balancer Vault for OHM-LUSD
-        ohmLusdVault = new MockVault(address(ohmLusdPool), address(ohm), address(lusd));
-        ohmLusdVault.setPoolAmounts(100e9, 1000e18); // 1000 LUSD = 100 OHM, 1 OHM = 10 LUSD
+        ohmLusdVault = new MockVault(address(ohmLusdPool), address(lusd), address(ohm));
+        ohmLusdVault.setPoolAmounts(1000e18, 100e9); // 1000 LUSD = 100 OHM, 1 OHM = 10 LUSD
         console2.log("Mock Balancer Vault deployed to: ", address(ohmLusdVault));
 
         // Deploy the Aura Reward Pools for OHM-LUSD
