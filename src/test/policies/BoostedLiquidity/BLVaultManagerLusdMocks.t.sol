@@ -107,8 +107,8 @@ contract BLVaultManagerLusdTest is Test {
         // Deploy mock Balancer contracts
         {
             liquidityPool = new MockBalancerPool();
-            vault = new MockVault(address(liquidityPool), address(ohm), address(lusd));
-            vault.setPoolAmounts(100e9, 1000e18);
+            vault = new MockVault(address(liquidityPool), address(lusd), address(ohm));
+            vault.setPoolAmounts(1000e18, 100e9);
         }
 
         // Deploy mock Aura contracts
@@ -321,9 +321,9 @@ contract BLVaultManagerLusdTest is Test {
         vaultManager.mintOhmToVault(1e9);
     }
 
-    function testCorrectness_mintOhmToVaultCanOnlyBeCalledByApprovedVault(
-        address attacker_
-    ) public {
+    function testCorrectness_mintOhmToVaultCanOnlyBeCalledByApprovedVault(address attacker_)
+        public
+    {
         address validVault = _createVault();
 
         vm.prank(validVault);
@@ -401,9 +401,9 @@ contract BLVaultManagerLusdTest is Test {
         vaultManager.burnOhmFromVault(1e9);
     }
 
-    function testCorrectness_burnOhmFromVaultCanOnlyBeCalledByAnApprovedVault(
-        address attacker_
-    ) public {
+    function testCorrectness_burnOhmFromVaultCanOnlyBeCalledByAnApprovedVault(address attacker_)
+        public
+    {
         // Setup
         address validVault = _createVault();
         vm.prank(validVault);
@@ -492,9 +492,9 @@ contract BLVaultManagerLusdTest is Test {
         vaultManager.increaseTotalLp(1e18);
     }
 
-    function testCorrectness_increaseTotalLpCanOnlyBeCalledByAnApprovedVault(
-        address attacker_
-    ) public {
+    function testCorrectness_increaseTotalLpCanOnlyBeCalledByAnApprovedVault(address attacker_)
+        public
+    {
         // Setup
         address validVault = _createVault();
 
@@ -540,9 +540,9 @@ contract BLVaultManagerLusdTest is Test {
         vaultManager.decreaseTotalLp(1e18);
     }
 
-    function testCorrectness_decreaseTotalLpCanOnlyBeCalledByAnApprovedVault(
-        address attacker_
-    ) public {
+    function testCorrectness_decreaseTotalLpCanOnlyBeCalledByAnApprovedVault(address attacker_)
+        public
+    {
         // Setup
         address validVault = _createVault();
 
@@ -619,7 +619,7 @@ contract BLVaultManagerLusdTest is Test {
 
         // Set pool amounts to current balance
         uint256 vaultLusdBalance = lusd.balanceOf(address(vault));
-        vault.setPoolAmounts(100e9, vaultLusdBalance);
+        vault.setPoolAmounts(vaultLusdBalance, 100e9);
 
         // Check state after
         assertEq(vaultManager.getUserPairShare(alice), 1e18);
@@ -702,7 +702,7 @@ contract BLVaultManagerLusdTest is Test {
 
         // Set pool amounts to current balance
         uint256 vaultOhmBalance = ohm.balanceOf(address(vault));
-        vault.setPoolAmounts(vaultOhmBalance, 1000e18);
+        vault.setPoolAmounts(1000e18, vaultOhmBalance);
 
         // Check state after
         poolOhmShare = vaultManager.getPoolOhmShare();
@@ -724,7 +724,7 @@ contract BLVaultManagerLusdTest is Test {
 
         // Set pool amounts to current balance
         uint256 vaultOhmBalance = ohm.balanceOf(address(vault));
-        vault.setPoolAmounts(vaultOhmBalance, 1000e18);
+        vault.setPoolAmounts(1000e18, vaultOhmBalance);
 
         // Set total supply to 0
         liquidityPool.setTotalSupply(0);
@@ -780,7 +780,7 @@ contract BLVaultManagerLusdTest is Test {
 
         // Set pool amounts to current balance
         uint256 vaultOhmBalance = ohm.balanceOf(address(vault));
-        vault.setPoolAmounts(vaultOhmBalance, 1000e18);
+        vault.setPoolAmounts(1000e18, vaultOhmBalance);
 
         (poolOhmShare, ohmMinted, ohmBurned) = vaultManager.getOhmSupplyChangeData();
         assertEq(poolOhmShare, 1e9);
@@ -827,13 +827,13 @@ contract BLVaultManagerLusdTest is Test {
         assertEq(price, 1e8);
 
         // Increase OHM value
-        vault.setPoolAmounts(100e8, 1000e18); // 0.1 ETH
+        vault.setPoolAmounts(1000e18, 100e8); // 0.1 ETH
         price = vaultManager.getOhmTknPoolPrice();
         assertEq(price, 1e7);
     }
 
     function testCorrectness_getOhmTknPoolPrice_empty() public {
-        vault.setPoolAmounts(100e9, 0);
+        vault.setPoolAmounts(0, 100e9);
 
         uint256 price = vaultManager.getOhmTknPoolPrice();
         assertEq(price, 0);
@@ -949,9 +949,9 @@ contract BLVaultManagerLusdTest is Test {
     ///     [X]  can only be called by liquidityvault_admin
     ///     [X]  correctly sets price feed update thresholds
 
-    function testCorrectness_changeUpdateThresholdsCanOnlyBeCalledByAdmin(
-        address attacker_
-    ) public {
+    function testCorrectness_changeUpdateThresholdsCanOnlyBeCalledByAdmin(address attacker_)
+        public
+    {
         vm.assume(attacker_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(

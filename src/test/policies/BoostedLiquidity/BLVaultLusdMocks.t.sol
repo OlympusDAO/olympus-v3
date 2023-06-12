@@ -110,8 +110,8 @@ contract BLVaultLusdTest is Test {
         // Deploy mock Balancer contracts
         {
             liquidityPool = new MockBalancerPool();
-            vault = new MockVault(address(liquidityPool), address(ohm), address(lusd));
-            vault.setPoolAmounts(1e9, 10e18);
+            vault = new MockVault(address(liquidityPool), address(lusd), address(ohm));
+            vault.setPoolAmounts(10e18, 1e9);
         }
 
         // Deploy mock Aura contracts
@@ -598,7 +598,7 @@ contract BLVaultLusdTest is Test {
         vm.stopPrank();
 
         // Set pool amounts to true balances
-        vault.setPoolAmounts(ohm.balanceOf(address(vault)), lusd.balanceOf(address(vault)));
+        vault.setPoolAmounts(lusd.balanceOf(address(vault)), ohm.balanceOf(address(vault)));
 
         // Calculate expected share
         uint256 tknOhmPrice = vaultManager.getTknOhmPrice();
