@@ -890,8 +890,6 @@ contract DependencyDeploy is Script {
     MockAuraMiningLib public auraMiningLib;
     MockAuraRewardPool public ohmWstethRewardPool;
     // MockAuraRewardPool public ohmWstethExtraRewardPool;
-    MockAuraRewardPool public ohmLusdRewardPool;
-    // MockAuraRewardPool public ohmLusdExtraRewardPool;
 
     function deploy() external {
         vm.startBroadcast();
@@ -957,9 +955,9 @@ contract DependencyDeployLUSD is Script {
     MockPriceFeed public lusdUsdPriceFeed;
     MockBalancerPool public ohmLusdPool;
     MockVault public ohmLusdVault;
-    MockAuraBooster public ohmLusdAuraBooster;
+    // MockAuraBooster public ohmLusdAuraBooster;
     MockAuraRewardPool public ohmLusdRewardPool;
-    MockAuraRewardPool public ohmLusdExtraRewardPool;
+    // MockAuraRewardPool public ohmLusdExtraRewardPool;
 
     MockAuraMiningLib public auraMiningLib;
 
@@ -1000,18 +998,18 @@ contract DependencyDeployLUSD is Script {
         );
         console2.log("OHM-LUSD LP reward pool deployed to: ", address(ohmLusdRewardPool));
 
-        // Deploy the Aura extra reward pool
-        ohmLusdExtraRewardPool = new MockAuraRewardPool(
-            address(ohmLusdPool), // OHM-LUSD LP
-            address(ldo), // LIDO
-            address(0)
-        );
-        ohmLusdRewardPool.addExtraReward(address(ohmLusdExtraRewardPool));
-        console2.log("OHM-LUSD LP extra reward pool deployed to: ", address(ohmLusdExtraRewardPool));
+        // // Deploy the Aura extra reward pool
+        // ohmLusdExtraRewardPool = new MockAuraRewardPool(
+        //     address(ohmLusdPool), // OHM-LUSD LP
+        //     address(ldo), // LIDO
+        //     address(0)
+        // );
+        // ohmLusdRewardPool.addExtraReward(address(ohmLusdExtraRewardPool));
+        // console2.log("OHM-LUSD LP extra reward pool deployed to: ", address(ohmLusdExtraRewardPool));
 
-        // Deploy the Aura Booster
-        ohmLusdAuraBooster = new MockAuraBooster(address(ohmLusdPool), address(ohmLusdRewardPool));
-        console2.log("OHM-LUSD Aura Booster deployed to:", address(ohmLusdAuraBooster));
+        // // Deploy the Aura Booster
+        // ohmLusdAuraBooster = new MockAuraBooster(address(ohmLusdPool), address(ohmLusdRewardPool));
+        // console2.log("OHM-LUSD Aura Booster deployed to:", address(ohmLusdAuraBooster));
 
         vm.stopBroadcast();
     }
