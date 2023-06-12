@@ -51,6 +51,9 @@ contract BLVaultLusd is IBLVault, Clone {
 
     uint256 private _reentrancyStatus;
 
+    uint8 private constant _ohmIndex = 1;
+    uint8 private constant _lusdIndex = 0;
+
     // ========= CONSTRUCTOR ========= //
 
     constructor() {}
@@ -361,12 +364,13 @@ contract BLVaultLusd is IBLVault, Clone {
         (, uint256[] memory balances, ) = vault().getPoolTokens(liquidityPool().getPoolId());
 
         // Get user's share of the LUSD
-        uint256 userLusdShare = (userLpBalance * balances[1]) / liquidityPool().totalSupply();
+        uint256 userLusdShare = (userLpBalance * balances[_lusdIndex]) /
+            liquidityPool().totalSupply();
 
         // Check pool against oracle price
         // getTknOhmPrice returns the amount of LUSD per 1 OHM based on the oracle price
         uint256 lusdOhmPrice = manager().getTknOhmPrice();
-        uint256 expectedLusdShare = (userLpBalance * balances[0] * lusdOhmPrice) /
+        uint256 expectedLusdShare = (userLpBalance * balances[_ohmIndex] * lusdOhmPrice) /
             (liquidityPool().totalSupply() * _OHM_DECIMALS);
 
         return userLusdShare > expectedLusdShare ? expectedLusdShare : userLusdShare;
@@ -421,12 +425,12 @@ contract BLVaultLusd is IBLVault, Clone {
 
         // Build join pool request
         address[] memory assets = new address[](2);
-        assets[0] = address(ohm);
-        assets[1] = address(lusd);
+        assets[_ohmIndex] = address(ohm);
+        assets[_lusdIndex] = address(lusd);
 
         uint256[] memory maxAmountsIn = new uint256[](2);
-        maxAmountsIn[0] = ohmAmount_;
-        maxAmountsIn[1] = lusdAmount_;
+        maxAmountsIn[_ohmIndex] = ohmAmount_;
+        maxAmountsIn[_lusdIndex] = lusdAmount_;
 
         JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
             assets: assets,
@@ -450,8 +454,8 @@ contract BLVaultLusd is IBLVault, Clone {
 
         // Build exit pool request
         address[] memory assets = new address[](2);
-        assets[0] = address(ohm);
-        assets[1] = address(lusd);
+        assets[_ohmIndex] = address(ohm);
+        assets[_lusdIndex] = address(lusd);
 
         ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
             assets: assets,
