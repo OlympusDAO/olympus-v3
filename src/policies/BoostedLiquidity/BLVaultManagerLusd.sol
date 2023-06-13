@@ -89,6 +89,8 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
 
     // Constants
     uint32 public constant MAX_FEE = 10_000; // 100%
+    uint8 private constant _ohmIndex = 1;
+    uint8 private constant _lusdIndex = 0;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -353,12 +355,12 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
 
         // Build join pool request
         address[] memory assets = new address[](2);
-        assets[0] = ohm;
-        assets[1] = pairToken;
+        assets[_ohmIndex] = ohm;
+        assets[_lusdIndex] = pairToken;
 
         uint256[] memory maxAmountsIn = new uint256[](2);
-        maxAmountsIn[0] = ohmMintAmount;
-        maxAmountsIn[1] = amount_;
+        maxAmountsIn[_ohmIndex] = ohmMintAmount;
+        maxAmountsIn[_lusdIndex] = amount_;
 
         JoinPoolRequest memory joinPoolRequest = JoinPoolRequest({
             assets: assets,
@@ -387,12 +389,12 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
 
         // Build exit pool request
         address[] memory assets = new address[](2);
-        assets[0] = ohm;
-        assets[1] = pairToken;
+        assets[_ohmIndex] = ohm;
+        assets[_lusdIndex] = pairToken;
 
         uint256[] memory minAmountsOut = new uint256[](2);
-        minAmountsOut[0] = 0;
-        minAmountsOut[1] = 0;
+        minAmountsOut[_ohmIndex] = 0;
+        minAmountsOut[_lusdIndex] = 0;
 
         ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
             assets: assets,
@@ -420,12 +422,12 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
 
         // Build exit pool request
         address[] memory assets = new address[](2);
-        assets[0] = ohm;
-        assets[1] = pairToken;
+        assets[_ohmIndex] = ohm;
+        assets[_lusdIndex] = pairToken;
 
         uint256[] memory minAmountsOut = new uint256[](2);
-        minAmountsOut[0] = 0;
-        minAmountsOut[1] = 0;
+        minAmountsOut[_ohmIndex] = 0;
+        minAmountsOut[_lusdIndex] = 0;
 
         ExitPoolRequest memory exitPoolRequest = ExitPoolRequest({
             assets: assets,
@@ -443,11 +445,11 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
 
         // Check against oracle price
         uint256 tknOhmPrice = getTknOhmPrice();
-        uint256 expectedTknAmountOut = (expectedTokenAmounts[0] * tknOhmPrice) / 1e9;
+        uint256 expectedTknAmountOut = (expectedTokenAmounts[_ohmIndex] * tknOhmPrice) / 1e9;
 
-        expectedTknAmount = expectedTokenAmounts[1] > expectedTknAmountOut
+        expectedTknAmount = expectedTokenAmounts[_lusdIndex] > expectedTknAmountOut
             ? expectedTknAmountOut
-            : expectedTokenAmounts[1];
+            : expectedTokenAmounts[_lusdIndex];
     }
 
     /// @inheritdoc IBLVaultManager
@@ -511,9 +513,9 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
         (, uint256[] memory balances_, ) = vault.getPoolTokens(pool.getPoolId());
 
         // Balancer pool tokens are sorted alphabetically by token address. In the case of this
-        // deployment, OHM is the first token in the pool. Therefore, the OHM balance is at index 0.
+        // deployment, OHM is the second token in the pool. Therefore, the OHM balance is at index 1.
         if (poolTotalSupply == 0) return 0;
-        else return (balances_[0] * totalLp) / poolTotalSupply;
+        else return (balances_[_ohmIndex] * totalLp) / poolTotalSupply;
     }
 
     /// @inheritdoc IBLVaultManager
@@ -585,8 +587,8 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
         (, uint256[] memory balances, ) = vault.getPoolTokens(pool.getPoolId());
 
         // Get OHM per LUSD (9 decimals)
-        if (balances[1] == 0) return 0;
-        else return (balances[0] * 1e18) / balances[1];
+        if (balances[_lusdIndex] == 0) return 0;
+        else return (balances[_ohmIndex] * 1e18) / balances[_lusdIndex];
     }
 
     //============================================================================================//

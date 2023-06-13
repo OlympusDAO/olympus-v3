@@ -38,8 +38,8 @@ import {BondManager} from "policies/BondManager.sol";
 import {Burner} from "policies/Burner.sol";
 import {BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
 import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
-import {BLVaultManagerLusd} from "policies/BoostedLiquidity/BLVaultManagerLUSD.sol";
-import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLUSD.sol";
+import {BLVaultManagerLusd} from "policies/BoostedLiquidity/BLVaultManagerLusd.sol";
+import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
@@ -149,8 +149,8 @@ contract OlympusDeploy is Script {
         selectorMap["Burner"] = this._deployBurner.selector;
         selectorMap["BLVaultLido"] = this._deployBLVaultLido.selector;
         selectorMap["BLVaultManagerLido"] = this._deployBLVaultManagerLido.selector;
-        selectorMap["BLVaultLUSD"] = this._deployBLVaultLUSD.selector;
-        selectorMap["BLVaultManagerLUSD"] = this._deployBLVaultManagerLUSD.selector;
+        selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
+        selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
 
         // Load environment addresses
         string memory env = vm.readFile("./src/scripts/env.json");
@@ -203,8 +203,8 @@ contract OlympusDeploy is Script {
         burner = Burner(env.readAddress(string.concat(".", chain_, ".olympus.policies.Burner")));
         lidoVaultManager = BLVaultManagerLido(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultManagerLido")));
         lidoVault = BLVaultLido(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultLido")));
-        lusdVaultManager = BLVaultManagerLusd(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultManagerLUSD")));
-        lusdVault = BLVaultLusd(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultLUSD")));
+        lusdVaultManager = BLVaultManagerLusd(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultManagerLusd")));
+        lusdVault = BLVaultLusd(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultLusd")));
 
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy.json");
@@ -218,14 +218,6 @@ contract OlympusDeploy is Script {
 
         // Forge doesn't correctly parse a string[] from a json array so we have to do it manually
         string[] memory names = abi.decode(bytes.concat(bytes32(uint256(32)),bytes32(len),data.parseRaw(".sequence..name")),(string[]));
-
-        // uint256 len = 5;
-        // string[] memory names = new string[](len);
-        // names[0] = "OlympusBoostedLiquidityRegistry";
-        // names[1] = "BLVaultLido";
-        // names[2] = "BLVaultManagerLido";
-        // names[1] = "BLVaultLUSD";
-        // names[2] = "BLVaultManagerLUSD";
 
         // Iterate through deployment sequence and set deployment args
         for (uint256 i = 0; i < len; i++) {
@@ -529,13 +521,13 @@ contract OlympusDeploy is Script {
         return address(lidoVault);
     }
 
-    function _deployBLVaultLUSD(bytes memory args) public returns (address) {
-        // No additional arguments for BLVaultLUSD policy
+    function _deployBLVaultLusd(bytes memory args) public returns (address) {
+        // No additional arguments for BLVaultLusd policy
 
-        // Deploy BLVaultLUSD policy
+        // Deploy BLVaultLusd policy
         vm.broadcast();
         lusdVault = new BLVaultLusd();
-        console2.log("BLVaultLUSD deployed at:", address(lusdVault));
+        console2.log("BLVaultLusd deployed at:", address(lusdVault));
 
         return address(lusdVault);
     }
@@ -622,7 +614,7 @@ contract OlympusDeploy is Script {
     }
 
     // deploy.json was not being parsed correctly, so I had to hardcode most of the deployment arguments
-    function _deployBLVaultManagerLUSD(bytes memory args) public returns (address) {
+    function _deployBLVaultManagerLusd(bytes memory args) public returns (address) {
         console2.log("ohm", address(ohm));
         console2.log("lusd", address(lusd));
         console2.log("aura", address(aura));
@@ -681,7 +673,7 @@ contract OlympusDeploy is Script {
         console2.log("LUSD update threshold: ", lusdUsdPriceFeedData.updateThreshold);
 
 
-        // Deploy BLVaultManagerLUSD policy
+        // Deploy BLVaultManagerLusd policy
         vm.broadcast();
         lusdVaultManager = new BLVaultManagerLusd(
             kernel,
@@ -697,7 +689,7 @@ contract OlympusDeploy is Script {
             uint64(0), // fee
             uint48(1 days) // withdrawal delay
         );
-        console2.log("BLVaultManagerLUSD deployed at:", address(lusdVaultManager));
+        console2.log("BLVaultManagerLusd deployed at:", address(lusdVaultManager));
 
         return address(lusdVaultManager);
     }
@@ -968,7 +960,7 @@ contract DependencyDeployLUSD is Script {
         aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
         ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
         ohm = ERC20(env.readAddress(string.concat(".", chain_, ".olympus.legacy.OHM")));
-        lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD")));
+        lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD"))); // Requires the address of LUSD to be less than the address of OHM, in order to reflect the conditions on mainnet
 
         vm.startBroadcast();
 
@@ -986,8 +978,8 @@ contract DependencyDeployLUSD is Script {
         console2.log("OHM-LUSD LP deployed to: ", address(ohmLusdPool));
 
         // Deploy the Balancer Vault for OHM-LUSD
-        ohmLusdVault = new MockVault(address(ohmLusdPool), address(ohm), address(lusd));
-        ohmLusdVault.setPoolAmounts(100e9, 1000e18); // 1000 LUSD = 100 OHM, 1 OHM = 10 LUSD
+        ohmLusdVault = new MockVault(address(ohmLusdPool), address(lusd), address(ohm));
+        ohmLusdVault.setPoolAmounts(1000e18, 100e9); // 1000 LUSD = 100 OHM, 1 OHM = 10 LUSD
         console2.log("Mock Balancer Vault deployed to: ", address(ohmLusdVault));
 
         // Deploy the Aura Reward Pools for OHM-LUSD

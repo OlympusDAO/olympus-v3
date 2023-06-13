@@ -10,7 +10,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
+import {MockBalancerVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
 import {MockAuraBooster, MockAuraRewardPool} from "test/mocks/AuraMocks.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
@@ -46,7 +46,7 @@ contract BLVaultLusdTest is Test {
     MockPriceFeed internal ethUsdPriceFeed;
     MockPriceFeed internal lusdUsdPriceFeed;
 
-    MockVault internal vault;
+    MockBalancerVault internal vault;
     MockBalancerPool internal liquidityPool;
 
     MockAuraBooster internal booster;
@@ -67,6 +67,8 @@ contract BLVaultLusdTest is Test {
     BLVaultLusd internal aliceVault;
 
     uint256[] internal minAmountsOut = [0, 0];
+
+    uint256 internal constant BPT_MULTIPLIER = 2;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -110,8 +112,13 @@ contract BLVaultLusdTest is Test {
         // Deploy mock Balancer contracts
         {
             liquidityPool = new MockBalancerPool();
-            vault = new MockVault(address(liquidityPool), address(ohm), address(lusd));
-            vault.setPoolAmounts(1e9, 10e18);
+            vault = new MockBalancerVault(
+                address(liquidityPool),
+                address(lusd),
+                address(ohm),
+                BPT_MULTIPLIER
+            );
+            vault.setPoolAmounts(10e18, 1e9);
         }
 
         // Deploy mock Aura contracts
@@ -239,6 +246,13 @@ contract BLVaultLusdTest is Test {
         }
     }
 
+    function _calculateBptOut(
+        uint256 lusdAmount_,
+        uint256 ohmAmount_
+    ) internal pure returns (uint256) {
+        return (lusdAmount_ * BPT_MULTIPLIER) + (ohmAmount_ * BPT_MULTIPLIER);
+    }
+
     //============================================================================================//
     //                                      LIQUIDITY FUNCTIONS                                   //
     //============================================================================================//
@@ -301,7 +315,7 @@ contract BLVaultLusdTest is Test {
 
         // Verify state after
         assertEq(vaultManager.deployedOhm(), newLimit);
-        assertEq(vaultManager.totalLp(), depositAmount_);
+        assertEq(vaultManager.totalLp(), _calculateBptOut(depositAmount_, newLimit));
     }
 
     function testCorrectness_depositCorrectlyDeploysLiquidity() public {
@@ -318,7 +332,11 @@ contract BLVaultLusdTest is Test {
         uint256 expectedOhmAmount = (100e18 * vaultManager.getOhmTknPrice()) / 1e18;
         assertEq(ohm.balanceOf(address(vault)), expectedOhmAmount);
         assertEq(lusd.balanceOf(address(vault)), 100e18);
-        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
+
+        assertEq(
+            ERC20(vault.bpt()).balanceOf(address(auraPool)),
+            _calculateBptOut(100e18, expectedOhmAmount)
+        );
     }
 
     function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueLow() public {
@@ -338,7 +356,11 @@ contract BLVaultLusdTest is Test {
         uint256 expectedOhmAmount = (100e18 * vaultManager.getOhmTknPrice()) / 1e18;
         assertEq(ohm.balanceOf(address(vault)), expectedOhmAmount);
         assertEq(lusd.balanceOf(address(vault)), 100e18);
-        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
+
+        assertEq(
+            ERC20(vault.bpt()).balanceOf(address(auraPool)),
+            _calculateBptOut(100e18, expectedOhmAmount)
+        );
     }
 
     function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueHigh() public {
@@ -355,9 +377,11 @@ contract BLVaultLusdTest is Test {
         aliceVault.deposit(100e18, 0);
 
         // Verify state after
+        // 100 LUSD = 10 OHM, so the result is 10e9
         assertEq(ohm.balanceOf(address(vault)), 10e9);
         assertEq(lusd.balanceOf(address(vault)), 100e18);
-        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
+
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), _calculateBptOut(100e18, 10e9));
     }
 
     /// [X]  withdraw
@@ -449,7 +473,7 @@ contract BLVaultLusdTest is Test {
 
         // Check state before
         assertEq(ohm.balanceOf(address(vault)), 10e9);
-        assertEq(lusd.balanceOf(address(vault)), aliceLpBalance);
+        assertEq(lusd.balanceOf(address(vault)), 100e18);
         assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), aliceLpBalance);
 
         // Withdraw
@@ -476,7 +500,7 @@ contract BLVaultLusdTest is Test {
 
         // Check state before
         assertEq(ohm.balanceOf(address(vault)), 10e9);
-        assertEq(lusd.balanceOf(address(vault)), aliceLpBalance);
+        assertEq(lusd.balanceOf(address(vault)), 100e18);
         assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), aliceLpBalance);
 
         // Withdraw
@@ -570,7 +594,7 @@ contract BLVaultLusdTest is Test {
         vm.stopPrank();
 
         // Check state after
-        assertEq(aliceVault.getLpBalance(), depositAmount_);
+        assertEq(aliceVault.getLpBalance(), _calculateBptOut(depositAmount_, newLimit));
     }
 
     /// [X]  getUserPairShare
@@ -598,11 +622,13 @@ contract BLVaultLusdTest is Test {
         vm.stopPrank();
 
         // Set pool amounts to true balances
-        vault.setPoolAmounts(ohm.balanceOf(address(vault)), lusd.balanceOf(address(vault)));
+        vault.setPoolAmounts(lusd.balanceOf(address(vault)), ohm.balanceOf(address(vault)));
+
+        uint256 lpBalance = aliceVault.getLpBalance();
 
         // Calculate expected share
         uint256 tknOhmPrice = vaultManager.getTknOhmPrice();
-        uint256 userOhmShare = (depositAmount_ * ohm.balanceOf(address(vault))) /
+        uint256 userOhmShare = (lpBalance * ohm.balanceOf(address(vault))) /
             liquidityPool.totalSupply();
         uint256 expectedLusdShare = (userOhmShare * tknOhmPrice) / 1e9;
         uint256 expectedShare = depositAmount_ > expectedLusdShare
