@@ -100,7 +100,7 @@ Set up a foundry config in foundry.toml.
 
 Add `FORK_TEST_RPC_URL` to the .env file in order to run fork tests
 
-Copy the `.env.deploy.example` file into one file per chain, e.g. `.env_deploy_goerli` and set the appropriate variables. This chain-specific environment file can then be called during deployment, e.g. `env $(cat .env.goerli | xargs) PRIVATE_KEY=<PRIVATE KEY> ./shell/deploy.sh`
+Copy the `.env.deploy.example` file into one file per chain, e.g. `.env_deploy_goerli` and set the appropriate variables. This chain-specific environment file can then be called during deployment, e.g. `env $(cat .env_deploy_goerli | xargs) PRIVATE_KEY=<PRIVATE KEY> ./shell/deploy.sh`
 
 ## How To Deploy
 
