@@ -1,11 +1,11 @@
 {
     "sequence": [
         {
-            "name": "BLVaultLUSD",
+            "name": "BLVaultLusd",
             "args": {}
         },
         {
-            "name": "BLVaultManagerLUSD",
+            "name": "BLVaultManagerLusd",
             "args": {}
         }
     ]
