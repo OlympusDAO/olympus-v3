@@ -313,12 +313,9 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
     }
 
     /// @inheritdoc IBLVaultManager
-    function getOutstandingRewards(address user_)
-        external
-        view
-        override
-        returns (RewardsData[] memory)
-    {
+    function getOutstandingRewards(
+        address user_
+    ) external view override returns (RewardsData[] memory) {
         // Get user's vault address
         BLVaultLusd vault = userVaults[user_];
         if (address(vault) == address(0)) return new RewardsData[](0);
@@ -384,11 +381,9 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
     /// @inheritdoc IBLVaultManager
     /// @dev    This is an external function but should only be used in a callstatic from an external
     ///         source like the frontend.
-    function getExpectedTokensOutProtocol(uint256 lpAmount_)
-        external
-        override
-        returns (uint256[] memory expectedTokenAmounts)
-    {
+    function getExpectedTokensOutProtocol(
+        uint256 lpAmount_
+    ) external override returns (uint256[] memory expectedTokenAmounts) {
         IBasePool pool = IBasePool(balancerData.liquidityPool);
         IBalancerHelper balancerHelper = IBalancerHelper(balancerData.balancerHelper);
 
@@ -419,11 +414,9 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
     /// @inheritdoc IBLVaultManager
     /// @dev    This is an external function but should only be used in a callstatic from an external
     ///         source like the frontend.
-    function getExpectedPairTokenOutUser(uint256 lpAmount_)
-        external
-        override
-        returns (uint256 expectedTknAmount)
-    {
+    function getExpectedPairTokenOutUser(
+        uint256 lpAmount_
+    ) external override returns (uint256 expectedTknAmount) {
         IBasePool pool = IBasePool(balancerData.liquidityPool);
         IBalancerHelper balancerHelper = IBalancerHelper(balancerData.balancerHelper);
 
@@ -479,12 +472,9 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
     }
 
     /// @inheritdoc IBLVaultManager
-    function getRewardRate(address rewardToken_)
-        external
-        view
-        override
-        returns (uint256 rewardRate)
-    {
+    function getRewardRate(
+        address rewardToken_
+    ) external view override returns (uint256 rewardRate) {
         IAuraRewardPool auraPool = IAuraRewardPool(auraData.auraRewardPool);
 
         if (rewardToken_ == bal) {
@@ -533,11 +523,7 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
         external
         view
         override
-        returns (
-            uint256 poolOhmShare,
-            uint256 mintedOhm,
-            uint256 netBurnedOhm
-        )
+        returns (uint256 poolOhmShare, uint256 mintedOhm, uint256 netBurnedOhm)
     {
         // Using the pool's OHM share, the amount of OHM deployed by this system, and the amount of
         // OHM burned by this system we can calculate a whole host of useful data points. The most
@@ -628,11 +614,9 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
     }
 
     /// @inheritdoc IBLVaultManager
-    function setWithdrawalDelay(uint48 newDelay_)
-        external
-        override
-        onlyRole("liquidityvault_admin")
-    {
+    function setWithdrawalDelay(
+        uint48 newDelay_
+    ) external override onlyRole("liquidityvault_admin") {
         minWithdrawalDelay = newDelay_;
     }
 
@@ -666,11 +650,10 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
     //                                      INTERNAL FUNCTIONS                                    //
     //============================================================================================//
 
-    function _validatePrice(AggregatorV3Interface priceFeed_, uint48 updateThreshold_)
-        internal
-        view
-        returns (uint256)
-    {
+    function _validatePrice(
+        AggregatorV3Interface priceFeed_,
+        uint48 updateThreshold_
+    ) internal view returns (uint256) {
         // Get price data
         (uint80 roundId, int256 priceInt, , uint256 updatedAt, uint80 answeredInRound) = priceFeed_
             .latestRoundData();
