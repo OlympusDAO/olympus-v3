@@ -318,7 +318,12 @@ contract BLVaultLusdTest is Test {
         uint256 expectedOhmAmount = (100e18 * vaultManager.getOhmTknPrice()) / 1e18;
         assertEq(ohm.balanceOf(address(vault)), expectedOhmAmount);
         assertEq(lusd.balanceOf(address(vault)), 100e18);
-        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
+
+        // The MockVault implementation mints BPT equivalent to `maxAmountsIn[1]`,
+        // which is the amount of minted OHM in this case.
+        // 100 LUSD = 10 OHM, so the result is 10e9
+
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), expectedOhmAmount);
     }
 
     function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueLow() public {
@@ -338,7 +343,11 @@ contract BLVaultLusdTest is Test {
         uint256 expectedOhmAmount = (100e18 * vaultManager.getOhmTknPrice()) / 1e18;
         assertEq(ohm.balanceOf(address(vault)), expectedOhmAmount);
         assertEq(lusd.balanceOf(address(vault)), 100e18);
-        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
+
+        // The MockVault implementation mints BPT equivalent to `maxAmountsIn[1]`,
+        // which is the amount of minted OHM in this case.
+
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), expectedOhmAmount);
     }
 
     function testCorrectness_depositCorrectlyDeploysLiquidityOracleValueHigh() public {
@@ -354,10 +363,16 @@ contract BLVaultLusdTest is Test {
         vm.prank(alice);
         aliceVault.deposit(100e18, 0);
 
+        // 100 LUSD = 10 OHM, so the result is 10e9
+        uint256 expectedOhmAmount = 10e9;
+
         // Verify state after
-        assertEq(ohm.balanceOf(address(vault)), 10e9);
+        assertEq(ohm.balanceOf(address(vault)), expectedOhmAmount);
         assertEq(lusd.balanceOf(address(vault)), 100e18);
-        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), 100e18);
+
+        // The MockVault implementation mints BPT equivalent to `maxAmountsIn[1]`,
+        // which is the amount of minted OHM in this case.
+        assertEq(ERC20(vault.bpt()).balanceOf(address(auraPool)), expectedOhmAmount);
     }
 
     /// [X]  withdraw

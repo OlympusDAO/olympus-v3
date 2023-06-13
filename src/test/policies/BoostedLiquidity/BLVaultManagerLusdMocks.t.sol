@@ -600,10 +600,10 @@ contract BLVaultManagerLusdTest is Test {
 
         // The MockVault implementation mints BPT equivalent to `maxAmountsIn[1]`,
         // which is the amount of minted OHM in this case.
-        // 0.1 OHM = 1 LUSD, so the result is 1e8
+        // 1 LUSD = 0.1 OHM, so the result is 0.1e9
 
         // Check state after
-        assertEq(vaultManager.getLpBalance(alice), 1e8);
+        assertEq(vaultManager.getLpBalance(alice), 0.1e9);
     }
 
     /// [X]  getUserPairShare
