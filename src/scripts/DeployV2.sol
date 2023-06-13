@@ -46,7 +46,7 @@ import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultMana
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "test/mocks/AuraMocks.sol";
-import {MockBalancerPool, MockBalancerVault, MockVault} from "test/mocks/BalancerMocks.sol";
+import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
 
@@ -949,7 +949,6 @@ contract DependencyDeployLusd is Script {
 
     MockPriceFeed public lusdUsdPriceFeed;
     MockBalancerPool public ohmLusdPool;
-    MockBalancerVault public ohmLusdVault;
     // MockAuraBooster public ohmLusdAuraBooster;
     MockAuraRewardPool public ohmLusdRewardPool;
     // MockAuraRewardPool public ohmLusdExtraRewardPool;
@@ -980,11 +979,6 @@ contract DependencyDeployLusd is Script {
         ohmLusdPool = new MockBalancerPool(); // pool id is 0, which is fine as this will have its own vault
         console2.log("OHM-LUSD LP deployed to: ", address(ohmLusdPool));
 
-        // Deploy the Balancer Vault for OHM-LUSD
-        ohmLusdVault = new MockBalancerVault(address(ohmLusdPool), address(lusd), address(ohm), 2);
-        ohmLusdVault.setPoolAmounts(1000e18, 100e9); // 1000 LUSD = 100 OHM, 1 OHM = 10 LUSD
-        console2.log("Mock Balancer Vault deployed to: ", address(ohmLusdVault));
-
         // Deploy the Aura Reward Pools for OHM-LUSD
         ohmLusdRewardPool = new MockAuraRewardPool(
             address(ohmLusdPool), // OHM-LUSD LP
@@ -992,19 +986,6 @@ contract DependencyDeployLusd is Script {
             address(aura) // AURA
         );
         console2.log("OHM-LUSD LP reward pool deployed to: ", address(ohmLusdRewardPool));
-
-        // // Deploy the Aura extra reward pool
-        // ohmLusdExtraRewardPool = new MockAuraRewardPool(
-        //     address(ohmLusdPool), // OHM-LUSD LP
-        //     address(ldo), // LIDO
-        //     address(0)
-        // );
-        // ohmLusdRewardPool.addExtraReward(address(ohmLusdExtraRewardPool));
-        // console2.log("OHM-LUSD LP extra reward pool deployed to: ", address(ohmLusdExtraRewardPool));
-
-        // // Deploy the Aura Booster
-        // ohmLusdAuraBooster = new MockAuraBooster(address(ohmLusdPool), address(ohmLusdRewardPool));
-        // console2.log("OHM-LUSD Aura Booster deployed to:", address(ohmLusdAuraBooster));
 
         vm.stopBroadcast();
     }
