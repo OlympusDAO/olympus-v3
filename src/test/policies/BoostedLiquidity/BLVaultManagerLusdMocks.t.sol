@@ -598,6 +598,10 @@ contract BLVaultManagerLusdTest is Test {
         BLVaultLusd(aliceVault).deposit(1e18, 0);
         vm.stopPrank();
 
+        // The MockVault implementation mints BPT equivalent to `maxAmountsIn[1]`,
+        // which is the amount of minted OHM in this case.
+        // 0.1 OHM = 1 LUSD, so the result is 1e8
+
         // Check state after
         assertEq(vaultManager.getLpBalance(alice), 1e8);
     }
