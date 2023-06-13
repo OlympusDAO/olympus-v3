@@ -23,7 +23,7 @@ contract MockVault {
         address sender,
         address recipient,
         JoinPoolRequest calldata request
-    ) external {
+    ) external virtual {
         ERC20(request.assets[0]).transferFrom(sender, address(this), request.maxAmountsIn[0]);
         ERC20(request.assets[1]).transferFrom(sender, address(this), request.maxAmountsIn[1]);
         bpt.mint(recipient, request.maxAmountsIn[1]);
@@ -34,7 +34,7 @@ contract MockVault {
         address sender,
         address recipient,
         ExitPoolRequest calldata request
-    ) external {
+    ) external virtual {
         (, uint256 bptAmount) = abi.decode(request.userData, (uint256, uint256));
         bpt.burn(sender, bptAmount);
         ERC20(request.assets[0]).transfer(
@@ -64,6 +64,58 @@ contract MockVault {
     function setPoolAmounts(uint256 token0Amount_, uint256 token1Amount_) external {
         token0Amount = token0Amount_;
         token1Amount = token1Amount_;
+    }
+}
+
+/// @notice     Mock Balancer Vault with fixed BPT amount
+contract MockBalancerVault is MockVault {
+    uint256 public _bptMultiplier;
+
+    constructor(
+        address bpt_,
+        address token0_,
+        address token1_,
+        uint256 bptMultiplier_
+    ) MockVault(bpt_, token0_, token1_) {
+        _bptMultiplier = bptMultiplier_;
+    }
+
+    /// @dev    Calculate BPT amount based on token amounts
+    ///         This ensures that if the inputs change, the resulting number also changes
+    function _calculateBptOut(
+        uint256 token0Amount_,
+        uint256 token1Amount_
+    ) internal view returns (uint256) {
+        return (token0Amount_ * _bptMultiplier) + (token1Amount_ * _bptMultiplier);
+    }
+
+    function joinPool(
+        bytes32 poolId,
+        address sender,
+        address recipient,
+        JoinPoolRequest calldata request
+    ) external override {
+        ERC20(request.assets[0]).transferFrom(sender, address(this), request.maxAmountsIn[0]);
+        ERC20(request.assets[1]).transferFrom(sender, address(this), request.maxAmountsIn[1]);
+        bpt.mint(recipient, _calculateBptOut(request.maxAmountsIn[0], request.maxAmountsIn[1]));
+    }
+
+    function exitPool(
+        bytes32 poolId,
+        address sender,
+        address recipient,
+        ExitPoolRequest calldata request
+    ) external override {
+        (, uint256 bptAmount) = abi.decode(request.userData, (uint256, uint256));
+        bpt.burn(sender, bptAmount);
+        ERC20(request.assets[0]).transfer(
+            recipient,
+            ERC20(request.assets[0]).balanceOf(address(this))
+        );
+        ERC20(request.assets[1]).transfer(
+            recipient,
+            ERC20(request.assets[1]).balanceOf(address(this))
+        );
     }
 }
 
