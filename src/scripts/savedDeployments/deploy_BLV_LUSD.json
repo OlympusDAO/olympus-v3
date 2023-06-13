@@ -6,7 +6,9 @@
         },
         {
             "name": "BLVaultManagerLusd",
-            "args": {}
+            "args": {
+                "auraPid": 0
+            }
         }
     ]
 }

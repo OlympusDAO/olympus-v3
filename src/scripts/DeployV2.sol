@@ -615,18 +615,21 @@ contract OlympusDeploy is Script {
 
     // deploy.json was not being parsed correctly, so I had to hardcode most of the deployment arguments
     function _deployBLVaultManagerLusd(bytes memory args) public returns (address) {
+        // Decode arguments for BLVaultManagerLusd policy
+        (uint256 auraPid) = abi.decode(args, (uint256));
+
         console2.log("ohm", address(ohm));
         console2.log("lusd", address(lusd));
         console2.log("aura", address(aura));
         console2.log("bal", address(bal));
         console2.log("balancerVault", address(balancerVault));
-        console2.log("ohmLusdPool", address(ohmLusdPool)); // TODO set this in env.json
+        console2.log("ohmLusdPool", address(ohmLusdPool));
         console2.log("balancerHelper", address(balancerHelper));
         console2.log("auraBooster", address(auraBooster));
-        console2.log("ohmLusdRewardsPool", address(ohmLusdRewardsPool)); // TODO set this in env.json
+        console2.log("ohmLusdRewardsPool", address(ohmLusdRewardsPool));
         console2.log("ohmEthPriceFeed", address(ohmEthPriceFeed));
         console2.log("ethUsdPriceFeed", address(ethUsdPriceFeed));
-        console2.log("lusdUsdPriceFeed", address(lusdUsdPriceFeed)); // This is currently the DAI price feed on Goerli
+        console2.log("lusdUsdPriceFeed", address(lusdUsdPriceFeed));
         console2.log("implementation", address(lusdVault));
 
         // Create TokenData object
@@ -646,7 +649,7 @@ contract OlympusDeploy is Script {
 
         // Create AuraData object
         IBLVaultManager.AuraData memory auraData = IBLVaultManager.AuraData({
-            pid: uint256(73), // TODO change this?
+            pid: auraPid,
             auraBooster: address(auraBooster),
             auraRewardPool: address(ohmLusdRewardsPool)
         });
