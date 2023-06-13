@@ -46,7 +46,7 @@ import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultMana
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "test/mocks/AuraMocks.sol";
-import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
+import {MockBalancerPool, MocKBalancerVault, MockVault} from "test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
 
@@ -938,7 +938,7 @@ contract DependencyDeploy is Script {
     }
 }
 
-contract DependencyDeployLUSD is Script {
+contract DependencyDeployLusd is Script {
     using stdJson for string;
 
     ERC20 public bal;
@@ -949,7 +949,7 @@ contract DependencyDeployLUSD is Script {
 
     MockPriceFeed public lusdUsdPriceFeed;
     MockBalancerPool public ohmLusdPool;
-    MockVault public ohmLusdVault;
+    MockBalancerVault public ohmLusdVault;
     // MockAuraBooster public ohmLusdAuraBooster;
     MockAuraRewardPool public ohmLusdRewardPool;
     // MockAuraRewardPool public ohmLusdExtraRewardPool;
@@ -981,7 +981,7 @@ contract DependencyDeployLUSD is Script {
         console2.log("OHM-LUSD LP deployed to: ", address(ohmLusdPool));
 
         // Deploy the Balancer Vault for OHM-LUSD
-        ohmLusdVault = new MockVault(address(ohmLusdPool), address(lusd), address(ohm));
+        ohmLusdVault = new MockBalancerVault(address(ohmLusdPool), address(lusd), address(ohm), 2);
         ohmLusdVault.setPoolAmounts(1000e18, 100e9); // 1000 LUSD = 100 OHM, 1 OHM = 10 LUSD
         console2.log("Mock Balancer Vault deployed to: ", address(ohmLusdVault));
 
