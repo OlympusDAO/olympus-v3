@@ -209,15 +209,9 @@ contract OlympusDeploy is Script {
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy.json");
 
-        // Have to use a hack with jq to get the length of the deployment sequence since the json lib used by forge doesn't have a length operation
-        string[] memory inputs = new string[](3);
-        inputs[0] = "sh";
-        inputs[1] = "-c";
-        inputs[2] = 'jq -c ".sequence | length" ./src/scripts/deploy.json | cast --to-uint256';
-        uint256 len = abi.decode(vm.ffi(inputs), (uint256));
-
-        // Forge doesn't correctly parse a string[] from a json array so we have to do it manually
-        string[] memory names = abi.decode(bytes.concat(bytes32(uint256(32)),bytes32(len),data.parseRaw(".sequence..name")),(string[]));
+        // Parse deployment sequence and names
+        string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
+        uint256 len = names.length;
 
         // Iterate through deployment sequence and set deployment args
         for (uint256 i = 0; i < len; i++) {
