@@ -541,7 +541,9 @@ contract OlympusPricev2 is PRICEv2 {
         Component memory strategy_,
         bool useMovingAverage_
     ) internal {
-        // Validate strategy component submodule is installed
+        // Validate strategy component submodule is installed (if a strategy is being used)
+        // A strategy is optional if there is only one price feed being used.
+        // The number of feeds is checked in the external functions that call this one.
         if (
             fromSubKeycode(strategy_.target) != bytes20(0) &&
             !_submoduleIsInstalled(strategy_.target)
