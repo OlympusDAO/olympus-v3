@@ -2271,7 +2271,7 @@ contract PriceV2Test is Test {
 
         // Reverts as there should only be 1 observation (cached result) when no moving average is being stored
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_ParamsObservationInsufficient(address,uint256,uint256,uint256)",
+            "PRICE_ParamsInvalidObservationCount(address,uint256,uint256,uint256)",
             address(weth),
             observations.length,
             0,
@@ -3196,7 +3196,7 @@ contract PriceV2Test is Test {
         // Update the asset's moving average
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_ParamsObservationInsufficient(address,uint256,uint256,uint256)",
+            "PRICE_ParamsInvalidObservationCount(address,uint256,uint256,uint256)",
             address(reserve),
             observations.length,
             1,
@@ -3226,7 +3226,7 @@ contract PriceV2Test is Test {
         // Update the asset's moving average
         vm.startPrank(writer);
         bytes memory err = abi.encodeWithSignature(
-            "PRICE_ParamsObservationInsufficient(address,uint256,uint256,uint256)",
+            "PRICE_ParamsInvalidObservationCount(address,uint256,uint256,uint256)",
             address(reserve),
             observations.length,
             0,

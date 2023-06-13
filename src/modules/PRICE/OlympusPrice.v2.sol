@@ -274,15 +274,13 @@ contract OlympusPricev2 is PRICEv2 {
         Variant variant_
     ) external view override returns (uint256, uint48) {
         // Get the price of the asset (checks if approved)
-        (uint256 assetPrice, uint48 assetPriceUpdated) = getPrice(asset_, variant_);
+        (uint256 assetPrice, uint48 assetTime) = getPrice(asset_, variant_);
 
         // Get the price of the base (checks if approved)
-        (uint256 basePrice, uint48 basePriceUpdated) = getPrice(base_, variant_);
+        (uint256 basePrice, uint48 baseTime) = getPrice(base_, variant_);
 
         // The updatedAt timestamp is the minimum of the two price updatedAt timestamps
-        uint48 updatedAt = assetPriceUpdated < basePriceUpdated
-            ? assetPriceUpdated
-            : basePriceUpdated;
+        uint48 updatedAt = assetTime < baseTime ? assetTime : baseTime;
 
         // Calculate the price of the asset in the base
         uint256 price = (assetPrice * 10 ** decimals) / basePrice;
@@ -308,14 +306,14 @@ contract OlympusPricev2 is PRICEv2 {
         if (!asset.approved) revert PRICE_AssetNotApproved(asset_);
 
         // Get the current price for the asset
-        (uint256 price, ) = _getCurrentPrice(asset_);
+        (uint256 price, uint48 currentTime) = _getCurrentPrice(asset_);
 
         // Store the data in the obs index
         uint256 oldestPrice = asset.obs[asset.nextObsIndex];
         asset.obs[asset.nextObsIndex] = price;
 
         // Update the last observation time and increment the next index
-        asset.lastObservationTime = uint48(block.timestamp);
+        asset.lastObservationTime = currentTime;
         asset.nextObsIndex = (asset.nextObsIndex + 1) % asset.numObservations;
 
         // Update the cumulative observation, if storing the moving average
@@ -323,7 +321,7 @@ contract OlympusPricev2 is PRICEv2 {
             asset.cumulativeObs = asset.cumulativeObs + price - oldestPrice;
 
         // Emit event
-        emit PriceStored(asset_, price, uint48(block.timestamp));
+        emit PriceStored(asset_, price, currentTime);
     }
 
     // ========== ASSET MANAGEMENT ========== //
@@ -647,7 +645,7 @@ contract OlympusPricev2 is PRICEv2 {
 
             uint16 numObservations = uint16(movingAverageDuration_ / observationFrequency);
             if (observations_.length != numObservations)
-                revert PRICE_ParamsObservationInsufficient(
+                revert PRICE_ParamsInvalidObservationCount(
                     asset_,
                     observations_.length,
                     numObservations,
@@ -676,7 +674,7 @@ contract OlympusPricev2 is PRICEv2 {
         } else {
             // If not storing the moving average, validate that the array has at most one value (for caching)
             if (observations_.length > 1)
-                revert PRICE_ParamsObservationInsufficient(asset_, observations_.length, 0, 1);
+                revert PRICE_ParamsInvalidObservationCount(asset_, observations_.length, 0, 1);
 
             asset.storeMovingAverage = false;
             asset.movingAverageDuration = 0;

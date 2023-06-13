@@ -102,7 +102,7 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param observationCount_        The number of observations that was provided
     /// @param minimumObservationCount_ The minimum number of observations that is permissible
     /// @param maximumObservationCount_ The maximum number of observations that is permissible
-    error PRICE_ParamsObservationInsufficient(
+    error PRICE_ParamsInvalidObservationCount(
         address asset_,
         uint256 observationCount_,
         uint256 minimumObservationCount_,
@@ -112,11 +112,11 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @notice                 The number of provided price feeds is insufficient
     /// @param asset_           The address of the asset
     /// @param feedCount_       The number of price feeds provided
-    /// @param feedRequired_    The minimum number of price feeds required
+    /// @param feedCountRequired_    The minimum number of price feeds required
     error PRICE_ParamsPriceFeedInsufficient(
         address asset_,
         uint256 feedCount_,
-        uint256 feedRequired_
+        uint256 feedCountRequired_
     );
 
     /// @notice         The asset requires storeMovingAverage to be enabled
