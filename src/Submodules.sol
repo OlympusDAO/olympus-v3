@@ -78,16 +78,11 @@ abstract contract ModuleWithSubmodules is Module {
     mapping(SubKeycode => Submodule) public getSubmoduleForKeycode;
 
     function installSubmodule(Submodule newSubmodule_) external permissioned {
-        // Validate new submodule is a contract, has correct parent, and has valid SubKeycode
-        ensureContract(address(newSubmodule_));
-        Keycode keycode = KEYCODE();
-        if (fromKeycode(newSubmodule_.PARENT()) != fromKeycode(keycode))
-            revert Module_InvalidSubmodule();
-        ensureValidSubKeycode(newSubmodule_.SUBKEYCODE(), keycode);
+        // Validate new submodule and get its subkeycode
+        SubKeycode subKeycode = _validateSubmodule(newSubmodule_);
 
-        // Check that submodule is not already installed
-        SubKeycode subKeycode = newSubmodule_.SUBKEYCODE();
-
+        // Check that a submodule with this keycode is not already installed
+        // If this reverts, then the new submodule should be installed via upgradeSubmodule
         if (address(getSubmoduleForKeycode[subKeycode]) != address(0))
             revert Module_SubmoduleAlreadyInstalled(subKeycode);
 
@@ -100,17 +95,12 @@ abstract contract ModuleWithSubmodules is Module {
     }
 
     function upgradeSubmodule(Submodule newSubmodule_) external permissioned {
-        // Validate new submodule is a contract, has correct parent, and has valid SubKeycode
-        ensureContract(address(newSubmodule_));
-        Keycode keycode = KEYCODE();
-        if (fromKeycode(newSubmodule_.PARENT()) != fromKeycode(keycode))
-            revert Module_InvalidSubmodule();
-        ensureValidSubKeycode(newSubmodule_.SUBKEYCODE(), keycode);
+        // Validate new submodule and get its subkeycode
+        SubKeycode subKeycode = _validateSubmodule(newSubmodule_);
 
-        // Check that submodule is already installed
-        SubKeycode subKeycode = newSubmodule_.SUBKEYCODE();
+        // Get the existing submodule, ensure that it's not zero and not the same as the new submodule
+        // If this reverts due to no submodule being installed, then the new submodule should be installed via installSubmodule
         Submodule oldSubmodule = getSubmoduleForKeycode[subKeycode];
-
         if (oldSubmodule == Submodule(address(0)) || oldSubmodule == newSubmodule_)
             revert Module_InvalidSubmoduleUpgrade(subKeycode);
 
@@ -144,6 +134,18 @@ abstract contract ModuleWithSubmodules is Module {
         Submodule submodule = getSubmoduleForKeycode[subKeycode_];
         if (address(submodule) == address(0)) revert Module_SubmoduleNotInstalled(subKeycode_);
         return submodule;
+    }
+
+    function _validateSubmodule(Submodule newSubmodule_) internal view returns (SubKeycode) {
+        // Validate new submodule is a contract, has correct parent, and has valid SubKeycode
+        ensureContract(address(newSubmodule_));
+        Keycode keycode = KEYCODE();
+        if (fromKeycode(newSubmodule_.PARENT()) != fromKeycode(keycode))
+            revert Module_InvalidSubmodule();
+        SubKeycode subKeycode = newSubmodule_.SUBKEYCODE();
+        ensureValidSubKeycode(subKeycode, keycode);
+
+        return subKeycode;
     }
 }
 
