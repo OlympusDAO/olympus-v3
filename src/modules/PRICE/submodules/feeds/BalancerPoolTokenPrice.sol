@@ -151,7 +151,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @dev                This currently only occurs if the weight is 0
     /// @param poolId_      The id of the Balancer pool
     /// @param index_       The index of the weight in the pool
-    /// @param weight_       The value of the weight
+    /// @param weight_      The value of the weight
     error Balancer_PoolWeightInvalid(bytes32 poolId_, uint256 index_, uint256 weight_);
 
     /// @notice             The price of a corresponding token could not be found
