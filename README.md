@@ -111,3 +111,9 @@ Copy the `.env.deploy.example` file into one file per chain, e.g. `.env_deploy_g
 - Uncomment the line containing `--broadcast` in the deployment bash script after testing in order to push the changes to the live chain
 - The deployment output will be saved in `deployments/`
 - Update the `src/scripts/env.json` file with the new contract addresses (which can be copied from the deployment output)
+
+## Boosted Liquidity Vault Setup
+
+- Deploy any dependencies (if on testnet)
+- Deploy BLV contracts
+- Activate BLV contracts with the BLV registry (using an olymsig script)
