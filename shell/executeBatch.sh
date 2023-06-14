@@ -1,10 +1,8 @@
 # Arguments required for this script
 # 1. String: File/Contract Name (should be the same)
-# 2. String: Batch Function Signature (e.g. "Integrative1(int32)")
+# 2. String: Batch Function Signature (e.g. "Integrative1(bool,int32)"), should always start with a bool since that determines simulate or send
 # 3. Bool: Whether to send to STS or not (if false, just simulates the batch)
 # 4+. Additional arguments to pass to the script, needs to be included in the function signature
-
-# TODO how do we allow providing arbitrary arguments to the batch function?
 
 # Load environment variables
 source .env

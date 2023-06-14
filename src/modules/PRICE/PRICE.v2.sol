@@ -176,7 +176,7 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
 
     struct Asset {
         bool approved; // whether the asset is approved for use in the system
-        bool storeMovingAverage; // whether the moving average should be stored on heartbeats, TODO: create a way to store this data and get a list of assets that need to be stored
+        bool storeMovingAverage; // whether the moving average should be stored on heartbeats
         bool useMovingAverage; // whether the moving average should be provided as an argument to the strategy
         uint32 movingAverageDuration; // the duration of the moving average
         uint16 nextObsIndex; // the index of obs at which the next observation will be stored
