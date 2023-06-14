@@ -942,10 +942,8 @@ contract DependencyDeployLusd is Script {
     ERC20 public lusd;
 
     MockPriceFeed public lusdUsdPriceFeed;
-    MockBalancerPool public ohmLusdPool;
-    // MockAuraBooster public ohmLusdAuraBooster;
+    IBasePool public ohmLusdPool;
     MockAuraRewardPool public ohmLusdRewardPool;
-    // MockAuraRewardPool public ohmLusdExtraRewardPool;
 
     MockAuraMiningLib public auraMiningLib;
 
@@ -957,6 +955,7 @@ contract DependencyDeployLusd is Script {
         ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
         ohm = ERC20(env.readAddress(string.concat(".", chain_, ".olympus.legacy.OHM")));
         lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD"))); // Requires the address of LUSD to be less than the address of OHM, in order to reflect the conditions on mainnet
+        ohmLusdPool = IBasePool(env.readAddress(string.concat(".", chain_, ".external.balancer.OhmLusdPool"))); // Real pool, deployed separately as it's a little more complicated
 
         vm.startBroadcast();
 
@@ -968,10 +967,6 @@ contract DependencyDeployLusd is Script {
         lusdUsdPriceFeed.setAnsweredInRound(1);
         lusdUsdPriceFeed.setTimestamp(block.timestamp); // Will be good for 1 year from now
         console2.log("LUSD-USD Price Feed deployed to:", address(lusdUsdPriceFeed));
-
-        // Deploy the OHM-LUSD LP
-        ohmLusdPool = new MockBalancerPool(); // pool id is 0, which is fine as this will have its own vault
-        console2.log("OHM-LUSD LP deployed to: ", address(ohmLusdPool));
 
         // Deploy the Aura Reward Pools for OHM-LUSD
         ohmLusdRewardPool = new MockAuraRewardPool(
