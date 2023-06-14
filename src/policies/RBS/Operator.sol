@@ -65,6 +65,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     uint8 internal immutable ohmDecimals;
     ERC20 internal immutable _reserve;
     uint8 internal immutable reserveDecimals;
+    uint8 internal oracleDecimals;
 
     // Constants
     uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
@@ -160,6 +161,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         _ohm.safeApprove(address(MINTR), type(uint256).max);
+
+        // Store the price decimals for use in calculations (cached here to avoid extra external calls)
+        oracleDecimals = PRICE.decimals();
     }
 
     /// @inheritdoc Policy
@@ -243,7 +247,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
                 // if not active, check if the price is below the cushion
                 // if so, open a new bond market
                 if (currentPrice < range.cushion.low.price && currentPrice > range.wall.low.price) {
-                    _activate(false);
+                    _activate(false, currentPrice);
                 }
             }
         }
@@ -263,7 +267,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
                 if (
                     currentPrice > range.cushion.high.price && currentPrice < range.wall.high.price
                 ) {
-                    _activate(true);
+                    _activate(true, currentPrice);
                 }
             }
         }
@@ -366,7 +370,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice      Activate a cushion by deploying a bond market
     /// @param high_ Whether the cushion is for the high or low side of the range (true = high, false = low)
-    function _activate(bool high_) internal {
+    function _activate(bool high_, uint256 currentPrice_) internal {
         RANGEv1.Range memory range = RANGE.range();
 
         if (high_) {
@@ -378,14 +382,12 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             int8 scaleAdjustment = int8(ohmDecimals) - int8(reserveDecimals) + (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            uint256 oracleScale = 10 ** uint8(int8(PRICE.decimals()) - priceDecimals);
+            uint256 oracleScale = 10 ** uint8(int8(oracleDecimals) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
                     36 + scaleAdjustment + int8(reserveDecimals) - int8(ohmDecimals) - priceDecimals
                 );
-            // Staleness checked before, TODO pass this in to avoid extra calls?
-            uint256 currentPrice = PRICE.getPriceIn(address(_ohm), address(_reserve));
-            uint256 initialPrice = currentPrice.mulDiv(bondScale, oracleScale);
+            uint256 initialPrice = currentPrice_.mulDiv(bondScale, oracleScale);
             uint256 minimumPrice = range.cushion.high.price.mulDiv(bondScale, oracleScale);
 
             // Cache config struct to avoid multiple SLOADs
@@ -422,11 +424,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             RANGE.updateMarket(true, market, marketCapacity);
         } else {
             // Calculate inverse prices from the oracle feed for the low side
-            uint8 oracleDecimals = PRICE.decimals();
             uint256 invCushionPrice = 10 ** (oracleDecimals * 2) / range.cushion.low.price;
-            // Staleness checked before, TODO pass this in to avoid extra calls?
-            uint256 currentPrice = PRICE.getPriceIn(address(_ohm), address(_reserve));
-            uint256 invCurrentPrice = 10 ** (oracleDecimals * 2) / currentPrice;
+            uint256 invCurrentPrice = 10 ** (oracleDecimals * 2) / currentPrice_;
 
             // Calculate scaleAdjustment for bond market
             // Price decimals are returned from the perspective of the quote token
@@ -502,7 +501,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         // Subtract the stated decimals from the calculated decimals to get the relative price decimals.
         // Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
-        return decimals - int8(PRICE.decimals());
+        return decimals - int8(oracleDecimals);
     }
 
     // =========  INTERNAL FUNCTIONS ========= //
@@ -842,7 +841,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
                 10 ** reserveDecimals * RANGE.price(true, false),
-                10 ** ohmDecimals * 10 ** PRICE.decimals()
+                10 ** ohmDecimals * 10 ** oracleDecimals
             );
 
             // Revert if amount out exceeds capacity
@@ -852,7 +851,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         } else if (tokenIn_ == _reserve) {
             // Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
-                10 ** ohmDecimals * 10 ** PRICE.decimals(),
+                10 ** ohmDecimals * 10 ** oracleDecimals,
                 10 ** reserveDecimals * RANGE.price(true, true)
             );
 
@@ -872,7 +871,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (high_) {
             capacity =
                 (capacity.mulDiv(
-                    10 ** ohmDecimals * 10 ** PRICE.decimals(),
+                    10 ** ohmDecimals * 10 ** oracleDecimals,
                     10 ** reserveDecimals * RANGE.price(true, true)
                 ) * (ONE_HUNDRED_PERCENT + RANGE.spread(true) * 2)) /
                 ONE_HUNDRED_PERCENT;
