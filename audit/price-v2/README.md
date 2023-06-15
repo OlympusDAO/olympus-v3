@@ -90,7 +90,7 @@ A: None
 
 ### Q: Please list any known issues/acceptable risks that should not result in a valid finding.
 
-A: We're away that L2 deployments of Chainlink oracles require additional validation of the sequencer uptime feed. We don't intend to deploy to L2s immediately and will add a L2 version of that submodule when we do.
+A: We're aware that L2 deployments of Chainlink oracles require additional validation of the sequencer uptime feed. We don't intend to deploy to L2s immediately and will add a L2 version of that submodule when we do.
 
 ---
 
@@ -159,7 +159,7 @@ The oracle system has 4 main pieces:
 The following diagram places these in context of the Default Framework:
 ![PRICEv2 Architecture](./PRICEv2_architecture.png)
 
-### Price resolution
+### Price Resolution
 
 Oracles are a large risk in any DeFi system that incorporates them. Most systems use a single oracle feed for an asset and exit if there is a problem validating the data provided. To avoid reliance on any single oracle or any one provider long-term, we designed this system to be able to ingest one or more price feeds for a specific asset and then apply a strategy to determine a canonical price to use for any system within the protocol. Therefore, an asset can be configured with:
 
