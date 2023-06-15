@@ -568,16 +568,19 @@ contract OlympusDeploy is Script {
         IBLVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = IBLVaultManagerLido.OracleFeed({
             feed: ohmEthPriceFeed,
             updateThreshold: uint48(86400) // needs to be 1 day
+            // updateThreshold: uint48(365 days) // Testnet only
         });
 
         IBLVaultManagerLido.OracleFeed memory ethUsdPriceFeedData = IBLVaultManagerLido.OracleFeed({
             feed: ethUsdPriceFeed,
             updateThreshold: uint48(3600) // needs to be 1 hour
+            // updateThreshold: uint48(365 days) // Testnet only
         });
 
         IBLVaultManagerLido.OracleFeed memory stethUsdPriceFeedData = IBLVaultManagerLido.OracleFeed({
             feed: stethUsdPriceFeed,
             updateThreshold: uint48(3600) // needs to be 1 hour
+            // updateThreshold: uint48(365 days) // Testnet only
         });
 
         console2.log("pid: ", auraData.pid);
@@ -652,16 +655,19 @@ contract OlympusDeploy is Script {
         IBLVaultManager.OracleFeed memory ohmEthPriceFeedData = IBLVaultManager.OracleFeed({
             feed: ohmEthPriceFeed,
             updateThreshold: uint48(86400) // needs to be 1 day
+            // updateThreshold: uint48(365 days) // Testnet only
         });
 
         IBLVaultManager.OracleFeed memory ethUsdPriceFeedData = IBLVaultManager.OracleFeed({
             feed: ethUsdPriceFeed,
             updateThreshold: uint48(3600) // needs to be 1 hour
+            // updateThreshold: uint48(365 days) // Testnet only
         });
 
         IBLVaultManager.OracleFeed memory lusdUsdPriceFeedData = IBLVaultManager.OracleFeed({
             feed: lusdUsdPriceFeed,
             updateThreshold: uint48(3600) // needs to be 1 hour
+            // updateThreshold: uint48(365 days) // Testnet only
         });
 
         console2.log("pid: ", auraData.pid);
