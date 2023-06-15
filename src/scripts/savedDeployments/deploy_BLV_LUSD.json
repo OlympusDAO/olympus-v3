@@ -7,7 +7,7 @@
         {
             "name": "BLVaultManagerLusd",
             "args": {
-                "auraPid": 1
+                "auraPid": 127
             }
         }
     ]
