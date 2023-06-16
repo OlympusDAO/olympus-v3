@@ -871,7 +871,7 @@ contract OlympusDeploy is Script {
 }
 
 /// @notice Deploys mock Balancer and Aura contracts for testing on Goerli
-contract DependencyDeploy is Script {
+contract DependencyDeployLido is Script {
     // MockPriceFeed public ohmEthPriceFeed;
     // MockPriceFeed public reserveEthPriceFeed;
     MockERC20 public bal;
@@ -944,6 +944,8 @@ contract DependencyDeployLusd is Script {
     ERC20 public ohm;
     ERC20 public lusd;
 
+    MockAuraBooster public auraBooster;
+
     MockPriceFeed public lusdUsdPriceFeed;
     IBasePool public ohmLusdPool;
     MockAuraRewardPool public ohmLusdRewardPool;
@@ -959,8 +961,13 @@ contract DependencyDeployLusd is Script {
         ohm = ERC20(env.readAddress(string.concat(".", chain_, ".olympus.legacy.OHM")));
         lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD"))); // Requires the address of LUSD to be less than the address of OHM, in order to reflect the conditions on mainnet
         ohmLusdPool = IBasePool(env.readAddress(string.concat(".", chain_, ".external.balancer.OhmLusdPool"))); // Real pool, deployed separately as it's a little more complicated
+        auraBooster = MockAuraBooster(env.readAddress(string.concat(".", chain_, ".external.aura.AuraBooster")));
 
         vm.startBroadcast();
+
+        // Add the pool to the aura booster
+        auraBooster.addPool(address(ohmLusdRewardPool));
+        console2.log("Added ohmLusdRewardPool to Aura Booster");
 
         // Deploy the LUSD price feed
         lusdUsdPriceFeed = new MockPriceFeed();
