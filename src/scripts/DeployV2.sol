@@ -648,7 +648,7 @@ contract OlympusDeploy is Script {
         IBLVaultManager.AuraData memory auraData = IBLVaultManager.AuraData({
             pid: auraPid,
             auraBooster: address(auraBooster),
-            auraRewardPool: address(ohmLusdRewardsPool)
+            auraRewardPool: address(ohmLusdRewardsPool) // determined by calling poolInfo(auraPid) on the booster contract
         });
 
         // Create OracleFeed objects
