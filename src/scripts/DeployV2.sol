@@ -914,7 +914,7 @@ contract DependencyDeploy is Script {
         ohmWstethRewardPool.addExtraReward(0x31abFacE787376c9C7c1173106D9f6D64779c32F);
 
         // Deploy Aura Booster
-        auraBooster = new MockAuraBooster(0x3F50E8018bC26668F5cd59B3e5be5257615F83A3, address(ohmWstethRewardPool));
+        auraBooster = new MockAuraBooster(address(ohmWstethRewardPool));
         console2.log("Aura Booster deployed to:", address(auraBooster));
 
         // Deploy the Aura Mining Library

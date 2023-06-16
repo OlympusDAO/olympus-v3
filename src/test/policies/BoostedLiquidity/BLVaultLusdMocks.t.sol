@@ -124,7 +124,7 @@ contract BLVaultLusdTest is Test {
         // Deploy mock Aura contracts
         {
             auraPool = new MockAuraRewardPool(address(vault.bpt()), address(bal), address(aura));
-            booster = new MockAuraBooster(address(vault.bpt()), address(auraPool));
+            booster = new MockAuraBooster(address(auraPool));
         }
 
         // Deploy kernel

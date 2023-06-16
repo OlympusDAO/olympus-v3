@@ -5,16 +5,15 @@ import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiq
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 contract MockAuraBooster is IAuraBooster {
-    address public token;
     address[] public pools;
 
-    constructor(address token_, address pool_) {
-        token = token_;
+    constructor(address pool_) {
         pools.push(pool_);
     }
 
     function deposit(uint256 pid_, uint256 amount_, bool stake_) external returns (bool) {
         address pool = pools[pid_];
+        address token = MockAuraRewardPool(pool).depositToken();
 
         MockERC20(token).transferFrom(msg.sender, address(this), amount_);
 
