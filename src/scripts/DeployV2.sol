@@ -528,6 +528,9 @@ contract OlympusDeploy is Script {
 
     // deploy.json was not being parsed correctly, so I had to hardcode most of the deployment arguments
     function _deployBLVaultManagerLido(bytes memory args) public returns (address) {
+        // Decode arguments for BLVaultManagerLusd policy
+        (uint256 auraPid, uint48 ohmEthFeedUpdateThreshold, uint48 ethUsdFeedUpdateThreshold, uint48 stethUsdFeedUpdateThreshold) = abi.decode(args, (uint256, uint48, uint48, uint48));
+
         console2.log("ohm", address(ohm));
         console2.log("wsteth", address(wsteth));
         console2.log("aura", address(aura));
@@ -559,7 +562,7 @@ contract OlympusDeploy is Script {
 
         // Create AuraData object
         IBLVaultManagerLido.AuraData memory auraData = IBLVaultManagerLido.AuraData({
-            pid: uint256(73),
+            pid: auraPid,
             auraBooster: address(auraBooster),
             auraRewardPool: address(ohmWstethRewardsPool)
         });
@@ -567,20 +570,17 @@ contract OlympusDeploy is Script {
         // Create OracleFeed objects
         IBLVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = IBLVaultManagerLido.OracleFeed({
             feed: ohmEthPriceFeed,
-            updateThreshold: uint48(86400) // needs to be 1 day
-            // updateThreshold: uint48(365 days) // Testnet only
+            updateThreshold: ohmEthFeedUpdateThreshold
         });
 
         IBLVaultManagerLido.OracleFeed memory ethUsdPriceFeedData = IBLVaultManagerLido.OracleFeed({
             feed: ethUsdPriceFeed,
-            updateThreshold: uint48(3600) // needs to be 1 hour
-            // updateThreshold: uint48(365 days) // Testnet only
+            updateThreshold: ethUsdFeedUpdateThreshold
         });
 
         IBLVaultManagerLido.OracleFeed memory stethUsdPriceFeedData = IBLVaultManagerLido.OracleFeed({
             feed: stethUsdPriceFeed,
-            updateThreshold: uint48(3600) // needs to be 1 hour
-            // updateThreshold: uint48(365 days) // Testnet only
+            updateThreshold: stethUsdFeedUpdateThreshold
         });
 
         console2.log("pid: ", auraData.pid);
@@ -613,7 +613,7 @@ contract OlympusDeploy is Script {
     // deploy.json was not being parsed correctly, so I had to hardcode most of the deployment arguments
     function _deployBLVaultManagerLusd(bytes memory args) public returns (address) {
         // Decode arguments for BLVaultManagerLusd policy
-        (uint256 auraPid) = abi.decode(args, (uint256));
+        (uint256 auraPid, uint48 ohmEthFeedUpdateThreshold, uint48 ethUsdFeedUpdateThreshold, uint48 lusdUsdFeedUpdateThreshold) = abi.decode(args, (uint256, uint48, uint48, uint48));
 
         console2.log("ohm", address(ohm));
         console2.log("lusd", address(lusd));
@@ -654,20 +654,17 @@ contract OlympusDeploy is Script {
         // Create OracleFeed objects
         IBLVaultManager.OracleFeed memory ohmEthPriceFeedData = IBLVaultManager.OracleFeed({
             feed: ohmEthPriceFeed,
-            updateThreshold: uint48(86400) // needs to be 1 day
-            // updateThreshold: uint48(365 days) // Testnet only
+            updateThreshold: ohmEthFeedUpdateThreshold
         });
 
         IBLVaultManager.OracleFeed memory ethUsdPriceFeedData = IBLVaultManager.OracleFeed({
             feed: ethUsdPriceFeed,
-            updateThreshold: uint48(3600) // needs to be 1 hour
-            // updateThreshold: uint48(365 days) // Testnet only
+            updateThreshold: ethUsdFeedUpdateThreshold
         });
 
         IBLVaultManager.OracleFeed memory lusdUsdPriceFeedData = IBLVaultManager.OracleFeed({
             feed: lusdUsdPriceFeed,
-            updateThreshold: uint48(3600) // needs to be 1 hour
-            // updateThreshold: uint48(365 days) // Testnet only
+            updateThreshold: lusdUsdFeedUpdateThreshold
         });
 
         console2.log("pid: ", auraData.pid);
