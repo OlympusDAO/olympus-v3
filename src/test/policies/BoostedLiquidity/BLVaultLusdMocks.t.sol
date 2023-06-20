@@ -11,7 +11,7 @@ import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockBalancerVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
-import {MockAuraBooster, MockAuraRewardPool} from "test/mocks/AuraMocks.sol";
+import {MockAuraBooster, MockAuraRewardPool, MockAuraStashToken, MockAuraVirtualRewardPool} from "test/mocks/AuraMocks.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {IAuraBooster, IAuraRewardPool} from "policies/BoostedLiquidity/interfaces/IAura.sol";
@@ -41,6 +41,8 @@ contract BLVaultLusdTest is Test {
     MockERC20 internal lusd;
     MockERC20 internal aura;
     MockERC20 internal bal;
+    MockERC20 internal ldo;
+    MockAuraStashToken internal ldoStash;
 
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal ethUsdPriceFeed;
@@ -92,6 +94,8 @@ contract BLVaultLusdTest is Test {
             lusd = new MockERC20("LUSD", "LUSD", 18);
             aura = new MockERC20("Aura", "AURA", 18);
             bal = new MockERC20("Balancer", "BAL", 18);
+            ldo = new MockERC20("Lido", "LDO", 18);
+            ldoStash = new MockAuraStashToken("Lido-Stash", "LDOSTASH", 18, address(ldo));
         }
 
         // Deploy mock price feeds
@@ -603,6 +607,51 @@ contract BLVaultLusdTest is Test {
         assertEq(aura.balanceOf(address(newUser)), 1e18 * 0.95);
         assertEq(aura.balanceOf(address(treasury)), 1e18 * 0.05);
     }
+
+    function testCorrectness_claimRewardsFee_extraRewards() public {
+        // Configure the vault manager with the fee
+        vaultManager.setFee(500); // 500 / 1e4 = 5%
+
+        // Add the extra reward pool to Aura
+        MockAuraVirtualRewardPool extraPool = new MockAuraVirtualRewardPool(address(ldoStash));
+        auraPool.addExtraReward(address(extraPool));
+
+        // Create a new user
+        address newUser = userCreator.create(1)[0];
+
+        // Mint LUSD to the new user
+        lusd.mint(newUser, 1_000e18);
+
+        // Deploy a new vault (since the fee won't be applied to earlier ones)
+        vm.startPrank(newUser);
+        BLVaultLusd newVault = BLVaultLusd(vaultManager.deployVault());
+        lusd.approve(address(newVault), type(uint256).max);
+
+        // Deposit LUSD to the vault
+        newVault.deposit(100e18, 0);
+        vm.stopPrank();
+
+        // Check state of rewards before
+        assertEq(bal.balanceOf(address(newUser)), 0);
+        assertEq(bal.balanceOf(address(treasury)), 0);
+        assertEq(aura.balanceOf(address(newUser)), 0);
+        assertEq(aura.balanceOf(address(treasury)), 0);
+        assertEq(ldo.balanceOf(address(newUser)), 0);
+        assertEq(ldo.balanceOf(address(treasury)), 0);
+
+        // Claim rewards
+        vm.prank(newUser);
+        newVault.claimRewards();
+
+        // Check state of rewards after
+        assertEq(bal.balanceOf(address(newUser)), 1e18 * 0.95);
+        assertEq(bal.balanceOf(address(treasury)), 1e18 * 0.05);
+        assertEq(aura.balanceOf(address(newUser)), 1e18 * 0.95);
+        assertEq(aura.balanceOf(address(treasury)), 1e18 * 0.05);
+        assertEq(ldo.balanceOf(address(newUser)), 1e18 * 0.95);
+        assertEq(ldo.balanceOf(address(treasury)), 1e18 * 0.05);
+    }
+
     //============================================================================================//
     //                                        VIEW FUNCTIONS                                      //
     //============================================================================================//

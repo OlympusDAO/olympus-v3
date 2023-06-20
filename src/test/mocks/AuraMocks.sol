@@ -4,6 +4,15 @@ pragma solidity >=0.8.0;
 import {IAuraBooster, IAuraRewardPool, IAuraMiningLib, ISTASHToken} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
+/// @title  Used for extra/virtual reward pools
+interface IRewards {
+    function getReward(address) external;
+
+    function stake(address, uint256) external;
+
+    function rewardToken() external view returns (address);
+}
+
 contract MockAuraBooster is IAuraBooster {
     address[] public pools;
 
@@ -53,6 +62,11 @@ contract MockAuraRewardPool is IAuraRewardPool {
     function deposit(uint256 assets_, address receiver_) external {
         balanceOf[receiver_] += assets_;
         MockERC20(depositToken).transferFrom(msg.sender, address(this), assets_);
+
+        for (uint256 i; i < extraRewardsLength; i++) {
+            IRewards(extraRewards[i]).stake(receiver_, assets_);
+            ++i;
+        }
     }
 
     function getReward(address account_, bool claimExtras_) public {
@@ -63,7 +77,7 @@ contract MockAuraRewardPool is IAuraRewardPool {
 
         if (claimExtras_) {
             for (uint256 i; i < extraRewardsLength; i++) {
-                IAuraRewardPool(extraRewards[i]).getReward(account_, false);
+                IRewards(extraRewards[i]).getReward(account_);
                 ++i;
             }
         }
@@ -112,5 +126,23 @@ contract MockAuraStashToken is ISTASHToken, MockERC20 {
         address baseToken_
     ) MockERC20(name_, symbol_, decimals_) {
         baseToken = baseToken_;
+    }
+}
+
+contract MockAuraVirtualRewardPool is IRewards {
+    address public rewardToken;
+
+    constructor(address rewardToken_) {
+        rewardToken = rewardToken_;
+    }
+
+    function getReward(address account_) external override {
+        // Mimic transferring the base token of the reward token from the virtual reward pool
+        // See: https://etherscan.io/address/0xA40A280b8ce1eba3E33E638b4BD72D5B701109FC#code#F1#L194
+        MockERC20(ISTASHToken(rewardToken).baseToken()).mint(account_, 1e18);
+    }
+
+    function stake(address, uint256) external override {
+        // Do nothing
     }
 }
