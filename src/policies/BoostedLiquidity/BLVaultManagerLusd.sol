@@ -577,7 +577,6 @@ contract BLVaultManagerLusd is Policy, IBLVaultManager, RolesConsumer {
         return (ethPerOhm * usdPerEth) / (usdPerLusd);
     }
 
-    // TODO: Update
     /// @inheritdoc IBLVaultManager
     function getOhmTknPoolPrice() public view override returns (uint256) {
         IBasePool pool = IBasePool(balancerData.liquidityPool);
