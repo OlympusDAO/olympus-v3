@@ -523,6 +523,9 @@ contract BLVaultLusdTest is Test {
     ///     [X]  can only be called when the manager is active
     ///     [X]  can only be called by the vault's owner
     ///     [X]  correctly claims rewards from Aura
+    ///     [X]  sends fee on BAL rewards to the treasury
+    ///     [X]  sends fee on AURA rewards to the treasury
+    ///     [ ]  sends fee on extra rewards to the treasury
 
     function testCorrectness_claimRewardsCanOnlyBeCalledWhenManagerIsActive() public {
         // Deactivate vault manager
@@ -565,6 +568,41 @@ contract BLVaultLusdTest is Test {
         assertEq(bal.balanceOf(address(alice)), 1e18);
     }
 
+    function testCorrectness_claimRewardsFee() public {
+        // Configure the vault manager with the fee
+        vaultManager.setFee(500); // 500 / 1e4 = 5%
+
+        // Create a new user
+        address newUser = userCreator.create(1)[0];
+
+        // Mint LUSD to the new user
+        lusd.mint(newUser, 1_000e18);
+
+        // Deploy a new vault (since the fee won't be applied to earlier ones)
+        vm.startPrank(newUser);
+        BLVaultLusd newVault = BLVaultLusd(vaultManager.deployVault());
+        lusd.approve(address(newVault), type(uint256).max);
+
+        // Deposit LUSD to the vault
+        newVault.deposit(100e18, 0);
+        vm.stopPrank();
+
+        // Check state of rewards before
+        assertEq(bal.balanceOf(address(newUser)), 0);
+        assertEq(bal.balanceOf(address(treasury)), 0);
+        assertEq(aura.balanceOf(address(newUser)), 0);
+        assertEq(aura.balanceOf(address(treasury)), 0);
+
+        // Claim rewards
+        vm.prank(newUser);
+        newVault.claimRewards();
+
+        // Check state of rewards after
+        assertEq(bal.balanceOf(address(newUser)), 1e18 * 0.95);
+        assertEq(bal.balanceOf(address(treasury)), 1e18 * 0.05);
+        assertEq(aura.balanceOf(address(newUser)), 1e18 * 0.95);
+        assertEq(aura.balanceOf(address(treasury)), 1e18 * 0.05);
+    }
     //============================================================================================//
     //                                        VIEW FUNCTIONS                                      //
     //============================================================================================//

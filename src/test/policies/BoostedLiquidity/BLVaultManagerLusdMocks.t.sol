@@ -680,10 +680,18 @@ contract BLVaultManagerLusdTest is Test {
 
     /// [X]  getRewardRate
     ///     [X]  returns correct reward rate for Bal
+    ///     [X]  returns correct reward rate for AURA
 
-    function testCorrectness_getRewardRate() public {
+    function testCorrectness_getRewardRate_bal() public {
         uint256 rate = vaultManager.getRewardRate(address(bal));
 
+        assertEq(rate, 1e18);
+    }
+
+    function testCorrectness_getRewardRate_aura() public {
+        uint256 rate = vaultManager.getRewardRate(address(aura));
+
+        // Same as the BAL rate, due to the implementation of MockAuraMiningLib
         assertEq(rate, 1e18);
     }
 
