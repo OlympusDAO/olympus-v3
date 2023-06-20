@@ -872,19 +872,29 @@ contract OlympusDeploy is Script {
 
 /// @notice Deploys mock Balancer and Aura contracts for testing on Goerli
 contract DependencyDeployLido is Script {
+    using stdJson for string;
+
     // MockPriceFeed public ohmEthPriceFeed;
     // MockPriceFeed public reserveEthPriceFeed;
-    MockERC20 public bal;
-    MockERC20 public aura;
-    MockERC20 public ldo;
+    ERC20 public bal;
+    ERC20 public aura;
+    ERC20 public ldo;
     MockAuraStashToken public ldoStash;
 
+    IBasePool public ohmWstethPool;
     MockAuraBooster public auraBooster;
     MockAuraMiningLib public auraMiningLib;
     MockAuraRewardPool public ohmWstethRewardPool;
     MockAuraVirtualRewardPool public ohmWstethExtraRewardPool;
 
-    function deploy() external {
+    function deploy(string calldata chain_) external {
+        // Load environment addresses
+        string memory env = vm.readFile("./src/scripts/env.json");
+        bal = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.BAL")));
+        aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
+        ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
+        ohmWstethPool = IBasePool(env.readAddress(string.concat(".", chain_, ".external.balancer.OhmWstethPool")));
+
         vm.startBroadcast();
 
         // Deploy the mock tokens
@@ -899,9 +909,9 @@ contract DependencyDeployLido is Script {
 
         // Deploy the Aura Reward Pools for OHM-wstETH
         ohmWstethRewardPool = new MockAuraRewardPool(
-            0x3F50E8018bC26668F5cd59B3e5be5257615F83A3, // Goerli OHM-wstETH LP
-            0xd517A8E45771a40B29eCDa347634bD62051F91B9, // Goerli BAL
-            0x4a92f7C880f14c2a06FfCf56C7849739B0E492f5 // Goerli AURA
+            address(ohmWstethPool), // Goerli OHM-wstETH LP
+            address(bal), // Goerli BAL
+            address(aura) // Goerli AURA
         );
         console2.log("OHM-WSTETH Reward Pool deployed to:", address(ohmWstethRewardPool));
 
@@ -910,7 +920,7 @@ contract DependencyDeployLido is Script {
         console2.log("Lido Stash deployed to:", address(ldoStash));
 
         ohmWstethExtraRewardPool = new MockAuraVirtualRewardPool(
-            0x3F50E8018bC26668F5cd59B3e5be5257615F83A3, // Goerli OHM-wstETH LP
+            address(ohmWstethPool), // Goerli OHM-wstETH LP
             address(ldoStash)
         );
         console2.log("OHM-WSTETH Extra Reward Pool deployed to:", address(ohmWstethExtraRewardPool));
@@ -946,7 +956,6 @@ contract DependencyDeployLusd is Script {
     ERC20 public bal;
     ERC20 public aura;
     ERC20 public ldo;
-    ERC20 public ohm;
     ERC20 public lusd;
 
     MockAuraBooster public auraBooster;
@@ -963,7 +972,6 @@ contract DependencyDeployLusd is Script {
         bal = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.BAL")));
         aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
         ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
-        ohm = ERC20(env.readAddress(string.concat(".", chain_, ".olympus.legacy.OHM")));
         lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD"))); // Requires the address of LUSD to be less than the address of OHM, in order to reflect the conditions on mainnet
         ohmLusdPool = IBasePool(env.readAddress(string.concat(".", chain_, ".external.balancer.OhmLusdPool"))); // Real pool, deployed separately as it's a little more complicated
         auraBooster = MockAuraBooster(env.readAddress(string.concat(".", chain_, ".external.aura.AuraBooster")));
