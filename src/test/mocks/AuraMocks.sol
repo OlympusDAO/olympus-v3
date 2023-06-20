@@ -13,6 +13,8 @@ interface IRewards {
     function stake(address, uint256) external;
 
     function rewardToken() external view returns (address);
+
+    function rewardRate() external view returns (uint256);
 }
 
 contract MockAuraBooster is IAuraBooster {
@@ -156,5 +158,9 @@ contract MockAuraVirtualRewardPool is IRewards {
 
     function rewardToken() external view override returns (address) {
         return _rewardToken;
+    }
+
+    function rewardRate() external view override returns (uint256) {
+        return 1e18;
     }
 }
