@@ -682,6 +682,23 @@ contract BLVaultManagerLusdTest is Test {
         assertEq(tokens[1], address(bal));
     }
 
+    function testCorrectness_getRewardTokens_extraRewards() public {
+        // Add the extra reward pool to Aura
+        MockAuraRewardPool extraPool = new MockAuraRewardPool(
+            address(vault.bpt()),
+            address(ldoStash),
+            address(aura)
+        );
+        auraPool.addExtraReward(address(extraPool));
+
+        address[] memory tokens = vaultManager.getRewardTokens();
+
+        assertEq(tokens.length, 3);
+        assertEq(tokens[0], address(aura));
+        assertEq(tokens[1], address(bal));
+        assertEq(tokens[2], address(ldo));
+    }
+
     /// [X]  getRewardRate
     ///     [X]  returns correct reward rate for Bal
     ///     [X]  returns correct reward rate for AURA

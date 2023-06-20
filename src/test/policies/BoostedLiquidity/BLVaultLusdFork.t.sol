@@ -459,7 +459,7 @@ contract BLVaultLusdTestFork is Test {
         vm.prank(alice);
         aliceVault.claimRewards();
 
-        // TODO these report 0 balances
+        // TODO these will report 0 balances until rewards are enabled
 
         // Check state after
         assertTrue(bal.balanceOf(address(alice)) > 0);
