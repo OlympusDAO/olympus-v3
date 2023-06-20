@@ -543,7 +543,7 @@ contract OlympusDeploy is Script {
         console2.log("ohmEthPriceFeed", address(ohmEthPriceFeed));
         console2.log("ethUsdPriceFeed", address(ethUsdPriceFeed));
         console2.log("stethUsdPriceFeed", address(stethUsdPriceFeed));
-        console2.log("implementation", address(lidoVault));
+        console2.log("BLV Lido implementation", address(lidoVault));
 
         // Create TokenData object
         IBLVaultManagerLido.TokenData memory tokenData = IBLVaultManagerLido.TokenData({
@@ -627,7 +627,7 @@ contract OlympusDeploy is Script {
         console2.log("ohmEthPriceFeed", address(ohmEthPriceFeed));
         console2.log("ethUsdPriceFeed", address(ethUsdPriceFeed));
         console2.log("lusdUsdPriceFeed", address(lusdUsdPriceFeed));
-        console2.log("implementation", address(lusdVault));
+        console2.log("BLV LUSD implementation", address(lusdVault));
 
         // Create TokenData object
         IBLVaultManager.TokenData memory tokenData = IBLVaultManager.TokenData({
