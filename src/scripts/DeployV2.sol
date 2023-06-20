@@ -974,13 +974,9 @@ contract DependencyDeployLusd is Script {
         ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
         lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD"))); // Requires the address of LUSD to be less than the address of OHM, in order to reflect the conditions on mainnet
         ohmLusdPool = IBasePool(env.readAddress(string.concat(".", chain_, ".external.balancer.OhmLusdPool"))); // Real pool, deployed separately as it's a little more complicated
-        auraBooster = MockAuraBooster(env.readAddress(string.concat(".", chain_, ".external.aura.AuraBooster")));
+        auraBooster = MockAuraBooster(env.readAddress(string.concat(".", chain_, ".external.aura.AuraBooster"))); // Requires DependencyDeployLido to be run first
 
         vm.startBroadcast();
-
-        // Add the pool to the aura booster
-        auraBooster.addPool(address(ohmLusdRewardPool));
-        console2.log("Added ohmLusdRewardPool to Aura Booster");
 
         // Deploy the LUSD price feed
         lusdUsdPriceFeed = new MockPriceFeed();
@@ -998,6 +994,10 @@ contract DependencyDeployLusd is Script {
             address(aura) // AURA
         );
         console2.log("OHM-LUSD LP reward pool deployed to: ", address(ohmLusdRewardPool));
+
+        // Add the pool to the aura booster
+        auraBooster.addPool(address(ohmLusdRewardPool));
+        console2.log("Added ohmLusdRewardPool to Aura Booster");
 
         vm.stopBroadcast();
     }
