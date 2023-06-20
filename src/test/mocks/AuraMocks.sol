@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0;
 
-import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
+import {IAuraBooster, IAuraRewardPool, IAuraMiningLib, ISTASHToken} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 contract MockAuraBooster is IAuraBooster {
@@ -98,5 +98,19 @@ contract MockAuraMiningLib is IAuraMiningLib {
 
     function convertCrvToCvx(uint256 amount_) external view returns (uint256) {
         return amount_;
+    }
+}
+
+contract MockAuraStashToken is ISTASHToken, MockERC20 {
+    address public baseToken;
+
+    // Constructor with the address of the baseToken and arguments to pass to MockERC20
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        uint8 decimals_,
+        address baseToken_
+    ) MockERC20(name_, symbol_, decimals_) {
+        baseToken = baseToken_;
     }
 }

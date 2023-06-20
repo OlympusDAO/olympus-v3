@@ -11,7 +11,7 @@ import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
-import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "test/mocks/AuraMocks.sol";
+import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {IAuraBooster, IAuraRewardPool} from "policies/BoostedLiquidity/interfaces/IAura.sol";
@@ -42,6 +42,8 @@ contract BLVaultManagerLusdTest is Test {
     MockERC20 internal lusd;
     MockERC20 internal aura;
     MockERC20 internal bal;
+    MockERC20 internal ldo;
+    MockAuraStashToken internal ldoStash;
 
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal ethUsdPriceFeed;
@@ -87,6 +89,8 @@ contract BLVaultManagerLusdTest is Test {
             lusd = new MockERC20("LUSD", "LUSD", 18);
             aura = new MockERC20("Aura", "AURA", 18);
             bal = new MockERC20("Balancer", "BAL", 18);
+            ldo = new MockERC20("Lido", "LDO", 18);
+            ldoStash = new MockAuraStashToken("Lido-Stash", "LDOSTASH", 18, address(ldo));
         }
 
         // Deploy mock price feeds
@@ -681,6 +685,8 @@ contract BLVaultManagerLusdTest is Test {
     /// [X]  getRewardRate
     ///     [X]  returns correct reward rate for Bal
     ///     [X]  returns correct reward rate for AURA
+    ///     [X]  returns correct reward rate for extra rewards
+    ///     [X]  returns 0 reward rate for other tokens
 
     function testCorrectness_getRewardRate_bal() public {
         uint256 rate = vaultManager.getRewardRate(address(bal));
@@ -693,6 +699,27 @@ contract BLVaultManagerLusdTest is Test {
 
         // Same as the BAL rate, due to the implementation of MockAuraMiningLib
         assertEq(rate, 1e18);
+    }
+
+    function testCorrectness_getRewardRate_extraRewards() public {
+        // Add the extra reward pool to Aura
+        MockAuraRewardPool extraPool = new MockAuraRewardPool(
+            address(vault.bpt()),
+            address(ldoStash),
+            address(aura)
+        );
+        auraPool.addExtraReward(address(extraPool));
+
+        uint256 rate = vaultManager.getRewardRate(address(ldo));
+
+        // Same as the BAL rate, due to the implementation of MockAuraMiningLib
+        assertEq(rate, 1e18);
+    }
+
+    function testCorrectness_getRewardRate_otherToken() public {
+        uint256 rate = vaultManager.getRewardRate(address(lusd));
+
+        assertEq(rate, 0);
     }
 
     /// [X]  getPoolOhmShare
