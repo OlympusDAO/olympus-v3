@@ -45,7 +45,7 @@ import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVault
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "test/mocks/AuraMocks.sol";
+import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
 import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
@@ -877,11 +877,12 @@ contract DependencyDeployLido is Script {
     MockERC20 public bal;
     MockERC20 public aura;
     MockERC20 public ldo;
+    MockAuraStashToken public ldoStash;
 
     MockAuraBooster public auraBooster;
     MockAuraMiningLib public auraMiningLib;
     MockAuraRewardPool public ohmWstethRewardPool;
-    // MockAuraRewardPool public ohmWstethExtraRewardPool;
+    MockAuraVirtualRewardPool public ohmWstethExtraRewardPool;
 
     function deploy() external {
         vm.startBroadcast();
@@ -904,14 +905,18 @@ contract DependencyDeployLido is Script {
         );
         console2.log("OHM-WSTETH Reward Pool deployed to:", address(ohmWstethRewardPool));
 
-        // ohmWstethExtraRewardPool = new MockAuraRewardPool(
-        //     0x3F50E8018bC26668F5cd59B3e5be5257615F83A3,
-        //     address(ldo),
-        //     address(0)
-        // );
-        // console2.log("OHM-WSTETH Extra Reward Pool deployed to:", address(ohmWstethExtraRewardPool));
+        // Deploy the extra rewards pool
+        ldoStash = new MockAuraStashToken("Lido-Stash", "LDOSTASH", 18, address(ldo));
+        console2.log("Lido Stash deployed to:", address(ldoStash));
 
-        ohmWstethRewardPool.addExtraReward(0x31abFacE787376c9C7c1173106D9f6D64779c32F);
+        ohmWstethExtraRewardPool = new MockAuraVirtualRewardPool(
+            0x3F50E8018bC26668F5cd59B3e5be5257615F83A3, // Goerli OHM-wstETH LP
+            address(ldoStash)
+        );
+        console2.log("OHM-WSTETH Extra Reward Pool deployed to:", address(ohmWstethExtraRewardPool));
+
+        ohmWstethRewardPool.addExtraReward(address(ohmWstethExtraRewardPool));
+        console2.log("Added OHM-WSTETH Extra Reward Pool to OHM-WSTETH Reward Pool");
 
         // Deploy Aura Booster
         auraBooster = new MockAuraBooster(address(ohmWstethRewardPool));
