@@ -613,7 +613,10 @@ contract BLVaultLusdTest is Test {
         vaultManager.setFee(500); // 500 / 1e4 = 5%
 
         // Add the extra reward pool to Aura
-        MockAuraVirtualRewardPool extraPool = new MockAuraVirtualRewardPool(address(ldoStash));
+        MockAuraVirtualRewardPool extraPool = new MockAuraVirtualRewardPool(
+            address(liquidityPool),
+            address(ldoStash)
+        );
         auraPool.addExtraReward(address(extraPool));
 
         // Create a new user

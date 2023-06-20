@@ -6,6 +6,8 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 /// @title  Used for extra/virtual reward pools
 interface IRewards {
+    function deposits() external view returns (address);
+
     function getReward(address) external;
 
     function stake(address, uint256) external;
@@ -130,19 +132,29 @@ contract MockAuraStashToken is ISTASHToken, MockERC20 {
 }
 
 contract MockAuraVirtualRewardPool is IRewards {
-    address public rewardToken;
+    address private _rewardToken;
+    address private _deposits;
 
-    constructor(address rewardToken_) {
-        rewardToken = rewardToken_;
+    constructor(address depositToken_, address rewardToken_) {
+        _rewardToken = rewardToken_;
+        _deposits = depositToken_;
+    }
+
+    function deposits() external view override returns (address) {
+        return _deposits;
     }
 
     function getReward(address account_) external override {
         // Mimic transferring the base token of the reward token from the virtual reward pool
         // See: https://etherscan.io/address/0xA40A280b8ce1eba3E33E638b4BD72D5B701109FC#code#F1#L194
-        MockERC20(ISTASHToken(rewardToken).baseToken()).mint(account_, 1e18);
+        MockERC20(ISTASHToken(_rewardToken).baseToken()).mint(account_, 1e18);
     }
 
     function stake(address, uint256) external override {
         // Do nothing
+    }
+
+    function rewardToken() external view override returns (address) {
+        return _rewardToken;
     }
 }
