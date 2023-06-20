@@ -686,7 +686,7 @@ contract OlympusDeploy is Script {
             lusdUsdPriceFeedData,
             address(lusdVault),
             233_645e9, // 233_645e9 // $2.5m = 233,645 OHM
-            uint64(0), // fee
+            uint64(500), // fee // 10_000 = 1 = 100%, 500 / 1e4 = 0.05 = 5%
             uint48(1 days) // withdrawal delay
         );
         console2.log("BLVaultManagerLusd deployed at:", address(lusdVaultManager));
