@@ -613,7 +613,8 @@ contract OlympusDeploy is Script {
     // deploy.json was not being parsed correctly, so I had to hardcode most of the deployment arguments
     function _deployBLVaultManagerLusd(bytes memory args) public returns (address) {
         // Decode arguments for BLVaultManagerLusd policy
-        (uint256 auraPid, uint48 ohmEthFeedUpdateThreshold, uint48 ethUsdFeedUpdateThreshold, uint48 lusdUsdFeedUpdateThreshold) = abi.decode(args, (uint256, uint48, uint48, uint48));
+        // (uint256 auraPid, uint48 ohmEthFeedUpdateThreshold, uint48 ethUsdFeedUpdateThreshold, uint48 lusdUsdFeedUpdateThreshold) = abi.decode(args, (uint256, uint48, uint48, uint48));
+        // lusdUsdFeedUpdateThreshold ends up being 86400 for some reason. Ordering is incorrect?
 
         console2.log("ohm", address(ohm));
         console2.log("lusd", address(lusd));
@@ -646,7 +647,7 @@ contract OlympusDeploy is Script {
 
         // Create AuraData object
         IBLVaultManager.AuraData memory auraData = IBLVaultManager.AuraData({
-            pid: auraPid,
+            pid: uint256(127),
             auraBooster: address(auraBooster),
             auraRewardPool: address(ohmLusdRewardsPool) // determined by calling poolInfo(auraPid) on the booster contract
         });
@@ -654,17 +655,17 @@ contract OlympusDeploy is Script {
         // Create OracleFeed objects
         IBLVaultManager.OracleFeed memory ohmEthPriceFeedData = IBLVaultManager.OracleFeed({
             feed: ohmEthPriceFeed,
-            updateThreshold: ohmEthFeedUpdateThreshold
+            updateThreshold: uint48(86400)
         });
 
         IBLVaultManager.OracleFeed memory ethUsdPriceFeedData = IBLVaultManager.OracleFeed({
             feed: ethUsdPriceFeed,
-            updateThreshold: ethUsdFeedUpdateThreshold
+            updateThreshold: uint48(3600)
         });
 
         IBLVaultManager.OracleFeed memory lusdUsdPriceFeedData = IBLVaultManager.OracleFeed({
             feed: lusdUsdPriceFeed,
-            updateThreshold: lusdUsdFeedUpdateThreshold
+            updateThreshold: uint48(3600)
         });
 
         console2.log("pid: ", auraData.pid);
