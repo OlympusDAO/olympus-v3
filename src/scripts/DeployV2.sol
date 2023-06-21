@@ -685,7 +685,8 @@ contract OlympusDeploy is Script {
             ethUsdPriceFeedData,
             lusdUsdPriceFeedData,
             address(lusdVault),
-            233_645e9, // 233_645e9 // $2.5m = 233,645 OHM
+            // 2500000 cap/$10.84 = 230,627.3062730627 OHM
+            230_627e9, // max OHM minted
             uint64(500), // fee // 10_000 = 1 = 100%, 500 / 1e4 = 0.05 = 5%
             uint48(1 days) // withdrawal delay
         );
