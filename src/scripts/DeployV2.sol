@@ -610,11 +610,10 @@ contract OlympusDeploy is Script {
         return address(lidoVaultManager);
     }
 
-    // deploy.json was not being parsed correctly, so I had to hardcode most of the deployment arguments
     function _deployBLVaultManagerLusd(bytes memory args) public returns (address) {
         // Decode arguments for BLVaultManagerLusd policy
-        // (uint256 auraPid, uint48 ohmEthFeedUpdateThreshold, uint48 ethUsdFeedUpdateThreshold, uint48 lusdUsdFeedUpdateThreshold) = abi.decode(args, (uint256, uint48, uint48, uint48));
-        // lusdUsdFeedUpdateThreshold ends up being 86400 for some reason. Ordering is incorrect?
+        // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
+        (uint256 auraPid, uint256 ethUsdFeedUpdateThreshold, uint256 lusdUsdFeedUpdateThreshold, uint256 ohmEthFeedUpdateThreshold) = abi.decode(args, (uint256, uint256, uint256, uint256));
 
         console2.log("ohm", address(ohm));
         console2.log("lusd", address(lusd));
@@ -647,7 +646,7 @@ contract OlympusDeploy is Script {
 
         // Create AuraData object
         IBLVaultManager.AuraData memory auraData = IBLVaultManager.AuraData({
-            pid: uint256(127),
+            pid: uint256(auraPid),
             auraBooster: address(auraBooster),
             auraRewardPool: address(ohmLusdRewardsPool) // determined by calling poolInfo(auraPid) on the booster contract
         });
@@ -655,24 +654,23 @@ contract OlympusDeploy is Script {
         // Create OracleFeed objects
         IBLVaultManager.OracleFeed memory ohmEthPriceFeedData = IBLVaultManager.OracleFeed({
             feed: ohmEthPriceFeed,
-            updateThreshold: uint48(86400)
+            updateThreshold: uint48(ohmEthFeedUpdateThreshold)
         });
 
         IBLVaultManager.OracleFeed memory ethUsdPriceFeedData = IBLVaultManager.OracleFeed({
             feed: ethUsdPriceFeed,
-            updateThreshold: uint48(3600)
+            updateThreshold: uint48(ethUsdFeedUpdateThreshold)
         });
 
         IBLVaultManager.OracleFeed memory lusdUsdPriceFeedData = IBLVaultManager.OracleFeed({
             feed: lusdUsdPriceFeed,
-            updateThreshold: uint48(3600)
+            updateThreshold: uint48(lusdUsdFeedUpdateThreshold)
         });
 
         console2.log("pid: ", auraData.pid);
         console2.log("OHM update threshold: ", ohmEthPriceFeedData.updateThreshold);
         console2.log("ETH update threshold: ", ethUsdPriceFeedData.updateThreshold);
         console2.log("LUSD update threshold: ", lusdUsdPriceFeedData.updateThreshold);
-
 
         // Deploy BLVaultManagerLusd policy
         vm.broadcast();

@@ -8,9 +8,9 @@
             "name": "BLVaultManagerLusd",
             "args": {
                 "auraPid": 127,
-                "ohmEthFeedUpdateThreshold": 86400,
                 "ethUsdFeedUpdateThreshold": 3600,
-                "lusdUsdFeedUpdateThreshold": 3600
+                "lusdUsdFeedUpdateThreshold": 3600,
+                "ohmEthFeedUpdateThreshold": 86400
             }
         }
     ]
