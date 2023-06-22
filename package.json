@@ -9,7 +9,7 @@
     "url": "git+https://github.com/FrankieIsLost/forge-template.git"
   },
   "scripts": {
-    "build": "chmod +x shell/* && ./shell/full_install.sh",
+    "build": "./shell/full_install.sh",
     "prettier": "prettier --write 'src/**/*.sol'",
     "prettier:list": "prettier --list-different 'src/**/*.sol'",
     "prettier:check": "prettier --check 'src/**/*.sol'",
