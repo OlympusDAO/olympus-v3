@@ -2,7 +2,7 @@
 
 npm install
 git submodule init
-git submodule update --recursive --remote
+git submodule update
 forge install
 forge update
 forge build
