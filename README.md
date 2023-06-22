@@ -1,8 +1,17 @@
 # Olympus Bophades
 
-Use `npm run build` to refresh deps.
+## Development Environment
 
-Set up a foundry config in foundry.toml.
+### Global Dependencies
+
+This requires the following to be installed:
+
+- jq: `brew install jq`
+- foundry: [instructions](https://book.getfoundry.sh/getting-started/installation)
+
+### Setup
+
+- Use `npm run build` to install all project dependencies
 
 ## SRC Directory Structure
 
