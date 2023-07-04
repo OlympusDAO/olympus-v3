@@ -450,6 +450,57 @@ contract BalancerPoolTokenPriceStableTest is Test {
         assertEq(priceUsdc, 1e18); // Double-check value
     }
 
+    function test_getTokenPriceFromStablePool_scalingFactor_priceDecimalsFuzz(
+        uint8 priceDecimals_
+    ) public {
+        uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
+
+        address dola = 0x865377367054516e17014CcdED1e7d814EDC9ce4;
+        address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+
+        // Set up a pool for DOLA-USDC, which has a scaling factor
+        // Values are taken from the live DOLA-USDC pool: https://etherscan.io/address/0xBA12222222228d8Ba445958a75a0704d566BF2C8#readContract
+        MockBalancerStablePool mockDolaUsdcPool = new MockBalancerStablePool();
+        mockDolaUsdcPool.setDecimals(BALANCER_POOL_DECIMALS);
+        mockDolaUsdcPool.setTotalSupply(3262924705777927304170384);
+        mockDolaUsdcPool.setPoolId(
+            0xff4ce5aaab5a627bf82f4a571ab1ce94aa365ea6000200000000000000000426
+        );
+        mockDolaUsdcPool.setLastInvariant(3272947203169998812276392, 200000);
+        mockDolaUsdcPool.setRate(1003083263104177887);
+        setScalingFactorsTwo(
+            mockDolaUsdcPool,
+            1000000000000000000,
+            1000000000000000000000000000000
+        );
+
+        setTokensTwo(mockBalancerVault, dola, usdc);
+        setBalancesTwo(mockBalancerVault, 1872102650769666439105823, 1401055486359);
+
+        mockERC20Decimals(usdc, 6);
+        mockERC20Decimals(dola, 18);
+
+        bytes memory params = encodeBalancerPoolParams(mockDolaUsdcPool);
+
+        // Look up the price of DOLA
+        mockAssetPrice(usdc, 1 * 10 ** priceDecimals);
+        uint256 priceDola = balancerSubmodule.getTokenPriceFromStablePool(
+            dola,
+            priceDecimals,
+            params
+        );
+        assertEq(priceDola, uint256(10004).mulDiv(10 ** priceDecimals, 1e4)); // Double-check value
+
+        // Look up the price of USDC
+        mockAssetPrice(dola, uint256(10004).mulDiv(10 ** priceDecimals, 1e4));
+        uint256 priceUsdc = balancerSubmodule.getTokenPriceFromStablePool(
+            usdc,
+            priceDecimals,
+            params
+        );
+        assertEq(priceUsdc, 1 * 10 ** priceDecimals); // Double-check value
+    }
+
     // ========= POOL TOKEN PRICE ========= //
 
     function setUpStablePoolTokenPrice() internal {
