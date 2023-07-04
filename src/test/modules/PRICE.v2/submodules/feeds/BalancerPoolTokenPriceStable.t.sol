@@ -72,6 +72,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
             mockStablePool.setPoolId(BALANCER_POOL_ID);
             mockStablePool.setLastInvariant(INVARIANT, AMP_FACTOR);
             mockStablePool.setRate(BALANCER_POOL_RATE);
+            setScalingFactorsTwo(mockStablePool, 1000000000000000000, 1000000000000000000);
         }
 
         // Set up the Balancer submodule
@@ -113,6 +114,17 @@ contract BalancerPoolTokenPriceStableTest is Test {
         balances[0] = balance1_;
         balances[1] = balance2_;
         vault.setBalances(balances);
+    }
+
+    function setScalingFactorsTwo(
+        MockBalancerStablePool pool_,
+        uint256 scalingFactor1_,
+        uint256 scalingFactor2_
+    ) internal {
+        uint256[] memory scalingFactors = new uint256[](2);
+        scalingFactors[0] = scalingFactor1_;
+        scalingFactors[1] = scalingFactor2_;
+        pool_.setScalingFactors(scalingFactors);
     }
 
     function mockERC20Decimals(address asset_, uint8 decimals_) internal {
@@ -397,10 +409,6 @@ contract BalancerPoolTokenPriceStableTest is Test {
 
         // Set up a pool for DOLA-USDC, which has a scaling factor
         // Values are taken from the live DOLA-USDC pool: https://etherscan.io/address/0xBA12222222228d8Ba445958a75a0704d566BF2C8#readContract
-        uint256[] memory poolScalingFactors = new uint256[](2);
-        poolScalingFactors[0] = 1000000000000000000;
-        poolScalingFactors[1] = 1000000000000000000000000000000;
-
         MockBalancerStablePool mockDolaUsdcPool = new MockBalancerStablePool();
         mockDolaUsdcPool.setDecimals(BALANCER_POOL_DECIMALS);
         mockDolaUsdcPool.setTotalSupply(3262924705777927304170384);
@@ -409,6 +417,11 @@ contract BalancerPoolTokenPriceStableTest is Test {
         );
         mockDolaUsdcPool.setLastInvariant(3272947203169998812276392, 200000);
         mockDolaUsdcPool.setRate(1003083263104177887);
+        setScalingFactorsTwo(
+            mockDolaUsdcPool,
+            1000000000000000000,
+            1000000000000000000000000000000
+        );
 
         setTokensTwo(mockBalancerVault, dola, usdc);
         setBalancesTwo(mockBalancerVault, 1872102650769666439105823, 1401055486359);
