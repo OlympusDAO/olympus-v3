@@ -516,22 +516,39 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint256 len = tokens.length;
         if (len == 0) revert Balancer_PoolValueZero(poolId);
 
-        uint256 baseTokenPrice; // outputDecimals_
+        uint256 minimumPrice; // outputDecimals_
         {
-            address token = tokens[0];
-            if (token == address(0)) revert Balancer_PoolTokenInvalid(poolId, 0, token);
-
             /**
-             * PRICE will revert if there is an issue resolving the price, or if it is 0.
+             * The Balancer docs do not currently state this, but a historical version noted
+             * that getRate() should be multiplied by the minimum price of the tokens in the
+             * pool in order to get a valuation. This is the same approach as used by Curve stable pools.
              *
-             * As the value of the pool token is reliant on the price of every underlying token,
-             * the revert from PRICE is not caught.
+             * Source: https://github.com/balancer/docs/blob/663e2f4f2c3eee6f85805e102434629633af92a2/docs/concepts/advanced/valuing-bpt/bpt-as-collateral.md
              */
-            (uint256 price_, ) = _PRICE().getPrice(token, PRICEv2.Variant.CURRENT); // outputDecimals_
-            baseTokenPrice = price_;
+            for (uint256 i; i < len; i++) {
+                address token = tokens[i];
+                if (token == address(0)) revert Balancer_PoolTokenInvalid(poolId, i, token);
+
+                /**
+                 * PRICE will revert if there is an issue resolving the price, or if it is 0.
+                 *
+                 * As the value of the pool token is reliant on the price of every underlying token,
+                 * the revert from PRICE is not caught.
+                 */
+                (uint256 price_, ) = _PRICE().getPrice(token, PRICEv2.Variant.CURRENT); // outputDecimals_
+
+                if (minimumPrice == 0) {
+                    minimumPrice = price_;
+                } else if (price_ < minimumPrice) {
+                    minimumPrice = price_;
+                }
+            }
+
+            // minimumPrice almost certainly has a value, but check to be sure
+            if (minimumPrice == 0) revert Balancer_PoolValueZero(poolId);
         }
 
-        uint256 poolValue = poolRate.mulDiv(baseTokenPrice, 10 ** poolDecimals); // outputDecimals_
+        uint256 poolValue = poolRate.mulDiv(minimumPrice, 10 ** poolDecimals); // outputDecimals_
 
         return poolValue;
     }
