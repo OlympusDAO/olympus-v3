@@ -28,18 +28,23 @@ function fromSubKeycode(SubKeycode key_) pure returns (bytes20) {
 // solhint-disable-next-line func-visibility
 function ensureValidSubKeycode(SubKeycode subKeycode_, Keycode parentKeycode_) pure {
     // The SubKeycode must have the parent Keycode as its first 5 bytes
-    // Additionally, the SubKeycode must only contain A-Z, _, or blank characters
+    // Additionally, the SubKeycode must have 3 non-blank characters to start
+    // and only contain A-Z, _, or blank characters.
     bytes5 unwrappedParent = Keycode.unwrap(parentKeycode_);
     bytes20 unwrappedSub = SubKeycode.unwrap(subKeycode_);
     for (uint256 i; i < 20; ) {
         bytes1 char = unwrappedSub[i];
         if (i < 5) {
             if (unwrappedParent[i] != char) revert InvalidSubKeycode(subKeycode_);
-        }
-        if (i == 5) {
+        } else if (i == 5) {
             // 6th character must be a period
             if (char != 0x2e) revert InvalidSubKeycode(subKeycode_); // .
+        } else if (i < 9) {
+            // Must have at least 3 non-blank characters after the period
+            if ((char < 0x30 || char > 0x39) && (char < 0x41 || char > 0x5A) && char != 0x5f)
+                revert InvalidSubKeycode(subKeycode_); // 0-9, A-Z, _
         } else {
+            // Characters after the first 3 can be blank or 0-9, A-Z, _
             if (
                 (char < 0x30 || char > 0x39) &&
                 (char < 0x41 || char > 0x5A) &&

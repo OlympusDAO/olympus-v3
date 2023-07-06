@@ -228,6 +228,29 @@ contract MockInvalidSubKeycodeThree is Submodule {
     }
 }
 
+contract MockInvalidSubKeycodeFour is Submodule {
+    bool public theTruth;
+
+    constructor(Module parent_) Submodule(parent_) {}
+
+    function PARENT() public pure override returns (Keycode) {
+        return toKeycode("MOCKY");
+    }
+
+    function SUBKEYCODE() public pure override returns (SubKeycode) {
+        return toSubKeycode("MOCKY.S");
+    }
+
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+    }
+
+    function INIT() external override onlyParent {
+        theTruth = true;
+    }
+}
+
 contract MockPolicy is Policy {
     MockModuleWithSubmodules internal MOCKY;
 
@@ -330,6 +353,16 @@ contract SubmodulesTest is Test {
         vm.expectRevert(err);
         vm.prank(writer);
         module.installSubmodule(invalidSubKeycodeThree);
+
+        // Case 4: SubKeycode is too short (must be 3 non-blank characters after the period)
+        MockInvalidSubKeycodeFour invalidSubKeycodeFour = new MockInvalidSubKeycodeFour(module);
+        err = abi.encodeWithSignature(
+            "InvalidSubKeycode(bytes20)",
+            invalidSubKeycodeFour.SUBKEYCODE()
+        );
+        vm.expectRevert(err);
+        vm.prank(writer);
+        module.installSubmodule(invalidSubKeycodeFour);
     }
 
     function testRevert_installSubmodule_alreadyInstalled() public {
