@@ -191,7 +191,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         // Check the deviation of the maximum from the average
         uint256 maxPrice = sortedPrices[sortedPrices.length - 1];
-        if (((maxPrice - averagePrice) * 10000) / maxPrice > deviationBps) return averagePrice;
+        if (((maxPrice - averagePrice) * 10000) / averagePrice > deviationBps) return averagePrice;
 
         // Otherwise, return the first non-zero value
         return firstNonZeroPrice;
@@ -252,7 +252,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         // Check the deviation of the maximum from the average
         uint256 maxPrice = sortedPrices[sortedPrices.length - 1];
-        if (((maxPrice - averagePrice) * 10000) / maxPrice > deviationBps) return medianPrice;
+        if (((maxPrice - averagePrice) * 10000) / averagePrice > deviationBps) return medianPrice;
 
         // Otherwise, return the first non-zero value
         return firstNonZeroPrice;
