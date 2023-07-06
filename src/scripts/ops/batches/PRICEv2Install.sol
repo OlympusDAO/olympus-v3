@@ -87,11 +87,11 @@ contract PRICEv2Install is OlyBatch {
         // Deactivate old heart
         addToBatch(oldHeart, abi.encodeWithSelector(OlympusHeart.deactivate.selector));
 
-        // Give DAO MS operator_policy role to deactivate operator
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("operator_policy"), daoMS)
-        );
+        // // Give DAO MS operator_policy role to deactivate operator
+        // addToBatch(
+        //     rolesAdmin,
+        //     abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("operator_policy"), daoMS)
+        // );
 
         // Deactivate old operator
         addToBatch(oldOperator, abi.encodeWithSelector(Operator.deactivate.selector));
@@ -106,14 +106,14 @@ contract PRICEv2Install is OlyBatch {
         // PriceConfig policy
         // Operator policy
         // Heart policy
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.DeactivatePolicy,
-                priceConfig
-            )
-        );
+        // addToBatch(
+        //     kernel,
+        //     abi.encodeWithSelector(
+        //         Kernel.executeAction.selector,
+        //         Actions.DeactivatePolicy,
+        //         priceConfig
+        //     )
+        // );
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -164,22 +164,22 @@ contract PRICEv2Install is OlyBatch {
         //     - Give Policy MS the bookkeeper_policy role
         // Operator policy
         //     - Give Heart the operator_operate role
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("bookkeeper_admin"),
-                daoMS
-            )
-        );
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("bookkeeper_policy"),
-                policyMS
-            )
-        );
+        // addToBatch(
+        //     rolesAdmin,
+        //     abi.encodeWithSelector(
+        //         RolesAdmin.grantRole.selector,
+        //         bytes32("bookkeeper_admin"),
+        //         daoMS
+        //     )
+        // );
+        // addToBatch(
+        //     rolesAdmin,
+        //     abi.encodeWithSelector(
+        //         RolesAdmin.grantRole.selector,
+        //         bytes32("bookkeeper_policy"),
+        //         policyMS
+        //     )
+        // );
         addToBatch(
             rolesAdmin,
             abi.encodeWithSelector(
