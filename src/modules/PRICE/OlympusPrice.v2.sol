@@ -1,8 +1,6 @@
 /// SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-
 import "src/modules/PRICE/PRICE.v2.sol";
 
 /// @title      OlympusPriceV2
