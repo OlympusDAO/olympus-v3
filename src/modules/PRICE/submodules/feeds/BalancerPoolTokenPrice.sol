@@ -736,7 +736,6 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint256 lookupTokenIndex = type(uint256).max;
         uint256 destinationTokenIndex = type(uint256).max;
         uint256 destinationTokenPrice; // Scale: outputDecimals_
-        address destinationToken;
         bytes32 poolId;
         {
             // Prevent re-entrancy attacks
@@ -784,7 +783,6 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                 ) {
                     destinationTokenIndex = i;
                     destinationTokenPrice = currentPrice;
-                    destinationToken = currentToken;
                 } catch (bytes memory) {
                     continue;
                 }
@@ -795,11 +793,8 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                 revert Balancer_LookupTokenNotFound(poolId, lookupToken_);
 
             // No destination token found with a price
-            if (
-                destinationTokenPrice == 0 ||
-                destinationTokenIndex == type(uint256).max ||
-                destinationToken == address(0)
-            ) revert Balancer_PriceNotFound(poolId, lookupToken_);
+            if (destinationTokenPrice == 0 || destinationTokenIndex == type(uint256).max)
+                revert Balancer_PriceNotFound(poolId, lookupToken_);
         }
 
         uint256 lookupTokenPrice;
