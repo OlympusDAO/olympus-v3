@@ -105,8 +105,6 @@ contract OlympusPricev2 is PRICEv2 {
             return _getLastPrice(asset_);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             return _getMovingAveragePrice(asset_);
-        } else {
-            revert PRICE_ParamsVariantInvalid(variant_);
         }
     }
 
