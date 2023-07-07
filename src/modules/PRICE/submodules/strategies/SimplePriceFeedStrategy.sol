@@ -176,6 +176,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         if (nonZeroPrices.length == 1) return nonZeroPrices[0];
 
         // Get the average and abort if there's a problem
+        // Cache first non-zero price since the array is sorted in place
+        uint256 firstNonZeroPrice = nonZeroPrices[0];
         uint256[] memory sortedPrices = nonZeroPrices.sort();
         uint256 averagePrice = _getAveragePrice(sortedPrices);
 
@@ -191,8 +193,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256 maxPrice = sortedPrices[sortedPrices.length - 1];
         if (((maxPrice - averagePrice) * 10000) / maxPrice > deviationBps) return averagePrice;
 
-        // Otherwise, return the first value
-        return nonZeroPrices[0];
+        // Otherwise, return the first non-zero value
+        return firstNonZeroPrice;
     }
 
     /// @notice         This strategy returns the median of the non-zero prices in the array if
@@ -231,6 +233,9 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         if (nonZeroPrices.length < 3) return nonZeroPrices[0];
 
         // Get the average and median and abort if there's a problem
+
+        // Cache first non-zero price since the array is sorted in place
+        uint256 firstNonZeroPrice = nonZeroPrices[0];
         uint256[] memory sortedPrices = nonZeroPrices.sort();
 
         // The following two values are guaranteed to not be 0 since sortedPrices only contains non-zero values and has a length of 3+
@@ -249,8 +254,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256 maxPrice = sortedPrices[sortedPrices.length - 1];
         if (((maxPrice - averagePrice) * 10000) / maxPrice > deviationBps) return medianPrice;
 
-        // Otherwise, return the first value
-        return prices_[0];
+        // Otherwise, return the first non-zero value
+        return firstNonZeroPrice;
     }
 
     /// @notice         This strategy returns the average of the non-zero prices in the array.
