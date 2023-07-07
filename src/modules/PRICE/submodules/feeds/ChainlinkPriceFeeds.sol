@@ -164,6 +164,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     function _getFeedPrice(
         AggregatorV2V3Interface feed_,
         uint256 updateThreshold_,
+        uint8 feedDecimals_,
         uint8 outputDecimals_
     ) internal view returns (uint256) {
         FeedRoundData memory roundData;
@@ -184,7 +185,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
 
         uint256 price = uint256(roundData.priceInt);
 
-        return price.mulDiv(10 ** outputDecimals_, 10 ** feed_.decimals());
+        return price.mulDiv(10 ** outputDecimals_, 10 ** feedDecimals_);
     }
 
     /// @notice                 Returns the price from a single Chainlink feed, as specified in `params_`.
@@ -211,16 +212,18 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         // Ensure that no decimals would result in an underflow or overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Chainlink_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
-        if (params.feed.decimals() > BASE_10_MAX_EXPONENT)
+        uint8 feedDecimals = params.feed.decimals();
+        if (feedDecimals > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(
                 address(params.feed),
-                params.feed.decimals(),
+                feedDecimals,
                 BASE_10_MAX_EXPONENT
             );
 
         uint256 feedPrice = _getFeedPrice(
             params.feed,
             uint256(params.updateThreshold),
+            feedDecimals,
             outputDecimals_
         );
 
@@ -257,16 +260,18 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         // Ensure that no decimals would result in an underflow or overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Chainlink_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
-        if (params.firstFeed.decimals() > BASE_10_MAX_EXPONENT)
+        uint8 firstFeedDecimals = params.firstFeed.decimals();
+        if (firstFeedDecimals > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(
                 address(params.firstFeed),
-                params.firstFeed.decimals(),
+                firstFeedDecimals,
                 BASE_10_MAX_EXPONENT
             );
-        if (params.secondFeed.decimals() > BASE_10_MAX_EXPONENT)
+        uint8 secondFeedDecimals = params.secondFeed.decimals();
+        if (secondFeedDecimals > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(
                 address(params.secondFeed),
-                params.secondFeed.decimals(),
+                secondFeedDecimals,
                 BASE_10_MAX_EXPONENT
             );
 
@@ -274,11 +279,13 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         uint256 numeratorPrice = _getFeedPrice(
             params.firstFeed,
             uint256(params.firstUpdateThreshold),
+            firstFeedDecimals,
             outputDecimals_
         );
         uint256 denominatorPrice = _getFeedPrice(
             params.secondFeed,
             uint256(params.secondUpdateThreshold),
+            secondFeedDecimals,
             outputDecimals_
         );
 
@@ -318,16 +325,18 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         // Ensure that no decimals would result in an underflow or overflow
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert Chainlink_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
-        if (params.firstFeed.decimals() > BASE_10_MAX_EXPONENT)
+        uint8 firstFeedDecimals = params.firstFeed.decimals();
+        if (firstFeedDecimals > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(
                 address(params.firstFeed),
-                params.firstFeed.decimals(),
+                firstFeedDecimals,
                 BASE_10_MAX_EXPONENT
             );
-        if (params.secondFeed.decimals() > BASE_10_MAX_EXPONENT)
+        uint8 secondFeedDecimals = params.secondFeed.decimals();
+        if (secondFeedDecimals > BASE_10_MAX_EXPONENT)
             revert Chainlink_FeedDecimalsOutOfBounds(
                 address(params.secondFeed),
-                params.secondFeed.decimals(),
+                secondFeedDecimals,
                 BASE_10_MAX_EXPONENT
             );
 
@@ -335,11 +344,13 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         uint256 firstPrice = _getFeedPrice(
             params.firstFeed,
             uint256(params.firstUpdateThreshold),
+            firstFeedDecimals,
             outputDecimals_
         );
         uint256 secondPrice = _getFeedPrice(
             params.secondFeed,
             uint256(params.secondUpdateThreshold),
+            secondFeedDecimals,
             outputDecimals_
         );
 
