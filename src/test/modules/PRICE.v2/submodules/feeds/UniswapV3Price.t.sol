@@ -44,7 +44,7 @@ contract UniswapV3PriceTest is Test {
     int56[] internal uniTickCumulatives = [-15895885013372, -15895901590172];
 
     uint8 internal MIN_DECIMALS = 6;
-    uint8 internal MAX_DECIMALS = 50;
+    uint8 internal MAX_DECIMALS = 30;
     // Mirror of TWAP_MINIMUM_OBSERVATION_SECONDS
     uint32 internal MIN_OBSERVATION_SECONDS = 19;
 

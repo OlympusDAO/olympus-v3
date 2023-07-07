@@ -16,7 +16,7 @@ contract UniswapV3Price is PriceSubmodule {
     // ========== CONSTANTS ========== //
 
     /// @notice     The maximum number of decimals allowed for a token in order to prevent overflows
-    uint8 internal constant BASE_10_MAX_EXPONENT = 50;
+    uint8 internal constant BASE_10_MAX_EXPONENT = 30;
 
     /// @notice     The minimum length of the TWAP observation window in seconds
     ///             From testing, a value under 19 seconds is rejected by `OracleLibrary.getQuoteAtTick()`
@@ -205,6 +205,8 @@ contract UniswapV3Price is PriceSubmodule {
                         BASE_10_MAX_EXPONENT
                     );
 
+                // baseTokenDecimals must be less than 38 to avoid overflow when cast to uint128
+                // BASE_10_MAX_EXPONENT is less than 38, so this check is safe
                 if (baseTokenDecimals > BASE_10_MAX_EXPONENT)
                     revert UniswapV3_AssetDecimalsOutOfBounds(
                         lookupToken_,
