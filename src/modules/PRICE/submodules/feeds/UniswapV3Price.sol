@@ -209,7 +209,7 @@ contract UniswapV3Price is PriceSubmodule {
             ) {
                 timeWeightedTick =
                     (tickCumulatives[1] - tickCumulatives[0]) /
-                    int56(int32(params.observationWindowSeconds));
+                    int32(params.observationWindowSeconds);
             } catch (bytes memory) {
                 // Handle a non-UniswapV3 pool
                 // A UniswapV2 pool could pass the above check, but would revert here
