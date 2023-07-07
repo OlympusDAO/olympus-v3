@@ -103,7 +103,9 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         }
 
         // Otherwise return the median price
-        return prices_[(pricesLen - 1) / 2];
+        // Don't need to subtract 1 from pricesLen to get midpoint index
+        // since integer division will round down
+        return prices_[pricesLen / 2];
     }
 
     // ========== STRATEGY FUNCTIONS ========== //
