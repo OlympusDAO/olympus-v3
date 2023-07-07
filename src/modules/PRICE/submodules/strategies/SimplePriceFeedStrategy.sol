@@ -87,18 +87,13 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @notice         Returns the median of the prices in the array
     /// @dev            This function will calculate the median of all values in the array.
     ///                 It assumes that the price array is sorted in ascending order.
+    ///                 The function assumes there are at least 3 prices in the array.
     ///                 If non-zero values should not be included in the median, filter them prior.
     ///
     /// @param prices_  Array of prices
-    /// @return         The median price or 0
+    /// @return         The median price
     function _getMedianPrice(uint256[] memory prices_) internal pure returns (uint256) {
         uint256 pricesLen = prices_.length;
-
-        // If all price feeds are down, no median can be calculated
-        if (pricesLen == 0) return 0;
-
-        // If there is only one price, return it
-        if (pricesLen == 1) return prices_[0];
 
         // If there are an even number of prices, return the average of the two middle prices
         if (pricesLen % 2 == 0) {
