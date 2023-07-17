@@ -111,6 +111,25 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return prices_[(pricesLen - 1) / 2];
     }
 
+    /// @notice         Returns a new array with the same values as the input array, sorted using the QuickSort library
+    /// @dev            This is done to avoid unpredictable behaviour when sorting an array in-place
+    /// @param array_   Array of uint256 values
+    /// @return         Array of uint256 values, sorted in ascending order
+    function _sort(uint256[] memory array_) internal pure returns (uint256[] memory) {
+        // Create a new array of the same length
+        uint256[] memory sortedArray = new uint256[](array_.length);
+
+        // Copy the array into the new array
+        for (uint256 i = 0; i < array_.length; i++) {
+            sortedArray[i] = array_[i];
+        }
+
+        // Sort the new array
+        sortedArray.sort();
+
+        return sortedArray;
+    }
+
     // ========== STRATEGY FUNCTIONS ========== //
 
     /// @notice         Returns the first non-zero price in the array.
@@ -173,7 +192,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         if (nonZeroPrices.length == 0) return 0;
 
         // If there are not enough non-zero prices to calculate an average, return the first non-zero price
-        if (nonZeroPrices.length == 1) return nonZeroPrices[0];
+        uint256 firstPrice = nonZeroPrices[0];
+        if (nonZeroPrices.length == 1) return firstPrice;
 
         // Get the average and abort if there's a problem
         // Cache first non-zero price since the array is sorted in place
@@ -230,7 +250,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         if (nonZeroPrices.length == 0) return 0;
 
         // If there are not enough non-zero prices to calculate a median, return the first non-zero price
-        if (nonZeroPrices.length < 3) return nonZeroPrices[0];
+        uint256 firstPrice = nonZeroPrices[0];
+        if (nonZeroPrices.length < 3) return firstPrice;
 
         // Get the average and median and abort if there's a problem
 
@@ -319,7 +340,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         if (nonZeroPricesLen < 3) return nonZeroPrices[0];
 
         // Sort the prices
-        uint256[] memory sortedPrices = nonZeroPrices.sort();
+        uint256[] memory sortedPrices = _sort(nonZeroPrices);
 
         return _getMedianPrice(sortedPrices);
     }
