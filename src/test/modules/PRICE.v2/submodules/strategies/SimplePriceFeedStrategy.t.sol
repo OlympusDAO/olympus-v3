@@ -67,19 +67,11 @@ contract SimplePriceFeedStrategyTest is Test {
         uint256 referenceValue_,
         uint256 deviationBps_
     ) internal returns (bool) {
-        console2.log("value", valueOne_);
-        console2.log("reference", referenceValue_);
-        console2.log("deviationBps", deviationBps_);
         uint256 largerValue = valueOne_.max(referenceValue_);
         uint256 smallerValue = valueOne_.min(referenceValue_);
 
         // 10_000 = 100%
         uint256 deviationBase = 10_000;
-
-        console2.log(
-            "calculated deviation",
-            (largerValue - smallerValue).mulDiv(deviationBase, referenceValue_)
-        );
 
         return (largerValue - smallerValue).mulDiv(deviationBase, referenceValue_) > deviationBps_;
     }
@@ -468,16 +460,12 @@ contract SimplePriceFeedStrategyTest is Test {
         uint256 averagePrice = (priceOne + priceTwo + priceThree) / 3;
         uint256 minPrice = priceOne.min(priceTwo).min(priceThree);
         uint256 maxPrice = priceOne.max(priceTwo).max(priceThree);
-        console2.log("average", averagePrice);
-        console2.log("min", minPrice);
-        console2.log("max", maxPrice);
 
         // Check if the minPrice or maxPrice deviate sufficiently from the averagePrice
         bool minPriceDeviation = _isDeviating(minPrice, averagePrice, deviationBps);
         bool maxPriceDeviation = _isDeviating(maxPrice, averagePrice, deviationBps);
         // Expected price is the average if there is a minPriceDeviation or maxPriceDeviation, otherwise the first price value
         uint256 expectedPrice = minPriceDeviation || maxPriceDeviation ? averagePrice : priceOne;
-        console2.log("expected", expectedPrice);
 
         uint256 price = strategy.getAveragePriceIfDeviation(
             prices,
@@ -653,24 +641,29 @@ contract SimplePriceFeedStrategyTest is Test {
         prices[1] = priceTwo;
         prices[2] = priceThree;
 
-        uint256 expectedPrice;
-        {
-            uint256[] memory sortedPrices = prices.sort();
-            uint256 medianPrice = sortedPrices[1];
-            uint256 minPrice = sortedPrices[0];
-            uint256 maxPrice = sortedPrices[2];
-
-            // Check if the minPrice or maxPrice deviate sufficiently from the medianPrice
-            bool minPriceDeviation = _isDeviating(minPrice, medianPrice, deviationBps);
-            bool maxPriceDeviation = _isDeviating(maxPrice, medianPrice, deviationBps);
-            // Expected price is the median if there is a minPriceDeviation or maxPriceDeviation, otherwise the first price value
-            expectedPrice = minPriceDeviation || maxPriceDeviation ? medianPrice : priceOne;
-        }
-
         uint256 price = strategy.getMedianPriceIfDeviation(
             prices,
             encodeDeviationParams(deviationBps)
         );
+
+        uint256 expectedPrice;
+        {
+            uint256 averagePrice = (priceOne + priceTwo + priceThree) / 3;
+            uint256 minPrice = priceOne.min(priceTwo).min(priceThree);
+            uint256 maxPrice = priceOne.max(priceTwo).max(priceThree);
+
+            // Check if the minPrice or maxPrice deviate sufficiently from the averagePrice
+            bool minPriceDeviation = _isDeviating(minPrice, averagePrice, deviationBps);
+            bool maxPriceDeviation = _isDeviating(maxPrice, averagePrice, deviationBps);
+
+            // NOTE: this occurs after the `getMedianPriceIfDeviation` function call, as it modifies the prices array
+            uint256[] memory sortedPrices = prices.sort();
+            uint256 medianPrice = sortedPrices[1];
+
+            // Expected price is the median if there is a minPriceDeviation or maxPriceDeviation, otherwise the first price value
+            expectedPrice = minPriceDeviation || maxPriceDeviation ? medianPrice : priceOne;
+        }
+
         assertEq(price, expectedPrice);
     }
 
