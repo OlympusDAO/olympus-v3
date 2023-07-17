@@ -24,7 +24,10 @@ contract SimplePriceFeedStrategyTest is Test {
 
     SimplePriceFeedStrategy internal strategy;
 
-    uint8 internal PRICE_DECIMALS = 18;
+    uint8 internal constant PRICE_DECIMALS = 18;
+
+    uint256 internal constant DEVIATION_MIN = 0;
+    uint256 internal constant DEVIATION_MAX = 10_000;
 
     function setUp() public {
         Kernel kernel = new Kernel();
@@ -66,7 +69,7 @@ contract SimplePriceFeedStrategyTest is Test {
         uint256 valueOne_,
         uint256 referenceValue_,
         uint256 deviationBps_
-    ) internal returns (bool) {
+    ) internal pure returns (bool) {
         uint256 largerValue = valueOne_.max(referenceValue_);
         uint256 smallerValue = valueOne_.min(referenceValue_);
 
@@ -75,8 +78,6 @@ contract SimplePriceFeedStrategyTest is Test {
 
         return (largerValue - smallerValue).mulDiv(deviationBase, referenceValue_) > deviationBps_;
     }
-
-    // TODO max deviation value
 
     // =========  TESTS - FIRST PRICE ========= //
 
@@ -526,14 +527,19 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getAveragePriceIfDeviation(prices, "");
     }
 
-    function test_getAveragePriceIfDeviation_revertsOnMissingParamsDeviationBpsZero() public {
-        uint256[] memory prices = new uint256[](2);
+    function test_getAveragePriceIfDeviation_paramsDeviationBps_fuzz(uint256 deviationBps_) public {
+        uint256 deviationBps = bound(deviationBps_, DEVIATION_MIN, DEVIATION_MAX * 2);
+
+        bool isDeviationInvalid = deviationBps <= DEVIATION_MIN || deviationBps >= DEVIATION_MAX;
+
+        uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
+        prices[2] = 1.002 * 1e18;
 
-        expectRevertParams(encodeDeviationParams(0));
+        if (isDeviationInvalid) expectRevertParams(encodeDeviationParams(deviationBps));
 
-        strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(0));
+        strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(deviationBps));
     }
 
     function test_getAveragePriceIfDeviation_revertsOnMissingParamsDeviationBpsEmpty() public {
@@ -742,15 +748,19 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getMedianPriceIfDeviation(prices, abi.encode(""));
     }
 
-    function test_getMedianPriceIfDeviation_revertsOnMissingParamsDeviationBpsZero() public {
+    function test_getMedianPriceIfDeviation_paramsDeviationBps_fuzz(uint256 deviationBps_) public {
+        uint256 deviationBps = bound(deviationBps_, DEVIATION_MIN, DEVIATION_MAX * 2);
+
+        bool isDeviationInvalid = deviationBps <= DEVIATION_MIN || deviationBps >= DEVIATION_MAX;
+
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
         prices[2] = 1.002 * 1e18;
 
-        expectRevertParams(encodeDeviationParams(0));
+        if (isDeviationInvalid) expectRevertParams(encodeDeviationParams(deviationBps));
 
-        strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(0));
+        strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(deviationBps));
     }
 
     function test_getMedianPriceIfDeviation_withoutDeviation() public {

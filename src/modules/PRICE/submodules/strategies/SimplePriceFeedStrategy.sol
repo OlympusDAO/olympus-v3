@@ -13,6 +13,12 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @notice     This is the expected length of bytes for the parameters to the deviation strategies
     uint8 internal constant DEVIATION_PARAMS_LENGTH = 32;
 
+    /// @notice     Represents a 0% deviation, which is invalid
+    uint256 internal constant DEVIATION_MIN = 0;
+
+    /// @notice     Represents a 100% deviation, which is invalid
+    uint256 internal constant DEVIATION_MAX = 10_000;
+
     // ========== ERRORS ========== //
 
     /// @notice                 Indicates that the number of prices provided to the strategy is invalid
@@ -174,7 +180,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///
     ///                 Will revert if:
     ///                 - The number of elements in the `prices_` array is less than 2, since it would represent a mis-configuration.
-    ///                 - The deviationBps is 0.
+    ///                 - The deviationBps is `DEVIATION_MIN` or greater than or equal to `DEVIATION_MAX`.
     ///
     /// @param prices_  Array of prices
     /// @param params_  uint256 encoded as bytes
@@ -203,7 +209,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsInvalid(params_);
         uint256 deviationBps = abi.decode(params_, (uint256));
-        if (deviationBps == 0) revert SimpleStrategy_ParamsInvalid(params_);
+        if (deviationBps <= DEVIATION_MIN || deviationBps >= DEVIATION_MAX)
+            revert SimpleStrategy_ParamsInvalid(params_);
 
         // Check the deviation of the minimum from the average
         uint256 minPrice = sortedPrices[0];
@@ -233,6 +240,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///                 Will revert if:
     ///                 - The number of elements in the `prices_` array is less than 3, since it would represent a mis-configuration.
     ///                 - The deviationBps is 0.
+    ///                 - The deviationBps is `DEVIATION_MIN` or greater than or equal to `DEVIATION_MAX`.
     ///
     /// @param prices_  Array of prices
     /// @param params_  uint256 encoded as bytes
@@ -265,7 +273,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsInvalid(params_);
         uint256 deviationBps = abi.decode(params_, (uint256));
-        if (deviationBps == 0) revert SimpleStrategy_ParamsInvalid(params_);
+        if (deviationBps <= DEVIATION_MIN || deviationBps >= DEVIATION_MAX)
+            revert SimpleStrategy_ParamsInvalid(params_);
 
         // Check the deviation of the minimum from the average
         uint256 minPrice = sortedPrices[0];
