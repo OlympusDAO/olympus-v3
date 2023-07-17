@@ -10,9 +10,13 @@ import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
+import {Math} from "src/libraries/Balancer/math/Math.sol";
+import {QuickSort} from "libraries/QuickSort.sol";
 
 contract SimplePriceFeedStrategyTest is Test {
     using ModuleTestFixtureGenerator for SimplePriceFeedStrategy;
+    using Math for uint256;
+    using QuickSort for uint256[];
 
     MockPrice internal mockPrice;
 
@@ -417,6 +421,39 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(averagePrice, 1e18);
     }
 
+    function test_getAveragePriceIfDeviation_threeItems_fuzz(
+        uint256 priceOne_,
+        uint256 priceTwo_,
+        uint256 priceThree_
+    ) public {
+        uint256 deviationBps = 100;
+
+        uint256 priceOne = bound(priceOne_, 0.001 * 1e18, 2 * 1e18);
+        uint256 priceTwo = bound(priceTwo_, 0.001 * 1e18, 2 * 1e18);
+        uint256 priceThree = bound(priceThree_, 0.001 * 1e18, 2 * 1e18);
+
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = priceOne;
+        prices[1] = priceTwo;
+        prices[2] = priceThree;
+
+        uint256 averagePrice = (priceOne + priceTwo + priceThree) / 3;
+        uint256 minPrice = priceOne.min(priceTwo).min(priceThree);
+        uint256 maxPrice = priceOne.max(priceTwo).max(priceThree);
+
+        // Check if the minPrice or maxPrice deviate sufficiently from the averagePrice
+        bool minPriceDeviation = minPrice.mul(10000 + deviationBps) < averagePrice.mul(10000);
+        bool maxPriceDeviation = maxPrice.mul(10000 - deviationBps) > averagePrice.mul(10000);
+        // Expected price is the average if there is a minPriceDeviation or maxPriceDeviation, otherwise the first price value
+        uint256 expectedPrice = minPriceDeviation || maxPriceDeviation ? averagePrice : priceOne;
+
+        uint256 price = strategy.getAveragePriceIfDeviation(
+            prices,
+            encodeDeviationParams(deviationBps)
+        );
+        assertEq(price, expectedPrice);
+    }
+
     function test_getAveragePriceIfDeviation_threeItems_deviationIndexOne() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
@@ -566,6 +603,43 @@ contract SimplePriceFeedStrategyTest is Test {
 
         // Ignores the zero price
         assertEq(price, (1 * 1e18 + 1.001 * 1e18) / 2); // Average of the middle two
+    }
+
+    function test_getMedianPriceIfDeviation_threeItems_fuzz(
+        uint256 priceOne_,
+        uint256 priceTwo_,
+        uint256 priceThree_
+    ) public {
+        uint256 deviationBps = 100;
+
+        uint256 priceOne = bound(priceOne_, 0.001 * 1e18, 2 * 1e18);
+        uint256 priceTwo = bound(priceTwo_, 0.001 * 1e18, 2 * 1e18);
+        uint256 priceThree = bound(priceThree_, 0.001 * 1e18, 2 * 1e18);
+
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = priceOne;
+        prices[1] = priceTwo;
+        prices[2] = priceThree;
+
+        uint256 expectedPrice;
+        {
+            uint256[] memory sortedPrices = prices.sort();
+            uint256 medianPrice = sortedPrices[1];
+            uint256 minPrice = sortedPrices[0];
+            uint256 maxPrice = sortedPrices[2];
+
+            // Check if the minPrice or maxPrice deviate sufficiently from the medianPrice
+            bool minPriceDeviation = minPrice.mul(10000 + deviationBps) < medianPrice.mul(10000);
+            bool maxPriceDeviation = maxPrice.mul(10000 - deviationBps) > medianPrice.mul(10000);
+            // Expected price is the median if there is a minPriceDeviation or maxPriceDeviation, otherwise the first price value
+            uint256 expectedPrice = minPriceDeviation || maxPriceDeviation ? medianPrice : priceOne;
+        }
+
+        uint256 price = strategy.getMedianPriceIfDeviation(
+            prices,
+            encodeDeviationParams(deviationBps)
+        );
+        assertEq(price, expectedPrice);
     }
 
     function test_getMedianPriceIfDeviation_threeItems_deviationIndexOne() public {
