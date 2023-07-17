@@ -10,12 +10,14 @@ import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
+import {FullMath} from "libraries/FullMath.sol";
 import {Math} from "src/libraries/Balancer/math/Math.sol";
 import {QuickSort} from "libraries/QuickSort.sol";
 
 contract SimplePriceFeedStrategyTest is Test {
     using ModuleTestFixtureGenerator for SimplePriceFeedStrategy;
     using Math for uint256;
+    using FullMath for uint256;
     using QuickSort for uint256[];
 
     MockPrice internal mockPrice;
@@ -57,6 +59,32 @@ contract SimplePriceFeedStrategyTest is Test {
         );
         vm.expectRevert(err);
     }
+
+    /// @notice                 Indicates whether the supplied values are deviating
+    /// @param deviationBps_    The deviation in basis points, where 0 = 0% and 10_000 = 100%
+    function _isDeviating(
+        uint256 valueOne_,
+        uint256 referenceValue_,
+        uint256 deviationBps_
+    ) internal returns (bool) {
+        console2.log("value", valueOne_);
+        console2.log("reference", referenceValue_);
+        console2.log("deviationBps", deviationBps_);
+        uint256 largerValue = valueOne_.max(referenceValue_);
+        uint256 smallerValue = valueOne_.min(referenceValue_);
+
+        // 10_000 = 100%
+        uint256 deviationBase = 10_000;
+
+        console2.log(
+            "calculated deviation",
+            (largerValue - smallerValue).mulDiv(deviationBase, referenceValue_)
+        );
+
+        return (largerValue - smallerValue).mulDiv(deviationBase, referenceValue_) > deviationBps_;
+    }
+
+    // TODO max deviation value
 
     // =========  TESTS - FIRST PRICE ========= //
 
@@ -426,7 +454,7 @@ contract SimplePriceFeedStrategyTest is Test {
         uint256 priceTwo_,
         uint256 priceThree_
     ) public {
-        uint256 deviationBps = 100;
+        uint256 deviationBps = 100; // 1%
 
         uint256 priceOne = bound(priceOne_, 0.001 * 1e18, 2 * 1e18);
         uint256 priceTwo = bound(priceTwo_, 0.001 * 1e18, 2 * 1e18);
@@ -440,12 +468,16 @@ contract SimplePriceFeedStrategyTest is Test {
         uint256 averagePrice = (priceOne + priceTwo + priceThree) / 3;
         uint256 minPrice = priceOne.min(priceTwo).min(priceThree);
         uint256 maxPrice = priceOne.max(priceTwo).max(priceThree);
+        console2.log("average", averagePrice);
+        console2.log("min", minPrice);
+        console2.log("max", maxPrice);
 
         // Check if the minPrice or maxPrice deviate sufficiently from the averagePrice
-        bool minPriceDeviation = minPrice.mul(10000 + deviationBps) < averagePrice.mul(10000);
-        bool maxPriceDeviation = maxPrice.mul(10000 - deviationBps) > averagePrice.mul(10000);
+        bool minPriceDeviation = _isDeviating(minPrice, averagePrice, deviationBps);
+        bool maxPriceDeviation = _isDeviating(maxPrice, averagePrice, deviationBps);
         // Expected price is the average if there is a minPriceDeviation or maxPriceDeviation, otherwise the first price value
         uint256 expectedPrice = minPriceDeviation || maxPriceDeviation ? averagePrice : priceOne;
+        console2.log("expected", expectedPrice);
 
         uint256 price = strategy.getAveragePriceIfDeviation(
             prices,
@@ -610,7 +642,7 @@ contract SimplePriceFeedStrategyTest is Test {
         uint256 priceTwo_,
         uint256 priceThree_
     ) public {
-        uint256 deviationBps = 100;
+        uint256 deviationBps = 100; // 1%
 
         uint256 priceOne = bound(priceOne_, 0.001 * 1e18, 2 * 1e18);
         uint256 priceTwo = bound(priceTwo_, 0.001 * 1e18, 2 * 1e18);
@@ -629,10 +661,10 @@ contract SimplePriceFeedStrategyTest is Test {
             uint256 maxPrice = sortedPrices[2];
 
             // Check if the minPrice or maxPrice deviate sufficiently from the medianPrice
-            bool minPriceDeviation = minPrice.mul(10000 + deviationBps) < medianPrice.mul(10000);
-            bool maxPriceDeviation = maxPrice.mul(10000 - deviationBps) > medianPrice.mul(10000);
+            bool minPriceDeviation = _isDeviating(minPrice, medianPrice, deviationBps);
+            bool maxPriceDeviation = _isDeviating(maxPrice, medianPrice, deviationBps);
             // Expected price is the median if there is a minPriceDeviation or maxPriceDeviation, otherwise the first price value
-            uint256 expectedPrice = minPriceDeviation || maxPriceDeviation ? medianPrice : priceOne;
+            expectedPrice = minPriceDeviation || maxPriceDeviation ? medianPrice : priceOne;
         }
 
         uint256 price = strategy.getMedianPriceIfDeviation(
