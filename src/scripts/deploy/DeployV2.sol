@@ -228,7 +228,7 @@ contract OlympusDeploy is Script {
         }
     }
 
-    function envAddress(string memory key_) internal view returns (address) {
+    function envAddress(string memory key_) internal returns (address) {
         return env.readAddress(string.concat(".current.", chain, ".", key_));
     }
 

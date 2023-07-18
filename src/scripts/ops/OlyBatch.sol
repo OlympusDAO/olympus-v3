@@ -12,6 +12,7 @@ abstract contract OlyBatch is BatchScript {
     address daoMS;
     address policyMS;
     address emergencyMS;
+    address safe;
 
     modifier isDaoBatch(bool send_) {
         // Load environment addresses for chain
@@ -22,6 +23,7 @@ abstract contract OlyBatch is BatchScript {
         daoMS = vm.envAddress("DAO_MS"); // DAO MS address
         policyMS = vm.envAddress("POLICY_MS"); // Policy MS address
         emergencyMS = vm.envAddress("EMERGENCY_MS"); // Emergency MS address
+        safe = daoMS;
 
         // Load addresses from env (as defined in batch script)
         loadEnv();
@@ -42,6 +44,7 @@ abstract contract OlyBatch is BatchScript {
         daoMS = vm.envAddress("DAO_MS"); // DAO MS address
         policyMS = vm.envAddress("POLICY_MS"); // Policy MS address
         emergencyMS = vm.envAddress("EMERGENCY_MS"); // Emergency MS address
+        safe = policyMS;
 
         // Load addresses from env (as defined in batch script)
         loadEnv();
@@ -62,6 +65,7 @@ abstract contract OlyBatch is BatchScript {
         daoMS = vm.envAddress("DAO_MS"); // DAO MS address
         policyMS = vm.envAddress("POLICY_MS"); // Policy MS address
         emergencyMS = vm.envAddress("EMERGENCY_MS"); // Emergency MS address
+        safe = emergencyMS;
 
         // Load addresses from env (as defined in batch script)
         loadEnv();
@@ -73,9 +77,21 @@ abstract contract OlyBatch is BatchScript {
         executeBatch(emergencyMS, send_);
     }
 
-    function envAddress(string memory version, string memory key) internal view returns (address) {
+    function envAddress(string memory version, string memory key) internal returns (address) {
         return env.readAddress(string.concat(".", version, ".", chain, ".", key));
     }
 
     function loadEnv() internal virtual;
+
+    function addToBatch(address to_, bytes memory data_) internal returns (bytes memory) {
+        return addToBatch(safe, to_, data_);
+    }
+
+    function addToBatch(
+        address to_,
+        uint256 value_,
+        bytes memory data_
+    ) internal returns (bytes memory) {
+        return addToBatch(safe, to_, value_, data_);
+    }
 }
