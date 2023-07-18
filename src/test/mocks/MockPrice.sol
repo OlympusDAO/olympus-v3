@@ -48,9 +48,10 @@ contract MockPrice is Module {
     }
 
     // =========  POLICY FUNCTIONS ========= //
-    function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
-        external
-    {}
+    function initialize(
+        uint256[] memory startObservations_,
+        uint48 lastObservationTime_
+    ) external {}
 
     function changeMovingAverageDuration(uint48 movingAverageDuration_) external {}
 

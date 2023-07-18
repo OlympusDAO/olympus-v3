@@ -188,11 +188,10 @@ contract OlympusRange is RANGEv1 {
     }
 
     /// @inheritdoc RANGEv1
-    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_)
-        external
-        override
-        permissioned
-    {
+    function setSpreads(
+        uint256 cushionSpread_,
+        uint256 wallSpread_
+    ) external override permissioned {
         // Confirm spreads are within allowed values
         if (
             wallSpread_ >= ONE_HUNDRED_PERCENT ||

@@ -104,12 +104,12 @@ contract DistributorTest is Test {
 
             /// Mint DAI and OHM to OHM-DAI pool
             mintr.mintOhm(address(ohmDai), 100000 gwei);
-            dai.mint(address(ohmDai), 100000 * 10**18);
+            dai.mint(address(ohmDai), 100000 * 10 ** 18);
             ohmDai.sync();
 
             /// Mint WETH and OHM to OHM-WETH pool
             mintr.mintOhm(address(ohmWeth), 100000 gwei);
-            weth.mint(address(ohmWeth), 100000 * 10**18);
+            weth.mint(address(ohmWeth), 100000 * 10 ** 18);
             ohmWeth.sync();
             vm.stopPrank();
 

@@ -15,6 +15,8 @@ contract MockOhm is ERC20 {
     }
 
     function burnFrom(address from, uint256 value) public virtual {
+        require(value <= balanceOf[from], "ERC20: burn amount exceeds balance");
+
         _burn(from, value);
     }
 }
