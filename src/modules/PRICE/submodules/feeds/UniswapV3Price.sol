@@ -85,13 +85,13 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param pool_            The address of the pool
     error UniswapV3_PoolTypeInvalid(address pool_);
 
-    /// @notice                 The pool is invalid or the observation window is too long.
-    /// @dev                    This is triggered if the pool reverted when called,
-    ///                         and indicates that the feed address is not a UniswapV3 pool
-    ///                         or that the observation window is too long.
+    /// @notice                             The pool is invalid or the observation window is too long.
+    /// @dev                                This is triggered if the pool reverted when called,
+    ///                                     and indicates that the feed address is not a UniswapV3 pool
+    ///                                     or that the observation window is too long.
     ///
-    /// @param pool_                     The address of the pool
-    /// @param observationWindowSeconds_ The observation window in seconds
+    /// @param pool_                        The address of the pool
+    /// @param observationWindowSeconds_    The observation window in seconds
     error UniswapV3_InvalidObservation(address pool_, uint32 observationWindowSeconds_);
 
     /// @notice                 The calculated tick is out of bounds
