@@ -30,7 +30,7 @@ jobs:
               run: npm run lint:check
 
             - name: Run non-fork tests
-              run: forge test --no-match-contract "$1.*Fork$"
+              run: forge test --no-match-contract Fork
 
             - name: Run fork tests
-              run: forge test --match-contract "$1.*Fork$" --fork-url ${{ secrets.FORK_TEST_RPC_URL }}
+              run: forge test --match-contract Fork --fork-url ${{ secrets.FORK_TEST_RPC_URL }}
