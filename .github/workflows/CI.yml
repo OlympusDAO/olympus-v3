@@ -5,6 +5,10 @@ on:
             - master
     pull_request:
 
+env:
+  ETH_MAINNET_RPC_URL: ${{ secrets.ETH_MAINNET_RPC_URL }}
+  POLYGON_MAINNET_RPC_URL: ${{ secrets.POLYGON_MAINNET_RPC_URL }}
+
 jobs:
     run-ci:
         runs-on: ubuntu-latest
