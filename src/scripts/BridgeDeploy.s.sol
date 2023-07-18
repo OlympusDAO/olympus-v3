@@ -38,6 +38,8 @@ contract BridgeDeploy is Script {
         // Arb goerli endpoint
         //address lzEndpoint = 0x6aB5Ae6822647046626e83ee6dB8187151E1d5ab;
 
+        // Optimism endpoint = 0x3c2269811836af69497E5F486A85D7316753cf62
+
         // Keep deployer as vault in order to transfer minter role after OHM
         // token is deployed
         auth = new OlympusAuthority(msg.sender, multisig_, multisig_, msg.sender);
