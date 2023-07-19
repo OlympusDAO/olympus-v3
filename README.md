@@ -99,3 +99,21 @@ Set up a foundry config in foundry.toml.
 ## Setup
 
 Add `FORK_TEST_RPC_URL` to the .env file in order to run fork tests
+
+Copy the `.env.deploy.example` file into one file per chain, e.g. `.env_deploy_goerli` and set the appropriate variables. This chain-specific environment file can then be called during deployment, e.g. `env $(cat .env_deploy_goerli | xargs) PRIVATE_KEY=<PRIVATE KEY> ./shell/deploy.sh`
+
+## How To Deploy
+
+- Develop the deployment configuration in `src/scripts/savedDeployments`. Can be based on an existing file. Commit this to git.
+- Copy to `src/scripts/deploy.json`, but don't commit to git.
+- Ensure that the deploy script (`src/scripts/DeployV2.sol`) has function(s) for deploying the contract(s), and the correct mapping from the contract name in `src/scripts/deploy.json` and the selector added to `selectorMap`
+- Run the deployment bash script (e.g. `shell/deploy.sh`) against the local fork
+- Uncomment the line containing `--broadcast` in the deployment bash script after testing in order to push the changes to the live chain
+- The deployment output will be saved in `deployments/`
+- Update the `src/scripts/env.json` file with the new contract addresses (which can be copied from the deployment output)
+
+## Boosted Liquidity Vault Setup
+
+- Deploy any dependencies (if on testnet)
+- Deploy BLV contracts
+- Activate BLV contracts with the BLV registry (using an olymsig script)

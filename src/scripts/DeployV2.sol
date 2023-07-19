@@ -38,12 +38,16 @@ import {BondManager} from "policies/BondManager.sol";
 import {Burner} from "policies/Burner.sol";
 import {BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
 import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
+import {BLVaultManagerLusd} from "policies/BoostedLiquidity/BLVaultManagerLusd.sol";
+import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
+import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "test/mocks/AuraMocks.sol";
+import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
+import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
 
@@ -79,6 +83,8 @@ contract OlympusDeploy is Script {
     Burner public burner;
     BLVaultManagerLido public lidoVaultManager;
     BLVaultLido public lidoVault;
+    BLVaultManagerLusd public lusdVaultManager;
+    BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
 
     /// Construction variables
@@ -87,6 +93,7 @@ contract OlympusDeploy is Script {
     ERC20 public ohm;
     ERC20 public reserve;
     ERC20 public wsteth;
+    ERC20 public lusd;
     ERC20 public aura;
     ERC20 public bal;
 
@@ -101,6 +108,7 @@ contract OlympusDeploy is Script {
     AggregatorV2V3Interface public reserveEthPriceFeed;
     AggregatorV2V3Interface public ethUsdPriceFeed;
     AggregatorV2V3Interface public stethUsdPriceFeed;
+    AggregatorV2V3Interface public lusdUsdPriceFeed;
 
     /// External contracts
     address public staking;
@@ -110,11 +118,13 @@ contract OlympusDeploy is Script {
     IVault public balancerVault;
     IBalancerHelper public balancerHelper;
     IBasePool public ohmWstethPool;
+    IBasePool public ohmLusdPool;
 
     /// Aura Contracts
     IAuraBooster public auraBooster;
     IAuraMiningLib public auraMiningLib;
     IAuraRewardPool public ohmWstethRewardsPool;
+    IAuraRewardPool public ohmLusdRewardsPool;
 
     // Deploy system storage
     mapping(string => bytes4) public selectorMap;
@@ -143,6 +153,8 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultLido"] = this._deployBLVaultLido.selector;
         selectorMap["BLVaultManagerLido"] = this._deployBLVaultManagerLido.selector;
         selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
+        selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
+        selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
 
         // Load environment addresses
         string memory env = vm.readFile("./src/scripts/env.json");
@@ -151,6 +163,7 @@ contract OlympusDeploy is Script {
         ohm = ERC20(env.readAddress(string.concat(".", chain_, ".olympus.legacy.OHM")));
         reserve = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.DAI")));
         wsteth = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.WSTETH")));
+        lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD")));
         aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
         bal = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.BAL")));
         bondAuctioneer = IBondSDA(env.readAddress(string.concat(".", chain_, ".external.bond-protocol.BondFixedTermAuctioneer")));
@@ -161,14 +174,17 @@ contract OlympusDeploy is Script {
         reserveEthPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(".", chain_, ".external.chainlink.daiEthPriceFeed")));
         ethUsdPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(".", chain_, ".external.chainlink.ethUsdPriceFeed")));
         stethUsdPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(".", chain_, ".external.chainlink.stethUsdPriceFeed")));
+        lusdUsdPriceFeed = AggregatorV2V3Interface(env.readAddress(string.concat(".", chain_, ".external.chainlink.lusdUsdPriceFeed")));
         staking = env.readAddress(string.concat(".", chain_, ".olympus.legacy.Staking"));
         gnosisEasyAuction = env.readAddress(string.concat(".", chain_, ".external.gnosis.EasyAuction"));
         balancerVault = IVault(env.readAddress(string.concat(".", chain_, ".external.balancer.BalancerVault")));
         balancerHelper = IBalancerHelper(env.readAddress(string.concat(".", chain_, ".external.balancer.BalancerHelper")));
         ohmWstethPool = IBasePool(env.readAddress(string.concat(".", chain_, ".external.balancer.OhmWstethPool")));
+        ohmLusdPool = IBasePool(env.readAddress(string.concat(".", chain_, ".external.balancer.OhmLusdPool"))); // Populated from: https://github.com/BalancerMaxis/multisig-ops/pull/252
         auraBooster = IAuraBooster(env.readAddress(string.concat(".", chain_, ".external.aura.AuraBooster")));
         auraMiningLib = IAuraMiningLib(env.readAddress(string.concat(".", chain_, ".external.aura.AuraMiningLib")));
         ohmWstethRewardsPool = IAuraRewardPool(env.readAddress(string.concat(".", chain_, ".external.aura.OhmWstethRewardsPool")));
+        ohmLusdRewardsPool = IAuraRewardPool(env.readAddress(string.concat(".", chain_, ".external.aura.OhmLusdRewardsPool")));
 
         // Bophades contracts
         kernel = Kernel(env.readAddress(string.concat(".", chain_, ".olympus.Kernel")));
@@ -192,25 +208,15 @@ contract OlympusDeploy is Script {
         lidoVaultManager = BLVaultManagerLido(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultManagerLido")));
         lidoVault = BLVaultLido(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultLido")));
         bridge = CrossChainBridge(env.readAddress(string.concat(chain_, ".olympus.policies.CrossChainBridge")));
+        lusdVaultManager = BLVaultManagerLusd(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultManagerLusd")));
+        lusdVault = BLVaultLusd(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultLusd")));
 
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy.json");
 
-        // Have to use a hack with jq to get the length of the deployment sequence since the json lib used by forge doesn't have a length operation
-        string[] memory inputs = new string[](3);
-        inputs[0] = "sh";
-        inputs[1] = "-c";
-        inputs[2] = 'jq -c ".sequence | length" ./src/scripts/deploy.json | cast --to-uint256';
-        uint256 len = abi.decode(vm.ffi(inputs), (uint256));
-
-        // Forge doesn't correctly parse a string[] from a json array so we have to do it manually
-        string[] memory names = abi.decode(bytes.concat(bytes32(uint256(32)),bytes32(len),data.parseRaw(".sequence..name")),(string[]));
-
-        // uint256 len = 3;
-        // string[] memory names = new string[](len);
-        // names[0] = "OlympusBoostedLiquidityRegistry";
-        // names[1] = "BLVaultLido";
-        // names[2] = "BLVaultManagerLido";
+        // Parse deployment sequence and names
+        string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
+        uint256 len = names.length;
 
         // Iterate through deployment sequence and set deployment args
         for (uint256 i = 0; i < len; i++) {
@@ -514,8 +520,22 @@ contract OlympusDeploy is Script {
         return address(lidoVault);
     }
 
+    function _deployBLVaultLusd(bytes memory args) public returns (address) {
+        // No additional arguments for BLVaultLusd policy
+
+        // Deploy BLVaultLusd policy
+        vm.broadcast();
+        lusdVault = new BLVaultLusd();
+        console2.log("BLVaultLusd deployed at:", address(lusdVault));
+
+        return address(lusdVault);
+    }
+
     // deploy.json was not being parsed correctly, so I had to hardcode most of the deployment arguments
     function _deployBLVaultManagerLido(bytes memory args) public returns (address) {
+        // Decode arguments for BLVaultManagerLusd policy
+        (uint256 auraPid, uint48 ohmEthFeedUpdateThreshold, uint48 ethUsdFeedUpdateThreshold, uint48 stethUsdFeedUpdateThreshold) = abi.decode(args, (uint256, uint48, uint48, uint48));
+
         console2.log("ohm", address(ohm));
         console2.log("wsteth", address(wsteth));
         console2.log("aura", address(aura));
@@ -528,7 +548,7 @@ contract OlympusDeploy is Script {
         console2.log("ohmEthPriceFeed", address(ohmEthPriceFeed));
         console2.log("ethUsdPriceFeed", address(ethUsdPriceFeed));
         console2.log("stethUsdPriceFeed", address(stethUsdPriceFeed));
-        console2.log("implementation", address(lidoVault));
+        console2.log("BLV Lido implementation", address(lidoVault));
 
         // Create TokenData object
         IBLVaultManagerLido.TokenData memory tokenData = IBLVaultManagerLido.TokenData({
@@ -547,7 +567,7 @@ contract OlympusDeploy is Script {
 
         // Create AuraData object
         IBLVaultManagerLido.AuraData memory auraData = IBLVaultManagerLido.AuraData({
-            pid: uint256(73),
+            pid: auraPid,
             auraBooster: address(auraBooster),
             auraRewardPool: address(ohmWstethRewardsPool)
         });
@@ -555,17 +575,17 @@ contract OlympusDeploy is Script {
         // Create OracleFeed objects
         IBLVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = IBLVaultManagerLido.OracleFeed({
             feed: ohmEthPriceFeed,
-            updateThreshold: uint48(86400) // needs to be 1 day
+            updateThreshold: ohmEthFeedUpdateThreshold
         });
 
         IBLVaultManagerLido.OracleFeed memory ethUsdPriceFeedData = IBLVaultManagerLido.OracleFeed({
             feed: ethUsdPriceFeed,
-            updateThreshold: uint48(3600) // needs to be 1 hour
+            updateThreshold: ethUsdFeedUpdateThreshold
         });
 
         IBLVaultManagerLido.OracleFeed memory stethUsdPriceFeedData = IBLVaultManagerLido.OracleFeed({
             feed: stethUsdPriceFeed,
-            updateThreshold: uint48(3600) // needs to be 1 hour
+            updateThreshold: stethUsdFeedUpdateThreshold
         });
 
         console2.log("pid: ", auraData.pid);
@@ -604,6 +624,91 @@ contract OlympusDeploy is Script {
 
         return address(bridge);
     }
+
+    function _deployBLVaultManagerLusd(bytes memory args) public returns (address) {
+        // Decode arguments for BLVaultManagerLusd policy
+        // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
+        (uint256 auraPid, uint256 ethUsdFeedUpdateThreshold, uint256 lusdUsdFeedUpdateThreshold, uint256 ohmEthFeedUpdateThreshold) = abi.decode(args, (uint256, uint256, uint256, uint256));
+
+        console2.log("ohm", address(ohm));
+        console2.log("lusd", address(lusd));
+        console2.log("aura", address(aura));
+        console2.log("bal", address(bal));
+        console2.log("balancerVault", address(balancerVault));
+        console2.log("ohmLusdPool", address(ohmLusdPool));
+        console2.log("balancerHelper", address(balancerHelper));
+        console2.log("auraBooster", address(auraBooster));
+        console2.log("ohmLusdRewardsPool", address(ohmLusdRewardsPool));
+        console2.log("ohmEthPriceFeed", address(ohmEthPriceFeed));
+        console2.log("ethUsdPriceFeed", address(ethUsdPriceFeed));
+        console2.log("lusdUsdPriceFeed", address(lusdUsdPriceFeed));
+        console2.log("BLV LUSD implementation", address(lusdVault));
+
+        // Create TokenData object
+        IBLVaultManager.TokenData memory tokenData = IBLVaultManager.TokenData({
+            ohm: address(ohm),
+            pairToken: address(lusd),
+            aura: address(aura),
+            bal: address(bal)
+        });
+
+        // Create BalancerData object
+        IBLVaultManager.BalancerData memory balancerData = IBLVaultManager.BalancerData({
+            vault: address(balancerVault),
+            liquidityPool: address(ohmLusdPool),
+            balancerHelper: address(balancerHelper)
+        });
+
+        // Create AuraData object
+        IBLVaultManager.AuraData memory auraData = IBLVaultManager.AuraData({
+            pid: uint256(auraPid),
+            auraBooster: address(auraBooster),
+            auraRewardPool: address(ohmLusdRewardsPool) // determined by calling poolInfo(auraPid) on the booster contract
+        });
+
+        // Create OracleFeed objects
+        IBLVaultManager.OracleFeed memory ohmEthPriceFeedData = IBLVaultManager.OracleFeed({
+            feed: ohmEthPriceFeed,
+            updateThreshold: uint48(ohmEthFeedUpdateThreshold)
+        });
+
+        IBLVaultManager.OracleFeed memory ethUsdPriceFeedData = IBLVaultManager.OracleFeed({
+            feed: ethUsdPriceFeed,
+            updateThreshold: uint48(ethUsdFeedUpdateThreshold)
+        });
+
+        IBLVaultManager.OracleFeed memory lusdUsdPriceFeedData = IBLVaultManager.OracleFeed({
+            feed: lusdUsdPriceFeed,
+            updateThreshold: uint48(lusdUsdFeedUpdateThreshold)
+        });
+
+        console2.log("pid: ", auraData.pid);
+        console2.log("OHM update threshold: ", ohmEthPriceFeedData.updateThreshold);
+        console2.log("ETH update threshold: ", ethUsdPriceFeedData.updateThreshold);
+        console2.log("LUSD update threshold: ", lusdUsdPriceFeedData.updateThreshold);
+
+        // Deploy BLVaultManagerLusd policy
+        vm.broadcast();
+        lusdVaultManager = new BLVaultManagerLusd(
+            kernel,
+            tokenData,
+            balancerData,
+            auraData,
+            address(auraMiningLib),
+            ohmEthPriceFeedData,
+            ethUsdPriceFeedData,
+            lusdUsdPriceFeedData,
+            address(lusdVault),
+            // 2500000 cap/$10.84 = 230,627.3062730627 OHM
+            230_627e9, // max OHM minted
+            uint64(500), // fee // 10_000 = 1 = 100%, 500 / 1e4 = 0.05 = 5%
+            uint48(1 days) // withdrawal delay
+        );
+        console2.log("BLVaultManagerLusd deployed at:", address(lusdVaultManager));
+
+        return address(lusdVaultManager);
+    }
+
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
     /// @dev Should be called prior to verifyAndPushAuth()
@@ -782,19 +887,31 @@ contract OlympusDeploy is Script {
     }
 }
 
-contract DependencyDeploy is Script {
+/// @notice Deploys mock Balancer and Aura contracts for testing on Goerli
+contract DependencyDeployLido is Script {
+    using stdJson for string;
+
     // MockPriceFeed public ohmEthPriceFeed;
     // MockPriceFeed public reserveEthPriceFeed;
-    MockERC20 public bal;
-    MockERC20 public aura;
-    MockERC20 public ldo;
+    ERC20 public bal;
+    ERC20 public aura;
+    ERC20 public ldo;
+    MockAuraStashToken public ldoStash;
 
+    IBasePool public ohmWstethPool;
     MockAuraBooster public auraBooster;
     MockAuraMiningLib public auraMiningLib;
     MockAuraRewardPool public ohmWstethRewardPool;
-    MockAuraRewardPool public ohmWstethExtraRewardPool;
+    MockAuraVirtualRewardPool public ohmWstethExtraRewardPool;
 
-    function deploy() external {
+    function deploy(string calldata chain_) external {
+        // Load environment addresses
+        string memory env = vm.readFile("./src/scripts/env.json");
+        bal = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.BAL")));
+        aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
+        ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
+        ohmWstethPool = IBasePool(env.readAddress(string.concat(".", chain_, ".external.balancer.OhmWstethPool")));
+
         vm.startBroadcast();
 
         // Deploy the mock tokens
@@ -807,25 +924,29 @@ contract DependencyDeploy is Script {
         // ldo = new MockERC20("Lido", "LDO", 18);
         // console2.log("LDO deployed to:", address(ldo));
 
-        // Deploy the Aura Reward Pools
+        // Deploy the Aura Reward Pools for OHM-wstETH
         ohmWstethRewardPool = new MockAuraRewardPool(
-            0x3F50E8018bC26668F5cd59B3e5be5257615F83A3,
-            0xd517A8E45771a40B29eCDa347634bD62051F91B9,
-            0x4a92f7C880f14c2a06FfCf56C7849739B0E492f5
+            address(ohmWstethPool), // Goerli OHM-wstETH LP
+            address(bal), // Goerli BAL
+            address(aura) // Goerli AURA
         );
         console2.log("OHM-WSTETH Reward Pool deployed to:", address(ohmWstethRewardPool));
 
-        // ohmWstethExtraRewardPool = new MockAuraRewardPool(
-        //     0x3F50E8018bC26668F5cd59B3e5be5257615F83A3,
-        //     address(ldo),
-        //     address(0)
-        // );
-        // console2.log("OHM-WSTETH Extra Reward Pool deployed to:", address(ohmWstethExtraRewardPool));
+        // Deploy the extra rewards pool
+        ldoStash = new MockAuraStashToken("Lido-Stash", "LDOSTASH", 18, address(ldo));
+        console2.log("Lido Stash deployed to:", address(ldoStash));
 
-        ohmWstethRewardPool.addExtraReward(0x31abFacE787376c9C7c1173106D9f6D64779c32F);
+        ohmWstethExtraRewardPool = new MockAuraVirtualRewardPool(
+            address(ohmWstethPool), // Goerli OHM-wstETH LP
+            address(ldoStash)
+        );
+        console2.log("OHM-WSTETH Extra Reward Pool deployed to:", address(ohmWstethExtraRewardPool));
+
+        ohmWstethRewardPool.addExtraReward(address(ohmWstethExtraRewardPool));
+        console2.log("Added OHM-WSTETH Extra Reward Pool to OHM-WSTETH Reward Pool");
 
         // Deploy Aura Booster
-        auraBooster = new MockAuraBooster(0x3F50E8018bC26668F5cd59B3e5be5257615F83A3, address(ohmWstethRewardPool));
+        auraBooster = new MockAuraBooster(address(ohmWstethRewardPool));
         console2.log("Aura Booster deployed to:", address(auraBooster));
 
         // Deploy the Aura Mining Library
@@ -841,6 +962,59 @@ contract DependencyDeploy is Script {
         // // Set the decimals of the price feeds
         // ohmEthPriceFeed.setDecimals(18);
         // reserveEthPriceFeed.setDecimals(18);
+
+        vm.stopBroadcast();
+    }
+}
+
+contract DependencyDeployLusd is Script {
+    using stdJson for string;
+
+    ERC20 public bal;
+    ERC20 public aura;
+    ERC20 public ldo;
+    ERC20 public lusd;
+
+    MockAuraBooster public auraBooster;
+
+    MockPriceFeed public lusdUsdPriceFeed;
+    IBasePool public ohmLusdPool;
+    MockAuraRewardPool public ohmLusdRewardPool;
+
+    MockAuraMiningLib public auraMiningLib;
+
+    function deploy(string calldata chain_) external {
+        // Load environment addresses
+        string memory env = vm.readFile("./src/scripts/env.json");
+        bal = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.BAL")));
+        aura = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.AURA")));
+        ldo = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LDO")));
+        lusd = ERC20(env.readAddress(string.concat(".", chain_, ".external.tokens.LUSD"))); // Requires the address of LUSD to be less than the address of OHM, in order to reflect the conditions on mainnet
+        ohmLusdPool = IBasePool(env.readAddress(string.concat(".", chain_, ".external.balancer.OhmLusdPool"))); // Real pool, deployed separately as it's a little more complicated
+        auraBooster = MockAuraBooster(env.readAddress(string.concat(".", chain_, ".external.aura.AuraBooster"))); // Requires DependencyDeployLido to be run first
+
+        vm.startBroadcast();
+
+        // Deploy the LUSD price feed
+        lusdUsdPriceFeed = new MockPriceFeed();
+        lusdUsdPriceFeed.setDecimals(8);
+        lusdUsdPriceFeed.setLatestAnswer(1e8);
+        lusdUsdPriceFeed.setRoundId(1);
+        lusdUsdPriceFeed.setAnsweredInRound(1);
+        lusdUsdPriceFeed.setTimestamp(block.timestamp); // Will be good for 1 year from now
+        console2.log("LUSD-USD Price Feed deployed to:", address(lusdUsdPriceFeed));
+
+        // Deploy the Aura Reward Pools for OHM-LUSD
+        ohmLusdRewardPool = new MockAuraRewardPool(
+            address(ohmLusdPool), // OHM-LUSD LP
+            address(bal), // BAL
+            address(aura) // AURA
+        );
+        console2.log("OHM-LUSD LP reward pool deployed to: ", address(ohmLusdRewardPool));
+
+        // Add the pool to the aura booster
+        auraBooster.addPool(address(ohmLusdRewardPool));
+        console2.log("Added ohmLusdRewardPool to Aura Booster");
 
         vm.stopBroadcast();
     }
