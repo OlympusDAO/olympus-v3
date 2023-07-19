@@ -159,6 +159,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     ///
     /// @param feed_                    Chainlink price feed
     /// @param updateThreshold_         The maximum number of seconds elapsed since the last price feed update
+    /// @param feedDecimals_            The number of decimals of the price feed
     /// @param outputDecimals_          The number of decimals to return the price in
     /// @return                         The validated price in the scale of `outputDecimals_`
     function _getFeedPrice(
