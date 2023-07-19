@@ -40,6 +40,7 @@ import {BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.s
 import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
 
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
+import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "test/mocks/AuraMocks.sol";
@@ -53,6 +54,7 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 contract OlympusDeploy is Script {
     using stdJson for string;
     using TransferHelper for ERC20;
+
     Kernel public kernel;
 
     /// Modules
@@ -77,6 +79,7 @@ contract OlympusDeploy is Script {
     Burner public burner;
     BLVaultManagerLido public lidoVaultManager;
     BLVaultLido public lidoVault;
+    CrossChainBridge public bridge;
 
     /// Construction variables
 
@@ -139,6 +142,7 @@ contract OlympusDeploy is Script {
         selectorMap["Burner"] = this._deployBurner.selector;
         selectorMap["BLVaultLido"] = this._deployBLVaultLido.selector;
         selectorMap["BLVaultManagerLido"] = this._deployBLVaultManagerLido.selector;
+        selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
 
         // Load environment addresses
         string memory env = vm.readFile("./src/scripts/env.json");
@@ -187,6 +191,7 @@ contract OlympusDeploy is Script {
         burner = Burner(env.readAddress(string.concat(".", chain_, ".olympus.policies.Burner")));
         lidoVaultManager = BLVaultManagerLido(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultManagerLido")));
         lidoVault = BLVaultLido(env.readAddress(string.concat(".", chain_, ".olympus.policies.BLVaultLido")));
+        bridge = CrossChainBridge(env.readAddress(string.concat(chain_, ".olympus.policies.CrossChainBridge")));
 
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy.json");
@@ -590,6 +595,16 @@ contract OlympusDeploy is Script {
         return address(lidoVaultManager);
     }
 
+    function _deployCrossChainBridge(bytes memory args) public returns (address) {
+        address lzEndpoint = abi.decode(args, (address));
+
+        // Deploy CrossChainBridge policy
+        bridge = new CrossChainBridge(kernel, lzEndpoint);
+        console2.log("Bridge deployed at:", address(bridge));
+
+        return address(bridge);
+    }
+
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
     /// @dev Should be called prior to verifyAndPushAuth()
     function verifyKernelInstallation() external {
@@ -611,6 +626,7 @@ contract OlympusDeploy is Script {
         treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
         distributor = Distributor(vm.envAddress("DISTRIBUTOR"));
         emergency = Emergency(vm.envAddress("EMERGENCY"));
+        bridge = CrossChainBridge(vm.envAddress("BRIDGE"));
 
         /// Check that Modules are installed
         /// PRICE
