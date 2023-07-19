@@ -145,7 +145,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///
     /// @dev            This strategy is useful to smooth out price volatility.
     ///
-    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 Zero prices in the array are ignored, to allow for
     ///                 handling of price lookup sources that return errors.
     ///                 Otherwise, an asset with any zero price would result in
     ///                 no price being returned at all.
@@ -169,7 +169,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
-        // If there are no non-zero prices, return 0
+        // Return 0 if all prices are 0
         if (nonZeroPrices.length == 0) return 0;
 
         // If there are not enough non-zero prices to calculate an average, return the first non-zero price
@@ -200,7 +200,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///
     /// @dev            This strategy is useful to smooth out price volatility.
     ///
-    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 Zero prices in the array are ignored, to allow for
     ///                 handling of price lookup sources that return errors.
     ///                 Otherwise, an asset with any zero price would result in
     ///                 no price being returned at all.
@@ -224,7 +224,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
-        // If there are no non-zero prices, return 0
+        // Return 0 if all prices are 0
         if (nonZeroPrices.length == 0) return 0;
 
         // If there are not enough non-zero prices to calculate a median, return the first non-zero price
@@ -255,13 +255,13 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
     /// @notice         This strategy returns the average of the non-zero prices in the array.
     ///
-    /// @dev            If there are no non-zero prices in the array, 0 will be returned. This ensures that a situation
+    /// @dev            Return 0 if all prices in the array are zero. This ensures that a situation
     //                  where all price feeds are down is handled gracefully.
     ///
     ///                 Will revert if:
     ///                 - The number of elements in the `prices_` array is less than 2 (which would represent a mis-configuration)
     ///
-    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 Zero prices in the array are ignored, to allow for
     ///                 handling of price lookup sources that return errors.
     ///                 Otherwise, an asset with any zero price would result in
     ///                 no price being returned at all.
@@ -286,7 +286,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @dev            If the array has an even number of non-zero prices, the average of the two middle
     ///                 prices is returned.
     ///
-    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 Zero prices in the array are ignored, to allow for
     ///                 handling of price lookup sources that return errors.
     ///                 Otherwise, an asset with any zero price would result in
     ///                 no price being returned at all.
