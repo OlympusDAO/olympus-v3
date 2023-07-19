@@ -117,25 +117,6 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         return prices_[(pricesLen - 1) / 2];
     }
 
-    /// @notice         Returns a new array with the same values as the input array, sorted using the QuickSort library
-    /// @dev            This is done to avoid unpredictable behaviour when sorting an array in-place
-    /// @param array_   Array of uint256 values
-    /// @return         Array of uint256 values, sorted in ascending order
-    function _sort(uint256[] memory array_) internal pure returns (uint256[] memory) {
-        // Create a new array of the same length
-        uint256[] memory sortedArray = new uint256[](array_.length);
-
-        // Copy the array into the new array
-        for (uint256 i = 0; i < array_.length; i++) {
-            sortedArray[i] = array_[i];
-        }
-
-        // Sort the new array
-        sortedArray.sort();
-
-        return sortedArray;
-    }
-
     // ========== STRATEGY FUNCTIONS ========== //
 
     /// @notice         Returns the first non-zero price in the array.
@@ -349,7 +330,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         if (nonZeroPricesLen < 3) return nonZeroPrices[0];
 
         // Sort the prices
-        uint256[] memory sortedPrices = _sort(nonZeroPrices);
+        uint256[] memory sortedPrices = nonZeroPrices.sort();
 
         return _getMedianPrice(sortedPrices);
     }
