@@ -72,7 +72,12 @@ contract OlympusDeploy is Script {
     /// External contracts
     address public staking;
 
-    function deploy(string memory chain_, address guardian_, address policy_, address emergency_) external {
+    function deploy(
+        string memory chain_,
+        address guardian_,
+        address policy_,
+        address emergency_
+    ) external {
         /// Token addresses
         ohm = ERC20(vm.envAddress("OHM_ADDRESS"));
         reserve = ERC20(vm.envAddress("DAI_ADDRESS"));
@@ -347,7 +352,6 @@ contract OlympusDeploy is Script {
         /// BondManager Roles
         require(ROLES.hasRole(policy_, "bondmanager_admin"));
 
-
         /// Push rolesAdmin and Executor
         vm.startBroadcast();
         rolesAdmin.pushNewAdmin(guardian_);
@@ -357,7 +361,13 @@ contract OlympusDeploy is Script {
 
     function _saveDeployment(string memory chain_) internal {
         // Create file path
-        string memory file = string.concat("./deployments/", chain_, "-", vm.toString(block.timestamp), ".json");
+        string memory file = string.concat(
+            "./deployments/",
+            chain_,
+            "-",
+            vm.toString(block.timestamp),
+            ".json"
+        );
 
         // Write deployment info to file in JSON format
         vm.writeLine(file, "{");
@@ -371,7 +381,13 @@ contract OlympusDeploy is Script {
         );
         vm.writeLine(
             file,
-            string.concat('"', type(OlympusTreasury).name, '": "', vm.toString(address(TRSRY)), '",')
+            string.concat(
+                '"',
+                type(OlympusTreasury).name,
+                '": "',
+                vm.toString(address(TRSRY)),
+                '",'
+            )
         );
         vm.writeLine(
             file,
@@ -395,23 +411,53 @@ contract OlympusDeploy is Script {
         );
         vm.writeLine(
             file,
-            string.concat('"', type(BondCallback).name, '": "', vm.toString(address(callback)), '",')
+            string.concat(
+                '"',
+                type(BondCallback).name,
+                '": "',
+                vm.toString(address(callback)),
+                '",'
+            )
         );
         vm.writeLine(
             file,
-            string.concat('"', type(OlympusPriceConfig).name, '": "', vm.toString(address(priceConfig)), '",')
+            string.concat(
+                '"',
+                type(OlympusPriceConfig).name,
+                '": "',
+                vm.toString(address(priceConfig)),
+                '",'
+            )
         );
         vm.writeLine(
             file,
-            string.concat('"', type(RolesAdmin).name, '": "', vm.toString(address(rolesAdmin)), '",')
+            string.concat(
+                '"',
+                type(RolesAdmin).name,
+                '": "',
+                vm.toString(address(rolesAdmin)),
+                '",'
+            )
         );
         vm.writeLine(
             file,
-            string.concat('"', type(TreasuryCustodian).name, '": "', vm.toString(address(treasuryCustodian)), '",')
+            string.concat(
+                '"',
+                type(TreasuryCustodian).name,
+                '": "',
+                vm.toString(address(treasuryCustodian)),
+                '",'
+            )
         );
         vm.writeLine(
             file,
-            string.concat('"', type(Distributor).name, '": "', vm.toString(address(distributor)), '",')
+            string.concat(
+                '"',
+                type(Distributor).name,
+                '": "',
+                vm.toString(address(distributor)),
+                '",'
+            )
         );
         vm.writeLine(
             file,
