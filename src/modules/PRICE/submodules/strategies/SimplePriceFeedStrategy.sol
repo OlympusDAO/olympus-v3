@@ -178,13 +178,13 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         // If there are no non-zero prices, return 0
         if (nonZeroPrices.length == 0) return 0;
 
-        // If there are not enough non-zero prices to calculate an average, return the first non-zero price
-        uint256 firstPrice = nonZeroPrices[0];
-        if (nonZeroPrices.length == 1) return firstPrice;
-
-        // Get the average and abort if there's a problem
         // Cache first non-zero price since the array is sorted in place
         uint256 firstNonZeroPrice = nonZeroPrices[0];
+
+        // If there are not enough non-zero prices to calculate an average, return the first non-zero price
+        if (nonZeroPrices.length == 1) return firstNonZeroPrice;
+
+        // Get the average and abort if there's a problem
         uint256[] memory sortedPrices = nonZeroPrices.sort();
         uint256 averagePrice = _getAveragePrice(sortedPrices);
 
@@ -238,16 +238,15 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         // If there are no non-zero prices, return 0
         if (nonZeroPrices.length == 0) return 0;
 
-        // If there are not enough non-zero prices to calculate a median, return the first non-zero price
-        uint256 firstPrice = nonZeroPrices[0];
-        if (nonZeroPrices.length < 3) return firstPrice;
-
-        // Get the average and median and abort if there's a problem
-
         // Cache first non-zero price since the array is sorted in place
         uint256 firstNonZeroPrice = nonZeroPrices[0];
+
+        // If there are not enough non-zero prices to calculate a median, return the first non-zero price
+        if (nonZeroPrices.length < 3) return firstNonZeroPrice;
+
         uint256[] memory sortedPrices = nonZeroPrices.sort();
 
+        // Get the average and median and abort if there's a problem
         // The following two values are guaranteed to not be 0 since sortedPrices only contains non-zero values and has a length of 3+
         uint256 averagePrice = _getAveragePrice(sortedPrices);
         uint256 medianPrice = _getMedianPrice(sortedPrices);
