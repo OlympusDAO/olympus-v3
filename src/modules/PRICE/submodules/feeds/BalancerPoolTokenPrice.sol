@@ -543,11 +543,15 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                     minimumPrice = price_;
                 }
             }
-
-            // minimumPrice almost certainly has a value, but check to be sure
-            if (minimumPrice == 0) revert Balancer_PoolValueZero(poolId);
         }
 
+        /**
+         * NOTE: if this line is reached, minimumPrice is guaranteed to be non-zero:
+         * - the length of the `tokens` array is greater than 0
+         * - the price of each token is non-zero (or else it would have reverted)
+         *
+         * Gas is saved by skipping a check on the value of minimumPrice.
+         */
         uint256 poolValue = poolRate.mulDiv(minimumPrice, 10 ** poolDecimals); // outputDecimals_
 
         return poolValue;
