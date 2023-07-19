@@ -175,7 +175,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     /// @notice                 Determines the unit price of the pool token for the UniswapV2 pool specified in `params_`.
     ///
     /// @dev                    The pool token price is determined using the "fair LP pricing" described here: https://cmichel.io/pricing-lp-tokens/
-    ///                         This approach is implemented in order to reduce the succeptibility to manipulation of the pool token price
+    ///                         This approach is implemented in order to reduce the susceptibility to manipulation of the pool token price
     ///                         through the pool's reserves.
     ///
     /// @param asset_           Unused
