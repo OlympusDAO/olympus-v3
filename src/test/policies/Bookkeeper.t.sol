@@ -23,10 +23,10 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 // [X] requestPermissions
 //
 // PRICEv2 Configuration
-// [X] addAssetPrice
+// [X] addAsset
 //     [X] only "bookkeeper_policy" role can call
 //     [X] inputs to PRICEv2.addAsset are correct
-// [X] removeAssetPrice
+// [X] removeAsset
 //     [X] only "bookkeeper_policy" role can call
 //     [X] inputs to PRICEv2.removeAsset are correct
 // [X] updateAssetPriceFeeds
@@ -230,7 +230,7 @@ contract BookkeeperTest is Test {
         uint256[] memory obs = _makeObservations(ohm, feeds[0], 15);
 
         vm.prank(policy);
-        bookkeeper.addAssetPrice(
+        bookkeeper.addAsset(
             address(ohm),
             true,
             true,
@@ -313,7 +313,7 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.addAssetPrice(
+        bookkeeper.addAsset(
             address(ohm),
             true,
             true,
@@ -330,7 +330,7 @@ contract BookkeeperTest is Test {
 
         // Try to add asset to PRICEv2 with policy account, expect success
         vm.prank(policy);
-        bookkeeper.addAssetPrice(
+        bookkeeper.addAsset(
             address(ohm),
             true,
             true,
@@ -342,7 +342,7 @@ contract BookkeeperTest is Test {
         );
     }
 
-    function test_addAssetPrice_correctData() public {
+    function test_addAsset_correctData() public {
         // Setup data to add asset
         PRICEv2.Component memory strategyComponent = PRICEv2.Component(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
@@ -388,7 +388,7 @@ contract BookkeeperTest is Test {
 
         // Add asset to PRICEv2 using policy account
         vm.prank(policy);
-        bookkeeper.addAssetPrice(
+        bookkeeper.addAsset(
             address(ohm),
             true,
             true,
@@ -418,7 +418,7 @@ contract BookkeeperTest is Test {
         assertEq(asset.feeds, abi.encode(feedComponents));
     }
 
-    function testRevert_removeAssetPrice_onlyPolicy(address user_) public {
+    function testRevert_removeAsset_onlyPolicy(address user_) public {
         vm.assume(user_ != policy);
 
         // Add base assets to PRICEv2
@@ -435,7 +435,7 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.removeAssetPrice(address(ohm));
+        bookkeeper.removeAsset(address(ohm));
 
         // Confirm asset was not removed
         asset = PRICE.getAssetData(address(ohm));
@@ -443,14 +443,14 @@ contract BookkeeperTest is Test {
 
         // Try to remove asset from PRICEv2 with policy account, expect success
         vm.prank(policy);
-        bookkeeper.removeAssetPrice(address(ohm));
+        bookkeeper.removeAsset(address(ohm));
 
         // Confirm asset was removed
         asset = PRICE.getAssetData(address(ohm));
         assertEq(asset.approved, false);
     }
 
-    function test_removeAssetPrice() public {
+    function test_removeAsset() public {
         // Add base assets to PRICEv2
         _addBaseAssets();
 
@@ -460,7 +460,7 @@ contract BookkeeperTest is Test {
 
         // Remove asset from PRICEv2 using policy account
         vm.prank(policy);
-        bookkeeper.removeAssetPrice(address(ohm));
+        bookkeeper.removeAsset(address(ohm));
 
         // Confirm asset is not approved and all data deleted
         asset = PRICE.getAssetData(address(ohm));
@@ -704,7 +704,7 @@ contract BookkeeperTest is Test {
         );
 
         vm.prank(policy);
-        bookkeeper.addAssetPrice(
+        bookkeeper.addAsset(
             address(fohm),
             false,
             false,

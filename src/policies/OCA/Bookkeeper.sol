@@ -69,7 +69,7 @@ contract Bookkeeper is Policy, RolesConsumer {
     /// @param observations_ The array of observations to add - the number of observations must match the moving average duration divided by the PRICEv2 observation frequency
     /// @param strategy_ The price resolution strategy to use for this asset
     /// @param feeds_ The array of price feeds to use for this asset
-    function addAssetPrice(
+    function addAsset(
         address asset_,
         bool storeMovingAverage_,
         bool useMovingAverage_,
@@ -93,7 +93,7 @@ contract Bookkeeper is Policy, RolesConsumer {
 
     /// @notice Remove an asset from the PRICE module
     /// @dev After removal, calls to PRICEv2 for the asset's price will revert
-    function removeAssetPrice(address asset_) external onlyRole("bookkeeper_policy") {
+    function removeAsset(address asset_) external onlyRole("bookkeeper_policy") {
         PRICE.removeAsset(asset_);
     }
 
