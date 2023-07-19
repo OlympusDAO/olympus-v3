@@ -8,7 +8,7 @@ print_test_event() {
 source .env
 
 print_test_event "Running non-fork tests"
-forge test --no-match-contract ".*Fork$"
+forge test --no-match-contract ".*Fork$" -vvv
 
 print_test_event "Running fork tests"
-forge test --match-contract ".*Fork$" --fork-url $FORK_TEST_RPC_URL
+forge test --match-contract ".*Fork$" --fork-url $FORK_TEST_RPC_URL -vvv

@@ -5,6 +5,8 @@ remappings = [
     'solmate/=lib/solmate/src/',
     'forge-std/=lib/forge-std/src/',
     'balancer-v2/=lib/balancer-v2/',
+    'layer-zero/=lib/solidity-examples/contracts/',
+    '@openzeppelin/=lib/openzeppelin-contracts/',
 
     'interfaces/=src/interfaces',
     'modules/=src/modules',

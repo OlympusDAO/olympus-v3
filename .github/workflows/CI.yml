@@ -5,6 +5,10 @@ on:
             - master
     pull_request:
 
+env:
+  ETH_MAINNET_RPC_URL: ${{ secrets.ETH_MAINNET_RPC_URL }}
+  POLYGON_MAINNET_RPC_URL: ${{ secrets.POLYGON_MAINNET_RPC_URL }}
+
 jobs:
     run-ci:
         runs-on: ubuntu-latest
@@ -30,7 +34,10 @@ jobs:
               run: npm run lint:check
 
             - name: Run non-fork tests
-              run: forge test --no-match-contract "$1.*Fork$"
+              run: forge test --no-match-contract Fork
 
             - name: Run fork tests
               run: forge test --match-contract "$1.*Fork$" --fork-url ${{ secrets.FORK_TEST_RPC_URL }}
+
+            - name: Run cross-chain fork tests
+              run: forge test --match-contract CrossChainBridgeFork
