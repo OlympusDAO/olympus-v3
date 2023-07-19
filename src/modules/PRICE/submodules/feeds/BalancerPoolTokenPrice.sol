@@ -355,7 +355,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @notice                 Determines the unit price of the pool token for the Balancer weighted pool specified in `params_`.
     ///
     /// @dev                    To avoid price manipulation, this function calculated the pool token price in the manner recommended by
-    ///                         Balancer at https://docs.balancer.fi/concepts/advanced/valuing-bpt.html#on-chain-price-evaluation :
+    ///                         Balancer at https://docs.balancer.fi/concepts/advanced/valuing-bpt/valuing-bpt.html#on-chain-price-evaluation :
     ///                         - Obtains the prices of all tokens in the pool from PRICE (usually using price feeds)
     ///                         - Applies a guard to protect against re-entrancy attacks on the Balancer pool
     ///
@@ -448,7 +448,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ///
     /// @dev                    To avoid price manipulation, this function calculated the pool token price in the following manner:
     ///                         - Applies a guard to protect against re-entrancy attacks on the Balancer pool
-    ///                         - Utilises the formula suggested by Balancer: https://docs.balancer.fi/concepts/advanced/valuing-bpt.html#on-chain-price-evaluation
+    ///                         - Utilises the formula suggested by Balancer: https://docs.balancer.fi/concepts/advanced/valuing-bpt/valuing-bpt.html#on-chain-price-evaluation
     ///
     ///                         This function will revert if:
     ///                         - The scale of `outputDecimals_` or the pool's decimals is too high
