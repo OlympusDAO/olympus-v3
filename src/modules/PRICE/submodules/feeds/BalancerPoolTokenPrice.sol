@@ -456,7 +456,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ///                         This function will revert if:
     ///                         - The scale of `outputDecimals_` or the pool's decimals is too high
     ///                         - The pool is mis-configured
-    ///                         - The pool is not a stable pool
+    ///                         - If the pool is not a stable pool or is a composable stable pool (determined by the absence of the `getLastInvariant()` function)
     ///
     ///                         NOTE: If there is a significant de-peg between the prices of constituent assets, the token price will be inaccurate. See the now-deleted mention of this: https://github.com/balancer/docs/pull/112/files
     ///
@@ -489,6 +489,15 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
             // Get pool ID
             poolId = pool.getPoolId();
+
+            // Ensure that the pool is a stable pool, but not a composable stable pool.
+            // Determining the LP token price using a composable stable pool is sufficiently different from other
+            // stable pools, and should be added in a separate adapter/function at a later date.
+            try pool.getLastInvariant() returns (uint256, uint256) {
+                // Do nothing
+            } catch (bytes memory) {
+                revert Balancer_PoolTypeNotStable(poolId);
+            }
 
             // Prevent re-entrancy attacks
             VaultReentrancyLib.ensureNotInVaultContext(balVault);
@@ -727,7 +736,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ///
     ///                         Will revert upon the following:
     ///                         - If the transaction involves reentrancy on the Balancer pool
-    ///                         - If the pool is not a stable pool
+    ///                         - If the pool is not a stable pool or is a composable stable pool (determined by the absence of the `getLastInvariant()` function)
     ///
     ///                         NOTE: as the reserves of Balancer pools can be manipulated using flash loans, the spot price
     ///                         can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
@@ -855,7 +864,9 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                         scalingFactors[lookupTokenIndex]
                     );
                 } catch (bytes memory) {
-                    // Revert if the pool is not a stable pool, and does not have the required function
+                    // Ensure that the pool is a stable pool, but not a composable stable pool.
+                    // Determining the token price using a composable stable pool is sufficiently different from other
+                    // stable pools, and should be added in a separate adapter/function at a later date.
                     revert Balancer_PoolTypeNotStable(poolId);
                 }
             }

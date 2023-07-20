@@ -7,7 +7,7 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 
 import "src/Kernel.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
-import {MockBalancerPool, MockBalancerStablePool, MockBalancerWeightedPool} from "test/mocks/MockBalancerPool.sol";
+import {MockBalancerPool, MockBalancerStablePool, MockBalancerWeightedPool, MockBalancerComposableStablePool} from "test/mocks/MockBalancerPool.sol";
 import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -412,7 +412,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
         balancerSubmodule.getTokenPriceFromStablePool(B_80BAL_20WETH, PRICE_DECIMALS, params);
     }
 
-    function test_getTokenPriceFromStablePool_incorrectPoolType() public {
+    function test_getTokenPriceFromStablePool_weightedPoolType() public {
         // Set up a weighted pool
         MockBalancerWeightedPool mockWeightedPool = new MockBalancerWeightedPool();
         mockWeightedPool.setDecimals(BALANCER_POOL_DECIMALS);
@@ -426,6 +426,25 @@ contract BalancerPoolTokenPriceStableTest is Test {
         );
 
         bytes memory params = abi.encode(mockWeightedPool);
+        balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, PRICE_DECIMALS, params);
+    }
+
+    function test_getTokenPriceFromStablePool_composableStablePoolType() public {
+        // Set up a composable stable pool
+        MockBalancerComposableStablePool mockComposablePool = new MockBalancerComposableStablePool();
+        mockComposablePool.setDecimals(BALANCER_POOL_DECIMALS);
+        mockComposablePool.setTotalSupply(BALANCER_POOL_TOTAL_SUPPLY);
+        mockComposablePool.setPoolId(BALANCER_POOL_ID);
+        mockComposablePool.setRate(BALANCER_POOL_RATE);
+        mockComposablePool.setActualSupply(BALANCER_POOL_TOTAL_SUPPLY / 2);
+
+        // Will fail as the pool does not have the supported function
+        expectRevert_pool(
+            BalancerPoolTokenPrice.Balancer_PoolTypeNotStable.selector,
+            BALANCER_POOL_ID
+        );
+
+        bytes memory params = abi.encode(mockComposablePool);
         balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, PRICE_DECIMALS, params);
     }
 
@@ -731,7 +750,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
         balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getStablePoolTokenPrice_incorrectPoolType() public {
+    function test_getStablePoolTokenPrice_weightedPoolType() public {
         setUpStablePoolTokenPrice();
 
         // Set up a weighted pool
@@ -747,6 +766,27 @@ contract BalancerPoolTokenPriceStableTest is Test {
         );
 
         bytes memory params = abi.encode(mockWeightedPool);
+        balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getStablePoolTokenPrice_composableStablePoolType() public {
+        setUpStablePoolTokenPrice();
+
+        // Set up a composable stable pool
+        MockBalancerComposableStablePool mockComposablePool = new MockBalancerComposableStablePool();
+        mockComposablePool.setDecimals(BALANCER_POOL_DECIMALS);
+        mockComposablePool.setTotalSupply(BALANCER_POOL_TOTAL_SUPPLY);
+        mockComposablePool.setPoolId(BALANCER_POOL_ID);
+        mockComposablePool.setRate(BALANCER_POOL_RATE);
+        mockComposablePool.setActualSupply(BALANCER_POOL_TOTAL_SUPPLY / 2);
+
+        // Will fail as the pool does not have the supported function
+        expectRevert_pool(
+            BalancerPoolTokenPrice.Balancer_PoolTypeNotStable.selector,
+            BALANCER_POOL_ID
+        );
+
+        bytes memory params = abi.encode(mockComposablePool);
         balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, params);
     }
 
