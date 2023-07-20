@@ -451,12 +451,14 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ///
     /// @dev                    To avoid price manipulation, this function calculated the pool token price in the following manner:
     ///                         - Applies a guard to protect against re-entrancy attacks on the Balancer pool
-    ///                         - Utilises the formula suggested by Balancer: https://docs.balancer.fi/concepts/advanced/valuing-bpt.html#on-chain-price-evaluation
+    ///                         - Utilises the formula suggested by Balancer: https://github.com/balancer/docs/blob/663e2f4f2c3eee6f85805e102434629633af92a2/docs/concepts/advanced/valuing-bpt/bpt-as-collateral.md
     ///
     ///                         This function will revert if:
     ///                         - The scale of `outputDecimals_` or the pool's decimals is too high
     ///                         - The pool is mis-configured
     ///                         - The pool is not a stable pool
+    ///
+    ///                         NOTE: If there is a significant de-peg between the prices of constituent assets, the token price will be inaccurate. See the now-deleted mention of this: https://github.com/balancer/docs/pull/112/files
     ///
     /// @param asset_           Unused
     /// @param outputDecimals_  The number of output decimals
@@ -516,22 +518,41 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint256 len = tokens.length;
         if (len == 0) revert Balancer_PoolValueZero(poolId);
 
-        uint256 baseTokenPrice; // outputDecimals_
+        uint256 minimumPrice; // outputDecimals_
         {
-            address token = tokens[0];
-            if (token == address(0)) revert Balancer_PoolTokenInvalid(poolId, 0, token);
-
             /**
-             * PRICE will revert if there is an issue resolving the price, or if it is 0.
-             *
-             * As the value of the pool token is reliant on the price of every underlying token,
-             * the revert from PRICE is not caught.
+             * The Balancer docs do not currently state this, but a historical version noted
+             * that getRate() should be multiplied by the minimum price of the tokens in the
+             * pool in order to get a valuation. This is the same approach as used by Curve stable pools.
              */
-            (uint256 price_, ) = _PRICE().getPrice(token, PRICEv2.Variant.CURRENT); // outputDecimals_
-            baseTokenPrice = price_;
+            for (uint256 i; i < len; i++) {
+                address token = tokens[i];
+                if (token == address(0)) revert Balancer_PoolTokenInvalid(poolId, i, token);
+
+                /**
+                 * PRICE will revert if there is an issue resolving the price, or if it is 0.
+                 *
+                 * As the value of the pool token is reliant on the price of every underlying token,
+                 * the revert from PRICE is not caught.
+                 */
+                (uint256 price_, ) = _PRICE().getPrice(token, PRICEv2.Variant.CURRENT); // outputDecimals_
+
+                if (minimumPrice == 0) {
+                    minimumPrice = price_;
+                } else if (price_ < minimumPrice) {
+                    minimumPrice = price_;
+                }
+            }
         }
 
-        uint256 poolValue = poolRate.mulDiv(baseTokenPrice, 10 ** poolDecimals); // outputDecimals_
+        /**
+         * NOTE: if this line is reached, minimumPrice is guaranteed to be non-zero:
+         * - the length of the `tokens` array is greater than 0
+         * - the price of each token is non-zero (or else it would have reverted)
+         *
+         * Gas is saved by skipping a check on the value of minimumPrice.
+         */
+        uint256 poolValue = poolRate.mulDiv(minimumPrice, 10 ** poolDecimals); // outputDecimals_
 
         return poolValue;
     }
