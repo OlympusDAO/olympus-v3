@@ -58,6 +58,7 @@ contract MockBalancerStablePool is IStablePool, MockBalancerPool {
     uint256 private _invariant;
     uint256 private _ampFactor;
     uint256 private _rate;
+    uint256[] private _scalingFactors;
 
     function setLastInvariant(uint256 invariant_, uint256 ampFactor_) public {
         _invariant = invariant_;
@@ -74,5 +75,45 @@ contract MockBalancerStablePool is IStablePool, MockBalancerPool {
 
     function getRate() external view override returns (uint256) {
         return (_rate);
+    }
+
+    function setScalingFactors(uint256[] memory scalingFactors_) public {
+        _scalingFactors = scalingFactors_;
+    }
+
+    function getScalingFactors() external view override returns (uint256[] memory) {
+        return _scalingFactors;
+    }
+}
+
+/// @notice         Barebones implementation of the Balancer Composable Stable Pool
+/// @dev            Original: https://github.com/balancer/balancer-v2-monorepo/blob/c4cc3d466eaa3c1e5fa62d303208c6c4a10db48a/pkg/pool-stable/contracts/ComposableStablePool.sol#L4
+contract MockBalancerComposableStablePool is MockBalancerPool {
+    uint256 private _rate;
+    uint256[] private _scalingFactors;
+    uint256 private _actualSupply;
+
+    function setRate(uint256 rate_) public {
+        _rate = rate_;
+    }
+
+    function getRate() external view returns (uint256) {
+        return (_rate);
+    }
+
+    function setScalingFactors(uint256[] memory scalingFactors_) public {
+        _scalingFactors = scalingFactors_;
+    }
+
+    function getScalingFactors() external view returns (uint256[] memory) {
+        return _scalingFactors;
+    }
+
+    function setActualSupply(uint256 actualSupply_) public {
+        _actualSupply = actualSupply_;
+    }
+
+    function getActualSupply() external view returns (uint256) {
+        return _actualSupply;
     }
 }

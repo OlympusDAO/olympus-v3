@@ -166,6 +166,12 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param target_  The encoded SubKeycode of the submodule
     error PRICE_SubmoduleNotInstalled(address asset_, bytes target_);
 
+    /// @notice         A duplicate price feed was provided when updating an asset's price feeds
+    ///
+    /// @param asset_   The asset being updated with duplicate price feeds
+    /// @param index_   The index of the price feed that is a duplicate
+    error PRICE_DuplicatePriceFeed(address asset_, uint256 index_);
+
     // ========== STATE ========== //
 
     struct Component {

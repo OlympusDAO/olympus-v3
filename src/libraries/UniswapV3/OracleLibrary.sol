@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-pragma solidity >=0.8.0;
+pragma solidity >=0.8.0 <0.9.0;
 
 import "../FullMath.sol";
 import "./TickMath.sol";
@@ -32,9 +32,9 @@ library OracleLibrary {
         uint160 secondsPerLiquidityCumulativesDelta = secondsPerLiquidityCumulativeX128s[1] -
             secondsPerLiquidityCumulativeX128s[0];
 
-        arithmeticMeanTick = int24(tickCumulativesDelta / int56(int32(secondsAgo)));
+        arithmeticMeanTick = int24(tickCumulativesDelta / int56(uint56(secondsAgo)));
         // Always round to negative infinity
-        if (tickCumulativesDelta < 0 && (tickCumulativesDelta % int56(int32(secondsAgo)) != 0))
+        if (tickCumulativesDelta < 0 && (tickCumulativesDelta % int56(uint56(secondsAgo)) != 0))
             arithmeticMeanTick--;
 
         // We are multiplying here instead of shifting to ensure that harmonicMeanLiquidity doesn't overflow uint128
@@ -92,7 +92,9 @@ library OracleLibrary {
             (observationTimestamp, , , ) = IUniswapV3Pool(pool).observations(0);
         }
 
-        secondsAgo = uint32(block.timestamp) - observationTimestamp;
+        unchecked {
+            secondsAgo = uint32(block.timestamp) - observationTimestamp;
+        }
     }
 
     /// @notice Given a pool, it returns the tick value as of the start of the current block
@@ -137,7 +139,7 @@ library OracleLibrary {
         require(prevInitialized, "ONI");
 
         uint32 delta = observationTimestamp - prevObservationTimestamp;
-        tick = int24((tickCumulative - prevTickCumulative) / int56(uint56(delta)));
+        tick = int24((tickCumulative - int56(uint56(prevTickCumulative))) / int56(uint56(delta)));
         uint128 liquidity = uint128(
             (uint192(delta) * type(uint160).max) /
                 (uint192(
@@ -170,7 +172,7 @@ library OracleLibrary {
 
         // Products fit in 152 bits, so it would take an array of length ~2**104 to overflow this logic
         for (uint256 i; i < weightedTickData.length; i++) {
-            numerator += weightedTickData[i].tick * int256(int128(weightedTickData[i].weight));
+            numerator += weightedTickData[i].tick * int256(uint256(weightedTickData[i].weight));
             denominator += weightedTickData[i].weight;
         }
 

@@ -466,9 +466,27 @@ contract OlympusPricev2 is PRICEv2 {
         uint256 len = feeds_.length;
         if (len == 0) revert PRICE_ParamsPriceFeedInsufficient(asset_, len, 1);
 
+        bytes32[] memory hashes = new bytes32[](len);
+
         for (uint256 i; i < len; ) {
+            // Check that the submodule is installed
             if (!_submoduleIsInstalled(feeds_[i].target))
                 revert PRICE_SubmoduleNotInstalled(asset_, abi.encode(feeds_[i].target));
+
+            // Confirm that the feed is not a duplicate by checking the hash against hashes of previous feeds in the array
+            bytes32 _hash = keccak256(
+                abi.encode(feeds_[i].target, feeds_[i].selector, feeds_[i].params)
+            );
+
+            for (uint256 j; j < i; ) {
+                if (_hash == hashes[j]) revert PRICE_DuplicatePriceFeed(asset_, i);
+                unchecked {
+                    ++j;
+                }
+            }
+
+            hashes[i] = _hash;
+
             unchecked {
                 ++i;
             }

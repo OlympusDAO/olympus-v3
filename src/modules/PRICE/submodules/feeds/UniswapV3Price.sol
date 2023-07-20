@@ -15,7 +15,7 @@ contract UniswapV3Price is PriceSubmodule {
     // ========== CONSTANTS ========== //
 
     /// @notice     The maximum number of decimals allowed for a token in order to prevent overflows
-    uint8 internal constant BASE_10_MAX_EXPONENT = 50;
+    uint8 internal constant BASE_10_MAX_EXPONENT = 30;
 
     /// @notice     The minimum length of the TWAP observation window in seconds
     ///             From testing, a value under 19 seconds is rejected by `OracleLibrary.getQuoteAtTick()`
@@ -84,6 +84,15 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param pool_            The address of the pool
     error UniswapV3_PoolTypeInvalid(address pool_);
 
+    /// @notice                             The pool is invalid or the observation window is too long.
+    /// @dev                                This is triggered if the pool reverted when called,
+    ///                                     and indicates that the feed address is not a UniswapV3 pool
+    ///                                     or that the observation window is too long.
+    ///
+    /// @param pool_                        The address of the pool
+    /// @param observationWindowSeconds_    The observation window in seconds
+    error UniswapV3_InvalidObservation(address pool_, uint32 observationWindowSeconds_);
+
     /// @notice                 The calculated tick is out of bounds
     /// @dev                    The tick is calculated as the average of the ticks over the observation window.
     ///
@@ -125,6 +134,10 @@ contract UniswapV3Price is PriceSubmodule {
     ///                         - `lookupToken_` is not in the pool
     ///                         - The calculated time-weighted tick is outside the bounds of int24
     ///
+    ///                         NOTE: as a UniswapV3 pool can be manipulated using multi-block MEV, the TWAP values
+    ///                         can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
+    ///                         See https://chainsecurity.com/oracle-manipulation-after-merge/
+    ///
     /// @param lookupToken_     The token to determine the price of.
     /// @param outputDecimals_  The number of decimals to return the price in
     /// @param params_          Pool parameters of type `UniswapV3Params`
@@ -137,6 +150,13 @@ contract UniswapV3Price is PriceSubmodule {
         UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
         if (address(params.pool) == address(0))
             revert UniswapV3_ParamsPoolInvalid(0, address(params.pool));
+
+        try pool.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
+            // Do nothing
+        } catch (bytes memory) {
+            // Handle a non-UniswapV3 pool
+            revert UniswapV3_PoolTypeInvalid(address(pool));
+        }
 
         address quoteToken;
         {
@@ -210,9 +230,12 @@ contract UniswapV3Price is PriceSubmodule {
                     (tickCumulatives[1] - tickCumulatives[0]) /
                     int32(params.observationWindowSeconds);
             } catch (bytes memory) {
-                // Handle a non-UniswapV3 pool
-                // A UniswapV2 pool could pass the above check, but would revert here
-                revert UniswapV3_PoolTypeInvalid(address(params.pool));
+                // This function will revert if the observation window is longer than the oldest observation in the pool
+                // https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/Oracle.sol#L226C30-L226C30
+                revert UniswapV3_InvalidObservation(
+                    address(params.pool),
+                    params.observationWindowSeconds
+                );
             }
         }
 
@@ -233,6 +256,8 @@ contract UniswapV3Price is PriceSubmodule {
                         BASE_10_MAX_EXPONENT
                     );
 
+                // baseTokenDecimals must be less than 38 to avoid overflow when cast to uint128
+                // BASE_10_MAX_EXPONENT is less than 38, so this check is safe
                 if (baseTokenDecimals > BASE_10_MAX_EXPONENT)
                     revert UniswapV3_AssetDecimalsOutOfBounds(
                         lookupToken_,

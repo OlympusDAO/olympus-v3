@@ -13,6 +13,12 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @notice     This is the expected length of bytes for the parameters to the deviation strategies
     uint8 internal constant DEVIATION_PARAMS_LENGTH = 32;
 
+    /// @notice     Represents a 0% deviation, which is invalid
+    uint256 internal constant DEVIATION_MIN = 0;
+
+    /// @notice     Represents a 100% deviation, which is invalid
+    uint256 internal constant DEVIATION_MAX = 10_000;
+
     // ========== ERRORS ========== //
 
     /// @notice                 Indicates that the number of prices provided to the strategy is invalid
@@ -142,7 +148,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///
     /// @dev            This strategy is useful to smooth out price volatility.
     ///
-    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 Zero prices in the array are ignored, to allow for
     ///                 handling of price lookup sources that return errors.
     ///                 Otherwise, an asset with any zero price would result in
     ///                 no price being returned at all.
@@ -152,7 +158,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///
     ///                 Will revert if:
     ///                 - The number of elements in the `prices_` array is less than 2, since it would represent a mis-configuration.
-    ///                 - The deviationBps is 0.
+    ///                 - The deviationBps is `DEVIATION_MIN` or greater than or equal to `DEVIATION_MAX`.
     ///
     /// @param prices_  Array of prices
     /// @param params_  uint256 encoded as bytes
@@ -166,11 +172,14 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
-        // If there are no non-zero prices, return 0
+        // Return 0 if all prices are 0
         if (nonZeroPrices.length == 0) return 0;
 
+        // Cache first non-zero price since the array is sorted in place
+        uint256 firstNonZeroPrice = nonZeroPrices[0];
+
         // If there are not enough non-zero prices to calculate an average, return the first non-zero price
-        if (nonZeroPrices.length == 1) return nonZeroPrices[0];
+        if (nonZeroPrices.length == 1) return firstNonZeroPrice;
 
         // Get the average and abort if there's a problem
         uint256[] memory sortedPrices = nonZeroPrices.sort();
@@ -178,7 +187,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsInvalid(params_);
         uint256 deviationBps = abi.decode(params_, (uint256));
-        if (deviationBps == 0) revert SimpleStrategy_ParamsInvalid(params_);
+        if (deviationBps <= DEVIATION_MIN || deviationBps >= DEVIATION_MAX)
+            revert SimpleStrategy_ParamsInvalid(params_);
 
         // Check the deviation of the minimum from the average
         uint256 minPrice = sortedPrices[0];
@@ -186,10 +196,10 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         // Check the deviation of the maximum from the average
         uint256 maxPrice = sortedPrices[sortedPrices.length - 1];
-        if (((maxPrice - averagePrice) * 10000) / maxPrice > deviationBps) return averagePrice;
+        if (((maxPrice - averagePrice) * 10000) / averagePrice > deviationBps) return averagePrice;
 
-        // Otherwise, return the first value
-        return nonZeroPrices[0];
+        // Otherwise, return the first non-zero value
+        return firstNonZeroPrice;
     }
 
     /// @notice         This strategy returns the median of the non-zero prices in the array if
@@ -197,7 +207,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///
     /// @dev            This strategy is useful to smooth out price volatility.
     ///
-    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 Zero prices in the array are ignored, to allow for
     ///                 handling of price lookup sources that return errors.
     ///                 Otherwise, an asset with any zero price would result in
     ///                 no price being returned at all.
@@ -208,6 +218,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///                 Will revert if:
     ///                 - The number of elements in the `prices_` array is less than 3, since it would represent a mis-configuration.
     ///                 - The deviationBps is 0.
+    ///                 - The deviationBps is `DEVIATION_MIN` or greater than or equal to `DEVIATION_MAX`.
     ///
     /// @param prices_  Array of prices
     /// @param params_  uint256 encoded as bytes
@@ -221,22 +232,26 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         uint256[] memory nonZeroPrices = _getNonZeroArray(prices_);
 
-        // If there are no non-zero prices, return 0
+        // Return 0 if all prices are 0
         if (nonZeroPrices.length == 0) return 0;
 
-        // If there are not enough non-zero prices to calculate a median, return the first non-zero price
-        if (nonZeroPrices.length < 3) return nonZeroPrices[0];
+        // Cache first non-zero price since the array is sorted in place
+        uint256 firstNonZeroPrice = nonZeroPrices[0];
 
-        // Get the average and median and abort if there's a problem
+        // If there are not enough non-zero prices to calculate a median, return the first non-zero price
+        if (nonZeroPrices.length < 3) return firstNonZeroPrice;
+
         uint256[] memory sortedPrices = nonZeroPrices.sort();
 
+        // Get the average and median and abort if there's a problem
         // The following two values are guaranteed to not be 0 since sortedPrices only contains non-zero values and has a length of 3+
         uint256 averagePrice = _getAveragePrice(sortedPrices);
         uint256 medianPrice = _getMedianPrice(sortedPrices);
 
         if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsInvalid(params_);
         uint256 deviationBps = abi.decode(params_, (uint256));
-        if (deviationBps == 0) revert SimpleStrategy_ParamsInvalid(params_);
+        if (deviationBps <= DEVIATION_MIN || deviationBps >= DEVIATION_MAX)
+            revert SimpleStrategy_ParamsInvalid(params_);
 
         // Check the deviation of the minimum from the average
         uint256 minPrice = sortedPrices[0];
@@ -244,21 +259,21 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         // Check the deviation of the maximum from the average
         uint256 maxPrice = sortedPrices[sortedPrices.length - 1];
-        if (((maxPrice - averagePrice) * 10000) / maxPrice > deviationBps) return medianPrice;
+        if (((maxPrice - averagePrice) * 10000) / averagePrice > deviationBps) return medianPrice;
 
-        // Otherwise, return the first value
-        return prices_[0];
+        // Otherwise, return the first non-zero value
+        return firstNonZeroPrice;
     }
 
     /// @notice         This strategy returns the average of the non-zero prices in the array.
     ///
-    /// @dev            If there are no non-zero prices in the array, 0 will be returned. This ensures that a situation
+    /// @dev            Return 0 if all prices in the array are zero. This ensures that a situation
     //                  where all price feeds are down is handled gracefully.
     ///
     ///                 Will revert if:
     ///                 - The number of elements in the `prices_` array is less than 2 (which would represent a mis-configuration)
     ///
-    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 Zero prices in the array are ignored, to allow for
     ///                 handling of price lookup sources that return errors.
     ///                 Otherwise, an asset with any zero price would result in
     ///                 no price being returned at all.
@@ -283,7 +298,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @dev            If the array has an even number of non-zero prices, the average of the two middle
     ///                 prices is returned.
     ///
-    ///                 Non-zero prices in the array are ignored, to allow for
+    ///                 Zero prices in the array are ignored, to allow for
     ///                 handling of price lookup sources that return errors.
     ///                 Otherwise, an asset with any zero price would result in
     ///                 no price being returned at all.
