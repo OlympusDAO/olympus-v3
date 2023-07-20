@@ -817,7 +817,7 @@ contract PriceV2Test is Test {
         price.getPrice(address(weth), PRICEv2.Variant.CURRENT);
     }
 
-    function test_getPrice_current_noStrat_oneFeedRecurvsive(uint256 nonce_) public {
+    function test_getPrice_current_noStrat_oneFeedRecursive(uint256 nonce_) public {
         // Add base assets to price module
         _addBaseAssets(nonce_);
 

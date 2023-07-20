@@ -10,15 +10,24 @@ import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
+import {FullMath} from "libraries/FullMath.sol";
+import {Math} from "src/libraries/Balancer/math/Math.sol";
+import {QuickSort} from "libraries/QuickSort.sol";
 
 contract SimplePriceFeedStrategyTest is Test {
     using ModuleTestFixtureGenerator for SimplePriceFeedStrategy;
+    using Math for uint256;
+    using FullMath for uint256;
+    using QuickSort for uint256[];
 
     MockPrice internal mockPrice;
 
     SimplePriceFeedStrategy internal strategy;
 
-    uint8 internal PRICE_DECIMALS = 18;
+    uint8 internal constant PRICE_DECIMALS = 18;
+
+    uint256 internal constant DEVIATION_MIN = 0;
+    uint256 internal constant DEVIATION_MAX = 10_000;
 
     function setUp() public {
         Kernel kernel = new Kernel();
@@ -52,6 +61,22 @@ contract SimplePriceFeedStrategyTest is Test {
             minPricesLen_
         );
         vm.expectRevert(err);
+    }
+
+    /// @notice                 Indicates whether the supplied values are deviating
+    /// @param deviationBps_    The deviation in basis points, where 0 = 0% and 10_000 = 100%
+    function _isDeviating(
+        uint256 valueOne_,
+        uint256 referenceValue_,
+        uint256 deviationBps_
+    ) internal pure returns (bool) {
+        uint256 largerValue = valueOne_.max(referenceValue_);
+        uint256 smallerValue = valueOne_.min(referenceValue_);
+
+        // 10_000 = 100%
+        uint256 deviationBase = 10_000;
+
+        return (largerValue - smallerValue).mulDiv(deviationBase, referenceValue_) > deviationBps_;
     }
 
     // =========  TESTS - FIRST PRICE ========= //
@@ -417,6 +442,39 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(averagePrice, 1e18);
     }
 
+    function test_getAveragePriceIfDeviation_threeItems_fuzz(
+        uint256 priceOne_,
+        uint256 priceTwo_,
+        uint256 priceThree_
+    ) public {
+        uint256 deviationBps = 100; // 1%
+
+        uint256 priceOne = bound(priceOne_, 0.001 * 1e18, 2 * 1e18);
+        uint256 priceTwo = bound(priceTwo_, 0.001 * 1e18, 2 * 1e18);
+        uint256 priceThree = bound(priceThree_, 0.001 * 1e18, 2 * 1e18);
+
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = priceOne;
+        prices[1] = priceTwo;
+        prices[2] = priceThree;
+
+        uint256 averagePrice = (priceOne + priceTwo + priceThree) / 3;
+        uint256 minPrice = priceOne.min(priceTwo).min(priceThree);
+        uint256 maxPrice = priceOne.max(priceTwo).max(priceThree);
+
+        // Check if the minPrice or maxPrice deviate sufficiently from the averagePrice
+        bool minPriceDeviation = _isDeviating(minPrice, averagePrice, deviationBps);
+        bool maxPriceDeviation = _isDeviating(maxPrice, averagePrice, deviationBps);
+        // Expected price is the average if there is a minPriceDeviation or maxPriceDeviation, otherwise the first price value
+        uint256 expectedPrice = minPriceDeviation || maxPriceDeviation ? averagePrice : priceOne;
+
+        uint256 price = strategy.getAveragePriceIfDeviation(
+            prices,
+            encodeDeviationParams(deviationBps)
+        );
+        assertEq(price, expectedPrice);
+    }
+
     function test_getAveragePriceIfDeviation_threeItems_deviationIndexOne() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
@@ -469,14 +527,19 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getAveragePriceIfDeviation(prices, "");
     }
 
-    function test_getAveragePriceIfDeviation_revertsOnMissingParamsDeviationBpsZero() public {
-        uint256[] memory prices = new uint256[](2);
+    function test_getAveragePriceIfDeviation_paramsDeviationBps_fuzz(uint256 deviationBps_) public {
+        uint256 deviationBps = bound(deviationBps_, DEVIATION_MIN, DEVIATION_MAX * 2);
+
+        bool isDeviationInvalid = deviationBps <= DEVIATION_MIN || deviationBps >= DEVIATION_MAX;
+
+        uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
+        prices[2] = 1.002 * 1e18;
 
-        expectRevertParams(encodeDeviationParams(0));
+        if (isDeviationInvalid) expectRevertParams(encodeDeviationParams(deviationBps));
 
-        strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(0));
+        strategy.getAveragePriceIfDeviation(prices, encodeDeviationParams(deviationBps));
     }
 
     function test_getAveragePriceIfDeviation_revertsOnMissingParamsDeviationBpsEmpty() public {
@@ -568,6 +631,48 @@ contract SimplePriceFeedStrategyTest is Test {
         assertEq(price, (1 * 1e18 + 1.001 * 1e18) / 2); // Average of the middle two
     }
 
+    function test_getMedianPriceIfDeviation_threeItems_fuzz(
+        uint256 priceOne_,
+        uint256 priceTwo_,
+        uint256 priceThree_
+    ) public {
+        uint256 deviationBps = 100; // 1%
+
+        uint256 priceOne = bound(priceOne_, 0.001 * 1e18, 2 * 1e18);
+        uint256 priceTwo = bound(priceTwo_, 0.001 * 1e18, 2 * 1e18);
+        uint256 priceThree = bound(priceThree_, 0.001 * 1e18, 2 * 1e18);
+
+        uint256[] memory prices = new uint256[](3);
+        prices[0] = priceOne;
+        prices[1] = priceTwo;
+        prices[2] = priceThree;
+
+        uint256 price = strategy.getMedianPriceIfDeviation(
+            prices,
+            encodeDeviationParams(deviationBps)
+        );
+
+        uint256 expectedPrice;
+        {
+            uint256 averagePrice = (priceOne + priceTwo + priceThree) / 3;
+            uint256 minPrice = priceOne.min(priceTwo).min(priceThree);
+            uint256 maxPrice = priceOne.max(priceTwo).max(priceThree);
+
+            // Check if the minPrice or maxPrice deviate sufficiently from the averagePrice
+            bool minPriceDeviation = _isDeviating(minPrice, averagePrice, deviationBps);
+            bool maxPriceDeviation = _isDeviating(maxPrice, averagePrice, deviationBps);
+
+            // NOTE: this occurs after the `getMedianPriceIfDeviation` function call, as it modifies the prices array
+            uint256[] memory sortedPrices = prices.sort();
+            uint256 medianPrice = sortedPrices[1];
+
+            // Expected price is the median if there is a minPriceDeviation or maxPriceDeviation, otherwise the first price value
+            expectedPrice = minPriceDeviation || maxPriceDeviation ? medianPrice : priceOne;
+        }
+
+        assertEq(price, expectedPrice);
+    }
+
     function test_getMedianPriceIfDeviation_threeItems_deviationIndexOne() public {
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
@@ -643,15 +748,19 @@ contract SimplePriceFeedStrategyTest is Test {
         strategy.getMedianPriceIfDeviation(prices, abi.encode(""));
     }
 
-    function test_getMedianPriceIfDeviation_revertsOnMissingParamsDeviationBpsZero() public {
+    function test_getMedianPriceIfDeviation_paramsDeviationBps_fuzz(uint256 deviationBps_) public {
+        uint256 deviationBps = bound(deviationBps_, DEVIATION_MIN, DEVIATION_MAX * 2);
+
+        bool isDeviationInvalid = deviationBps <= DEVIATION_MIN || deviationBps >= DEVIATION_MAX;
+
         uint256[] memory prices = new uint256[](3);
         prices[0] = 1 * 1e18;
         prices[1] = 1.001 * 1e18;
         prices[2] = 1.002 * 1e18;
 
-        expectRevertParams(encodeDeviationParams(0));
+        if (isDeviationInvalid) expectRevertParams(encodeDeviationParams(deviationBps));
 
-        strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(0));
+        strategy.getMedianPriceIfDeviation(prices, encodeDeviationParams(deviationBps));
     }
 
     function test_getMedianPriceIfDeviation_withoutDeviation() public {
