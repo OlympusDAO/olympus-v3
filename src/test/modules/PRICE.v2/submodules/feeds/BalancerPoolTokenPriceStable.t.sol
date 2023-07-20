@@ -7,7 +7,7 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 
 import "src/Kernel.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
-import {MockBalancerPool, MockBalancerStablePool, MockBalancerWeightedPool} from "test/mocks/MockBalancerPool.sol";
+import {MockBalancerPool, MockBalancerStablePool, MockBalancerWeightedPool, MockBalancerComposableStablePool} from "test/mocks/MockBalancerPool.sol";
 import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -72,6 +72,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
             mockStablePool.setPoolId(BALANCER_POOL_ID);
             mockStablePool.setLastInvariant(INVARIANT, AMP_FACTOR);
             mockStablePool.setRate(BALANCER_POOL_RATE);
+            setScalingFactorsTwo(mockStablePool, 1000000000000000000, 1000000000000000000);
         }
 
         // Set up the Balancer submodule
@@ -104,6 +105,19 @@ contract BalancerPoolTokenPriceStableTest is Test {
         vault.setTokens(coins);
     }
 
+    function setTokensThree(
+        MockBalancerVault vault,
+        address coin1_,
+        address coin2_,
+        address coin3_
+    ) internal {
+        address[] memory coins = new address[](3);
+        coins[0] = coin1_;
+        coins[1] = coin2_;
+        coins[2] = coin3_;
+        vault.setTokens(coins);
+    }
+
     function setBalancesTwo(
         MockBalancerVault vault,
         uint256 balance1_,
@@ -113,6 +127,30 @@ contract BalancerPoolTokenPriceStableTest is Test {
         balances[0] = balance1_;
         balances[1] = balance2_;
         vault.setBalances(balances);
+    }
+
+    function setBalancesThree(
+        MockBalancerVault vault,
+        uint256 balance1_,
+        uint256 balance2_,
+        uint256 balance3_
+    ) internal {
+        uint256[] memory balances = new uint256[](3);
+        balances[0] = balance1_;
+        balances[1] = balance2_;
+        balances[2] = balance3_;
+        vault.setBalances(balances);
+    }
+
+    function setScalingFactorsTwo(
+        MockBalancerStablePool pool_,
+        uint256 scalingFactor1_,
+        uint256 scalingFactor2_
+    ) internal {
+        uint256[] memory scalingFactors = new uint256[](2);
+        scalingFactors[0] = scalingFactor1_;
+        scalingFactors[1] = scalingFactor2_;
+        pool_.setScalingFactors(scalingFactors);
     }
 
     function mockERC20Decimals(address asset_, uint8 decimals_) internal {
@@ -141,10 +179,11 @@ contract BalancerPoolTokenPriceStableTest is Test {
 
     function _getBalancerPoolTokenPrice(uint8 priceDecimals) internal view returns (uint256) {
         uint256 rate = BALANCER_POOL_RATE.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS); // outputDecimals_
-        uint256 baseTokenPrice = B_80BAL_20WETH_BALANCE_PRICE_EXPECTED.mulDiv(
-            10 ** priceDecimals,
-            10 ** BALANCER_POOL_DECIMALS
-        ); // outputDecimals_
+        uint256 baseTokenPrice = (
+            B_80BAL_20WETH_BALANCE_PRICE_EXPECTED < AURA_BAL_PRICE_EXPECTED
+                ? B_80BAL_20WETH_BALANCE_PRICE_EXPECTED
+                : AURA_BAL_PRICE_EXPECTED
+        ).mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS); // outputDecimals_
 
         return rate.mulDiv(baseTokenPrice, 10 ** priceDecimals);
     }
@@ -201,7 +240,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
         );
 
         // Will be normalised to outputDecimals_
-        uint8 decimalDiff = priceDecimals > 18 ? priceDecimals - 18 : 18 - priceDecimals;
+        uint8 decimalDiff = priceDecimals > 18 ? priceDecimals - 18 : 18 - priceDecimals + 1;
         assertApproxEqAbs(
             price,
             AURA_BAL_PRICE_EXPECTED.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS),
@@ -373,7 +412,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
         balancerSubmodule.getTokenPriceFromStablePool(B_80BAL_20WETH, PRICE_DECIMALS, params);
     }
 
-    function test_getTokenPriceFromStablePool_incorrectPoolType() public {
+    function test_getTokenPriceFromStablePool_weightedPoolType() public {
         // Set up a weighted pool
         MockBalancerWeightedPool mockWeightedPool = new MockBalancerWeightedPool();
         mockWeightedPool.setDecimals(BALANCER_POOL_DECIMALS);
@@ -388,6 +427,126 @@ contract BalancerPoolTokenPriceStableTest is Test {
 
         bytes memory params = abi.encode(mockWeightedPool);
         balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, PRICE_DECIMALS, params);
+    }
+
+    function test_getTokenPriceFromStablePool_composableStablePoolType() public {
+        // Set up a composable stable pool
+        MockBalancerComposableStablePool mockComposablePool = new MockBalancerComposableStablePool();
+        mockComposablePool.setDecimals(BALANCER_POOL_DECIMALS);
+        mockComposablePool.setTotalSupply(BALANCER_POOL_TOTAL_SUPPLY);
+        mockComposablePool.setPoolId(BALANCER_POOL_ID);
+        mockComposablePool.setRate(BALANCER_POOL_RATE);
+        mockComposablePool.setActualSupply(BALANCER_POOL_TOTAL_SUPPLY / 2);
+
+        // Will fail as the pool does not have the supported function
+        expectRevert_pool(
+            BalancerPoolTokenPrice.Balancer_PoolTypeNotStable.selector,
+            BALANCER_POOL_ID
+        );
+
+        bytes memory params = abi.encode(mockComposablePool);
+        balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, PRICE_DECIMALS, params);
+    }
+
+    /// @dev    Tests for issue 3.1 identified in hickuphh3's audit
+    function test_getTokenPriceFromStablePool_scalingFactor() public {
+        address dola = 0x865377367054516e17014CcdED1e7d814EDC9ce4;
+        address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+
+        // Set up a pool for DOLA-USDC, which has a scaling factor
+        // Values are taken from the live DOLA-USDC pool: https://etherscan.io/address/0xBA12222222228d8Ba445958a75a0704d566BF2C8#readContract
+        MockBalancerStablePool mockDolaUsdcPool = new MockBalancerStablePool();
+        mockDolaUsdcPool.setDecimals(BALANCER_POOL_DECIMALS);
+        mockDolaUsdcPool.setTotalSupply(3262924705777927304170384);
+        mockDolaUsdcPool.setPoolId(
+            0xff4ce5aaab5a627bf82f4a571ab1ce94aa365ea6000200000000000000000426
+        );
+        mockDolaUsdcPool.setLastInvariant(3272947203169998812276392, 200000);
+        mockDolaUsdcPool.setRate(1003083263104177887);
+        setScalingFactorsTwo(
+            mockDolaUsdcPool,
+            1000000000000000000,
+            1000000000000000000000000000000
+        );
+
+        setTokensTwo(mockBalancerVault, dola, usdc);
+        setBalancesTwo(mockBalancerVault, 1872102650769666439105823, 1401055486359);
+
+        mockERC20Decimals(usdc, 6);
+        mockERC20Decimals(dola, 18);
+
+        bytes memory params = encodeBalancerPoolParams(mockDolaUsdcPool);
+
+        // Look up the price of DOLA
+        uint256 expectedPriceDola = 998508498121509280; // $0.9985 reported on CoinGecko at the time of writing
+        mockAssetPrice(usdc, 1e18);
+        uint256 priceDola = balancerSubmodule.getTokenPriceFromStablePool(
+            dola,
+            PRICE_DECIMALS,
+            params
+        );
+        _assertEqTruncated(priceDola, 18, expectedPriceDola, 18, 6, 0);
+
+        // Look up the price of USDC
+        mockAssetPrice(dola, expectedPriceDola);
+        uint256 priceUsdc = balancerSubmodule.getTokenPriceFromStablePool(
+            usdc,
+            PRICE_DECIMALS,
+            params
+        );
+        _assertEqTruncated(priceUsdc, 18, 1e18, 18, 6, 0);
+    }
+
+    function test_getTokenPriceFromStablePool_scalingFactor_priceDecimalsFuzz(
+        uint8 priceDecimals_
+    ) public {
+        uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
+
+        address dola = 0x865377367054516e17014CcdED1e7d814EDC9ce4;
+        address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+
+        // Set up a pool for DOLA-USDC, which has a scaling factor
+        // Values are taken from the live DOLA-USDC pool: https://etherscan.io/address/0xBA12222222228d8Ba445958a75a0704d566BF2C8#readContract
+        MockBalancerStablePool mockDolaUsdcPool = new MockBalancerStablePool();
+        mockDolaUsdcPool.setDecimals(BALANCER_POOL_DECIMALS);
+        mockDolaUsdcPool.setTotalSupply(3262924705777927304170384);
+        mockDolaUsdcPool.setPoolId(
+            0xff4ce5aaab5a627bf82f4a571ab1ce94aa365ea6000200000000000000000426
+        );
+        mockDolaUsdcPool.setLastInvariant(3272947203169998812276392, 200000);
+        mockDolaUsdcPool.setRate(1003083263104177887);
+        setScalingFactorsTwo(
+            mockDolaUsdcPool,
+            1000000000000000000,
+            1000000000000000000000000000000
+        );
+
+        setTokensTwo(mockBalancerVault, dola, usdc);
+        setBalancesTwo(mockBalancerVault, 1872102650769666439105823, 1401055486359);
+
+        mockERC20Decimals(usdc, 6);
+        mockERC20Decimals(dola, 18);
+
+        bytes memory params = encodeBalancerPoolParams(mockDolaUsdcPool);
+
+        // Look up the price of DOLA
+        uint256 expectedPriceDola = 998508498121509280; // $0.9985 reported on CoinGecko at the time of writing
+        mockAssetPrice(usdc, 1 * 10 ** priceDecimals);
+        uint256 priceDola = balancerSubmodule.getTokenPriceFromStablePool(
+            dola,
+            priceDecimals,
+            params
+        );
+        _assertEqTruncated(priceDola, priceDecimals, expectedPriceDola, 18, 4, 50); // At low price decimals, it is rather imprecise. Truncate to 4 decimal places with a modest delta.
+
+        // Look up the price of USDC
+        mockAssetPrice(dola, expectedPriceDola.mulDiv(10 ** priceDecimals, 1e18));
+        uint256 priceUsdc = balancerSubmodule.getTokenPriceFromStablePool(
+            usdc,
+            priceDecimals,
+            params
+        );
+        _assertEqTruncated(priceUsdc, priceDecimals, 1e18, 18, 6, 0); // At low price decimals, it is rather imprecise. Truncate to 6 decimal places with a modest delta.
     }
 
     // ========= POOL TOKEN PRICE ========= //
@@ -591,7 +750,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
         balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, params);
     }
 
-    function test_getStablePoolTokenPrice_incorrectPoolType() public {
+    function test_getStablePoolTokenPrice_weightedPoolType() public {
         setUpStablePoolTokenPrice();
 
         // Set up a weighted pool
@@ -608,5 +767,101 @@ contract BalancerPoolTokenPriceStableTest is Test {
 
         bytes memory params = abi.encode(mockWeightedPool);
         balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getStablePoolTokenPrice_composableStablePoolType() public {
+        setUpStablePoolTokenPrice();
+
+        // Set up a composable stable pool
+        MockBalancerComposableStablePool mockComposablePool = new MockBalancerComposableStablePool();
+        mockComposablePool.setDecimals(BALANCER_POOL_DECIMALS);
+        mockComposablePool.setTotalSupply(BALANCER_POOL_TOTAL_SUPPLY);
+        mockComposablePool.setPoolId(BALANCER_POOL_ID);
+        mockComposablePool.setRate(BALANCER_POOL_RATE);
+        mockComposablePool.setActualSupply(BALANCER_POOL_TOTAL_SUPPLY / 2);
+
+        // Will fail as the pool does not have the supported function
+        expectRevert_pool(
+            BalancerPoolTokenPrice.Balancer_PoolTypeNotStable.selector,
+            BALANCER_POOL_ID
+        );
+
+        bytes memory params = abi.encode(mockComposablePool);
+        balancerSubmodule.getStablePoolTokenPrice(address(0), PRICE_DECIMALS, params);
+    }
+
+    function test_getStablePoolTokenPrice_threeTokens() public {
+        address weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+        uint256 wethBalance = 50000 * 1e18; // 1 ETH = 10 * 80BAL-20WETH
+
+        // Set asset prices
+        setUpStablePoolTokenPrice();
+        mockAssetPrice(weth, 1700e18);
+
+        // Set up a pool with three tokens
+        MockBalancerStablePool mockPoolThree = new MockBalancerStablePool();
+        mockPoolThree.setDecimals(BALANCER_POOL_DECIMALS);
+        mockPoolThree.setTotalSupply(BALANCER_POOL_TOTAL_SUPPLY);
+        mockPoolThree.setPoolId(BALANCER_POOL_ID);
+        mockPoolThree.setLastInvariant(INVARIANT, AMP_FACTOR);
+        mockPoolThree.setRate(BALANCER_POOL_RATE);
+        setTokensThree(mockBalancerVault, B_80BAL_20WETH, AURA_BAL, weth);
+        setBalancesThree(mockBalancerVault, B_80BAL_20WETH_BALANCE, AURA_BAL_BALANCE, wethBalance);
+
+        // Check the price
+        bytes memory params = encodeBalancerPoolParams(mockPoolThree);
+        uint256 price = balancerSubmodule.getStablePoolTokenPrice(
+            address(0),
+            PRICE_DECIMALS,
+            params
+        );
+
+        assertEq(price, _getBalancerPoolTokenPrice(PRICE_DECIMALS));
+    }
+
+    function test_getStablePoolTokenPrice_threeTokens_minimumPriceFuzz(
+        uint8 priceDecimals_,
+        uint8 priceOne_,
+        uint8 priceTwo_,
+        uint8 priceThree_
+    ) public {
+        // Set up bounds
+        uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
+        uint256 priceOne = bound(priceOne_, 1, 150);
+        uint256 priceTwo = bound(priceTwo_, 1, 150);
+        uint256 priceThree = bound(priceThree_, 1, 150);
+
+        address weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+        uint256 wethBalance = 50000 * 1e18;
+
+        // Determine the minimum price
+        uint256 _minimumPriceOne = (priceOne < priceTwo ? priceOne : priceTwo);
+        uint256 _minimumPrice = (_minimumPriceOne < priceThree ? _minimumPriceOne : priceThree);
+        uint256 minimumPrice = _minimumPrice.mulDiv(10 ** priceDecimals, 10 ** 2);
+
+        // Set asset prices
+        mockPrice.setPrice(B_80BAL_20WETH, uint256(priceOne).mulDiv(10 ** priceDecimals, 10 ** 2));
+        mockPrice.setPrice(AURA_BAL, uint256(priceTwo).mulDiv(10 ** priceDecimals, 10 ** 2));
+        mockPrice.setPrice(weth, uint256(priceThree).mulDiv(10 ** priceDecimals, 10 ** 2));
+
+        // Set up a pool with three tokens
+        MockBalancerStablePool mockPoolThree = new MockBalancerStablePool();
+        mockPoolThree.setDecimals(BALANCER_POOL_DECIMALS);
+        mockPoolThree.setTotalSupply(BALANCER_POOL_TOTAL_SUPPLY);
+        mockPoolThree.setPoolId(BALANCER_POOL_ID);
+        mockPoolThree.setLastInvariant(INVARIANT, AMP_FACTOR);
+        mockPoolThree.setRate(BALANCER_POOL_RATE);
+        setTokensThree(mockBalancerVault, B_80BAL_20WETH, AURA_BAL, weth);
+        setBalancesThree(mockBalancerVault, B_80BAL_20WETH_BALANCE, AURA_BAL_BALANCE, wethBalance);
+
+        // Check the price
+        bytes memory params = encodeBalancerPoolParams(mockPoolThree);
+        uint256 price = balancerSubmodule.getStablePoolTokenPrice(
+            address(0),
+            priceDecimals,
+            params
+        );
+
+        assertEq(price, BALANCER_POOL_RATE.mulDiv(minimumPrice, 10 ** BALANCER_POOL_DECIMALS));
     }
 }

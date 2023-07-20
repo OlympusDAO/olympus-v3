@@ -8,6 +8,7 @@ import {StableMath} from "src/libraries/Balancer/math/StableMath.sol";
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 import {VaultReentrancyLib} from "src/libraries/Balancer/contracts/VaultReentrancyLib.sol";
 import {LogExpMath} from "src/libraries/Balancer/math/LogExpMath.sol";
+import {FixedPoint} from "src/libraries/Balancer/math/FixedPoint.sol";
 
 interface IBasePool {
     function getPoolId() external view returns (bytes32);
@@ -27,6 +28,8 @@ interface IStablePool is IBasePool {
     function getLastInvariant() external view returns (uint256, uint256);
 
     function getRate() external view returns (uint256);
+
+    function getScalingFactors() external view returns (uint256[] memory);
 }
 
 /// @title      BalancerPoolTokenPrice
@@ -453,7 +456,9 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ///                         This function will revert if:
     ///                         - The scale of `outputDecimals_` or the pool's decimals is too high
     ///                         - The pool is mis-configured
-    ///                         - The pool is not a stable pool
+    ///                         - If the pool is not a stable pool or is a composable stable pool (determined by the absence of the `getLastInvariant()` function)
+    ///
+    ///                         NOTE: If there is a significant de-peg between the prices of constituent assets, the token price will be inaccurate. See the now-deleted mention of this: https://github.com/balancer/docs/pull/112/files
     ///
     /// @param asset_           Unused
     /// @param outputDecimals_  The number of output decimals
@@ -485,6 +490,15 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
             // Get pool ID
             poolId = pool.getPoolId();
 
+            // Ensure that the pool is a stable pool, but not a composable stable pool.
+            // Determining the LP token price using a composable stable pool is sufficiently different from other
+            // stable pools, and should be added in a separate adapter/function at a later date.
+            try pool.getLastInvariant() returns (uint256, uint256) {
+                // Do nothing
+            } catch (bytes memory) {
+                revert Balancer_PoolTypeNotStable(poolId);
+            }
+
             // Prevent re-entrancy attacks
             VaultReentrancyLib.ensureNotInVaultContext(balVault);
 
@@ -513,22 +527,41 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint256 len = tokens.length;
         if (len == 0) revert Balancer_PoolValueZero(poolId);
 
-        uint256 baseTokenPrice; // outputDecimals_
+        uint256 minimumPrice; // outputDecimals_
         {
-            address token = tokens[0];
-            if (token == address(0)) revert Balancer_PoolTokenInvalid(poolId, 0, token);
-
             /**
-             * PRICE will revert if there is an issue resolving the price, or if it is 0.
-             *
-             * As the value of the pool token is reliant on the price of every underlying token,
-             * the revert from PRICE is not caught.
+             * The Balancer docs do not currently state this, but a historical version noted
+             * that getRate() should be multiplied by the minimum price of the tokens in the
+             * pool in order to get a valuation. This is the same approach as used by Curve stable pools.
              */
-            (uint256 price_, ) = _PRICE().getPrice(token, PRICEv2.Variant.CURRENT); // outputDecimals_
-            baseTokenPrice = price_;
+            for (uint256 i; i < len; i++) {
+                address token = tokens[i];
+                if (token == address(0)) revert Balancer_PoolTokenInvalid(poolId, i, token);
+
+                /**
+                 * PRICE will revert if there is an issue resolving the price, or if it is 0.
+                 *
+                 * As the value of the pool token is reliant on the price of every underlying token,
+                 * the revert from PRICE is not caught.
+                 */
+                (uint256 price_, ) = _PRICE().getPrice(token, PRICEv2.Variant.CURRENT); // outputDecimals_
+
+                if (minimumPrice == 0) {
+                    minimumPrice = price_;
+                } else if (price_ < minimumPrice) {
+                    minimumPrice = price_;
+                }
+            }
         }
 
-        uint256 poolValue = poolRate.mulDiv(baseTokenPrice, 10 ** poolDecimals); // outputDecimals_
+        /**
+         * NOTE: if this line is reached, minimumPrice is guaranteed to be non-zero:
+         * - the length of the `tokens` array is greater than 0
+         * - the price of each token is non-zero (or else it would have reverted)
+         *
+         * Gas is saved by skipping a check on the value of minimumPrice.
+         */
+        uint256 poolValue = poolRate.mulDiv(minimumPrice, 10 ** poolDecimals); // outputDecimals_
 
         return poolValue;
     }
@@ -703,7 +736,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ///
     ///                         Will revert upon the following:
     ///                         - If the transaction involves reentrancy on the Balancer pool
-    ///                         - If the pool is not a stable pool
+    ///                         - If the pool is not a stable pool or is a composable stable pool (determined by the absence of the `getLastInvariant()` function)
     ///
     ///                         NOTE: as the reserves of Balancer pools can be manipulated using flash loans, the spot price
     ///                         can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
@@ -804,28 +837,52 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
         uint256 lookupTokenPrice;
         {
-            (, uint256[] memory balances_, ) = balVault.getPoolTokens(poolId);
+            uint256 lookupTokensPerDestinationToken;
+            {
+                (, uint256[] memory balances_, ) = balVault.getPoolTokens(poolId);
+                try pool.getLastInvariant() returns (uint256, uint256 ampFactor) {
+                    // Upscale balances by the scaling factors
+                    uint256[] memory scalingFactors = pool.getScalingFactors();
+                    uint256 len = scalingFactors.length;
+                    for (uint256 i; i < len; ++i) {
+                        balances_[i] = FixedPoint.mulDown(balances_[i], scalingFactors[i]);
+                    }
 
-            try pool.getLastInvariant() returns (uint256 invariant, uint256 ampFactor) {
-                // Calculate the quantity of lookupTokens returned by swapping 1 destinationToken
-                uint256 lookupTokensPerDestinationToken = StableMath._calcOutGivenIn(
-                    ampFactor,
-                    balances_,
-                    destinationTokenIndex,
-                    lookupTokenIndex,
-                    1e18,
-                    invariant
-                );
+                    // Calculate the quantity of lookupTokens returned by swapping 1 destinationToken
+                    lookupTokensPerDestinationToken = StableMath._calcOutGivenIn(
+                        ampFactor,
+                        balances_,
+                        destinationTokenIndex,
+                        lookupTokenIndex,
+                        1e18,
+                        StableMath._calculateInvariant(ampFactor, balances_) // Sometimes the fetched invariant value does not work, so calculate it
+                    );
 
-                // Price per destinationToken / quantity
-                lookupTokenPrice = destinationTokenPrice.mulDiv(
-                    1e18,
-                    lookupTokensPerDestinationToken
-                );
-            } catch (bytes memory) {
-                // Revert if the pool is not a stable pool, and does not have the required function
-                revert Balancer_PoolTypeNotStable(poolId);
+                    // Downscale the amount to token decimals
+                    lookupTokensPerDestinationToken = FixedPoint.divDown(
+                        lookupTokensPerDestinationToken,
+                        scalingFactors[lookupTokenIndex]
+                    );
+                } catch (bytes memory) {
+                    // Ensure that the pool is a stable pool, but not a composable stable pool.
+                    // Determining the token price using a composable stable pool is sufficiently different from other
+                    // stable pools, and should be added in a separate adapter/function at a later date.
+                    revert Balancer_PoolTypeNotStable(poolId);
+                }
             }
+
+            // Convert to outputDecimals
+            lookupTokensPerDestinationToken = _convertERC20Decimals(
+                lookupTokensPerDestinationToken,
+                lookupToken_,
+                outputDecimals_
+            );
+
+            // Price per destinationToken / quantity
+            lookupTokenPrice = destinationTokenPrice.mulDiv(
+                10 ** outputDecimals_,
+                lookupTokensPerDestinationToken
+            );
         }
 
         return lookupTokenPrice;
