@@ -151,11 +151,11 @@ contract UniswapV3Price is PriceSubmodule {
         if (address(params.pool) == address(0))
             revert UniswapV3_ParamsPoolInvalid(0, address(params.pool));
 
-        try pool.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
+        try params.pool.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
             // Do nothing
         } catch (bytes memory) {
             // Handle a non-UniswapV3 pool
-            revert UniswapV3_PoolTypeInvalid(address(pool));
+            revert UniswapV3_PoolTypeInvalid(address(params.pool));
         }
 
         address quoteToken;
