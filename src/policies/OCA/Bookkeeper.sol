@@ -17,7 +17,6 @@ contract Bookkeeper is Policy, RolesConsumer {
     // [X] Update moving average data for asset on PRICEv2
 
     // ========== ERRORS ========== //
-    error Bookkeeper_InvalidModule(Keycode module_);
 
     // ========== EVENTS ========== //
 

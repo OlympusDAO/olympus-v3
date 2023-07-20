@@ -55,6 +55,16 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         IStablePool pool;
     }
 
+    /// @notice             Struct to cache data related to a Balancer weighted pool
+    /// @dev                This is not persisted between calls, and is only used to reduce the number of parameters
+    struct BalancerWeightedPoolCache {
+        address[] tokens;
+        uint256[] weights;
+        uint256[] balances;
+        uint8 decimals;
+        bytes32 poolId;
+    }
+
     // ========== ERRORS ========== //
 
     /// @notice             The number of decimals of the asset is greater than the maximum allowed
@@ -208,54 +218,32 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         return value_.mulDiv(10 ** outputDecimals_, 10 ** tokenDecimals);
     }
 
-    /// @notice                     Obtains the balance of the token at index `tokenIndex_` in the pool
-    ///
-    /// @dev                        This function will revert if converting the token's balance would result in an overflow.
-    ///
-    ///                             As this function is accessing the balances of the pool, it is guarded by VaultReentrancyLib to
-    ///                             prevent re-entrancy attacks.
-    ///
-    /// @param poolId_              id of the Balancer pool
-    /// @param tokenIndex_          Index of the token in the Balancer pool
-    /// @param outputDecimals_      The desired number of decimals
-    /// @return                     Balance in the scale of `outputDecimals_`
-    function _getTokenBalance(
-        bytes32 poolId_,
-        uint256 tokenIndex_,
-        uint8 outputDecimals_
-    ) internal view returns (uint256) {
-        // Prevent re-entrancy attacks
-        VaultReentrancyLib.ensureNotInVaultContext(balVault);
-
-        (address[] memory tokens_, uint256[] memory balances_, ) = balVault.getPoolTokens(poolId_);
-
-        // Balances are in the scale of the ERC20 token, so adjust those to `outputDecimals_`
-        return _convertERC20Decimals(balances_[tokenIndex_], tokens_[tokenIndex_], outputDecimals_);
-    }
-
     /// @notice                     Obtains the balance/weight ratio of the token at index `index_` in the pool
     ///
     /// @dev                        This function will revert if converting the pool's decimals would result in an overflow.
     ///
-    ///                             As this function is accessing the balances of the pool, it is guarded by VaultReentrancyLib to
-    ///                             prevent re-entrancy attacks.
+    ///                             As this function is accessing the balances of the pool, ensure that VaultReentrancyLib
+    ///                             is called in order to prevent re-entrancy attacks.
     ///
-    /// @param poolId_              Id of the Balancer pool
-    /// @param pool_                Balancer weighted pool
+    /// @param cache                Cached data related to the Balancer weighted pool
     /// @param index_               Index of the token in the Balancer pool
     /// @param outputDecimals_      The desired number of decimals
     /// @return                     Balance in the scale of `outputDecimals_`
     function _getTokenBalanceWeighting(
-        bytes32 poolId_,
-        IWeightedPool pool_,
+        BalancerWeightedPoolCache memory cache,
         uint256 index_,
         uint8 outputDecimals_
     ) internal view returns (uint256) {
-        uint256 tokenBalance = _getTokenBalance(poolId_, index_, outputDecimals_);
+        uint256 tokenBalance = _convertERC20Decimals(
+            cache.balances[index_],
+            cache.tokens[index_],
+            outputDecimals_
+        );
 
-        uint8 poolDecimals = pool_.decimals();
-        uint256[] memory weights = pool_.getNormalizedWeights();
-        uint256 tokenWeight = weights[index_].mulDiv(10 ** outputDecimals_, 10 ** poolDecimals);
+        uint256 tokenWeight = cache.weights[index_].mulDiv(
+            10 ** outputDecimals_,
+            10 ** cache.decimals
+        );
 
         return tokenBalance.mulDiv(10 ** outputDecimals_, tokenWeight);
     }
@@ -607,96 +595,89 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
             pool = IWeightedPool(params.pool);
         }
 
+        BalancerWeightedPoolCache memory poolCache;
         uint256 lookupTokenIndex = type(uint256).max;
         uint256 destinationTokenIndex = type(uint256).max;
         uint256 destinationTokenPrice; // Scale: outputDecimals_
-        bytes32 poolId;
         {
             // Prevent re-entrancy attacks
             VaultReentrancyLib.ensureNotInVaultContext(balVault);
 
             // Get tokens in the pool from vault
-            poolId = pool.getPoolId();
-            address[] memory tokens;
-            {
-                (address[] memory tokens_, uint256[] memory balances_, ) = balVault.getPoolTokens(
-                    poolId
+            poolCache.poolId = pool.getPoolId();
+            (address[] memory tokens_, uint256[] memory balances_, ) = balVault.getPoolTokens(
+                poolCache.poolId
+            );
+            poolCache.tokens = tokens_;
+            poolCache.balances = balances_;
+            poolCache.decimals = pool.decimals();
+
+            if (poolCache.decimals > BASE_10_MAX_EXPONENT)
+                revert Balancer_PoolDecimalsOutOfBounds(
+                    poolCache.poolId,
+                    poolCache.decimals,
+                    BASE_10_MAX_EXPONENT
                 );
-                tokens = tokens_;
 
-                uint8 poolDecimals = pool.decimals();
-                if (poolDecimals > BASE_10_MAX_EXPONENT)
-                    revert Balancer_PoolDecimalsOutOfBounds(
-                        poolId,
-                        poolDecimals,
-                        BASE_10_MAX_EXPONENT
-                    );
-
-                // Check that the pool is not mis-configured
-                uint256[] memory weights;
-                // Test if the weights function exists, otherwise revert
-                try pool.getNormalizedWeights() returns (uint256[] memory weights_) {
-                    weights = weights_;
-                } catch (bytes memory) {
-                    revert Balancer_PoolTypeNotWeighted(poolId);
-                }
-
-                if (!(tokens.length == balances_.length && balances_.length == weights.length))
-                    revert Balancer_PoolTokenBalanceWeightMismatch(
-                        poolId,
-                        tokens.length,
-                        balances_.length,
-                        weights.length
-                    );
+            // Test if the weights function exists, otherwise revert
+            try pool.getNormalizedWeights() returns (uint256[] memory weights_) {
+                poolCache.weights = weights_;
+            } catch (bytes memory) {
+                revert Balancer_PoolTypeNotWeighted(poolCache.poolId);
             }
+
+            // Check for consistency of tokens
+            if (
+                !(poolCache.tokens.length == poolCache.balances.length &&
+                    poolCache.balances.length == poolCache.weights.length)
+            )
+                revert Balancer_PoolTokenBalanceWeightMismatch(
+                    poolCache.poolId,
+                    poolCache.tokens.length,
+                    poolCache.balances.length,
+                    poolCache.weights.length
+                );
 
             // Determine the index of the lookup token and an appropriate destination token
-            {
-                uint256 tokensLen = tokens.length;
-                address destinationToken;
-                for (uint256 i; i < tokensLen; i++) {
-                    // If address is zero, complain
-                    address currentToken = tokens[i];
-                    if (currentToken == address(0))
-                        revert Balancer_PoolTokenInvalid(poolId, i, currentToken);
+            uint256 tokensLen = poolCache.tokens.length;
+            for (uint256 i; i < tokensLen; i++) {
+                // If address is zero, complain
+                address currentToken = poolCache.tokens[i];
+                if (currentToken == address(0))
+                    revert Balancer_PoolTokenInvalid(poolCache.poolId, i, currentToken);
 
-                    // If lookup token
-                    if (lookupToken_ == currentToken) {
-                        lookupTokenIndex = i;
-                        continue;
-                    }
-
-                    // Don't set the destination token again
-                    if (destinationTokenIndex != type(uint256).max) continue;
-
-                    /**
-                     * PRICE will revert if there is an issue resolving the price, or if it is 0.
-                     *
-                     * We catch this, so that other candidate tokens can be tested.
-                     */
-                    try _PRICE().getPrice(currentToken, PRICEv2.Variant.CURRENT) returns (
-                        uint256 currentPrice,
-                        uint48 timestamp
-                    ) {
-                        destinationTokenIndex = i;
-                        destinationTokenPrice = currentPrice;
-                        destinationToken = currentToken;
-                    } catch (bytes memory) {
-                        continue;
-                    }
+                // If lookup token
+                if (lookupToken_ == currentToken) {
+                    lookupTokenIndex = i;
+                    continue;
                 }
 
-                // Lookup token not found
-                if (lookupTokenIndex == type(uint256).max)
-                    revert Balancer_LookupTokenNotFound(poolId, lookupToken_);
+                // Don't set the destination token again
+                if (destinationTokenIndex != type(uint256).max) continue;
 
-                // No destination token found with a price
-                if (
-                    destinationTokenPrice == 0 ||
-                    destinationTokenIndex == type(uint256).max ||
-                    destinationToken == address(0)
-                ) revert Balancer_PriceNotFound(poolId, lookupToken_);
+                /**
+                 * PRICE will revert if there is an issue resolving the price, or if it is 0.
+                 *
+                 * We catch this, so that other candidate tokens can be tested.
+                 */
+                try _PRICE().getPrice(currentToken, PRICEv2.Variant.CURRENT) returns (
+                    uint256 currentPrice,
+                    uint48 timestamp
+                ) {
+                    destinationTokenIndex = i;
+                    destinationTokenPrice = currentPrice;
+                } catch (bytes memory) {
+                    continue;
+                }
             }
+
+            // Lookup token not found
+            if (lookupTokenIndex == type(uint256).max)
+                revert Balancer_LookupTokenNotFound(poolCache.poolId, lookupToken_);
+
+            // No destination token found with a price
+            if (destinationTokenPrice == 0 || destinationTokenIndex == type(uint256).max)
+                revert Balancer_PriceNotFound(poolCache.poolId, lookupToken_);
         }
 
         // Calculate the rate of the lookup token
@@ -705,14 +686,12 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
             // Weightings
             // Scale: outputDecimals_
             uint256 lookupTokenWeighting = _getTokenBalanceWeighting(
-                poolId,
-                pool,
+                poolCache,
                 lookupTokenIndex,
                 outputDecimals_
             );
             uint256 destinationTokenWeighting = _getTokenBalanceWeighting(
-                poolId,
-                pool,
+                poolCache,
                 destinationTokenIndex,
                 outputDecimals_
             );
@@ -769,7 +748,6 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
         uint256 lookupTokenIndex = type(uint256).max;
         uint256 destinationTokenIndex = type(uint256).max;
         uint256 destinationTokenPrice; // Scale: outputDecimals_
-        address destinationToken;
         bytes32 poolId;
         {
             // Prevent re-entrancy attacks
@@ -817,7 +795,6 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                 ) {
                     destinationTokenIndex = i;
                     destinationTokenPrice = currentPrice;
-                    destinationToken = currentToken;
                 } catch (bytes memory) {
                     continue;
                 }
@@ -828,11 +805,8 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
                 revert Balancer_LookupTokenNotFound(poolId, lookupToken_);
 
             // No destination token found with a price
-            if (
-                destinationTokenPrice == 0 ||
-                destinationTokenIndex == type(uint256).max ||
-                destinationToken == address(0)
-            ) revert Balancer_PriceNotFound(poolId, lookupToken_);
+            if (destinationTokenPrice == 0 || destinationTokenIndex == type(uint256).max)
+                revert Balancer_PriceNotFound(poolId, lookupToken_);
         }
 
         uint256 lookupTokenPrice;

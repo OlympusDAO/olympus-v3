@@ -1,8 +1,6 @@
 /// SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-
 import "src/modules/PRICE/PRICE.v2.sol";
 
 /// @title      OlympusPriceV2
@@ -105,8 +103,6 @@ contract OlympusPricev2 is PRICEv2 {
             return _getLastPrice(asset_);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             return _getMovingAveragePrice(asset_);
-        } else {
-            revert PRICE_ParamsVariantInvalid(variant_);
         }
     }
 
@@ -132,10 +128,11 @@ contract OlympusPricev2 is PRICEv2 {
         uint256[] memory prices = asset.useMovingAverage
             ? new uint256[](numFeeds + 1)
             : new uint256[](numFeeds);
+        uint8 _decimals = decimals; // cache in memory to save gas
         for (uint256 i; i < numFeeds; ) {
             (bool success_, bytes memory data_) = address(_getSubmoduleIfInstalled(feeds[i].target))
                 .staticcall(
-                    abi.encodeWithSelector(feeds[i].selector, asset_, decimals, feeds[i].params)
+                    abi.encodeWithSelector(feeds[i].selector, asset_, _decimals, feeds[i].params)
                 );
 
             // Store price if successful, otherwise leave as zero

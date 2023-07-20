@@ -202,7 +202,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         } else {
             uint256 auctionAmount = currentTime - nextBeat > duration
                 ? maxReward
-                : (uint256(currentTime - nextBeat) * maxReward) / uint256(duration);
+                : (uint256(currentTime - nextBeat) * maxReward) / duration;
             uint256 balance = rewardToken.balanceOf(address(this));
             return auctionAmount > balance ? balance : auctionAmount;
         }

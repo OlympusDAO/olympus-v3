@@ -6,7 +6,6 @@ import {IUniswapV3Pool} from "interfaces/UniswapV3/IUniswapV3Pool.sol";
 import {OracleLibrary} from "libraries/UniswapV3/OracleLibrary.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
-import {TickMath} from "libraries/UniswapV3/TickMath.sol";
 
 /// @title      UniswapV3Price
 /// @notice     Provides prices derived from the TWAP of a Uniswap V3 pool
@@ -152,12 +151,56 @@ contract UniswapV3Price is PriceSubmodule {
         if (address(params.pool) == address(0))
             revert UniswapV3_ParamsPoolInvalid(0, address(params.pool));
 
-        IUniswapV3Pool pool = IUniswapV3Pool(params.pool);
-        try pool.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
+        try params.pool.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
             // Do nothing
         } catch (bytes memory) {
             // Handle a non-UniswapV3 pool
-            revert UniswapV3_PoolTypeInvalid(address(pool));
+            revert UniswapV3_PoolTypeInvalid(address(params.pool));
+        }
+
+        address quoteToken;
+        {
+            bool lookupTokenFound;
+            try params.pool.token0() returns (address token) {
+                // Check if token is zero address, revert if so
+                if (token == address(0))
+                    revert UniswapV3_PoolTokensInvalid(address(params.pool), 0, token);
+
+                // If token is the lookup token, set lookupTokenFound to true
+                // Otherwise, it should be the quote token
+                // If lookup token isn't found, quote token will be set twice,
+                // but this is fine since the function will revert anyway
+                if (token == lookupToken_) {
+                    lookupTokenFound = true;
+                } else {
+                    quoteToken = token;
+                }
+            } catch (bytes memory) {
+                // Handle a non-UniswapV3 pool
+                revert UniswapV3_PoolTypeInvalid(address(params.pool));
+            }
+            try params.pool.token1() returns (address token) {
+                // Check if token is zero address, revert if so
+                if (token == address(0))
+                    revert UniswapV3_PoolTokensInvalid(address(params.pool), 1, token);
+
+                // If token is the lookup token, set lookupTokenFound to true
+                // Otherwise, it should be the quote token
+                // If lookup token isn't found, quote token will be set twice,
+                // but this is fine since the function will revert anyway
+                if (token == lookupToken_) {
+                    lookupTokenFound = true;
+                } else {
+                    quoteToken = token;
+                }
+            } catch (bytes memory) {
+                // Handle a non-UniswapV3 pool
+                revert UniswapV3_PoolTypeInvalid(address(params.pool));
+            }
+
+            // If lookup token wasn't found, revert
+            if (!lookupTokenFound)
+                revert UniswapV3_LookupTokenNotFound(address(params.pool), lookupToken_);
         }
 
         // Revert if the observation window is less than the minimum (which would not give manipulation-resistant results)
@@ -168,15 +211,9 @@ contract UniswapV3Price is PriceSubmodule {
                 TWAP_MINIMUM_OBSERVATION_SECONDS
             );
 
-        // Revert if either of the tokens in the pool are not set (probably too paranoid)
-        if (pool.token0() == address(0))
-            revert UniswapV3_PoolTokensInvalid(address(pool), 0, pool.token0());
-        if (pool.token1() == address(0))
-            revert UniswapV3_PoolTokensInvalid(address(pool), 1, pool.token1());
-
-        // Revert if token_ is not in the specified pool
-        if (pool.token0() != lookupToken_ && pool.token1() != lookupToken_)
-            revert UniswapV3_LookupTokenNotFound(address(pool), lookupToken_);
+        // Validate output decimals are not too high
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT)
+            revert UniswapV3_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
 
         // Determine the tick over the observation window
         int56 timeWeightedTick;
@@ -185,28 +222,29 @@ contract UniswapV3Price is PriceSubmodule {
             observationWindow[0] = params.observationWindowSeconds;
             observationWindow[1] = 0;
 
-            try pool.observe(observationWindow) returns (
+            try params.pool.observe(observationWindow) returns (
                 int56[] memory tickCumulatives,
                 uint160[] memory secondsPerLiquidityCumulativeX128s
             ) {
                 timeWeightedTick =
                     (tickCumulatives[1] - tickCumulatives[0]) /
-                    int56(int32(params.observationWindowSeconds));
+                    int32(params.observationWindowSeconds);
             } catch (bytes memory) {
                 // This function will revert if the observation window is longer than the oldest observation in the pool
                 // https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/Oracle.sol#L226C30-L226C30
-                revert UniswapV3_InvalidObservation(address(pool), params.observationWindowSeconds);
+                revert UniswapV3_InvalidObservation(
+                    address(params.pool),
+                    params.observationWindowSeconds
+                );
             }
         }
 
         uint256 tokenPrice;
         {
             uint8 quoteTokenDecimals;
-            address quoteToken;
             uint256 baseInQuotePrice;
             {
                 // Convert the tick to a price in terms of the other token
-                quoteToken = pool.token0() == lookupToken_ ? pool.token1() : pool.token0();
                 quoteTokenDecimals = ERC20(quoteToken).decimals();
                 uint8 baseTokenDecimals = ERC20(lookupToken_).decimals();
 
@@ -231,7 +269,7 @@ contract UniswapV3Price is PriceSubmodule {
                 // Otherwise getQuoteAtTick will revert: https://docs.uniswap.org/contracts/v3/reference/error-codes
                 if (timeWeightedTick > MAX_TICK || timeWeightedTick < MIN_TICK)
                     revert UniswapV3_TickOutOfBounds(
-                        address(pool),
+                        address(params.pool),
                         timeWeightedTick,
                         MIN_TICK,
                         MAX_TICK
@@ -248,12 +286,10 @@ contract UniswapV3Price is PriceSubmodule {
 
             // Get the price of {quoteToken} in USD
             // Decimals: outputDecimals_
-            if (outputDecimals_ > BASE_10_MAX_EXPONENT)
-                revert UniswapV3_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
-
             // PRICE will revert if the price cannot be determined or is 0.
             (uint256 quoteInUsdPrice, ) = _PRICE().getPrice(quoteToken, PRICEv2.Variant.CURRENT);
 
+            // Calculate final price in USD
             // Decimals: outputDecimals_
             tokenPrice = baseInQuotePrice.mulDiv(quoteInUsdPrice, 10 ** quoteTokenDecimals);
         }

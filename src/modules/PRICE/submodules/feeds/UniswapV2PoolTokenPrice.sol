@@ -335,37 +335,22 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
         uint256 destinationTokenIndex = type(uint256).max;
         uint256 destinationTokenPrice; // Scale: outputDecimals_
         {
-            address destinationToken;
+            address token0 = tokens_[0];
+            address token1 = tokens_[1];
 
-            // Determine the index of the lookup token and an appropriate destination token
-            uint256 len = tokens_.length;
-            for (uint256 i; i < len; i++) {
-                // If address is zero, complain
-                if (tokens_[i] == address(0))
-                    revert UniswapV2_PoolTokensInvalid(address(pool), i, tokens_[i]);
-
-                // If lookup token
-                if (lookupToken_ == tokens_[i]) {
-                    lookupTokenIndex = i;
-                    continue;
-                }
-
-                // Don't set the destination token again
-                if (destinationTokenIndex != type(uint256).max) {
-                    continue;
-                }
-
-                // PRICE will revert if the price cannot be determined or is 0.
-                (uint256 currentPrice, ) = _PRICE().getPrice(tokens_[i], PRICEv2.Variant.CURRENT);
-
-                destinationTokenIndex = i;
-                destinationTokenPrice = currentPrice;
-                destinationToken = tokens_[i];
-            }
-
-            // Lookup token not found
-            if (lookupTokenIndex == type(uint256).max)
+            if (token0 == address(0)) revert UniswapV2_PoolTokensInvalid(address(pool), 0, token0);
+            if (token1 == address(0))
+                revert UniswapV2_PoolTokensInvalid(address(pool), 1, tokens_[1]);
+            if (lookupToken_ != token0 && lookupToken_ != token1)
                 revert UniswapV2_LookupTokenNotFound(address(pool), lookupToken_);
+
+            lookupTokenIndex = (lookupToken_ == token0) ? 0 : 1;
+            destinationTokenIndex = 1 - lookupTokenIndex;
+            (uint256 destinationTokenPrice_, ) = _PRICE().getPrice(
+                tokens_[destinationTokenIndex],
+                PRICEv2.Variant.CURRENT
+            );
+            destinationTokenPrice = destinationTokenPrice_;
         }
 
         // Calculate the rate of the lookup token

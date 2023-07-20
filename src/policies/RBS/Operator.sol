@@ -103,9 +103,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         if (
             configParams[5] < 1 hours ||
-            configParams[6] > configParams[7] ||
-            configParams[7] == uint32(0) ||
-            configParams[6] == uint32(0)
+            configParams[6] == uint32(0) ||
+            configParams[6] > configParams[7]
         ) revert Operator_InvalidParams();
 
         auctioneer = auctioneer_;
