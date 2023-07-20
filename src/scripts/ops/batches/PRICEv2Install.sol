@@ -252,7 +252,7 @@ contract PRICEv2Install is OlyBatch {
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
-                Bookkeeper.addAsset.selector,
+                Bookkeeper.addAssetPrice.selector,
                 ohm,
                 true, // store moving average for ohm
                 false, // don't use the moving average as part of price strategy
@@ -292,7 +292,7 @@ contract PRICEv2Install is OlyBatch {
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
-                Bookkeeper.addAsset.selector,
+                Bookkeeper.addAssetPrice.selector,
                 dai,
                 true, // store moving average for dai
                 true, // use the moving average as part of price strategy
