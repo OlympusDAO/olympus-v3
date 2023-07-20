@@ -135,6 +135,10 @@ contract UniswapV3Price is PriceSubmodule {
     ///                         - `lookupToken_` is not in the pool
     ///                         - The calculated time-weighted tick is outside the bounds of int24
     ///
+    ///                         NOTE: as a UniswapV3 pool can be manipulated using multi-block MEV, the TWAP values
+    ///                         can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
+    ///                         See https://chainsecurity.com/oracle-manipulation-after-merge/
+    ///
     /// @param lookupToken_     The token to determine the price of.
     /// @param outputDecimals_  The number of decimals to return the price in
     /// @param params_          Pool parameters of type `UniswapV3Params`
