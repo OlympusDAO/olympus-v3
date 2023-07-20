@@ -72,6 +72,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
             mockStablePool.setPoolId(BALANCER_POOL_ID);
             mockStablePool.setLastInvariant(INVARIANT, AMP_FACTOR);
             mockStablePool.setRate(BALANCER_POOL_RATE);
+            setScalingFactorsTwo(mockStablePool, 1000000000000000000, 1000000000000000000);
         }
 
         // Set up the Balancer submodule
@@ -113,6 +114,17 @@ contract BalancerPoolTokenPriceStableTest is Test {
         balances[0] = balance1_;
         balances[1] = balance2_;
         vault.setBalances(balances);
+    }
+
+    function setScalingFactorsTwo(
+        MockBalancerStablePool pool_,
+        uint256 scalingFactor1_,
+        uint256 scalingFactor2_
+    ) internal {
+        uint256[] memory scalingFactors = new uint256[](2);
+        scalingFactors[0] = scalingFactor1_;
+        scalingFactors[1] = scalingFactor2_;
+        pool_.setScalingFactors(scalingFactors);
     }
 
     function mockERC20Decimals(address asset_, uint8 decimals_) internal {
@@ -201,7 +213,7 @@ contract BalancerPoolTokenPriceStableTest is Test {
         );
 
         // Will be normalised to outputDecimals_
-        uint8 decimalDiff = priceDecimals > 18 ? priceDecimals - 18 : 18 - priceDecimals;
+        uint8 decimalDiff = priceDecimals > 18 ? priceDecimals - 18 : 18 - priceDecimals + 1;
         assertApproxEqAbs(
             price,
             AURA_BAL_PRICE_EXPECTED.mulDiv(10 ** priceDecimals, 10 ** BALANCER_POOL_DECIMALS),
@@ -388,6 +400,107 @@ contract BalancerPoolTokenPriceStableTest is Test {
 
         bytes memory params = abi.encode(mockWeightedPool);
         balancerSubmodule.getTokenPriceFromStablePool(AURA_BAL, PRICE_DECIMALS, params);
+    }
+
+    /// @dev    Tests for issue 3.1 identified in hickuphh3's audit
+    function test_getTokenPriceFromStablePool_scalingFactor() public {
+        address dola = 0x865377367054516e17014CcdED1e7d814EDC9ce4;
+        address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+
+        // Set up a pool for DOLA-USDC, which has a scaling factor
+        // Values are taken from the live DOLA-USDC pool: https://etherscan.io/address/0xBA12222222228d8Ba445958a75a0704d566BF2C8#readContract
+        MockBalancerStablePool mockDolaUsdcPool = new MockBalancerStablePool();
+        mockDolaUsdcPool.setDecimals(BALANCER_POOL_DECIMALS);
+        mockDolaUsdcPool.setTotalSupply(3262924705777927304170384);
+        mockDolaUsdcPool.setPoolId(
+            0xff4ce5aaab5a627bf82f4a571ab1ce94aa365ea6000200000000000000000426
+        );
+        mockDolaUsdcPool.setLastInvariant(3272947203169998812276392, 200000);
+        mockDolaUsdcPool.setRate(1003083263104177887);
+        setScalingFactorsTwo(
+            mockDolaUsdcPool,
+            1000000000000000000,
+            1000000000000000000000000000000
+        );
+
+        setTokensTwo(mockBalancerVault, dola, usdc);
+        setBalancesTwo(mockBalancerVault, 1872102650769666439105823, 1401055486359);
+
+        mockERC20Decimals(usdc, 6);
+        mockERC20Decimals(dola, 18);
+
+        bytes memory params = encodeBalancerPoolParams(mockDolaUsdcPool);
+
+        // Look up the price of DOLA
+        uint256 expectedPriceDola = 998508498121509280; // $0.9985 reported on CoinGecko at the time of writing
+        mockAssetPrice(usdc, 1e18);
+        uint256 priceDola = balancerSubmodule.getTokenPriceFromStablePool(
+            dola,
+            PRICE_DECIMALS,
+            params
+        );
+        _assertEqTruncated(priceDola, 18, expectedPriceDola, 18, 6, 0);
+
+        // Look up the price of USDC
+        mockAssetPrice(dola, expectedPriceDola);
+        uint256 priceUsdc = balancerSubmodule.getTokenPriceFromStablePool(
+            usdc,
+            PRICE_DECIMALS,
+            params
+        );
+        _assertEqTruncated(priceUsdc, 18, 1e18, 18, 6, 0);
+    }
+
+    function test_getTokenPriceFromStablePool_scalingFactor_priceDecimalsFuzz(
+        uint8 priceDecimals_
+    ) public {
+        uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
+
+        address dola = 0x865377367054516e17014CcdED1e7d814EDC9ce4;
+        address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+
+        // Set up a pool for DOLA-USDC, which has a scaling factor
+        // Values are taken from the live DOLA-USDC pool: https://etherscan.io/address/0xBA12222222228d8Ba445958a75a0704d566BF2C8#readContract
+        MockBalancerStablePool mockDolaUsdcPool = new MockBalancerStablePool();
+        mockDolaUsdcPool.setDecimals(BALANCER_POOL_DECIMALS);
+        mockDolaUsdcPool.setTotalSupply(3262924705777927304170384);
+        mockDolaUsdcPool.setPoolId(
+            0xff4ce5aaab5a627bf82f4a571ab1ce94aa365ea6000200000000000000000426
+        );
+        mockDolaUsdcPool.setLastInvariant(3272947203169998812276392, 200000);
+        mockDolaUsdcPool.setRate(1003083263104177887);
+        setScalingFactorsTwo(
+            mockDolaUsdcPool,
+            1000000000000000000,
+            1000000000000000000000000000000
+        );
+
+        setTokensTwo(mockBalancerVault, dola, usdc);
+        setBalancesTwo(mockBalancerVault, 1872102650769666439105823, 1401055486359);
+
+        mockERC20Decimals(usdc, 6);
+        mockERC20Decimals(dola, 18);
+
+        bytes memory params = encodeBalancerPoolParams(mockDolaUsdcPool);
+
+        // Look up the price of DOLA
+        uint256 expectedPriceDola = 998508498121509280; // $0.9985 reported on CoinGecko at the time of writing
+        mockAssetPrice(usdc, 1 * 10 ** priceDecimals);
+        uint256 priceDola = balancerSubmodule.getTokenPriceFromStablePool(
+            dola,
+            priceDecimals,
+            params
+        );
+        _assertEqTruncated(priceDola, priceDecimals, expectedPriceDola, 18, 4, 50); // At low price decimals, it is rather imprecise. Truncate to 4 decimal places with a modest delta.
+
+        // Look up the price of USDC
+        mockAssetPrice(dola, expectedPriceDola.mulDiv(10 ** priceDecimals, 1e18));
+        uint256 priceUsdc = balancerSubmodule.getTokenPriceFromStablePool(
+            usdc,
+            priceDecimals,
+            params
+        );
+        _assertEqTruncated(priceUsdc, priceDecimals, 1e18, 18, 6, 0); // At low price decimals, it is rather imprecise. Truncate to 6 decimal places with a modest delta.
     }
 
     // ========= POOL TOKEN PRICE ========= //

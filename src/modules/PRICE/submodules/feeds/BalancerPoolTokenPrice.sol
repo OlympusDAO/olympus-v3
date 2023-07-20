@@ -8,6 +8,7 @@ import {StableMath} from "src/libraries/Balancer/math/StableMath.sol";
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 import {VaultReentrancyLib} from "src/libraries/Balancer/contracts/VaultReentrancyLib.sol";
 import {LogExpMath} from "src/libraries/Balancer/math/LogExpMath.sol";
+import {FixedPoint} from "src/libraries/Balancer/math/FixedPoint.sol";
 
 interface IBasePool {
     function getPoolId() external view returns (bytes32);
@@ -27,6 +28,8 @@ interface IStablePool is IBasePool {
     function getLastInvariant() external view returns (uint256, uint256);
 
     function getRate() external view returns (uint256);
+
+    function getScalingFactors() external view returns (uint256[] memory);
 }
 
 /// @title      BalancerPoolTokenPrice
@@ -804,28 +807,50 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
 
         uint256 lookupTokenPrice;
         {
-            (, uint256[] memory balances_, ) = balVault.getPoolTokens(poolId);
+            uint256 lookupTokensPerDestinationToken;
+            {
+                (, uint256[] memory balances_, ) = balVault.getPoolTokens(poolId);
+                try pool.getLastInvariant() returns (uint256, uint256 ampFactor) {
+                    // Upscale balances by the scaling factors
+                    uint256[] memory scalingFactors = pool.getScalingFactors();
+                    uint256 len = scalingFactors.length;
+                    for (uint256 i; i < len; ++i) {
+                        balances_[i] = FixedPoint.mulDown(balances_[i], scalingFactors[i]);
+                    }
 
-            try pool.getLastInvariant() returns (uint256 invariant, uint256 ampFactor) {
-                // Calculate the quantity of lookupTokens returned by swapping 1 destinationToken
-                uint256 lookupTokensPerDestinationToken = StableMath._calcOutGivenIn(
-                    ampFactor,
-                    balances_,
-                    destinationTokenIndex,
-                    lookupTokenIndex,
-                    1e18,
-                    invariant
-                );
+                    // Calculate the quantity of lookupTokens returned by swapping 1 destinationToken
+                    lookupTokensPerDestinationToken = StableMath._calcOutGivenIn(
+                        ampFactor,
+                        balances_,
+                        destinationTokenIndex,
+                        lookupTokenIndex,
+                        1e18,
+                        StableMath._calculateInvariant(ampFactor, balances_) // Sometimes the fetched invariant value does not work, so calculate it
+                    );
 
-                // Price per destinationToken / quantity
-                lookupTokenPrice = destinationTokenPrice.mulDiv(
-                    1e18,
-                    lookupTokensPerDestinationToken
-                );
-            } catch (bytes memory) {
-                // Revert if the pool is not a stable pool, and does not have the required function
-                revert Balancer_PoolTypeNotStable(poolId);
+                    // Downscale the amount to token decimals
+                    lookupTokensPerDestinationToken = FixedPoint.divDown(
+                        lookupTokensPerDestinationToken,
+                        scalingFactors[lookupTokenIndex]
+                    );
+                } catch (bytes memory) {
+                    // Revert if the pool is not a stable pool, and does not have the required function
+                    revert Balancer_PoolTypeNotStable(poolId);
+                }
             }
+
+            // Convert to outputDecimals
+            lookupTokensPerDestinationToken = _convertERC20Decimals(
+                lookupTokensPerDestinationToken,
+                lookupToken_,
+                outputDecimals_
+            );
+
+            // Price per destinationToken / quantity
+            lookupTokenPrice = destinationTokenPrice.mulDiv(
+                10 ** outputDecimals_,
+                lookupTokensPerDestinationToken
+            );
         }
 
         return lookupTokenPrice;

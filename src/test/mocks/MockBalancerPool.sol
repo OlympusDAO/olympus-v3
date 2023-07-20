@@ -58,6 +58,7 @@ contract MockBalancerStablePool is IStablePool, MockBalancerPool {
     uint256 private _invariant;
     uint256 private _ampFactor;
     uint256 private _rate;
+    uint256[] private _scalingFactors;
 
     function setLastInvariant(uint256 invariant_, uint256 ampFactor_) public {
         _invariant = invariant_;
@@ -74,5 +75,13 @@ contract MockBalancerStablePool is IStablePool, MockBalancerPool {
 
     function getRate() external view override returns (uint256) {
         return (_rate);
+    }
+
+    function setScalingFactors(uint256[] memory scalingFactors_) public {
+        _scalingFactors = scalingFactors_;
+    }
+
+    function getScalingFactors() external view override returns (uint256[] memory) {
+        return _scalingFactors;
     }
 }
