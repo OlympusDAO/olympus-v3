@@ -2696,6 +2696,40 @@ contract PriceV2Test is Test {
         price.updateAssetPriceFeeds(address(weth), feeds);
     }
 
+    function testRevert_updateAssetPriceFeeds_duplicatePriceFeeds(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Set up a new feed
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            alphaUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        // Create a feed array with two of the same feed
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](2);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(ethParams) // bytes memory params_
+        );
+        feeds[1] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(ethParams) // bytes memory params_
+        );
+
+        // Try and update the asset
+        vm.startPrank(writer);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_DuplicatePriceFeed(address,uint256)",
+            address(weth),
+            uint256(1)
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceFeeds(address(weth), feeds);
+    }
+
     // ========== updateAssetPriceStrategy ========== //
 
     function test_updateAssetPriceStrategy(uint256 nonce_) public {
