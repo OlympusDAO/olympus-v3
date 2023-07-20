@@ -8,6 +8,7 @@ contract MockUniV3Pair is IUniswapV3Pool {
     address internal _token0;
     address internal _token1;
     int56[] internal _tickCumulatives;
+    bool internal _observeReverts;
 
     // Setters
 
@@ -55,9 +56,18 @@ contract MockUniV3Pair is IUniswapV3Pool {
             uint160[] memory secondsPerLiquidityCumulativeX128s
         )
     {
+        if (_observeReverts) {
+            // Mimics this: https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/Oracle.sol#L226C30-L226C30
+            require(1 == 0, "OLD");
+        }
+
         uint160[] memory secondsPerLiquidity;
 
         return (_tickCumulatives, secondsPerLiquidity);
+    }
+
+    function setObserveReverts(bool reverts_) external {
+        _observeReverts = reverts_;
     }
 
     function token0() external view returns (address) {

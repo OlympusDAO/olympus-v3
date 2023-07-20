@@ -16,6 +16,7 @@ import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {FixedPointMathLib} from "lib/solmate/src/utils/FixedPointMathLib.sol";
 import {TickMath} from "src/libraries/UniswapV3/TickMath.sol";
 import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
+import {MockUniswapV2Pool} from "test/mocks/MockUniswapV2Pool.sol";
 
 contract UniswapV3PriceTest is Test {
     using FullMath for uint256;
@@ -165,7 +166,7 @@ contract UniswapV3PriceTest is Test {
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function test_tokenTWAP_revertsOnIncorrectPoolType() public {
+    function test_tokenTWAP_revertsOnBalancerPoolType() public {
         // Set up a non-weighted pool
         MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
         mockNonWeightedPool.setDecimals(18);
@@ -181,6 +182,23 @@ contract UniswapV3PriceTest is Test {
 
         bytes memory params = abi.encode(mockNonWeightedPool, OBSERVATION_SECONDS);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
+    }
+
+    function test_tokenTWAP_revertsOnUniswapV2PoolType() public {
+        // Set up a Uniswap V2 pool
+        MockUniswapV2Pool mockUniPool = new MockUniswapV2Pool();
+        mockUniPool.setTotalSupply(10e18);
+        mockUniPool.setToken0(USDC);
+        mockUniPool.setToken1(WETH);
+        mockUniPool.setReserves(1e9, 1e18);
+
+        expectRevert_address(
+            UniswapV3Price.UniswapV3_PoolTypeInvalid.selector,
+            address(mockUniPool)
+        );
+
+        bytes memory params = abi.encode(mockUniPool, OBSERVATION_SECONDS);
+        uniSubmodule.getTokenTWAP(WETH, PRICE_DECIMALS, params);
     }
 
     function test_tokenTWAP_usesPrice() public {
@@ -300,6 +318,23 @@ contract UniswapV3PriceTest is Test {
             1,
             observationWindow,
             MIN_OBSERVATION_SECONDS
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, observationWindow);
+        uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
+    }
+
+    function test_tokenTWAP_revertsOnObservationWindowGreaterThanOldest() public {
+        uint32 observationWindow = 1800;
+
+        // Set up the pool to revert as the observation window is too long
+        mockUniPair.setObserveReverts(true);
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_InvalidObservation.selector,
+            address(mockUniPair),
+            observationWindow
         );
         vm.expectRevert(err);
 

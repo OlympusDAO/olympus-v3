@@ -85,6 +85,15 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param pool_            The address of the pool
     error UniswapV3_PoolTypeInvalid(address pool_);
 
+    /// @notice                             The pool is invalid or the observation window is too long.
+    /// @dev                                This is triggered if the pool reverted when called,
+    ///                                     and indicates that the feed address is not a UniswapV3 pool
+    ///                                     or that the observation window is too long.
+    ///
+    /// @param pool_                        The address of the pool
+    /// @param observationWindowSeconds_    The observation window in seconds
+    error UniswapV3_InvalidObservation(address pool_, uint32 observationWindowSeconds_);
+
     /// @notice                 The calculated tick is out of bounds
     /// @dev                    The tick is calculated as the average of the ticks over the observation window.
     ///
@@ -140,7 +149,7 @@ contract UniswapV3Price is PriceSubmodule {
             revert UniswapV3_ParamsPoolInvalid(0, address(params.pool));
 
         IUniswapV3Pool pool = IUniswapV3Pool(params.pool);
-        try pool.token0() returns (address token) {
+        try pool.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
             // Do nothing
         } catch (bytes memory) {
             // Handle a non-UniswapV3 pool
@@ -180,9 +189,9 @@ contract UniswapV3Price is PriceSubmodule {
                     (tickCumulatives[1] - tickCumulatives[0]) /
                     int56(int32(params.observationWindowSeconds));
             } catch (bytes memory) {
-                // Handle a non-UniswapV3 pool
-                // A UniswapV2 pool could pass the above check, but would revert here
-                revert UniswapV3_PoolTypeInvalid(address(pool));
+                // This function will revert if the observation window is longer than the oldest observation in the pool
+                // https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/Oracle.sol#L226C30-L226C30
+                revert UniswapV3_InvalidObservation(address(pool), params.observationWindowSeconds);
             }
         }
 
