@@ -18,7 +18,6 @@ interface IOperator {
     event CushionParamsChanged(uint32 duration_, uint32 debtBuffer_, uint32 depositInterval_);
     event ReserveFactorChanged(uint32 reserveFactor_);
     event RegenParamsChanged(uint32 wait_, uint32 threshold_, uint32 observe_);
-    event MinTargetPriceChanged(uint256 minTargetPrice_);
 
     // =========  ERRORS ========= //
 
@@ -132,16 +131,16 @@ interface IOperator {
     /// @dev    We must see Threshold number of price points that meet our criteria within the last Observe number of price points to regenerate a wall.
     function setRegenParams(uint32 wait_, uint32 threshold_, uint32 observe_) external;
 
+    /// @notice Sets the Appraiser contract address that the Operator gets the liquid backing calculation from.
+    /// @notice Access restricted
+    /// @param  appraiser_ The address of the new Appraiser contract
+    function setAppraiser(address appraiser_) external;
+
     /// @notice Set the contracts that the Operator deploys bond markets with.
     /// @notice Access restricted
     /// @param  auctioneer_ - Address of the bond auctioneer to use.
     /// @param  callback_ - Address of the callback to use.
     function setBondContracts(IBondSDA auctioneer_, IBondCallback callback_) external;
-
-    /// @notice Set the minimum target price for the Operator
-    /// @notice Access restricted
-    /// @param  minTargetPrice_ - Minimum target price in OHM/RESERVE with same units as PRICE.decimals()
-    function setMinTargetPrice(uint256 minTargetPrice_) external;
 
     /// @notice Initialize the Operator to begin market operations
     /// @notice Access restricted
@@ -175,7 +174,7 @@ interface IOperator {
 
     /// @notice Returns the Operator's target price. Target Price is the maximum of liquid backing per backed ohm and
     /// @notice the moving average of OHM against the reserve (duration and frequency configured on PRICE).
-    /// @dev This function calculates the target price based on the stored min target price and the moving average
+    /// @dev This function calculates the target price based on the liquid backing per backed ohm and the moving average
     /// @dev During an operate transaction, it is expected that it will be updated in the same block prior to the call.
     /// @return targetPrice_ - The target price
     function targetPrice() external view returns (uint256);

@@ -8,6 +8,7 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {IOperator} from "policies/RBS/interfaces/IOperator.sol";
+import {IAppraiser} from "policies/OCA/interfaces/IAppraiser.sol";
 import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 
@@ -45,14 +46,14 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice    Whether the Operator is active
     bool public active;
 
-    /// @notice    The minimum price for establishing an updated range
-    uint256 public minTargetPrice;
-
     // Modules
     PRICEv2 internal PRICE;
     RANGEv1 internal RANGE;
     TRSRYv1 internal TRSRY;
     MINTRv1 internal MINTR;
+
+    // Other Policies
+    IAppraiser public appraiser;
 
     // External contracts
     /// @notice Auctioneer contract used for cushion bond market deployments
@@ -77,15 +78,18 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     constructor(
         Kernel kernel_,
+        IAppraiser appraiser_,
         IBondSDA auctioneer_,
         IBondCallback callback_,
         ERC20[2] memory tokens_, // [ohm, reserve]
-        uint32[8] memory configParams, // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
-        uint256 minTargetPrice_
+        uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
     ) Policy(kernel_) {
         // Check params are valid
-        if (address(auctioneer_) == address(0) || address(callback_) == address(0))
-            revert Operator_InvalidParams();
+        if (
+            address(auctioneer_) == address(0) ||
+            address(callback_) == address(0) ||
+            address(appraiser_) == address(0)
+        ) revert Operator_InvalidParams();
 
         if (configParams[1] > uint256(7 days) || configParams[1] < uint256(1 days))
             revert Operator_InvalidParams();
@@ -107,6 +111,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             configParams[6] > configParams[7]
         ) revert Operator_InvalidParams();
 
+        appraiser = appraiser_;
         auctioneer = auctioneer_;
         callback = callback_;
         _ohm = tokens_[0];
@@ -134,13 +139,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         _status = Status({low: regen, high: regen});
 
-        minTargetPrice = minTargetPrice_;
-
         emit CushionFactorChanged(configParams[0]);
         emit CushionParamsChanged(configParams[1], configParams[2], configParams[3]);
         emit ReserveFactorChanged(configParams[4]);
         emit RegenParamsChanged(configParams[5], configParams[6], configParams[7]);
-        emit MinTargetPriceChanged(minTargetPrice_);
     }
 
     /// @inheritdoc Policy
@@ -750,6 +752,12 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IOperator
+    function setAppraiser(address appraiser_) external onlyRole("operator_policy") {
+        if (address(appraiser_) == address(0)) revert Operator_InvalidParams();
+        appraiser = IAppraiser(appraiser_);
+    }
+
+    /// @inheritdoc IOperator
     function setBondContracts(
         IBondSDA auctioneer_,
         IBondCallback callback_
@@ -759,15 +767,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Set contracts
         auctioneer = auctioneer_;
         callback = callback_;
-    }
-
-    /// @inheritdoc IOperator
-    function setMinTargetPrice(uint256 minTargetPrice_) external onlyRole("operator_policy") {
-        // Set min target price
-        minTargetPrice = minTargetPrice_;
-
-        // Emit event
-        emit MinTargetPriceChanged(minTargetPrice_);
     }
 
     /// @inheritdoc IOperator
@@ -818,8 +817,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IOperator
     function targetPrice() public view override returns (uint256) {
-        // Get liquid backing per backed ohm stored locally
-        uint256 lbbo = minTargetPrice;
+        // Get liquid backing per backed ohm from appraiser
+        uint256 lbbo = appraiser.getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
 
         // Get moving average of OHM against the reserve
         (uint256 average, ) = PRICE.getPriceIn(
