@@ -75,7 +75,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
+        dependencies = new Keycode[](3);
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("ROLES");
         dependencies[2] = toKeycode("MINTR");
@@ -92,9 +92,12 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](2);
+        Keycode MINTR_KEYCODE = MINTR.KEYCODE();
+
+        permissions = new Permissions[](3);
         permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.storePrice.selector);
-        permissions[1] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
+        permissions[1] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -125,9 +128,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         lastBeat = currentTime - ((currentTime - lastBeat) % frequency());
 
         // Issue the reward
-        MINTR.increaseMintApproval(address(this), reward);
-        MINTR.mintOhm(msg.sender, reward);
-        emit RewardIssued(msg.sender, reward);
+        if (reward > 0) {
+            MINTR.increaseMintApproval(address(this), reward);
+            MINTR.mintOhm(msg.sender, reward);
+            emit RewardIssued(msg.sender, reward);
+        }
 
         emit Beat(block.timestamp);
     }
