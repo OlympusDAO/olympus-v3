@@ -3,7 +3,7 @@ pragma solidity >=0.8.0;
 
 import {Category} from "src/modules/TRSRY/TRSRY.v1.sol";
 
-interface IValuation {
+interface IAppraiser {
     // ========== DATA STRUCTURES ========== //
     enum Variant {
         CURRENT,

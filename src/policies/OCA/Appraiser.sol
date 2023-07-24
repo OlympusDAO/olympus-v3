@@ -5,19 +5,19 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import "src/Kernel.sol";
-import {IValuation} from "src/policies/OCA/interfaces/IValuation.sol";
+import {IAppraiser} from "src/policies/OCA/interfaces/IAppraiser.sol";
 import {TRSRYv1_1, Category, toCategory} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {SPPLYv1} from "src/modules/SPPLY/SPPLY.v1.sol";
 
-contract OlympusValuation is IValuation, Policy {
+contract OlympusAppraiser is IAppraiser, Policy {
     // ========== EVENTS ========== //
 
     // ========== ERRORS ========== //
-    error VALUE_ValueCallFailed(address asset_);
-    error VALUE_ValueZero(address asset_);
-    error VALUE_InvalidParams(uint256 index, bytes params);
-    error VALUE_InvalidCalculation(address asset_, Variant variant_);
+    error Appraiser_ValueCallFailed(address asset_);
+    error Appraiser_ValueZero(address asset_);
+    error Appraiser_InvalidParams(uint256 index, bytes params);
+    error Appraiser_InvalidCalculation(address asset_, Variant variant_);
 
     // ========== STATE ========== //
 
@@ -90,7 +90,7 @@ contract OlympusValuation is IValuation, Policy {
         } else if (variant_ == Variant.CURRENT) {
             return _assetValue(asset_);
         } else {
-            revert VALUE_InvalidParams(1, abi.encode(variant_));
+            revert Appraiser_InvalidParams(1, abi.encode(variant_));
         }
     }
 
@@ -146,7 +146,7 @@ contract OlympusValuation is IValuation, Policy {
         } else if (variant_ == Variant.CURRENT) {
             return _categoryValue(category_);
         } else {
-            revert VALUE_InvalidParams(1, abi.encode(variant_));
+            revert Appraiser_InvalidParams(1, abi.encode(variant_));
         }
     }
 
@@ -224,10 +224,10 @@ contract OlympusValuation is IValuation, Policy {
             } else if (metric_ == Metric.THIRTY_DAY_OHM_VOLATILITY) {
                 return (_thirtyDayOhmVolatility(), uint48(block.timestamp));
             } else {
-                revert VALUE_InvalidParams(0, abi.encode(metric_));
+                revert Appraiser_InvalidParams(0, abi.encode(metric_));
             }
         } else {
-            revert VALUE_InvalidParams(1, abi.encode(variant_));
+            revert Appraiser_InvalidParams(1, abi.encode(variant_));
         }
     }
 
@@ -341,7 +341,7 @@ contract OlympusValuation is IValuation, Policy {
             data.numObservations != 90 ||
             data.movingAverageDuration != uint32(30 days)
         ) {
-            revert VALUE_ValueCallFailed(ohm);
+            revert Appraiser_ValueCallFailed(ohm);
         }
 
         // Calculate percent changes for each observation to the next
