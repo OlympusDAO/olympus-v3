@@ -21,14 +21,20 @@ contract OlympusAppraiser is IAppraiser, Policy {
 
     // ========== STATE ========== //
 
-    mapping(Metric => Cache) public metricCache;
-    mapping(address => Cache) public assetValueCache;
-    mapping(Category => Cache) public categoryValueCache;
-
     // Modules
     TRSRYv1_1 internal TRSRY;
     SPPLYv1 internal SPPLY;
     PRICEv2 internal PRICE;
+
+    // Storage of protocol variables to avoid extra external calls
+    address internal ohm;
+    uint256 internal constant OHM_SCALE = 1e9;
+    uint256 internal priceScale;
+
+    // Cache
+    mapping(Metric => Cache) public metricCache;
+    mapping(address => Cache) public assetValueCache;
+    mapping(Category => Cache) public categoryValueCache;
 
     //============================================================================================//
     //                                     POLICY SETUP                                           //
@@ -46,6 +52,8 @@ contract OlympusAppraiser is IAppraiser, Policy {
         PRICE = PRICEv2(getModuleAddress(dependencies[0]));
         SPPLY = SPPLYv1(getModuleAddress(dependencies[1]));
         TRSRY = TRSRYv1_1(getModuleAddress(dependencies[2]));
+        ohm = address(SPPLY.ohm());
+        priceScale = 10 ** PRICE.decimals();
     }
 
     //============================================================================================//
@@ -97,13 +105,12 @@ contract OlympusAppraiser is IAppraiser, Policy {
     function _assetValue(address asset_) internal view returns (uint256, uint48) {
         // Get current asset price, should be in price decimals configured on PRICE
         (uint256 price, ) = PRICE.getPrice(asset_, PRICEv2.Variant.CURRENT);
-        uint8 priceDecimals = PRICE.decimals();
 
         // Get current asset balance, should be in the decimals of the asset
         (uint256 balance, ) = TRSRY.getAssetBalance(asset_, TRSRYv1_1.Variant.CURRENT);
 
         // Calculate the value of the protocols holdings of the asset
-        uint256 value = (price * balance) / 10 ** priceDecimals;
+        uint256 value = (price * balance) / (10 ** ERC20(asset_).decimals());
 
         return (value, uint48(block.timestamp));
     }
@@ -235,9 +242,6 @@ contract OlympusAppraiser is IAppraiser, Policy {
         // Get list of assets owned by the protocol
         address[] memory assets = TRSRY.getAssets();
 
-        // Get ohm address
-        address ohm = address(SPPLY.ohm());
-
         // Get the addresses of POL assets in the treasury
         address[] memory polAssets = TRSRY.getAssetsByCategory(
             toCategory("protocol-owned-liquidity")
@@ -286,7 +290,7 @@ contract OlympusAppraiser is IAppraiser, Policy {
         );
 
         // Divide liquid backing by backed supply
-        return (liquidBacking * 10 ** SPPLY.ohm().decimals()) / backedSupply;
+        return (liquidBacking * OHM_SCALE) / backedSupply;
     }
 
     function _marketValue() internal view returns (uint256) {
@@ -312,13 +316,13 @@ contract OlympusAppraiser is IAppraiser, Policy {
         (uint256 supply, ) = SPPLY.getMetric(SPPLYv1.Metric.TOTAL_SUPPLY, SPPLYv1.Variant.CURRENT);
 
         // Get price of ohm
-        (uint256 price, ) = PRICE.getPrice(address(SPPLY.ohm()), PRICEv2.Variant.CURRENT);
+        (uint256 price, ) = PRICE.getPrice(ohm, PRICEv2.Variant.CURRENT);
 
         // Multiply supply by price
-        return (supply * price) / 10 ** PRICE.decimals();
+        return (supply * price) / OHM_SCALE;
     }
 
-    // returns value in PRICE.priceDecimals() units
+    // returns value in PRICE.decimals() units
     function _premium() internal view returns (uint256) {
         // Get market cap of OHM
         uint256 marketCap = _marketCap();
@@ -327,12 +331,11 @@ contract OlympusAppraiser is IAppraiser, Policy {
         uint256 marketValue = _marketValue();
 
         // Divide market cap by market value of treasury
-        return (marketCap * 10 ** PRICE.decimals()) / marketValue;
+        return (marketCap * priceScale) / marketValue;
     }
 
     function _thirtyDayOhmVolatility() internal view returns (uint256) {
         // Get OHM price data from price module
-        address ohm = address(SPPLY.ohm());
         PRICEv2.Asset memory data = PRICE.getAssetData(ohm);
 
         // Check that the number of observations (90) and duration (30 days) is correct (30 days, 8 hour increments)
@@ -345,14 +348,13 @@ contract OlympusAppraiser is IAppraiser, Policy {
         }
 
         // Calculate percent changes for each observation to the next
-        uint256 units = 10 ** PRICE.decimals();
         uint256 len = data.numObservations - 1;
         uint256[] memory changes = new uint256[](len);
         uint256 sum; // used for mean calculation
         for (uint256 i; i < len; i++) {
             uint256 obsIndex = (data.nextObsIndex + i) % data.numObservations;
             changes[i] =
-                (data.obs[(obsIndex + 1) % data.numObservations] * units) /
+                (data.obs[(obsIndex + 1) % data.numObservations] * priceScale) /
                 data.obs[obsIndex];
             sum += changes[i];
         }
