@@ -14,8 +14,9 @@ contract OlympusSupply is SPPLYv1 {
     //============================================================================================//
     //                                        MODULE SETUP                                        //
     //============================================================================================//
-    constructor(Kernel kernel_, address ohm_) Module(kernel_) {
+    constructor(Kernel kernel_, address ohm_, uint256 initialCrossChainSupply_) Module(kernel_) {
         ohm = OHM(ohm_);
+        totalCrossChainSupply = initialCrossChainSupply_;
 
         // Add categories that are required for the metrics functions
         _addCategory(toCategory("protocol-owned-treasury"), false, 0x00000000);
