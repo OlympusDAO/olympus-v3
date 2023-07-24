@@ -5,11 +5,12 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import "src/Kernel.sol";
+import {IValuation} from "src/policies/OCA/interfaces/IValuation.sol";
 import {TRSRYv1_1, Category, toCategory} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {SPPLYv1} from "src/modules/SPPLY/SPPLY.v1.sol";
 
-contract OlympusValuation is Policy {
+contract OlympusValuation is IValuation, Policy {
     // ========== EVENTS ========== //
 
     // ========== ERRORS ========== //
@@ -19,26 +20,6 @@ contract OlympusValuation is Policy {
     error VALUE_InvalidCalculation(address asset_, Variant variant_);
 
     // ========== STATE ========== //
-
-    enum Variant {
-        CURRENT,
-        LAST
-    }
-
-    enum Metric {
-        BACKING,
-        LIQUID_BACKING,
-        LIQUID_BACKING_PER_BACKED_OHM,
-        MARKET_VALUE,
-        MARKET_CAP,
-        PREMIUM,
-        THIRTY_DAY_OHM_VOLATILITY
-    }
-
-    struct Cache {
-        uint256 value;
-        uint48 timestamp;
-    }
 
     mapping(Metric => Cache) public metricCache;
     mapping(address => Cache) public assetValueCache;
@@ -71,7 +52,7 @@ contract OlympusValuation is Policy {
     //                                       ASSET VALUES                                         //
     //============================================================================================//
 
-    function getAssetValue(address asset_) external view returns (uint256) {
+    function getAssetValue(address asset_) external view override returns (uint256) {
         // Get the cached asset value
         (uint256 value, uint48 timestamp) = getAssetValue(asset_, Variant.LAST);
 
@@ -84,7 +65,10 @@ contract OlympusValuation is Policy {
         return value;
     }
 
-    function getAssetValue(address asset_, uint48 maxAge_) external view returns (uint256) {
+    function getAssetValue(
+        address asset_,
+        uint48 maxAge_
+    ) external view override returns (uint256) {
         // Get the cached asset value
         (uint256 value, uint48 timestamp) = getAssetValue(asset_, Variant.LAST);
 
@@ -97,7 +81,10 @@ contract OlympusValuation is Policy {
         return value;
     }
 
-    function getAssetValue(address asset_, Variant variant_) public view returns (uint256, uint48) {
+    function getAssetValue(
+        address asset_,
+        Variant variant_
+    ) public view override returns (uint256, uint48) {
         if (variant_ == Variant.LAST) {
             return (assetValueCache[asset_].value, assetValueCache[asset_].timestamp);
         } else if (variant_ == Variant.CURRENT) {
@@ -121,7 +108,7 @@ contract OlympusValuation is Policy {
         return (value, uint48(block.timestamp));
     }
 
-    function getCategoryValue(Category category_) external view returns (uint256) {
+    function getCategoryValue(Category category_) external view override returns (uint256) {
         // Get the cached category value
         (uint256 value, uint48 timestamp) = getCategoryValue(category_, Variant.LAST);
 
@@ -134,7 +121,10 @@ contract OlympusValuation is Policy {
         return value;
     }
 
-    function getCategoryValue(Category category_, uint48 maxAge_) external view returns (uint256) {
+    function getCategoryValue(
+        Category category_,
+        uint48 maxAge_
+    ) external view override returns (uint256) {
         // Get the cached category value
         (uint256 value, uint48 timestamp) = getCategoryValue(category_, Variant.LAST);
 
@@ -150,7 +140,7 @@ contract OlympusValuation is Policy {
     function getCategoryValue(
         Category category_,
         Variant variant_
-    ) public view returns (uint256, uint48) {
+    ) public view override returns (uint256, uint48) {
         if (variant_ == Variant.LAST) {
             return (categoryValueCache[category_].value, categoryValueCache[category_].timestamp);
         } else if (variant_ == Variant.CURRENT) {
@@ -184,7 +174,7 @@ contract OlympusValuation is Policy {
 
     /// @notice Returns the current value of the metric
     /// @dev Optimistically uses the cached value if it has been updated this block, otherwise calculates value dynamically
-    function getMetric(Metric metric_) external view returns (uint256) {
+    function getMetric(Metric metric_) external view override returns (uint256) {
         // Get the cached value of the metric
         (uint256 value, uint48 timestamp) = getMetric(metric_, Variant.LAST);
 
@@ -198,7 +188,7 @@ contract OlympusValuation is Policy {
     }
 
     /// @notice Returns a value no older than the provided age
-    function getMetric(Metric metric_, uint48 maxAge_) external view returns (uint256) {
+    function getMetric(Metric metric_, uint48 maxAge_) external view override returns (uint256) {
         // Get the cached value of the metric
         (uint256 value, uint48 timestamp) = getMetric(metric_, Variant.LAST);
 
@@ -212,7 +202,10 @@ contract OlympusValuation is Policy {
     }
 
     /// @notice Returns the requested variant of the metric and the timestamp at which it was calculated
-    function getMetric(Metric metric_, Variant variant_) public view returns (uint256, uint48) {
+    function getMetric(
+        Metric metric_,
+        Variant variant_
+    ) public view override returns (uint256, uint48) {
         if (variant_ == Variant.LAST) {
             return (metricCache[metric_].value, metricCache[metric_].timestamp);
         } else if (variant_ == Variant.CURRENT) {
@@ -382,17 +375,17 @@ contract OlympusValuation is Policy {
     //                                       CACHING                                              //
     //============================================================================================//
 
-    function storeAssetValue(address asset_) external {
+    function storeAssetValue(address asset_) external override {
         (uint256 value, uint48 timestamp) = getAssetValue(asset_, Variant.CURRENT);
         assetValueCache[asset_] = Cache(value, timestamp);
     }
 
-    function storeCategoryValue(Category category_) external {
+    function storeCategoryValue(Category category_) external override {
         (uint256 value, uint48 timestamp) = getCategoryValue(category_, Variant.CURRENT);
         categoryValueCache[category_] = Cache(value, timestamp);
     }
 
-    function storeMetric(Metric metric_) external {
+    function storeMetric(Metric metric_) external override {
         (uint256 result, uint48 timestamp) = getMetric(metric_, Variant.CURRENT);
         metricCache[metric_] = Cache(result, timestamp);
     }
