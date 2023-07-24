@@ -5,6 +5,8 @@ import "src/Kernel.sol";
 
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import "modules/PRICE/PRICE.v2.sol";
+import {SPPLYv1, Category as SupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
+import {TRSRYv1_1, CategoryGroup as AssetCategoryGroup, Category as AssetCategory} from "modules/TRSRY/TRSRY.v1.sol";
 
 contract Bookkeeper is Policy, RolesConsumer {
     // DONE
@@ -15,14 +17,26 @@ contract Bookkeeper is Policy, RolesConsumer {
     // [X] Update price feeds for asset on PRICEv2
     // [X] Update price strategy for asset on PRICEv2
     // [X] Update moving average data for asset on PRICEv2
+    // [X] Add category to SPPLYv1
+    // [X] Remove category from SPPLYv1
+    // [X] Categorize address in SPPLYv1
+    // [X] Add asset to TRSRYv1.1
+    // [X] Add category group to TRSRYv1.1
+    // [X] Add category to TRSRYv1.1
+    // [X] Add location to asset on TRSRYv1.1
+    // [X] Remove location from asset on TRSRYv1.1
+    // [X] Categorize asset on TRSRYv1.1
 
     // ========== ERRORS ========== //
+    error Bookkeeper_InvalidModule(Keycode module_);
 
     // ========== EVENTS ========== //
 
     // ========== STATE ========== //
     // Modules
     PRICEv2 public PRICE;
+    SPPLYv1 public SPPLY;
+    TRSRYv1_1 public TRSRY;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -144,18 +158,143 @@ contract Bookkeeper is Policy, RolesConsumer {
     }
 
     //==================================================================================================//
+    //                                      SUPPLY MANAGEMENT                                           //
+    //==================================================================================================//
+
+    /// @notice Add a new category to the supply tracking system
+    /// @param category_ The category to add
+    function addCategory(
+        SupplyCategory category_,
+        bool useSubmodules_,
+        bytes4 submoduleSelector_
+    ) external onlyRole("bookkeeper_policy") {
+        SPPLY.addCategory(category_, useSubmodules_, submoduleSelector_);
+    }
+
+    /// @notice Remove a category from the supply tracking system
+    /// @param category_ The category to remove
+    function removeCategory(SupplyCategory category_) external onlyRole("bookkeeper_policy") {
+        SPPLY.removeCategory(category_);
+    }
+
+    /// @notice Categorize an address in a supply category
+    /// @param location_ The address to categorize
+    /// @param category_ The category to add the address to
+    function categorize(
+        address location_,
+        SupplyCategory category_
+    ) external onlyRole("bookkeeper_policy") {
+        SPPLY.categorize(location_, category_);
+    }
+
+    //==================================================================================================//
+    //                                      TREASURY MANAGEMENT                                         //
+    //==================================================================================================//
+
+    /// @notice Add a new asset to the treasury for tracking
+    /// @param asset_ The address of the asset to add
+    /// @param locations_ Array of locations other than TRSRY to get balance from
+    function addAsset(
+        address asset_,
+        address[] calldata locations_
+    ) external onlyRole("bookkeeper_policy") {
+        TRSRY.addAsset(asset_, locations_);
+    }
+
+    /// @notice Add a new location to a specific asset on the treasury for tracking
+    /// @param asset_ The address of the asset to add the location to
+    /// @param location_ The address of the location to add
+    function addAssetLocation(
+        address asset_,
+        address location_
+    ) external onlyRole("bookkeeper_policy") {
+        TRSRY.addAssetLocation(asset_, location_);
+    }
+
+    /// @notice Remove a location from a specific asset on the treasury for tracking
+    /// @param asset_ The address of the asset to remove the location from
+    /// @param location_ The address of the location to remove
+    function removeAssetLocation(
+        address asset_,
+        address location_
+    ) external onlyRole("bookkeeper_policy") {
+        TRSRY.removeAssetLocation(asset_, location_);
+    }
+
+    /// @notice Add a new category group to the treasury for tracking
+    /// @param categoryGroup_ The category group to add
+    function addAssetCategoryGroup(
+        AssetCategoryGroup categoryGroup_
+    ) external onlyRole("bookkeeper_policy") {
+        TRSRY.addCategoryGroup(categoryGroup_);
+    }
+
+    /// @notice Add a new category to a specific category group on the treasury for tracking
+    /// @param category_ The category to add
+    /// @param categoryGroup_ The category group to add the category to
+    function addAssetCategory(
+        AssetCategory category_,
+        AssetCategoryGroup categoryGroup_
+    ) external onlyRole("bookkeeper_policy") {
+        TRSRY.addCategory(category_, categoryGroup_);
+    }
+
+    /// @notice Categorize a location in a category
+    /// @param asset_ The address of the asset to categorize
+    /// @param category_ The category to add the asset to
+    function categorizeAsset(
+        address asset_,
+        AssetCategory category_
+    ) external onlyRole("bookkeeper_policy") {
+        TRSRY.categorize(asset_, category_);
+    }
+
+    //==================================================================================================//
     //                                      SUBMODULE MANAGEMENT                                        //
     //==================================================================================================//
 
-    /// @notice Install a new submodule on the PRICE module, which can be a new strategy or feed
-    function installSubmodule(Submodule submodule_) external onlyRole("bookkeeper_admin") {
-        PRICE.installSubmodule(submodule_);
+    /// @notice Install a new submodule on the designated module
+    function installSubmodule(
+        Keycode moduleKeycode_,
+        Submodule submodule_
+    ) external onlyRole("bookkeeper_admin") {
+        if (fromKeycode(moduleKeycode_) == bytes5("PRICE")) {
+            PRICE.installSubmodule(submodule_);
+        } else if (fromKeycode(moduleKeycode_) == bytes5("SPPLY")) {
+            SPPLY.installSubmodule(submodule_);
+        } else {
+            revert Bookkeeper_InvalidModule(moduleKeycode_);
+        }
     }
 
     /// @notice Upgrade a submodule on the PRICE module
     /// @dev The upgraded submodule must have the same SubKeycode as an existing submodule that it is replacing,
     /// otherwise use installSubmodule
-    function upgradeSubmodule(Submodule submodule_) external onlyRole("bookkeeper_admin") {
-        PRICE.upgradeSubmodule(submodule_);
+    function upgradeSubmodule(
+        Keycode moduleKeycode_,
+        Submodule submodule_
+    ) external onlyRole("bookkeeper_admin") {
+        if (fromKeycode(moduleKeycode_) == bytes5("PRICE")) {
+            PRICE.upgradeSubmodule(submodule_);
+        } else if (fromKeycode(moduleKeycode_) == bytes5("SPPLY")) {
+            SPPLY.upgradeSubmodule(submodule_);
+        } else {
+            revert Bookkeeper_InvalidModule(moduleKeycode_);
+        }
+    }
+
+    function execOnSubmodule(
+        SubKeycode subKeycode_,
+        bytes calldata data_
+    ) external onlyRole("bookkeeper_policy") {
+        bytes20 subKeycode = fromSubKeycode(subKeycode_);
+        bytes5 moduleKeycode = bytes5(subKeycode >> (15 * 8));
+        if (moduleKeycode == bytes5("PRICE")) {
+            PRICE.execOnSubmodule(subKeycode_, data_);
+        } else if (moduleKeycode == bytes5("SPPLY")) {
+            SPPLY.execOnSubmodule(subKeycode_, data_);
+        } else {
+            revert Bookkeeper_InvalidModule(toKeycode(moduleKeycode));
+        }
     }
 }

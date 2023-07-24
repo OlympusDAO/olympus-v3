@@ -162,8 +162,8 @@ contract BookkeeperTest is Test {
 
         // Install base submodules on PRICE
         vm.startPrank(admin);
-        bookkeeper.installSubmodule(chainlinkPrice);
-        bookkeeper.installSubmodule(strategy);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), chainlinkPrice);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), strategy);
         vm.stopPrank();
     }
 
@@ -563,7 +563,7 @@ contract BookkeeperTest is Test {
             abi.encode(1)
         );
         vm.prank(admin);
-        bookkeeper.installSubmodule(newStrategy);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
 
         // Try to update strategy for asset on PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
@@ -615,7 +615,7 @@ contract BookkeeperTest is Test {
             abi.encode(1)
         );
         vm.prank(admin);
-        bookkeeper.installSubmodule(newStrategy);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
 
         // Update strategy for asset on PRICEv2 with policy account
         vm.prank(policy);
@@ -770,7 +770,7 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.installSubmodule(newStrategy);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
 
         // Confirm submodule was not installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -778,7 +778,7 @@ contract BookkeeperTest is Test {
 
         // Try to install submodule with admin account, expect success
         vm.prank(admin);
-        bookkeeper.installSubmodule(newStrategy);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
 
         // Confirm submodule was installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -795,7 +795,7 @@ contract BookkeeperTest is Test {
 
         // Install new submodule with admin account
         vm.prank(admin);
-        bookkeeper.installSubmodule(newStrategy);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
 
         // Confirm submodule was installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -822,7 +822,7 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.upgradeSubmodule(newChainlink);
+        bookkeeper.upgradeSubmodule(toKeycode("PRICE"), newChainlink);
 
         // Confirm chainlink submodule was not upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -833,7 +833,7 @@ contract BookkeeperTest is Test {
 
         // Try to upgrade chainlink submodule with admin account, expect success
         vm.prank(admin);
-        bookkeeper.upgradeSubmodule(newChainlink);
+        bookkeeper.upgradeSubmodule(toKeycode("PRICE"), newChainlink);
 
         // Confirm chainlink submodule was upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -856,7 +856,7 @@ contract BookkeeperTest is Test {
 
         // Upgrade chainlink submodule with admin account, expect success
         vm.prank(admin);
-        bookkeeper.upgradeSubmodule(newChainlink);
+        bookkeeper.upgradeSubmodule(toKeycode("PRICE"), newChainlink);
 
         // Confirm chainlink submodule was upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
