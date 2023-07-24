@@ -11,6 +11,7 @@ import {BytesLib} from "layer-zero/util/BytesLib.sol";
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {SPPLYv1} from "modules/SPPLY/SPPLY.v1.sol";
 
 import "src/Kernel.sol";
 
@@ -61,8 +62,11 @@ contract CrossChainBridge is
     event SetMinDstGas(uint16 dstChainId_, uint16 type_, uint256 _minDstGas);
     event BridgeStatusSet(bool isActive_);
 
+    bool public mainnet;
+
     // Modules
     MINTRv1 public MINTR;
+    SPPLYv1 public SPPLY;
 
     ILayerZeroEndpoint public immutable lzEndpoint;
     ERC20 public ohm;
@@ -89,13 +93,23 @@ contract CrossChainBridge is
     constructor(Kernel kernel_, address endpoint_) Policy(kernel_) {
         lzEndpoint = ILayerZeroEndpoint(endpoint_);
         bridgeActive = true;
+        mainnet = block.chainid == 1;
     }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
-        dependencies[0] = toKeycode("MINTR");
-        dependencies[1] = toKeycode("ROLES");
+        if (mainnet) {
+            dependencies = new Keycode[](2);
+            dependencies[0] = toKeycode("MINTR");
+            dependencies[1] = toKeycode("ROLES");
+            dependencies[2] = toKeycode("SPPLY");
+
+            SPPLY = SPPLYv1(getModuleAddress(dependencies[2]));
+        } else {
+            dependencies = new Keycode[](2);
+            dependencies[0] = toKeycode("MINTR");
+            dependencies[1] = toKeycode("ROLES");
+        }
 
         MINTR = MINTRv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
@@ -112,10 +126,21 @@ contract CrossChainBridge is
     {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        permissions = new Permissions[](3);
-        permissions[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        permissions[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        if (mainnet) {
+            Keycode SPPLY_KEYCODE = SPPLY.KEYCODE();
+
+            permissions = new Permissions[](5);
+            permissions[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+            permissions[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+            permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+            permissions[3] = Permissions(SPPLY_KEYCODE, SPPLY.increaseCrossChainSupply.selector);
+            permissions[4] = Permissions(SPPLY_KEYCODE, SPPLY.decreaseCrossChainSupply.selector);
+        } else {
+            permissions = new Permissions[](3);
+            permissions[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+            permissions[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+            permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        }
     }
 
     //============================================================================================//
@@ -130,6 +155,7 @@ contract CrossChainBridge is
         bytes memory payload = abi.encode(to_, amount_);
 
         MINTR.burnOhm(msg.sender, amount_);
+        if (mainnet) SPPLY.increaseCrossChainSupply(amount_);
         _sendMessage(dstChainId_, payload, payable(msg.sender), address(0x0), bytes(""), msg.value);
 
         emit BridgeTransferred(msg.sender, amount_, dstChainId_);
@@ -147,6 +173,7 @@ contract CrossChainBridge is
 
         MINTR.increaseMintApproval(address(this), amount);
         MINTR.mintOhm(to, amount);
+        if (mainnet) SPPLY.decreaseCrossChainSupply(amount);
 
         emit BridgeReceived(to, amount, srcChainId_);
     }
