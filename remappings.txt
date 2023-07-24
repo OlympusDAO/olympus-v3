@@ -5,6 +5,7 @@ modules/=src/modules/
 policies/=src/policies/
 libraries/=src/libraries/
 solmate/=lib/solmate/src/
+layer-zero/=lib/solidity-examples/contracts/
 bonds/=lib/bonds/src/
 test/=src/test/
 clones/=lib/clones-with-immutable-args/src/

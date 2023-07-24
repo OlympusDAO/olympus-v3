@@ -4,5 +4,6 @@
     "[solidity]": {
         "editor.defaultFormatter": "JuanBlanco.solidity"
     },
+    "solidity.defaultCompiler": "remote",
     "solidity.compileUsingRemoteVersion": "v0.8.15+commit.e14f2714"
 }

@@ -8,7 +8,7 @@ import {larping} from "test/lib/larping.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
-import {ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
@@ -20,39 +20,31 @@ import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {IBLVaultManagerLido, BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
-import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
+import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
+import {BLVaultManagerLusd} from "policies/BoostedLiquidity/BLVaultManagerLusd.sol";
+import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 
 import "src/Kernel.sol";
 
 import {console2} from "forge-std/console2.sol";
 
-interface ISteth {
-    function submit(address _referral) external payable returns (uint256);
-}
-
-interface IWsteth {
-    function wrap(uint256 _amount) external returns (uint256);
-}
-
 // solhint-disable-next-line max-states-count
-contract BLVaultLidoTestFork is Test {
+contract BLVaultLusdTestFork is Test {
     using FullMath for uint256;
 
     address internal alice;
     address internal bob;
     address internal guardian;
-    address internal ldoController;
     address public godmode;
 
     OlympusERC20Token internal ohm;
-    ERC20 internal wsteth;
+    MockERC20 internal lusd;
     ERC20 internal aura;
     ERC20 internal bal;
 
     AggregatorV2V3Interface internal ohmEthPriceFeed;
     AggregatorV2V3Interface internal ethUsdPriceFeed;
-    AggregatorV2V3Interface internal stethUsdPriceFeed;
+    AggregatorV2V3Interface internal lusdUsdPriceFeed;
 
     IVault internal vault;
     IBasePool internal liquidityPool;
@@ -72,10 +64,10 @@ contract BLVaultLidoTestFork is Test {
     OlympusRoles internal roles;
 
     RolesAdmin internal rolesAdmin;
-    BLVaultManagerLido internal vaultManager;
-    BLVaultLido internal vaultImplementation;
+    BLVaultManagerLusd internal vaultManager;
+    BLVaultLusd internal vaultImplementation;
 
-    BLVaultLido internal aliceVault;
+    BLVaultLusd internal aliceVault;
 
     uint256[] internal minAmountsOut = [0, 0];
 
@@ -85,7 +77,6 @@ contract BLVaultLidoTestFork is Test {
             alice = payable(address(uint160(uint256(keccak256(abi.encodePacked("alice"))))));
             bob = payable(address(uint160(uint256(keccak256(abi.encodePacked("bob"))))));
             guardian = 0x245cc372C84B3645Bf0Ffe6538620B04a217988B;
-            ldoController = 0xf73a1260d222f447210581DDf212D915c09a3249;
 
             // Give ETH to alice
             vm.deal(alice, 100 ether);
@@ -95,19 +86,22 @@ contract BLVaultLidoTestFork is Test {
             vm.label(alice, "alice");
             vm.label(bob, "bob");
             vm.label(guardian, "guardian");
-            vm.label(ldoController, "ldoController");
         }
 
         {
             // Get tokens
             ohm = OlympusERC20Token(0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5);
-            wsteth = ERC20(0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0);
+            lusd = MockERC20(0x5f98805A4E8be255a32880FDeC7F6728C6568bA0);
             aura = ERC20(0xC0c293ce456fF0ED870ADd98a0828Dd4d2903DBF);
             bal = ERC20(0xba100000625a3754423978a60c9317c58a424e3D);
 
+            // Give LUSD to alice
+            vm.prank(0x24179CD81c9e782A4096035f7eC97fB8B783e007);
+            lusd.mint(alice, 1000e18);
+
             // Label tokens
             vm.label(address(ohm), "ohm");
-            vm.label(address(wsteth), "wsteth");
+            vm.label(address(lusd), "lusd");
             vm.label(address(aura), "aura");
             vm.label(address(bal), "bal");
         }
@@ -116,18 +110,18 @@ contract BLVaultLidoTestFork is Test {
             // Get price feeds
             ohmEthPriceFeed = AggregatorV2V3Interface(0x9a72298ae3886221820B1c878d12D872087D3a23);
             ethUsdPriceFeed = AggregatorV2V3Interface(0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419);
-            stethUsdPriceFeed = AggregatorV2V3Interface(0xCfE54B5cD566aB89272946F602D76Ea879CAb4a8);
+            lusdUsdPriceFeed = AggregatorV2V3Interface(0x3D7aE7E594f2f2091Ad8798313450130d0Aba3a0);
 
             // Label price feeds
             vm.label(address(ohmEthPriceFeed), "ohmEthPriceFeed");
             vm.label(address(ethUsdPriceFeed), "ethUsdPriceFeed");
-            vm.label(address(stethUsdPriceFeed), "stethUsdPriceFeed");
+            vm.label(address(lusdUsdPriceFeed), "lusdUsdPriceFeed");
         }
 
         {
             // Get Balancer contracts
             vault = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
-            liquidityPool = IBasePool(0xd4f79CA0Ac83192693bce4699d0c10C66Aa6Cf0F);
+            liquidityPool = IBasePool(0x18FDf15ff782e44C1f9B6C5846ff6B0F0004F6a2);
             balancerHelper = IBalancerHelper(0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5);
 
             // Label Balancer contracts
@@ -139,9 +133,11 @@ contract BLVaultLidoTestFork is Test {
         {
             // Get Aura contracts
             booster = IAuraBooster(0xA57b8d98dAE62B26Ec3bcC4a365338157060B234);
-            auraPool = IAuraRewardPool(0x636024F9Ddef77e625161b2cCF3A2adfbfAd3615);
             auraMiningLib = IAuraMiningLib(0x744Be650cea753de1e69BF6BAd3c98490A855f52);
-            auraDepositToken = ERC20(0x0EF97ef0e20F84e82ec2D79CBD9Eda923C3DAF09);
+
+            // determine by calling poolInfo(127) on booster
+            auraPool = IAuraRewardPool(0x3b395A27F77C3450393047fF564E893243aC29fF);
+            auraDepositToken = ERC20(0x1D15D9B189F61F26f4C2D09451A1da7c698eE502);
 
             // Label Aura contracts
             vm.label(address(booster), "booster");
@@ -183,39 +179,44 @@ contract BLVaultLidoTestFork is Test {
 
         {
             // Deploy BLVault implementation
-            vaultImplementation = new BLVaultLido();
+            vaultImplementation = new BLVaultLusd();
 
             // Deploy BLVault Manager
-            IBLVaultManagerLido.TokenData memory tokenData = IBLVaultManagerLido.TokenData({
+            IBLVaultManager.TokenData memory tokenData = IBLVaultManager.TokenData({
                 ohm: address(ohm),
-                pairToken: address(wsteth),
+                pairToken: address(lusd),
                 aura: address(aura),
                 bal: address(bal)
             });
 
-            IBLVaultManagerLido.BalancerData memory balancerData = IBLVaultManagerLido
-                .BalancerData({
-                    vault: address(vault),
-                    liquidityPool: address(liquidityPool),
-                    balancerHelper: address(0)
-                });
+            IBLVaultManager.BalancerData memory balancerData = IBLVaultManager.BalancerData({
+                vault: address(vault),
+                liquidityPool: address(liquidityPool),
+                balancerHelper: address(0)
+            });
 
-            IBLVaultManagerLido.AuraData memory auraData = IBLVaultManagerLido.AuraData({
-                pid: uint256(73),
+            IBLVaultManager.AuraData memory auraData = IBLVaultManager.AuraData({
+                pid: uint256(127),
                 auraBooster: address(booster),
                 auraRewardPool: address(auraPool)
             });
 
-            IBLVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = IBLVaultManagerLido
-                .OracleFeed({feed: ohmEthPriceFeed, updateThreshold: uint48(1 days)});
+            IBLVaultManager.OracleFeed memory ohmEthPriceFeedData = IBLVaultManager.OracleFeed({
+                feed: ohmEthPriceFeed,
+                updateThreshold: uint48(1 days)
+            });
 
-            IBLVaultManagerLido.OracleFeed memory ethUsdPriceFeedData = IBLVaultManagerLido
-                .OracleFeed({feed: ethUsdPriceFeed, updateThreshold: uint48(1 hours)});
+            IBLVaultManager.OracleFeed memory ethUsdPriceFeedData = IBLVaultManager.OracleFeed({
+                feed: ethUsdPriceFeed,
+                updateThreshold: uint48(1 hours)
+            });
 
-            IBLVaultManagerLido.OracleFeed memory stethUsdPriceFeedData = IBLVaultManagerLido
-                .OracleFeed({feed: stethUsdPriceFeed, updateThreshold: uint48(1 hours)});
+            IBLVaultManager.OracleFeed memory lusdUsdPriceFeedData = IBLVaultManager.OracleFeed({
+                feed: lusdUsdPriceFeed,
+                updateThreshold: uint48(1 hours)
+            });
 
-            vaultManager = new BLVaultManagerLido(
+            vaultManager = new BLVaultManagerLusd(
                 kernel,
                 tokenData,
                 balancerData,
@@ -223,9 +224,9 @@ contract BLVaultLidoTestFork is Test {
                 address(auraMiningLib),
                 ohmEthPriceFeedData,
                 ethUsdPriceFeedData,
-                stethUsdPriceFeedData,
+                lusdUsdPriceFeedData,
                 address(vaultImplementation),
-                100_000e9,
+                233_645e9, // 233_645e9 // $2.5m = 233,645 OHM
                 0,
                 1 minutes
             );
@@ -261,48 +262,12 @@ contract BLVaultLidoTestFork is Test {
         }
 
         {
-            vm.startPrank(alice);
-
-            // Deposit ETH to stETH
-            ISteth(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84).submit{value: 75 ether}(address(0));
-
-            // Wrap stETH to wstETH
-            uint256 stethBalance = ERC20(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84).balanceOf(
-                alice
-            );
-            ERC20(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84).approve(
-                address(wsteth),
-                stethBalance
-            );
-            IWsteth(address(wsteth)).wrap(stethBalance);
-
-            vm.stopPrank();
-        }
-
-        {
-            vm.startPrank(bob);
-
-            // Deposit ETH to stETH
-            ISteth(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84).submit{value: 75 ether}(address(0));
-
-            // Wrap stETH to wstETH
-            uint256 stethBalance = ERC20(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84).balanceOf(bob);
-            ERC20(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84).approve(
-                address(wsteth),
-                stethBalance
-            );
-            IWsteth(address(wsteth)).wrap(stethBalance);
-
-            vm.stopPrank();
-        }
-
-        {
             // Create alice's vault
             vm.startPrank(alice);
-            aliceVault = BLVaultLido(vaultManager.deployVault());
+            aliceVault = BLVaultLusd(vaultManager.deployVault());
 
-            // Approve wstETH to alice's vault
-            wsteth.approve(address(aliceVault), type(uint256).max);
+            // Approve LUSD to alice's vault
+            lusd.approve(address(aliceVault), type(uint256).max);
             vm.stopPrank();
         }
     }
@@ -321,7 +286,7 @@ contract BLVaultLidoTestFork is Test {
         // Deactivate vault manager
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLVaultLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLVaultLusd_Inactive()");
         vm.expectRevert(err);
 
         // Try to deposit
@@ -330,7 +295,7 @@ contract BLVaultLidoTestFork is Test {
     }
 
     function testCorrectness_depositCanOnlyBeCalledByTheVaultOwner() public {
-        bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
+        bytes memory err = abi.encodeWithSignature("BLVaultLusd_OnlyOwner()");
         vm.expectRevert(err);
 
         // Try to deposit
@@ -343,9 +308,9 @@ contract BLVaultLidoTestFork is Test {
         uint256 newLimit = (vaultManager.getOhmTknPrice() * 10e18) / 1e18;
         vaultManager.setLimit(newLimit);
 
-        // Approve wstETH to alice's vault
+        // Approve LUSD to alice's vault
         vm.startPrank(alice);
-        wsteth.approve(address(aliceVault), type(uint256).max);
+        lusd.approve(address(aliceVault), type(uint256).max);
 
         // Verify state before
         assertEq(vaultManager.deployedOhm(), 0);
@@ -363,10 +328,10 @@ contract BLVaultLidoTestFork is Test {
     function testCorrectness_depositCorrectlyDeploysLiquidity() public {
         // Verify state before
         uint256 ohmVaultBalanceBefore = ohm.balanceOf(address(vault));
-        uint256 wstethVaultBalanceBefore = wsteth.balanceOf(address(vault));
+        uint256 lusdVaultBalanceBefore = lusd.balanceOf(address(vault));
         uint256 auraBalanceBefore = auraDepositToken.balanceOf(address(auraPool));
 
-        // Deposit wstETH
+        // Deposit LUSD
         vm.prank(alice);
         aliceVault.deposit(10e18, 0);
 
@@ -374,11 +339,11 @@ contract BLVaultLidoTestFork is Test {
         uint256 expectedOhmAmount = (10e18 * vaultManager.getOhmTknPrice()) / 1e18;
 
         uint256 ohmVaultBalanceAfter = ohm.balanceOf(address(vault));
-        uint256 wstethVaultBalanceAfter = wsteth.balanceOf(address(vault));
+        uint256 lusdVaultBalanceAfter = lusd.balanceOf(address(vault));
         uint256 auraBalanceAfter = auraDepositToken.balanceOf(address(auraPool));
 
         assertApproxEqRel(ohmVaultBalanceAfter - ohmVaultBalanceBefore, expectedOhmAmount, 5e16); // 5% tolerance
-        assertApproxEqRel(wstethVaultBalanceAfter - wstethVaultBalanceBefore, 10e18, 5e16); // 5% tolerance
+        assertApproxEqRel(lusdVaultBalanceAfter - lusdVaultBalanceBefore, 10e18, 5e16); // 5% tolerance
         assertTrue(auraBalanceAfter > auraBalanceBefore);
     }
 
@@ -388,7 +353,7 @@ contract BLVaultLidoTestFork is Test {
     ///     [X]  correctly withdraws liquidity
 
     function _withdrawSetup() internal {
-        // Deposit wstETH
+        // Deposit LUSD
         vm.prank(alice);
         aliceVault.deposit(10e18, 0);
 
@@ -398,7 +363,7 @@ contract BLVaultLidoTestFork is Test {
     function testCorrectness_withdrawCanOnlyBeCalledByTheVaultOwner() public {
         _withdrawSetup();
 
-        bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
+        bytes memory err = abi.encodeWithSignature("BLVaultLusd_OnlyOwner()");
         vm.expectRevert(err);
 
         // Try to withdraw
@@ -432,7 +397,7 @@ contract BLVaultLidoTestFork is Test {
 
         // Check state before
         uint256 ohmVaultBalanceBefore = ohm.balanceOf(address(vault));
-        uint256 wstethVaultBalanceBefore = wsteth.balanceOf(address(vault));
+        uint256 lusdVaultBalanceBefore = lusd.balanceOf(address(vault));
         uint256 auraBalanceBefore = auraDepositToken.balanceOf(address(auraPool));
 
         // Withdraw
@@ -441,11 +406,11 @@ contract BLVaultLidoTestFork is Test {
 
         // Check state after
         uint256 ohmVaultBalanceAfter = ohm.balanceOf(address(vault));
-        uint256 wstethVaultBalanceAfter = wsteth.balanceOf(address(vault));
+        uint256 lusdVaultBalanceAfter = lusd.balanceOf(address(vault));
         uint256 auraBalanceAfter = auraDepositToken.balanceOf(address(auraPool));
 
         assertTrue(ohmVaultBalanceBefore > ohmVaultBalanceAfter);
-        assertTrue(wstethVaultBalanceBefore > wstethVaultBalanceAfter);
+        assertTrue(lusdVaultBalanceBefore > lusdVaultBalanceAfter);
         assertEq(auraBalanceBefore - auraBalanceAfter, aliceLpBalance);
     }
 
@@ -462,7 +427,7 @@ contract BLVaultLidoTestFork is Test {
         // Deactivate vault manager
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLVaultLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLVaultLusd_Inactive()");
         vm.expectRevert(err);
 
         // Try to claim rewards
@@ -471,7 +436,7 @@ contract BLVaultLidoTestFork is Test {
     }
 
     function testCorrectness_claimRewardsCanOnlyBeCalledByTheVaultOwner() public {
-        bytes memory err = abi.encodeWithSignature("BLVaultLido_OnlyOwner()");
+        bytes memory err = abi.encodeWithSignature("BLVaultLusd_OnlyOwner()");
         vm.expectRevert(err);
 
         // Try to claim rewards
@@ -480,7 +445,7 @@ contract BLVaultLidoTestFork is Test {
     }
 
     function testCorrectness_claimRewardsCorrectlyClaims() public {
-        // Deposit wstETH
+        // Deposit LUSD
         _withdrawSetup();
 
         // Jump forward to accrue rewards
@@ -493,6 +458,8 @@ contract BLVaultLidoTestFork is Test {
         // Claim rewards
         vm.prank(alice);
         aliceVault.claimRewards();
+
+        // TODO these will report 0 balances until rewards are enabled
 
         // Check state after
         assertTrue(bal.balanceOf(address(alice)) > 0);
@@ -519,7 +486,7 @@ contract BLVaultLidoTestFork is Test {
     }
 
     /// [X]  getUserPairShare
-    ///     [X]  returns the correct user wstETH share
+    ///     [X]  returns the correct user LUSD share
 
     function testCorrectness_getUserPairShare() public {
         // Check state before

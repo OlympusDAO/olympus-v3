@@ -101,18 +101,47 @@ abstract contract BatchScript is Script, DelegatePrank {
     // - `value` as a `uint256` (=> 32 bytes),
     // -  length of `data` as a `uint256` (=> 32 bytes),
     // - `data` as `bytes`.
-    function addToBatch(address to_, uint256 value_, bytes memory data_) public {
+    function addToBatch(
+        address safe_,
+        address to_,
+        uint256 value_,
+        bytes memory data_
+    ) internal returns (bytes memory) {
+        // Add transaction to batch array
         encodedTxns.push(abi.encodePacked(Operation.CALL, to_, value_, data_.length, data_));
+
+        // Simulate transaction and get return value
+        vm.prank(safe_);
+        (bool success, bytes memory data) = to_.call{value: value_}(data_);
+        if (success) {
+            return data;
+        } else {
+            revert(string(data));
+        }
     }
 
-    function addToBatch(address to_, bytes memory data_) public {
+    function addToBatch(
+        address safe_,
+        address to_,
+        bytes memory data_
+    ) internal returns (bytes memory) {
+        // Add transaction to batch array
         encodedTxns.push(abi.encodePacked(Operation.CALL, to_, uint256(0), data_.length, data_));
+
+        // Simulate transaction and get return value
+        vm.prank(safe_);
+        (bool success, bytes memory data) = to_.call(data_);
+        if (success) {
+            return data;
+        } else {
+            revert(string(data));
+        }
     }
 
     function executeBatch(address safe_, bool send_) public {
         _initialize();
         Batch memory batch = _createBatch(safe_);
-        _simulateBatch(safe_, batch);
+        // _simulateBatch(safe_, batch);
         if (send_) {
             batch = _signBatch(safe_, batch);
             _sendBatch(safe_, batch);

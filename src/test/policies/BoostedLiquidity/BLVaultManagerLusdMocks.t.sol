@@ -11,7 +11,7 @@ import {MockLegacyAuthority} from "test/mocks/MockLegacyAuthority.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockVault, MockBalancerPool} from "test/mocks/BalancerMocks.sol";
-import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "test/mocks/AuraMocks.sol";
+import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {IAuraBooster, IAuraRewardPool} from "policies/BoostedLiquidity/interfaces/IAura.sol";
@@ -21,37 +21,17 @@ import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {IBLVaultManagerLido, BLVaultManagerLido} from "policies/BoostedLiquidity/BLVaultManagerLido.sol";
-import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
+import {IBLVaultManager, BLVaultManagerLusd} from "policies/BoostedLiquidity/BLVaultManagerLusd.sol";
+import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 
-import {RewardsData} from "policies/BoostedLiquidity/interfaces/IBLVaultLido.sol";
+import {RewardsData} from "policies/BoostedLiquidity/interfaces/IBLVault.sol";
 
 import "src/Kernel.sol";
 
 import {console2} from "forge-std/console2.sol";
 
-contract MockWsteth is ERC20 {
-    constructor(
-        string memory _name,
-        string memory _symbol,
-        uint8 _decimals
-    ) ERC20(_name, _symbol, _decimals) {}
-
-    function mint(address to, uint256 value) public {
-        _mint(to, value);
-    }
-
-    function burnFrom(address from, uint256 value) public {
-        _burn(from, value);
-    }
-
-    function stEthPerToken() public pure returns (uint256) {
-        return 1e18;
-    }
-}
-
 // solhint-disable-next-line max-states-count
-contract BLVaultManagerLidoTest is Test {
+contract BLVaultManagerLusdTest is Test {
     using FullMath for uint256;
     using larping for *;
 
@@ -59,13 +39,15 @@ contract BLVaultManagerLidoTest is Test {
     address internal alice;
 
     OlympusERC20Token internal ohm;
-    MockWsteth internal wsteth;
+    MockERC20 internal lusd;
     MockERC20 internal aura;
     MockERC20 internal bal;
+    MockERC20 internal ldo;
+    MockAuraStashToken internal ldoStash;
 
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal ethUsdPriceFeed;
-    MockPriceFeed internal stethUsdPriceFeed;
+    MockPriceFeed internal lusdUsdPriceFeed;
 
     MockVault internal vault;
     MockBalancerPool internal liquidityPool;
@@ -83,8 +65,8 @@ contract BLVaultManagerLidoTest is Test {
     OlympusRoles internal roles;
 
     RolesAdmin internal rolesAdmin;
-    BLVaultManagerLido internal vaultManager;
-    BLVaultLido internal vaultImplementation;
+    BLVaultManagerLusd internal vaultManager;
+    BLVaultLusd internal vaultImplementation;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -104,31 +86,33 @@ contract BLVaultManagerLidoTest is Test {
         // Deploy mock tokens
         {
             ohm = new OlympusERC20Token(address(auth));
-            wsteth = new MockWsteth("Wrapped Staked ETH", "wstETH", 18);
+            lusd = new MockERC20("LUSD", "LUSD", 18);
             aura = new MockERC20("Aura", "AURA", 18);
             bal = new MockERC20("Balancer", "BAL", 18);
+            ldo = new MockERC20("Lido", "LDO", 18);
+            ldoStash = new MockAuraStashToken("Lido-Stash", "LDOSTASH", 18, address(ldo));
         }
 
         // Deploy mock price feeds
         {
             ohmEthPriceFeed = new MockPriceFeed();
             ethUsdPriceFeed = new MockPriceFeed();
-            stethUsdPriceFeed = new MockPriceFeed();
+            lusdUsdPriceFeed = new MockPriceFeed();
 
             ohmEthPriceFeed.setDecimals(18);
             ethUsdPriceFeed.setDecimals(8);
-            stethUsdPriceFeed.setDecimals(8);
+            lusdUsdPriceFeed.setDecimals(8);
 
             ohmEthPriceFeed.setLatestAnswer(1e16); // 0.01 ETH
             ethUsdPriceFeed.setLatestAnswer(1000e8); // 1000 USD
-            stethUsdPriceFeed.setLatestAnswer(1000e8); // 1000 USD
+            lusdUsdPriceFeed.setLatestAnswer(1e8); // 1 USD
         }
 
         // Deploy mock Balancer contracts
         {
             liquidityPool = new MockBalancerPool();
-            vault = new MockVault(address(liquidityPool), address(ohm), address(wsteth));
-            vault.setPoolAmounts(100e9, 1e18);
+            vault = new MockVault(address(liquidityPool), address(lusd), address(ohm));
+            vault.setPoolAmounts(1000e18, 100e9);
         }
 
         // Deploy mock Aura contracts
@@ -158,38 +142,43 @@ contract BLVaultManagerLidoTest is Test {
 
         // Deploy policies
         {
-            vaultImplementation = new BLVaultLido();
+            vaultImplementation = new BLVaultLusd();
 
-            IBLVaultManagerLido.TokenData memory tokenData = IBLVaultManagerLido.TokenData({
+            IBLVaultManager.TokenData memory tokenData = IBLVaultManager.TokenData({
                 ohm: address(ohm),
-                pairToken: address(wsteth),
+                pairToken: address(lusd),
                 aura: address(aura),
                 bal: address(bal)
             });
 
-            IBLVaultManagerLido.BalancerData memory balancerData = IBLVaultManagerLido
-                .BalancerData({
-                    vault: address(vault),
-                    liquidityPool: address(liquidityPool),
-                    balancerHelper: address(0)
-                });
+            IBLVaultManager.BalancerData memory balancerData = IBLVaultManager.BalancerData({
+                vault: address(vault),
+                liquidityPool: address(liquidityPool),
+                balancerHelper: address(0)
+            });
 
-            IBLVaultManagerLido.AuraData memory auraData = IBLVaultManagerLido.AuraData({
+            IBLVaultManager.AuraData memory auraData = IBLVaultManager.AuraData({
                 pid: uint256(0),
                 auraBooster: address(booster),
                 auraRewardPool: address(auraPool)
             });
 
-            IBLVaultManagerLido.OracleFeed memory ohmEthPriceFeedData = IBLVaultManagerLido
-                .OracleFeed({feed: ohmEthPriceFeed, updateThreshold: uint48(1 days)});
+            IBLVaultManager.OracleFeed memory ohmEthPriceFeedData = IBLVaultManager.OracleFeed({
+                feed: ohmEthPriceFeed,
+                updateThreshold: uint48(1 days)
+            });
 
-            IBLVaultManagerLido.OracleFeed memory ethUsdPriceFeedData = IBLVaultManagerLido
-                .OracleFeed({feed: ethUsdPriceFeed, updateThreshold: uint48(1 days)});
+            IBLVaultManager.OracleFeed memory ethUsdPriceFeedData = IBLVaultManager.OracleFeed({
+                feed: ethUsdPriceFeed,
+                updateThreshold: uint48(1 days)
+            });
 
-            IBLVaultManagerLido.OracleFeed memory stethUsdPriceFeedData = IBLVaultManagerLido
-                .OracleFeed({feed: stethUsdPriceFeed, updateThreshold: uint48(1 days)});
+            IBLVaultManager.OracleFeed memory lusdUsdPriceFeedData = IBLVaultManager.OracleFeed({
+                feed: lusdUsdPriceFeed,
+                updateThreshold: uint48(1 days)
+            });
 
-            vaultManager = new BLVaultManagerLido(
+            vaultManager = new BLVaultManagerLusd(
                 kernel,
                 tokenData,
                 balancerData,
@@ -197,7 +186,7 @@ contract BLVaultManagerLidoTest is Test {
                 address(auraMiningLib),
                 ohmEthPriceFeedData,
                 ethUsdPriceFeedData,
-                stethUsdPriceFeedData,
+                lusdUsdPriceFeedData,
                 address(vaultImplementation),
                 100_000e9,
                 0,
@@ -234,12 +223,12 @@ contract BLVaultManagerLidoTest is Test {
         {
             ohmEthPriceFeed.setTimestamp(block.timestamp);
             ethUsdPriceFeed.setTimestamp(block.timestamp);
-            stethUsdPriceFeed.setTimestamp(block.timestamp);
+            lusdUsdPriceFeed.setTimestamp(block.timestamp);
         }
 
-        // Mint wstETH to alice
+        // Mint LUSD to alice
         {
-            wsteth.mint(alice, 100e18);
+            lusd.mint(alice, 100e18);
         }
     }
 
@@ -258,7 +247,7 @@ contract BLVaultManagerLidoTest is Test {
         // Deactivate contract
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLManagerLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLusd_Inactive()");
         vm.expectRevert(err);
 
         vaultManager.deployVault();
@@ -274,7 +263,7 @@ contract BLVaultManagerLidoTest is Test {
         vm.prank(alice);
         vaultManager.deployVault();
 
-        bytes memory err = abi.encodeWithSignature("BLManagerLido_VaultAlreadyExists()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLusd_VaultAlreadyExists()");
         vm.expectRevert(err);
 
         // Try to create second vault
@@ -285,14 +274,14 @@ contract BLVaultManagerLidoTest is Test {
     function testCorrectness_deployVaultCorrectlyClonesVault() public {
         // Create vault
         vm.prank(alice);
-        BLVaultLido aliceVault = BLVaultLido(vaultManager.deployVault());
+        BLVaultLusd aliceVault = BLVaultLusd(vaultManager.deployVault());
 
         // Verify vault state
         assertEq(aliceVault.owner(), alice);
         assertEq(address(aliceVault.manager()), address(vaultManager));
         assertEq(aliceVault.TRSRY(), address(treasury));
         assertEq(address(aliceVault.ohm()), address(ohm));
-        assertEq(address(aliceVault.wsteth()), address(wsteth));
+        assertEq(address(aliceVault.lusd()), address(lusd));
         assertEq(address(aliceVault.aura()), address(aura));
         assertEq(address(aliceVault.bal()), address(bal));
         assertEq(address(aliceVault.vault()), address(vault));
@@ -305,7 +294,7 @@ contract BLVaultManagerLidoTest is Test {
 
     function testCorrectness_deployVaultCorrectlyTracksVaultState(address user_) public {
         vm.prank(user_);
-        BLVaultLido userVault = BLVaultLido(vaultManager.deployVault());
+        BLVaultLusd userVault = BLVaultLusd(vaultManager.deployVault());
 
         // Verify manager state
         assertEq(vaultManager.vaultOwners(userVault), user_);
@@ -330,7 +319,7 @@ contract BLVaultManagerLidoTest is Test {
         // Deactive system
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLManagerLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLusd_Inactive()");
         vm.expectRevert(err);
 
         vaultManager.mintOhmToVault(1e9);
@@ -345,7 +334,7 @@ contract BLVaultManagerLidoTest is Test {
         vaultManager.mintOhmToVault(1e9);
 
         if (attacker_ != validVault) {
-            bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidVault()");
+            bytes memory err = abi.encodeWithSignature("BLManagerLusd_InvalidVault()");
             vm.expectRevert(err);
 
             vm.prank(attacker_);
@@ -362,7 +351,7 @@ contract BLVaultManagerLidoTest is Test {
             vm.prank(validVault);
             vaultManager.mintOhmToVault(amount_);
         } else {
-            bytes memory err = abi.encodeWithSignature("BLManagerLido_LimitViolation()");
+            bytes memory err = abi.encodeWithSignature("BLManagerLusd_LimitViolation()");
             vm.expectRevert(err);
 
             vm.prank(validVault);
@@ -410,7 +399,7 @@ contract BLVaultManagerLidoTest is Test {
         // Deactive system
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLManagerLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLusd_Inactive()");
         vm.expectRevert(err);
 
         vaultManager.burnOhmFromVault(1e9);
@@ -431,7 +420,7 @@ contract BLVaultManagerLidoTest is Test {
         vm.stopPrank();
 
         if (attacker_ != validVault) {
-            bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidVault()");
+            bytes memory err = abi.encodeWithSignature("BLManagerLusd_InvalidVault()");
             vm.expectRevert(err);
 
             vm.prank(attacker_);
@@ -501,7 +490,7 @@ contract BLVaultManagerLidoTest is Test {
         // Deactive system
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLManagerLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLusd_Inactive()");
         vm.expectRevert(err);
 
         vaultManager.increaseTotalLp(1e18);
@@ -518,7 +507,7 @@ contract BLVaultManagerLidoTest is Test {
         vaultManager.increaseTotalLp(1e18);
 
         if (attacker_ != validVault) {
-            bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidVault()");
+            bytes memory err = abi.encodeWithSignature("BLManagerLusd_InvalidVault()");
             vm.expectRevert(err);
 
             vm.prank(attacker_);
@@ -549,7 +538,7 @@ contract BLVaultManagerLidoTest is Test {
         // Deactive system
         vaultManager.deactivate();
 
-        bytes memory err = abi.encodeWithSignature("BLManagerLido_Inactive()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLusd_Inactive()");
         vm.expectRevert(err);
 
         vaultManager.decreaseTotalLp(1e18);
@@ -568,7 +557,7 @@ contract BLVaultManagerLidoTest is Test {
         vm.stopPrank();
 
         if (attacker_ != validVault) {
-            bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidVault()");
+            bytes memory err = abi.encodeWithSignature("BLManagerLusd_InvalidVault()");
             vm.expectRevert(err);
 
             vm.prank(attacker_);
@@ -607,18 +596,22 @@ contract BLVaultManagerLidoTest is Test {
         // Check state before
         assertEq(vaultManager.getLpBalance(alice), 0);
 
-        // Deposit wstETH
+        // Deposit LUSD
         vm.startPrank(alice);
-        wsteth.approve(aliceVault, type(uint256).max);
-        BLVaultLido(aliceVault).deposit(1e18, 0);
+        lusd.approve(aliceVault, type(uint256).max);
+        BLVaultLusd(aliceVault).deposit(1e18, 0);
         vm.stopPrank();
 
+        // The MockVault implementation mints BPT equivalent to `maxAmountsIn[1]`,
+        // which is the amount of minted OHM in this case.
+        // 1 LUSD = 0.1 OHM, so the result is 0.1e9
+
         // Check state after
-        assertEq(vaultManager.getLpBalance(alice), 1e18);
+        assertEq(vaultManager.getLpBalance(alice), 0.1e9);
     }
 
     /// [X]  getUserPairShare
-    ///     [X]  returns correct user wstETH share
+    ///     [X]  returns correct user LUSD share
 
     function testCorrectness_getUserPairShare() public {
         address aliceVault = _createVault();
@@ -626,11 +619,15 @@ contract BLVaultManagerLidoTest is Test {
         // Check state before
         assertEq(vaultManager.getUserPairShare(alice), 0);
 
-        // Deposit wstETH
+        // Deposit LUSD
         vm.startPrank(alice);
-        wsteth.approve(aliceVault, type(uint256).max);
-        BLVaultLido(aliceVault).deposit(1e18, 0);
+        lusd.approve(aliceVault, type(uint256).max);
+        BLVaultLusd(aliceVault).deposit(1e18, 0);
         vm.stopPrank();
+
+        // Set pool amounts to current balance
+        uint256 vaultLusdBalance = lusd.balanceOf(address(vault));
+        vault.setPoolAmounts(vaultLusdBalance, 100e9);
 
         // Check state after
         assertEq(vaultManager.getUserPairShare(alice), 1e18);
@@ -642,10 +639,10 @@ contract BLVaultManagerLidoTest is Test {
     function testCorrectness_getOutstandingRewards() public {
         address aliceVault = _createVault();
 
-        // Deposit wstETH
+        // Deposit LUSD
         vm.startPrank(alice);
-        wsteth.approve(aliceVault, type(uint256).max);
-        BLVaultLido(aliceVault).deposit(1e18, 0);
+        lusd.approve(aliceVault, type(uint256).max);
+        BLVaultLusd(aliceVault).deposit(1e18, 0);
         vm.stopPrank();
 
         // Check state after
@@ -658,20 +655,20 @@ contract BLVaultManagerLidoTest is Test {
     }
 
     /// [X]  getMaxDeposit
-    ///     [X]  returns correct wstETH deposit amount
+    ///     [X]  returns correct LUSD deposit amount
 
     function testCorrectness_getMaxDeposit() public {
         address aliceVault = _createVault();
 
         // Check state before
-        assertEq(vaultManager.getMaxDeposit(), 1_000e18);
+        assertEq(vaultManager.getMaxDeposit(), 1_000_000e18);
 
         // Increase OHM minted
         vm.prank(aliceVault);
         vaultManager.mintOhmToVault(99_900e9);
 
         // Check state after
-        assertEq(vaultManager.getMaxDeposit(), 1e18);
+        assertEq(vaultManager.getMaxDeposit(), 1000e18);
     }
 
     /// [X]  getRewardTokens
@@ -685,17 +682,66 @@ contract BLVaultManagerLidoTest is Test {
         assertEq(tokens[1], address(bal));
     }
 
+    function testCorrectness_getRewardTokens_extraRewards() public {
+        // Add the extra reward pool to Aura
+        MockAuraRewardPool extraPool = new MockAuraRewardPool(
+            address(vault.bpt()),
+            address(ldoStash),
+            address(aura)
+        );
+        auraPool.addExtraReward(address(extraPool));
+
+        address[] memory tokens = vaultManager.getRewardTokens();
+
+        assertEq(tokens.length, 3);
+        assertEq(tokens[0], address(aura));
+        assertEq(tokens[1], address(bal));
+        assertEq(tokens[2], address(ldo));
+    }
+
     /// [X]  getRewardRate
     ///     [X]  returns correct reward rate for Bal
+    ///     [X]  returns correct reward rate for AURA
+    ///     [X]  returns correct reward rate for extra rewards
+    ///     [X]  returns 0 reward rate for other tokens
 
-    function testCorrectness_getRewardRate() public {
+    function testCorrectness_getRewardRate_bal() public {
         uint256 rate = vaultManager.getRewardRate(address(bal));
 
         assertEq(rate, 1e18);
     }
 
+    function testCorrectness_getRewardRate_aura() public {
+        uint256 rate = vaultManager.getRewardRate(address(aura));
+
+        // Same as the BAL rate, due to the implementation of MockAuraMiningLib
+        assertEq(rate, 1e18);
+    }
+
+    function testCorrectness_getRewardRate_extraRewards() public {
+        // Add the extra reward pool to Aura
+        MockAuraRewardPool extraPool = new MockAuraRewardPool(
+            address(vault.bpt()),
+            address(ldoStash),
+            address(aura)
+        );
+        auraPool.addExtraReward(address(extraPool));
+
+        uint256 rate = vaultManager.getRewardRate(address(ldo));
+
+        // Same as the BAL rate, due to the implementation of MockAuraMiningLib
+        assertEq(rate, 1e18);
+    }
+
+    function testCorrectness_getRewardRate_otherToken() public {
+        uint256 rate = vaultManager.getRewardRate(address(lusd));
+
+        assertEq(rate, 0);
+    }
+
     /// [X]  getPoolOhmShare
     ///     [X]  returns correct pool OHM share
+    ///     [X]  0 total supply
 
     function testCorrectness_getPoolOhmShare() public {
         // Test base case
@@ -706,17 +752,46 @@ contract BLVaultManagerLidoTest is Test {
         address validVault = _createVault();
 
         vm.startPrank(alice);
-        wsteth.approve(validVault, type(uint256).max);
-        BLVaultLido(validVault).deposit(1e18, 0);
+        lusd.approve(validVault, type(uint256).max);
+        BLVaultLusd(validVault).deposit(10e18, 0);
         vm.stopPrank();
+
+        // Set pool amounts to current balance
+        uint256 vaultOhmBalance = ohm.balanceOf(address(vault));
+        vault.setPoolAmounts(1000e18, vaultOhmBalance);
 
         // Check state after
         poolOhmShare = vaultManager.getPoolOhmShare();
-        assertEq(poolOhmShare, 100e9);
+        assertEq(poolOhmShare, 1e9);
     }
 
-    /// []  getOhmSupplyChangeData
-    ///     []  returns correct data
+    function testCorrectness_getPoolOhmShare_zeroTotalSupply() public {
+        // Test base case
+        uint256 poolOhmShare = vaultManager.getPoolOhmShare();
+        assertEq(poolOhmShare, 0);
+
+        // Deposit
+        address validVault = _createVault();
+
+        vm.startPrank(alice);
+        lusd.approve(validVault, type(uint256).max);
+        BLVaultLusd(validVault).deposit(10e18, 0);
+        vm.stopPrank();
+
+        // Set pool amounts to current balance
+        uint256 vaultOhmBalance = ohm.balanceOf(address(vault));
+        vault.setPoolAmounts(1000e18, vaultOhmBalance);
+
+        // Set total supply to 0
+        liquidityPool.setTotalSupply(0);
+
+        // Check state after
+        poolOhmShare = vaultManager.getPoolOhmShare();
+        assertEq(poolOhmShare, 0); // Instead of 1e9
+    }
+
+    /// [X]  getOhmSupplyChangeData
+    ///     [X]  returns correct data
 
     function testCorrectness_getOhmSupplyChangeData() public {
         // Test base case
@@ -752,46 +827,72 @@ contract BLVaultManagerLidoTest is Test {
         assertEq(poolOhmShare, 0);
         assertEq(ohmMinted, 0);
         assertEq(ohmBurned, 10e9);
+
+        // Test with proper deposit
+        vm.startPrank(alice);
+        lusd.approve(validVault, type(uint256).max);
+        BLVaultLusd(validVault).deposit(10e18, 0);
+        vm.stopPrank();
+
+        // Set pool amounts to current balance
+        uint256 vaultOhmBalance = ohm.balanceOf(address(vault));
+        vault.setPoolAmounts(1000e18, vaultOhmBalance);
+
+        (poolOhmShare, ohmMinted, ohmBurned) = vaultManager.getOhmSupplyChangeData();
+        assertEq(poolOhmShare, 1e9);
+        assertEq(ohmMinted, 1e9);
+        assertEq(ohmBurned, 10e9);
     }
 
     /// [X]  getOhmTknPrice
-    ///     [X]  returns correct OHM per wstETH (100)
+    ///     [X]  returns correct OHM per LUSD (0.1)
 
     function testCorrectness_getOhmTknPrice() public {
         // Test base case
         uint256 price = vaultManager.getOhmTknPrice();
-        assertEq(price, 100e9);
+        assertEq(price, 1e8);
 
         // Increase OHM value
         ohmEthPriceFeed.setLatestAnswer(1e17); // 0.1 ETH
         price = vaultManager.getOhmTknPrice();
-        assertEq(price, 10e9);
-
-        // Reset OHM value and decrease stETH value
-        ohmEthPriceFeed.setLatestAnswer(1e16); // 0.01 ETH
-        stethUsdPriceFeed.setLatestAnswer(900e8); // 900 USD
-        price = vaultManager.getOhmTknPrice();
-        assertEq(price, 90e9);
+        assertEq(price, 1e7);
     }
 
     /// [X]  getTknOhmPrice
-    ///     [X]  returns correct wstETH per OHM (0.01)
+    ///     [X]  returns correct LUSD per OHM (10)
 
     function testCorrectness_getTknOhmPrice() public {
         // Test base case
         uint256 price = vaultManager.getTknOhmPrice();
-        assertEq(price, 1e16);
+        assertEq(price, 10e18);
 
         // Increase OHM value
         ohmEthPriceFeed.setLatestAnswer(1e17); // 0.1 ETH
         price = vaultManager.getTknOhmPrice();
-        assertEq(price, 1e17);
+        assertEq(price, 100e18);
+    }
 
-        // Reset OHM value and decrease stETH value
-        ohmEthPriceFeed.setLatestAnswer(1e16); // 0.01 ETH
-        stethUsdPriceFeed.setLatestAnswer(500e8); // 500 USD
-        price = vaultManager.getTknOhmPrice();
-        assertEq(price, 2e16);
+    /// [X] getOhmTknPoolPrice
+    ///     [X] returns correct OHM per LUSD
+    ///     [X] returns 0 if pool is empty
+
+    function testCorrectness_getOhmTknPoolPrice() public {
+        // Base case
+        uint256 price = vaultManager.getOhmTknPoolPrice();
+        // 100e9 * 1e18 / 1000e18 = 0.1e9 = 1e8
+        assertEq(price, 1e8);
+
+        // Increase OHM value
+        vault.setPoolAmounts(1000e18, 100e8); // 0.1 ETH
+        price = vaultManager.getOhmTknPoolPrice();
+        assertEq(price, 1e7);
+    }
+
+    function testCorrectness_getOhmTknPoolPrice_empty() public {
+        vault.setPoolAmounts(0, 100e9);
+
+        uint256 price = vaultManager.getOhmTknPoolPrice();
+        assertEq(price, 0);
     }
 
     //============================================================================================//
@@ -825,7 +926,7 @@ contract BLVaultManagerLidoTest is Test {
         vaultManager.mintOhmToVault(10_000e9);
 
         // Try to set limit
-        bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidLimit()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLusd_InvalidLimit()");
         vm.expectRevert(err);
 
         vaultManager.setLimit(1e9);
@@ -858,7 +959,7 @@ contract BLVaultManagerLidoTest is Test {
         vm.stopPrank();
 
         // Attempt to set limit
-        bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidLimit()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLusd_InvalidLimit()");
         vm.expectRevert(err);
         vaultManager.setLimit(1e9);
     }
@@ -884,7 +985,7 @@ contract BLVaultManagerLidoTest is Test {
     function testCorrectness_setFeeCannotSetFeeAbove100(uint64 fee_) public {
         vm.assume(fee_ > 10_000);
 
-        bytes memory err = abi.encodeWithSignature("BLManagerLido_InvalidFee()");
+        bytes memory err = abi.encodeWithSignature("BLManagerLusd_InvalidFee()");
         vm.expectRevert(err);
 
         vaultManager.setFee(fee_);
@@ -922,27 +1023,27 @@ contract BLVaultManagerLidoTest is Test {
     function testCorrectness_changeUpdateThresholdsCorrectlySetsThresholds(
         uint48 ohmPriceThreshold_,
         uint48 ethPriceThreshold_,
-        uint48 stethPriceThreshold_
+        uint48 lusdPriceThreshold_
     ) public {
         // Set thresholds
         vaultManager.changeUpdateThresholds(
             ohmPriceThreshold_,
             ethPriceThreshold_,
-            stethPriceThreshold_
+            lusdPriceThreshold_
         );
 
         // Check state after
         (, uint48 ohmEthUpdateThreshold) = vaultManager.ohmEthPriceFeed();
         (, uint48 ethUsdUpdateThreshold) = vaultManager.ethUsdPriceFeed();
-        (, uint48 stethUsdUpdateThreshold) = vaultManager.stethUsdPriceFeed();
+        (, uint48 lusdUsdUpdateThreshold) = vaultManager.lusdUsdPriceFeed();
 
         assertEq(ohmEthUpdateThreshold, ohmPriceThreshold_);
-        assertEq(stethUsdUpdateThreshold, stethPriceThreshold_);
+        assertEq(lusdUsdUpdateThreshold, lusdPriceThreshold_);
     }
 
     /// [X]  activate
     ///     [X]  can only be called by liquidityvault_admin
-    ///     [X]  sets isLidoBLVaultActive to true
+    ///     [X]  sets isLusdBLVaultActive to true
 
     function testCorrectness_activateCanOnlyBeCalledByAdmin(address attacker_) public {
         vm.assume(attacker_ != address(this));
@@ -957,25 +1058,25 @@ contract BLVaultManagerLidoTest is Test {
         vaultManager.activate();
     }
 
-    function testCorrectness_activateCorrectlySetsIsLidoBLVaultActive() public {
+    function testCorrectness_activateCorrectlySetsIsLusdBLVaultActive() public {
         // Setup
         vaultManager.deactivate();
 
         // Check state before
-        assertEq(vaultManager.isLidoBLVaultActive(), false);
+        assertEq(vaultManager.isLusdBLVaultActive(), false);
         assertEq(blreg.activeVaultCount(), 0);
 
         // Activate
         vaultManager.activate();
 
         // Check state after
-        assertEq(vaultManager.isLidoBLVaultActive(), true);
+        assertEq(vaultManager.isLusdBLVaultActive(), true);
         assertEq(blreg.activeVaults(0), address(vaultManager));
     }
 
     /// [X]  deactivate
     ///     [X]  can only be called by emergency_admin
-    ///     [X]  sets isLidoBLVaultActive to false
+    ///     [X]  sets isLusdBLVaultActive to false
 
     function testCorrectness_deactivateCanOnlyBeCalledByAdmin(address attacker_) public {
         vm.assume(attacker_ != address(this));
@@ -990,9 +1091,9 @@ contract BLVaultManagerLidoTest is Test {
         vaultManager.deactivate();
     }
 
-    function testCorrectness_deactivateCorrectlySetsIsLidoBLVaultActive() public {
+    function testCorrectness_deactivateCorrectlySetsIsLusdBLVaultActive() public {
         // Check state before
-        assertEq(vaultManager.isLidoBLVaultActive(), true);
+        assertEq(vaultManager.isLusdBLVaultActive(), true);
         assertEq(blreg.activeVaultCount(), 1);
         assertEq(blreg.activeVaults(0), address(vaultManager));
 
@@ -1000,6 +1101,6 @@ contract BLVaultManagerLidoTest is Test {
         vaultManager.deactivate();
 
         // Check state after
-        assertEq(vaultManager.isLidoBLVaultActive(), false);
+        assertEq(vaultManager.isLusdBLVaultActive(), false);
     }
 }
