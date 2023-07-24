@@ -99,7 +99,7 @@ contract CrossChainBridge is
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         if (mainnet) {
-            dependencies = new Keycode[](2);
+            dependencies = new Keycode[](3);
             dependencies[0] = toKeycode("MINTR");
             dependencies[1] = toKeycode("ROLES");
             dependencies[2] = toKeycode("SPPLY");
