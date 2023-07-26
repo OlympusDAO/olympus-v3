@@ -3,6 +3,7 @@ pragma solidity 0.8.15;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -66,6 +67,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     uint8 internal immutable ohmDecimals;
     ERC20 internal immutable _reserve;
     uint8 internal immutable reserveDecimals;
+    ERC4626 internal immutable _wrappedReserve;
     uint8 internal oracleDecimals;
 
     // Constants
@@ -81,7 +83,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         IAppraiser appraiser_,
         IBondSDA auctioneer_,
         IBondCallback callback_,
-        ERC20[2] memory tokens_, // [ohm, reserve]
+        address[3] memory tokens_, // [ohm, reserve, wrappedReserve]
         uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
     ) Policy(kernel_) {
         // Check params are valid
@@ -114,10 +116,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         appraiser = appraiser_;
         auctioneer = auctioneer_;
         callback = callback_;
-        _ohm = tokens_[0];
-        ohmDecimals = tokens_[0].decimals();
-        _reserve = tokens_[1];
-        reserveDecimals = tokens_[1].decimals();
+        _ohm = ERC20(tokens_[0]);
+        ohmDecimals = _ohm.decimals();
+        _reserve = ERC20(tokens_[1]);
+        reserveDecimals = _reserve.decimals();
+        _wrappedReserve = ERC4626(tokens_[2]);
 
         Regen memory regen = Regen({
             count: uint32(0),
@@ -312,8 +315,14 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Burn OHM
             MINTR.burnOhm(address(this), amountIn_);
 
-            // Withdraw and transfer reserve to sender
-            TRSRY.withdrawReserves(msg.sender, _reserve, amountOut);
+            // Calculate amount of wrappedReserve to withdraw from the TRSRY
+            uint256 amountWrapped = _wrappedReserve.convertToShares(amountOut);
+
+            // Withdraw wrapped reserves from TRSRY
+            TRSRY.withdrawReserves(msg.sender, ERC20(address(_wrappedReserve)), amountWrapped);
+
+            // Unwrap reserves and transfer to sender
+            _wrappedReserve.withdraw(amountOut, msg.sender, address(this));
 
             emit Swap(_ohm, _reserve, amountIn_, amountOut);
         } else if (tokenIn_ == _reserve) {
@@ -337,8 +346,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // If wall is down after swap, deactive the cushion as well
             _checkCushion(true);
 
-            // Transfer reserves to treasury
-            _reserve.safeTransferFrom(msg.sender, address(TRSRY), amountIn_);
+            // Transfer reserves to this contract from sender
+            _reserve.safeTransferFrom(msg.sender, address(this), amountIn_);
+
+            // Wrap reserves and transfer to TRSRY
+            _wrappedReserve.deposit(amountIn_, address(TRSRY));
 
             // Mint OHM to sender
             MINTR.mintOhm(msg.sender, amountOut);
@@ -477,6 +489,18 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
             // Update the market information on the range module
             RANGE.updateMarket(false, market, marketCapacity);
+
+            // Reserves stored in the TRSRY are wrapped to generate yield
+            // We must withdraw some of those reserves, unwrap them,
+            // and send them back to the TRSRY so that the BondCallback
+            // has access to the right amount of reserves.
+            // The amount withdrawn is equal to the market capacity.
+            uint256 amountToConvert = _wrappedReserve.convertToShares(marketCapacity);
+            /// TODO: increasing withdraw approval here because we are withdrawing capacity that may not all be used
+            /// Tried to see if we could increment approval back up as needed on deactivate, but it's not precise because the conversion changes
+            TRSRY.increaseWithdrawApproval(address(this), _wrappedReserve, amountToConvert);
+            TRSRY.withdrawReserves(address(this), ERC20(address(_wrappedReserve)), amountToConvert);
+            _wrappedReserve.withdraw(marketCapacity, address(TRSRY), address(this));
         }
     }
 
@@ -487,6 +511,17 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (auctioneer.isLive(market)) {
             auctioneer.closeMarket(market);
             RANGE.updateMarket(high_, type(uint256).max, 0);
+        }
+
+        // If a lower cushion is being deactivated, withdraw excess reserve from TRSRY
+        // wrap it to generate yield, and re-deposit it into the TRSRY
+        if (!high_) {
+            uint256 excessReserve = _reserve.balanceOf(address(TRSRY));
+            if (excessReserve > 0) {
+                TRSRY.increaseWithdrawApproval(address(this), _reserve, excessReserve);
+                TRSRY.withdrawReserves(address(this), _reserve, excessReserve);
+                _wrappedReserve.deposit(excessReserve, address(TRSRY));
+            }
         }
     }
 
@@ -609,11 +644,21 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
             // Get approval from the TRSRY to withdraw up to the capacity in reserves
             // If current approval is higher than the capacity, reduce it
-            uint256 currentApproval = TRSRY.withdrawApproval(address(this), _reserve);
-            if (currentApproval < capacity) {
-                TRSRY.increaseWithdrawApproval(address(this), _reserve, capacity - currentApproval);
-            } else if (currentApproval > capacity) {
-                TRSRY.decreaseWithdrawApproval(address(this), _reserve, currentApproval - capacity);
+            // Reserves are stored in the TRSRY as wrapped reserves to generate yield.
+            uint256 currentApproval = TRSRY.withdrawApproval(address(this), _wrappedReserve);
+            uint256 wrappedCapacity = _wrappedReserve.convertToShares(capacity);
+            if (currentApproval < wrappedCapacity) {
+                TRSRY.increaseWithdrawApproval(
+                    address(this),
+                    _wrappedReserve,
+                    wrappedCapacity - currentApproval
+                );
+            } else if (currentApproval > wrappedCapacity) {
+                TRSRY.decreaseWithdrawApproval(
+                    address(this),
+                    _wrappedReserve,
+                    currentApproval - wrappedCapacity
+                );
             }
 
             // Regenerate the side with the capacity
@@ -864,7 +909,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IOperator
     function fullCapacity(bool high_) public view override returns (uint256) {
-        uint256 reservesInTreasury = TRSRY.getReserveBalance(_reserve);
+        uint256 wrappedReservesInTreasury = TRSRY.getReserveBalance(_wrappedReserve);
+        uint256 reservesInTreasury = _wrappedReserve.convertToAssets(wrappedReservesInTreasury);
         uint256 capacity = (reservesInTreasury * _config.reserveFactor) / ONE_HUNDRED_PERCENT;
         if (high_) {
             capacity =
