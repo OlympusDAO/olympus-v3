@@ -208,10 +208,20 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         // Update the prices for the range, save new regen observations, and update capacities based on bond market activity
         _updateRangePrices();
-        _addObservation();
+
+        // Get latest price for OHM in reserve token
+        // Operator expects the keeper to have updated the price feeds before calling operate()
+        // However, this function will fallback to a dynamically calculated value if the cached value is stale
+        uint256 currentPrice = PRICE.getPriceIn(address(_ohm), address(_reserve));
+
+        // Add observations to regeneration counters
+        _addObservation(currentPrice);
 
         // Cache config in memory
         Config memory config_ = _config;
+
+        // Get liquid backing metric to determine if auto-refills of lower side capacity should be performed
+        uint256 lbbo = appraiser.getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
 
         // Check if walls can regenerate capacity
         if (
@@ -220,21 +230,18 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         ) {
             _regenerate(true);
         }
+        // For the lower side, we can regenerate if the regen count is above the threshold OR
+        // if the current price is below LBBO and the capacity is below 20% of the full capacity for the side
         if (
-            uint48(block.timestamp) >= RANGE.lastActive(false) + uint48(config_.regenWait) &&
-            _status.low.count >= config_.regenThreshold
+            (uint48(block.timestamp) >= RANGE.lastActive(false) + uint48(config_.regenWait) &&
+                _status.low.count >= config_.regenThreshold) ||
+            (currentPrice < lbbo && RANGE.capacity(false) < (fullCapacity(false) * 20) / 100)
         ) {
             _regenerate(false);
         }
 
         // Cache range data after potential regeneration
         RANGEv1.Range memory range = RANGE.range();
-
-        // Get latest price
-        // See note in addObservation() for more details
-        // Operator expects the keeper to have updated the price feeds before calling operate()
-        // However, this function will fallback to a dynamically calculated value if the cached value is stale
-        uint256 currentPrice = PRICE.getPriceIn(address(_ohm), address(_reserve));
 
         // Check if the cushion bond markets are active
         // if so, determine if it should stay open or close
@@ -562,12 +569,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @notice Add an observation to the regeneration status variables for each side
-    function _addObservation() internal {
+    function _addObservation(uint256 currentPrice_) internal {
         // Get latest target price, expect it to have been updated this same block
         uint256 target = targetPrice();
-
-        // Get price from latest update
-        uint256 currentPrice = PRICE.getPriceIn(address(_ohm), address(_reserve));
 
         // Store observations and update counts for regeneration
 
@@ -575,7 +579,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Observation is positive if the current price is greater than the MA
         uint32 observe = _config.regenObserve;
         Regen memory regen = _status.low;
-        if (currentPrice >= target) {
+        if (currentPrice_ >= target) {
             if (!regen.observations[regen.nextObservation]) {
                 _status.low.observations[regen.nextObservation] = true;
                 _status.low.count++;
@@ -591,7 +595,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Update high side regen status with a new observation
         // Observation is positive if the current price is less than the MA
         regen = _status.high;
-        if (currentPrice <= target) {
+        if (currentPrice_ <= target) {
             if (!regen.observations[regen.nextObservation]) {
                 _status.high.observations[regen.nextObservation] = true;
                 _status.high.count++;
