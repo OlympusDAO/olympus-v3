@@ -89,7 +89,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         returns (Permissions[] memory permissions)
     {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
-        
+
         permissions = new Permissions[](3);
         permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
         permissions[1] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
