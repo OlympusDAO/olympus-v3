@@ -1,0 +1,7 @@
+{
+  "recommendations": [
+    "nomicfoundation.hardhat-solidity",
+    "gruntfuggly.todo-tree",
+    "ryanluker.vscode-coverage-gutters"
+  ]
+}
