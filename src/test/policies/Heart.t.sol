@@ -7,6 +7,7 @@ import {console2} from "forge-std/console2.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -24,10 +25,12 @@ import {IOperator} from "policies/interfaces/IOperator.sol";
  */
 contract MockOperator is Policy {
     bool public result;
+    address public ohm;
     error Operator_CustomError();
 
-    constructor(Kernel kernel_) Policy(kernel_) {
+    constructor(Kernel kernel_, address ohm_) Policy(kernel_) {
         result = true;
+        ohm = ohm_;
     }
 
     // =========  FRAMEWORK CONFIFURATION ========= //
@@ -53,11 +56,12 @@ contract HeartTest is Test {
     address internal bob;
     address internal policy;
 
-    MockERC20 internal rewardToken;
+    MockERC20 internal ohm;
 
     Kernel internal kernel;
     MockPrice internal price;
     OlympusRoles internal roles;
+    OlympusMinter internal mintr;
 
     MockOperator internal operator;
     OlympusHeart internal heart;
@@ -74,9 +78,8 @@ contract HeartTest is Test {
         }
         {
             // Deploy token mocks
-            rewardToken = new MockERC20("Reward Token", "RWD", 18);
+            ohm = new MockERC20("Olympus", "OHM", 9);
         }
-
         {
             // Deploy kernel
             kernel = new Kernel(); // this contract will be the executor
@@ -84,6 +87,7 @@ contract HeartTest is Test {
             // Deploy modules (some mocks)
             price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
             roles = new OlympusRoles(kernel);
+            mintr = new OlympusMinter(kernel, address(ohm));
 
             // Configure mocks
             price.setMovingAverage(100 * 1e18);
@@ -94,13 +98,13 @@ contract HeartTest is Test {
 
         {
             // Deploy mock operator
-            operator = new MockOperator(kernel);
+            operator = new MockOperator(kernel, address(ohm));
 
             // Deploy heart
             heart = new OlympusHeart(
                 kernel,
                 IOperator(address(operator)),
-                uint256(10e18), // max reward = 10 reward tokens
+                uint256(10e9), // max reward = 10 reward tokens
                 uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
             );
 
@@ -113,6 +117,7 @@ contract HeartTest is Test {
             // Install modules
             kernel.executeAction(Actions.InstallModule, address(price));
             kernel.executeAction(Actions.InstallModule, address(roles));
+            kernel.executeAction(Actions.InstallModule, address(mintr));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
@@ -124,14 +129,7 @@ contract HeartTest is Test {
             // Heart roles
             rolesAdmin.grantRole("heart_admin", policy);
         }
-
-        {
-            // Mint reward tokens to heart contract
-            rewardToken.mint(address(heart), uint256(1000 * 1e18));
-        }
     }
-
-    // =========  HELPER FUNCTIONS ========= //
 
     // =========  KEEPER FUNCTIONS ========= //
     // DONE
@@ -141,6 +139,7 @@ contract HeartTest is Test {
     //     [X] cannot beat if not enough time has passed
     //     [X] fails if price or operator revert
     //     [X] reward auction functions correctly based on time since beat available
+    // [ ] Mints rewardToken correctly
 
     function testCorrectness_beat() public {
         // Get the beat frequency of the heart and wait that amount of time
@@ -225,7 +224,7 @@ contract HeartTest is Test {
         vm.warp(block.timestamp + frequency);
 
         // Store this contract's current reward token balance
-        uint256 startBalance = rewardToken.balanceOf(address(this));
+        uint256 startBalance = ohm.balanceOf(address(this));
         uint256 maxReward = heart.maxReward();
         uint256 expectedReward = wait_ > auctionDuration
             ? maxReward
@@ -238,7 +237,7 @@ contract HeartTest is Test {
         heart.beat();
 
         // Reward issued should be half the max reward
-        assertEq(rewardToken.balanceOf(address(this)), startBalance + expectedReward);
+        assertEq(ohm.balanceOf(address(this)), startBalance + expectedReward);
     }
 
     // =========  VIEW FUNCTIONS ========= //
@@ -336,9 +335,8 @@ contract HeartTest is Test {
         uint48 frequency = heart.frequency();
         vm.warp(block.timestamp + frequency);
 
-        // Create new reward token
-        MockERC20 newToken = new MockERC20("New Token", "NT", 18);
-        uint256 newMaxReward = uint256(2e18);
+        // Set new params
+        uint256 newMaxReward = uint256(2e9);
         uint48 newAuctionDuration = uint48(12 * 25); // 5 mins
 
         // Try to set new reward token and amount while a beat is available, expect to fail
@@ -357,25 +355,14 @@ contract HeartTest is Test {
         // Expect the heart's reward to be updated
         assertEq(heart.maxReward(), newMaxReward);
 
-        // Mint some new tokens to the heart to pay rewards
-        newToken.mint(address(heart), uint256(3e18));
-
         // Expect the heart to reward the new token and amount on a beat
-        uint256 startBalance = newToken.balanceOf(address(this));
+        uint256 startBalance = ohm.balanceOf(address(this));
 
         vm.warp(block.timestamp + frequency + newAuctionDuration);
         heart.beat();
 
-        uint256 endBalance = newToken.balanceOf(address(this));
+        uint256 endBalance = ohm.balanceOf(address(this));
         assertEq(endBalance, startBalance + heart.maxReward());
-
-        // Balance is now less than the reward amount, test the min function
-        startBalance = newToken.balanceOf(address(this));
-        vm.warp(block.timestamp + frequency + newAuctionDuration);
-        heart.beat();
-
-        endBalance = newToken.balanceOf(address(this));
-        assertEq(endBalance, startBalance + 1e18);
     }
 
     function testCorrectness_cannotCallAdminFunctionsWithoutPermissions() public {
