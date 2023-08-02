@@ -56,7 +56,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     constructor(
         Kernel kernel_,
         IOperator operator_,
-        ERC20 rewardToken_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {

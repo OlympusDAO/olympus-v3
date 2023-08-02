@@ -100,7 +100,6 @@ contract HeartTest is Test {
             heart = new OlympusHeart(
                 kernel,
                 IOperator(address(operator)),
-                rewardToken,
                 uint256(10e18), // max reward = 10 reward tokens
                 uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
             );

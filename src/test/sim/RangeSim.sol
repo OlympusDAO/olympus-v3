@@ -400,7 +400,6 @@ abstract contract RangeSim is Test {
             heart = new OlympusHeart(
                 kernel,
                 operator,
-                reserve,
                 uint256(0), // no keeper rewards for sim
                 uint48(0) // no keeper rewards for sim
             );
