@@ -17,6 +17,10 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 // Import libraries
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
+interface IpOHM {
+    function terms(address account_) external view returns (Pohm.Term memory);
+}
+
 contract Pohm is Policy, RolesConsumer {
     using TransferHelper for ERC20;
 
@@ -26,6 +30,8 @@ contract Pohm is Policy, RolesConsumer {
     error POHM_AlreadyHasClaim();
     error POHM_NoWalletChange();
     error POHM_AllocationLimitViolation();
+    error POHM_ClaimMoreThanVested();
+    error POHM_ClaimMoreThanMax();
 
     // ========= EVENTS ========= //
 
@@ -42,8 +48,11 @@ contract Pohm is Policy, RolesConsumer {
     // ========= STATE VARIABLES ========= //
 
     // Modules
-    MINTRv1 public mintr;
-    TRSRYv1 public trsry;
+    MINTRv1 public MINTR;
+    TRSRYv1 public TRSRY;
+
+    // Olympus Contracts
+    IpOHM public previous; // TODO wrap in some interface
 
     // Tokens
     ERC20 public OHM;
@@ -60,16 +69,29 @@ contract Pohm is Policy, RolesConsumer {
     //                                      POLICY SETUP                                          //
     //============================================================================================//
 
-    constructor(address _kernel) Kernel(_kernel) {}
+    constructor(
+        Kernel kernel_,
+        address previous_,
+        address ohm_,
+        address gohm_,
+        address dai_
+    ) Policy(kernel_) {
+        previous = IpOHM(previous_);
+        OHM = ERC20(ohm_);
+        gOHM = IgOHM(gohm_);
+        DAI = ERC20(dai_);
+    }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
-        dependencies[0] = Keycode.MINTR;
-        dependencies[1] = Keycode.ROLES;
+        dependencies = new Keycode[](3);
+        dependencies[0] = toKeycode("MINTR");
+        dependencies[1] = toKeycode("TRSRY");
+        dependencies[2] = toKeycode("ROLES");
 
         MINTR = MINTRv1(getModuleAddress((dependencies[0])));
-        ROLES = ROLESv1(getModuleAddress((dependencies[1])));
+        TRSRY = TRSRYv1(getModuleAddress((dependencies[1])));
+        ROLES = ROLESv1(getModuleAddress((dependencies[2])));
     }
 
     /// @inheritdoc Policy
@@ -83,22 +105,17 @@ contract Pohm is Policy, RolesConsumer {
 
         permissions = new Permissions[](2);
         permissions[0] = Permissions(mintrKeycode, MINTR.mintOhm.selector);
-        permissions[1] = Permissions(mintrKeycode, MINTR.increaseMintApproval);
+        permissions[1] = Permissions(mintrKeycode, MINTR.increaseMintApproval.selector);
     }
 
     //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    function claim(address to_, uint256 amount_, bool stake_) external {
+    function claim(address to_, uint256 amount_) external {
         uint256 ohmAmount = _claim(amount_);
-
-        if (stake_) {
-            // TODO: Switch OHM to OlympusERC20Token and approve the staking contract
-            _stake(ohmAmount);
-        } else {
-            OHM.safeTransfer(to_, ohmAmount);
-        }
+        MINTR.increaseMintApproval(address(this), ohmAmount);
+        MINTR.mintOhm(to_, ohmAmount);
     }
 
     //============================================================================================//
@@ -143,11 +160,11 @@ contract Pohm is Policy, RolesConsumer {
 
     function getAccountClaimed(address account_) public view returns (uint256) {
         Term memory accountTerms = terms[account_];
-        return gOHM.balanceFrom(terms.gClaimed);
+        return gOHM.balanceFrom(accountTerms.gClaimed);
     }
 
     //============================================================================================//
-    //                                       VIEW FUNCTIONS                                       //
+    //                                       ADMIN FUNCTIONS                                      //
     //============================================================================================//
 
     function migrate(address[] calldata accounts_) external onlyRole("pohm_admin") {
@@ -169,5 +186,22 @@ contract Pohm is Policy, RolesConsumer {
 
         terms[account_] = Term(percent_, gClaimed_, max_);
         totalAllocated += percent_;
+    }
+
+    //============================================================================================//
+    //                                     INTERNAL FUNCTIONS                                     //
+    //============================================================================================//
+
+    function _claim(uint256 amount_) internal returns (uint256 toSend) {
+        Term memory accountTerms = terms[msg.sender];
+
+        DAI.safeTransferFrom(msg.sender, address(TRSRY), amount_);
+        toSend = (amount_ * 1e9) / 1e18;
+
+        if ((redeemableFor(msg.sender) / 1e9) >= toSend) revert POHM_ClaimMoreThanVested();
+        if ((accountTerms.max - getAccountClaimed(msg.sender)) >= toSend)
+            revert POHM_ClaimMoreThanMax();
+
+        terms[msg.sender].gClaimed += gOHM.balanceTo(toSend);
     }
 }
