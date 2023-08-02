@@ -215,7 +215,7 @@ contract OperatorTest is Test {
             /// Get current capacity of the low wall
             /// Set amount in to put capacity 1 below the threshold for shutting down the wall
             uint256 startCapacity = range.capacity(false);
-            uint256 lowWallPrice = range.price(true, false);
+            uint256 lowWallPrice = range.price(false, true);
             amountIn = startCapacity.mulDiv(1e9, lowWallPrice).mulDiv(9999, 10000) + 1;
 
             uint256 expAmountOut = operator.getAmountOut(ohm, amountIn);
@@ -275,7 +275,7 @@ contract OperatorTest is Test {
         uint256 reserveBalance = reserve.balanceOf(alice);
 
         /// Calculate expected difference
-        uint256 lowWallPrice = range.price(true, false);
+        uint256 lowWallPrice = range.price(false, true);
         uint256 expAmountOut = amountIn.mulDiv(1e18 * lowWallPrice, 1e9 * 1e18);
 
         /// Swap at the high wall
@@ -381,7 +381,7 @@ contract OperatorTest is Test {
 
         /// Try to swap, expect to fail
         uint256 amountIn = 100 * 1e9;
-        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(false, true), 1e9 * 1e18);
 
         bytes memory err = abi.encodeWithSignature("Operator_WallDown()");
         vm.expectRevert(err);
@@ -423,7 +423,7 @@ contract OperatorTest is Test {
 
         /// Try to swap, expect to fail
         uint256 amountIn = 100 * 1e9;
-        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(false, true), 1e9 * 1e18);
 
         bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
         vm.expectRevert(err);
@@ -457,7 +457,7 @@ contract OperatorTest is Test {
 
         /// Set amounts for low wall swap with minAmountOut greater than expAmountOut
         amountIn = 100 * 1e9;
-        expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
+        expAmountOut = amountIn.mulDiv(1e18 * range.price(false, true), 1e9 * 1e18);
         minAmountOut = expAmountOut + 1;
 
         /// Try to swap at low wall, expect to fail
@@ -825,7 +825,7 @@ contract OperatorTest is Test {
         assertEq(type(uint256).max, currentMarket);
 
         /// Cause price to spike to trigger high cushion
-        uint256 cushionPrice = range.price(false, true);
+        uint256 cushionPrice = range.price(true, false);
         price.setLastPrice(cushionPrice + 500);
         vm.prank(heart);
         operator.operate();
@@ -1666,14 +1666,14 @@ contract OperatorTest is Test {
         /// Spreads not updated
         assertEq(newRange.high.cushion.spread, 1000);
         assertEq(newRange.high.wall.spread, 2000);
+        assertEq(newRange.high.cushion.price, startRange.high.cushion.price);
+        assertEq(newRange.high.wall.price, startRange.high.wall.price);
 
         /// Check that the spreads have been set and prices are updated
         assertEq(newRange.low.cushion.spread, 1500);
         assertEq(newRange.low.wall.spread, 3000);
         assertLt(newRange.low.cushion.price, startRange.low.cushion.price);
         assertLt(newRange.low.wall.price, startRange.low.wall.price);
-        assertGt(newRange.high.cushion.price, startRange.high.cushion.price);
-        assertGt(newRange.high.wall.price, startRange.high.wall.price);
 
         /// Set spreads smaller as admin
         vm.prank(policy);
@@ -1685,14 +1685,14 @@ contract OperatorTest is Test {
         /// Spreads not updated
         assertEq(newRange.high.cushion.spread, 1000);
         assertEq(newRange.high.wall.spread, 2000);
+        assertEq(newRange.high.cushion.price, startRange.high.cushion.price);
+        assertEq(newRange.high.wall.price, startRange.high.wall.price);
 
         /// Check that the spreads have been set and prices are updated
         assertEq(newRange.low.cushion.spread, 500);
         assertEq(newRange.low.wall.spread, 1000);
         assertGt(newRange.low.cushion.price, startRange.low.cushion.price);
         assertGt(newRange.low.wall.price, startRange.low.wall.price);
-        assertLt(newRange.high.cushion.price, startRange.high.cushion.price);
-        assertLt(newRange.high.wall.price, startRange.high.wall.price);
     }
 
     function testCorrectness_setThresholdFactor() public {
@@ -1972,8 +1972,8 @@ contract OperatorTest is Test {
         assertTrue(!range.active(false));
         assertEq(treasury.withdrawApproval(address(operator), reserve), 0);
         assertEq(range.price(false, false), 0);
-        assertEq(range.price(true, false), 0);
         assertEq(range.price(false, true), 0);
+        assertEq(range.price(true, false), 0);
         assertEq(range.price(true, true), 0);
         assertEq(range.capacity(false), 0);
         assertEq(range.capacity(true), 0);
@@ -1989,8 +1989,8 @@ contract OperatorTest is Test {
         assertTrue(range.active(false));
         assertEq(treasury.withdrawApproval(address(operator), reserve), range.capacity(false));
         assertGt(range.price(false, false), 0);
-        assertGt(range.price(true, false), 0);
         assertGt(range.price(false, true), 0);
+        assertGt(range.price(true, false), 0);
         assertGt(range.price(true, true), 0);
         assertGt(range.capacity(false), 0);
         assertGt(range.capacity(true), 0);
@@ -2231,12 +2231,12 @@ contract OperatorTest is Test {
         /// Check that getAmountOut returns the amount of token to receive for different combinations of inputs
         /// Case 1: OHM In, less than capacity
         uint256 amountIn = 100 * 1e9;
-        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(false, true), 1e9 * 1e18);
 
         assertEq(expAmountOut, operator.getAmountOut(ohm, amountIn));
 
         /// Case 2: OHM In, more than capacity
-        amountIn = range.capacity(false).mulDiv(1e9 * 1e18, 1e18 * range.price(true, false)) + 1e9;
+        amountIn = range.capacity(false).mulDiv(1e9 * 1e18, 1e18 * range.price(false, true)) + 1e9;
 
         bytes memory err = abi.encodeWithSignature("Operator_InsufficientCapacity()");
         vm.expectRevert(err);
@@ -2282,8 +2282,8 @@ contract OperatorTest is Test {
 
         /// Check that the bands have updated
         assertGt(range.price(false, false), startRange.low.cushion.price);
-        assertGt(range.price(true, false), startRange.low.wall.price);
-        assertGt(range.price(false, true), startRange.high.cushion.price);
+        assertGt(range.price(false, true), startRange.low.wall.price);
+        assertGt(range.price(true, false), startRange.high.cushion.price);
         assertGt(range.price(true, true), startRange.high.wall.price);
 
         /// Update moving average downwards and trigger the operator
@@ -2293,8 +2293,8 @@ contract OperatorTest is Test {
 
         /// Check that the bands have updated
         assertLt(range.price(false, false), startRange.low.cushion.price);
-        assertLt(range.price(true, false), startRange.low.wall.price);
-        assertLt(range.price(false, true), startRange.high.cushion.price);
+        assertLt(range.price(false, true), startRange.low.wall.price);
+        assertLt(range.price(true, false), startRange.high.cushion.price);
         assertLt(range.price(true, true), startRange.high.wall.price);
 
         /// Check that the bands do not get reduced further past the minimum target price
@@ -2312,8 +2312,8 @@ contract OperatorTest is Test {
 
         /// Check that the bands have not changed
         assertEq(currentRange.low.cushion.price, range.price(false, false));
-        assertEq(currentRange.low.wall.price, range.price(true, false));
-        assertEq(currentRange.high.cushion.price, range.price(false, true));
+        assertEq(currentRange.low.wall.price, range.price(false, true));
+        assertEq(currentRange.high.cushion.price, range.price(true, false));
         assertEq(currentRange.high.wall.price, range.price(true, true));
     }
 }
