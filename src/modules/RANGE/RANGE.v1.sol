@@ -17,7 +17,7 @@ abstract contract RANGEv1 is Module {
         uint256 cushionHighPrice_,
         uint256 wallHighPrice_
     );
-    event SpreadsChanged(bool side_, uint256 cushionSpread_, uint256 wallSpread_);
+    event SpreadsChanged(bool high_, uint256 cushionSpread_, uint256 wallSpread_);
     event ThresholdFactorChanged(uint256 thresholdFactor_);
 
     // =========  ERRORS ========= //
