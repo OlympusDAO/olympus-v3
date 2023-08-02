@@ -122,8 +122,8 @@ contract BondCallbackTest is Test {
                 ERC20(ohm),
                 ERC20(reserve),
                 uint256(100),
-                uint256(1000),
-                uint256(2000)
+                [uint256(1000), uint256(2000)],
+                [uint256(1000), uint256(2000)]
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));

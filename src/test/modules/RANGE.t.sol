@@ -54,14 +54,17 @@ contract RangeTest is Test {
             /// Deploy kernel
             kernel = new Kernel(); // this contract will be the executor
 
+            uint256[2] memory lowSpreads = [uint256(1000), uint256(2000)];
+            uint256[2] memory highSpreads = [uint256(2000), uint256(2500)];
+
             /// Deploy module
             range = new OlympusRange(
                 kernel,
                 ERC20(ohm),
                 ERC20(reserve),
                 uint256(100),
-                uint256(1000),
-                uint256(2000)
+                lowSpreads,
+                highSpreads
             );
 
             // Deploy mock module writer
@@ -106,7 +109,7 @@ contract RangeTest is Test {
 
     event WallUp(bool high_, uint256 timestamp_, uint256 capacity_);
     event WallDown(bool high_, uint256 timestamp_, uint256 capacity_);
-    event SpreadsChanged(uint256 cushionSpread_, uint256 wallSpread_);
+    event SpreadsChanged(bool high_, uint256 cushionSpread_, uint256 wallSpread_);
 
     function testCorrectness_updateCapacity() public {
         /// Confirm that the capacities are initialiized
@@ -154,20 +157,20 @@ contract RangeTest is Test {
         range.updatePrices(110 * 1e18);
 
         /// Check that the bands have updated
-        assertGt(range.price(false, false), startRange.cushion.low.price);
-        assertGt(range.price(true, false), startRange.wall.low.price);
-        assertGt(range.price(false, true), startRange.cushion.high.price);
-        assertGt(range.price(true, true), startRange.wall.high.price);
+        assertGt(range.price(false, false), startRange.low.cushion.price);
+        assertGt(range.price(true, false), startRange.low.wall.price);
+        assertGt(range.price(false, true), startRange.high.cushion.price);
+        assertGt(range.price(true, true), startRange.high.wall.price);
 
         /// Update prices with a new moving average below the initial one
         vm.prank(writer);
         range.updatePrices(90 * 1e18);
 
         /// Check that the bands have updated
-        assertLt(range.price(false, false), startRange.cushion.low.price);
-        assertLt(range.price(true, false), startRange.wall.low.price);
-        assertLt(range.price(false, true), startRange.cushion.high.price);
-        assertLt(range.price(true, true), startRange.wall.high.price);
+        assertLt(range.price(false, false), startRange.low.cushion.price);
+        assertLt(range.price(true, false), startRange.low.wall.price);
+        assertLt(range.price(false, true), startRange.high.cushion.price);
+        assertLt(range.price(true, true), startRange.high.wall.price);
     }
 
     function testCorrectness_regenerate() public {
@@ -262,35 +265,37 @@ contract RangeTest is Test {
 
     function testCorrectness_setSpreads() public {
         /// Confirm that the spreads are set with the initial values
-        assertEq(range.spread(false), 1000);
-        assertEq(range.spread(true), 2000);
+        assertEq(range.spread(false, false), 1000);
+        assertEq(range.spread(false, true), 1500);
+        assertEq(range.spread(true, false), 2000);
+        assertEq(range.spread(true, true), 2500);
 
         /// Store initial prices. These should not update immediately when the spreads are updated because they require update prices to be called first.
         OlympusRange.Range memory startRange = range.range();
 
         /// Update the spreads with valid parameters from an approved address
         vm.expectEmit(false, false, false, true);
-        emit SpreadsChanged(500, 1000);
+        emit SpreadsChanged(false, 500, 1000);
         vm.prank(writer);
-        range.setSpreads(500, 1000);
+        range.setSpreads(false, 500, 1000);
 
         /// Expect the spreads to be updated and the prices to be the same
-        assertEq(range.spread(false), 500);
-        assertEq(range.spread(true), 1000);
-        assertEq(range.price(false, false), startRange.cushion.low.price);
-        assertEq(range.price(true, false), startRange.wall.low.price);
-        assertEq(range.price(false, true), startRange.cushion.high.price);
-        assertEq(range.price(true, true), startRange.wall.high.price);
+        assertEq(range.spread(false, false), 500);
+        assertEq(range.spread(false, true), 1000);
+        assertEq(range.price(false, false), startRange.low.cushion.price);
+        assertEq(range.price(true, false), startRange.low.wall.price);
+        assertEq(range.price(false, true), startRange.high.cushion.price);
+        assertEq(range.price(true, true), startRange.high.wall.price);
 
         /// Call updatePrices and check that the new spreads are applied
         vm.prank(writer);
         range.updatePrices(100 * 1e18);
 
         /// Expect the prices to be updated now (range is tighter so they should be inside the new spreads)
-        assertGt(range.price(false, false), startRange.cushion.low.price);
-        assertGt(range.price(true, false), startRange.wall.low.price);
-        assertLt(range.price(false, true), startRange.cushion.high.price);
-        assertLt(range.price(true, true), startRange.wall.high.price);
+        assertGt(range.price(false, false), startRange.low.cushion.price);
+        assertGt(range.price(true, false), startRange.low.wall.price);
+        assertLt(range.price(false, true), startRange.high.cushion.price);
+        assertLt(range.price(true, true), startRange.high.wall.price);
     }
 
     function testCorrectness_setThresholdFactor() public {
@@ -329,23 +334,23 @@ contract RangeTest is Test {
         /// Case 1: wallSpread > 10000
         vm.startPrank(writer);
         vm.expectRevert(err);
-        range.setSpreads(1000, 20000);
+        range.setSpreads(false, 1000, 20000);
 
         /// Case 2: wallSpread < 100
         vm.expectRevert(err);
-        range.setSpreads(1000, 50);
+        range.setSpreads(false, 1000, 50);
 
         /// Case 3: cushionSpread > 10000
         vm.expectRevert(err);
-        range.setSpreads(20000, 1000);
+        range.setSpreads(false, 20000, 1000);
 
         /// Case 4: cushionSpread < 100
         vm.expectRevert(err);
-        range.setSpreads(50, 1000);
+        range.setSpreads(false, 50, 1000);
 
         /// Case 5: cushionSpread > wallSpread (with in bounds values)
         vm.expectRevert(err);
-        range.setSpreads(2000, 1000);
+        range.setSpreads(false, 2000, 1000);
 
         /// Try to call setThresholdFactor with invalid parameters from an approved address
         /// Case 1: thresholdFactor > 10000
@@ -384,7 +389,7 @@ contract RangeTest is Test {
 
         /// setSpreads
         vm.expectRevert(err);
-        range.setSpreads(500, 1000);
+        range.setSpreads(false, 500, 1000);
 
         /// setThresholdFactor
         vm.expectRevert(err);
@@ -418,13 +423,15 @@ contract RangeTest is Test {
         assertEq(_range.high.threshold, 100_000 * 1e18);
         assertEq(_range.high.market, type(uint256).max);
 
-        assertEq(_range.cushion.low.price, (100 * 1e18 * (1e4 - 1000)) / 1e4);
-        assertEq(_range.cushion.high.price, (100 * 1e18 * (1e4 + 1000)) / 1e4);
-        assertEq(_range.cushion.spread, 1000);
+        assertEq(_range.low.cushion.price, (100 * 1e18 * (1e4 - 1000)) / 1e4);
+        assertEq(_range.high.cushion.price, (100 * 1e18 * (1e4 + 2000)) / 1e4);
+        assertEq(_range.low.cushion.spread, 1000);
+        assertEq(_range.high.cushion.spread, 2000);
 
-        assertEq(_range.wall.low.price, (100 * 1e18 * (1e4 - 2000)) / 1e4);
-        assertEq(_range.wall.high.price, (100 * 1e18 * (1e4 + 2000)) / 1e4);
-        assertEq(_range.wall.spread, 2000);
+        assertEq(_range.low.wall.price, (100 * 1e18 * (1e4 - 1500)) / 1e4);
+        assertEq(_range.high.wall.price, (100 * 1e18 * (1e4 + 2500)) / 1e4);
+        assertEq(_range.low.wall.spread, 1500);
+        assertEq(_range.high.wall.spread, 2500);
     }
 
     function testCorrectness_viewCapacity() public {
@@ -450,10 +457,10 @@ contract RangeTest is Test {
         OlympusRange.Range memory _range = range.range();
 
         /// Check that cushion and walls prices match the value returned from price
-        assertEq(range.price(false, false), _range.cushion.low.price);
-        assertEq(range.price(true, false), _range.wall.low.price);
-        assertEq(range.price(false, true), _range.cushion.high.price);
-        assertEq(range.price(true, true), _range.wall.high.price);
+        assertEq(range.price(false, false), _range.low.cushion.price);
+        assertEq(range.price(true, false), _range.low.wall.price);
+        assertEq(range.price(false, true), _range.high.cushion.price);
+        assertEq(range.price(true, true), _range.high.wall.price);
     }
 
     function testCorrectness_viewSpread() public {
@@ -461,8 +468,10 @@ contract RangeTest is Test {
         OlympusRange.Range memory _range = range.range();
 
         /// Check that cushion and walls prices match the value returned from price
-        assertEq(range.spread(false), _range.cushion.spread);
-        assertEq(range.spread(true), _range.wall.spread);
+        assertEq(range.spread(false, false), _range.low.cushion.spread);
+        assertEq(range.spread(false, true), _range.low.wall.spread);
+        assertEq(range.spread(true, false), _range.high.cushion.spread);
+        assertEq(range.spread(true, true), _range.high.wall.spread);
     }
 
     function testCorrectness_viewMarket() public {

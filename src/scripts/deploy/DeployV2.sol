@@ -346,7 +346,7 @@ contract OlympusDeploy is Script {
 
         // Deploy Range module
         vm.broadcast();
-        RANGE = new OlympusRange(kernel, ohm, reserve, thresholdFactor, cushionSpread, wallSpread);
+        RANGE = new OlympusRange(kernel, ohm, reserve, thresholdFactor, [cushionSpread, wallSpread], [cushionSpread, wallSpread]);
         console2.log("Range deployed at:", address(RANGE));
 
         return address(RANGE);

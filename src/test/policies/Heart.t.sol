@@ -346,17 +346,16 @@ contract HeartTest is Test {
         bytes memory err = abi.encodeWithSignature("Heart_BeatAvailable()");
         vm.expectRevert(err);
         vm.prank(policy);
-        heart.setRewardAuctionParams(newToken, newMaxReward, newAuctionDuration);
+        heart.setRewardAuctionParams(newMaxReward, newAuctionDuration);
 
         // Beat the heart
         heart.beat();
 
         // Set a new reward token and amount from the policy
         vm.prank(policy);
-        heart.setRewardAuctionParams(newToken, newMaxReward, newAuctionDuration);
+        heart.setRewardAuctionParams(newMaxReward, newAuctionDuration);
 
-        // Expect the heart's reward token and reward to be updated
-        assertEq(address(heart.rewardToken()), address(newToken));
+        // Expect the heart's reward to be updated
         assertEq(heart.maxReward(), newMaxReward);
 
         // Mint some new tokens to the heart to pay rewards
@@ -380,35 +379,6 @@ contract HeartTest is Test {
         assertEq(endBalance, startBalance + 1e18);
     }
 
-    function testCorrectness_withdrawUnspentRewards() public {
-        // Set timestamp so that a heart beat is available
-        vm.warp(block.timestamp + heart.frequency());
-
-        // Try to call while a beat is available, expect to fail
-        bytes memory err = abi.encodeWithSignature("Heart_BeatAvailable()");
-        vm.expectRevert(err);
-        vm.prank(policy);
-        heart.withdrawUnspentRewards(rewardToken);
-
-        // Beat the heart
-        heart.beat();
-
-        // Get the balance of the reward token on the contract
-        uint256 startBalance = rewardToken.balanceOf(address(policy));
-        uint256 heartBalance = rewardToken.balanceOf(address(heart));
-
-        // Withdraw the heart's unspent rewards
-        vm.prank(policy);
-        heart.withdrawUnspentRewards(rewardToken);
-        uint256 endBalance = rewardToken.balanceOf(address(policy));
-
-        // Expect the heart's reward token balance to be 0
-        assertEq(rewardToken.balanceOf(address(heart)), uint256(0));
-
-        // Expect this contract's reward token balance to be increased by the heart's unspent rewards
-        assertEq(endBalance, startBalance + heartBalance);
-    }
-
     function testCorrectness_cannotCallAdminFunctionsWithoutPermissions() public {
         // Try to call admin functions on the heart as non-policy and expect revert
         bytes memory err = abi.encodeWithSelector(
@@ -426,9 +396,6 @@ contract HeartTest is Test {
         heart.activate();
 
         vm.expectRevert(err);
-        heart.setRewardAuctionParams(rewardToken, uint256(2e18), uint48(12 * 25));
-
-        vm.expectRevert(err);
-        heart.withdrawUnspentRewards(rewardToken);
+        heart.setRewardAuctionParams(uint256(2e18), uint48(12 * 25));
     }
 }

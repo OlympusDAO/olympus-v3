@@ -362,8 +362,8 @@ abstract contract RangeSim is Test {
                 kernel,
                 ERC20(ohm), ERC20(reserve),
                 vm.envUint("THRESHOLD_FACTOR"),
-                uint256(_params.cushionSpread),
-                uint256(_params.wallSpread)
+                [uint256(_params.cushionSpread), uint256(_params.wallSpread)],
+                [uint256(_params.cushionSpread), uint256(_params.wallSpread)]
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
@@ -1026,10 +1026,10 @@ abstract contract RangeSim is Test {
             supply,
             _range.low.capacity,
             _range.high.capacity,
-            _range.wall.low.price,
-            _range.wall.high.price,
-            _range.cushion.low.price,
-            _range.cushion.high.price
+            _range.low.wall.price,
+            _range.high.wall.price,
+            _range.low.cushion.price,
+            _range.high.cushion.price
         );
     }
 
