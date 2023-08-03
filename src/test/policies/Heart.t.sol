@@ -67,6 +67,9 @@ contract HeartTest is Test {
     OlympusHeart internal heart;
     RolesAdmin internal rolesAdmin;
 
+    // MINTR
+    event Mint(address indexed policy_, address indexed to_, uint256 amount_);
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -139,7 +142,7 @@ contract HeartTest is Test {
     //     [X] cannot beat if not enough time has passed
     //     [X] fails if price or operator revert
     //     [X] reward auction functions correctly based on time since beat available
-    // [ ] Mints rewardToken correctly
+    // [X] Mints rewardToken correctly
 
     function testCorrectness_beat() public {
         // Get the beat frequency of the heart and wait that amount of time
@@ -232,6 +235,12 @@ contract HeartTest is Test {
 
         // Warp forward the fuzzed wait time
         vm.warp(block.timestamp + wait_);
+
+        // Expect the reward to be emitted
+        if (expectedReward > 0) {
+            vm.expectEmit(false, false, false, true);
+            emit Mint(address(heart), address(this), expectedReward);
+        }
 
         // Beat the heart
         heart.beat();
