@@ -1693,6 +1693,29 @@ contract OperatorTest is Test {
         assertEq(newRange.low.wall.spread, 1000);
         assertGt(newRange.low.cushion.price, startRange.low.cushion.price);
         assertGt(newRange.low.wall.price, startRange.low.wall.price);
+
+        // Reset lower spreads as admin
+        vm.prank(policy);
+        operator.setSpreads(false, 1000, 2000);
+
+        // Set upper spreads as admin
+        vm.prank(policy);
+        operator.setSpreads(true, 500, 1000);
+
+        /// Get new bands
+        newRange = range.range();
+
+        /// Lower spreads not updated
+        assertEq(newRange.low.cushion.spread, 1000);
+        assertEq(newRange.low.wall.spread, 2000);
+        assertEq(newRange.low.cushion.price, startRange.low.cushion.price);
+        assertEq(newRange.low.wall.price, startRange.low.wall.price);
+
+        /// Upper spreads have been set and prices are updated
+        assertEq(newRange.high.cushion.spread, 500);
+        assertEq(newRange.high.wall.spread, 1000);
+        assertLt(newRange.high.cushion.price, startRange.high.cushion.price);
+        assertLt(newRange.high.wall.price, startRange.high.wall.price);
     }
 
     function testCorrectness_setThresholdFactor() public {
