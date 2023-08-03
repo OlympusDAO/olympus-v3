@@ -175,7 +175,7 @@ contract RangeTest is Test {
         assertLt(range.price(true, true), startRange.high.wall.price);
     }
 
-function testCorrectness_updatePrices_differentSpreads() public {
+    function testCorrectness_updatePrices_differentSpreads() public {
         // Set different spreads for high and low
         vm.prank(writer);
         range.setSpreads(false, 500, 1000); // low, cushion, wall
