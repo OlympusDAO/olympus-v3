@@ -287,7 +287,6 @@ contract HeartTest is Test {
     // [X] activate and deactivate
     // [X] setOperator
     // [X] setRewardAuctionParams
-    // [X] withdrawUnspentRewards
     // [X] cannot call admin functions without permissions
 
     function testCorrectness_resetBeat() public {
@@ -360,6 +359,8 @@ contract HeartTest is Test {
         // Set a new reward token and amount from the policy
         vm.prank(policy);
         heart.setRewardAuctionParams(newMaxReward, newAuctionDuration);
+
+        // TODO RewardUpdated event
 
         // Expect the heart's reward to be updated
         assertEq(heart.maxReward(), newMaxReward);

@@ -32,9 +32,6 @@ contract RangeTest is Test {
 
     address internal writer;
 
-    // TODOs
-    // [ ] Asymmetric spreads
-
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -101,11 +98,14 @@ contract RangeTest is Test {
     ///     [X] updating capacity above the threshold
     ///     [X] updating capacity below the threshold
     /// [X] updatePrices
+    ///     [ ] handles different high and low spreads
     /// [X] regenerate
     /// [X] updateMarket
     ///     [X] updating with non-max market ID and positive capacity creates a cushion
     ///     [X] updating with max-market ID takes down a cushion and sets last market capacity to zero
     /// [X] setSpreads
+    ///     [ ] low spreads, emits event
+    ///     [ ] high spreads, emits event
     /// [X] setThresholdFactor
     /// [X] cannot set parameters with invalid params
     /// [X] only permitted policies can call these functions
@@ -412,7 +412,9 @@ contract RangeTest is Test {
     /// [X] capacity
     /// [X] active
     /// [X] price
+    ///     [ ] handles high and low
     /// [X] spread
+    ///     [ ] handles high and low
     /// [X] market
 
     function testCorrectness_viewRange() public {
