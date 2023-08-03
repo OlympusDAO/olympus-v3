@@ -98,14 +98,13 @@ contract RangeTest is Test {
     ///     [X] updating capacity above the threshold
     ///     [X] updating capacity below the threshold
     /// [X] updatePrices
-    ///     [ ] handles different high and low spreads
     /// [X] regenerate
     /// [X] updateMarket
     ///     [X] updating with non-max market ID and positive capacity creates a cushion
     ///     [X] updating with max-market ID takes down a cushion and sets last market capacity to zero
     /// [X] setSpreads
-    ///     [ ] low spreads, emits event
-    ///     [ ] high spreads, emits event
+    ///     [X] low spreads, emits event
+    ///     [X] high spreads, emits event
     /// [X] setThresholdFactor
     /// [X] cannot set parameters with invalid params
     /// [X] only permitted policies can call these functions
@@ -174,6 +173,32 @@ contract RangeTest is Test {
         assertLt(range.price(false, true), startRange.low.wall.price);
         assertLt(range.price(true, false), startRange.high.cushion.price);
         assertLt(range.price(true, true), startRange.high.wall.price);
+    }
+
+function testCorrectness_updatePrices_differentSpreads() public {
+        // Set different spreads for high and low
+        vm.prank(writer);
+        range.setSpreads(false, 500, 1000); // low, cushion, wall
+        vm.prank(writer);
+        range.setSpreads(true, 100, 200); // high, cushion, wall
+
+        /// Update the prices with the same target price, in order to regenerate
+        vm.prank(writer);
+        range.updatePrices(100 * 1e18);
+
+        /// Get range data
+        OlympusRange.Range memory _range = range.range();
+
+        /// Check that the bands have updated
+        assertEq(_range.low.cushion.price, (100 * 1e18 * (1e4 - 500)) / 1e4);
+        assertEq(_range.high.cushion.price, (100 * 1e18 * (1e4 + 100)) / 1e4);
+        assertEq(_range.low.cushion.spread, 500);
+        assertEq(_range.high.cushion.spread, 100);
+
+        assertEq(_range.low.wall.price, (100 * 1e18 * (1e4 - 1000)) / 1e4);
+        assertEq(_range.high.wall.price, (100 * 1e18 * (1e4 + 200)) / 1e4);
+        assertEq(_range.low.wall.spread, 1000);
+        assertEq(_range.high.wall.spread, 200);
     }
 
     function testCorrectness_regenerate() public {
@@ -276,23 +301,25 @@ contract RangeTest is Test {
         /// Store initial prices. These should not update immediately when the spreads are updated because they require update prices to be called first.
         OlympusRange.Range memory startRange = range.range();
 
-        /// Update the spreads with valid parameters from an approved address
+        /// Update the low spreads with valid parameters from an approved address
         vm.expectEmit(false, false, false, true);
         emit SpreadsChanged(false, 500, 1000);
         vm.prank(writer);
         range.setSpreads(false, 500, 1000); // low, cushion, wall
 
-        /// Update the spreads with valid parameters from an approved address
+        /// Update the high spreads with valid parameters from an approved address
         vm.expectEmit(false, false, false, true);
-        emit SpreadsChanged(true, 500, 1000);
+        emit SpreadsChanged(true, 499, 999);
         vm.prank(writer);
-        range.setSpreads(true, 500, 1000); // low, cushion, wall
+        range.setSpreads(true, 499, 999); // high, cushion, wall
 
         /// Expect the spreads to be updated and the prices to be the same
-        assertEq(range.spread(false, false), 500); // Cushion
-        assertEq(range.spread(false, true), 1000); // Wall
+        assertEq(range.spread(false, false), 500); // low, Cushion
+        assertEq(range.spread(false, true), 1000); // low, Wall
         assertEq(range.price(false, false), startRange.low.cushion.price);
         assertEq(range.price(false, true), startRange.low.wall.price);
+        assertEq(range.spread(true, false), 499); // high, Cushion
+        assertEq(range.spread(true, true), 999); // high, Wall
         assertEq(range.price(true, false), startRange.high.cushion.price);
         assertEq(range.price(true, true), startRange.high.wall.price);
 
@@ -412,9 +439,9 @@ contract RangeTest is Test {
     /// [X] capacity
     /// [X] active
     /// [X] price
-    ///     [ ] handles high and low
+    ///     [X] handles high and low
     /// [X] spread
-    ///     [ ] handles high and low
+    ///     [X] handles high and low
     /// [X] market
 
     function testCorrectness_viewRange() public {

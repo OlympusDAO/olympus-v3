@@ -70,6 +70,9 @@ contract HeartTest is Test {
     // MINTR
     event Mint(address indexed policy_, address indexed to_, uint256 amount_);
 
+    // Heart
+    event RewardUpdated(uint256 maxRewardAmount_, uint48 auctionDuration_);
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -356,11 +359,13 @@ contract HeartTest is Test {
         // Beat the heart
         heart.beat();
 
+        // Expect the event to be emitted
+        vm.expectEmit(false, false, false, true);
+        emit RewardUpdated(newMaxReward, newAuctionDuration);
+
         // Set a new reward token and amount from the policy
         vm.prank(policy);
         heart.setRewardAuctionParams(newMaxReward, newAuctionDuration);
-
-        // TODO RewardUpdated event
 
         // Expect the heart's reward to be updated
         assertEq(heart.maxReward(), newMaxReward);
