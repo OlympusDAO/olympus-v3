@@ -5,6 +5,7 @@ import {Vm} from "forge-std/Vm.sol";
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
@@ -214,6 +215,7 @@ abstract contract RangeSim is Test {
     BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
+    MockERC4626 internal wrappedReserve;
     ZuniswapV2Factory internal lpFactory;
     ZuniswapV2Pair internal pool;
     ZuniswapV2Router internal router;
@@ -285,6 +287,7 @@ abstract contract RangeSim is Test {
             reserve = new MockERC20("Reserve", "RSV", 18); // deploying reserve before ohm in the broader context of this file means it will have a smaller address and therefore will be token0 in the LP pool
             ohm = new MockOhm("Olympus", "OHM", 9);
             require(address(reserve) < address(ohm)); // ensure reserve is token0 in the LP pool
+            wrappedReserve = new MockERC4626(reserve, "Wrapped Reserve", "WRSV");
 
             ohmEthPriceFeed = new MockPriceFeed();
             ohmEthPriceFeed.setDecimals(18);
@@ -379,7 +382,7 @@ abstract contract RangeSim is Test {
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [ERC20(ohm), ERC20(reserve)],
+                [address(ohm), address(reserve), address(wrappedReserve)],
                 [
                     _params.cushionFactor, // cushionFactor
                     uint32(vm.envUint("CUSHION_DURATION")), // duration

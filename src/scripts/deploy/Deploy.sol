@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {Script, console2} from "forge-std/Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
@@ -59,6 +60,7 @@ contract OlympusDeploy is Script {
     /// Token addresses
     ERC20 public ohm;
     ERC20 public reserve;
+    ERC4626 public wrappedReserve;
     ERC20 public rewardToken;
 
     /// Bond system addresses
@@ -81,6 +83,7 @@ contract OlympusDeploy is Script {
         /// Token addresses
         ohm = ERC20(vm.envAddress("OHM_ADDRESS"));
         reserve = ERC20(vm.envAddress("DAI_ADDRESS"));
+        wrappedReserve = ERC4626(vm.envAddress("SDAI_ADDRESS"));
         rewardToken = ERC20(vm.envAddress("OHM_ADDRESS"));
 
         /// Bond system addresses
@@ -140,7 +143,7 @@ contract OlympusDeploy is Script {
             kernel,
             bondAuctioneer,
             callback,
-            [ohm, reserve],
+            [address(ohm), address(reserve), address(wrappedReserve)],
             [
                 uint32(3075), // cushionFactor
                 uint32(3 days), // cushionDuration

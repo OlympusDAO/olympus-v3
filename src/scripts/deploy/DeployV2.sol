@@ -5,6 +5,7 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {Script, console2} from "forge-std/Script.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 // Bond Protocol
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
@@ -90,6 +91,7 @@ contract OlympusDeploy is Script {
     /// Token addresses
     ERC20 public ohm;
     ERC20 public reserve;
+    ERC4626 public wrappedReserve;
     ERC20 public wsteth;
     ERC20 public lusd;
     ERC20 public aura;
@@ -166,6 +168,7 @@ contract OlympusDeploy is Script {
         // Non-bophades contracts
         ohm = ERC20(envAddress("olympus.legacy.OHM"));
         reserve = ERC20(envAddress("external.tokens.DAI"));
+        wrappedReserve = ERC4626(envAddress("external.tokens.sDAI"));
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
         aura = ERC20(envAddress("external.tokens.AURA"));
         bal = ERC20(envAddress("external.tokens.BAL"));
@@ -421,7 +424,13 @@ contract OlympusDeploy is Script {
 
         // Deploy Operator policy
         vm.broadcast();
-        operator = new Operator(kernel, bondAuctioneer, callback, [ohm, reserve], configParams);
+        operator = new Operator(
+            kernel,
+            bondAuctioneer,
+            callback,
+            [address(ohm), address(reserve), address(wrappedReserve)],
+            configParams
+        );
         console2.log("Operator deployed at:", address(operator));
 
         return address(operator);
