@@ -339,10 +339,13 @@ contract OlympusDeploy is Script {
 
     function _deployRange(bytes memory args) public returns (address) {
         // Decode arguments for Range module
-        (uint256 highCushionSpread, uint256 highWallSpread, uint256 lowCushionSpread, uint256 lowWallSpread, uint256 thresholdFactor) = abi.decode(
-            args,
-            (uint256, uint256, uint256, uint256, uint256)
-        );
+        (
+            uint256 highCushionSpread,
+            uint256 highWallSpread,
+            uint256 lowCushionSpread,
+            uint256 lowWallSpread,
+            uint256 thresholdFactor
+        ) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
 
         console2.log("highCushionSpread", highCushionSpread);
         console2.log("highWallSpread", highWallSpread);
@@ -421,7 +424,10 @@ contract OlympusDeploy is Script {
             uint256 regenThreshold,
             uint256 regenWait,
             uint256 reserveFactor
-        ) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256));
+        ) = abi.decode(
+                args,
+                (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256)
+            );
 
         // Create config params array
         // Order is not alphabetical. Copied from the constructor.
@@ -452,7 +458,13 @@ contract OlympusDeploy is Script {
 
         // Deploy Operator policy
         vm.broadcast();
-        operator = new Operator(kernel, bondAuctioneer, callback, [address(ohm), address(reserve)], configParams);
+        operator = new Operator(
+            kernel,
+            bondAuctioneer,
+            callback,
+            [address(ohm), address(reserve)],
+            configParams
+        );
         console2.log("Operator deployed at:", address(operator));
 
         return address(operator);

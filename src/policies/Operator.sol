@@ -378,13 +378,19 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(range.high.cushion.price);
-            int8 scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
+            int8 scaleAdjustment = int8(_ohmDecimals) -
+                int8(_reserveDecimals) +
+                (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
             uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
-                    36 + scaleAdjustment + int8(_reserveDecimals) - int8(_ohmDecimals) - priceDecimals
+                    36 +
+                        scaleAdjustment +
+                        int8(_reserveDecimals) -
+                        int8(_ohmDecimals) -
+                        priceDecimals
                 );
 
             uint256 initialPrice = PRICE.getLastPrice().mulDiv(bondScale, oracleScale);
@@ -432,13 +438,19 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(invCushionPrice);
-            int8 scaleAdjustment = int8(_reserveDecimals) - int8(_ohmDecimals) + (priceDecimals / 2);
+            int8 scaleAdjustment = int8(_reserveDecimals) -
+                int8(_ohmDecimals) +
+                (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
             uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
-                    36 + scaleAdjustment + int8(_ohmDecimals) - int8(_reserveDecimals) - priceDecimals
+                    36 +
+                        scaleAdjustment +
+                        int8(_ohmDecimals) -
+                        int8(_reserveDecimals) -
+                        priceDecimals
                 );
 
             uint256 initialPrice = invCurrentPrice.mulDiv(bondScale, oracleScale);
