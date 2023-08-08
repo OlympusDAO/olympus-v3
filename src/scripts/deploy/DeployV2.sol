@@ -452,7 +452,7 @@ contract OlympusDeploy is Script {
 
         // Deploy Operator policy
         vm.broadcast();
-        operator = new Operator(kernel, bondAuctioneer, callback, [ohm, reserve], configParams);
+        operator = new Operator(kernel, bondAuctioneer, callback, [address(ohm), address(reserve)], configParams);
         console2.log("Operator deployed at:", address(operator));
 
         return address(operator);

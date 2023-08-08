@@ -60,14 +60,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     // Tokens
     /// @notice OHM token contract
     ERC20 public immutable ohm;
-    uint8 public immutable ohmDecimals;
+    uint8 internal immutable _ohmDecimals;
     /// @notice Reserve token contract
     ERC20 public immutable reserve;
-    uint8 public immutable reserveDecimals;
+    uint8 internal immutable _reserveDecimals;
+    uint8 internal _oracleDecimals;
 
     // Constants
-    uint32 public constant ONE_HUNDRED_PERCENT = 100e2;
-    uint32 public constant ONE_PERCENT = 1e2;
+    uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
+    uint32 internal constant ONE_PERCENT = 1e2;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -77,7 +78,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         Kernel kernel_,
         IBondSDA auctioneer_,
         IBondCallback callback_,
-        ERC20[2] memory tokens_, // [ohm, reserve]
+        address[2] memory tokens_, // [ohm, reserve]
         uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
     ) Policy(kernel_) {
         // Check params are valid
@@ -107,10 +108,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         auctioneer = auctioneer_;
         callback = callback_;
-        ohm = tokens_[0];
-        ohmDecimals = tokens_[0].decimals();
-        reserve = tokens_[1];
-        reserveDecimals = tokens_[1].decimals();
+        ohm = ERC20(tokens_[0]);
+        _ohmDecimals = ohm.decimals();
+        reserve = ERC20(tokens_[1]);
+        _reserveDecimals = reserve.decimals();
 
         Regen memory regen = Regen({
             count: uint32(0),
@@ -155,6 +156,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
+
+        // Store the price decimals for use in calculations (cached here to avoid extra external calls)
+        _oracleDecimals = PRICE.decimals();
     }
 
     /// @inheritdoc Policy
@@ -374,13 +378,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(range.high.cushion.price);
-            int8 scaleAdjustment = int8(ohmDecimals) - int8(reserveDecimals) + (priceDecimals / 2);
+            int8 scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            uint256 oracleScale = 10 ** uint8(int8(PRICE.decimals()) - priceDecimals);
+            uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
-                    36 + scaleAdjustment + int8(reserveDecimals) - int8(ohmDecimals) - priceDecimals
+                    36 + scaleAdjustment + int8(_reserveDecimals) - int8(_ohmDecimals) - priceDecimals
                 );
 
             uint256 initialPrice = PRICE.getLastPrice().mulDiv(bondScale, oracleScale);
@@ -420,22 +424,21 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             RANGE.updateMarket(true, market, marketCapacity);
         } else {
             // Calculate inverse prices from the oracle feed for the low side
-            uint8 oracleDecimals = PRICE.decimals();
-            uint256 invCushionPrice = 10 ** (oracleDecimals * 2) / range.low.cushion.price;
-            uint256 invCurrentPrice = 10 ** (oracleDecimals * 2) / PRICE.getLastPrice();
+            uint256 invCushionPrice = 10 ** (_oracleDecimals * 2) / range.low.cushion.price;
+            uint256 invCurrentPrice = 10 ** (_oracleDecimals * 2) / PRICE.getLastPrice();
 
             // Calculate scaleAdjustment for bond market
             // Price decimals are returned from the perspective of the quote token
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(invCushionPrice);
-            int8 scaleAdjustment = int8(reserveDecimals) - int8(ohmDecimals) + (priceDecimals / 2);
+            int8 scaleAdjustment = int8(_reserveDecimals) - int8(_ohmDecimals) + (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            uint256 oracleScale = 10 ** uint8(int8(oracleDecimals) - priceDecimals);
+            uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
-                    36 + scaleAdjustment + int8(ohmDecimals) - int8(reserveDecimals) - priceDecimals
+                    36 + scaleAdjustment + int8(_ohmDecimals) - int8(_reserveDecimals) - priceDecimals
                 );
 
             uint256 initialPrice = invCurrentPrice.mulDiv(bondScale, oracleScale);
@@ -498,7 +501,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         // Subtract the stated decimals from the calculated decimals to get the relative price decimals.
         // Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
-        return decimals - int8(PRICE.decimals());
+        return decimals - int8(_oracleDecimals);
     }
 
     // =========  INTERNAL FUNCTIONS ========= //
@@ -798,8 +801,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (tokenIn_ == ohm) {
             // Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
-                10 ** reserveDecimals * RANGE.price(false, true),
-                10 ** ohmDecimals * 10 ** PRICE.decimals()
+                10 ** _reserveDecimals * RANGE.price(false, true),
+                10 ** _ohmDecimals * 10 ** _oracleDecimals
             );
 
             // Revert if amount out exceeds capacity
@@ -809,8 +812,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         } else if (tokenIn_ == reserve) {
             // Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
-                10 ** ohmDecimals * 10 ** PRICE.decimals(),
-                10 ** reserveDecimals * RANGE.price(true, true)
+                10 ** _ohmDecimals * 10 ** _oracleDecimals,
+                10 ** _reserveDecimals * RANGE.price(true, true)
             );
 
             // Revert if amount out exceeds capacity
@@ -829,8 +832,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (high_) {
             capacity =
                 (capacity.mulDiv(
-                    10 ** ohmDecimals * 10 ** PRICE.decimals(),
-                    10 ** reserveDecimals * RANGE.price(true, true)
+                    10 ** _ohmDecimals * 10 ** _oracleDecimals,
+                    10 ** _reserveDecimals * RANGE.price(true, true)
                 ) * (ONE_HUNDRED_PERCENT + RANGE.spread(true, true) + RANGE.spread(false, true))) /
                 ONE_HUNDRED_PERCENT;
         }

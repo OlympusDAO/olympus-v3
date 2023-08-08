@@ -379,7 +379,7 @@ abstract contract RangeSim is Test {
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [ERC20(ohm), ERC20(reserve)],
+                [address(ohm), address(reserve)],
                 [
                     _params.cushionFactor, // cushionFactor
                     uint32(vm.envUint("CUSHION_DURATION")), // duration

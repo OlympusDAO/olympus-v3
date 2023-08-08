@@ -140,7 +140,7 @@ contract OlympusDeploy is Script {
             kernel,
             bondAuctioneer,
             callback,
-            [ohm, reserve],
+            [address(ohm), address(reserve)],
             [
                 uint32(3075), // cushionFactor
                 uint32(3 days), // cushionDuration

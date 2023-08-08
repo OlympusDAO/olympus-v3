@@ -121,7 +121,7 @@ contract OperatorTest is Test {
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [ERC20(ohm), ERC20(reserve)],
+                [address(ohm), address(reserve)],
                 [
                     uint32(2000), // cushionFactor
                     uint32(5 days), // duration
