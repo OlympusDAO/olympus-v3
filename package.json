@@ -18,8 +18,9 @@
     "lint": "npm run prettier && npm run solhint",
     "lint:check": "npm run prettier:check && npm run solhint:check",
     "test": "./shell/test_all.sh",
-    "test:unit": "forge test --no-match-contract \".*Fork$\" -vvv",
-    "test:fork": "forge test --match-contract \".*Fork$\" --fork-url $FORK_TEST_RPC_URL -vvv"
+    "test:unit": "forge test --no-match-contract Fork -vvv",
+    "test:fork": "forge test --match-contract \"$1.*Fork$\" --fork-url $FORK_TEST_RPC_URL -vvv",
+    "test:crosschainfork": "forge test --match-contract CrossChainBridgeFork -vvv"
   },
   "devDependencies": {
     "prettier": "^2.5.1",
