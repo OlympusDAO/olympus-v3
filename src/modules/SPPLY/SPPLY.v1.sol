@@ -3,6 +3,7 @@ pragma solidity 0.8.15;
 
 import "src/Submodules.sol";
 import {OlympusERC20Token as OHM} from "src/external/OlympusERC20.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
 
 type Category is bytes32;
 
@@ -39,6 +40,9 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
 
     /// @notice OHM Token
     OHM public ohm;
+
+    /// @notice gOHM Token
+    IgOHM public gOhm;
 
     // Cross-chain Supply
 

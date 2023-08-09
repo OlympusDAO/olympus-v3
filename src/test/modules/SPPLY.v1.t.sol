@@ -55,6 +55,10 @@ import "src/modules/SPPLY/OlympusSupply.sol";
 // [ ] getCategories - returns array of all categories used to track supply
 // [ ] getLocationsByCategory - returns array of all locations categorized in a given category
 // [ ] getSupplyByCategory - returns the supply of a given category (totaled from across all locations)
+//    [ ] zero supply
+//    [ ] OHM supply
+//    [ ] gOHM supply
+//    [ ] cross-chain supply
 //
 // Supply Metrics
 // [ ] totalSupply - returns the total supply of OHM, including cross-chain OHM

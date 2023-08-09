@@ -14,8 +14,13 @@ contract OlympusSupply is SPPLYv1 {
     //============================================================================================//
     //                                        MODULE SETUP                                        //
     //============================================================================================//
-    constructor(Kernel kernel_, address ohm_, uint256 initialCrossChainSupply_) Module(kernel_) {
-        ohm = OHM(ohm_);
+    constructor(
+        Kernel kernel_, 
+        address[3] memory tokens_, // [ohm, gOHM]
+        uint256 initialCrossChainSupply_
+    ) Module(kernel_) {
+        ohm = OHM(tokens_[0]);
+        gOhm = IgOHM(tokens_[1]);
         totalCrossChainSupply = initialCrossChainSupply_;
 
         // Add categories that are required for the metrics functions
@@ -239,6 +244,19 @@ contract OlympusSupply is SPPLYv1 {
         }
     }
 
+    /// @notice             Returns the balance of gOHM (in terms of OHM) for the provided location
+    /// @param location_    The location to get the gOHM balance for
+    /// @return             The balance of gOHM (in terms of OHM) for the provided location
+    function _getOhmForGOhmBalance(address location_) internal view returns (uint256) {
+        // Get the gOHM balance of the location
+        uint256 gOhmBalance = gOhm.balanceOf(location_);
+
+        // Convert gOHM balance to OHM balance
+        uint256 ohmBalance = gOhm.balanceFrom(gOhmBalance);
+
+        return ohmBalance;
+    }
+
     function _getSupplyByCategory(Category category_) internal view returns (uint256) {
         // Determine the number of locations in the category
         uint256 len = locations.length;
@@ -257,8 +275,8 @@ contract OlympusSupply is SPPLYv1 {
         // If count is zero, return zero
         if (count == 0) return 0;
 
-        // Total up the supply of all locations in the category
-        count = 0;
+        // Total up the supply of OHM of all locations in the category
+        count = 0; // TODO is this needed?
         uint256 supply;
         for (uint256 i; i < len; ) {
             if (fromCategory(categorization[locations[i]]) == fromCategory(category_)) {
@@ -266,6 +284,16 @@ contract OlympusSupply is SPPLYv1 {
                 unchecked {
                     ++count;
                 }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Total up the supply of gOHM of all locations in the category
+        for (uint256 i; i < len; ) {
+            if (fromCategory(categorization[locations[i]]) == fromCategory(category_)) {
+                supply += _getOhmForGOhmBalance(locations[i]);
             }
             unchecked {
                 ++i;
