@@ -60,9 +60,10 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 // [ ] getCategories - returns array of all categories used to track supply
 // [ ] getLocationsByCategory - returns array of all locations categorized in a given category
 // [ ] getSupplyByCategory - returns the supply of a given category (totaled from across all locations)
-//    [ ] zero supply
+//    [ ] no locations
+//    [X] zero supply
 //    [X] OHM supply
-//    [ ] gOHM supply
+//    [X] gOHM supply
 //    [ ] cross-chain supply
 //    [ ] handles submodules
 //    [ ] reverts upon submodule failure
@@ -152,6 +153,30 @@ contract SupplyTest is Test {
 
     // =========  getSupplyByCategory ========= //
 
+    function test_getSupplyByCategory_noLocations() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Remove the existing location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory(0));
+        vm.stopPrank();
+
+        // Check supply
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
+
+        assertEq(supply, 0);
+    }
+
+    function test_getSupplyByCategory_zeroSupply() public {
+        // No OHM or gOHM
+
+        // Check supply
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
+
+        assertEq(supply, 0);
+    }
+
     function test_getSupplyByCategory_ohmSupply() public {
         // Add OHM in the treasury
         ohm.mint(address(treasury), 100e9);
@@ -160,5 +185,17 @@ contract SupplyTest is Test {
         uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
 
         assertEq(supply, 100e9);
+    }
+
+    function test_getSupplyByCategory_gOhmSupply() public {
+        // Add gOHM in the treasury
+        gOhm.mint(address(treasury), 1e18); // 1 gOHM
+
+        uint256 expectedOhmSupply = uint256(1e18).mulDiv(GOHM_INDEX, 1e18); // 9 decimals
+
+        // Check supply
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
+
+        assertEq(supply, expectedOhmSupply);
     }
 }
