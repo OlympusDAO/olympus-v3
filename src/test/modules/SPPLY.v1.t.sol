@@ -7,10 +7,15 @@ import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockGohm} from "test/mocks/OlympusMocks.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
-//import {MockPolicy} from "test/mocks/KernelTestMocks.sol";
+
+import {FullMath} from "libraries/FullMath.sol";
 
 import "src/modules/SPPLY/OlympusSupply.sol";
+import {AuraBalancerSupply} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
+import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 
 // Tests for OlympusSupply v1.0
 // TODO
@@ -56,7 +61,7 @@ import "src/modules/SPPLY/OlympusSupply.sol";
 // [ ] getLocationsByCategory - returns array of all locations categorized in a given category
 // [ ] getSupplyByCategory - returns the supply of a given category (totaled from across all locations)
 //    [ ] zero supply
-//    [ ] OHM supply
+//    [X] OHM supply
 //    [ ] gOHM supply
 //    [ ] cross-chain supply
 //    [ ] handles submodules
@@ -68,3 +73,92 @@ import "src/modules/SPPLY/OlympusSupply.sol";
 // [ ] floatingSupply
 // [ ] collateralizedSupply
 // [ ] backedSupply
+
+contract SupplyTest is Test {
+    using FullMath for uint256;
+    using ModuleTestFixtureGenerator for OlympusSupply;
+
+    MockERC20 internal ohm;
+    MockGohm internal gOhm;
+
+    Kernel internal kernel;
+
+    OlympusSupply internal moduleSupply;
+
+    AuraBalancerSupply internal submoduleAuraBalancerSupply;
+    BLVaultSupply internal submoduleBLVaultSupply;
+    SiloSupply internal submoduleSiloSupply;
+
+    address internal writer;
+
+    UserFactory public userFactory;
+    address internal treasury;
+
+    uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
+    uint256 internal constant INITIAL_CROSS_CHAIN_SUPPLY = 100e9; // 100 OHM
+
+    function setUp() public {
+        vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
+
+        // Tokens
+        {
+            ohm = new MockERC20("OHM", "OHM", 9);
+            gOhm = new MockGohm(GOHM_INDEX);
+        }
+
+        // Locations
+        {
+            userFactory = new UserFactory();
+            address[] memory users = userFactory.create(1);
+            treasury = users[0];
+        }
+
+        // Bophades
+        {
+            // Deploy kernel
+            kernel = new Kernel(); // this contract will be the executor
+
+            // Deploy SPPLY module
+            address[2] memory tokens = [address(ohm), address(gOhm)];
+            moduleSupply = new OlympusSupply(kernel, tokens, INITIAL_CROSS_CHAIN_SUPPLY);
+
+            // Deploy mock module writer
+            writer = moduleSupply.generateGodmodeFixture(type(OlympusSupply).name);
+
+            // TODO Deploy submodules
+        }
+
+        // Initialize
+        {
+            /// Initialize system and kernel
+            kernel.executeAction(Actions.InstallModule, address(moduleSupply));
+            kernel.executeAction(Actions.ActivatePolicy, address(writer));
+
+            // Install submodules on supply module
+            vm.startPrank(writer);
+            // TODO install submodules on supply
+            vm.stopPrank();
+        }
+
+        // Locations
+        {
+            vm.startPrank(writer);
+            moduleSupply.categorize(address(treasury), toCategory("protocol-owned-treasury"));
+            vm.stopPrank();
+        }
+    }
+
+    // =========  TESTS ========= //
+
+    // =========  getSupplyByCategory ========= //
+
+    function test_getSupplyByCategory_ohmSupply() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Check supply
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
+
+        assertEq(supply, 100e9);
+    }
+}
