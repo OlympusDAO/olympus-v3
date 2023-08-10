@@ -106,8 +106,9 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //      [ ] cached value
 //    [ ] invalid variant
 // [ ] storeCategorySupply
-//    [ ] stores supply for category
-//    [ ] reverts with an invalid category
+//  [ ] reverts if caller is not permissioned
+//  [ ] stores supply for category
+//  [ ] reverts with an invalid category
 //
 // Supply Metrics
 // [ ] getMetric
@@ -130,8 +131,9 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //      [ ] cached value
 //    [ ] invalid variant
 // [ ] storeMetric
-//    [ ] stores metric
-//    [ ] reverts with an invalid metric
+//  [ ] reverts if caller is not permissioned
+//  [ ] stores metric
+//  [ ] reverts with an invalid metric
 
 contract SupplyTest is Test {
     using FullMath for uint256;
