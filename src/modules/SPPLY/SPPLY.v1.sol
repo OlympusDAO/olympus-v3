@@ -25,7 +25,11 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     error SPPLY_CategoryAlreadyApproved(Category category_);
     error SPPLY_CategoryNotApproved(Category category_);
     error SPPLY_CategoryInUse(Category category_);
-    error SPPLY_CategorySubmoduleFailed(Category category_, uint256 submoduleIndex_, bytes4 selector_);
+    error SPPLY_CategorySubmoduleFailed(
+        Category category_,
+        uint256 submoduleIndex_,
+        bytes4 selector_
+    );
 
     //============================================================================================//
     //                                          EVENTS                                            //

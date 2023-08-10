@@ -316,7 +316,8 @@ contract OlympusSupply is SPPLYv1 {
                 );
 
                 // Ensure call was successful
-                if (!success) revert SPPLY_CategorySubmoduleFailed(category_, i, data.submoduleSelector);
+                if (!success)
+                    revert SPPLY_CategorySubmoduleFailed(category_, i, data.submoduleSelector);
 
                 // Decode supply returned by the submodule
                 supply += abi.decode(returnData, (uint256));
