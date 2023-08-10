@@ -15,8 +15,8 @@ contract OlympusSupply is SPPLYv1 {
     //                                        MODULE SETUP                                        //
     //============================================================================================//
     constructor(
-        Kernel kernel_, 
-        address[3] memory tokens_, // [ohm, gOHM]
+        Kernel kernel_,
+        address[2] memory tokens_, // [ohm, gOHM]
         uint256 initialCrossChainSupply_
     ) Module(kernel_) {
         ohm = OHM(tokens_[0]);
