@@ -414,7 +414,7 @@ contract OlympusSupply is SPPLYv1 {
     function _collateralizedSupply() internal view returns (uint256) {
         // There isn't any collateralized supply from simple balance lookups, so we forgo the supply by category call
         // Iterate through the submodules and get the collateralized supply from each lending facility
-        // In eneral, collateralized supply can't be measured by a balance lookup since it would not be in the contract
+        // In general, collateralized supply can't be measured by a balance lookup since it would not be in the contract
         uint256 total;
         uint256 len = submodules.length;
         for (uint256 i; i < len; ) {
