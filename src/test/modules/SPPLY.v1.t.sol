@@ -18,12 +18,19 @@ import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 
 // Tests for OlympusSupply v1.0
-// TODO
 // Module Setup
 // [ ] KEYCODE - returns the module's identifier: SPPLY
 // [ ] VERSION - returns the module's version: 1.0
 //
 // Cross-chain Supply
+// [ ] increaseCrossChainSupply
+//  [ ] reverts if caller is not permissioned
+//  [ ] increments value, emits event
+// [ ] decreaseCrossChainSupply
+//  [ ] reverts if caller is not permissioned
+//  [ ] decrements value, emits event
+//
+// TODO remove these?
 // [ ] addChain - adds a new chain for cross-chain supply tracking
 //      [ ] reverts if caller is not permissioned
 //      [ ] reverts if chain already approved
@@ -54,26 +61,77 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //
 // Supply Categorization
 // [ ] addCategory - adds a new category for supply tracking
+//  [ ] reverts if caller is not permissioned
+//  [ ] reverts if category already approved
+//  [ ] reverts if category is empty
+//  [ ] stores category in categories array, emits event
 // [ ] removeCategory - removes a category from supply tracking
+//  [ ] reverts if caller is not permissioned
+//  [ ] reverts if category not approved
+//  [ ] reverts if category has locations not yet removed
+//  [ ] removes category from categories array, emits event
 // [ ] categorize - categorizes an OHM location in a category for supply tracking
+//  [ ] reverts if caller is not permissioned
+//  [ ] reverts if category not approved
+//  [ ] location not assigned to category - adds to locations array, adds to categorization mapping, emits event
+//  [ ] reverts if location assigned to different category
+//  [ ] empty category - removes from locations array, removes from categorization mapping, emits event
 // [ ] getLocations - returns array of all locations where supply is tracked
 // [ ] getCategories - returns array of all categories used to track supply
 // [ ] getLocationsByCategory - returns array of all locations categorized in a given category
+//  [ ] category not approved
+//  [ ] no locations in category
+//  [ ] returns locations in category
 // [ ] getSupplyByCategory - returns the supply of a given category (totaled from across all locations)
-//    [ ] no locations
+//  [ ] supply calculations
+//    [ ] no locations in category
 //    [X] zero supply
 //    [X] OHM supply
 //    [X] gOHM supply
-//    [ ] cross-chain supply
-//    [ ] handles submodules
+//    [ ] cross-chain category supply
+//    [ ] uses submodules if enabled
+//    [ ] ignores submodules if disabled
 //    [ ] reverts upon submodule failure
+//  [ ] base function
+//    [ ] uses cached value if in the same block
+//    [ ] calculates new value
+//  [ ] maxAge
+//    [ ] within age threshold
+//    [ ] after age threshold
+//  [ ] variant
+//    [ ] category not approved
+//    [ ] current variant
+//    [ ] last variant
+//      [ ] no cached value
+//      [ ] cached value
+//    [ ] invalid variant
+// [ ] storeCategorySupply
+//    [ ] stores supply for category
+//    [ ] reverts with an invalid category
 //
 // Supply Metrics
-// [ ] totalSupply - returns the total supply of OHM, including cross-chain OHM
-// [ ] circulatingSupply
-// [ ] floatingSupply
-// [ ] collateralizedSupply
-// [ ] backedSupply
+// [ ] getMetric
+//  [ ] metric calculations
+//    [ ] totalSupply - returns the total supply of OHM, including cross-chain OHM
+//    [ ] circulatingSupply
+//    [ ] floatingSupply
+//    [ ] collateralizedSupply
+//    [ ] backedSupply
+//  [ ] base function
+//    [ ] uses cached value if in the same block
+//    [ ] calculates new value
+//  [ ] maxAge
+//    [ ] within age threshold
+//    [ ] after age threshold
+//  [ ] variant
+//    [ ] current variant
+//    [ ] last variant
+//      [ ] no cached value
+//      [ ] cached value
+//    [ ] invalid variant
+// [ ] storeMetric
+//    [ ] stores metric
+//    [ ] reverts with an invalid metric
 
 contract SupplyTest is Test {
     using FullMath for uint256;
