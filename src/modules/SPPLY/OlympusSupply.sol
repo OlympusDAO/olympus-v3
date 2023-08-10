@@ -314,8 +314,13 @@ contract OlympusSupply is SPPLYv1 {
                 (bool success, bytes memory returnData) = submodule.staticcall(
                     abi.encodeWithSelector(data.submoduleSelector)
                 );
-                // TODO - should this revert on failure? or just skip?
-                if (success) supply += abi.decode(returnData, (uint256));
+
+                // Ensure call was successful
+                if (!success) revert SPPLY_CategorySubmoduleFailed(category_, i, data.submoduleSelector);
+
+                // Decode supply returned by the submodule
+                supply += abi.decode(returnData, (uint256));
+
                 unchecked {
                     ++i;
                 }

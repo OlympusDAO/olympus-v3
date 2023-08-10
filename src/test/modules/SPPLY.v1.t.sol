@@ -59,6 +59,8 @@ import "src/modules/SPPLY/OlympusSupply.sol";
 //    [ ] OHM supply
 //    [ ] gOHM supply
 //    [ ] cross-chain supply
+//    [ ] handles submodules
+//    [ ] reverts upon submodule failure
 //
 // Supply Metrics
 // [ ] totalSupply - returns the total supply of OHM, including cross-chain OHM

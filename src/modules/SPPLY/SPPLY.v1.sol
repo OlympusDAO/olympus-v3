@@ -25,6 +25,7 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     error SPPLY_CategoryAlreadyApproved(Category category_);
     error SPPLY_CategoryNotApproved(Category category_);
     error SPPLY_CategoryInUse(Category category_);
+    error SPPLY_CategorySubmoduleFailed(Category category_, uint256 submoduleIndex_, bytes4 selector_);
 
     //============================================================================================//
     //                                          EVENTS                                            //
@@ -59,7 +60,7 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     struct CategoryData {
         bool approved;
         bool useSubmodules;
-        bytes4 submoduleSelector;
+        bytes4 submoduleSelector; // The selector from `SupplySubmodule` to use for this category
         Cache crossChain;
         Cache total;
     }
