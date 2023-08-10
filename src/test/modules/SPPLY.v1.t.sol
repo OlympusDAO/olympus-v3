@@ -19,8 +19,8 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 
 // Tests for OlympusSupply v1.0
 // Module Setup
-// [ ] KEYCODE - returns the module's identifier: SPPLY
-// [ ] VERSION - returns the module's version: 1.0
+// [X] KEYCODE - returns the module's identifier: SPPLY
+// [X] VERSION - returns the module's version: 1.0
 //
 // Cross-chain Supply
 // [ ] increaseCrossChainSupply
@@ -210,6 +210,19 @@ contract SupplyTest is Test {
     }
 
     // =========  TESTS ========= //
+
+    // =========  Module Information ========= //
+
+    function test_keycode() public {
+        assertEq(fromKeycode(moduleSupply.KEYCODE()), "SPPLY");
+    }
+
+    function test_version() public {
+        (uint8 major, uint8 minor) = moduleSupply.VERSION();
+
+        assertEq(major, 1);
+        assertEq(minor, 0);
+    }
 
     // =========  getSupplyByCategory ========= //
 
