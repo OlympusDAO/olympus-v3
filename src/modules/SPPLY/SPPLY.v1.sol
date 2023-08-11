@@ -121,6 +121,8 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
 
     function getCategories() external view virtual returns (Category[] memory);
 
+    function getCategoryData(Category category_) external view virtual returns (CategoryData memory);
+
     function getLocationsByCategory(
         Category category_
     ) external view virtual returns (address[] memory);

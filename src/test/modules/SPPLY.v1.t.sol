@@ -61,10 +61,13 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //
 // Supply Categorization
 // [ ] addCategory - adds a new category for supply tracking
-//  [ ] reverts if caller is not permissioned
-//  [ ] reverts if category already approved
-//  [ ] reverts if category is empty
-//  [ ] stores category in categories array, emits event
+//  [X] reverts if caller is not permissioned
+//  [X] reverts if category already approved
+//  [X] reverts if category is empty
+//  [X] reverts if an incorrect submodules selector is provided
+//  [X] reverts if a submodules selector is provided when disabled
+//  [X] stores category in categories array, emits event
+//  [X] stores category with submodules enabled in categories array, emits event
 // [ ] removeCategory - removes a category from supply tracking
 //  [ ] reverts if caller is not permissioned
 //  [ ] reverts if category not approved
@@ -158,6 +161,12 @@ contract SupplyTest is Test {
     uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
     uint256 internal constant INITIAL_CROSS_CHAIN_SUPPLY = 100e9; // 100 OHM
 
+    // Events
+    event CrossChainSupplyUpdated(uint256 supply_);
+    event CategoryAdded(Category category_);
+    event CategoryRemoved(Category category_);
+    event LocationCategorized(address location_, Category category_);
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
 
@@ -222,6 +231,155 @@ contract SupplyTest is Test {
 
         assertEq(major, 1);
         assertEq(minor, 0);
+    }
+
+    // =========  addCategory ========= //
+
+    function test_addCategory_notPermissioned_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        moduleSupply.addCategory(toCategory("test"), false, "");
+    }
+
+    function test_addCategory_alreadyApproved_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryAlreadyApproved(bytes32)",
+            toCategory("protocol-owned-treasury")
+        );
+        vm.expectRevert(err);
+
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory("protocol-owned-treasury"), false, "");
+        vm.stopPrank();
+    }
+
+    function test_addCategory_emptyStringName_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_InvalidParams()"
+        );
+        vm.expectRevert(err);
+
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory(""), false, "");
+        vm.stopPrank();
+    }
+
+    function test_addCategory_emptyName_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_InvalidParams()"
+        );
+        vm.expectRevert(err);
+
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory(0), false, "");
+        vm.stopPrank();
+    }
+
+    function test_addCategory_emptyStringSubmoduleSelector_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_InvalidParams()"
+        );
+        vm.expectRevert(err);
+
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory("test"), true, "");
+        vm.stopPrank();
+    }
+
+    function test_addCategory_emptySubmoduleSelector_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_InvalidParams()"
+        );
+        vm.expectRevert(err);
+
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory("test"), true, bytes4(0));
+        vm.stopPrank();
+    }
+
+    function test_addCategory_invalidSubmoduleSelector_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_InvalidParams()"
+        );
+        vm.expectRevert(err);
+
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory("test"), true, bytes4("junk"));
+        vm.stopPrank();
+    }
+
+    function test_addCategory_submodulesDisabled_withSelector_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_InvalidParams()"
+        );
+        vm.expectRevert(err);
+
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory("test"), false, SupplySubmodule.getCollateralizedOhm.selector);
+                vm.startPrank(writer);
+
+    }
+
+    function test_addCategory() public {
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit CategoryAdded(toCategory("test"));
+
+        // Add category
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory("test"), false, "");
+        vm.stopPrank();
+
+        // Get categories
+        Category[] memory categories = moduleSupply.getCategories();
+
+        // Check that the category is contained in the categories array
+        bool found = false;
+        for (uint256 i = 0; i < categories.length; i++) {
+            if (fromCategory(categories[i]) == "test") {
+                found = true;
+            }
+        }
+        assertEq(found, true);
+
+        // Check that the category is contained in the categoryData mapping
+        SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
+        assertEq(categoryData.approved, true);
+        assertEq(categoryData.useSubmodules, false);
+        assertEq(categoryData.submoduleSelector, bytes4(0));
+    }
+
+    function test_addCategory_withSubmodules() public {
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit CategoryAdded(toCategory("test"));
+
+        // Add category
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory("test"), true, SupplySubmodule.getCollateralizedOhm.selector);
+        vm.stopPrank();
+
+        // Get categories
+        Category[] memory categories = moduleSupply.getCategories();
+
+        // Check that the category is contained in the categories array
+        bool found = false;
+        for (uint256 i = 0; i < categories.length; i++) {
+            if (fromCategory(categories[i]) == "test") {
+                found = true;
+            }
+        }
+        assertEq(found, true);
+
+        // Check that the category is contained in the categoryData mapping
+        SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
+        assertEq(categoryData.approved, true);
+        assertEq(categoryData.useSubmodules, true);
+        assertEq(categoryData.submoduleSelector, SupplySubmodule.getCollateralizedOhm.selector);
     }
 
     // =========  getSupplyByCategory ========= //
