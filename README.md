@@ -1,6 +1,6 @@
 # Olympus Bophades
 
-Use `npm run build` to refresh deps.
+Use `pnpm run build` to refresh deps.
 
 Set up a foundry config in foundry.toml.
 

@@ -8,7 +8,7 @@ print_test_event() {
 source .env
 
 print_test_event "Running non-fork tests"
-npm run test:unit
+pnpm run test:unit
 
 print_test_event "Running fork tests"
-npm run test:fork
+pnpm run test:fork

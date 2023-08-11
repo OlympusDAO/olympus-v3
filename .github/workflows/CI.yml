@@ -31,15 +31,15 @@ jobs:
               run: forge install
 
             - name: Run lint check
-              run: npm run lint:check
+              run: pnpm run lint:check
 
             - name: Run non-fork tests
-              run: npm run test:unit
+              run: pnpm run test:unit
 
             - name: Run fork tests
-              run: npm run test:fork
+              run: pnpm run test:fork
               env:
                 FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
 
             - name: Run cross-chain fork tests
-              run: npm run test:crosschainfork
+              run: pnpm run test:crosschainfork
