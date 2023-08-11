@@ -206,6 +206,13 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    function getCategoryByLocation(
+        address location_
+    ) external view virtual override returns (Category) {
+        return categorization[location_];
+    }
+
+    /// @inheritdoc SPPLYv1
     function getSupplyByCategory(Category category_) external view override returns (uint256) {
         // Try to use the last value, must be updated on the current timestamp
         // getSupplyByCategory checks if category is approved

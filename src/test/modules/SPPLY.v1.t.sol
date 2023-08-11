@@ -60,7 +60,7 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //      [ ] many chains
 //
 // Supply Categorization
-// [ ] addCategory - adds a new category for supply tracking
+// [X] addCategory - adds a new category for supply tracking
 //  [X] reverts if caller is not permissioned
 //  [X] reverts if category already approved
 //  [X] reverts if category is empty
@@ -68,17 +68,19 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //  [X] reverts if a submodules selector is provided when disabled
 //  [X] stores category in categories array, emits event
 //  [X] stores category with submodules enabled in categories array, emits event
-// [ ] removeCategory - removes a category from supply tracking
-//  [ ] reverts if caller is not permissioned
-//  [ ] reverts if category not approved
-//  [ ] reverts if category has locations not yet removed
-//  [ ] removes category from categories array, emits event
-// [ ] categorize - categorizes an OHM location in a category for supply tracking
-//  [ ] reverts if caller is not permissioned
-//  [ ] reverts if category not approved
-//  [ ] location not assigned to category - adds to locations array, adds to categorization mapping, emits event
-//  [ ] reverts if location assigned to different category
-//  [ ] empty category - removes from locations array, removes from categorization mapping, emits event
+// [X] removeCategory - removes a category from supply tracking
+//  [X] reverts if caller is not permissioned
+//  [X] reverts if category not approved
+//  [X] reverts if category has locations not yet removed
+//  [X] removes category from categories array, emits event
+// [X] categorize - categorizes an OHM location in a category for supply tracking
+//  [X] reverts if caller is not permissioned
+//  [X] reverts if category not approved
+//  [X] reverts if location assigned to the category already
+//  [X] reverts if location assigned to another category already
+//  [X] new location - adds to locations array, adds to categorization mapping, emits event
+//  [X] empty category - reverts if location is not present
+//  [X] empty category - removes from locations array, removes from categorization mapping, emits event
 // [ ] getLocations - returns array of all locations where supply is tracked
 // [ ] getCategories - returns array of all categories used to track supply
 // [ ] getLocationsByCategory - returns array of all locations categorized in a given category
@@ -380,6 +382,260 @@ contract SupplyTest is Test {
         assertEq(categoryData.approved, true);
         assertEq(categoryData.useSubmodules, true);
         assertEq(categoryData.submoduleSelector, SupplySubmodule.getCollateralizedOhm.selector);
+    }
+
+    // =========  removeCategory ========= //
+
+    function _addCategory(bytes32 name_) internal {
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory(name_), false, "");
+        vm.stopPrank();
+    }
+
+    function test_removeCategory_notPermissioned_reverts() public {
+        // Add the category
+        _addCategory("test");
+
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        // Remove the category
+        moduleSupply.removeCategory(toCategory("test"));
+    }
+
+    function test_removeCategory_notApproved_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("junk")
+        );
+        vm.expectRevert(err);
+
+        // Remove the category
+        vm.startPrank(writer);
+        moduleSupply.removeCategory(toCategory("junk"));
+        vm.stopPrank();
+    }
+
+    function test_removeCategory_existingLocations_reverts() public {
+        // Add the category
+        _addCategory("test");
+
+        // Add a location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory("test"));
+        vm.stopPrank();
+
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryInUse(bytes32)",
+            toCategory("test")
+        );
+        vm.expectRevert(err);
+
+        // Remove the category
+        vm.startPrank(writer);
+        moduleSupply.removeCategory(toCategory("test"));
+        vm.stopPrank();
+    }
+
+    function test_removeCategory() public {
+        // Add the category
+        _addCategory("test");
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit CategoryRemoved(toCategory("test"));
+
+        // Remove the category
+        vm.startPrank(writer);
+        moduleSupply.removeCategory(toCategory("test"));
+        vm.stopPrank();
+
+        // Get categories
+        Category[] memory categories = moduleSupply.getCategories();
+
+        // Check that the category is not contained in the categories array
+        bool found = false;
+        for (uint256 i = 0; i < categories.length; i++) {
+            if (fromCategory(categories[i]) == "test") {
+                found = true;
+            }
+        }
+        assertEq(found, false);
+
+        // Check that the category is not contained in the categoryData mapping
+        SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
+        assertEq(categoryData.approved, false);
+        assertEq(categoryData.useSubmodules, false);
+        assertEq(categoryData.submoduleSelector, bytes4(0));
+    }
+
+    // =========  categorize ========= //
+
+    function test_categorize_notPermissioned_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        // Categorize
+        moduleSupply.categorize(address(treasury), toCategory("protocol-owned-treasury"));
+    }
+
+    function test_categorize_notApproved_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("junk")
+        );
+        vm.expectRevert(err);
+
+        // Categorize
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory("junk"));
+        vm.stopPrank();
+    }
+
+    function test_categorize_locationAssigned_reverts() public {
+        // Add the category
+        _addCategory("test");
+
+        // Add a location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory("test"));
+        vm.stopPrank();
+
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_LocationAlreadyCategorized(address,bytes32)",
+            address(treasury),
+            toCategory("test")
+        );
+        vm.expectRevert(err);
+
+        // Categorize
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory("test"));
+        vm.stopPrank();
+    }
+
+    function test_categorize_locationAssigned_differentCategory_reverts() public {
+        // Add the category
+        _addCategory("test");
+        _addCategory("test2");
+
+        // Add a location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory("test"));
+        vm.stopPrank();
+
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_LocationAlreadyCategorized(address,bytes32)",
+            address(treasury),
+            toCategory("test")
+        );
+        vm.expectRevert(err);
+
+        // Categorize to a different category
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory("test2"));
+        vm.stopPrank();
+    }
+
+    function test_categorize() public {
+        // Add the category
+        _addCategory("test");
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit LocationCategorized(address(treasury), toCategory("test"));
+
+        // Categorize
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory("test"));
+        vm.stopPrank();
+
+        // Get the category
+        Category category = moduleSupply.getCategoryByLocation(address(treasury));
+        assertEq(fromCategory(category), "test");
+
+        // Get the locations and check that it is present
+        address[] memory locations = moduleSupply.getLocationsByCategory(toCategory("test"));
+        assertEq(locations.length, 1);
+        assertEq(locations[0], address(treasury));
+    }
+
+    function test_categorize_remove_locationNotAssigned_reverts() public {
+        // Add the category
+        _addCategory("test");
+
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_LocationNotCategorized(address)",
+            address(treasury)
+        );
+        vm.expectRevert(err);
+
+        // Remove the location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory(0));
+        vm.stopPrank();
+    }
+
+    function test_categorize_remove_emptyCategoryString() public {
+        // Add the category
+        _addCategory("test");
+
+        // Add a location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory("test"));
+        vm.stopPrank();
+
+        // Remove the location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory(""));
+        vm.stopPrank();
+
+        // Check that the location is not contained in the locations array
+        bool found = false;
+        for (uint256 i = 0; i < moduleSupply.getLocations().length; i++) {
+            if (moduleSupply.getLocations()[i] == address(treasury)) {
+                found = true;
+            }
+        }
+        assertEq(found, false);
+
+        // Check that the location is not contained in the categorization mapping
+        Category category = moduleSupply.getCategoryByLocation(address(treasury));
+        assertEq(fromCategory(category), "");
+    }
+
+    function test_categorize_remove_emptyCategoryNumber() public {
+        // Add the category
+        _addCategory("test");
+
+        // Add a location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory("test"));
+        vm.stopPrank();
+
+        // Remove the location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory(0));
+        vm.stopPrank();
+
+        // Check that the location is not contained in the locations array
+        bool found = false;
+        for (uint256 i = 0; i < moduleSupply.getLocations().length; i++) {
+            if (moduleSupply.getLocations()[i] == address(treasury)) {
+                found = true;
+            }
+        }
+        assertEq(found, false);
+
+        // Check that the location is not contained in the categorization mapping
+        Category category = moduleSupply.getCategoryByLocation(address(treasury));
+        assertEq(fromCategory(category), "");
     }
 
     // =========  getSupplyByCategory ========= //

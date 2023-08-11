@@ -30,6 +30,7 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
         uint256 submoduleIndex_,
         bytes4 selector_
     );
+    error SPPLY_LocationAlreadyCategorized(address location_, Category category_);
 
     //============================================================================================//
     //                                          EVENTS                                            //
@@ -107,14 +108,49 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     //                                      SUPPLY CATEGORIZATION                                 //
     //============================================================================================//
 
+    /// @notice                     Adds a category to the list of approved categories
+    /// @dev                        This function will revert if:
+    ///                             - The caller is not permissioned
+    ///                             - The category is already approved
+    ///                             - The category name is empty
+    ///
+    ///                             This function will emit the `CategoryAdded` event if successful
+    ///
+    /// @param category_            The category to add
+    /// @param useSubmodules_       Whether or not to use submodules for this category
+    /// @param submoduleSelector_   The selector from `SupplySubmodule` to use for this category
     function addCategory(
         Category category_,
         bool useSubmodules_,
         bytes4 submoduleSelector_
     ) external virtual;
 
+    /// @notice                     Removes a category from the list of approved categories
+    /// @dev                        This function will revert if:
+    ///                             - The caller is not permissioned
+    ///                             - The category is not approved
+    ///                             - The category has locations assigned to it
+    ///
+    ///                             This function will emit the `CategoryRemoved` event if successful
+    ///
+    /// @param category_            The category to remove
     function removeCategory(Category category_) external virtual;
 
+    /// @notice                     Adds or removes a location to a category
+    /// @dev                        To add a location to a category, pass in the address and category
+    ///
+    ///                             To remove a location from all categories, pass in the address and an empty category
+    ///
+    ///                             This function will revert if:
+    ///                             - The caller is not permissioned
+    ///                             - The category is not approved
+    ///                             - The location is already in the same category
+    ///                             - The location is not in the specified category and the category is empty
+    ///
+    ///                             This function will emit the `LocationCategorized` event if successful
+    /// 
+    /// @param location_            The address to categorize
+    /// @param category_            The category to add the location to
     function categorize(address location_, Category category_) external virtual;
 
     function getLocations() external view virtual returns (address[] memory);
@@ -122,6 +158,8 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     function getCategories() external view virtual returns (Category[] memory);
 
     function getCategoryData(Category category_) external view virtual returns (CategoryData memory);
+
+    function getCategoryByLocation(address location_) external view virtual returns (Category);
 
     function getLocationsByCategory(
         Category category_
