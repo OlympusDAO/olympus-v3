@@ -74,12 +74,14 @@ contract Pohm is Policy, RolesConsumer {
         address previous_,
         address ohm_,
         address gohm_,
-        address dai_
+        address dai_,
+        uint256 maximumAllocated_
     ) Policy(kernel_) {
         previous = IpOHM(previous_);
         OHM = ERC20(ohm_);
         gOHM = IgOHM(gohm_);
         DAI = ERC20(dai_);
+        maximumAllocated = maximumAllocated_;
     }
 
     /// @inheritdoc Policy
@@ -155,7 +157,7 @@ contract Pohm is Policy, RolesConsumer {
 
     function getCirculatingSupply() public view returns (uint256) {
         // TODO
-        return 0;
+        return 100_000_000e9;
     }
 
     function getAccountClaimed(address account_) public view returns (uint256) {
@@ -195,13 +197,14 @@ contract Pohm is Policy, RolesConsumer {
     function _claim(uint256 amount_) internal returns (uint256 toSend) {
         Term memory accountTerms = terms[msg.sender];
 
-        DAI.safeTransferFrom(msg.sender, address(TRSRY), amount_);
         toSend = (amount_ * 1e9) / 1e18;
 
-        if ((redeemableFor(msg.sender) / 1e9) >= toSend) revert POHM_ClaimMoreThanVested();
-        if ((accountTerms.max - getAccountClaimed(msg.sender)) >= toSend)
-            revert POHM_ClaimMoreThanMax();
+        if ((redeemableFor(msg.sender) / 1e9) < toSend) revert POHM_ClaimMoreThanVested();
+        if ((accountTerms.max - getAccountClaimed(msg.sender)) < toSend)
+            revert POHM_ClaimMoreThanMax(); // TODO this is actually redundant since redeemableFor limits to max
 
         terms[msg.sender].gClaimed += gOHM.balanceTo(toSend);
+
+        DAI.safeTransferFrom(msg.sender, address(TRSRY), amount_);
     }
 }
