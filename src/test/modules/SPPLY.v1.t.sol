@@ -90,7 +90,7 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //  [X] returns locations in category
 // [ ] getSupplyByCategory - returns the supply of a given category (totaled from across all locations)
 //  [ ] supply calculations
-//    [ ] no locations in category
+//    [X] no locations in category
 //    [X] zero supply
 //    [X] OHM supply
 //    [X] gOHM supply
@@ -98,16 +98,19 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //    [ ] uses submodules if enabled
 //    [ ] ignores submodules if disabled
 //    [ ] reverts upon submodule failure
-//  [ ] base function
-//    [ ] uses cached value if in the same block
-//    [ ] calculates new value
-//  [ ] maxAge
-//    [ ] within age threshold
-//    [ ] after age threshold
-//  [ ] variant
+//  [X] base function
 //    [ ] category not approved
+//    [X] uses cached value if in the same block
+//    [X] calculates new value
+//  [X] maxAge
+//    [ ] category not approved
+//    [X] within age threshold
+//    [X] after age threshold
+//  [ ] variant
 //    [ ] current variant
+//      [ ] category not approved
 //    [ ] last variant
+//      [ ] category not approved
 //      [ ] no cached value
 //      [ ] cached value
 //    [ ] invalid variant
@@ -876,5 +879,82 @@ contract SupplyTest is Test {
         uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
 
         assertEq(supply, expectedOhmSupply);
+    }
+
+    function test_getSupplyByCategory_sameTimestampUsesCache() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Cache the value
+        vm.startPrank(writer);
+        moduleSupply.storeCategorySupply(toCategory("protocol-owned-treasury"));
+        vm.stopPrank();
+
+        // Add more OHM in the treasury (so the cached value will not be correct)
+        ohm.mint(address(treasury), 100e9);
+
+        // Check supply - should use the cached value
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
+        assertEq(supply, 100e9);
+    }
+
+    function test_getSupplyByCategory_differentTimestampIgnoresCache() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Cache the value
+        vm.startPrank(writer);
+        moduleSupply.storeCategorySupply(toCategory("protocol-owned-treasury"));
+        vm.stopPrank();
+
+        // Add more OHM in the treasury (so the cached value will not be correct)
+        ohm.mint(address(treasury), 100e9);
+
+        // Warp forward 1 second
+        vm.warp(block.timestamp + 1);
+
+        // Check supply - should NOT use the cached value
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
+        assertEq(supply, 200e9);
+    }
+
+    function test_getSupplyByCategory_maxAge_withinThreshold() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Cache the value
+        vm.startPrank(writer);
+        moduleSupply.storeCategorySupply(toCategory("protocol-owned-treasury"));
+        vm.stopPrank();
+
+        // Add more OHM in the treasury (so the cached value will not be correct)
+        ohm.mint(address(treasury), 100e9);
+
+        // Warp forward 1 second
+        vm.warp(block.timestamp + 1);
+
+        // Check supply - should use the cached value
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), 2);
+        assertEq(supply, 100e9);
+    }
+
+    function test_getSupplyByCategory_maxAge_afterThreshold() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Cache the value
+        vm.startPrank(writer);
+        moduleSupply.storeCategorySupply(toCategory("protocol-owned-treasury"));
+        vm.stopPrank();
+
+        // Add more OHM in the treasury (so the cached value will not be correct)
+        ohm.mint(address(treasury), 100e9);
+
+        // Warp forward 3 seconds
+        vm.warp(block.timestamp + 3);
+
+        // Check supply - should NOT use the cached value
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), 2);
+        assertEq(supply, 200e9);
     }
 }
