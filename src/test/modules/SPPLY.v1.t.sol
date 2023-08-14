@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
+import {stdError} from "forge-std/StdError.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
@@ -23,12 +24,13 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 // [X] VERSION - returns the module's version: 1.0
 //
 // Cross-chain Supply
-// [ ] increaseCrossChainSupply
-//  [ ] reverts if caller is not permissioned
-//  [ ] increments value, emits event
-// [ ] decreaseCrossChainSupply
-//  [ ] reverts if caller is not permissioned
-//  [ ] decrements value, emits event
+// [X] increaseCrossChainSupply
+//  [X] reverts if caller is not permissioned
+//  [X] increments value, emits event
+// [X] decreaseCrossChainSupply
+//  [X] reverts if caller is not permissioned
+//  [X] decrements value, emits event
+//  [X] reverts if underflow
 //
 // TODO remove these?
 // [ ] addChain - adds a new chain for cross-chain supply tracking
@@ -243,6 +245,71 @@ contract SupplyTest is Test {
 
         assertEq(major, 1);
         assertEq(minor, 0);
+    }
+
+    // =========  increaseCrossChainSupply ========= //
+
+    function test_increaseCrossChainSupply_notPermissioned_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        moduleSupply.increaseCrossChainSupply(100);
+    }
+
+    function test_increaseCrossChainSupply() public {
+        uint256 expectedCrossChainSupply = INITIAL_CROSS_CHAIN_SUPPLY + 100;
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit CrossChainSupplyUpdated(expectedCrossChainSupply);
+
+        // Increase cross-chain supply
+        vm.startPrank(writer);
+        moduleSupply.increaseCrossChainSupply(100);
+        vm.stopPrank();
+
+        // Check that the cross-chain supply is correct
+        assertEq(moduleSupply.totalCrossChainSupply(), expectedCrossChainSupply);
+    }
+
+    // =========  decreaseCrossChainSupply ========= //
+
+    function test_decreaseCrossChainSupply_notPermissioned_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        moduleSupply.decreaseCrossChainSupply(100);
+    }
+
+    function test_decreaseCrossChainSupply() public {
+        uint256 expectedCrossChainSupply = INITIAL_CROSS_CHAIN_SUPPLY - 100;
+
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit CrossChainSupplyUpdated(expectedCrossChainSupply);
+
+        // Decrease cross-chain supply
+        vm.startPrank(writer);
+        moduleSupply.decreaseCrossChainSupply(100);
+        vm.stopPrank();
+
+        // Check that the cross-chain supply is correct
+        assertEq(moduleSupply.totalCrossChainSupply(), expectedCrossChainSupply);
+    }
+
+    function test_decreaseCrossChainSupply_underflow_reverts() public {
+        vm.expectRevert(stdError.arithmeticError);
+
+        // Decrease cross-chain supply
+        vm.startPrank(writer);
+        moduleSupply.decreaseCrossChainSupply(INITIAL_CROSS_CHAIN_SUPPLY + 100);
+        vm.stopPrank();
     }
 
     // =========  addCategory ========= //
