@@ -99,25 +99,29 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //    [ ] ignores submodules if disabled
 //    [ ] reverts upon submodule failure
 //  [X] base function
-//    [ ] category not approved
+//    [X] category not approved
 //    [X] uses cached value if in the same block
+//    [X] same block, no cached value
 //    [X] calculates new value
 //  [X] maxAge
-//    [ ] category not approved
+//    [X] category not approved
 //    [X] within age threshold
+//    [X] within age threshold, no cache
 //    [X] after age threshold
-//  [ ] variant
-//    [ ] current variant
-//      [ ] category not approved
-//    [ ] last variant
-//      [ ] category not approved
-//      [ ] no cached value
-//      [ ] cached value
-//    [ ] invalid variant
-// [ ] storeCategorySupply
-//  [ ] reverts if caller is not permissioned
-//  [ ] stores supply for category
-//  [ ] reverts with an invalid category
+//  [X] variant
+//    [X] current variant
+//      [X] category not approved
+//      [X] no cached value
+//      [X] ignores cached value
+//    [X] last variant
+//      [X] category not approved
+//      [X] no cached value
+//      [X] cached value
+//    [X] invalid variant
+// [X] storeCategorySupply
+//  [X] reverts if caller is not permissioned
+//  [X] stores supply for category
+//  [X] reverts with an invalid category
 //
 // Supply Metrics
 // [ ] getMetric
@@ -881,7 +885,18 @@ contract SupplyTest is Test {
         assertEq(supply, expectedOhmSupply);
     }
 
-    function test_getSupplyByCategory_sameTimestampUsesCache() public {
+    function test_getSupplyByCategory_categoryNotApproved_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("junk")
+        );
+        vm.expectRevert(err);
+
+        // Get supply
+        moduleSupply.getSupplyByCategory(toCategory("junk"));
+    }
+
+    function test_getSupplyByCategory_sameTimestamp_usesCache() public {
         // Add OHM in the treasury
         ohm.mint(address(treasury), 100e9);
 
@@ -898,7 +913,16 @@ contract SupplyTest is Test {
         assertEq(supply, 100e9);
     }
 
-    function test_getSupplyByCategory_differentTimestampIgnoresCache() public {
+    function test_getSupplyByCategory_sameTimestamp_withoutCache() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Check supply - should work without cached value
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
+        assertEq(supply, 100e9);
+    }
+
+    function test_getSupplyByCategory_differentTimestamp_ignoresCache() public {
         // Add OHM in the treasury
         ohm.mint(address(treasury), 100e9);
 
@@ -916,6 +940,17 @@ contract SupplyTest is Test {
         // Check supply - should NOT use the cached value
         uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
         assertEq(supply, 200e9);
+    }
+
+    function test_getSuppyByCategory_maxAge_categoryNotApproved_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("junk")
+        );
+        vm.expectRevert(err);
+
+        // Get supply
+        moduleSupply.getSupplyByCategory(toCategory("junk"), 2);
     }
 
     function test_getSupplyByCategory_maxAge_withinThreshold() public {
@@ -938,6 +973,18 @@ contract SupplyTest is Test {
         assertEq(supply, 100e9);
     }
 
+    function test_getSupplyByCategory_maxAge_withinThreshold_withoutCache() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Warp forward 1 second
+        vm.warp(block.timestamp + 1);
+
+        // Check supply - should work without cached value
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), 2);
+        assertEq(supply, 100e9);
+    }
+
     function test_getSupplyByCategory_maxAge_afterThreshold() public {
         // Add OHM in the treasury
         ohm.mint(address(treasury), 100e9);
@@ -956,5 +1003,152 @@ contract SupplyTest is Test {
         // Check supply - should NOT use the cached value
         uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), 2);
         assertEq(supply, 200e9);
+    }
+
+    function test_getSupplyByCategory_variant_current_categoryNotApproved_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("junk")
+        );
+        vm.expectRevert(err);
+
+        // Get supply
+        moduleSupply.getSupplyByCategory(toCategory("junk"), SPPLYv1.Variant.CURRENT);
+    }
+
+    function test_getSupplyByCategory_variant_current_withoutCache() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Check supply - should work without cached value
+        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.CURRENT);
+        assertEq(supply, 100e9);
+        assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function test_getSupplyByCategory_variant_current_withCache() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Cache the value
+        vm.startPrank(writer);
+        moduleSupply.storeCategorySupply(toCategory("protocol-owned-treasury"));
+        vm.stopPrank();
+
+        // Add more OHM in the treasury (so the cached value will not be correct)
+        ohm.mint(address(treasury), 100e9);
+
+        // Check supply - should NOT use the cached value
+        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.CURRENT);
+        assertEq(supply, 200e9);
+        assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function test_getSupplyByCategory_variant_last_categoryNotApproved_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("junk")
+        );
+        vm.expectRevert(err);
+
+        // Get supply
+        moduleSupply.getSupplyByCategory(toCategory("junk"), SPPLYv1.Variant.LAST);
+    }
+
+    function test_getSupplyByCategory_variant_last_withoutCache() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Check supply - should work without cached value
+        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.LAST);
+        assertEq(supply, 0);
+        assertEq(timestamp, 0);
+    }
+
+    function test_getSupplyByCategory_variant_last_withCache() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Cache the value
+        vm.startPrank(writer);
+        moduleSupply.storeCategorySupply(toCategory("protocol-owned-treasury"));
+        vm.stopPrank();
+
+        // Add more OHM in the treasury (so the cached value will not be correct)
+        ohm.mint(address(treasury), 100e9);
+
+        // Check supply - should use the cached value
+        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.LAST);
+        assertEq(supply, 100e9);
+        assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function test_getSupplyByCategory_variant_last_laterBlock_withCache() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Cache the value
+        vm.startPrank(writer);
+        moduleSupply.storeCategorySupply(toCategory("protocol-owned-treasury"));
+        vm.stopPrank();
+
+        // Warp forward 1 second
+        uint256 previousTimestamp = block.timestamp;
+        vm.warp(block.timestamp + 1);
+
+        // Check supply - should use the cached value
+        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.LAST);
+        assertEq(supply, 100e9);
+        assertEq(timestamp, previousTimestamp);
+    }
+
+    function test_getSupplyByCategory_variant_invalid_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_InvalidParams()"
+        );
+        vm.expectRevert(err);
+
+        // Get supply
+        moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), 2);
+    }
+
+    // =========  storeCategorySupply ========= //
+
+    function test_storeCategorySupply_categoryNotApproved_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("junk")
+        );
+        vm.expectRevert(err);
+
+        // Store supply
+        vm.startPrank(writer);
+        moduleSupply.storeCategorySupply(toCategory("junk"));
+        vm.stopPrank();
+    }
+
+    function test_storeCategorySupply() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasury), 100e9);
+
+        // Store supply
+        vm.startPrank(writer);
+        moduleSupply.storeCategorySupply(toCategory("protocol-owned-treasury"));
+        vm.stopPrank();
+
+        // Check supply
+        (uint256 supply,) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.LAST);
+        assertEq(supply, 100e9);
+    }
+
+    function test_storeCategorySupply_notPermissioned_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        // Store supply
+        moduleSupply.storeCategorySupply(toCategory("protocol-owned-treasury"));
     }
 }
