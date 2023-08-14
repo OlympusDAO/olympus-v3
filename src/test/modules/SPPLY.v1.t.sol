@@ -82,7 +82,8 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //  [X] empty category - reverts if location is not present
 //  [X] empty category - removes from locations array, removes from categorization mapping, emits event
 // [X] getLocations - returns array of all locations where supply is tracked
-// [ ] getCategories - returns array of all categories used to track supply
+// [X] getCategories - returns array of all categories used to track supply
+// [X] getCategoryData - returns the data for a given category
 // [ ] getLocationsByCategory - returns array of all locations categorized in a given category
 //  [ ] category not approved
 //  [ ] no locations in category
@@ -162,6 +163,8 @@ contract SupplyTest is Test {
 
     uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
     uint256 internal constant INITIAL_CROSS_CHAIN_SUPPLY = 100e9; // 100 OHM
+
+    uint256 internal constant CATEGORIES_DEFAULT_COUNT = 4;
 
     // Events
     event CrossChainSupplyUpdated(uint256 supply_);
@@ -690,6 +693,91 @@ contract SupplyTest is Test {
         for (uint256 i = 0; i < locationCount; i++) {
             assertEq(locations[i + 1], users[i]);
         }
+    }
+
+    // =========  getCategories ========= //
+
+    function test_getCategories_zeroCategories() public {
+        // Remove the locations
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory(0));
+        vm.stopPrank();
+
+        // Remove the existing categories
+        vm.startPrank(writer);
+        moduleSupply.removeCategory(toCategory("protocol-owned-treasury"));
+        moduleSupply.removeCategory(toCategory("dao"));
+        moduleSupply.removeCategory(toCategory("protocol-owned-liquidity"));
+        moduleSupply.removeCategory(toCategory("protocol-owned-borrowable"));
+        vm.stopPrank();
+
+        // Get categories
+        Category[] memory categories = moduleSupply.getCategories();
+
+        assertEq(categories.length, 0);
+    }
+
+    function test_getCategories_oneCategory() public {
+        // Remove all but one existing category
+        vm.startPrank(writer);
+        moduleSupply.removeCategory(toCategory("dao"));
+        moduleSupply.removeCategory(toCategory("protocol-owned-liquidity"));
+        moduleSupply.removeCategory(toCategory("protocol-owned-borrowable"));
+        vm.stopPrank();
+
+        // Get categories
+        Category[] memory categories = moduleSupply.getCategories();
+
+        assertEq(categories.length, 1);
+        assertEq(fromCategory(categories[0]), "protocol-owned-treasury");
+    }
+
+    function test_getCategories() public {
+        uint8 categoryCount = 5;
+        string[5] memory categoryNames = ["test1", "test2", "test3", "test4", "test5"];
+
+        // Create categories
+        for (uint256 i = 0; i < categoryCount; i++) {
+            _addCategory(bytes32(bytes(categoryNames[i])));
+        }
+
+        // Get categories
+        Category[] memory categories = moduleSupply.getCategories();
+
+        assertEq(categories.length, categoryCount + CATEGORIES_DEFAULT_COUNT);
+        assertEq(fromCategory(categories[0]), "protocol-owned-treasury");
+        assertEq(fromCategory(categories[1]), "dao");
+        assertEq(fromCategory(categories[2]), "protocol-owned-liquidity");
+        assertEq(fromCategory(categories[3]), "protocol-owned-borrowable");
+
+        for (uint256 i = 0; i < categoryCount; i++) {
+            assertEq(fromCategory(categories[i + CATEGORIES_DEFAULT_COUNT]), bytes32(bytes(categoryNames[i])));
+        }
+    }
+
+    // =========  getCategoryData ========= //
+
+    function test_getCategoryData() public {
+        // Add the category
+        _addCategory("test");
+
+        // Get the category data
+        SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
+
+        assertEq(categoryData.approved, true);
+        assertEq(categoryData.useSubmodules, false);
+        assertEq(categoryData.submoduleSelector, bytes4(0));
+    }
+
+    function test_getCategoryData_invalid_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("junk")
+        );
+        vm.expectRevert(err);
+
+        // Get the category data
+        moduleSupply.getCategoryData(toCategory("junk"));
     }
 
     // =========  getSupplyByCategory ========= //
