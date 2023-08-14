@@ -84,10 +84,10 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 // [X] getLocations - returns array of all locations where supply is tracked
 // [X] getCategories - returns array of all categories used to track supply
 // [X] getCategoryData - returns the data for a given category
-// [ ] getLocationsByCategory - returns array of all locations categorized in a given category
-//  [ ] category not approved
-//  [ ] no locations in category
-//  [ ] returns locations in category
+// [X] getLocationsByCategory - returns array of all locations categorized in a given category
+//  [X] category not approved
+//  [X] no locations in category
+//  [X] returns locations in category
 // [ ] getSupplyByCategory - returns the supply of a given category (totaled from across all locations)
 //  [ ] supply calculations
 //    [ ] no locations in category
@@ -769,7 +769,7 @@ contract SupplyTest is Test {
         assertEq(categoryData.submoduleSelector, bytes4(0));
     }
 
-    function test_getCategoryData_invalid_reverts() public {
+    function test_getCategoryData_categoryNotApproved_reverts() public {
         bytes memory err = abi.encodeWithSignature(
             "SPPLY_CategoryNotApproved(bytes32)",
             toCategory("junk")
@@ -778,6 +778,56 @@ contract SupplyTest is Test {
 
         // Get the category data
         moduleSupply.getCategoryData(toCategory("junk"));
+    }
+
+    // =========  getLocationsByCategory ========= //
+
+    function test_getLocationsByCategory_categoryNotApproved_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("junk")
+        );
+        vm.expectRevert(err);
+
+        // Get locations
+        moduleSupply.getLocationsByCategory(toCategory("junk"));
+    }
+
+    function test_getLocationsByCategory_noLocations() public {
+        // Remove the existing location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory(0));
+        vm.stopPrank();
+
+        // Get locations
+        address[] memory locations = moduleSupply.getLocationsByCategory(toCategory("protocol-owned-treasury"));
+
+        assertEq(locations.length, 0);
+    }
+
+    function test_getLocationsByCategory_fuzz(uint8 locationCount_) public {
+        // Create locations
+        uint8 locationCount = uint8(bound(locationCount_, 1, 10));
+
+        // Create users
+        address[] memory users = userFactory.create(locationCount);
+
+        // Add locations to the category
+        for (uint256 i = 0; i < locationCount; i++) {
+            vm.startPrank(writer);
+            moduleSupply.categorize(users[i], toCategory("protocol-owned-treasury"));
+            vm.stopPrank();
+        }
+
+        // Get locations
+        address[] memory locations = moduleSupply.getLocationsByCategory(toCategory("protocol-owned-treasury"));
+
+        assertEq(locations.length, locationCount + 1);
+
+        // Ensure locations are not added to other categories
+        address[] memory locationsTwo = moduleSupply.getLocationsByCategory(toCategory("dao"));
+
+        assertEq(locationsTwo.length, 0);
     }
 
     // =========  getSupplyByCategory ========= //
