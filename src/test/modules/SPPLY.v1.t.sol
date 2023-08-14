@@ -96,7 +96,6 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //    [X] zero supply
 //    [X] OHM supply
 //    [X] gOHM supply
-//    [ ] cross-chain category supply
 //    [ ] uses submodules if enabled
 //    [ ] ignores submodules if disabled
 //    [ ] reverts upon submodule failure
@@ -128,11 +127,14 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 // Supply Metrics
 // [ ] getMetric
 //  [ ] metric calculations
-//    [ ] totalSupply - returns the total supply of OHM, including cross-chain OHM
-//    [ ] circulatingSupply
-//    [ ] floatingSupply
-//    [ ] collateralizedSupply
+//    [X] totalSupply - returns the total supply of OHM, including cross-chain OHM
+//    [X] circulatingSupply
+//    [X] floatingSupply
+//    [X] collateralizedSupply
 //    [ ] backedSupply
+//     [X] no submodules
+//     [ ] with submodules, no values
+//     [ ] with submodules, with values
 //  [ ] base function
 //    [ ] uses cached value if in the same block
 //    [ ] calculates new value
@@ -168,7 +170,10 @@ contract SupplyTest is Test {
     address internal writer;
 
     UserFactory public userFactory;
-    address internal treasury;
+    address internal treasuryAddress;
+    address internal daoAddress;
+    address internal polAddress;
+    address internal borrowableOhmAddress;
 
     uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
     uint256 internal constant INITIAL_CROSS_CHAIN_SUPPLY = 100e9; // 100 OHM
@@ -193,8 +198,11 @@ contract SupplyTest is Test {
         // Locations
         {
             userFactory = new UserFactory();
-            address[] memory users = userFactory.create(1);
-            treasury = users[0];
+            address[] memory users = userFactory.create(4);
+            treasuryAddress = users[0];
+            daoAddress = users[1];
+            polAddress = users[2];
+            borrowableOhmAddress = users[3];
         }
 
         // Bophades
@@ -227,7 +235,7 @@ contract SupplyTest is Test {
         // Locations
         {
             vm.startPrank(writer);
-            moduleSupply.categorize(address(treasury), toCategory("protocol-owned-treasury"));
+            moduleSupply.categorize(address(treasuryAddress), toCategory("protocol-owned-treasury"));
             vm.stopPrank();
         }
     }
@@ -502,7 +510,7 @@ contract SupplyTest is Test {
 
         // Add a location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory("test"));
+        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
         vm.stopPrank();
 
         bytes memory err = abi.encodeWithSignature(
@@ -559,7 +567,7 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         // Categorize
-        moduleSupply.categorize(address(treasury), toCategory("protocol-owned-treasury"));
+        moduleSupply.categorize(address(treasuryAddress), toCategory("protocol-owned-treasury"));
     }
 
     function test_categorize_notApproved_reverts() public {
@@ -571,7 +579,7 @@ contract SupplyTest is Test {
 
         // Categorize
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory("junk"));
+        moduleSupply.categorize(address(treasuryAddress), toCategory("junk"));
         vm.stopPrank();
     }
 
@@ -581,19 +589,19 @@ contract SupplyTest is Test {
 
         // Add a location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory("test"));
+        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
         vm.stopPrank();
 
         bytes memory err = abi.encodeWithSignature(
             "SPPLY_LocationAlreadyCategorized(address,bytes32)",
-            address(treasury),
+            address(treasuryAddress),
             toCategory("test")
         );
         vm.expectRevert(err);
 
         // Categorize
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory("test"));
+        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
         vm.stopPrank();
     }
 
@@ -604,19 +612,19 @@ contract SupplyTest is Test {
 
         // Add a location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory("test"));
+        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
         vm.stopPrank();
 
         bytes memory err = abi.encodeWithSignature(
             "SPPLY_LocationAlreadyCategorized(address,bytes32)",
-            address(treasury),
+            address(treasuryAddress),
             toCategory("test")
         );
         vm.expectRevert(err);
 
         // Categorize to a different category
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory("test2"));
+        moduleSupply.categorize(address(treasuryAddress), toCategory("test2"));
         vm.stopPrank();
     }
 
@@ -626,21 +634,21 @@ contract SupplyTest is Test {
 
         // Expect an event to be emitted
         vm.expectEmit(true, false, false, true);
-        emit LocationCategorized(address(treasury), toCategory("test"));
+        emit LocationCategorized(address(treasuryAddress), toCategory("test"));
 
         // Categorize
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory("test"));
+        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
         vm.stopPrank();
 
         // Get the category
-        Category category = moduleSupply.getCategoryByLocation(address(treasury));
+        Category category = moduleSupply.getCategoryByLocation(address(treasuryAddress));
         assertEq(fromCategory(category), "test");
 
         // Get the locations and check that it is present
         address[] memory locations = moduleSupply.getLocationsByCategory(toCategory("test"));
         assertEq(locations.length, 1);
-        assertEq(locations[0], address(treasury));
+        assertEq(locations[0], address(treasuryAddress));
     }
 
     function test_categorize_remove_locationNotAssigned_reverts() public {
@@ -649,13 +657,13 @@ contract SupplyTest is Test {
 
         bytes memory err = abi.encodeWithSignature(
             "SPPLY_LocationNotCategorized(address)",
-            address(treasury)
+            address(treasuryAddress)
         );
         vm.expectRevert(err);
 
         // Remove the location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory(0));
+        moduleSupply.categorize(address(treasuryAddress), toCategory(0));
         vm.stopPrank();
     }
 
@@ -665,25 +673,25 @@ contract SupplyTest is Test {
 
         // Add a location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory("test"));
+        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
         vm.stopPrank();
 
         // Remove the location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory(""));
+        moduleSupply.categorize(address(treasuryAddress), toCategory(""));
         vm.stopPrank();
 
         // Check that the location is not contained in the locations array
         bool found = false;
         for (uint256 i = 0; i < moduleSupply.getLocations().length; i++) {
-            if (moduleSupply.getLocations()[i] == address(treasury)) {
+            if (moduleSupply.getLocations()[i] == address(treasuryAddress)) {
                 found = true;
             }
         }
         assertEq(found, false);
 
         // Check that the location is not contained in the categorization mapping
-        Category category = moduleSupply.getCategoryByLocation(address(treasury));
+        Category category = moduleSupply.getCategoryByLocation(address(treasuryAddress));
         assertEq(fromCategory(category), "");
     }
 
@@ -693,25 +701,25 @@ contract SupplyTest is Test {
 
         // Add a location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory("test"));
+        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
         vm.stopPrank();
 
         // Remove the location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory(0));
+        moduleSupply.categorize(address(treasuryAddress), toCategory(0));
         vm.stopPrank();
 
         // Check that the location is not contained in the locations array
         bool found = false;
         for (uint256 i = 0; i < moduleSupply.getLocations().length; i++) {
-            if (moduleSupply.getLocations()[i] == address(treasury)) {
+            if (moduleSupply.getLocations()[i] == address(treasuryAddress)) {
                 found = true;
             }
         }
         assertEq(found, false);
 
         // Check that the location is not contained in the categorization mapping
-        Category category = moduleSupply.getCategoryByLocation(address(treasury));
+        Category category = moduleSupply.getCategoryByLocation(address(treasuryAddress));
         assertEq(fromCategory(category), "");
     }
 
@@ -720,7 +728,7 @@ contract SupplyTest is Test {
     function test_getLocations_zeroLocations() public {
         // Remove the existing location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory(0));
+        moduleSupply.categorize(address(treasuryAddress), toCategory(0));
         vm.stopPrank();
 
         // Get locations
@@ -734,7 +742,7 @@ contract SupplyTest is Test {
         address[] memory locations = moduleSupply.getLocations();
 
         assertEq(locations.length, 1);
-        assertEq(locations[0], address(treasury));
+        assertEq(locations[0], address(treasuryAddress));
     }
 
     function test_getLocations() public {
@@ -762,7 +770,7 @@ contract SupplyTest is Test {
         address[] memory locations = moduleSupply.getLocations();
 
         assertEq(locations.length, locationCount + 1);
-        assertEq(locations[0], address(treasury));
+        assertEq(locations[0], address(treasuryAddress));
 
         for (uint256 i = 0; i < locationCount; i++) {
             assertEq(locations[i + 1], users[i]);
@@ -774,7 +782,7 @@ contract SupplyTest is Test {
     function test_getCategories_zeroCategories() public {
         // Remove the locations
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory(0));
+        moduleSupply.categorize(address(treasuryAddress), toCategory(0));
         vm.stopPrank();
 
         // Remove the existing categories
@@ -870,7 +878,7 @@ contract SupplyTest is Test {
     function test_getLocationsByCategory_noLocations() public {
         // Remove the existing location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory(0));
+        moduleSupply.categorize(address(treasuryAddress), toCategory(0));
         vm.stopPrank();
 
         // Get locations
@@ -908,11 +916,11 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_noLocations() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Remove the existing location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasury), toCategory(0));
+        moduleSupply.categorize(address(treasuryAddress), toCategory(0));
         vm.stopPrank();
 
         // Check supply
@@ -932,7 +940,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_ohmSupply() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Check supply
         uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
@@ -942,7 +950,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_gOhmSupply() public {
         // Add gOHM in the treasury
-        gOhm.mint(address(treasury), 1e18); // 1 gOHM
+        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         uint256 expectedOhmSupply = uint256(1e18).mulDiv(GOHM_INDEX, 1e18); // 9 decimals
 
@@ -965,7 +973,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_sameTimestamp_usesCache() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Cache the value
         vm.startPrank(writer);
@@ -973,7 +981,7 @@ contract SupplyTest is Test {
         vm.stopPrank();
 
         // Add more OHM in the treasury (so the cached value will not be correct)
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Check supply - should use the cached value
         uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
@@ -982,7 +990,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_sameTimestamp_withoutCache() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Check supply - should work without cached value
         uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
@@ -991,7 +999,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_differentTimestamp_ignoresCache() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Cache the value
         vm.startPrank(writer);
@@ -999,7 +1007,7 @@ contract SupplyTest is Test {
         vm.stopPrank();
 
         // Add more OHM in the treasury (so the cached value will not be correct)
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Warp forward 1 second
         vm.warp(block.timestamp + 1);
@@ -1022,7 +1030,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_maxAge_withinThreshold() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Cache the value
         vm.startPrank(writer);
@@ -1030,7 +1038,7 @@ contract SupplyTest is Test {
         vm.stopPrank();
 
         // Add more OHM in the treasury (so the cached value will not be correct)
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Warp forward 1 second
         vm.warp(block.timestamp + 1);
@@ -1042,7 +1050,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_maxAge_withinThreshold_withoutCache() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Warp forward 1 second
         vm.warp(block.timestamp + 1);
@@ -1054,7 +1062,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_maxAge_afterThreshold() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Cache the value
         vm.startPrank(writer);
@@ -1062,7 +1070,7 @@ contract SupplyTest is Test {
         vm.stopPrank();
 
         // Add more OHM in the treasury (so the cached value will not be correct)
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Warp forward 3 seconds
         vm.warp(block.timestamp + 3);
@@ -1085,7 +1093,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_variant_current_withoutCache() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Check supply - should work without cached value
         (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.CURRENT);
@@ -1095,7 +1103,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_variant_current_withCache() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Cache the value
         vm.startPrank(writer);
@@ -1103,7 +1111,7 @@ contract SupplyTest is Test {
         vm.stopPrank();
 
         // Add more OHM in the treasury (so the cached value will not be correct)
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Check supply - should NOT use the cached value
         (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.CURRENT);
@@ -1124,7 +1132,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_variant_last_withoutCache() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Check supply - should work without cached value
         (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.LAST);
@@ -1134,7 +1142,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_variant_last_withCache() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Cache the value
         vm.startPrank(writer);
@@ -1142,7 +1150,7 @@ contract SupplyTest is Test {
         vm.stopPrank();
 
         // Add more OHM in the treasury (so the cached value will not be correct)
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Check supply - should use the cached value
         (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.LAST);
@@ -1152,7 +1160,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_variant_last_laterBlock_withCache() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Cache the value
         vm.startPrank(writer);
@@ -1196,7 +1204,7 @@ contract SupplyTest is Test {
 
     function test_storeCategorySupply() public {
         // Add OHM in the treasury
-        ohm.mint(address(treasury), 100e9);
+        ohm.mint(address(treasuryAddress), 100e9);
 
         // Store supply
         vm.startPrank(writer);
@@ -1217,5 +1225,74 @@ contract SupplyTest is Test {
 
         // Store supply
         moduleSupply.storeCategorySupply(toCategory("protocol-owned-treasury"));
+    }
+
+    // =========  getMetric ========= //
+
+    function _setupMetricLocations() private {
+        // Categorise
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(daoAddress), toCategory("dao"));
+        moduleSupply.categorize(address(polAddress), toCategory("protocol-owned-liquidity"));
+        moduleSupply.categorize(address(borrowableOhmAddress), toCategory("protocol-owned-borrowable"));
+        vm.stopPrank();
+
+        // Mint OHM into the locations
+        ohm.mint(address(treasuryAddress), 100e9);
+        ohm.mint(address(daoAddress), 99e9);
+        ohm.mint(address(polAddress), 98e9);
+        ohm.mint(address(borrowableOhmAddress), 97e9);
+    }
+
+    uint256 internal constant TOTAL_OHM = 100e9 + 99e9 + 98e9 + 97e9 + INITIAL_CROSS_CHAIN_SUPPLY;
+
+    function test_getMetric_totalSupply() public {
+        _setupMetricLocations();
+
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.TOTAL_SUPPLY);
+
+        // Total amount of OHM minted, including cross-chain supply
+        assertEq(metric, TOTAL_OHM);
+    }
+
+    function test_getMetric_totalSupply_zeroSupply() public {
+        // Don't populate locations
+
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.TOTAL_SUPPLY);
+
+        // No OHM minted, just cross-chain supply
+        assertEq(metric, INITIAL_CROSS_CHAIN_SUPPLY);
+    }
+
+    function test_getMetric_circulatingSupply() public {
+        _setupMetricLocations();
+        
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+
+        // OHM minted - POT - DAO
+        assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
+    }
+
+    function test_getMetric_floatingSupply() public {
+        _setupMetricLocations();
+        
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+
+        // OHM minted - POT - DAO - POL - borrowable
+        assertEq(metric, TOTAL_OHM - 100e9 - 99e9 - 98e9 - 97e9);
+    }
+
+    function test_getMetric_backedSupply_noSubmodules() public {
+        _setupMetricLocations();
+        
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.BACKED_SUPPLY);
+
+        // OHM minted - POT - DAO - POL - borrowable
+        assertEq(metric, TOTAL_OHM - 100e9 - 99e9 - 98e9 - 97e9);
     }
 }
