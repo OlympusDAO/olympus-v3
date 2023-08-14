@@ -17,6 +17,9 @@ import {IVault, IBasePool, IBalancerHelper} from "policies/BoostedLiquidity/inte
 // Aura
 import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
+// Cooler Loans
+import {CoolerFactory, Cooler} from "cooler/CoolerFactory.sol";
+
 import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
@@ -43,6 +46,7 @@ import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
+import {Clearinghouse} from "policies/Clearinghouse.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
@@ -84,16 +88,19 @@ contract OlympusDeploy is Script {
     BLVaultManagerLusd public lusdVaultManager;
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
+    Clearinghouse public clearinghouse;
 
     /// Construction variables
 
     /// Token addresses
     ERC20 public ohm;
+    ERC20 public gohm;
     ERC20 public reserve;
     ERC20 public wsteth;
     ERC20 public lusd;
     ERC20 public aura;
     ERC20 public bal;
+    ERC20 public sdai;
 
     /// Bond system addresses
     IBondSDA public bondAuctioneer;
@@ -123,6 +130,9 @@ contract OlympusDeploy is Script {
     IAuraMiningLib public auraMiningLib;
     IAuraRewardPool public ohmWstethRewardsPool;
     IAuraRewardPool public ohmLusdRewardsPool;
+
+    // Cooler Loan contracts
+    CoolerFactory public coolerFactory;
 
     // Deploy system storage
     string public chain;
@@ -159,16 +169,19 @@ contract OlympusDeploy is Script {
         selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
+        selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
 
         // Load environment addresses
         env = vm.readFile("./src/scripts/env.json");
 
         // Non-bophades contracts
         ohm = ERC20(envAddress("olympus.legacy.OHM"));
+        gohm = ERC20(envAddress("olympus.legacy.gOHM"));
         reserve = ERC20(envAddress("external.tokens.DAI"));
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
         aura = ERC20(envAddress("external.tokens.AURA"));
         bal = ERC20(envAddress("external.tokens.BAL"));
+        sdai = ERC20(envAddress("external.tokens.sDAI"));
         bondAuctioneer = IBondSDA(envAddress("external.bond-protocol.BondFixedTermAuctioneer"));
         bondFixedExpiryAuctioneer = IBondSDA(
             envAddress("external.bond-protocol.BondFixedExpiryAuctioneer")
@@ -222,6 +235,7 @@ contract OlympusDeploy is Script {
         bridge = CrossChainBridge(envAddress("olympus.policies.CrossChainBridge"));
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
+        clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
 
         // Load deployment data
         string memory data = vm.readFile("./src/scripts/deploy/deploy.json");
@@ -726,6 +740,36 @@ contract OlympusDeploy is Script {
         console2.log("Bridge deployed at:", address(bridge));
 
         return address(bridge);
+    }
+
+    function _deployClearinghouse(bytes memory args) public returns (address) {
+        address factoryImplementation = abi.decode(args, (address));
+
+        if (factoryImplementation == address(0)) {
+            // Deploy a new Cooler Factory implementation
+            vm.broadcast();
+            coolerFactory = new CoolerFactory();
+            console2.log("Cooler Factory deployed at:", address(coolerFactory));
+            vm.stopBroadcast();
+        } else {
+            // Use the input Cooler Factory implmentation
+            coolerFactory = CoolerFactory(factoryImplementation);
+            console2.log("Input Factory Implementation:", address(coolerFactory));
+        }
+
+        // Deploy Clearinghouse policy
+        vm.broadcast();
+        clearinghouse = new Clearinghouse({
+            gohm_: address(gohm),
+            staking_: address(staking),
+            sdai_: address(sdai),
+            coolerFactory_: address(coolerFactory),
+            kernel_: address(kernel)
+        });
+        console2.log("Clearinghouse deployed at:", address(clearinghouse));
+        vm.stopBroadcast();
+
+        return address(clearinghouse);
     }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
