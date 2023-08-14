@@ -81,7 +81,7 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //  [X] new location - adds to locations array, adds to categorization mapping, emits event
 //  [X] empty category - reverts if location is not present
 //  [X] empty category - removes from locations array, removes from categorization mapping, emits event
-// [ ] getLocations - returns array of all locations where supply is tracked
+// [X] getLocations - returns array of all locations where supply is tracked
 // [ ] getCategories - returns array of all categories used to track supply
 // [ ] getLocationsByCategory - returns array of all locations categorized in a given category
 //  [ ] category not approved
@@ -636,6 +636,60 @@ contract SupplyTest is Test {
         // Check that the location is not contained in the categorization mapping
         Category category = moduleSupply.getCategoryByLocation(address(treasury));
         assertEq(fromCategory(category), "");
+    }
+
+    // =========  getLocations ========= //
+
+    function test_getLocations_zeroLocations() public {
+        // Remove the existing location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasury), toCategory(0));
+        vm.stopPrank();
+
+        // Get locations
+        address[] memory locations = moduleSupply.getLocations();
+
+        assertEq(locations.length, 0);
+    }
+
+    function test_getLocations_oneLocation() public {
+        // Get locations
+        address[] memory locations = moduleSupply.getLocations();
+
+        assertEq(locations.length, 1);
+        assertEq(locations[0], address(treasury));
+    }
+
+    function test_getLocations() public {
+        uint8 locationCount = 5;
+        string[5] memory categoryNames = ["test1", "test2", "test3", "test4", "test5"];
+
+        // Create categories
+        for (uint256 i = 0; i < locationCount; i++) {
+            vm.startPrank(writer);
+            moduleSupply.addCategory(toCategory(bytes32(bytes(categoryNames[i]))), false, "");
+            vm.stopPrank();
+        }
+
+        // Create users
+        address[] memory users = userFactory.create(locationCount);
+
+        // Add a location
+        for (uint256 i = 0; i < locationCount; i++) {
+            vm.startPrank(writer);
+            moduleSupply.categorize(users[i], toCategory(bytes32(bytes(categoryNames[i]))));
+            vm.stopPrank();
+        }
+
+        // Get locations
+        address[] memory locations = moduleSupply.getLocations();
+
+        assertEq(locations.length, locationCount + 1);
+        assertEq(locations[0], address(treasury));
+
+        for (uint256 i = 0; i < locationCount; i++) {
+            assertEq(locations[i + 1], users[i]);
+        }
     }
 
     // =========  getSupplyByCategory ========= //
