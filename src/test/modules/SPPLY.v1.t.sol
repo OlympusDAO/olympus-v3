@@ -154,10 +154,10 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //      [X] no cached value
 //      [X] cached value
 //    [X] invalid variant
-// [ ] storeMetric
-//  [ ] reverts if caller is not permissioned
-//  [ ] stores metric
-//  [ ] reverts with an invalid metric
+// [X] storeMetric
+//  [X] reverts if caller is not permissioned
+//  [X] stores metric
+//  [X] reverts with an invalid metric
 
 contract SupplyTest is Test {
     using FullMath for uint256;
@@ -1586,5 +1586,46 @@ contract SupplyTest is Test {
         (bool result,) = address(moduleSupply).call(
             abi.encodeWithSignature("getMetric(uint8,uint8)", 99, SPPLYv1.Variant.CURRENT)
         );
+    }
+
+    // =========  storeMetric ========= //
+
+    function test_storeMetric_invalidMetric_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_InvalidParams()"
+        );
+        vm.expectRevert(err);
+
+        // Store metric
+        (bool result,) = address(moduleSupply).call(
+            abi.encodeWithSignature("storeMetric(uint8)", 99)
+        );
+    }
+
+    function test_storeMetric_notPermissioned_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "Module_PolicyNotPermitted(address)",
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        // Store metric
+        moduleSupply.storeMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+    }
+
+    function test_storeMetric() public {
+        _setupMetricLocations();
+
+        // Store metric
+        vm.startPrank(writer);
+        moduleSupply.storeMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+        vm.stopPrank();
+
+        // Mint more OHM (so the cached value is incorrect)
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Get metric
+        (uint256 metric,) = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.LAST);
+        assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
     }
 }
