@@ -83,6 +83,12 @@ contract OlympusSupply is SPPLYv1 {
         // Check if category is already approved, if so revert
         if (categoryData[category_].approved) revert SPPLY_CategoryAlreadyApproved(category_);
 
+        // If submodules are enabled and the selector is empty, revert
+        if (useSubmodules_ && submoduleSelector_ == bytes4(0)) revert SPPLY_InvalidParams();
+
+        // If submodules are enabled and the selector is specified, revert
+        if (!useSubmodules_ && submoduleSelector_ != bytes4(0)) revert SPPLY_InvalidParams();
+
         // Add category to list of approved categories and store category data
         categories.push(category_);
         CategoryData storage data = categoryData[category_];
