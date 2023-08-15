@@ -213,6 +213,9 @@ contract OlympusSupply is SPPLYv1 {
     function getCategoryData(
         Category category_
     ) external view virtual override returns (CategoryData memory) {
+        // Check if category is approved
+        if (!categoryData[category_].approved) revert SPPLY_CategoryNotApproved(category_);
+
         return categoryData[category_];
     }
 
@@ -297,7 +300,7 @@ contract OlympusSupply is SPPLYv1 {
         Category category_,
         Variant variant_
     ) public view override returns (uint256, uint48) {
-        // Check if asset is approved
+        // Check if category is approved
         if (!categoryData[category_].approved) revert SPPLY_CategoryNotApproved(category_);
 
         // Route to correct price function based on requested variant
