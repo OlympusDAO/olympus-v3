@@ -2,7 +2,6 @@
 pragma solidity 0.8.15;
 
 import "modules/SPPLY/SPPLY.v1.sol";
-import {console2 as console} from "forge-std/console2.sol";
 
 // Requirements
 // [X] Track total OHM supply, including other chains
