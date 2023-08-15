@@ -11,6 +11,13 @@ import "modules/SPPLY/SPPLY.v1.sol";
 // [X] Allow caching supply metrics
 
 contract OlympusSupply is SPPLYv1 {
+
+    bytes4[3] internal SUPPLY_SUBMODULE_SELECTORS = [
+        SupplySubmodule.getCollateralizedOhm.selector,
+        SupplySubmodule.getProtocolOwnedBorrowableOhm.selector,
+        SupplySubmodule.getProtocolOwnedLiquidityOhm.selector
+    ];
+
     //============================================================================================//
     //                                        MODULE SETUP                                        //
     //============================================================================================//
@@ -88,6 +95,22 @@ contract OlympusSupply is SPPLYv1 {
 
         // If submodules are enabled and the selector is specified, revert
         if (!useSubmodules_ && submoduleSelector_ != bytes4(0)) revert SPPLY_InvalidParams();
+
+        // If submodules are enabled, check that the selector is valid
+        if (useSubmodules_) {
+            bool valid;
+            uint256 len = SUPPLY_SUBMODULE_SELECTORS.length;
+            for (uint256 i; i < len; ) {
+                if (SUPPLY_SUBMODULE_SELECTORS[i] == submoduleSelector_) {
+                    valid = true;
+                    break;
+                }
+                unchecked {
+                    ++i;
+                }
+            }
+            if (!valid) revert SPPLY_InvalidParams();
+        }
 
         // Add category to list of approved categories and store category data
         categories.push(category_);

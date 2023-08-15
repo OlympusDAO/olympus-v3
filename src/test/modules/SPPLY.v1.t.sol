@@ -504,6 +504,32 @@ contract SupplyTest is Test {
         vm.stopPrank();
     }
 
+    function test_removeCategory_emptyString_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("")
+        );
+        vm.expectRevert(err);
+
+        // Remove the category
+        vm.startPrank(writer);
+        moduleSupply.removeCategory(toCategory(""));
+        vm.stopPrank();
+    }
+
+    function test_removeCategory_zeroCategory_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory(0)
+        );
+        vm.expectRevert(err);
+
+        // Remove the category
+        vm.startPrank(writer);
+        moduleSupply.removeCategory(toCategory(0));
+        vm.stopPrank();
+    }
+
     function test_removeCategory_existingLocations_reverts() public {
         // Add the category
         _addCategory("test");
