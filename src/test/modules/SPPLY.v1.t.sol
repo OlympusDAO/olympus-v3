@@ -576,11 +576,14 @@ contract SupplyTest is Test {
         }
         assertEq(found, false);
 
-        // Check that the category is not contained in the categoryData mapping
-        SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
-        assertEq(categoryData.approved, false);
-        assertEq(categoryData.useSubmodules, false);
-        assertEq(categoryData.submoduleSelector, bytes4(0));
+        // Expect a revert when trying to get the category data
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("test")
+        );
+        vm.expectRevert(err);
+
+        moduleSupply.getCategoryData(toCategory("test"));
     }
 
     // =========  categorize ========= //
@@ -1245,7 +1248,9 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         // Get supply
-        moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), 2);
+        (bool result,) = address(moduleSupply).call(
+            abi.encodeWithSignature("getSupplyByCategory(bytes32,uint8)", toCategory("protocol-owned-treasury"), 2)
+        );
     }
 
     // =========  storeCategorySupply ========= //
