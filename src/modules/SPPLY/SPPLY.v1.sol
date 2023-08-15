@@ -30,6 +30,7 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
         uint256 submoduleIndex_,
         bytes4 selector_
     );
+    error SPPLY_LocationNotCategorized(address location_);
     error SPPLY_LocationAlreadyCategorized(address location_, Category category_);
 
     //============================================================================================//

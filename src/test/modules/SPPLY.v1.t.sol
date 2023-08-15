@@ -536,7 +536,7 @@ contract SupplyTest is Test {
 
         // Add a location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
+        moduleSupply.categorize(address(daoAddress), toCategory("test"));
         vm.stopPrank();
 
         bytes memory err = abi.encodeWithSignature(
@@ -593,7 +593,7 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         // Categorize
-        moduleSupply.categorize(address(treasuryAddress), toCategory("protocol-owned-treasury"));
+        moduleSupply.categorize(address(daoAddress), toCategory("protocol-owned-treasury"));
     }
 
     function test_categorize_notApproved_reverts() public {
@@ -605,7 +605,7 @@ contract SupplyTest is Test {
 
         // Categorize
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasuryAddress), toCategory("junk"));
+        moduleSupply.categorize(address(daoAddress), toCategory("junk"));
         vm.stopPrank();
     }
 
@@ -615,19 +615,19 @@ contract SupplyTest is Test {
 
         // Add a location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
+        moduleSupply.categorize(address(daoAddress), toCategory("test"));
         vm.stopPrank();
 
         bytes memory err = abi.encodeWithSignature(
             "SPPLY_LocationAlreadyCategorized(address,bytes32)",
-            address(treasuryAddress),
+            address(daoAddress),
             toCategory("test")
         );
         vm.expectRevert(err);
 
         // Categorize
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
+        moduleSupply.categorize(address(daoAddress), toCategory("test"));
         vm.stopPrank();
     }
 
@@ -638,19 +638,19 @@ contract SupplyTest is Test {
 
         // Add a location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
+        moduleSupply.categorize(address(daoAddress), toCategory("test"));
         vm.stopPrank();
 
         bytes memory err = abi.encodeWithSignature(
             "SPPLY_LocationAlreadyCategorized(address,bytes32)",
-            address(treasuryAddress),
+            address(daoAddress),
             toCategory("test")
         );
         vm.expectRevert(err);
 
         // Categorize to a different category
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasuryAddress), toCategory("test2"));
+        moduleSupply.categorize(address(daoAddress), toCategory("test2"));
         vm.stopPrank();
     }
 
@@ -660,21 +660,21 @@ contract SupplyTest is Test {
 
         // Expect an event to be emitted
         vm.expectEmit(true, false, false, true);
-        emit LocationCategorized(address(treasuryAddress), toCategory("test"));
+        emit LocationCategorized(address(daoAddress), toCategory("test"));
 
         // Categorize
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
+        moduleSupply.categorize(address(daoAddress), toCategory("test"));
         vm.stopPrank();
 
         // Get the category
-        Category category = moduleSupply.getCategoryByLocation(address(treasuryAddress));
+        Category category = moduleSupply.getCategoryByLocation(address(daoAddress));
         assertEq(fromCategory(category), "test");
 
         // Get the locations and check that it is present
         address[] memory locations = moduleSupply.getLocationsByCategory(toCategory("test"));
         assertEq(locations.length, 1);
-        assertEq(locations[0], address(treasuryAddress));
+        assertEq(locations[0], address(daoAddress));
     }
 
     function test_categorize_remove_locationNotAssigned_reverts() public {
@@ -683,13 +683,13 @@ contract SupplyTest is Test {
 
         bytes memory err = abi.encodeWithSignature(
             "SPPLY_LocationNotCategorized(address)",
-            address(treasuryAddress)
+            address(daoAddress)
         );
         vm.expectRevert(err);
 
         // Remove the location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasuryAddress), toCategory(0));
+        moduleSupply.categorize(address(daoAddress), toCategory(0));
         vm.stopPrank();
     }
 
@@ -699,25 +699,29 @@ contract SupplyTest is Test {
 
         // Add a location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
+        moduleSupply.categorize(address(daoAddress), toCategory("test"));
         vm.stopPrank();
+
+        // Expect event
+        vm.expectEmit(true, false, false, true);
+        emit LocationCategorized(address(daoAddress), toCategory(""));
 
         // Remove the location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasuryAddress), toCategory(""));
+        moduleSupply.categorize(address(daoAddress), toCategory(""));
         vm.stopPrank();
 
         // Check that the location is not contained in the locations array
         bool found = false;
         for (uint256 i = 0; i < moduleSupply.getLocations().length; i++) {
-            if (moduleSupply.getLocations()[i] == address(treasuryAddress)) {
+            if (moduleSupply.getLocations()[i] == address(daoAddress)) {
                 found = true;
             }
         }
         assertEq(found, false);
 
         // Check that the location is not contained in the categorization mapping
-        Category category = moduleSupply.getCategoryByLocation(address(treasuryAddress));
+        Category category = moduleSupply.getCategoryByLocation(address(daoAddress));
         assertEq(fromCategory(category), "");
     }
 
@@ -727,26 +731,57 @@ contract SupplyTest is Test {
 
         // Add a location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasuryAddress), toCategory("test"));
+        moduleSupply.categorize(address(daoAddress), toCategory("test"));
         vm.stopPrank();
+
+        // Expect event
+        vm.expectEmit(true, false, false, true);
+        emit LocationCategorized(address(daoAddress), toCategory(0));
 
         // Remove the location
         vm.startPrank(writer);
-        moduleSupply.categorize(address(treasuryAddress), toCategory(0));
+        moduleSupply.categorize(address(daoAddress), toCategory(0));
         vm.stopPrank();
 
         // Check that the location is not contained in the locations array
         bool found = false;
         for (uint256 i = 0; i < moduleSupply.getLocations().length; i++) {
-            if (moduleSupply.getLocations()[i] == address(treasuryAddress)) {
+            if (moduleSupply.getLocations()[i] == address(daoAddress)) {
                 found = true;
             }
         }
         assertEq(found, false);
 
         // Check that the location is not contained in the categorization mapping
-        Category category = moduleSupply.getCategoryByLocation(address(treasuryAddress));
+        Category category = moduleSupply.getCategoryByLocation(address(daoAddress));
         assertEq(fromCategory(category), "");
+    }
+
+    function test_categorize_remove_noCategorization() public {
+        // Add the category
+        _addCategory("test");
+
+        // Add a location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(daoAddress), toCategory("test"));
+        vm.stopPrank();
+
+        // Remove the location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(daoAddress), toCategory(0));
+        vm.stopPrank();
+
+        // Expect an error to be thrown
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_LocationNotCategorized(address)",
+            address(daoAddress)
+        );
+        vm.expectRevert(err);
+
+        // Remove the location again
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(daoAddress), toCategory(0));
+        vm.stopPrank();
     }
 
     // =========  getLocations ========= //

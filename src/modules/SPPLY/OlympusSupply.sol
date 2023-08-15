@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import "modules/SPPLY/SPPLY.v1.sol";
+import {console2 as console} from "forge-std/console2.sol";
 
 // Requirements
 // [X] Track total OHM supply, including other chains
@@ -147,31 +148,55 @@ contract OlympusSupply is SPPLYv1 {
         emit CategoryRemoved(category_);
     }
 
-    /// @inheritdoc SPPLYv1
-    function categorize(address location_, Category category) external override permissioned {
-        // Check if the category is approved
-        if (!categoryData[category].approved) revert SPPLY_CategoryNotApproved(category);
+    function _uncategorize(address location_) internal {
+        // Check if the location is already in the category, if not revert
+        if (fromCategory(categorization[location_]) == bytes32(uint256(0))) revert SPPLY_LocationNotCategorized(location_);
 
-        // If the location is not categorized yet, add to list of locations
-        // If it is already categorized, remove it if the new category is 0
-        if (fromCategory(categorization[location_]) == bytes32(uint256(0))) {
-            locations.push(location_);
-        } else if (fromCategory(category) == bytes32(uint256(0))) {
-            uint256 len = locations.length;
-            for (uint256 i; i < len; ) {
-                if (locations[i] == location_) {
-                    locations[i] = locations[locations.length - 1];
-                    locations.pop();
-                    break;
-                }
-                unchecked {
-                    ++i;
-                }
+        // Remove location from list of locations
+        uint256 len = locations.length;
+        for (uint256 i; i < len; ) {
+            if (locations[i] == location_) {
+                locations[i] = locations[locations.length - 1];
+                locations.pop();
+                break;
+            }
+            unchecked {
+                ++i;
             }
         }
 
-        // Categorize location
+        // Remove from location-category mapping
+        categorization[location_] = toCategory("");
+
+        emit LocationCategorized(location_, toCategory(""));
+    }
+
+    /// @inheritdoc SPPLYv1
+    function categorize(address location_, Category category) external override permissioned {
+        bool toRemove = fromCategory(category) == bytes32(uint256(0));
+
+        // Removing
+        if (toRemove) {
+            _uncategorize(location_);
+            return;
+        }
+
+        // Check if category is approved, if not revert
+        if (!categoryData[category].approved) revert SPPLY_CategoryNotApproved(category);
+
+        // Check if the location is already in the category, if so revert
+        Category existingCategorization = categorization[location_];
+        if (fromCategory(existingCategorization) == fromCategory(category)) revert SPPLY_LocationAlreadyCategorized(location_, existingCategorization);
+
+        // Check if the location is already in a different category, if so revert
+        if (fromCategory(existingCategorization) != bytes32(uint256(0))) revert SPPLY_LocationAlreadyCategorized(location_, existingCategorization);
+
+        // Add to the list of tracked locations
+        locations.push(location_);
+
+        // Add to the location-category mapping
         categorization[location_] = category;
+
         emit LocationCategorized(location_, category);
     }
 
