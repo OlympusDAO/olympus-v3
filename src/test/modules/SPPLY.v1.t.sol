@@ -1346,7 +1346,7 @@ contract SupplyTest is Test {
         _setupMetricLocations();
         
         // Get metric
-        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.FLOATING_SUPPLY);
 
         // OHM minted - POT - DAO - POL - borrowable
         assertEq(metric, TOTAL_OHM - 100e9 - 99e9 - 98e9 - 97e9);
