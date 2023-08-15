@@ -135,18 +135,25 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //     [X] no submodules
 //     [ ] with submodules, no values
 //     [ ] with submodules, with values
-//  [ ] base function
-//    [ ] uses cached value if in the same block
-//    [ ] calculates new value
-//  [ ] maxAge
-//    [ ] within age threshold
-//    [ ] after age threshold
-//  [ ] variant
-//    [ ] current variant
-//    [ ] last variant
-//      [ ] no cached value
-//      [ ] cached value
-//    [ ] invalid variant
+//     [ ] with submodules, reverts upon failure
+//  [X] base function
+//    [X] uses cached value if in the same block
+//    [X] calculates new value
+//    [X] invalid metric
+//  [X] maxAge
+//    [X] within age threshold
+//    [X] within age threshold, no cache
+//    [X] after age threshold
+//    [X] invalid metric
+//  [X] variant
+//    [X] invalid metric
+//    [X] current variant
+//      [X] no cached value
+//      [X] ignores cached value
+//    [X] last variant
+//      [X] no cached value
+//      [X] cached value
+//    [X] invalid variant
 // [ ] storeMetric
 //  [ ] reverts if caller is not permissioned
 //  [ ] stores metric
@@ -1198,7 +1205,7 @@ contract SupplyTest is Test {
         // Add OHM in the treasury
         ohm.mint(address(treasuryAddress), 100e9);
 
-        // Check supply - should work without cached value
+        // Check supply - should not return a value
         (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.LAST);
         assertEq(supply, 0);
         assertEq(timestamp, 0);
@@ -1360,5 +1367,224 @@ contract SupplyTest is Test {
 
         // OHM minted - POT - DAO - POL - borrowable
         assertEq(metric, TOTAL_OHM - 100e9 - 99e9 - 98e9 - 97e9);
+    }
+
+    function test_getMetric_invalidMetric_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_InvalidParams()"
+        );
+        vm.expectRevert(err);
+
+        // Get metric
+        (bool result,) = address(moduleSupply).call(
+            abi.encodeWithSignature("getMetric(uint8)", 99)
+        );
+    }
+
+    function test_getMetric_sameTimestamp_usesCache() public {
+        _setupMetricLocations();
+
+        // Store the metric value
+        vm.startPrank(writer);
+        moduleSupply.storeMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+        vm.stopPrank();
+
+        // Mint more OHM (so the cached value is incorrect)
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+
+        // Should use the cached value
+        assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
+    }
+
+    function test_getMetric_sameTimestamp_withoutCache() public {
+        _setupMetricLocations();
+
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+
+        // Should return a value
+        assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
+    }
+
+    function test_getMetric_differentTimestamp_ignoresCache() public {
+        _setupMetricLocations();
+
+        // Store the metric value
+        vm.startPrank(writer);
+        moduleSupply.storeMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+        vm.stopPrank();
+
+        // Mint more OHM (so the cached value is incorrect)
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Warp forward 1 second
+        vm.warp(block.timestamp + 1);
+
+        // Get metric - should NOT use the cached value
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+        assertEq(metric, TOTAL_OHM + 100e9 - 200e9 - 99e9);
+    }
+
+    function test_getMetric_maxAge_withinThreshold() public {
+        _setupMetricLocations();
+
+        // Store the metric value
+        vm.startPrank(writer);
+        moduleSupply.storeMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+        vm.stopPrank();
+
+        // Mint more OHM (so the cached value is incorrect)
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Warp forward 1 second
+        vm.warp(block.timestamp + 1);
+
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, 2);
+
+        // Should use the cached value
+        assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
+    }
+
+    function test_getMetric_maxAge_withinThreshold_withoutCache() public {
+        _setupMetricLocations();
+
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, 2);
+
+        // Should return a value
+        assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
+    }
+
+    function test_getMetric_maxAge_afterThreshold() public {
+        _setupMetricLocations();
+
+        // Store the metric value
+        vm.startPrank(writer);
+        moduleSupply.storeMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+        vm.stopPrank();
+
+        // Mint more OHM (so the cached value is incorrect)
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Warp forward 3 seconds
+        vm.warp(block.timestamp + 3);
+
+        // Get metric - should NOT use the cached value
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, 2);
+        assertEq(metric, TOTAL_OHM + 100e9 - 200e9 - 99e9);
+    }
+
+    function test_getMetric_maxAge_invalidMetric() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_InvalidParams()"
+        );
+        vm.expectRevert(err);
+
+        // Get metric
+        (bool result,) = address(moduleSupply).call(
+            abi.encodeWithSignature("getMetric(uint8,uint256)", 99, 2)
+        );
+    }
+
+    function test_getMetric_variant_current() public {
+        _setupMetricLocations();
+
+        // Get metric
+        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.CURRENT);
+
+        // Should return a value
+        assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
+        assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function test_getMetric_variant_current_withCache() public {
+        _setupMetricLocations();
+
+        // Store the metric value
+        vm.startPrank(writer);
+        moduleSupply.storeMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+        vm.stopPrank();
+
+        // Mint more OHM (so the cached value is incorrect)
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Get metric - should NOT use the cached value
+        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.CURRENT);
+        assertEq(metric, TOTAL_OHM + 100e9 - 200e9 - 99e9);
+        assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function test_getMetric_variant_last() public {
+        _setupMetricLocations();
+
+        // Get metric
+        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.LAST);
+
+        // Should NOT return a value
+        assertEq(metric, 0);
+        assertEq(timestamp, 0);
+    }
+
+    function test_getMetric_variant_last_withCache() public {
+        _setupMetricLocations();
+
+        // Store the metric value
+        vm.startPrank(writer);
+        moduleSupply.storeMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+        vm.stopPrank();
+
+        // Mint more OHM (so the cached value is incorrect)
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Get metric - should use the cached value
+        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.LAST);
+        assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
+        assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    function test_getMetric_variant_last_laterBlock_withCache() public {
+        _setupMetricLocations();
+
+        // Store the metric value
+        vm.startPrank(writer);
+        moduleSupply.storeMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+        vm.stopPrank();
+
+        // Warp forward 1 second
+        uint256 previousTimestamp = block.timestamp;
+        vm.warp(block.timestamp + 1);
+
+        // Get metric - should use the cached value
+        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.LAST);
+        assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
+        assertEq(timestamp, previousTimestamp);
+    }
+
+    function test_getMetric_variant_invalid_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_InvalidParams()"
+        );
+        vm.expectRevert(err);
+
+        // Get metric
+        (bool result,) = address(moduleSupply).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", SPPLYv1.Metric.CIRCULATING_SUPPLY, 2)
+        );
+    }
+
+    function test_getMetric_variant_invalidMetric_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_InvalidParams()"
+        );
+        vm.expectRevert(err);
+
+        // Get metric
+        (bool result,) = address(moduleSupply).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 99, SPPLYv1.Variant.CURRENT)
+        );
     }
 }
