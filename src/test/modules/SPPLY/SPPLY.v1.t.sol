@@ -223,8 +223,6 @@ contract SupplyTest is Test {
 
             // Deploy mock module writer
             writer = moduleSupply.generateGodmodeFixture(type(OlympusSupply).name);
-
-            // TODO Deploy submodules
         }
 
         // Initialize
@@ -232,11 +230,6 @@ contract SupplyTest is Test {
             /// Initialize system and kernel
             kernel.executeAction(Actions.InstallModule, address(moduleSupply));
             kernel.executeAction(Actions.ActivatePolicy, address(writer));
-
-            // Install submodules on supply module
-            vm.startPrank(writer);
-            // TODO install submodules on supply
-            vm.stopPrank();
         }
 
         // Locations

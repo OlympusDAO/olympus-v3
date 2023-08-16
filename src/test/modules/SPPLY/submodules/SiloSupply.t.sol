@@ -113,10 +113,10 @@ contract SiloSupplyTest is Test {
     // [X] Submodule
     //  [X] Version
     //  [X] Subkeycode
-    // [ ] getCollateralizedOhm
-    //  [ ] supplied > borrowed
-    //  [ ] supplied < borrowed
-    //  [ ] supplied == borrowed
+    // [X] getCollateralizedOhm
+    //  [X] supplied > borrowed
+    //  [X] supplied < borrowed
+    //  [X] supplied == borrowed
     // [X] getProtocolOwnedBorrowableOhm
     //  [X] supplied > borrowed
     //  [X] supplied < borrowed
@@ -207,7 +207,10 @@ contract SiloSupplyTest is Test {
     }
 
     function test_setSources_notParent_writer_reverts() public {
-        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(writer));
+        bytes memory err = abi.encodeWithSignature(
+            "Submodule_OnlyParent(address)",
+            address(writer)
+        );
         vm.expectRevert(err);
 
         vm.startPrank(writer);
