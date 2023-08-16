@@ -11,7 +11,6 @@ import "modules/SPPLY/SPPLY.v1.sol";
 // [X] Allow caching supply metrics
 
 contract OlympusSupply is SPPLYv1 {
-
     bytes4[3] internal SUPPLY_SUBMODULE_SELECTORS = [
         SupplySubmodule.getCollateralizedOhm.selector,
         SupplySubmodule.getProtocolOwnedBorrowableOhm.selector,
@@ -149,7 +148,8 @@ contract OlympusSupply is SPPLYv1 {
 
     function _uncategorize(address location_) internal {
         // Check if the location is already in the category, if not revert
-        if (fromCategory(categorization[location_]) == bytes32(uint256(0))) revert SPPLY_LocationNotCategorized(location_);
+        if (fromCategory(categorization[location_]) == bytes32(uint256(0)))
+            revert SPPLY_LocationNotCategorized(location_);
 
         // Remove location from list of locations
         uint256 len = locations.length;
@@ -185,10 +185,12 @@ contract OlympusSupply is SPPLYv1 {
 
         // Check if the location is already in the category, if so revert
         Category existingCategorization = categorization[location_];
-        if (fromCategory(existingCategorization) == fromCategory(category)) revert SPPLY_LocationAlreadyCategorized(location_, existingCategorization);
+        if (fromCategory(existingCategorization) == fromCategory(category))
+            revert SPPLY_LocationAlreadyCategorized(location_, existingCategorization);
 
         // Check if the location is already in a different category, if so revert
-        if (fromCategory(existingCategorization) != bytes32(uint256(0))) revert SPPLY_LocationAlreadyCategorized(location_, existingCategorization);
+        if (fromCategory(existingCategorization) != bytes32(uint256(0)))
+            revert SPPLY_LocationAlreadyCategorized(location_, existingCategorization);
 
         // Add to the list of tracked locations
         locations.push(location_);

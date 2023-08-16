@@ -242,7 +242,10 @@ contract SupplyTest is Test {
         // Locations
         {
             vm.startPrank(writer);
-            moduleSupply.categorize(address(treasuryAddress), toCategory("protocol-owned-treasury"));
+            moduleSupply.categorize(
+                address(treasuryAddress),
+                toCategory("protocol-owned-treasury")
+            );
             vm.stopPrank();
         }
     }
@@ -352,9 +355,7 @@ contract SupplyTest is Test {
     }
 
     function test_addCategory_emptyStringName_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "SPPLY_InvalidParams()"
-        );
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(writer);
@@ -363,9 +364,7 @@ contract SupplyTest is Test {
     }
 
     function test_addCategory_emptyName_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "SPPLY_InvalidParams()"
-        );
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(writer);
@@ -374,9 +373,7 @@ contract SupplyTest is Test {
     }
 
     function test_addCategory_emptyStringSubmoduleSelector_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "SPPLY_InvalidParams()"
-        );
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(writer);
@@ -385,9 +382,7 @@ contract SupplyTest is Test {
     }
 
     function test_addCategory_emptySubmoduleSelector_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "SPPLY_InvalidParams()"
-        );
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(writer);
@@ -396,9 +391,7 @@ contract SupplyTest is Test {
     }
 
     function test_addCategory_invalidSubmoduleSelector_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "SPPLY_InvalidParams()"
-        );
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(writer);
@@ -407,15 +400,16 @@ contract SupplyTest is Test {
     }
 
     function test_addCategory_submodulesDisabled_withSelector_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "SPPLY_InvalidParams()"
-        );
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), false, SupplySubmodule.getCollateralizedOhm.selector);
-                vm.startPrank(writer);
-
+        moduleSupply.addCategory(
+            toCategory("test"),
+            false,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
+        vm.startPrank(writer);
     }
 
     function test_addCategory() public {
@@ -454,7 +448,11 @@ contract SupplyTest is Test {
 
         // Add category
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), true, SupplySubmodule.getCollateralizedOhm.selector);
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
         vm.stopPrank();
 
         // Get categories
@@ -904,7 +902,10 @@ contract SupplyTest is Test {
         assertEq(fromCategory(categories[3]), "protocol-owned-borrowable");
 
         for (uint256 i = 0; i < categoryCount; i++) {
-            assertEq(fromCategory(categories[i + CATEGORIES_DEFAULT_COUNT]), bytes32(bytes(categoryNames[i])));
+            assertEq(
+                fromCategory(categories[i + CATEGORIES_DEFAULT_COUNT]),
+                bytes32(bytes(categoryNames[i]))
+            );
         }
     }
 
@@ -953,7 +954,9 @@ contract SupplyTest is Test {
         vm.stopPrank();
 
         // Get locations
-        address[] memory locations = moduleSupply.getLocationsByCategory(toCategory("protocol-owned-treasury"));
+        address[] memory locations = moduleSupply.getLocationsByCategory(
+            toCategory("protocol-owned-treasury")
+        );
 
         assertEq(locations.length, 0);
     }
@@ -973,7 +976,9 @@ contract SupplyTest is Test {
         }
 
         // Get locations
-        address[] memory locations = moduleSupply.getLocationsByCategory(toCategory("protocol-owned-treasury"));
+        address[] memory locations = moduleSupply.getLocationsByCategory(
+            toCategory("protocol-owned-treasury")
+        );
 
         assertEq(locations.length, locationCount + 1);
 
@@ -1167,7 +1172,10 @@ contract SupplyTest is Test {
         ohm.mint(address(treasuryAddress), 100e9);
 
         // Check supply - should work without cached value
-        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.CURRENT);
+        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(
+            toCategory("protocol-owned-treasury"),
+            SPPLYv1.Variant.CURRENT
+        );
         assertEq(supply, 100e9);
         assertEq(timestamp, uint48(block.timestamp));
     }
@@ -1185,7 +1193,10 @@ contract SupplyTest is Test {
         ohm.mint(address(treasuryAddress), 100e9);
 
         // Check supply - should NOT use the cached value
-        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.CURRENT);
+        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(
+            toCategory("protocol-owned-treasury"),
+            SPPLYv1.Variant.CURRENT
+        );
         assertEq(supply, 200e9);
         assertEq(timestamp, uint48(block.timestamp));
     }
@@ -1206,7 +1217,10 @@ contract SupplyTest is Test {
         ohm.mint(address(treasuryAddress), 100e9);
 
         // Check supply - should not return a value
-        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.LAST);
+        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(
+            toCategory("protocol-owned-treasury"),
+            SPPLYv1.Variant.LAST
+        );
         assertEq(supply, 0);
         assertEq(timestamp, 0);
     }
@@ -1224,7 +1238,10 @@ contract SupplyTest is Test {
         ohm.mint(address(treasuryAddress), 100e9);
 
         // Check supply - should use the cached value
-        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.LAST);
+        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(
+            toCategory("protocol-owned-treasury"),
+            SPPLYv1.Variant.LAST
+        );
         assertEq(supply, 100e9);
         assertEq(timestamp, uint48(block.timestamp));
     }
@@ -1243,20 +1260,25 @@ contract SupplyTest is Test {
         vm.warp(block.timestamp + 1);
 
         // Check supply - should use the cached value
-        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.LAST);
+        (uint256 supply, uint48 timestamp) = moduleSupply.getSupplyByCategory(
+            toCategory("protocol-owned-treasury"),
+            SPPLYv1.Variant.LAST
+        );
         assertEq(supply, 100e9);
         assertEq(timestamp, previousTimestamp);
     }
 
     function test_getSupplyByCategory_variant_invalid_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "SPPLY_InvalidParams()"
-        );
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         // Get supply
-        (bool result,) = address(moduleSupply).call(
-            abi.encodeWithSignature("getSupplyByCategory(bytes32,uint8)", toCategory("protocol-owned-treasury"), 2)
+        (bool result, ) = address(moduleSupply).call(
+            abi.encodeWithSignature(
+                "getSupplyByCategory(bytes32,uint8)",
+                toCategory("protocol-owned-treasury"),
+                2
+            )
         );
     }
 
@@ -1285,7 +1307,10 @@ contract SupplyTest is Test {
         vm.stopPrank();
 
         // Check supply
-        (uint256 supply,) = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), SPPLYv1.Variant.LAST);
+        (uint256 supply, ) = moduleSupply.getSupplyByCategory(
+            toCategory("protocol-owned-treasury"),
+            SPPLYv1.Variant.LAST
+        );
         assertEq(supply, 100e9);
     }
 
@@ -1307,7 +1332,10 @@ contract SupplyTest is Test {
         vm.startPrank(writer);
         moduleSupply.categorize(address(daoAddress), toCategory("dao"));
         moduleSupply.categorize(address(polAddress), toCategory("protocol-owned-liquidity"));
-        moduleSupply.categorize(address(borrowableOhmAddress), toCategory("protocol-owned-borrowable"));
+        moduleSupply.categorize(
+            address(borrowableOhmAddress),
+            toCategory("protocol-owned-borrowable")
+        );
         vm.stopPrank();
 
         // Mint OHM into the locations
@@ -1341,7 +1369,7 @@ contract SupplyTest is Test {
 
     function test_getMetric_circulatingSupply() public {
         _setupMetricLocations();
-        
+
         // Get metric
         uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
 
@@ -1351,7 +1379,7 @@ contract SupplyTest is Test {
 
     function test_getMetric_floatingSupply() public {
         _setupMetricLocations();
-        
+
         // Get metric
         uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.FLOATING_SUPPLY);
 
@@ -1361,7 +1389,7 @@ contract SupplyTest is Test {
 
     function test_getMetric_backedSupply_noSubmodules() public {
         _setupMetricLocations();
-        
+
         // Get metric
         uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.BACKED_SUPPLY);
 
@@ -1370,13 +1398,11 @@ contract SupplyTest is Test {
     }
 
     function test_getMetric_invalidMetric_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "SPPLY_InvalidParams()"
-        );
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         // Get metric
-        (bool result,) = address(moduleSupply).call(
+        (bool result, ) = address(moduleSupply).call(
             abi.encodeWithSignature("getMetric(uint8)", 99)
         );
     }
@@ -1479,13 +1505,11 @@ contract SupplyTest is Test {
     }
 
     function test_getMetric_maxAge_invalidMetric() public {
-        bytes memory err = abi.encodeWithSignature(
-            "SPPLY_InvalidParams()"
-        );
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         // Get metric
-        (bool result,) = address(moduleSupply).call(
+        (bool result, ) = address(moduleSupply).call(
             abi.encodeWithSignature("getMetric(uint8,uint256)", 99, 2)
         );
     }
@@ -1494,7 +1518,10 @@ contract SupplyTest is Test {
         _setupMetricLocations();
 
         // Get metric
-        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.CURRENT);
+        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(
+            SPPLYv1.Metric.CIRCULATING_SUPPLY,
+            SPPLYv1.Variant.CURRENT
+        );
 
         // Should return a value
         assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
@@ -1513,7 +1540,10 @@ contract SupplyTest is Test {
         ohm.mint(address(treasuryAddress), 100e9);
 
         // Get metric - should NOT use the cached value
-        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.CURRENT);
+        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(
+            SPPLYv1.Metric.CIRCULATING_SUPPLY,
+            SPPLYv1.Variant.CURRENT
+        );
         assertEq(metric, TOTAL_OHM + 100e9 - 200e9 - 99e9);
         assertEq(timestamp, uint48(block.timestamp));
     }
@@ -1522,7 +1552,10 @@ contract SupplyTest is Test {
         _setupMetricLocations();
 
         // Get metric
-        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.LAST);
+        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(
+            SPPLYv1.Metric.CIRCULATING_SUPPLY,
+            SPPLYv1.Variant.LAST
+        );
 
         // Should NOT return a value
         assertEq(metric, 0);
@@ -1541,7 +1574,10 @@ contract SupplyTest is Test {
         ohm.mint(address(treasuryAddress), 100e9);
 
         // Get metric - should use the cached value
-        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.LAST);
+        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(
+            SPPLYv1.Metric.CIRCULATING_SUPPLY,
+            SPPLYv1.Variant.LAST
+        );
         assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
         assertEq(timestamp, uint48(block.timestamp));
     }
@@ -1559,31 +1595,30 @@ contract SupplyTest is Test {
         vm.warp(block.timestamp + 1);
 
         // Get metric - should use the cached value
-        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.LAST);
+        (uint256 metric, uint48 timestamp) = moduleSupply.getMetric(
+            SPPLYv1.Metric.CIRCULATING_SUPPLY,
+            SPPLYv1.Variant.LAST
+        );
         assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
         assertEq(timestamp, previousTimestamp);
     }
 
     function test_getMetric_variant_invalid_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "SPPLY_InvalidParams()"
-        );
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         // Get metric
-        (bool result,) = address(moduleSupply).call(
+        (bool result, ) = address(moduleSupply).call(
             abi.encodeWithSignature("getMetric(uint8,uint8)", SPPLYv1.Metric.CIRCULATING_SUPPLY, 2)
         );
     }
 
     function test_getMetric_variant_invalidMetric_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "SPPLY_InvalidParams()"
-        );
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         // Get metric
-        (bool result,) = address(moduleSupply).call(
+        (bool result, ) = address(moduleSupply).call(
             abi.encodeWithSignature("getMetric(uint8,uint8)", 99, SPPLYv1.Variant.CURRENT)
         );
     }
@@ -1591,13 +1626,11 @@ contract SupplyTest is Test {
     // =========  storeMetric ========= //
 
     function test_storeMetric_invalidMetric_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "SPPLY_InvalidParams()"
-        );
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         // Store metric
-        (bool result,) = address(moduleSupply).call(
+        (bool result, ) = address(moduleSupply).call(
             abi.encodeWithSignature("storeMetric(uint8)", 99)
         );
     }
@@ -1625,7 +1658,10 @@ contract SupplyTest is Test {
         ohm.mint(address(treasuryAddress), 100e9);
 
         // Get metric
-        (uint256 metric,) = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.LAST);
+        (uint256 metric, ) = moduleSupply.getMetric(
+            SPPLYv1.Metric.CIRCULATING_SUPPLY,
+            SPPLYv1.Variant.LAST
+        );
         assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
     }
 }

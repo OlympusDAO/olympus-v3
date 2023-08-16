@@ -149,7 +149,7 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     ///                             - The location is not in the specified category and the category is empty
     ///
     ///                             This function will emit the `LocationCategorized` event if successful
-    /// 
+    ///
     /// @param location_            The address to categorize
     /// @param category_            The category to add the location to
     function categorize(address location_, Category category_) external virtual;
@@ -158,7 +158,9 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
 
     function getCategories() external view virtual returns (Category[] memory);
 
-    function getCategoryData(Category category_) external view virtual returns (CategoryData memory);
+    function getCategoryData(
+        Category category_
+    ) external view virtual returns (CategoryData memory);
 
     function getCategoryByLocation(address location_) external view virtual returns (Category);
 

@@ -9,7 +9,7 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockGohm} from "test/mocks/OlympusMocks.sol";
-import {MockSiloLens,MockBaseSilo} from "test/mocks/MockSilo.sol";
+import {MockSiloLens, MockBaseSilo} from "test/mocks/MockSilo.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -43,9 +43,9 @@ contract SiloSupplyTest is Test {
 
     // Real values from:
     // https://etherscan.io/address/0xf5ffabab8f9a6f4f6de1f0dd6e0820f68657d7db
-    uint256 internal constant LENS_BORROW_AMOUNT =      477149187374;
-    uint256 internal constant LENS_DEPOSIT_AMOUNT =     97364239386463;
-    uint256 internal constant LENS_SUPPLIED_AMOUNT =    23401686713550;
+    uint256 internal constant LENS_BORROW_AMOUNT = 477149187374;
+    uint256 internal constant LENS_DEPOSIT_AMOUNT = 97364239386463;
+    uint256 internal constant LENS_SUPPLIED_AMOUNT = 23401686713550;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -74,7 +74,6 @@ contract SiloSupplyTest is Test {
 
             // Deploy mock module writer
             writer = moduleSupply.generateGodmodeFixture(type(OlympusSupply).name);
-
         }
 
         // Deploy Silo submodule
@@ -87,7 +86,12 @@ contract SiloSupplyTest is Test {
             siloBase = new MockBaseSilo();
             siloBase.setCollateralToken(0x907136B74abA7D5978341eBA903544134A66B065);
 
-            submoduleSiloSupply = new SiloSupply(moduleSupply, siloAmo, address(siloLens), address(siloBase));
+            submoduleSiloSupply = new SiloSupply(
+                moduleSupply,
+                siloAmo,
+                address(siloLens),
+                address(siloBase)
+            );
         }
 
         // Initialize
@@ -161,7 +165,9 @@ contract SiloSupplyTest is Test {
 
     // =========  getProtocolOwnedBorrowableOhm ========= //
 
-    function test_getProtocolOwnedBorrowableOhm_suppliedGreaterThanBorrowed(uint256 supplied_) public {
+    function test_getProtocolOwnedBorrowableOhm_suppliedGreaterThanBorrowed(
+        uint256 supplied_
+    ) public {
         // Supplied > borrowed
         uint256 supplied = bound(supplied_, LENS_BORROW_AMOUNT + 1, LENS_DEPOSIT_AMOUNT);
         siloLens.setBalanceOfUnderlying(supplied);
@@ -192,20 +198,14 @@ contract SiloSupplyTest is Test {
     // =========  setSources ========= //
 
     function test_setSources_notParent_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "Submodule_OnlyParent",
-            address(this)
-        );
+        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent", address(this));
         vm.expectRevert(err);
 
         submoduleSiloSupply.setSources(siloAmo, address(siloLens), address(siloBase));
     }
 
     function test_setSources_notParent_writer_reverts() public {
-        bytes memory err = abi.encodeWithSignature(
-            "Submodule_OnlyParent",
-            address(writer)
-        );
+        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent", address(writer));
         vm.expectRevert(err);
 
         vm.startPrank(writer);
