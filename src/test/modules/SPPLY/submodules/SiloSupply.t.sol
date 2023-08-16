@@ -147,18 +147,20 @@ contract SiloSupplyTest is Test {
 
     // =========  getCollateralizedOhm ========= //
 
-    // TODO clarify definition
+    function test_getCollateralizedOhm_suppliedGreaterThanBorrowed(uint256 supplied_) public {
+        uint256 supplied = bound(supplied_, LENS_BORROW_AMOUNT + 1, LENS_DEPOSIT_AMOUNT);
+        siloLens.setBalanceOfUnderlying(supplied);
 
-    function test_getCollateralizedOhm_suppliedGreaterThanBorrowed() public {
-        uint256 expected = LENS_BORROW_AMOUNT;
+        uint256 expected = supplied - LENS_BORROW_AMOUNT;
 
         assertEq(submoduleSiloSupply.getCollateralizedOhm(), expected);
     }
 
-    function test_getCollateralizedOhm_suppliedLessThanBorrowed() public {
-        siloLens.setBalanceOfUnderlying(0);
+    function test_getCollateralizedOhm_suppliedLessThanBorrowed(uint256 supplied_) public {
+        uint256 supplied = bound(supplied_, 0, LENS_BORROW_AMOUNT);
+        siloLens.setBalanceOfUnderlying(supplied);
 
-        uint256 expected = LENS_SUPPLIED_AMOUNT;
+        uint256 expected = 0;
 
         assertEq(submoduleSiloSupply.getCollateralizedOhm(), expected);
     }
