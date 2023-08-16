@@ -117,17 +117,17 @@ contract SiloSupplyTest is Test {
     //  [ ] supplied > borrowed
     //  [ ] supplied < borrowed
     //  [ ] supplied == borrowed
-    // [ ] getProtocolOwnedBorrowableOhm
-    //  [ ] supplied > borrowed
-    //  [ ] supplied < borrowed
-    //  [ ] supplied == borrowed
-    // [ ] getProtocolOwnedLiquidityOhm
-    // [ ] setSources
-    //  [ ] not parent
-    //  [ ] amo address
-    //  [ ] lens address
-    //  [ ] silo address
-    //  [ ] multiple addresses
+    // [X] getProtocolOwnedBorrowableOhm
+    //  [X] supplied > borrowed
+    //  [X] supplied < borrowed
+    //  [X] supplied == borrowed
+    // [X] getProtocolOwnedLiquidityOhm
+    // [X] setSources
+    //  [X] not parent
+    //  [X] amo address
+    //  [X] lens address
+    //  [X] silo address
+    //  [X] multiple addresses
 
     // =========  TESTS ========= //
 
@@ -198,14 +198,14 @@ contract SiloSupplyTest is Test {
     // =========  setSources ========= //
 
     function test_setSources_notParent_reverts() public {
-        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent", address(this));
+        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(this));
         vm.expectRevert(err);
 
         submoduleSiloSupply.setSources(siloAmo, address(siloLens), address(siloBase));
     }
 
     function test_setSources_notParent_writer_reverts() public {
-        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent", address(writer));
+        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(writer));
         vm.expectRevert(err);
 
         vm.startPrank(writer);
@@ -217,7 +217,7 @@ contract SiloSupplyTest is Test {
         address[] memory newLocations = userFactory.create(1);
         address newAmo = newLocations[0];
 
-        vm.startPrank(address(submoduleSiloSupply));
+        vm.startPrank(address(moduleSupply));
         submoduleSiloSupply.setSources(newAmo, address(0), address(0));
         vm.stopPrank();
 
@@ -230,7 +230,7 @@ contract SiloSupplyTest is Test {
         address[] memory newLocations = userFactory.create(1);
         address newLens = newLocations[0];
 
-        vm.startPrank(address(submoduleSiloSupply));
+        vm.startPrank(address(moduleSupply));
         submoduleSiloSupply.setSources(address(0), newLens, address(0));
         vm.stopPrank();
 
@@ -243,7 +243,7 @@ contract SiloSupplyTest is Test {
         address[] memory newLocations = userFactory.create(1);
         address newSilo = newLocations[0];
 
-        vm.startPrank(address(submoduleSiloSupply));
+        vm.startPrank(address(moduleSupply));
         submoduleSiloSupply.setSources(address(0), address(0), newSilo);
         vm.stopPrank();
 
@@ -258,7 +258,7 @@ contract SiloSupplyTest is Test {
         address newLens = newLocations[1];
         address newSilo = newLocations[2];
 
-        vm.startPrank(address(submoduleSiloSupply));
+        vm.startPrank(address(moduleSupply));
         submoduleSiloSupply.setSources(newAmo, newLens, newSilo);
         vm.stopPrank();
 
