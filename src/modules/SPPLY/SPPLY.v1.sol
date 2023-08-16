@@ -213,6 +213,9 @@ abstract contract SupplySubmodule is Submodule {
     }
 
     // ========== DATA FUNCTIONS ========== //
+
+    /// @notice Value for collateralized OHM
+    /// @dev Definition: The quantity of OHM minted against collateral provided by borrowers or liquidity stakers and not backed by treasury assets.
     function getCollateralizedOhm() external view virtual returns (uint256);
 
     function getProtocolOwnedBorrowableOhm() external view virtual returns (uint256);

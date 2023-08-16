@@ -507,4 +507,6 @@ contract OlympusSupply is SPPLYv1 {
     function _backedSupply() internal view returns (uint256) {
         return _floatingSupply() - _collateralizedSupply();
     }
+
+    // TODO how to install/configure submodules
 }

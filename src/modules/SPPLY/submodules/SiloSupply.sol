@@ -11,7 +11,7 @@ contract SiloSupply is SupplySubmodule {
     // [X] Get amount of circulating OHM minted against collateral from pool
     // Math:
     // AMO mints X amount of OHM into pool.
-    // Other users depost Y amount of OHM into pool.
+    // Other users deposit Y amount of OHM into pool.
     // Z amount of OHM is borrowed from pool.
     // We assume that any OHM borrowed from the pool, up to X amount, is protocol-owned since it will the last to withdraw in the event of a run.
     // Therefore, of the X OHM minted into the pool, we have:
