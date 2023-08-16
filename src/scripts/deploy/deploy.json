@@ -1,10 +1,9 @@
 {
     "sequence": [
         {
-            "name": "OlympusHeart",
+            "name": "Clearinghouse",
             "args": {
-                "auctionDuration": 1200,
-                "maxReward": 40000000000
+                "factoryImplementation": "0x0000000000000000000000000000000000000000"
             }
         }
     ]
