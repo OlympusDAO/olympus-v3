@@ -9,7 +9,7 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Pohm} from "policies/Pohm.sol";
 import "src/Kernel.sol";
@@ -23,7 +23,7 @@ contract MockGohm is IgOHM {
     constructor() {}
 
     function balanceFrom(uint256 gohmAmount_) public view returns (uint256) {
-        return (gohmAmount_ * index) / 1e9;
+        return (gohmAmount_ * index) / 1e18;
     }
 
     function balanceTo(uint256 ohmAmount_) public view returns (uint256) {
@@ -224,5 +224,281 @@ contract PohmTest is Test {
         ohmBalance = ohm.balanceOf(alice);
         assertEq(ohmBalance, 100_000e9);
         vm.stopPrank();
+    }
+
+    //============================================================================================//
+    //                                   MANAGEMENT FUNCTIONS                                     //
+    //============================================================================================//
+
+    /// [X]  pushWalletChange
+    ///     [X]  cannot be called by someone without a claim
+    ///     [X]  flags a wallet change for the user
+
+    function test_pushWalletChangeCannotBeCalledWithoutClaim(address user_) public {
+        vm.assume(user_ != alice && user_ != bob);
+
+        vm.startPrank(user_);
+
+        bytes memory err = abi.encodeWithSignature("POHM_NoClaim()");
+        vm.expectRevert(err);
+
+        pohm.pushWalletChange(bob);
+        vm.stopPrank();
+    }
+
+    function test_pushWalletChangeFlagsWalletChangeForUser() public {
+        vm.startPrank(alice);
+
+        // Check wallet change before
+        address newWallet = pohm.walletChange(alice);
+        assertEq(newWallet, address(0));
+
+        pohm.pushWalletChange(bob);
+
+        newWallet = pohm.walletChange(alice);
+        assertEq(newWallet, bob);
+        vm.stopPrank();
+    }
+
+    /// [X]  pullWalletChange
+    ///     [X]  cannot be called unless the caller is flagged as the user's wallet change
+    ///     [X]  cannot be called if the new wallet already has a claim
+    ///     [X]  sets the wallet change to the zero address
+    ///     [X]  copies terms from old wallet to new wallet
+    ///     [X]  deletes terms for old wallet
+
+    function test_pullWalletCannotBeCalledByUnflaggedWallet(address user_) public {
+        vm.startPrank(user_);
+
+        bytes memory err = abi.encodeWithSignature("POHM_NoWalletChange()");
+        vm.expectRevert(err);
+
+        pohm.pullWalletChange(alice);
+        vm.stopPrank();
+    }
+
+    function test_pullWalletCannotBeCalledIfNewWalletHasClaim() public {
+        vm.prank(alice);
+        pohm.pushWalletChange(bob);
+
+        bytes memory err = abi.encodeWithSignature("POHM_AlreadyHasClaim()");
+        vm.expectRevert(err);
+
+        vm.prank(bob);
+        pohm.pullWalletChange(alice);
+    }
+
+    function test_pullWalletSetsWalletChangeToZeroAddress(address newWallet_) public {
+        vm.assume(newWallet_ != alice && newWallet_ != bob);
+
+        vm.prank(alice);
+        pohm.pushWalletChange(newWallet_);
+
+        address newWallet = pohm.walletChange(alice);
+        assertEq(newWallet, newWallet_);
+
+        vm.prank(newWallet_);
+        pohm.pullWalletChange(alice);
+
+        newWallet = pohm.walletChange(alice);
+        assertEq(newWallet, address(0));
+    }
+
+    function test_pullWalletCopiesTermsFromOldWalletToNewWallet(address newWallet_) public {
+        vm.assume(newWallet_ != alice && newWallet_ != bob);
+
+        vm.prank(alice);
+        pohm.pushWalletChange(newWallet_);
+
+        (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(alice);
+        assertEq(percent, 10_000);
+        assertEq(gClaimed, 0);
+        assertEq(max, 100_000e9);
+
+        (uint256 newWalletPercent, uint256 newWalletGClaimed, uint256 newWalletMax) = pohm.terms(
+            newWallet_
+        );
+        assertEq(newWalletPercent, 0);
+        assertEq(newWalletGClaimed, 0);
+        assertEq(newWalletMax, 0);
+
+        vm.prank(newWallet_);
+        pohm.pullWalletChange(alice);
+
+        (newWalletPercent, newWalletGClaimed, newWalletMax) = pohm.terms(newWallet_);
+        assertEq(newWalletPercent, 10_000);
+        assertEq(newWalletGClaimed, 0);
+        assertEq(newWalletMax, 100_000e9);
+    }
+
+    function test_pullWalletDeletesTermsForOldWallet(address newWallet_) public {
+        vm.assume(newWallet_ != alice && newWallet_ != bob);
+
+        vm.prank(alice);
+        pohm.pushWalletChange(newWallet_);
+
+        (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(alice);
+        assertEq(percent, 10_000);
+        assertEq(gClaimed, 0);
+        assertEq(max, 100_000e9);
+
+        vm.prank(newWallet_);
+        pohm.pullWalletChange(alice);
+
+        (percent, gClaimed, max) = pohm.terms(alice);
+        assertEq(percent, 0);
+        assertEq(gClaimed, 0);
+        assertEq(max, 0);
+    }
+
+    //============================================================================================//
+    //                                       ADMIN FUNCTIONS                                      //
+    //============================================================================================//
+
+    /// [X]  migrate
+    ///     [X]  can only be called by address with pohm_admin role
+    ///     [X]  copies terms from previous pOHM contract
+
+    function test_migrateCanOnlyBeCalledByPohmAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("pohm_admin")
+        );
+        vm.expectRevert(err);
+
+        address[] memory users = new address[](1);
+        users[0] = alice;
+
+        vm.prank(user_);
+        pohm.migrate(users);
+    }
+
+    function test_migrateCopiesTermsFromPreviousPohmContract(address migratedUser_) public {
+        vm.assume(migratedUser_ != alice && migratedUser_ != bob);
+
+        previous.setTerms(migratedUser_, 10_000, 0, 100_000e9);
+
+        (uint256 percent, uint256 gClaimed, uint256 max) = previous.terms(migratedUser_);
+        assertEq(percent, 10_000);
+        assertEq(gClaimed, 0);
+        assertEq(max, 100_000e9);
+
+        (uint256 newPercent, uint256 newGClaimed, uint256 newMax) = pohm.terms(migratedUser_);
+        assertEq(newPercent, 0);
+        assertEq(newGClaimed, 0);
+        assertEq(newMax, 0);
+
+        address[] memory users = new address[](1);
+        users[0] = migratedUser_;
+
+        pohm.migrate(users);
+
+        (newPercent, newGClaimed, newMax) = pohm.terms(migratedUser_);
+        assertEq(newPercent, 10_000);
+        assertEq(newGClaimed, 0);
+        assertEq(newMax, 100_000e9);
+    }
+
+    /// [X]  setTerms
+    ///     [X]  can only be called by address with pohm_admin role
+    ///     [X]  can only set terms for account that has no current claim
+    ///     [X]  cannot increase total allocation beyond max
+    ///     [X]  sets terms for account
+    ///     [X]  increases totalAllocated value
+
+    function test_setTermsCanOnlyBeCalledByPohmAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("pohm_admin")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        pohm.setTerms(alice, 10_000, 0, 100_000e9);
+    }
+
+    function test_setTermsCanOnlySetTermsForAccountThatHasNoCurrentClaim() public {
+        bytes memory err = abi.encodeWithSignature("POHM_AlreadyHasClaim()");
+        vm.expectRevert(err);
+
+        pohm.setTerms(alice, 10_000, 0, 100_000e9);
+    }
+
+    function test_setTermsCannotIncreaseTotalAllocationBeyondMax(address user_) public {
+        vm.assume(user_ != alice && user_ != bob);
+
+        bytes memory err = abi.encodeWithSignature("POHM_AllocationLimitViolation()");
+        vm.expectRevert(err);
+
+        pohm.setTerms(user_, 100_000, 0, 100_000e9);
+    }
+
+    function test_setTermsSetsTermsForAccount(address user_) public {
+        vm.assume(user_ != alice && user_ != bob);
+
+        (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(user_);
+        assertEq(percent, 0);
+        assertEq(gClaimed, 0);
+        assertEq(max, 0);
+
+        pohm.setTerms(user_, 10_000, 0, 100_000e9);
+
+        (percent, gClaimed, max) = pohm.terms(user_);
+        assertEq(percent, 10_000);
+        assertEq(gClaimed, 0);
+        assertEq(max, 100_000e9);
+    }
+
+    function test_setTermsIncreasesTotalAllocatedValue(address user_) public {
+        vm.assume(user_ != alice && user_ != bob);
+
+        uint256 totalAllocated = pohm.totalAllocated();
+        assertEq(totalAllocated, 20_000);
+
+        pohm.setTerms(user_, 10_000, 0, 100_000e9);
+
+        totalAllocated = pohm.totalAllocated();
+        assertEq(totalAllocated, 30_000);
+    }
+
+    //============================================================================================//
+    //                                       VIEW FUNCTIONS                                       //
+    //============================================================================================//
+
+    /// [X]  redeemableFor
+    /// [X]  getCirculatingSupply
+    /// [X]  getAccountClaimed
+
+    function test_redeemableFor() public {
+        assertEq(pohm.redeemableFor(alice), 100_000e9);
+
+        // Claim 10k
+        vm.startPrank(alice);
+        dai.approve(address(pohm), 10_000e18);
+        pohm.claim(alice, 10_000e18);
+        vm.stopPrank();
+
+        assertEq(pohm.redeemableFor(alice), 90_000e9);
+    }
+
+    function test_getCirculatingSupply() public {
+        // TODO FIX ONCE CALCULATION IS ACTUALLY WRITTEN
+        assertEq(pohm.getCirculatingSupply(), 100_000_000e9);
+    }
+
+    function test_getAccountClaimed() public {
+        assertEq(pohm.getAccountClaimed(alice), 0);
+
+        // Claim 100k
+        vm.startPrank(alice);
+        dai.approve(address(pohm), 10_000e18);
+        pohm.claim(alice, 10_000e18);
+        vm.stopPrank();
+
+        assertEq(pohm.getAccountClaimed(alice), 10_000e9);
     }
 }

@@ -152,7 +152,7 @@ contract Pohm is Policy, RolesConsumer {
         uint256 max = (circulatingSupply * accountTerms.percent) / 1e6;
         max = max > accountTerms.max ? accountTerms.max : max;
 
-        return (max - accountClaimed) * 1e9;
+        return max - accountClaimed;
     }
 
     function getCirculatingSupply() public view returns (uint256) {
@@ -174,6 +174,10 @@ contract Pohm is Policy, RolesConsumer {
         for (uint256 i; i < length; ) {
             Term memory accountTerm = previous.terms(accounts_[i]);
             setTerms(accounts_[i], accountTerm.percent, accountTerm.gClaimed, accountTerm.max);
+
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -199,7 +203,7 @@ contract Pohm is Policy, RolesConsumer {
 
         toSend = (amount_ * 1e9) / 1e18;
 
-        if ((redeemableFor(msg.sender) / 1e9) < toSend) revert POHM_ClaimMoreThanVested();
+        if (redeemableFor(msg.sender) < toSend) revert POHM_ClaimMoreThanVested();
         if ((accountTerms.max - getAccountClaimed(msg.sender)) < toSend)
             revert POHM_ClaimMoreThanMax(); // TODO this is actually redundant since redeemableFor limits to max
 
