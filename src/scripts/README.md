@@ -10,7 +10,7 @@
 3. If external dependencies are required, add them in `src/scripts/env.json`, so that they can be used in `DeployV2.sol`.
 4. If necessary, update your `.env` file. It should, at least, have the same variables as in `.env.deploy.example`.
 5. Run `./src/scripts/deploy/deployV2.sh` to run the deployment shell script.
- - If you want to broadcast the tx to the network, uncomment the last line.
+ - If you want to broadcast the tx to the network, uncomment the last line of the script.
 6. After a successful deployment, update `src/scripts/env.json` with the new contract addresses.
 
 # DeployV2 Instructions for CrossChain

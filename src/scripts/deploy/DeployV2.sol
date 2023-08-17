@@ -208,6 +208,7 @@ contract OlympusDeploy is Script {
         auraMiningLib = IAuraMiningLib(envAddress("external.aura.AuraMiningLib"));
         ohmWstethRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmWstethRewardsPool"));
         ohmLusdRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmLusdRewardsPool"));
+        coolerFactory = CoolerFactory(envAddress("external.cooler.CoolerFactory"));
 
         // Bophades contracts
         kernel = Kernel(envAddress("olympus.Kernel"));
@@ -742,16 +743,13 @@ contract OlympusDeploy is Script {
     }
 
     function _deployClearinghouse(bytes memory args) public returns (address) {
-        address factoryImplementation = abi.decode(args, (address));
-
-        if (factoryImplementation == address(0)) {
+        if (address(coolerFactory) == address(0)) {
             // Deploy a new Cooler Factory implementation
             vm.broadcast();
             coolerFactory = new CoolerFactory();
             console2.log("Cooler Factory deployed at:", address(coolerFactory));
         } else {
             // Use the input Cooler Factory implmentation
-            coolerFactory = CoolerFactory(factoryImplementation);
             console2.log("Input Factory Implementation:", address(coolerFactory));
         }
 
