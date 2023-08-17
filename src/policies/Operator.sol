@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
+import {console2} from "forge-std/console2.sol";
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -314,10 +315,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             MINTR.burnOhm(address(this), amountIn_);
 
             // Calculate amount of wrappedReserve to withdraw from the TRSRY
-            uint256 amountWrapped = wrappedReserve.previewDeposit(amountOut);
+            uint256 amountWrapped = wrappedReserve.previewWithdraw(amountOut);
 
             // Withdraw wrapped reserves from TRSRY
-            TRSRY.withdrawReserves(msg.sender, wrappedReserve, amountWrapped);
+            TRSRY.withdrawReserves(address(this), wrappedReserve, amountWrapped);
 
             // Unwrap reserves and transfer to sender
             wrappedReserve.withdraw(amountOut, msg.sender, address(this));
@@ -348,6 +349,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             reserve.safeTransferFrom(msg.sender, address(this), amountIn_);
 
             // Wrap reserves and transfer to TRSRY
+            reserve.approve(address(wrappedReserve), amountIn_);
             wrappedReserve.deposit(amountIn_, address(TRSRY));
 
             // Mint OHM to sender
@@ -531,6 +533,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             if (excessReserve > 0) {
                 TRSRY.increaseWithdrawApproval(address(this), reserve, excessReserve);
                 TRSRY.withdrawReserves(address(this), reserve, excessReserve);
+                reserve.approve(address(wrappedReserve), excessReserve);
                 wrappedReserve.deposit(excessReserve, address(TRSRY));
             }
         }
@@ -651,16 +654,26 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             _status.low.nextObservation = uint32(0);
             _status.low.lastRegen = uint48(block.timestamp);
 
-            // Calculate capacity
+            // Calculate capacity in reserve terms
             uint256 capacity = fullCapacity(false);
 
             // Get approval from the TRSRY to withdraw up to the capacity in reserves
             // If current approval is higher than the capacity, reduce it
-            uint256 currentApproval = TRSRY.withdrawApproval(address(this), reserve);
+            uint256 currentApproval = wrappedReserve.previewRedeem(
+                TRSRY.withdrawApproval(address(this), wrappedReserve)
+            );
             if (currentApproval < capacity) {
-                TRSRY.increaseWithdrawApproval(address(this), reserve, capacity - currentApproval);
+                TRSRY.increaseWithdrawApproval(
+                    address(this),
+                    wrappedReserve,
+                    wrappedReserve.previewWithdraw(capacity - currentApproval)
+                );
             } else if (currentApproval > capacity) {
-                TRSRY.decreaseWithdrawApproval(address(this), reserve, currentApproval - capacity);
+                TRSRY.decreaseWithdrawApproval(
+                    address(this),
+                    wrappedReserve,
+                    wrappedReserve.previewWithdraw(currentApproval - capacity)
+                );
             }
 
             // Regenerate the side with the capacity
@@ -875,7 +888,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IOperator
     function fullCapacity(bool high_) public view override returns (uint256) {
         uint256 wrappedReservesInTreasury = TRSRY.getReserveBalance(wrappedReserve);
-        uint256 reservesInTreasury = wrappedReserve.previewWithdraw(wrappedReservesInTreasury) +
+        uint256 reservesInTreasury = wrappedReserve.previewRedeem(wrappedReservesInTreasury) +
             TRSRY.getReserveBalance(reserve);
         uint256 capacity = (reservesInTreasury * _config.reserveFactor) / ONE_HUNDRED_PERCENT;
         if (high_) {
