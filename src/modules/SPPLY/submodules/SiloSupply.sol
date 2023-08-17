@@ -127,14 +127,20 @@ contract SiloSupply is SupplySubmodule {
 
     // =========== ADMIN FUNCTIONS =========== //
 
-    /// @notice Set the source addresses for Silo lending data
-    /// @dev all params are optional and will keep existing values if omitted
-    /// @param amo_ The address of the Olympus Silo AMO Policy / silo OHM token holder
-    /// @param lens_ The address of the SiloLens contract
-    /// @param silo_ The address of the Silo market
+    /// @notice         Set the source addresses for Silo lending data
+    /// @dev            All params are optional and will keep existing values if omitted
+    ///
+    ///                 Will revert if:
+    ///                 - The caller is not the parent module
+    ///
+    /// @param amo_     The address of the Olympus Silo AMO Policy / silo OHM token holder
+    /// @param lens_    The address of the SiloLens contract
+    /// @param silo_    The address of the Silo market
     function setSources(address amo_, address lens_, address silo_) external onlyParent {
         if (amo_ != address(0)) amo = amo_;
         if (lens_ != address(0)) lens = ISiloLens(lens_);
         if (silo_ != address(0)) silo = IBaseSilo(silo_);
     }
+
+    // TODO events
 }

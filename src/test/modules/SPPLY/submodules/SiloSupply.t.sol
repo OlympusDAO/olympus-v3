@@ -2,7 +2,6 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {stdError} from "forge-std/StdError.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
