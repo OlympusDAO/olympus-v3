@@ -32,35 +32,6 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //  [X] decrements value, emits event
 //  [X] reverts if underflow
 //
-// TODO remove these?
-// [ ] addChain - adds a new chain for cross-chain supply tracking
-//      [ ] reverts if caller is not permissioned
-//      [ ] reverts if chain already approved
-//      [ ] stores chainId in chainIds array
-//      [ ] stores ohm address on chain
-// [ ] removeChain - removes a chain from cross-chain supply tracking
-//      [ ] reverts if caller is not permissioned
-//      [ ] reverts if chain not approved
-//      [ ] removes chain supply from totalCrossChainSupply
-//      [ ] deletes chain supply from mapping
-//      [ ] removes chainId from chainIds array
-//      [ ] deletes chain ohm address from mapping
-// [ ] updateCrossChainSupplies - updates cross-chain supplies for the provided chains and the category supplies (across all other chains) from the provided categories
-//      [ ] reverts if caller is not permissioned
-//      [ ] reverts if number of chainIds doesn't match number of chain supplies provided
-//      [ ] reverts if any of the chainIds are not approved
-//      [ ] reverts if any of the categories are not approved
-//      [ ] reverts if number of categories doesn't match number of category supplies provided
-//      [ ] updates cross-chain supply for each chain provided
-//      [ ] updates category supply for each category provided
-//      [ ] updates totalCrossChainSupply with the sum of the chain supplies provided and reduces by the existing chain supply values
-//      [ ] emits event for each chain supply update
-//      [ ] emits event for each category supply update
-// [ ] getCrossChainIds - returns array of all approved chainIds
-//      [ ] zero chains
-//      [ ] one chain
-//      [ ] many chains
-//
 // Supply Categorization
 // [X] addCategory - adds a new category for supply tracking
 //  [X] reverts if caller is not permissioned
