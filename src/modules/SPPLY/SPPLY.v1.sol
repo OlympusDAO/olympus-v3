@@ -210,7 +210,7 @@ abstract contract SupplySubmodule is Submodule {
         return toKeycode("SPPLY");
     }
 
-    function SPPLY() internal view returns (SPPLYv1) {
+    function _SPPLY() internal view returns (SPPLYv1) {
         return SPPLYv1(address(parent));
     }
 
