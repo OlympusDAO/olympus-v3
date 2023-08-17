@@ -17,6 +17,8 @@ import {Math as OZMath} from "@openzeppelin/contracts/utils/math/Math.sol";
 import "src/modules/SPPLY/OlympusSupply.sol";
 import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 
+import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
+
 contract SiloSupplyTest is Test {
     using FullMath for uint256;
     using ModuleTestFixtureGenerator for OlympusSupply;
@@ -108,12 +110,11 @@ contract SiloSupplyTest is Test {
         }
     }
 
-    // TODO should the submodule support multiple AMO addresses?
-
     // Test checklist
     // [X] Submodule
     //  [X] Version
     //  [X] Subkeycode
+    //  [X] Incorrect parent
     // [X] getCollateralizedOhm
     //  [X] supplied > borrowed
     //  [X] supplied < borrowed
@@ -142,8 +143,42 @@ contract SiloSupplyTest is Test {
         assertEq(minor, 0);
     }
 
+    function test_submodule_parent() public {
+        assertEq(fromKeycode(submoduleSiloSupply.PARENT()), "SPPLY");
+    }
+
     function test_submodule_subkeycode() public {
         assertEq(fromSubKeycode(submoduleSiloSupply.SUBKEYCODE()), "SPPLY.SILO");
+    }
+
+    function test_submodule_parent_notModule_reverts() public {
+        // Feed in a different address
+        address[] memory newLocations = userFactory.create(1);
+
+        // There's no error message, so just check that a revert happens when attempting to call the module
+        vm.expectRevert();
+
+        new SiloSupply(
+            Module(newLocations[0]),
+            siloAmo,
+            address(siloLens),
+            address(siloBase)
+        );
+    }
+
+    function test_submodule_parent_notSpply_reverts() public {
+        // Pass the PRICEv2 module as the parent
+        OlympusPricev2 modulePrice = new OlympusPricev2(kernel, 18, 8 hours);
+
+        bytes memory err = abi.encodeWithSignature("Submodule_InvalidParent()");
+        vm.expectRevert(err);
+
+        new SiloSupply(
+            modulePrice,
+            siloAmo,
+            address(siloLens),
+            address(siloBase)
+        );
     }
 
     // =========  getCollateralizedOhm ========= //

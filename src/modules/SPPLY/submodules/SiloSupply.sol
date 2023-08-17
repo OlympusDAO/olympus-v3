@@ -69,10 +69,16 @@ contract SiloSupply is SupplySubmodule {
 
     // ========== DATA FUNCTIONS ========== //
 
-    /// @inheritdoc SupplySubmodule
+    /// @inheritdoc     SupplySubmodule
+    /// @dev            Collateralized OHM is calculated as the minimum of:
+    ///                 - OHM supplied/minted into the Silo market
+    ///                 - OHM borrowed from the Silo market
+    ///
+    ///                 This is also equal to the remainder of OHM minted into the Silo market - protocol-owned borrowable OHM.
+    ///
+    ///                 This function assumes that the protocol provided OHM is borrowable.
     function getCollateralizedOhm() external view override returns (uint256) {
         // Get OHM collateral token for this silo
-        /// @dev note: this assumes that the protocol provided OHM is borrowable. if not, this token is not correct.
         address ohmCollateralToken = silo.assetStorage(ohm).collateralToken;
 
         // Get amount of OHM supplied to market by lending facility
@@ -87,7 +93,14 @@ contract SiloSupply is SupplySubmodule {
         return supplied > borrowed ? borrowed : supplied;
     }
 
-    /// @inheritdoc SupplySubmodule
+    /// @inheritdoc     SupplySubmodule
+    /// @dev            Protocol-owned borrowable OHM is calculated as the maximum of:
+    ///                 - The difference between the OHM supplied/minted into the Silo market and the OHM borrowed from the Silo market
+    ///                 - 0
+    ///
+    ///                 We assume that any OHM borrowed from the pool, up to the minted amount, is protocol-owned since it will the last to withdraw in the event of a run.
+    ///
+    ///                 This function assumes that the protocol provided OHM is borrowable.
     function getProtocolOwnedBorrowableOhm() external view override returns (uint256) {
         // Get OHM collateral token for this silo
         /// @dev note: this assumes that the protocol provided OHM is borrowable. if not, this token is not correct.
@@ -105,7 +118,8 @@ contract SiloSupply is SupplySubmodule {
         return supplied > borrowed ? supplied - borrowed : 0;
     }
 
-    /// @inheritdoc SupplySubmodule
+    /// @inheritdoc     SupplySubmodule
+    /// @dev            Protocol-owned liquidity OHM is always zero for lending facilities
     function getProtocolOwnedLiquidityOhm() external pure override returns (uint256) {
         // POLO is always zero for lending facilities
         return 0;
