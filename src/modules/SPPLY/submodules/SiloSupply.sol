@@ -14,9 +14,12 @@ contract SiloSupply is SupplySubmodule {
     // Other users deposit Y amount of OHM into pool.
     // Z amount of OHM is borrowed from pool.
     // We assume that any OHM borrowed from the pool, up to X amount, is protocol-owned since it will the last to withdraw in the event of a run.
+    // Any OHM that is minted into the pool but not borrowed is collateralized OHM.
+    // At all times, collateralized OHM + protocol-owned borrowable OHM = X OHM (minted).
+    //
     // Therefore, of the X OHM minted into the pool, we have:
     // Protocol-owned Borrowable OHM = Max(X - Z, 0)
-    // Collateralized OHM = Max(X, Z)
+    // Collateralized OHM = Min(X, Z)
     // Protocol-owned Liquidity OHM = 0
 
     // ========== ERRORS ========== //
@@ -52,6 +55,7 @@ contract SiloSupply is SupplySubmodule {
 
     // ========== DATA FUNCTIONS ========== //
 
+    /// @inheritdoc SupplySubmodule
     function getCollateralizedOhm() external view override returns (uint256) {
         // Get OHM collateral token for this silo
         /// @dev note: this assumes that the protocol provided OHM is borrowable. if not, this token is not correct.
@@ -69,6 +73,7 @@ contract SiloSupply is SupplySubmodule {
         return supplied > borrowed ? borrowed : supplied;
     }
 
+    /// @inheritdoc SupplySubmodule
     function getProtocolOwnedBorrowableOhm() external view override returns (uint256) {
         // Get OHM collateral token for this silo
         /// @dev note: this assumes that the protocol provided OHM is borrowable. if not, this token is not correct.
@@ -86,6 +91,7 @@ contract SiloSupply is SupplySubmodule {
         return supplied > borrowed ? supplied - borrowed : 0;
     }
 
+    /// @inheritdoc SupplySubmodule
     function getProtocolOwnedLiquidityOhm() external pure override returns (uint256) {
         // POLO is always zero for lending facilities
         return 0;

@@ -12,6 +12,7 @@ import {MockGohm} from "test/mocks/OlympusMocks.sol";
 import {MockSiloLens, MockBaseSilo} from "test/mocks/MockSilo.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
+import {Math as OZMath} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "src/modules/SPPLY/OlympusSupply.sol";
 import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
@@ -43,8 +44,8 @@ contract SiloSupplyTest is Test {
 
     // Real values from:
     // https://etherscan.io/address/0xf5ffabab8f9a6f4f6de1f0dd6e0820f68657d7db
-    uint256 internal constant LENS_BORROW_AMOUNT = 477149187374;
-    uint256 internal constant LENS_DEPOSIT_AMOUNT = 97364239386463;
+    uint256 internal constant LENS_BORROWED_AMOUNT = 477149187374;
+    uint256 internal constant LENS_TOTAL_DEPOSITED_AMOUNT = 97364239386463;
     uint256 internal constant LENS_SUPPLIED_AMOUNT = 23401686713550;
 
     function setUp() public {
@@ -79,8 +80,8 @@ contract SiloSupplyTest is Test {
         // Deploy Silo submodule
         {
             siloLens = new MockSiloLens();
-            siloLens.setTotalDepositsWithInterest(LENS_DEPOSIT_AMOUNT);
-            siloLens.setTotalBorrowAmountWithInterest(LENS_BORROW_AMOUNT);
+            siloLens.setTotalDepositsWithInterest(LENS_TOTAL_DEPOSITED_AMOUNT);
+            siloLens.setTotalBorrowAmountWithInterest(LENS_BORROWED_AMOUNT);
             siloLens.setBalanceOfUnderlying(LENS_SUPPLIED_AMOUNT);
 
             siloBase = new MockBaseSilo();
@@ -147,54 +148,51 @@ contract SiloSupplyTest is Test {
 
     // =========  getCollateralizedOhm ========= //
 
-    function test_getCollateralizedOhm_suppliedGreaterThanBorrowed(uint256 supplied_) public {
-        uint256 supplied = bound(supplied_, LENS_BORROW_AMOUNT + 1, LENS_DEPOSIT_AMOUNT);
-        siloLens.setBalanceOfUnderlying(supplied);
+    function test_getCollateralizedOhm_fuzz(uint256 borrowed_) public {
+        uint256 borrowed = bound(borrowed_, 0, LENS_TOTAL_DEPOSITED_AMOUNT);
+        siloLens.setTotalBorrowAmountWithInterest(borrowed);
 
-        uint256 expected = supplied - LENS_BORROW_AMOUNT;
-
-        assertEq(submoduleSiloSupply.getCollateralizedOhm(), expected);
-    }
-
-    function test_getCollateralizedOhm_suppliedLessThanBorrowed(uint256 supplied_) public {
-        uint256 supplied = bound(supplied_, 0, LENS_BORROW_AMOUNT);
-        siloLens.setBalanceOfUnderlying(supplied);
-
-        uint256 expected = 0;
+        // Any OHM (up to the supplied amount) that is borrowed is collateralized
+        uint256 expected = OZMath.min(borrowed, LENS_SUPPLIED_AMOUNT);
 
         assertEq(submoduleSiloSupply.getCollateralizedOhm(), expected);
+
+        // Check the assertion
+        uint256 pobo = submoduleSiloSupply.getProtocolOwnedBorrowableOhm();
+        assertEq(pobo + expected, LENS_SUPPLIED_AMOUNT);
     }
 
     // =========  getProtocolOwnedBorrowableOhm ========= //
 
-    function test_getProtocolOwnedBorrowableOhm_suppliedGreaterThanBorrowed(
-        uint256 supplied_
+    function test_getProtocolOwnedBorrowableOhm_fuzz(
+        uint256 borrowed_
     ) public {
-        // Supplied > borrowed
-        uint256 supplied = bound(supplied_, LENS_BORROW_AMOUNT + 1, LENS_DEPOSIT_AMOUNT);
-        siloLens.setBalanceOfUnderlying(supplied);
+        uint256 borrowed = bound(borrowed_, 0, LENS_TOTAL_DEPOSITED_AMOUNT);
+        siloLens.setTotalBorrowAmountWithInterest(borrowed);
 
-        uint256 expected = supplied - LENS_BORROW_AMOUNT;
-
-        assertEq(submoduleSiloSupply.getProtocolOwnedBorrowableOhm(), expected);
-    }
-
-    function test_getProtocolOwnedBorrowableOhm_suppliedLessThanBorrowed(uint256 supplied_) public {
-        // Supplied <= borrowed
-        uint256 supplied = bound(supplied_, 0, LENS_BORROW_AMOUNT);
-        siloLens.setBalanceOfUnderlying(supplied);
-
-        uint256 expected = 0;
+        // Any OHM (up to the supplied amount) that is not borrowed is POBO
+        uint256 expected;
+        if (borrowed < LENS_SUPPLIED_AMOUNT) {
+            expected = LENS_SUPPLIED_AMOUNT - borrowed;
+        } else {
+            expected = 0;
+        }
 
         assertEq(submoduleSiloSupply.getProtocolOwnedBorrowableOhm(), expected);
+
+        // Check the assertion
+        uint256 col = submoduleSiloSupply.getCollateralizedOhm();
+        assertEq(col + expected, LENS_SUPPLIED_AMOUNT);
     }
 
     // =========  getProtocolOwnedLiquidityOhm ========= //
 
-    function test_getProtocolOwnedLiquidityOhm() public {
-        uint256 expected = 0;
+    function test_getProtocolOwnedLiquidityOhm_fuzz(uint256 borrowed_) public {
+        uint256 borrowed = bound(borrowed_, 0, LENS_TOTAL_DEPOSITED_AMOUNT);
+        siloLens.setTotalBorrowAmountWithInterest(borrowed);
 
-        assertEq(submoduleSiloSupply.getProtocolOwnedLiquidityOhm(), expected);
+        // No OHM is liquidity OHM
+        assertEq(submoduleSiloSupply.getProtocolOwnedLiquidityOhm(), 0);
     }
 
     // =========  setSources ========= //
