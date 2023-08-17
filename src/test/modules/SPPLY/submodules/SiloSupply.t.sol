@@ -49,6 +49,8 @@ contract SiloSupplyTest is Test {
     uint256 internal constant LENS_TOTAL_DEPOSITED_AMOUNT = 97364239386463;
     uint256 internal constant LENS_SUPPLIED_AMOUNT = 23401686713550;
 
+    event SourcesUpdated(address amo_, address lens_, address silo_);
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
 
@@ -180,6 +182,22 @@ contract SiloSupplyTest is Test {
         );
     }
 
+    function test_submodule_emitsEvent() public {
+        // Expect an event
+        vm.expectEmit(true, false, false, true);
+        emit SourcesUpdated(siloAmo, address(siloLens), address(siloBase));
+
+        // Create a new submodule
+        vm.startPrank(writer);
+        new SiloSupply(
+            moduleSupply,
+            siloAmo,
+            address(siloLens),
+            address(siloBase)
+        );
+        vm.stopPrank();
+    }
+
     // =========  getCollateralizedOhm ========= //
 
     function test_getCollateralizedOhm_fuzz(uint256 borrowed_) public {
@@ -254,6 +272,10 @@ contract SiloSupplyTest is Test {
         address[] memory newLocations = userFactory.create(1);
         address newAmo = newLocations[0];
 
+        // Expect an event
+        vm.expectEmit(true, false, false, true);
+        emit SourcesUpdated(newAmo, address(siloLens), address(siloBase));
+
         vm.startPrank(address(moduleSupply));
         submoduleSiloSupply.setSources(newAmo, address(0), address(0));
         vm.stopPrank();
@@ -267,6 +289,10 @@ contract SiloSupplyTest is Test {
         address[] memory newLocations = userFactory.create(1);
         address newLens = newLocations[0];
 
+        // Expect an event
+        vm.expectEmit(true, false, false, true);
+        emit SourcesUpdated(siloAmo, newLens, address(siloBase));
+
         vm.startPrank(address(moduleSupply));
         submoduleSiloSupply.setSources(address(0), newLens, address(0));
         vm.stopPrank();
@@ -279,6 +305,10 @@ contract SiloSupplyTest is Test {
     function test_setSources_silo() public {
         address[] memory newLocations = userFactory.create(1);
         address newSilo = newLocations[0];
+
+        // Expect an event
+        vm.expectEmit(true, false, false, true);
+        emit SourcesUpdated(siloAmo, address(siloLens), newSilo);
 
         vm.startPrank(address(moduleSupply));
         submoduleSiloSupply.setSources(address(0), address(0), newSilo);
@@ -294,6 +324,10 @@ contract SiloSupplyTest is Test {
         address newAmo = newLocations[0];
         address newLens = newLocations[1];
         address newSilo = newLocations[2];
+
+        // Expect an event
+        vm.expectEmit(true, false, false, true);
+        emit SourcesUpdated(newAmo, newLens, newSilo);
 
         vm.startPrank(address(moduleSupply));
         submoduleSiloSupply.setSources(newAmo, newLens, newSilo);

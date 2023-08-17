@@ -56,6 +56,9 @@ contract BLVaultSupplyTest is Test {
     uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
     uint256 internal constant INITIAL_CROSS_CHAIN_SUPPLY = 0; // 0 OHM
 
+    event VaultManagerAdded(address vaultManager_);
+    event VaultManagerRemoved(address vaultManager_);
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
 
@@ -121,18 +124,18 @@ contract BLVaultSupplyTest is Test {
     //  [X] no vault managers
     //  [X] one vault manager
     //  [X] multiple vault managers
-    // [ ] getProtocolOwnedBorrowableOhm
-    // [ ] getProtocolOwnedLiquidityOhm
-    // [ ] addVaultManager
-    //  [ ] not parent
-    //  [ ] address(0)
-    //  [ ] already added
-    //  [ ] success
-    // [ ] removeVaultManager
-    //  [ ] not parent
-    //  [ ] address(0)
-    //  [ ] not added
-    //  [ ] success
+    // [X] getProtocolOwnedBorrowableOhm
+    // [X] getProtocolOwnedLiquidityOhm
+    // [X] addVaultManager
+    //  [X] not parent
+    //  [X] address(0)
+    //  [X] already added
+    //  [X] success
+    // [X] removeVaultManager
+    //  [X] not parent
+    //  [X] address(0)
+    //  [X] not added
+    //  [X] success
 
     // =========  TESTS ========= //
 
@@ -176,6 +179,18 @@ contract BLVaultSupplyTest is Test {
 
         new BLVaultSupply(
             modulePrice,
+            vaultManagerAddresses
+        );
+    }
+
+    function test_submodule_emitsEvent() public {
+        // Expect an event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit VaultManagerAdded(vaultManagerAddresses[0]);
+
+        // New BLVaultSupply
+        new BLVaultSupply(
+            moduleSupply,
             vaultManagerAddresses
         );
     }
@@ -287,6 +302,10 @@ contract BLVaultSupplyTest is Test {
         // Add vault manager to list
         vaultManagerAddresses.push(address(vaultManager2));
 
+        // Expect an event
+        vm.expectEmit(true, false, false, true);
+        emit VaultManagerAdded(address(vaultManager2));
+
         // Add vault manager to BLVaultSupply
         vm.startPrank(address(moduleSupply));
         submoduleBLVaultSupply.addVaultManager(address(vaultManager2));
@@ -337,6 +356,9 @@ contract BLVaultSupplyTest is Test {
     }
 
     function test_removeVaultManager() public {
+        vm.expectEmit(true, false, false, true);
+        emit VaultManagerRemoved(vaultManagerAddresses[0]);
+
         // Remove vault manager from BLVaultSupply
         vm.startPrank(address(moduleSupply));
         submoduleBLVaultSupply.removeVaultManager(vaultManagerAddresses[0]);

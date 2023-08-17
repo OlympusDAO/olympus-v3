@@ -29,6 +29,8 @@ contract SiloSupply is SupplySubmodule {
 
     // ========== EVENTS ========== //
 
+    event SourcesUpdated(address amo_, address lens_, address silo_);
+
     // ========== STATE VARIABLES ========== //
 
     ISiloLens public lens;
@@ -49,6 +51,9 @@ contract SiloSupply is SupplySubmodule {
         lens = ISiloLens(lens_);
         silo = IBaseSilo(silo_);
         ohm = address(SPPLYv1(address(parent_)).ohm());
+
+        // Emit an event with the latest values for each source
+        emit SourcesUpdated(amo_, lens_, silo_);
     }
 
     // ========== SUBMODULE SETUP ========== //
@@ -140,7 +145,8 @@ contract SiloSupply is SupplySubmodule {
         if (amo_ != address(0)) amo = amo_;
         if (lens_ != address(0)) lens = ISiloLens(lens_);
         if (silo_ != address(0)) silo = IBaseSilo(silo_);
-    }
 
-    // TODO events
+        // Emit an event with the latest values for each source
+        emit SourcesUpdated(amo, address(lens), address(silo));
+    }
 }

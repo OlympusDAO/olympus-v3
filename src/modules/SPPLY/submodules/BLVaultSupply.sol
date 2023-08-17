@@ -31,6 +31,10 @@ contract BLVaultSupply is SupplySubmodule {
 
     // ========== EVENTS ========== //
 
+    event VaultManagerAdded(address vaultManager_);
+
+    event VaultManagerRemoved(address vaultManager_);
+
     // ========== STATE VARIABLES ========== //
 
     IBLVaultManager[] public vaultManagers;
@@ -46,6 +50,8 @@ contract BLVaultSupply is SupplySubmodule {
 
         for (uint256 i = 0; i < len; i++) {
             vaultManagers.push(IBLVaultManager(vaultManagers_[i]));
+
+            emit VaultManagerAdded(vaultManagers_[i]);
         }
     }
 
@@ -111,7 +117,7 @@ contract BLVaultSupply is SupplySubmodule {
             revert BLVaultSupply_InvalidParams();
         vaultManagers.push(IBLVaultManager(vaultManager_));
 
-        // TODO check configuration
+        emit VaultManagerAdded(vaultManager_);
     }
 
     /// @notice                 Remove a BLVaultManager from the list of managers
@@ -130,6 +136,7 @@ contract BLVaultSupply is SupplySubmodule {
             if (vaultManager_ == address(vaultManagers[i])) {
                 vaultManagers[i] = vaultManagers[len - 1];
                 vaultManagers.pop();
+                emit VaultManagerRemoved(vaultManager_);
                 return;
             }
             unchecked {
