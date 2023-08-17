@@ -5,6 +5,9 @@ import "modules/SPPLY/SPPLY.v1.sol";
 import {ISiloLens} from "interfaces/Silo/ISiloLens.sol";
 import {IBaseSilo} from "interfaces/Silo/IBaseSilo.sol";
 
+/// @title      SiloSupply
+/// @author     Oighty
+/// @notice     A SPPLY submodule that provides data on OHM deployed into the specified Silo
 contract SiloSupply is SupplySubmodule {
     // Requirements
     // [X] Get amount of OHM in Silo pools that is protocol-owned (still borrowable)
@@ -27,12 +30,20 @@ contract SiloSupply is SupplySubmodule {
     // ========== EVENTS ========== //
 
     // ========== STATE VARIABLES ========== //
+
     ISiloLens public lens;
     address public amo;
     address internal ohm;
     IBaseSilo public silo;
 
     // ========== CONSTRUCTOR ========== //
+
+    /// @notice         Initialize the SiloSupply submodule
+    ///
+    /// @param parent_  The parent module (SPPLY)
+    /// @param amo_     The address of the Olympus Silo AMO Policy / silo OHM token holder
+    /// @param lens_    The address of the SiloLens contract
+    /// @param silo_    The address of the Silo market
     constructor(Module parent_, address amo_, address lens_, address silo_) Submodule(parent_) {
         amo = amo_;
         lens = ISiloLens(lens_);
@@ -42,15 +53,18 @@ contract SiloSupply is SupplySubmodule {
 
     // ========== SUBMODULE SETUP ========== //
 
+    /// @inheritdoc Submodule
     function SUBKEYCODE() public pure override returns (SubKeycode) {
         return toSubKeycode("SPPLY.SILO");
     }
 
+    /// @inheritdoc Submodule
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
         major = 1;
         minor = 0;
     }
 
+    /// @inheritdoc Submodule
     function INIT() external override onlyParent {}
 
     // ========== DATA FUNCTIONS ========== //
@@ -101,9 +115,9 @@ contract SiloSupply is SupplySubmodule {
 
     /// @notice Set the source addresses for Silo lending data
     /// @dev all params are optional and will keep existing values if omitted
-    /// @param amo_ The address of the Olympus Silo AMO Policy
+    /// @param amo_ The address of the Olympus Silo AMO Policy / silo OHM token holder
     /// @param lens_ The address of the SiloLens contract
-    /// @param silo_ The address of the OHM Silo contract
+    /// @param silo_ The address of the Silo market
     function setSources(address amo_, address lens_, address silo_) external onlyParent {
         if (amo_ != address(0)) amo = amo_;
         if (lens_ != address(0)) lens = ISiloLens(lens_);

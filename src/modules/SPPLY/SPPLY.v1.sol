@@ -220,7 +220,11 @@ abstract contract SupplySubmodule is Submodule {
     /// @dev Definition: The quantity of OHM minted against collateral provided by borrowers or liquidity stakers and not backed by treasury assets.
     function getCollateralizedOhm() external view virtual returns (uint256);
 
+    /// @notice Value for protocol owned borrowable OHM
+    /// @dev Definition: The quantity of OHM minted against treasury assets and not backed by collateral provided by borrowers or liquidity stakers.
     function getProtocolOwnedBorrowableOhm() external view virtual returns (uint256);
 
+    /// @notice Value for protocol owned liquidity OHM
+    /// @dev Definition: The quantity of OHM minted against treasury assets and present in liquidity pools.
     function getProtocolOwnedLiquidityOhm() external view virtual returns (uint256);
 }
