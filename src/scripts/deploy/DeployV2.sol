@@ -241,15 +241,16 @@ contract OlympusDeploy is Script {
         string memory data = vm.readFile("./src/scripts/deploy/deploy.json");
 
         // Parse deployment sequence and names
-        string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
-        uint256 len = names.length;
+        bytes[] memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes[]));
+        uint256 len = sequence.length;
 
-        // Iterate through deployment sequence and set deployment args
-        for (uint256 i = 0; i < len; i++) {
-            string memory name = names[i];
+        if (len == 0) {
+            return;
+        } else if (len == 1) {
+            // Only one deployment
+            string memory name = abi.decode(data.parseRaw(".sequence..name"), (string));
             deployments.push(name);
             console2.log("Deploying", name);
-
             // Parse and store args if not kernel
             // Note: constructor args need to be provided in alphabetical order
             // due to changes with forge-std or a struct needs to be used
@@ -258,31 +259,29 @@ contract OlympusDeploy is Script {
                     string.concat(".sequence[?(@.name == '", name, "')].args")
                 );
             }
+        } else {
+            // More than one deployment
+            string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
+            for (uint256 i = 0; i < len; i++) {
+                string memory name = names[i];
+                deployments.push(name);
+                console2.log("Deploying", name);
+
+                // Parse and store args if not kernel
+                // Note: constructor args need to be provided in alphabetical order
+                // due to changes with forge-std or a struct needs to be used
+                if (keccak256(bytes(name)) != keccak256(bytes("Kernel"))) {
+                    argsMap[name] = data.parseRaw(
+                        string.concat(".sequence[?(@.name == '", name, "')].args")
+                    );
+                }
+            }
         }
     }
 
     function envAddress(string memory key_) internal returns (address) {
         return env.readAddress(string.concat(".current.", chain, ".", key_));
     }
-
-    /// @dev Installs, upgrades, activations, and deactivations as well as access control settings must be done via olymsig batches since DAO MS is multisig executor on mainnet
-    /// @dev If we can get multisig batch functionality in foundry, then we can add to these scripts
-    // function _installModule(Module module_) internal {
-    //     // Check if module is installed on the kernel and determine which type of install to use
-    //     vm.startBroadcast();
-    //     if (address(kernel.getModuleForKeycode(module_.KEYCODE())) != address(0)) {
-    //         kernel.executeAction(Actions.UpgradeModule, address(module_));
-    //     } else {
-    //         kernel.executeAction(Actions.InstallModule, address(module_));
-    //     }
-    //     vm.stopBroadcast();
-    // }
-
-    // function _activatePolicy(Policy policy_) internal {
-    //     // Check if policy is activated on the kernel and determine which type of activation to use
-    //     vm.broadcast();
-    //     kernel.executeAction(Actions.ActivatePolicy, address(policy_));
-    // }
 
     function deploy(string calldata chain_) external {
         // Setup
@@ -750,7 +749,6 @@ contract OlympusDeploy is Script {
             vm.broadcast();
             coolerFactory = new CoolerFactory();
             console2.log("Cooler Factory deployed at:", address(coolerFactory));
-            vm.stopBroadcast();
         } else {
             // Use the input Cooler Factory implmentation
             coolerFactory = CoolerFactory(factoryImplementation);
@@ -767,7 +765,6 @@ contract OlympusDeploy is Script {
             kernel_: address(kernel)
         });
         console2.log("Clearinghouse deployed at:", address(clearinghouse));
-        vm.stopBroadcast();
 
         return address(clearinghouse);
     }
