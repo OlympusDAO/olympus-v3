@@ -21,4 +21,7 @@
 	branch = v1.0.0
 [submodule "lib/cooler"]
 	path = lib/cooler
-	url = https://github.com/ohmzeus/cooler
+	url = https://github.com/ohmzeus/Cooler
+[submodule "lib/Cooler"]
+	path = lib/Cooler
+	url = https://github.com/ohmzeus/Cooler
