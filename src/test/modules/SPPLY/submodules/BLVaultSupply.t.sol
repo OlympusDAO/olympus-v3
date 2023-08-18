@@ -119,7 +119,9 @@ contract BLVaultSupplyTest is Test {
     // [X] Submodule
     //  [X] Version
     //  [X] Subkeycode
+    // [ ] Constructor
     //  [X] Incorrect parent
+    //  [ ] Duplicate vault managers
     // [X] getCollateralizedOhm
     //  [X] no vault managers
     //  [X] one vault manager

@@ -51,6 +51,9 @@ contract AuraBalancerSupply is SupplySubmodule {
 
     // ========== EVENTS ========== //
 
+    event PoolAdded(address balancerPool, address auraPool);
+    event PoolRemoved(address balancerPool, address auraPool);
+
     // ========== STATE VARIABLES ========== //
     struct Pool {
         IBalancerPool balancerPool;
@@ -170,8 +173,6 @@ contract AuraBalancerSupply is SupplySubmodule {
             Pool({balancerPool: IBalancerPool(balancerPool_), auraPool: IAuraPool(auraPool_)})
         );
     }
-
-    // TODO removePool
 
     /// @notice Remove a BLVaultManager from the list of managers
     function removeVaultManager(address balancerPool_) external onlyParent {
