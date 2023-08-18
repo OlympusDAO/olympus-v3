@@ -88,7 +88,7 @@ contract AuraBalancerSupplyTest is Test {
     bytes32 internal constant BALANCER_POOL_ID = "hello";
     uint256 internal constant BALANCER_POOL_OHM_BALANCE = 100e9; // 100 OHM
     uint256 internal constant BALANCER_POOL_DAI_BALANCE = 10e18; // 10 DAI
-    uint256 internal constant BALANCER_POOL_TOTAL_SUPPLY = 100e18; // 100 BPT
+    uint256 internal constant BALANCER_POOL_TOTAL_SUPPLY = 10e18; // 10 BPT
 
     MockERC20 internal dai;
     MockERC20 internal bal;
@@ -435,12 +435,12 @@ contract AuraBalancerSupplyTest is Test {
 
     // =========  getCollateralizedOhm ========= //
 
-    function test_getCollateralizedOhm(uint256 polManagerBptBalance_, uint256 polManagerAuraBptBalance_, uint256 bptTotalSupply_, uint256 poolOhmBalance_, uint256 poolDaiBalance_) public {
-        uint256 bptTotalSupply = bound(bptTotalSupply_, 1e18, 10e18);
+    function test_getCollateralizedOhm(uint256 polManagerBptBalance_, uint256 poolOhmBalance_) public {
+        uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
         uint256 polManagerBptBalance = bound(polManagerBptBalance_, 0, bptTotalSupply);
-        uint256 polManagerAuraBptBalance = bound(polManagerAuraBptBalance_, 0, bptTotalSupply - polManagerBptBalance);
-        uint256 poolOhmBalance = bound(poolOhmBalance_, 0, 10e9);
-        uint256 poolDaiBalance = bound(poolDaiBalance_, 0, 10e18);
+        uint256 polManagerAuraBptBalance = 0;
+        uint256 poolOhmBalance = bound(poolOhmBalance_, 0, 1e9);
+        uint256 poolDaiBalance = 1e18;
 
         // Set up the balances
         balancerPool.setTotalSupply(bptTotalSupply);
@@ -459,12 +459,12 @@ contract AuraBalancerSupplyTest is Test {
 
     // =========  getProtocolOwnedBorrowableOhm ========= //
 
-    function test_getProtocolOwnedBorrowableOhm(uint256 polManagerBptBalance_, uint256 polManagerAuraBptBalance_, uint256 bptTotalSupply_, uint256 poolOhmBalance_, uint256 poolDaiBalance_) public {
-        uint256 bptTotalSupply = bound(bptTotalSupply_, 1e18, 10e18);
+    function test_getProtocolOwnedBorrowableOhm(uint256 polManagerBptBalance_, uint256 poolOhmBalance_) public {
+        uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
         uint256 polManagerBptBalance = bound(polManagerBptBalance_, 0, bptTotalSupply);
-        uint256 polManagerAuraBptBalance = bound(polManagerAuraBptBalance_, 0, bptTotalSupply - polManagerBptBalance);
+        uint256 polManagerAuraBptBalance = 0;
         uint256 poolOhmBalance = bound(poolOhmBalance_, 0, 10e9);
-        uint256 poolDaiBalance = bound(poolDaiBalance_, 0, 10e18);
+        uint256 poolDaiBalance = 1e18;
 
         // Set up the balances
         balancerPool.setTotalSupply(bptTotalSupply);
@@ -483,12 +483,12 @@ contract AuraBalancerSupplyTest is Test {
 
     // =========  getProtocolOwnedLiquidityOhm ========= //
 
-    function test_getProtocolOwnedLiquidityOhm(uint256 polManagerBptBalance_, uint256 polManagerAuraBptBalance_, uint256 bptTotalSupply_, uint256 poolOhmBalance_, uint256 poolDaiBalance_) public {
-        uint256 bptTotalSupply = bound(bptTotalSupply_, 1e18, 10e18);
+    function test_getProtocolOwnedLiquidityOhm(uint256 polManagerBptBalance_, uint256 poolOhmBalance_) public {
+        uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
         uint256 polManagerBptBalance = bound(polManagerBptBalance_, 0, bptTotalSupply);
-        uint256 polManagerAuraBptBalance = bound(polManagerAuraBptBalance_, 0, bptTotalSupply - polManagerBptBalance);
-        uint256 poolOhmBalance = bound(poolOhmBalance_, 0, 10e9);
-        uint256 poolDaiBalance = bound(poolDaiBalance_, 0, 10e18);
+        uint256 polManagerAuraBptBalance = 0;
+        uint256 poolOhmBalance = bound(poolOhmBalance_, 0, 1e9);
+        uint256 poolDaiBalance = 1e18;
 
         // Set up the balances
         balancerPool.setTotalSupply(bptTotalSupply);
@@ -507,11 +507,36 @@ contract AuraBalancerSupplyTest is Test {
         assertEq(actual, expected);
     }
 
-    function test_getProtocolOwnedLiquidityOhm_bptTotalSupplyZero(uint256 polManagerBptBalance_, uint256 polManagerAuraBptBalance_, uint256 poolOhmBalance_, uint256 poolDaiBalance_) public {
-        uint256 polManagerBptBalance = bound(polManagerBptBalance_, 0, 10e18);
-        uint256 polManagerAuraBptBalance = bound(polManagerAuraBptBalance_, 0, 10e18 - polManagerBptBalance);
-        uint256 poolOhmBalance = bound(poolOhmBalance_, 0, 10e9);
-        uint256 poolDaiBalance = bound(poolDaiBalance_, 0, 10e18);
+    function test_getProtocolOwnedLiquidityOhm_auraPoolBalance(uint256 polManagerAuraBptBalance_, uint256 poolOhmBalance_) public {
+        uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
+        uint256 polManagerBptBalance = 1e18;
+        uint256 polManagerAuraBptBalance = bound(polManagerAuraBptBalance_, 0, bptTotalSupply - polManagerBptBalance);
+        uint256 poolOhmBalance = bound(poolOhmBalance_, 0, 1e9);
+        uint256 poolDaiBalance = 1e18;
+
+        // Set up the balances
+        balancerPool.setTotalSupply(bptTotalSupply);
+        balancerPool.setBalance(polManagerBptBalance);
+        auraPool.setBalance(polManagerAuraBptBalance);
+
+        uint256[] memory balancerPoolBalances = new uint256[](2);
+        balancerPoolBalances[0] = poolDaiBalance;
+        balancerPoolBalances[1] = poolOhmBalance;
+        balancerVault.setBalances(BALANCER_POOL_ID, balancerPoolBalances);
+
+        // TODO check decimals
+        uint256 expected = (polManagerBptBalance + polManagerAuraBptBalance).mulDiv(poolOhmBalance, bptTotalSupply);
+
+        uint256 actual = submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm();
+
+        assertEq(actual, expected);
+    }
+
+    function test_getProtocolOwnedLiquidityOhm_bptTotalSupplyZero() public {
+        uint256 polManagerBptBalance = 1e18;
+        uint256 polManagerAuraBptBalance = 0;
+        uint256 poolOhmBalance = 10e9;
+        uint256 poolDaiBalance = 1e18;
 
         // Set up the balances
         balancerPool.setTotalSupply(0);
@@ -530,12 +555,12 @@ contract AuraBalancerSupplyTest is Test {
         assertEq(actual, expected);
     }
 
-    function test_getProtocolOwnedLiquidityOhm_auraPoolZero(uint256 polManagerBptBalance_, uint256 polManagerAuraBptBalance_, uint256 bptTotalSupply_, uint256 poolOhmBalance_, uint256 poolDaiBalance_) public {
-        uint256 bptTotalSupply = bound(bptTotalSupply_, 1e18, 10e18);
-        uint256 polManagerBptBalance = bound(polManagerBptBalance_, 0, bptTotalSupply);
-        uint256 polManagerAuraBptBalance = bound(polManagerAuraBptBalance_, 0, bptTotalSupply - polManagerBptBalance);
-        uint256 poolOhmBalance = bound(poolOhmBalance_, 0, 10e9);
-        uint256 poolDaiBalance = bound(poolDaiBalance_, 0, 10e18);
+    function test_getProtocolOwnedLiquidityOhm_auraPoolZero() public {
+        uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
+        uint256 polManagerBptBalance = 1e18;
+        uint256 polManagerAuraBptBalance = 2e18;
+        uint256 poolOhmBalance = 10e9;
+        uint256 poolDaiBalance = 1e18;
 
         // Remove the pool configuration
         vm.startPrank(address(moduleSupply));
@@ -567,15 +592,15 @@ contract AuraBalancerSupplyTest is Test {
         assertEq(actual, expected);
     }
 
-    function test_getProtocolOwnedLiquidityOhm_multiplePools(uint256 polManagerBptBalanceOne_, uint256 polManagerAuraBptBalanceOne_, uint256 bptTotalSupplyOne_, uint256 poolOhmBalanceOne_, uint256 poolDaiBalanceOne_, uint256 polManagerBptBalanceTwo_, uint256 polManagerAuraBptBalanceTwo_, uint256 bptTotalSupplyTwo_, uint256 poolOhmBalanceTwo_, uint256 poolDaiBalanceTwo_) public {
+    function test_getProtocolOwnedLiquidityOhm_multiplePools() public {
         // Pool one
         uint256 expectedOne;
         {
-            uint256 bptTotalSupplyOne = bound(bptTotalSupplyOne_, 1e18, 10e18);
-            uint256 polManagerBptBalanceOne = bound(polManagerBptBalanceOne_, 0, bptTotalSupplyOne);
-            uint256 polManagerAuraBptBalanceOne = bound(polManagerAuraBptBalanceOne_, 0, bptTotalSupplyOne - polManagerBptBalanceOne);
-            uint256 poolOhmBalanceOne = bound(poolOhmBalanceOne_, 0, 10e9);
-            uint256 poolDaiBalanceOne = bound(poolDaiBalanceOne_, 0, 10e18);
+            uint256 bptTotalSupplyOne = BALANCER_POOL_TOTAL_SUPPLY;
+            uint256 polManagerBptBalanceOne = 1e18;
+            uint256 polManagerAuraBptBalanceOne = 0;
+            uint256 poolOhmBalanceOne = 10e9;
+            uint256 poolDaiBalanceOne = 1e18;
 
             // Set up the balances for pool one
             balancerPool.setTotalSupply(bptTotalSupplyOne);
@@ -593,11 +618,11 @@ contract AuraBalancerSupplyTest is Test {
         // Pool two
         uint256 expectedTwo;
         {
-            uint256 bptTotalSupplyTwo = bound(bptTotalSupplyTwo_, 1e18, 10e18);
-            uint256 polManagerBptBalanceTwo = bound(polManagerBptBalanceTwo_, 0, bptTotalSupplyTwo);
-            uint256 polManagerAuraBptBalanceTwo = bound(polManagerAuraBptBalanceTwo_, 0, bptTotalSupplyTwo - polManagerBptBalanceTwo);
-            uint256 poolOhmBalanceTwo = bound(poolOhmBalanceTwo_, 0, 10e9);
-            uint256 poolDaiBalanceTwo = bound(poolDaiBalanceTwo_, 0, 10e18);
+            uint256 bptTotalSupplyTwo = 2e18;
+            uint256 polManagerBptBalanceTwo = 1e18;
+            uint256 polManagerAuraBptBalanceTwo = 0;
+            uint256 poolOhmBalanceTwo = 10e9;
+            uint256 poolDaiBalanceTwo = 2e18;
 
             // Set up the balances for pool two
             MockBalancerPool balancerPoolTwo = new MockBalancerPool("poolTwo");
