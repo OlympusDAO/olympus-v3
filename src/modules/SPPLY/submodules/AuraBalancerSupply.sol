@@ -3,6 +3,8 @@ pragma solidity 0.8.15;
 
 import "modules/SPPLY/SPPLY.v1.sol";
 
+/// @dev    Interface for the Aura base reward pool
+///         Example contract: https://etherscan.io/address/0xB9D6ED734Ccbdd0b9CadFED712Cf8AC6D0917EcD
 interface IAuraPool {
     function balanceOf(address account_) external view returns (uint256);
 
@@ -168,6 +170,8 @@ contract AuraBalancerSupply is SupplySubmodule {
             Pool({balancerPool: IBalancerPool(balancerPool_), auraPool: IAuraPool(auraPool_)})
         );
     }
+
+    // TODO removePool
 
     /// @notice Remove a BLVaultManager from the list of managers
     function removeVaultManager(address balancerPool_) external onlyParent {
