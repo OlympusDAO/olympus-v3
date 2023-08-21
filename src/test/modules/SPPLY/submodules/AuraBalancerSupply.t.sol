@@ -565,7 +565,7 @@ contract AuraBalancerSupplyTest is Test {
 
         // Remove the pool configuration
         vm.startPrank(address(moduleSupply));
-        submoduleAuraBalancerSupply.removeVaultManager(address(balancerPool));
+        submoduleAuraBalancerSupply.removePool(address(balancerPool));
         vm.stopPrank();
 
         // Add it back without aura
@@ -859,7 +859,7 @@ contract AuraBalancerSupplyTest is Test {
         emit PoolRemoved(address(balancerPool), address(auraPool));
 
         vm.startPrank(address(moduleSupply));
-        submoduleAuraBalancerSupply.removeVaultManager(address(balancerPool));
+        submoduleAuraBalancerSupply.removePool(address(balancerPool));
         vm.stopPrank();
 
         // Check that the pool was removed
@@ -873,7 +873,7 @@ contract AuraBalancerSupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(address(moduleSupply));
-        submoduleAuraBalancerSupply.removeVaultManager(address(0));
+        submoduleAuraBalancerSupply.removePool(address(0));
         vm.stopPrank();
     }
 
@@ -886,7 +886,7 @@ contract AuraBalancerSupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(address(moduleSupply));
-        submoduleAuraBalancerSupply.removeVaultManager(address(balancerPoolTwo));
+        submoduleAuraBalancerSupply.removePool(address(balancerPoolTwo));
         vm.stopPrank();
     }
 
@@ -896,7 +896,7 @@ contract AuraBalancerSupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        submoduleAuraBalancerSupply.removeVaultManager(address(balancerPool));
+        submoduleAuraBalancerSupply.removePool(address(balancerPool));
         vm.stopPrank();
     }
 }

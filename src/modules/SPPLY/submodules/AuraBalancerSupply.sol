@@ -202,7 +202,7 @@ contract AuraBalancerSupply is SupplySubmodule {
     }
 
     /// @notice Remove a BLVaultManager from the list of managers
-    function removeVaultManager(address balancerPool_) external onlyParent {
+    function removePool(address balancerPool_) external onlyParent {
         // Ignore address 0
         if (balancerPool_ == address(0))
             revert AuraBalSupply_InvalidParams();
