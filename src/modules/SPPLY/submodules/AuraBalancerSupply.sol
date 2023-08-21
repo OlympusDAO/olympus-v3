@@ -226,6 +226,7 @@ contract AuraBalancerSupply is SupplySubmodule {
     ///                         - The `balancerPool_` address is 0
     ///                         - The `balancerPool_` address is already added
     ///                         - The `balancerPool_` address is not the asset of the specified Aura pool
+    ///                         - The caller is not the parent module
     ///
     /// @param balancerPool_    Address of the Balancer pool
     /// @param auraPool_        Address of the Aura pool
@@ -253,6 +254,7 @@ contract AuraBalancerSupply is SupplySubmodule {
     /// @dev                    Will revert if:
     ///                         - The `balancerPool_` address is 0
     ///                         - The `balancerPool_` address is not already added
+    ///                         - The caller is not the parent module
     ///
     /// @param balancerPool_    Address of the Balancer pool
     function removePool(address balancerPool_) external onlyParent {
