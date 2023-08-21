@@ -150,6 +150,14 @@ contract AuraBalancerSupply is SupplySubmodule {
                     // Break out of the loop
                     break;
                 }
+
+                unchecked {
+                    ++j;
+                }
+            }
+
+            unchecked {
+                ++i;
             }
         }
 
