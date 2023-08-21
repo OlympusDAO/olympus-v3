@@ -330,32 +330,12 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     function _getSupplyByCategory(Category category_) internal view returns (uint256) {
-        // Determine the number of locations in the category
-        uint256 len = locations.length;
-        uint256 count;
-        for (uint256 i; i < len; ) {
-            if (fromCategory(categorization[locations[i]]) == fromCategory(category_)) {
-                unchecked {
-                    ++count;
-                }
-            }
-            unchecked {
-                ++i;
-            }
-        }
-
-        // If count is zero, return zero
-        if (count == 0) return 0;
-
         // Total up the supply of OHM of all locations in the category
-        count = 0; // TODO is this needed?
+        uint256 len = locations.length;
         uint256 supply;
         for (uint256 i; i < len; ) {
             if (fromCategory(categorization[locations[i]]) == fromCategory(category_)) {
                 supply += ohm.balanceOf(locations[i]);
-                unchecked {
-                    ++count;
-                }
             }
             unchecked {
                 ++i;
@@ -374,7 +354,6 @@ contract OlympusSupply is SPPLYv1 {
 
         // Add cross-chain category supply
         CategoryData memory data = categoryData[category_];
-        supply += data.crossChain.value;
 
         // If category requires data from submodules, it must be calculated and added
         if (data.useSubmodules) {

@@ -19,9 +19,14 @@ import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 
 contract MockVaultManager is IBLVaultManager {
     uint256 public poolOhmShare;
+    bool public poolOhmShareReverts;
 
     constructor(uint256 poolOhmShare_) {
         poolOhmShare = poolOhmShare_;
+    }
+
+    function setPoolOhmShareReverts(bool reverts_) external {
+        poolOhmShareReverts = reverts_;
     }
 
     function setPoolOhmShare(uint256 poolOhmShare_) external {
@@ -29,6 +34,8 @@ contract MockVaultManager is IBLVaultManager {
     }
 
     function getPoolOhmShare() external view override returns (uint256) {
+        if (poolOhmShareReverts) revert();
+
         return poolOhmShare;
     }
 }

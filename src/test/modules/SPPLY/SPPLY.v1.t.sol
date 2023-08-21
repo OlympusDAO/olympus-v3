@@ -9,12 +9,17 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockGohm} from "test/mocks/OlympusMocks.sol";
+import {MockMultiplePoolBalancerVault} from "test/mocks/MockBalancerVault.sol";
+import {MockBalancerPool} from "test/modules/SPPLY/submodules/AuraBalancerSupply.t.sol";
+import {MockVaultManager} from "test/modules/SPPLY/submodules/BLVaultSupply.t.sol";
+import {MockSiloLens, MockBaseSilo} from "test/mocks/MockSilo.sol";
+
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
 import "src/modules/SPPLY/OlympusSupply.sol";
-import {AuraBalancerSupply} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {AuraBalancerSupply,IBalancerPool,IAuraPool} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
 import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 
@@ -61,15 +66,15 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //  [X] category not approved
 //  [X] no locations in category
 //  [X] returns locations in category
-// [ ] getSupplyByCategory - returns the supply of a given category (totaled from across all locations)
-//  [ ] supply calculations
+// [X] getSupplyByCategory - returns the supply of a given category (totaled from across all locations)
+//  [X] supply calculations
 //    [X] no locations in category
 //    [X] zero supply
 //    [X] OHM supply
 //    [X] gOHM supply
-//    [ ] uses submodules if enabled
-//    [ ] ignores submodules if disabled
-//    [ ] reverts upon submodule failure
+//    [X] uses submodules if enabled
+//    [X] ignores submodules if disabled
+//    [X] reverts upon submodule failure
 //  [X] base function
 //    [X] category not approved
 //    [X] uses cached value if in the same block
@@ -210,6 +215,89 @@ contract SupplyTest is Test {
                 address(treasuryAddress),
                 toCategory("protocol-owned-treasury")
             );
+            vm.stopPrank();
+        }
+    }
+
+    uint256 internal constant BALANCER_POOL_DAI_BALANCE = 100e18; // 100 DAI
+    uint256 internal constant BALANCER_POOL_OHM_BALANCE = 100e9; // 100 OHM
+    uint256 internal constant BALANCER_POOL_TOTAL_SUPPLY = 100e18; // 100 LP
+    uint256 internal constant BPT_BALANCE = 1e18;
+
+    uint256 internal constant BLV_POOL_SHARE = 1000e9;
+
+    uint256 internal constant LENS_TOTAL_DEPOSITS = 10e9;
+    uint256 internal constant LENS_BORROW_AMOUNT = 2e9;
+    uint256 internal constant LENS_SUPPLIED_AMOUNT = 5e9;
+
+    function _setUpSubmodules() public {
+        // AuraBalancerSupply setup
+        {
+            MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+            MockMultiplePoolBalancerVault balancerVault = new MockMultiplePoolBalancerVault();
+            bytes32 poolId = "hello";
+
+            address[] memory balancerPoolTokens = new address[](2);
+            balancerPoolTokens[0] = address(dai);
+            balancerPoolTokens[1] = address(ohm);
+            balancerVault.setTokens(poolId, balancerPoolTokens);
+            
+            uint256[] memory balancerPoolBalances = new uint256[](2);
+            balancerPoolBalances[0] = BALANCER_POOL_DAI_BALANCE;
+            balancerPoolBalances[1] = BALANCER_POOL_OHM_BALANCE;
+            balancerVault.setBalances(poolId, balancerPoolBalances);
+
+            MockBalancerPool balancerPool = new MockBalancerPool(poolId);
+            balancerPool.setTotalSupply(BALANCER_POOL_TOTAL_SUPPLY);
+            balancerPool.setBalance(BPT_BALANCE); // balance for polAddress
+
+            AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](1);
+            pools[0] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraPool(address(0)));
+
+            submoduleAuraBalancerSupply = new AuraBalancerSupply(
+                moduleSupply,
+                polAddress,
+                address(balancerVault),
+                pools
+            );
+        }
+
+        // BLVaultSupply setup
+        {
+            MockVaultManager vaultManager = new MockVaultManager(BLV_POOL_SHARE);
+            address[] memory vaultManagers = new address[](1);
+            vaultManagers[0] = address(vaultManager);
+
+            submoduleBLVaultSupply = new BLVaultSupply(moduleSupply, vaultManagers);
+        }
+
+        // Deploy submodules
+        {
+            MockSiloLens siloLens = new MockSiloLens();
+            siloLens.setTotalDepositsWithInterest(LENS_TOTAL_DEPOSITS);
+            siloLens.setTotalBorrowAmountWithInterest(LENS_BORROW_AMOUNT);
+            siloLens.setBalanceOfUnderlying(LENS_SUPPLIED_AMOUNT);
+
+            MockBaseSilo siloBase = new MockBaseSilo();
+            siloBase.setCollateralToken(0x907136B74abA7D5978341eBA903544134A66B065);
+
+            address[] memory users = userFactory.create(1);
+            address siloAmo = users[0];
+
+            submoduleSiloSupply = new SiloSupply(
+                moduleSupply,
+                siloAmo,
+                address(siloLens),
+                address(siloBase)
+            );
+        }
+
+        // Install submodules
+        {
+            vm.startPrank(writer);
+            moduleSupply.installSubmodule(submoduleAuraBalancerSupply);
+            moduleSupply.installSubmodule(submoduleBLVaultSupply);
+            moduleSupply.installSubmodule(submoduleSiloSupply);
             vm.stopPrank();
         }
     }
@@ -998,6 +1086,114 @@ contract SupplyTest is Test {
         uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"));
 
         assertEq(supply, expectedOhmSupply);
+    }
+
+    function test_getSupplyByCategory_submodules_pobo() public {
+        _setUpSubmodules();
+
+        // Add OHM/gOHM in the treasury
+        ohm.mint(address(treasuryAddress), 100e9);
+        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+
+        // Categories already defined
+
+        uint256 expected = LENS_SUPPLIED_AMOUNT - LENS_BORROW_AMOUNT;
+
+        // Check supply
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-borrowable"));
+        assertEq(supply, expected);
+    }
+
+    function test_getSupplyByCategory_submodules_polo() public {
+        _setUpSubmodules();
+
+        // Add OHM/gOHM in the treasury
+        ohm.mint(address(treasuryAddress), 100e9);
+        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+
+        // Categories already defined
+
+        uint256 expected = BPT_BALANCE.mulDiv(BALANCER_POOL_OHM_BALANCE, BALANCER_POOL_TOTAL_SUPPLY);
+
+        // Check supply
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-liquidity"));
+        assertEq(supply, expected);
+    }
+
+    function test_getSupplyByCategory_submodules_collateralized() public {
+        _setUpSubmodules();
+
+        // Add OHM/gOHM in the treasury
+        ohm.mint(address(treasuryAddress), 100e9);
+        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+
+        // Define category for collateralized OHM
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory("collateralized-ohm"), true, SupplySubmodule.getCollateralizedOhm.selector);
+        vm.stopPrank();
+
+        uint256 expected = BLV_POOL_SHARE + LENS_BORROW_AMOUNT;
+
+        // Check supply
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("collateralized-ohm"));
+        assertEq(supply, expected);
+    }
+
+    function test_getSupplyByCategory_submodules_disabled() public {
+        _setUpSubmodules();
+
+        // Add OHM/gOHM in the treasury
+        ohm.mint(address(treasuryAddress), 100e9);
+        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+
+        // Define a new category with submodules disabled
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory("test"), false, "");
+        vm.stopPrank();
+
+        uint256 expected = 0;
+
+        // Check supply
+        uint256 supply = moduleSupply.getSupplyByCategory(toCategory("test"));
+        assertEq(supply, expected);
+    }
+
+    function test_getSupplyByCategory_submoduleFailure() public {
+        // Set up a submodule
+        {
+            MockVaultManager vaultManager = new MockVaultManager(BLV_POOL_SHARE);
+            vaultManager.setPoolOhmShareReverts(true);
+
+            address[] memory vaultManagers = new address[](1);
+            vaultManagers[0] = address(vaultManager);
+
+            submoduleBLVaultSupply = new BLVaultSupply(moduleSupply, vaultManagers);
+
+            vm.startPrank(writer);
+            moduleSupply.installSubmodule(submoduleBLVaultSupply);
+            vm.stopPrank();
+        }
+
+        // Add OHM/gOHM in the treasury
+        ohm.mint(address(treasuryAddress), 100e9);
+        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+
+        // Define category for collateralized OHM
+        vm.startPrank(writer);
+        moduleSupply.addCategory(toCategory("collateralized-ohm"), true, SupplySubmodule.getCollateralizedOhm.selector);
+        vm.stopPrank();
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategorySubmoduleFailed(bytes32,uint256,bytes4)",
+            toCategory("collateralized-ohm"),
+            0,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
+        vm.expectRevert(err);
+
+        // Check supply
+        moduleSupply.getSupplyByCategory(toCategory("collateralized-ohm"));
     }
 
     function test_getSupplyByCategory_categoryNotApproved_reverts() public {

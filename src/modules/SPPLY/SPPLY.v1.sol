@@ -70,7 +70,6 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
         bool approved;
         bool useSubmodules;
         bytes4 submoduleSelector; // The selector from `SupplySubmodule` to use for this category
-        Cache crossChain;
         Cache total;
     }
     mapping(Category => CategoryData) public categoryData;
