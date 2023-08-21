@@ -28,6 +28,9 @@ interface IVault {
         returns (address[] memory tokens, uint256[] memory balances, uint256 lastChangeBlock);
 }
 
+/// @title      AuraBalancerSupply
+/// @author     Oighty
+/// @notice     Calculates the amount of protocol-owned liquidity OHM in Balancer pools, including BPTs staked in Aura
 contract AuraBalancerSupply is SupplySubmodule {
     // Requirements
     // [X] Determine the amount of protocol-owned liquidity OHM in Balancer pools, including BPTs staked in Aura
@@ -47,16 +50,31 @@ contract AuraBalancerSupply is SupplySubmodule {
 
     // ========== ERRORS ========== //
 
+    /// @notice The Balancer pool and Aura pool have differing assets
     error AuraBalSupply_PoolMismatch();
+
+    /// @notice The parameters provided are invalid. This is usually due to a zero address.
     error AuraBalSupply_InvalidParams();
+
+    /// @notice                 The pool is already added
+    /// @param balancerPool     Address of the Balancer pool
+    /// @param auraPool         Address of the Aura pool
     error AuraBalSupply_PoolAlreadyAdded(address balancerPool, address auraPool);
 
     // ========== EVENTS ========== //
 
+    /// @notice             Emitted when a pool is added
+    /// @param balancerPool Address of the Balancer pool
+    /// @param auraPool     Address of the Aura pool
     event PoolAdded(address balancerPool, address auraPool);
+
+    /// @notice             Emitted when a pool is removed
+    /// @param balancerPool Address of the Balancer pool
+    /// @param auraPool     Address of the Aura pool
     event PoolRemoved(address balancerPool, address auraPool);
 
     // ========== STATE VARIABLES ========== //
+
     struct Pool {
         IBalancerPool balancerPool;
         IAuraPool auraPool;
@@ -69,12 +87,26 @@ contract AuraBalancerSupply is SupplySubmodule {
 
     // ========== CONSTRUCTOR ========== //
 
+    /// @notice             Constructor for the AuraBalancerSupply submodule
+    /// @dev                Will revert if:
+    ///                     - The `polManager_` address is 0
+    ///                     - The `balVault_` address is 0
+    ///                     - There is an invalid entry in the `pools_` array (see `addPool()`)
+    ///                     - Calling the `Submodule` constructor fails
+    ///
+    /// @param parent_      Address of the parent contract, the SPPLY module
+    /// @param polManager_  Address of the POL manager
+    /// @param balVault_    Address of the Balancer vault
+    /// @param pools_       Array of Balancer/Aura pool pairs
     constructor(
         Module parent_,
         address polManager_,
         address balVault_,
         Pool[] memory pools_
     ) Submodule(parent_) {
+        // Check that the parameters are valid
+        if (polManager_ == address(0) || balVault_ == address(0)) revert AuraBalSupply_InvalidParams();
+
         polManager = polManager_;
         balVault = IVault(balVault_);
         ohm = address(SPPLYv1(address(parent_)).ohm());
@@ -104,29 +136,38 @@ contract AuraBalancerSupply is SupplySubmodule {
 
     // ========== SUBMODULE SETUP ========== //
 
+    /// @inheritdoc Submodule
     function SUBKEYCODE() public pure override returns (SubKeycode) {
         return toSubKeycode("SPPLY.AURABALANCER");
     }
 
+    /// @inheritdoc Submodule
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
         major = 1;
         minor = 0;
     }
 
+    /// @inheritdoc Submodule
     function INIT() external override onlyParent {}
 
     // ========== DATA FUNCTIONS ========== //
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        Collateralized OHM is always zero for liquidity pools
     function getCollateralizedOhm() external pure override returns (uint256) {
         // Collateralized OHM is zero for liquidity pools (except BLV, which is a different module)
         return 0;
     }
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        Protocol-owned borrowable OHM is always zero for liquidity pools
     function getProtocolOwnedBorrowableOhm() external pure override returns (uint256) {
         // POBO is zero for liquidity pools
         return 0;
     }
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        Protocol-owned liquidity OHM is calculated as the sum of the protocol-owned OHM in each pool
     function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
         // Iterate through the pools and get the POL supply from each
         uint256 supply;
@@ -180,7 +221,14 @@ contract AuraBalancerSupply is SupplySubmodule {
 
     // =========== ADMIN FUNCTIONS =========== //
 
-    /// @notice Add a Balancer/Aura Pool to the list of pools
+    /// @notice                 Add a Balancer/Aura Pool pair to the list of pools
+    /// @dev                    Will revert if:
+    ///                         - The `balancerPool_` address is 0
+    ///                         - The `balancerPool_` address is already added
+    ///                         - The `balancerPool_` address is not the asset of the specified Aura pool
+    ///
+    /// @param balancerPool_    Address of the Balancer pool
+    /// @param auraPool_        Address of the Aura pool
     function addPool(address balancerPool_, address auraPool_) external onlyParent {
         // Don't add address 0
         if (balancerPool_ == address(0)) revert AuraBalSupply_InvalidParams();
@@ -201,7 +249,12 @@ contract AuraBalancerSupply is SupplySubmodule {
         emit PoolAdded(balancerPool_, auraPool_);
     }
 
-    /// @notice Remove a BLVaultManager from the list of managers
+    /// @notice                 Remove a Balancer/Aura Pool pair from the list of pools
+    /// @dev                    Will revert if:
+    ///                         - The `balancerPool_` address is 0
+    ///                         - The `balancerPool_` address is not already added
+    ///
+    /// @param balancerPool_    Address of the Balancer pool
     function removePool(address balancerPool_) external onlyParent {
         // Ignore address 0
         if (balancerPool_ == address(0))
@@ -239,6 +292,7 @@ contract AuraBalancerSupply is SupplySubmodule {
         return false;
     }
 
+    /// @notice Get the list of configured pools
     function getPools() external view returns (Pool[] memory) {
         return pools;
     }

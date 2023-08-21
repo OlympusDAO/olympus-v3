@@ -292,6 +292,44 @@ contract AuraBalancerSupplyTest is Test {
         vm.stopPrank();
     }
 
+    function test_constructor_polManagerZero_reverts() public {
+        AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](1);
+        pools[0] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraPool(auraPool));
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature("AuraBalSupply_InvalidParams()");
+        vm.expectRevert(err);
+
+        // Create a new submodule
+        vm.startPrank(writer);
+        new AuraBalancerSupply(
+            moduleSupply,
+            address(0),
+            address(balancerVault),
+            pools
+        );
+        vm.stopPrank();
+    }
+
+    function test_constructor_balancerVaultZero_reverts() public {
+        AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](1);
+        pools[0] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraPool(auraPool));
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature("AuraBalSupply_InvalidParams()");
+        vm.expectRevert(err);
+
+        // Create a new submodule
+        vm.startPrank(writer);
+        new AuraBalancerSupply(
+            moduleSupply,
+            polManager,
+            address(0),
+            pools
+        );
+        vm.stopPrank();
+    }
+
     function test_constructor_duplicate_reverts() public {
         AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](2);
         pools[0] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraPool(auraPool));
