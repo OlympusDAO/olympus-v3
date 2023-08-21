@@ -46,8 +46,10 @@ contract AuraBalancerSupply is SupplySubmodule {
     // Protocol-owned Liquidity OHM = (A/B) * C
 
     // ========== ERRORS ========== //
+
     error AuraBalSupply_PoolMismatch();
     error AuraBalSupply_InvalidParams();
+    error AuraBalSupply_PoolAlreadyAdded(address balancerPool, address auraPool);
 
     // ========== EVENTS ========== //
 
@@ -81,13 +83,22 @@ contract AuraBalancerSupply is SupplySubmodule {
         // Check that the aura pool is for the associated balancer pool unless it is blank
         uint256 len = pools_.length;
         for (uint256 i; i < len; i++) {
+            // Don't add address 0
+            if (address(pools_[i].balancerPool) == address(0)) revert AuraBalSupply_InvalidParams();
+
+            // Balancer pool must be the asset of the Aura pool
             if (
                 address(pools_[i].auraPool) != address(0) &&
                 address(pools_[i].balancerPool) != pools_[i].auraPool.asset()
             ) {
                 revert AuraBalSupply_PoolMismatch();
             }
+
+            // Don't add twice
+            if (_inArray(address(pools_[i].balancerPool))) revert AuraBalSupply_PoolAlreadyAdded(address(pools_[i].balancerPool), address(pools_[i].auraPool));
+
             pools.push(pools_[i]);
+            emit PoolAdded(address(pools_[i].balancerPool), address(pools_[i].auraPool));
         }
     }
 
@@ -131,28 +142,31 @@ contract AuraBalancerSupply is SupplySubmodule {
             // Get the total supply of the balancer pool
             uint256 balTotalSupply = pools[i].balancerPool.totalSupply();
 
-            // Get the pool tokens and balances of the pool
-            (address[] memory tokens, uint256[] memory balances, ) = balVault.getPoolTokens(
-                pools[i].balancerPool.getPoolId()
-            );
+            // Continue only if total supply is not 0
+            if (balTotalSupply != 0) {
+                // Get the pool tokens and balances of the pool
+                (address[] memory tokens, uint256[] memory balances, ) = balVault.getPoolTokens(
+                    pools[i].balancerPool.getPoolId()
+                );
 
-            // Calculate the amount of OHM in the pool owned by the polManager
-            // We have to iterate through the tokens array to find the index of OHM
-            uint256 tokenLen = tokens.length;
-            for (uint256 j; j < tokenLen; ) {
-                if (tokens[j] == ohm) {
-                    // Get the amount of OHM in the pool
-                    uint256 ohmBalance = balances[j];
-                    // Calculate the amount of OHM owned by the polManager
-                    uint256 polBalance = (ohmBalance * balBalance) / balTotalSupply;
-                    // Add the amount of OHM owned by the polManager to the total POL supply
-                    supply += polBalance;
-                    // Break out of the loop
-                    break;
-                }
+                // Calculate the amount of OHM in the pool owned by the polManager
+                // We have to iterate through the tokens array to find the index of OHM
+                uint256 tokenLen = tokens.length;
+                for (uint256 j; j < tokenLen; ) {
+                    if (tokens[j] == ohm) {
+                        // Get the amount of OHM in the pool
+                        uint256 ohmBalance = balances[j];
+                        // Calculate the amount of OHM owned by the polManager
+                        uint256 polBalance = (ohmBalance * balBalance) / balTotalSupply;
+                        // Add the amount of OHM owned by the polManager to the total POL supply
+                        supply += polBalance;
+                        // Break out of the loop
+                        break;
+                    }
 
-                unchecked {
-                    ++j;
+                    unchecked {
+                        ++j;
+                    }
                 }
             }
 
@@ -168,9 +182,12 @@ contract AuraBalancerSupply is SupplySubmodule {
 
     /// @notice Add a Balancer/Aura Pool to the list of pools
     function addPool(address balancerPool_, address auraPool_) external onlyParent {
+        // Don't add address 0
+        if (balancerPool_ == address(0)) revert AuraBalSupply_InvalidParams();
+
         // Check that the pool isn't already added
-        if (balancerPool_ == address(0) || _inArray(balancerPool_))
-            revert AuraBalSupply_InvalidParams();
+        if (_inArray(balancerPool_))
+            revert AuraBalSupply_PoolAlreadyAdded(balancerPool_, auraPool_);
 
         // Check that the aura pool is for the associated balancer pool unless it is blank
         if (address(auraPool_) != address(0) && balancerPool_ != IAuraPool(auraPool_).asset())
@@ -180,19 +197,27 @@ contract AuraBalancerSupply is SupplySubmodule {
         pools.push(
             Pool({balancerPool: IBalancerPool(balancerPool_), auraPool: IAuraPool(auraPool_)})
         );
+
+        emit PoolAdded(balancerPool_, auraPool_);
     }
 
     /// @notice Remove a BLVaultManager from the list of managers
     function removeVaultManager(address balancerPool_) external onlyParent {
-        // Check that the pool isn't already added
-        if (balancerPool_ == address(0) || _inArray(balancerPool_))
+        // Ignore address 0
+        if (balancerPool_ == address(0))
+            revert AuraBalSupply_InvalidParams();
+
+        // Check that the pool is present
+        if (!_inArray(balancerPool_))
             revert AuraBalSupply_InvalidParams();
 
         uint256 len = pools.length;
         for (uint256 i; i < len; ) {
             if (balancerPool_ == address(pools[i].balancerPool)) {
+                address auraPool = address(pools[i].auraPool);
                 pools[i] = pools[len - 1];
                 pools.pop();
+                emit PoolRemoved(balancerPool_, auraPool);
                 return;
             }
             unchecked {
@@ -212,5 +237,9 @@ contract AuraBalancerSupply is SupplySubmodule {
             }
         }
         return false;
+    }
+
+    function getPools() external view returns (Pool[] memory) {
+        return pools;
     }
 }

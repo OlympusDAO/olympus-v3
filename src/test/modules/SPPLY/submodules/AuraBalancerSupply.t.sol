@@ -298,7 +298,7 @@ contract AuraBalancerSupplyTest is Test {
         pools[1] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraPool(auraPool));
 
         // Expect revert
-        bytes memory err = abi.encodeWithSignature("AuraBalSupply_PoolAlreadyAdded(address,address)");
+        bytes memory err = abi.encodeWithSignature("AuraBalSupply_PoolAlreadyAdded(address,address)", address(balancerPool), address(auraPool));
         vm.expectRevert(err);
 
         // Create a new submodule
@@ -317,7 +317,7 @@ contract AuraBalancerSupplyTest is Test {
         pools[0] = AuraBalancerSupply.Pool(IBalancerPool(address(0)), IAuraPool(auraPool));
 
         // Expect revert
-        bytes memory err = abi.encodeWithSignature("AuraBalSupply_PoolMismatch()");
+        bytes memory err = abi.encodeWithSignature("AuraBalSupply_InvalidParams()");
         vm.expectRevert(err);
 
         // Create a new submodule
@@ -355,7 +355,7 @@ contract AuraBalancerSupplyTest is Test {
         pools[0] = AuraBalancerSupply.Pool(IBalancerPool(address(0)), IAuraPool(address(0)));
 
         // Expect revert
-        bytes memory err = abi.encodeWithSignature("AuraBalSupply_PoolMismatch()");
+        bytes memory err = abi.encodeWithSignature("AuraBalSupply_InvalidParams()");
         vm.expectRevert(err);
 
         // Create a new submodule
@@ -372,18 +372,19 @@ contract AuraBalancerSupplyTest is Test {
     function test_constructor_no_pools() public {
         AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](0);
 
-        // No event
-        vm.expectEmit(false, false, false, false);
-
         // Create a new submodule
         vm.startPrank(writer);
-        new AuraBalancerSupply(
+        AuraBalancerSupply newSubmodule = new AuraBalancerSupply(
             moduleSupply,
             polManager,
             address(balancerVault),
             pools
         );
         vm.stopPrank();
+
+        // Should not be any pools
+        AuraBalancerSupply.Pool[] memory poolsActual = newSubmodule.getPools();
+        assertEq(poolsActual.length, 0);
     }
 
     function test_constructor_multiple_pools() public {
@@ -657,6 +658,72 @@ contract AuraBalancerSupplyTest is Test {
         assertEq(actual, expectedOne + expectedTwo);
     }
 
+    function test_getProtocolOwnedLiquidityOhm_multiplePools_bptTotalSupplyZero() public {
+        // Pool one
+        uint256 expectedOne;
+        {
+            uint256 bptTotalSupplyOne = 0;
+            uint256 polManagerBptBalanceOne = 1e18;
+            uint256 polManagerAuraBptBalanceOne = 0;
+            uint256 poolOhmBalanceOne = 10e9;
+            uint256 poolDaiBalanceOne = 1e18;
+
+            // Set up the balances for pool one
+            balancerPool.setTotalSupply(bptTotalSupplyOne);
+            balancerPool.setBalance(polManagerBptBalanceOne);
+            auraPool.setBalance(polManagerAuraBptBalanceOne);
+
+            uint256[] memory balancerPoolBalancesOne = new uint256[](2);
+            balancerPoolBalancesOne[0] = poolDaiBalanceOne;
+            balancerPoolBalancesOne[1] = poolOhmBalanceOne;
+            balancerVault.setBalances(BALANCER_POOL_ID, balancerPoolBalancesOne);
+
+            // 0 total supply of pool one means that the pool is not included in the calculation
+            expectedOne = 0;
+        }
+
+        // Pool two
+        uint256 expectedTwo;
+        {
+            uint256 bptTotalSupplyTwo = 2e18;
+            uint256 polManagerBptBalanceTwo = 1e18;
+            uint256 polManagerAuraBptBalanceTwo = 0;
+            uint256 poolOhmBalanceTwo = 10e9;
+            uint256 poolDaiBalanceTwo = 2e18;
+
+            // Set up the balances for pool two
+            MockBalancerPool balancerPoolTwo = new MockBalancerPool("poolTwo");
+            MockAuraPool auraPoolTwo = new MockAuraPool(address(balancerPoolTwo));
+            balancerPoolTwo.setTotalSupply(bptTotalSupplyTwo);
+            balancerPoolTwo.setBalance(polManagerBptBalanceTwo);
+            auraPoolTwo.setBalance(polManagerAuraBptBalanceTwo);
+
+            uint256[] memory balancerPoolBalancesTwo = new uint256[](2);
+            balancerPoolBalancesTwo[0] = poolDaiBalanceTwo;
+            balancerPoolBalancesTwo[1] = poolOhmBalanceTwo;
+            balancerVault.setBalances("poolTwo", balancerPoolBalancesTwo);
+
+            address[] memory balancerPoolTokensTwo = new address[](2);
+            balancerPoolTokensTwo[0] = address(dai);
+            balancerPoolTokensTwo[1] = address(ohm);
+            balancerVault.setTokens("poolTwo", balancerPoolTokensTwo);
+
+            // Add the second pool
+            vm.startPrank(address(moduleSupply));
+            submoduleAuraBalancerSupply.addPool(
+                address(balancerPoolTwo),
+                address(auraPoolTwo)
+            );
+            vm.stopPrank();
+
+            expectedTwo = (polManagerBptBalanceTwo + polManagerAuraBptBalanceTwo).mulDiv(poolOhmBalanceTwo, bptTotalSupplyTwo);
+        }
+
+        uint256 actual = submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm();
+
+        assertEq(actual, expectedOne + expectedTwo);
+    }
+
     // =========  addPool ========= //
 
     function test_addPool() public {
@@ -679,11 +746,14 @@ contract AuraBalancerSupplyTest is Test {
         (IBalancerPool balancerPool_, IAuraPool auraPool_) = submoduleAuraBalancerSupply.pools(1);
         assertEq(address(balancerPool_), address(balancerPoolTwo));
         assertEq(address(auraPool_), address(auraPoolTwo));
+
+        AuraBalancerSupply.Pool[] memory pools = submoduleAuraBalancerSupply.getPools();
+        assertEq(pools.length, 2);
     }
 
     function test_addPool_duplicate_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSignature("AuraBalSupply_PoolAlreadyAdded(address,address)");
+        bytes memory err = abi.encodeWithSignature("AuraBalSupply_PoolAlreadyAdded(address,address)", address(balancerPool), address(auraPool));
         vm.expectRevert(err);
 
         vm.startPrank(address(moduleSupply));
@@ -700,7 +770,7 @@ contract AuraBalancerSupplyTest is Test {
         MockAuraPool auraPoolTwo = new MockAuraPool(address(balancerPoolTwo));
 
         // Expect revert
-        bytes memory err = abi.encodeWithSignature("AuraBalSupply_PoolMismatch()");
+        bytes memory err = abi.encodeWithSignature("AuraBalSupply_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(address(moduleSupply));
@@ -730,11 +800,14 @@ contract AuraBalancerSupplyTest is Test {
         (IBalancerPool balancerPool_, IAuraPool auraPool_) = submoduleAuraBalancerSupply.pools(1);
         assertEq(address(balancerPool_), address(balancerPoolTwo));
         assertEq(address(auraPool_), address(0));
+
+        AuraBalancerSupply.Pool[] memory pools = submoduleAuraBalancerSupply.getPools();
+        assertEq(pools.length, 2);
     }
 
     function test_addPool_balancerPool_zero_auraPool_zero_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSignature("AuraBalSupply_PoolMismatch()");
+        bytes memory err = abi.encodeWithSignature("AuraBalSupply_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(address(moduleSupply));
@@ -767,7 +840,7 @@ contract AuraBalancerSupplyTest is Test {
         MockAuraPool auraPoolTwo = new MockAuraPool(address(balancerPoolTwo));
 
         // Expect revert
-        bytes memory err = abi.encodeWithSignature("AuraBalSupply_InvalidParams()");
+        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", writer);
         vm.expectRevert(err);
 
         vm.startPrank(writer);
@@ -790,9 +863,8 @@ contract AuraBalancerSupplyTest is Test {
         vm.stopPrank();
 
         // Check that the pool was removed
-        (IBalancerPool balancerPool_, IAuraPool auraPool_) = submoduleAuraBalancerSupply.pools(0);
-        assertEq(address(balancerPool_), address(0));
-        assertEq(address(auraPool_), address(0));
+        AuraBalancerSupply.Pool[] memory pools = submoduleAuraBalancerSupply.getPools();
+        assertEq(pools.length, 0);
     }
 
     function test_removePool_balancerPool_zero() public {
@@ -820,7 +892,7 @@ contract AuraBalancerSupplyTest is Test {
 
     function test_removePool_notParent_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSignature("AuraBalSupply_InvalidParams()");
+        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", writer);
         vm.expectRevert(err);
 
         vm.startPrank(writer);
