@@ -21,17 +21,16 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     //============================================================================================//
     //                                          ERRORS                                            //
     //============================================================================================//
-    error SPPLY_InvalidParams();
     error SPPLY_CategoryAlreadyApproved(Category category_);
     error SPPLY_CategoryNotApproved(Category category_);
     error SPPLY_CategoryInUse(Category category_);
-    error SPPLY_CategorySubmoduleFailed(
-        Category category_,
-        uint256 submoduleIndex_,
-        bytes4 selector_
-    );
+    error SPPLY_InvalidParams();
     error SPPLY_LocationNotCategorized(address location_);
     error SPPLY_LocationAlreadyCategorized(address location_, Category category_);
+    error SPPLY_SubmoduleFailed(
+        address submodule_,
+        bytes4 selector_
+    );
 
     //============================================================================================//
     //                                          EVENTS                                            //
