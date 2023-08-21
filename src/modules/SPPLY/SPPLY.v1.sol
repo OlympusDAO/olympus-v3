@@ -51,6 +51,9 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     /// @notice gOHM Token
     IgOHM public gOhm;
 
+    /// @notice Configured decimal places
+    uint8 immutable public decimals = 9;
+
     // Cross-chain Supply
 
     /// @notice Total supply of OHM on other chains
@@ -154,77 +157,166 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     /// @param category_            The category to add the location to
     function categorize(address location_, Category category_) external virtual;
 
+    /// @notice Returns the locations that are categorized
+    ///
+    /// @return An array of addresses
     function getLocations() external view virtual returns (address[] memory);
 
+    /// @notice Returns the identifiers of the configured categories
+    ///
+    /// @return An array of Category identifiers
     function getCategories() external view virtual returns (Category[] memory);
 
+    /// @notice             Returns the data for a specific category
+    /// @dev                Will revert if:
+    ///                     - The category is not approved
+    ///
+    /// @param category_    The category to query
+    /// @return             The category data
     function getCategoryData(
         Category category_
     ) external view virtual returns (CategoryData memory);
 
+    /// @notice             Returns the category for a location
+    ///
+    /// @param location_    The location to query
+    /// @return             The category identifier
     function getCategoryByLocation(address location_) external view virtual returns (Category);
 
+    /// @notice             Returns the locations configured for a category
+    /// @dev                Will revert if:
+    ///                     - The category is not approved
+    ///
+    /// @param category_    The category to query
+    /// @return             An array of addresses
     function getLocationsByCategory(
         Category category_
     ) external view virtual returns (address[] memory);
 
+    /// @notice             Returns the OHM supply for a category
+    /// @dev                This function will first attempt to return the cached value for the current
+    ///                     timestamp, if available. Otherwise, it will re-calculate the value.
+    ///
+    ///                     Will revert if:
+    ///                     - The category is not approved
+    ///
+    /// @param category_    The category to query
+    /// @return             The OHM supply for the category in the configured decimals
     function getSupplyByCategory(Category category_) external view virtual returns (uint256);
 
+    /// @notice             Returns the OHM supply for a category no older than the provided age
+    /// @dev                This function will first check the validity of the last-cached value. 
+    ///                     Otherwise, it will re-calculate the value.
+    ///
+    ///                     Will revert if:
+    ///                     - The category is not approved
+    ///
+    /// @param category_    The category to query
+    /// @param maxAge_      The maximum age (in seconds) of the cached value
+    /// @return             The OHM supply for the category in the configured decimals
     function getSupplyByCategory(
         Category category_,
         uint48 maxAge_
     ) external view virtual returns (uint256);
 
+    /// @notice             Returns OHM supply for a category with the requested variant
+    /// @dev                Will revert if:
+    ///                     - The category is not approved
+    ///
+    /// @param category_    The category to query
+    /// @param variant_     The variant to query
+    /// @return             The OHM supply for the category in the configured decimals and the timestamp at which it was calculated
     function getSupplyByCategory(
         Category category_,
         Variant variant_
     ) external view virtual returns (uint256, uint48);
 
-    /// @notice Calculates and stores the current value of the category supply
+    /// @notice             Calculates and stores the current value of the category supply
+    /// @dev                Will revert if:
+    ///                     - The category is not approved
+    ///
+    /// @param category_    The category to query
     function storeCategorySupply(Category category_) external virtual;
 
     //============================================================================================//
     //                                       SUPPLY METRICS                                       //
     //============================================================================================//
 
-    /// @notice Returns the current value of the metric
-    /// @dev Optimistically uses the cached value if it has been updated this block, otherwise calculates value dynamically
+    /// @notice         Returns the current value of the metric
+    /// @dev            Optimistically uses the cached value if it has been updated this block, otherwise calculates value dynamically
+    ///
+    ///                 Will revert if:
+    ///                 - The value for `metric_` is invalid
+    ///
+    /// @param metric_  The metric to query
+    /// @return         The value of the metric in the module's configured decimals
     function getMetric(Metric metric_) external view virtual returns (uint256);
 
-    /// @notice Returns a value no older than the provided age
+    /// @notice         Returns a metric value no older than the provided age
+    /// @dev            If the cached value is older than the provided age, then the value is calculated dynamically
+    ///
+    ///                 Will revert if:
+    ///                 - The value for `metric_` is invalid
+    ///
+    /// @param metric_  The metric to query
+    /// @param maxAge_  The maximum age (in seconds) of the cached value
+    /// @return         The value of the metric in the module's configured decimals
     function getMetric(Metric metric_, uint48 maxAge_) external view virtual returns (uint256);
 
-    /// @notice Returns the requested variant of the metric and the timestamp at which it was calculated
+    /// @notice         Returns the requested variant of the metric and the timestamp at which it was calculated
+    /// @dev            If the `Variant.LAST` variant is requested and it has not yet been stored, then (0, 0) will be returned.
+    ///
+    ///                 Will revert if:
+    ///                 - The value for `metric_` is invalid
+    ///                 - The value for `variant_` is invalid
+    ///
+    /// @param metric_  The metric to query
+    /// @param variant_ The variant to query
+    /// @return         The value of the metric in the module's configured decimals and the timestamp at which it was calculated
     function getMetric(
         Metric metric_,
         Variant variant_
     ) external view virtual returns (uint256, uint48);
 
-    /// @notice Calculates and stores the current value of the metric
+    /// @notice         Calculates and stores the current value of the metric
+    ///
+    ///                 Will revert if:
+    ///                 - The value for `metric_` is invalid
+    ///
+    /// @param metric_  The metric to query
     function storeMetric(Metric metric_) external virtual;
 }
 
 abstract contract SupplySubmodule is Submodule {
     // ========== SUBMODULE SETUP ========== //
+
+    /// @inheritdoc Submodule
     function PARENT() public pure override returns (Keycode) {
         return toKeycode("SPPLY");
     }
 
+    /// @notice The parent SPPLY module
     function _SPPLY() internal view returns (SPPLYv1) {
         return SPPLYv1(address(parent));
     }
 
     // ========== DATA FUNCTIONS ========== //
 
-    /// @notice Value for collateralized OHM
-    /// @dev Definition: The quantity of OHM minted against collateral provided by borrowers or liquidity stakers and not backed by treasury assets.
+    /// @notice     Quantity of collateralized OHM
+    /// @dev        Definition: The quantity of OHM minted against collateral provided by borrowers or liquidity stakers and not backed by treasury assets.
+    ///
+    /// @return     Quantity in the configured decimals
     function getCollateralizedOhm() external view virtual returns (uint256);
 
-    /// @notice Value for protocol owned borrowable OHM
-    /// @dev Definition: The quantity of OHM minted against treasury assets and not backed by collateral provided by borrowers or liquidity stakers.
+    /// @notice     Quantity for protocol owned borrowable OHM
+    /// @dev        Definition: The quantity of OHM minted against treasury assets and not backed by collateral provided by borrowers or liquidity stakers.
+    ///
+    /// @return     Quantity in the configured decimals
     function getProtocolOwnedBorrowableOhm() external view virtual returns (uint256);
 
-    /// @notice Value for protocol owned liquidity OHM
-    /// @dev Definition: The quantity of OHM minted against treasury assets and present in liquidity pools.
+    /// @notice     Quantity for protocol owned liquidity OHM
+    /// @dev        Definition: The quantity of OHM minted against treasury assets and present in liquidity pools.
+    ///
+    /// @return     Quantity in the configured decimals
     function getProtocolOwnedLiquidityOhm() external view virtual returns (uint256);
 }
