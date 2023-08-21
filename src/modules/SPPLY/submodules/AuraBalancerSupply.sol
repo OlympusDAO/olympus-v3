@@ -105,7 +105,8 @@ contract AuraBalancerSupply is SupplySubmodule {
         Pool[] memory pools_
     ) Submodule(parent_) {
         // Check that the parameters are valid
-        if (polManager_ == address(0) || balVault_ == address(0)) revert AuraBalSupply_InvalidParams();
+        if (polManager_ == address(0) || balVault_ == address(0))
+            revert AuraBalSupply_InvalidParams();
 
         polManager = polManager_;
         balVault = IVault(balVault_);
@@ -127,7 +128,11 @@ contract AuraBalancerSupply is SupplySubmodule {
             }
 
             // Don't add twice
-            if (_inArray(address(pools_[i].balancerPool))) revert AuraBalSupply_PoolAlreadyAdded(address(pools_[i].balancerPool), address(pools_[i].auraPool));
+            if (_inArray(address(pools_[i].balancerPool)))
+                revert AuraBalSupply_PoolAlreadyAdded(
+                    address(pools_[i].balancerPool),
+                    address(pools_[i].auraPool)
+                );
 
             pools.push(pools_[i]);
             emit PoolAdded(address(pools_[i].balancerPool), address(pools_[i].auraPool));
@@ -259,12 +264,10 @@ contract AuraBalancerSupply is SupplySubmodule {
     /// @param balancerPool_    Address of the Balancer pool
     function removePool(address balancerPool_) external onlyParent {
         // Ignore address 0
-        if (balancerPool_ == address(0))
-            revert AuraBalSupply_InvalidParams();
+        if (balancerPool_ == address(0)) revert AuraBalSupply_InvalidParams();
 
         // Check that the pool is present
-        if (!_inArray(balancerPool_))
-            revert AuraBalSupply_InvalidParams();
+        if (!_inArray(balancerPool_)) revert AuraBalSupply_InvalidParams();
 
         uint256 len = pools.length;
         for (uint256 i; i < len; ) {

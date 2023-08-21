@@ -159,12 +159,7 @@ contract SiloSupplyTest is Test {
         // There's no error message, so just check that a revert happens when attempting to call the module
         vm.expectRevert();
 
-        new SiloSupply(
-            Module(newLocations[0]),
-            siloAmo,
-            address(siloLens),
-            address(siloBase)
-        );
+        new SiloSupply(Module(newLocations[0]), siloAmo, address(siloLens), address(siloBase));
     }
 
     function test_submodule_parent_notSpply_reverts() public {
@@ -174,12 +169,7 @@ contract SiloSupplyTest is Test {
         bytes memory err = abi.encodeWithSignature("Submodule_InvalidParent()");
         vm.expectRevert(err);
 
-        new SiloSupply(
-            modulePrice,
-            siloAmo,
-            address(siloLens),
-            address(siloBase)
-        );
+        new SiloSupply(modulePrice, siloAmo, address(siloLens), address(siloBase));
     }
 
     function test_submodule_emitsEvent() public {
@@ -189,12 +179,7 @@ contract SiloSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new SiloSupply(
-            moduleSupply,
-            siloAmo,
-            address(siloLens),
-            address(siloBase)
-        );
+        new SiloSupply(moduleSupply, siloAmo, address(siloLens), address(siloBase));
         vm.stopPrank();
     }
 
@@ -216,9 +201,7 @@ contract SiloSupplyTest is Test {
 
     // =========  getProtocolOwnedBorrowableOhm ========= //
 
-    function test_getProtocolOwnedBorrowableOhm_fuzz(
-        uint256 borrowed_
-    ) public {
+    function test_getProtocolOwnedBorrowableOhm_fuzz(uint256 borrowed_) public {
         uint256 borrowed = bound(borrowed_, 0, LENS_TOTAL_DEPOSITED_AMOUNT);
         siloLens.setTotalBorrowAmountWithInterest(borrowed);
 

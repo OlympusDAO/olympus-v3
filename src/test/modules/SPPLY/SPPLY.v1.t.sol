@@ -19,7 +19,7 @@ import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import "src/modules/SPPLY/OlympusSupply.sol";
-import {AuraBalancerSupply,IBalancerPool,IAuraPool} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {AuraBalancerSupply, IBalancerPool, IAuraPool} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
 import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 
@@ -253,7 +253,7 @@ contract SupplyTest is Test {
             balancerPoolTokens[0] = address(dai);
             balancerPoolTokens[1] = address(ohm);
             balancerVault.setTokens(poolId, balancerPoolTokens);
-            
+
             uint256[] memory balancerPoolBalances = new uint256[](2);
             balancerPoolBalances[0] = BALANCER_POOL_DAI_BALANCE;
             balancerPoolBalances[1] = BALANCER_POOL_OHM_BALANCE;
@@ -1125,7 +1125,10 @@ contract SupplyTest is Test {
 
         // Categories already defined
 
-        uint256 expected = BPT_BALANCE.mulDiv(BALANCER_POOL_OHM_BALANCE, BALANCER_POOL_TOTAL_SUPPLY);
+        uint256 expected = BPT_BALANCE.mulDiv(
+            BALANCER_POOL_OHM_BALANCE,
+            BALANCER_POOL_TOTAL_SUPPLY
+        );
 
         // Check supply
         uint256 supply = moduleSupply.getSupplyByCategory(toCategory("protocol-owned-liquidity"));
@@ -1141,7 +1144,11 @@ contract SupplyTest is Test {
 
         // Define category for collateralized OHM
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("collateralized-ohm"), true, SupplySubmodule.getCollateralizedOhm.selector);
+        moduleSupply.addCategory(
+            toCategory("collateralized-ohm"),
+            true,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
         vm.stopPrank();
 
         uint256 expected = BLV_POOL_SHARE + LENS_BORROW_AMOUNT;
@@ -1192,7 +1199,11 @@ contract SupplyTest is Test {
 
         // Define category for collateralized OHM
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("collateralized-ohm"), true, SupplySubmodule.getCollateralizedOhm.selector);
+        moduleSupply.addCategory(
+            toCategory("collateralized-ohm"),
+            true,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
         vm.stopPrank();
 
         // Expect revert
@@ -1576,7 +1587,10 @@ contract SupplyTest is Test {
         uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.BACKED_SUPPLY);
 
         // OHM minted - POT - DAO - POL - borrowable
-        assertEq(metric, TOTAL_OHM - 100e9 - 99e9 - 98e9 - 97e9 - (LENS_SUPPLIED_AMOUNT - LENS_BORROW_AMOUNT));
+        assertEq(
+            metric,
+            TOTAL_OHM - 100e9 - 99e9 - 98e9 - 97e9 - (LENS_SUPPLIED_AMOUNT - LENS_BORROW_AMOUNT)
+        );
     }
 
     function test_getMetric_backedSupply_collateralizedZero() public {

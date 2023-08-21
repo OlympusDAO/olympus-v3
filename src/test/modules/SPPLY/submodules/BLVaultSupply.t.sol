@@ -13,7 +13,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import {Math as OZMath} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "src/modules/SPPLY/OlympusSupply.sol";
-import {BLVaultSupply,IBLVaultManager} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
+import {BLVaultSupply, IBLVaultManager} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 
@@ -74,7 +74,7 @@ contract BLVaultSupplyTest is Test {
             ohm = new MockERC20("OHM", "OHM", 9);
             gOhm = new MockGohm(GOHM_INDEX);
         }
-        
+
         // Locations
         {
             userFactory = new UserFactory();
@@ -103,10 +103,7 @@ contract BLVaultSupplyTest is Test {
             vaultManagerAddresses = new address[](1);
             vaultManagerAddresses[0] = address(vaultManager1);
 
-            submoduleBLVaultSupply = new BLVaultSupply(
-                moduleSupply,
-                vaultManagerAddresses
-            );
+            submoduleBLVaultSupply = new BLVaultSupply(moduleSupply, vaultManagerAddresses);
         }
 
         // Initialize
@@ -173,10 +170,7 @@ contract BLVaultSupplyTest is Test {
         // There's no error message, so just check that a revert happens when attempting to call the module
         vm.expectRevert();
 
-        new BLVaultSupply(
-            Module(newLocations[0]),
-            vaultManagerAddresses
-        );
+        new BLVaultSupply(Module(newLocations[0]), vaultManagerAddresses);
     }
 
     function test_submodule_parent_notSpply_reverts() public {
@@ -186,10 +180,7 @@ contract BLVaultSupplyTest is Test {
         bytes memory err = abi.encodeWithSignature("Submodule_InvalidParent()");
         vm.expectRevert(err);
 
-        new BLVaultSupply(
-            modulePrice,
-            vaultManagerAddresses
-        );
+        new BLVaultSupply(modulePrice, vaultManagerAddresses);
     }
 
     function test_submodule_emitsEvent() public {
@@ -198,20 +189,14 @@ contract BLVaultSupplyTest is Test {
         emit VaultManagerAdded(vaultManagerAddresses[0]);
 
         // New BLVaultSupply
-        new BLVaultSupply(
-            moduleSupply,
-            vaultManagerAddresses
-        );
+        new BLVaultSupply(moduleSupply, vaultManagerAddresses);
     }
 
     // =========  getCollateralizedOhm ========= //
 
     function test_getCollateralizedOhm_noVaultManagers() public {
         // Create a new BLVaultSupply with no vault managers
-        BLVaultSupply newSubmoduleBLVaultSupply = new BLVaultSupply(
-            moduleSupply,
-            new address[](0)
-        );
+        BLVaultSupply newSubmoduleBLVaultSupply = new BLVaultSupply(moduleSupply, new address[](0));
 
         assertEq(newSubmoduleBLVaultSupply.getCollateralizedOhm(), 0);
     }
@@ -223,7 +208,10 @@ contract BLVaultSupplyTest is Test {
         assertEq(submoduleBLVaultSupply.getCollateralizedOhm(), poolOhmShare);
     }
 
-    function test_getCollateralizedOhm_multipleVaultManagers(uint256 poolOhmShareOne_, uint256 poolOhmShareTwo_) public {
+    function test_getCollateralizedOhm_multipleVaultManagers(
+        uint256 poolOhmShareOne_,
+        uint256 poolOhmShareTwo_
+    ) public {
         uint256 poolOhmShareOne = bound(poolOhmShareOne_, 0, 1000e9);
         uint256 poolOhmShareTwo = bound(poolOhmShareTwo_, 0, 1000e9);
 
@@ -241,7 +229,10 @@ contract BLVaultSupplyTest is Test {
             vaultManagerAddresses
         );
 
-        assertEq(newSubmoduleBLVaultSupply.getCollateralizedOhm(), poolOhmShareOne + poolOhmShareTwo);
+        assertEq(
+            newSubmoduleBLVaultSupply.getCollateralizedOhm(),
+            poolOhmShareOne + poolOhmShareTwo
+        );
     }
 
     // =========  getProtocolOwnedBorrowableOhm ========= //
@@ -258,7 +249,7 @@ contract BLVaultSupplyTest is Test {
     function test_getProtocolOwnedLiquidityOhm_fuzz(uint256 poolOhmShare_) public {
         uint256 poolOhmShare = bound(poolOhmShare_, 0, 1000e9);
         vaultManagers[0].setPoolOhmShare(poolOhmShare);
-        
+
         assertEq(submoduleBLVaultSupply.getProtocolOwnedLiquidityOhm(), 0);
     }
 
@@ -278,7 +269,10 @@ contract BLVaultSupplyTest is Test {
         // Feed in a different address
         address[] memory newLocations = userFactory.create(1);
 
-        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(writer));
+        bytes memory err = abi.encodeWithSignature(
+            "Submodule_OnlyParent(address)",
+            address(writer)
+        );
         vm.expectRevert(err);
 
         vm.startPrank(writer);
@@ -335,7 +329,10 @@ contract BLVaultSupplyTest is Test {
     }
 
     function test_removeVaultManager_notParent_writer_reverts() public {
-        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(writer));
+        bytes memory err = abi.encodeWithSignature(
+            "Submodule_OnlyParent(address)",
+            address(writer)
+        );
         vm.expectRevert(err);
 
         vm.startPrank(writer);

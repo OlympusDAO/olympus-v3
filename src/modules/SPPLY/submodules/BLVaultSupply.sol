@@ -42,7 +42,7 @@ contract BLVaultSupply is SupplySubmodule {
     // ========== CONSTRUCTOR ========== //
 
     /// @notice                 Initialize the BLVaultSupply submodule
-    /// 
+    ///
     /// @param parent_          The parent module (SPPLY)
     /// @param vaultManagers_   The addresses of the BLVaultManager contracts
     constructor(Module parent_, address[] memory vaultManagers_) Submodule(parent_) {

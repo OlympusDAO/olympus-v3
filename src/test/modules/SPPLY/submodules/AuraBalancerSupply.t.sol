@@ -14,7 +14,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import {Math as OZMath} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "src/modules/SPPLY/OlympusSupply.sol";
-import {AuraBalancerSupply,IAuraPool,IBalancerPool} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {AuraBalancerSupply, IAuraPool, IBalancerPool} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
 
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 
@@ -142,12 +142,12 @@ contract AuraBalancerSupplyTest is Test {
             bal = new MockERC20("Balancer", "BAL", 18);
 
             balancerVault = new MockMultiplePoolBalancerVault();
-            
+
             address[] memory balancerPoolTokens = new address[](2);
             balancerPoolTokens[0] = address(dai);
             balancerPoolTokens[1] = address(ohm);
             balancerVault.setTokens(BALANCER_POOL_ID, balancerPoolTokens);
-            
+
             uint256[] memory balancerPoolBalances = new uint256[](2);
             balancerPoolBalances[0] = BALANCER_POOL_DAI_BALANCE;
             balancerPoolBalances[1] = BALANCER_POOL_OHM_BALANCE;
@@ -247,12 +247,7 @@ contract AuraBalancerSupplyTest is Test {
         AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](1);
         pools[0] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraPool(auraPool));
 
-        new AuraBalancerSupply(
-            Module(newLocations[0]),
-            polManager,
-            address(balancerVault),
-            pools
-        );
+        new AuraBalancerSupply(Module(newLocations[0]), polManager, address(balancerVault), pools);
     }
 
     function test_constructor_parent_notSpply_reverts() public {
@@ -265,12 +260,7 @@ contract AuraBalancerSupplyTest is Test {
         AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](1);
         pools[0] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraPool(auraPool));
 
-        new AuraBalancerSupply(
-            modulePrice,
-            polManager,
-            address(balancerVault),
-            pools
-        );
+        new AuraBalancerSupply(modulePrice, polManager, address(balancerVault), pools);
     }
 
     function test_constructor_emitsEvent() public {
@@ -283,12 +273,7 @@ contract AuraBalancerSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new AuraBalancerSupply(
-            moduleSupply,
-            polManager,
-            address(balancerVault),
-            pools
-        );
+        new AuraBalancerSupply(moduleSupply, polManager, address(balancerVault), pools);
         vm.stopPrank();
     }
 
@@ -302,12 +287,7 @@ contract AuraBalancerSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new AuraBalancerSupply(
-            moduleSupply,
-            address(0),
-            address(balancerVault),
-            pools
-        );
+        new AuraBalancerSupply(moduleSupply, address(0), address(balancerVault), pools);
         vm.stopPrank();
     }
 
@@ -321,12 +301,7 @@ contract AuraBalancerSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new AuraBalancerSupply(
-            moduleSupply,
-            polManager,
-            address(0),
-            pools
-        );
+        new AuraBalancerSupply(moduleSupply, polManager, address(0), pools);
         vm.stopPrank();
     }
 
@@ -336,17 +311,16 @@ contract AuraBalancerSupplyTest is Test {
         pools[1] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraPool(auraPool));
 
         // Expect revert
-        bytes memory err = abi.encodeWithSignature("AuraBalSupply_PoolAlreadyAdded(address,address)", address(balancerPool), address(auraPool));
+        bytes memory err = abi.encodeWithSignature(
+            "AuraBalSupply_PoolAlreadyAdded(address,address)",
+            address(balancerPool),
+            address(auraPool)
+        );
         vm.expectRevert(err);
 
         // Create a new submodule
         vm.startPrank(writer);
-        new AuraBalancerSupply(
-            moduleSupply,
-            polManager,
-            address(balancerVault),
-            pools
-        );
+        new AuraBalancerSupply(moduleSupply, polManager, address(balancerVault), pools);
         vm.stopPrank();
     }
 
@@ -360,12 +334,7 @@ contract AuraBalancerSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new AuraBalancerSupply(
-            moduleSupply,
-            polManager,
-            address(balancerVault),
-            pools
-        );
+        new AuraBalancerSupply(moduleSupply, polManager, address(balancerVault), pools);
         vm.stopPrank();
     }
 
@@ -379,12 +348,7 @@ contract AuraBalancerSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new AuraBalancerSupply(
-            moduleSupply,
-            polManager,
-            address(balancerVault),
-            pools
-        );
+        new AuraBalancerSupply(moduleSupply, polManager, address(balancerVault), pools);
         vm.stopPrank();
     }
 
@@ -398,12 +362,7 @@ contract AuraBalancerSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new AuraBalancerSupply(
-            moduleSupply,
-            polManager,
-            address(balancerVault),
-            pools
-        );
+        new AuraBalancerSupply(moduleSupply, polManager, address(balancerVault), pools);
         vm.stopPrank();
     }
 
@@ -440,12 +399,7 @@ contract AuraBalancerSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new AuraBalancerSupply(
-            moduleSupply,
-            polManager,
-            address(balancerVault),
-            pools
-        );
+        new AuraBalancerSupply(moduleSupply, polManager, address(balancerVault), pools);
         vm.stopPrank();
     }
 
@@ -463,18 +417,16 @@ contract AuraBalancerSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new AuraBalancerSupply(
-            moduleSupply,
-            polManager,
-            address(balancerVault),
-            pools
-        );
+        new AuraBalancerSupply(moduleSupply, polManager, address(balancerVault), pools);
         vm.stopPrank();
     }
 
     // =========  getCollateralizedOhm ========= //
 
-    function test_getCollateralizedOhm(uint256 polManagerBptBalance_, uint256 poolOhmBalance_) public {
+    function test_getCollateralizedOhm(
+        uint256 polManagerBptBalance_,
+        uint256 poolOhmBalance_
+    ) public {
         uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
         uint256 polManagerBptBalance = bound(polManagerBptBalance_, 0, bptTotalSupply);
         uint256 polManagerAuraBptBalance = 0;
@@ -498,7 +450,10 @@ contract AuraBalancerSupplyTest is Test {
 
     // =========  getProtocolOwnedBorrowableOhm ========= //
 
-    function test_getProtocolOwnedBorrowableOhm(uint256 polManagerBptBalance_, uint256 poolOhmBalance_) public {
+    function test_getProtocolOwnedBorrowableOhm(
+        uint256 polManagerBptBalance_,
+        uint256 poolOhmBalance_
+    ) public {
         uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
         uint256 polManagerBptBalance = bound(polManagerBptBalance_, 0, bptTotalSupply);
         uint256 polManagerAuraBptBalance = 0;
@@ -522,7 +477,10 @@ contract AuraBalancerSupplyTest is Test {
 
     // =========  getProtocolOwnedLiquidityOhm ========= //
 
-    function test_getProtocolOwnedLiquidityOhm(uint256 polManagerBptBalance_, uint256 poolOhmBalance_) public {
+    function test_getProtocolOwnedLiquidityOhm(
+        uint256 polManagerBptBalance_,
+        uint256 poolOhmBalance_
+    ) public {
         uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
         uint256 polManagerBptBalance = bound(polManagerBptBalance_, 0, bptTotalSupply);
         uint256 polManagerAuraBptBalance = 0;
@@ -539,17 +497,27 @@ contract AuraBalancerSupplyTest is Test {
         balancerPoolBalances[1] = poolOhmBalance;
         balancerVault.setBalances(BALANCER_POOL_ID, balancerPoolBalances);
 
-        uint256 expected = (polManagerBptBalance + polManagerAuraBptBalance).mulDiv(poolOhmBalance, bptTotalSupply);
+        uint256 expected = (polManagerBptBalance + polManagerAuraBptBalance).mulDiv(
+            poolOhmBalance,
+            bptTotalSupply
+        );
 
         uint256 actual = submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm();
 
         assertEq(actual, expected);
     }
 
-    function test_getProtocolOwnedLiquidityOhm_auraPoolBalance(uint256 polManagerAuraBptBalance_, uint256 poolOhmBalance_) public {
+    function test_getProtocolOwnedLiquidityOhm_auraPoolBalance(
+        uint256 polManagerAuraBptBalance_,
+        uint256 poolOhmBalance_
+    ) public {
         uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
         uint256 polManagerBptBalance = 1e18;
-        uint256 polManagerAuraBptBalance = bound(polManagerAuraBptBalance_, 0, bptTotalSupply - polManagerBptBalance);
+        uint256 polManagerAuraBptBalance = bound(
+            polManagerAuraBptBalance_,
+            0,
+            bptTotalSupply - polManagerBptBalance
+        );
         uint256 poolOhmBalance = bound(poolOhmBalance_, 0, 1e9);
         uint256 poolDaiBalance = 1e18;
 
@@ -564,7 +532,10 @@ contract AuraBalancerSupplyTest is Test {
         balancerVault.setBalances(BALANCER_POOL_ID, balancerPoolBalances);
 
         // TODO check decimals
-        uint256 expected = (polManagerBptBalance + polManagerAuraBptBalance).mulDiv(poolOhmBalance, bptTotalSupply);
+        uint256 expected = (polManagerBptBalance + polManagerAuraBptBalance).mulDiv(
+            poolOhmBalance,
+            bptTotalSupply
+        );
 
         uint256 actual = submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm();
 
@@ -608,10 +579,7 @@ contract AuraBalancerSupplyTest is Test {
 
         // Add it back without aura
         vm.startPrank(address(moduleSupply));
-        submoduleAuraBalancerSupply.addPool(
-            address(balancerPool),
-            address(0)
-        );
+        submoduleAuraBalancerSupply.addPool(address(balancerPool), address(0));
         vm.stopPrank();
 
         // Set up the balances
@@ -651,7 +619,10 @@ contract AuraBalancerSupplyTest is Test {
             balancerPoolBalancesOne[1] = poolOhmBalanceOne;
             balancerVault.setBalances(BALANCER_POOL_ID, balancerPoolBalancesOne);
 
-            expectedOne = (polManagerBptBalanceOne + polManagerAuraBptBalanceOne).mulDiv(poolOhmBalanceOne, bptTotalSupplyOne);
+            expectedOne = (polManagerBptBalanceOne + polManagerAuraBptBalanceOne).mulDiv(
+                poolOhmBalanceOne,
+                bptTotalSupplyOne
+            );
         }
 
         // Pool two
@@ -682,13 +653,13 @@ contract AuraBalancerSupplyTest is Test {
 
             // Add the second pool
             vm.startPrank(address(moduleSupply));
-            submoduleAuraBalancerSupply.addPool(
-                address(balancerPoolTwo),
-                address(auraPoolTwo)
-            );
+            submoduleAuraBalancerSupply.addPool(address(balancerPoolTwo), address(auraPoolTwo));
             vm.stopPrank();
 
-            expectedTwo = (polManagerBptBalanceTwo + polManagerAuraBptBalanceTwo).mulDiv(poolOhmBalanceTwo, bptTotalSupplyTwo);
+            expectedTwo = (polManagerBptBalanceTwo + polManagerAuraBptBalanceTwo).mulDiv(
+                poolOhmBalanceTwo,
+                bptTotalSupplyTwo
+            );
         }
 
         uint256 actual = submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm();
@@ -748,13 +719,13 @@ contract AuraBalancerSupplyTest is Test {
 
             // Add the second pool
             vm.startPrank(address(moduleSupply));
-            submoduleAuraBalancerSupply.addPool(
-                address(balancerPoolTwo),
-                address(auraPoolTwo)
-            );
+            submoduleAuraBalancerSupply.addPool(address(balancerPoolTwo), address(auraPoolTwo));
             vm.stopPrank();
 
-            expectedTwo = (polManagerBptBalanceTwo + polManagerAuraBptBalanceTwo).mulDiv(poolOhmBalanceTwo, bptTotalSupplyTwo);
+            expectedTwo = (polManagerBptBalanceTwo + polManagerAuraBptBalanceTwo).mulDiv(
+                poolOhmBalanceTwo,
+                bptTotalSupplyTwo
+            );
         }
 
         uint256 actual = submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm();
@@ -774,10 +745,7 @@ contract AuraBalancerSupplyTest is Test {
         emit PoolAdded(address(balancerPoolTwo), address(auraPoolTwo));
 
         vm.startPrank(address(moduleSupply));
-        submoduleAuraBalancerSupply.addPool(
-            address(balancerPoolTwo),
-            address(auraPoolTwo)
-        );
+        submoduleAuraBalancerSupply.addPool(address(balancerPoolTwo), address(auraPoolTwo));
         vm.stopPrank();
 
         // Check that the pool was added
@@ -791,14 +759,15 @@ contract AuraBalancerSupplyTest is Test {
 
     function test_addPool_duplicate_reverts() public {
         // Expect revert
-        bytes memory err = abi.encodeWithSignature("AuraBalSupply_PoolAlreadyAdded(address,address)", address(balancerPool), address(auraPool));
-        vm.expectRevert(err);
-
-        vm.startPrank(address(moduleSupply));
-        submoduleAuraBalancerSupply.addPool(
+        bytes memory err = abi.encodeWithSignature(
+            "AuraBalSupply_PoolAlreadyAdded(address,address)",
             address(balancerPool),
             address(auraPool)
         );
+        vm.expectRevert(err);
+
+        vm.startPrank(address(moduleSupply));
+        submoduleAuraBalancerSupply.addPool(address(balancerPool), address(auraPool));
         vm.stopPrank();
     }
 
@@ -812,10 +781,7 @@ contract AuraBalancerSupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(address(moduleSupply));
-        submoduleAuraBalancerSupply.addPool(
-            address(0),
-            address(auraPoolTwo)
-        );
+        submoduleAuraBalancerSupply.addPool(address(0), address(auraPoolTwo));
         vm.stopPrank();
     }
 
@@ -828,10 +794,7 @@ contract AuraBalancerSupplyTest is Test {
         emit PoolAdded(address(balancerPoolTwo), address(0));
 
         vm.startPrank(address(moduleSupply));
-        submoduleAuraBalancerSupply.addPool(
-            address(balancerPoolTwo),
-            address(0)
-        );
+        submoduleAuraBalancerSupply.addPool(address(balancerPoolTwo), address(0));
         vm.stopPrank();
 
         // Check that the pool was added
@@ -849,10 +812,7 @@ contract AuraBalancerSupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(address(moduleSupply));
-        submoduleAuraBalancerSupply.addPool(
-            address(0),
-            address(0)
-        );
+        submoduleAuraBalancerSupply.addPool(address(0), address(0));
         vm.stopPrank();
     }
 
@@ -865,10 +825,7 @@ contract AuraBalancerSupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(address(moduleSupply));
-        submoduleAuraBalancerSupply.addPool(
-            address(balancerPoolTwo),
-            address(auraPool)
-        );
+        submoduleAuraBalancerSupply.addPool(address(balancerPoolTwo), address(auraPool));
         vm.stopPrank();
     }
 
@@ -882,10 +839,7 @@ contract AuraBalancerSupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        submoduleAuraBalancerSupply.addPool(
-            address(balancerPoolTwo),
-            address(auraPoolTwo)
-        );
+        submoduleAuraBalancerSupply.addPool(address(balancerPoolTwo), address(auraPoolTwo));
         vm.stopPrank();
     }
 

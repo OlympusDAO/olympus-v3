@@ -27,10 +27,7 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     error SPPLY_InvalidParams();
     error SPPLY_LocationNotCategorized(address location_);
     error SPPLY_LocationAlreadyCategorized(address location_, Category category_);
-    error SPPLY_SubmoduleFailed(
-        address submodule_,
-        bytes4 selector_
-    );
+    error SPPLY_SubmoduleFailed(address submodule_, bytes4 selector_);
 
     //============================================================================================//
     //                                          EVENTS                                            //
@@ -51,7 +48,7 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     IgOHM public gOhm;
 
     /// @notice Configured decimal places
-    uint8 immutable public decimals = 9;
+    uint8 public immutable decimals = 9;
 
     // Cross-chain Supply
 
@@ -203,7 +200,7 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     function getSupplyByCategory(Category category_) external view virtual returns (uint256);
 
     /// @notice             Returns the OHM supply for a category no older than the provided age
-    /// @dev                This function will first check the validity of the last-cached value. 
+    /// @dev                This function will first check the validity of the last-cached value.
     ///                     Otherwise, it will re-calculate the value.
     ///
     ///                     Will revert if:
