@@ -12,6 +12,7 @@
 5. Run `./src/scripts/deploy/deployV2.sh` to run the deployment shell script.
  - If you want to broadcast the tx to the network, uncomment the last line of the script.
 6. After a successful deployment, update `src/scripts/env.json` with the new contract addresses.
+7. Finally, use [olymsig](https://github.com/OlympusDAO/olymsig) (or [olymsig-testnet](https://github.com/OlympusDAO/olymsig-testnet) if testing the deployment) to plug the newly deployed contracts into `olympus-v3`.
 
 # DeployV2 Instructions for CrossChain
 
