@@ -8,7 +8,6 @@ contract MockSiloLens is ISiloLens {
     uint256 internal _totalBorrowAmountWithInterest;
     uint256 internal _totalDepositsWithInterest;
     uint256 internal _balanceOfUnderlying;
-    bool internal _balanceOfUnderlyingReverts;
 
     function totalBorrowAmountWithInterest(
         IBaseSilo silo_,
@@ -37,17 +36,11 @@ contract MockSiloLens is ISiloLens {
         address shareToken_,
         address user_
     ) external view override returns (uint256 balance_) {
-        if (_balanceOfUnderlyingReverts) revert();
-
         return _balanceOfUnderlying;
     }
 
     function setBalanceOfUnderlying(uint256 balanceOfUnderlying_) external {
         _balanceOfUnderlying = balanceOfUnderlying_;
-    }
-
-    function setBalanceOfUnderlyingReverts(bool reverts_) external {
-        _balanceOfUnderlyingReverts = reverts_;
     }
 }
 

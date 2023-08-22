@@ -259,6 +259,9 @@ contract SupplyTest is Test {
             balancerPoolBalances[1] = BALANCER_POOL_OHM_BALANCE;
             balancerVault.setBalances(poolId, balancerPoolBalances);
 
+            // Mint the OHM in the pool
+            ohm.mint(address(balancerVault), BALANCER_POOL_OHM_BALANCE);
+
             MockBalancerPool balancerPool = new MockBalancerPool(poolId);
             balancerPool.setTotalSupply(BALANCER_POOL_TOTAL_SUPPLY);
             balancerPool.setBalance(BPT_BALANCE); // balance for polAddress
@@ -280,6 +283,9 @@ contract SupplyTest is Test {
             address[] memory vaultManagers = new address[](1);
             vaultManagers[0] = address(vaultManager);
 
+            // Mint the OHM in the BLV
+            ohm.mint(address(vaultManager), BLV_POOL_SHARE);
+
             submoduleBLVaultSupply = new BLVaultSupply(moduleSupply, vaultManagers);
         }
 
@@ -289,6 +295,9 @@ contract SupplyTest is Test {
             siloLens.setTotalDepositsWithInterest(LENS_TOTAL_DEPOSITS);
             siloLens.setTotalBorrowAmountWithInterest(LENS_BORROW_AMOUNT);
             siloLens.setBalanceOfUnderlying(LENS_SUPPLIED_AMOUNT);
+
+            // Mint the OHM in the Silo
+            ohm.mint(address(siloLens), LENS_SUPPLIED_AMOUNT);
 
             MockBaseSilo siloBase = new MockBaseSilo();
             siloBase.setCollateralToken(0x907136B74abA7D5978341eBA903544134A66B065);
@@ -1529,6 +1538,12 @@ contract SupplyTest is Test {
 
     uint256 internal constant TOTAL_OHM = 100e9 + 99e9 + 98e9 + 97e9 + INITIAL_CROSS_CHAIN_SUPPLY;
 
+    /// @dev    Returns the total amount of OHM minted, including cross-chain supply.
+    ///         This is useful when using submodules that will have minted OHM.
+    function _totalOhm() internal view returns (uint256) {
+        return ohm.totalSupply() + INITIAL_CROSS_CHAIN_SUPPLY;
+    }
+
     function test_getMetric_totalSupply() public {
         _setupMetricLocations();
 
@@ -1586,14 +1601,17 @@ contract SupplyTest is Test {
         // Get metric
         uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.BACKED_SUPPLY);
 
-        // OHM minted - POT - DAO - POL - borrowable
+        // OHM minted - POT - DAO - POL - borrowable - collateralized
         assertEq(
             metric,
-            TOTAL_OHM - 100e9 - 99e9 - 98e9 - 97e9 - (LENS_SUPPLIED_AMOUNT - LENS_BORROW_AMOUNT)
+            _totalOhm() - 100e9 - 99e9 - 98e9 - 97e9 - 
+            (submoduleSiloSupply.getProtocolOwnedLiquidityOhm() + submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm() + submoduleBLVaultSupply.getProtocolOwnedLiquidityOhm()) - 
+            (submoduleSiloSupply.getProtocolOwnedBorrowableOhm() + submoduleAuraBalancerSupply.getProtocolOwnedBorrowableOhm() + submoduleBLVaultSupply.getProtocolOwnedBorrowableOhm()) - 
+            (submoduleSiloSupply.getCollateralizedOhm() + submoduleAuraBalancerSupply.getCollateralizedOhm() + submoduleBLVaultSupply.getCollateralizedOhm())
         );
     }
 
-    function test_getMetric_backedSupply_collateralizedZero() public {
+    function test_getMetric_backedSupply_silo_collateralizedZero() public {
         _setupMetricLocations();
 
         // Set up submodules
@@ -1603,6 +1621,9 @@ contract SupplyTest is Test {
                 siloLens.setTotalDepositsWithInterest(LENS_TOTAL_DEPOSITS);
                 siloLens.setTotalBorrowAmountWithInterest(0); // Collateralized OHM = 0
                 siloLens.setBalanceOfUnderlying(LENS_SUPPLIED_AMOUNT);
+
+                // Mint the OHM for the silo
+                ohm.mint(address(siloLens), LENS_SUPPLIED_AMOUNT);
 
                 MockBaseSilo siloBase = new MockBaseSilo();
                 siloBase.setCollateralToken(0x907136B74abA7D5978341eBA903544134A66B065);
@@ -1630,7 +1651,10 @@ contract SupplyTest is Test {
         uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.BACKED_SUPPLY);
 
         // OHM minted - POT - DAO - POL - borrowable
-        assertEq(metric, TOTAL_OHM - 100e9 - 99e9 - 98e9 - 97e9);
+        assertEq(metric, _totalOhm() - 100e9 - 99e9 - 98e9 - 97e9 -
+            submoduleSiloSupply.getProtocolOwnedLiquidityOhm() - 
+            submoduleSiloSupply.getProtocolOwnedBorrowableOhm()
+        );
     }
 
     function test_getMetric_backedSupply_siloError_reverts() public {
@@ -1638,33 +1662,17 @@ contract SupplyTest is Test {
 
         // Set up submodules
         {
-            {
-                MockSiloLens siloLens = new MockSiloLens();
-                siloLens.setTotalDepositsWithInterest(LENS_TOTAL_DEPOSITS);
-                siloLens.setTotalBorrowAmountWithInterest(LENS_BORROW_AMOUNT);
-                siloLens.setBalanceOfUnderlying(LENS_SUPPLIED_AMOUNT);
-                siloLens.setBalanceOfUnderlyingReverts(true);
+            MockVaultManager vaultManager = new MockVaultManager(BLV_POOL_SHARE);
+            vaultManager.setPoolOhmShareReverts(true);
 
-                MockBaseSilo siloBase = new MockBaseSilo();
-                siloBase.setCollateralToken(0x907136B74abA7D5978341eBA903544134A66B065);
+            address[] memory vaultManagers = new address[](1);
+            vaultManagers[0] = address(vaultManager);
 
-                address[] memory users = userFactory.create(1);
-                address siloAmo = users[0];
+            submoduleBLVaultSupply = new BLVaultSupply(moduleSupply, vaultManagers);
 
-                submoduleSiloSupply = new SiloSupply(
-                    moduleSupply,
-                    siloAmo,
-                    address(siloLens),
-                    address(siloBase)
-                );
-            }
-
-            // Install submodules
-            {
-                vm.startPrank(writer);
-                moduleSupply.installSubmodule(submoduleSiloSupply);
-                vm.stopPrank();
-            }
+            vm.startPrank(writer);
+            moduleSupply.installSubmodule(submoduleBLVaultSupply);
+            vm.stopPrank();
         }
 
         // Expect revert

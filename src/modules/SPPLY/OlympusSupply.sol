@@ -458,14 +458,17 @@ contract OlympusSupply is SPPLYv1 {
     function _circulatingSupply() internal view returns (uint256) {
         uint256 treasuryOhm = _getSupplyByCategory(toCategory("protocol-owned-treasury"));
         uint256 daoOhm = _getSupplyByCategory(toCategory("dao"));
+        uint256 totalOhm = _totalSupply();
 
-        return _totalSupply() - treasuryOhm - daoOhm;
+        return totalOhm - treasuryOhm - daoOhm;
     }
 
     function _floatingSupply() internal view returns (uint256) {
         uint256 polOhm = _getSupplyByCategory(toCategory("protocol-owned-liquidity"));
         uint256 borrowableOhm = _getSupplyByCategory(toCategory("protocol-owned-borrowable"));
-        return _circulatingSupply() - polOhm - borrowableOhm;
+        uint256 circulatingSupply = _circulatingSupply();
+
+        return circulatingSupply - polOhm - borrowableOhm;
     }
 
     function _collateralizedSupply() internal view returns (uint256) {
@@ -475,8 +478,18 @@ contract OlympusSupply is SPPLYv1 {
         uint256 total;
         uint256 len = submodules.length;
         for (uint256 i; i < len; ) {
-            total += SupplySubmodule(address(getSubmoduleForKeycode[submodules[i]]))
-                .getCollateralizedOhm();
+            address submodule = address(_getSubmoduleIfInstalled(submodules[i]));
+
+            bytes4 selector = SupplySubmodule.getCollateralizedOhm.selector;
+            (bool success, bytes memory returnData) = submodule.staticcall(
+                 abi.encodeWithSelector(selector)
+            );
+
+            // Ensure call was successful
+            if (!success)
+                revert SPPLY_SubmoduleFailed(address(submodule), selector);
+
+            total += abi.decode(returnData, (uint256));
             unchecked {
                 ++i;
             }
@@ -486,6 +499,9 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     function _backedSupply() internal view returns (uint256) {
-        return _floatingSupply() - _collateralizedSupply();
+        uint256 floatingSupply = _floatingSupply();
+        uint256 collateralizedSupply = _collateralizedSupply();
+
+        return floatingSupply - collateralizedSupply;
     }
 }
