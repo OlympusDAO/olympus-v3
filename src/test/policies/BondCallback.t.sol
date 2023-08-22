@@ -12,6 +12,7 @@
 // import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 // import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+// import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 // import {MockPrice} from "test/mocks/MockPrice.sol";
 
 // import {IBondSDA} from "interfaces/IBondSDA.sol";
@@ -62,6 +63,7 @@
 //     BondFixedTermSDA internal auctioneer;
 //     MockOhm internal ohm;
 //     MockERC20 internal reserve;
+//     MockERC4626 internal wrappedReserve;
 //     MockERC20 internal other;
 
 //     Kernel internal kernel;
@@ -148,7 +150,7 @@
 //                 kernel,
 //                 IBondSDA(address(auctioneer)),
 //                 callback,
-//                 [ERC20(ohm), ERC20(reserve)],
+//                 [address(ohm), address(reserve), address(wrappedReserve)],
 //                 [
 //                     uint32(2000), // cushionFactor
 //                     uint32(5 days), // duration

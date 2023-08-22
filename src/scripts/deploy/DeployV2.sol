@@ -134,7 +134,7 @@ contract OlympusDeploy is Script {
     string[] public deployments;
     mapping(string => address) public deployedTo;
 
-    function _setUp(string calldata chain_) internal {
+    function _setUp(string calldata chain_, string calldata deployFilePath) internal {
         chain = chain_;
 
         // Setup contract -> selector mappings
@@ -227,7 +227,7 @@ contract OlympusDeploy is Script {
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
 
         // Load deployment data
-        string memory data = vm.readFile("./src/scripts/deploy/deploy.json");
+        string memory data = vm.readFile(deployFilePath);
 
         // Parse deployment sequence and names
         string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
@@ -273,9 +273,9 @@ contract OlympusDeploy is Script {
     //     kernel.executeAction(Actions.ActivatePolicy, address(policy_));
     // }
 
-    function deploy(string calldata chain_) external {
+    function deploy(string calldata chain_, string calldata deployFilePath) external {
         // Setup
-        _setUp(chain_);
+        _setUp(chain_, deployFilePath);
 
         // Check that deployments is not empty
         uint256 len = deployments.length;
@@ -342,10 +342,19 @@ contract OlympusDeploy is Script {
 
     function _deployRange(bytes memory args) public returns (address) {
         // Decode arguments for Range module
-        (uint256 thresholdFactor, uint256 cushionSpread, uint256 wallSpread) = abi.decode(
-            args,
-            (uint256, uint256, uint256)
-        );
+        (
+            uint256 highCushionSpread,
+            uint256 highWallSpread,
+            uint256 lowCushionSpread,
+            uint256 lowWallSpread,
+            uint256 thresholdFactor
+        ) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
+
+        console2.log("highCushionSpread", highCushionSpread);
+        console2.log("highWallSpread", highWallSpread);
+        console2.log("lowCushionSpread", lowCushionSpread);
+        console2.log("lowWallSpread", lowWallSpread);
+        console2.log("thresholdFactor", thresholdFactor);
 
         // Deploy Range module
         vm.broadcast();
@@ -354,8 +363,8 @@ contract OlympusDeploy is Script {
             ohm,
             reserve,
             thresholdFactor,
-            [cushionSpread, wallSpread],
-            [cushionSpread, wallSpread]
+            [lowCushionSpread, lowWallSpread],
+            [highCushionSpread, highWallSpread]
         );
         console2.log("Range deployed at:", address(RANGE));
 
@@ -409,18 +418,46 @@ contract OlympusDeploy is Script {
     // Policy deployment functions
     function _deployOperator(bytes memory args) public returns (address) {
         // Decode arguments for Operator policy
-        // Must use a dynamic array to parse correctly since the json lib defaults to this
-        uint32[] memory configParams_ = abi.decode(args, (uint32[]));
+        (
+            uint256 cushionDebtBuffer,
+            uint256 cushionDepositInterval,
+            uint256 cushionDuration,
+            uint256 cushionFactor,
+            uint256 regenObserve,
+            uint256 regenThreshold,
+            uint256 regenWait,
+            uint256 reserveFactor
+        ) = abi.decode(
+                args,
+                (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256)
+            );
+
+        // Create config params array
+        // Order is not alphabetical. Copied from the constructor.
         uint32[8] memory configParams = [
-            configParams_[0],
-            configParams_[1],
-            configParams_[2],
-            configParams_[3],
-            configParams_[4],
-            configParams_[5],
-            configParams_[6],
-            configParams_[7]
+            uint32(cushionFactor),
+            uint32(cushionDuration),
+            uint32(cushionDebtBuffer),
+            uint32(cushionDepositInterval),
+            uint32(reserveFactor),
+            uint32(regenWait),
+            uint32(regenThreshold),
+            uint32(regenObserve)
         ];
+
+        console2.log("kernel", address(kernel));
+        console2.log("bondAuctioneer", address(bondAuctioneer));
+        console2.log("callback", address(callback));
+        console2.log("ohm", address(ohm));
+        console2.log("reserve", address(reserve));
+        console2.log("cushionDebtBuffer", cushionDebtBuffer);
+        console2.log("cushionDepositInterval", cushionDepositInterval);
+        console2.log("cushionDuration", cushionDuration);
+        console2.log("cushionFactor", cushionFactor);
+        console2.log("regenObserve", regenObserve);
+        console2.log("regenThreshold", regenThreshold);
+        console2.log("regenWait", regenWait);
+        console2.log("reserveFactor", reserveFactor);
 
         // Deploy Operator policy
         vm.broadcast();
