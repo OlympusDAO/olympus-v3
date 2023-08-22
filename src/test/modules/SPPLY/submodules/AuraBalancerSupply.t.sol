@@ -507,9 +507,7 @@ contract AuraBalancerSupplyTest is Test {
         assertEq(actual, expected);
     }
 
-    function test_getProtocolOwnedLiquidityOhm_poolTokenOrder(
-        uint8 poolTokenOrder_
-    ) public {
+    function test_getProtocolOwnedLiquidityOhm_poolTokenOrder(uint8 poolTokenOrder_) public {
         uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
         uint256 polManagerBptBalance = 1e18;
         uint256 polManagerAuraBptBalance = 0;

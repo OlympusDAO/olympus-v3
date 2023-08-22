@@ -482,12 +482,11 @@ contract OlympusSupply is SPPLYv1 {
 
             bytes4 selector = SupplySubmodule.getCollateralizedOhm.selector;
             (bool success, bytes memory returnData) = submodule.staticcall(
-                 abi.encodeWithSelector(selector)
+                abi.encodeWithSelector(selector)
             );
 
             // Ensure call was successful
-            if (!success)
-                revert SPPLY_SubmoduleFailed(address(submodule), selector);
+            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), selector);
 
             total += abi.decode(returnData, (uint256));
             unchecked {

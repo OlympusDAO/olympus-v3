@@ -1581,10 +1581,7 @@ contract SupplyTest is Test {
 
         // OHM minted - POT - DAO
         // The "protocol-owned-treasury" and "dao" categories do not have submodules enabled
-        assertEq(
-            metric,
-            _totalOhm() - 100e9 - 99e9
-        );
+        assertEq(metric, _totalOhm() - 100e9 - 99e9);
     }
 
     function test_getMetric_floatingSupply_noSubmodules() public {
@@ -1607,9 +1604,17 @@ contract SupplyTest is Test {
         // OHM minted - POT - DAO - POL - borrowable
         assertEq(
             metric,
-            _totalOhm() - 100e9 - 99e9 - 98e9 - 97e9 - 
-            (submoduleSiloSupply.getProtocolOwnedLiquidityOhm() + submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm() + submoduleBLVaultSupply.getProtocolOwnedLiquidityOhm()) - 
-            (submoduleSiloSupply.getProtocolOwnedBorrowableOhm() + submoduleAuraBalancerSupply.getProtocolOwnedBorrowableOhm() + submoduleBLVaultSupply.getProtocolOwnedBorrowableOhm())
+            _totalOhm() -
+                100e9 -
+                99e9 -
+                98e9 -
+                97e9 -
+                (submoduleSiloSupply.getProtocolOwnedLiquidityOhm() +
+                    submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm() +
+                    submoduleBLVaultSupply.getProtocolOwnedLiquidityOhm()) -
+                (submoduleSiloSupply.getProtocolOwnedBorrowableOhm() +
+                    submoduleAuraBalancerSupply.getProtocolOwnedBorrowableOhm() +
+                    submoduleBLVaultSupply.getProtocolOwnedBorrowableOhm())
         );
     }
 
@@ -1653,9 +1658,15 @@ contract SupplyTest is Test {
         uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.FLOATING_SUPPLY);
 
         // OHM minted - POT - DAO - POL - borrowable
-        assertEq(metric, _totalOhm() - 100e9 - 99e9 - 98e9 - 97e9 -
-            submoduleSiloSupply.getProtocolOwnedLiquidityOhm() - 
-            submoduleSiloSupply.getProtocolOwnedBorrowableOhm()
+        assertEq(
+            metric,
+            _totalOhm() -
+                100e9 -
+                99e9 -
+                98e9 -
+                97e9 -
+                submoduleSiloSupply.getProtocolOwnedLiquidityOhm() -
+                submoduleSiloSupply.getProtocolOwnedBorrowableOhm()
         );
     }
 
@@ -1672,16 +1683,16 @@ contract SupplyTest is Test {
 
             MockBaseSilo siloBase = new MockBaseSilo();
             siloBase.setCollateralToken(0x907136B74abA7D5978341eBA903544134A66B065);
-                
+
             address[] memory users = userFactory.create(1);
             address siloAmo = users[0];
 
             submoduleSiloSupply = new SiloSupply(
-                    moduleSupply,
-                    siloAmo,
-                    address(siloLens),
-                    address(siloBase)
-                );
+                moduleSupply,
+                siloAmo,
+                address(siloLens),
+                address(siloBase)
+            );
 
             vm.startPrank(writer);
             moduleSupply.installSubmodule(submoduleSiloSupply);
@@ -1720,10 +1731,20 @@ contract SupplyTest is Test {
         // OHM minted - POT - DAO - POL - borrowable - collateralized
         assertEq(
             metric,
-            _totalOhm() - 100e9 - 99e9 - 98e9 - 97e9 - 
-            (submoduleSiloSupply.getProtocolOwnedLiquidityOhm() + submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm() + submoduleBLVaultSupply.getProtocolOwnedLiquidityOhm()) - 
-            (submoduleSiloSupply.getProtocolOwnedBorrowableOhm() + submoduleAuraBalancerSupply.getProtocolOwnedBorrowableOhm() + submoduleBLVaultSupply.getProtocolOwnedBorrowableOhm()) - 
-            (submoduleSiloSupply.getCollateralizedOhm() + submoduleAuraBalancerSupply.getCollateralizedOhm() + submoduleBLVaultSupply.getCollateralizedOhm())
+            _totalOhm() -
+                100e9 -
+                99e9 -
+                98e9 -
+                97e9 -
+                (submoduleSiloSupply.getProtocolOwnedLiquidityOhm() +
+                    submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm() +
+                    submoduleBLVaultSupply.getProtocolOwnedLiquidityOhm()) -
+                (submoduleSiloSupply.getProtocolOwnedBorrowableOhm() +
+                    submoduleAuraBalancerSupply.getProtocolOwnedBorrowableOhm() +
+                    submoduleBLVaultSupply.getProtocolOwnedBorrowableOhm()) -
+                (submoduleSiloSupply.getCollateralizedOhm() +
+                    submoduleAuraBalancerSupply.getCollateralizedOhm() +
+                    submoduleBLVaultSupply.getCollateralizedOhm())
         );
     }
 
@@ -1767,9 +1788,15 @@ contract SupplyTest is Test {
         uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.BACKED_SUPPLY);
 
         // OHM minted - POT - DAO - POL - borrowable
-        assertEq(metric, _totalOhm() - 100e9 - 99e9 - 98e9 - 97e9 -
-            submoduleSiloSupply.getProtocolOwnedLiquidityOhm() - 
-            submoduleSiloSupply.getProtocolOwnedBorrowableOhm()
+        assertEq(
+            metric,
+            _totalOhm() -
+                100e9 -
+                99e9 -
+                98e9 -
+                97e9 -
+                submoduleSiloSupply.getProtocolOwnedLiquidityOhm() -
+                submoduleSiloSupply.getProtocolOwnedBorrowableOhm()
         );
     }
 
@@ -1823,7 +1850,9 @@ contract SupplyTest is Test {
         // collateralized only
         assertEq(
             metric,
-            (submoduleSiloSupply.getCollateralizedOhm() + submoduleAuraBalancerSupply.getCollateralizedOhm() + submoduleBLVaultSupply.getCollateralizedOhm())
+            (submoduleSiloSupply.getCollateralizedOhm() +
+                submoduleAuraBalancerSupply.getCollateralizedOhm() +
+                submoduleBLVaultSupply.getCollateralizedOhm())
         );
     }
 
@@ -1883,16 +1912,16 @@ contract SupplyTest is Test {
 
             MockBaseSilo siloBase = new MockBaseSilo();
             siloBase.setCollateralToken(0x907136B74abA7D5978341eBA903544134A66B065);
-                
+
             address[] memory users = userFactory.create(1);
             address siloAmo = users[0];
 
             submoduleSiloSupply = new SiloSupply(
-                    moduleSupply,
-                    siloAmo,
-                    address(siloLens),
-                    address(siloBase)
-                );
+                moduleSupply,
+                siloAmo,
+                address(siloLens),
+                address(siloBase)
+            );
 
             vm.startPrank(writer);
             moduleSupply.installSubmodule(submoduleSiloSupply);
