@@ -507,6 +507,43 @@ contract AuraBalancerSupplyTest is Test {
         assertEq(actual, expected);
     }
 
+    function test_getProtocolOwnedLiquidityOhm_poolTokenOrder(
+        uint8 poolTokenOrder_
+    ) public {
+        uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
+        uint256 polManagerBptBalance = 1e18;
+        uint256 polManagerAuraBptBalance = 0;
+        uint256 poolOhmBalance = 1e9;
+        uint256 poolDaiBalance = 1e18;
+        uint8 poolTokenOrder = uint8(bound(poolTokenOrder_, 0, 1));
+
+        // Set up the user balances
+        balancerPool.setBalance(polManagerBptBalance);
+        auraPool.setBalance(polManagerAuraBptBalance);
+
+        // Set the balancer pool
+        balancerPool.setTotalSupply(bptTotalSupply);
+
+        address[] memory balancerPoolTokens = new address[](2);
+        balancerPoolTokens[0] = poolTokenOrder == 0 ? address(dai) : address(ohm);
+        balancerPoolTokens[1] = poolTokenOrder == 0 ? address(ohm) : address(dai);
+        balancerVault.setTokens(BALANCER_POOL_ID, balancerPoolTokens);
+
+        uint256[] memory balancerPoolBalances = new uint256[](2);
+        balancerPoolBalances[0] = poolTokenOrder == 0 ? poolDaiBalance : poolOhmBalance;
+        balancerPoolBalances[1] = poolTokenOrder == 0 ? poolOhmBalance : poolDaiBalance;
+        balancerVault.setBalances(BALANCER_POOL_ID, balancerPoolBalances);
+
+        uint256 expected = (polManagerBptBalance + polManagerAuraBptBalance).mulDiv(
+            poolOhmBalance,
+            bptTotalSupply
+        );
+
+        uint256 actual = submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm();
+
+        assertEq(actual, expected);
+    }
+
     function test_getProtocolOwnedLiquidityOhm_auraPoolBalance(
         uint256 polManagerAuraBptBalance_,
         uint256 poolOhmBalance_
