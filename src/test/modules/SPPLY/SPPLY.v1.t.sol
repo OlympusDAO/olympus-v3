@@ -101,24 +101,22 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //  [X] reverts with an invalid category
 //
 // Supply Metrics
-// [ ] getMetric
-//  [ ] metric calculations
+// [X] getMetric
+//  [X] metric calculations
 //    [X] totalSupply - returns the total supply of OHM, including cross-chain OHM
 //    [X] circulatingSupply
-//     [ ] no submodules
-//     [ ] with submodules, no values
-//     [ ] with submodules, with values
-//     [ ] with submodules, reverts upon failure
+//     [X] no submodules
+//     [X] with submodules, with values
 //    [X] floatingSupply
 //     [X] no submodules
-//     [ ] with submodules, no values
-//     [ ] with submodules, with values
-//     [ ] with submodules, reverts upon failure
+//     [X] with submodules, no values
+//     [X] with submodules, with values
+//     [X] with submodules, reverts upon failure
 //    [X] collateralizedSupply
 //     [X] no submodules
-//     [ ] with submodules, no values
-//     [ ] with submodules, with values
-//     [ ] with submodules, reverts upon failure
+//     [X] with submodules, no values
+//     [X] with submodules, with values
+//     [X] with submodules, reverts upon failure
 //    [X] backedSupply
 //     [X] no submodules
 //     [X] with submodules, no values
@@ -1564,7 +1562,7 @@ contract SupplyTest is Test {
         assertEq(metric, INITIAL_CROSS_CHAIN_SUPPLY);
     }
 
-    function test_getMetric_circulatingSupply() public {
+    function test_getMetric_circulatingSupply_noSubmodules() public {
         _setupMetricLocations();
 
         // Get metric
@@ -1574,7 +1572,22 @@ contract SupplyTest is Test {
         assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
     }
 
-    function test_getMetric_floatingSupply() public {
+    function test_getMetric_circulatingSupply() public {
+        _setupMetricLocations();
+        _setUpSubmodules();
+
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY);
+
+        // OHM minted - POT - DAO
+        // The "protocol-owned-treasury" and "dao" categories do not have submodules enabled
+        assertEq(
+            metric,
+            _totalOhm() - 100e9 - 99e9
+        );
+    }
+
+    function test_getMetric_floatingSupply_noSubmodules() public {
         _setupMetricLocations();
 
         // Get metric
@@ -1582,6 +1595,109 @@ contract SupplyTest is Test {
 
         // OHM minted - POT - DAO - POL - borrowable
         assertEq(metric, TOTAL_OHM - 100e9 - 99e9 - 98e9 - 97e9);
+    }
+
+    function test_getMetric_floatingSupply() public {
+        _setupMetricLocations();
+        _setUpSubmodules();
+
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.FLOATING_SUPPLY);
+
+        // OHM minted - POT - DAO - POL - borrowable
+        assertEq(
+            metric,
+            _totalOhm() - 100e9 - 99e9 - 98e9 - 97e9 - 
+            (submoduleSiloSupply.getProtocolOwnedLiquidityOhm() + submoduleAuraBalancerSupply.getProtocolOwnedLiquidityOhm() + submoduleBLVaultSupply.getProtocolOwnedLiquidityOhm()) - 
+            (submoduleSiloSupply.getProtocolOwnedBorrowableOhm() + submoduleAuraBalancerSupply.getProtocolOwnedBorrowableOhm() + submoduleBLVaultSupply.getProtocolOwnedBorrowableOhm())
+        );
+    }
+
+    function test_getMetric_floatingSupply_silo_borrowableZero() public {
+        _setupMetricLocations();
+
+        // Set up submodules
+        {
+            {
+                MockSiloLens siloLens = new MockSiloLens();
+                siloLens.setTotalDepositsWithInterest(LENS_TOTAL_DEPOSITS);
+                siloLens.setTotalBorrowAmountWithInterest(LENS_SUPPLIED_AMOUNT + 1); // POBO = 0
+                siloLens.setBalanceOfUnderlying(LENS_SUPPLIED_AMOUNT);
+
+                // Mint the OHM for the silo
+                ohm.mint(address(siloLens), LENS_SUPPLIED_AMOUNT);
+
+                MockBaseSilo siloBase = new MockBaseSilo();
+                siloBase.setCollateralToken(0x907136B74abA7D5978341eBA903544134A66B065);
+
+                address[] memory users = userFactory.create(1);
+                address siloAmo = users[0];
+
+                submoduleSiloSupply = new SiloSupply(
+                    moduleSupply,
+                    siloAmo,
+                    address(siloLens),
+                    address(siloBase)
+                );
+            }
+
+            // Install submodules
+            {
+                vm.startPrank(writer);
+                moduleSupply.installSubmodule(submoduleSiloSupply);
+                vm.stopPrank();
+            }
+        }
+
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.FLOATING_SUPPLY);
+
+        // OHM minted - POT - DAO - POL - borrowable
+        assertEq(metric, _totalOhm() - 100e9 - 99e9 - 98e9 - 97e9 -
+            submoduleSiloSupply.getProtocolOwnedLiquidityOhm() - 
+            submoduleSiloSupply.getProtocolOwnedBorrowableOhm()
+        );
+    }
+
+    function test_getMetric_floatingSupply_submoduleError_reverts() public {
+        _setupMetricLocations();
+
+        // Set up submodules
+        {
+            MockSiloLens siloLens = new MockSiloLens();
+            siloLens.setTotalDepositsWithInterest(LENS_TOTAL_DEPOSITS);
+            siloLens.setTotalBorrowAmountWithInterest(LENS_BORROW_AMOUNT);
+            siloLens.setBalanceOfUnderlying(LENS_SUPPLIED_AMOUNT);
+            siloLens.setBalanceOfUnderlyingReverts(true);
+
+            MockBaseSilo siloBase = new MockBaseSilo();
+            siloBase.setCollateralToken(0x907136B74abA7D5978341eBA903544134A66B065);
+                
+            address[] memory users = userFactory.create(1);
+            address siloAmo = users[0];
+
+            submoduleSiloSupply = new SiloSupply(
+                    moduleSupply,
+                    siloAmo,
+                    address(siloLens),
+                    address(siloBase)
+                );
+
+            vm.startPrank(writer);
+            moduleSupply.installSubmodule(submoduleSiloSupply);
+            vm.stopPrank();
+        }
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_SubmoduleFailed(address,bytes4)",
+            address(submoduleSiloSupply),
+            SupplySubmodule.getProtocolOwnedBorrowableOhm.selector
+        );
+        vm.expectRevert(err);
+
+        // Get metric
+        moduleSupply.getMetric(SPPLYv1.Metric.FLOATING_SUPPLY);
     }
 
     function test_getMetric_backedSupply_noSubmodules() public {
@@ -1657,7 +1773,7 @@ contract SupplyTest is Test {
         );
     }
 
-    function test_getMetric_backedSupply_siloError_reverts() public {
+    function test_getMetric_backedSupply_submoduleError_reverts() public {
         _setupMetricLocations();
 
         // Set up submodules
@@ -1685,6 +1801,114 @@ contract SupplyTest is Test {
 
         // Get metric
         moduleSupply.getMetric(SPPLYv1.Metric.BACKED_SUPPLY);
+    }
+
+    function test_getMetric_collateralizedSupply_noSubmodules() public {
+        _setupMetricLocations();
+
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.COLLATERALIZED_SUPPLY);
+
+        // collateralized only
+        assertEq(metric, 0);
+    }
+
+    function test_getMetric_collateralizedSupply() public {
+        _setupMetricLocations();
+        _setUpSubmodules();
+
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.COLLATERALIZED_SUPPLY);
+
+        // collateralized only
+        assertEq(
+            metric,
+            (submoduleSiloSupply.getCollateralizedOhm() + submoduleAuraBalancerSupply.getCollateralizedOhm() + submoduleBLVaultSupply.getCollateralizedOhm())
+        );
+    }
+
+    function test_getMetric_collateralizedSupply_silo_collateralizedZero() public {
+        _setupMetricLocations();
+
+        // Set up submodules
+        {
+            {
+                MockSiloLens siloLens = new MockSiloLens();
+                siloLens.setTotalDepositsWithInterest(LENS_TOTAL_DEPOSITS);
+                siloLens.setTotalBorrowAmountWithInterest(0); // Collateralized OHM = 0
+                siloLens.setBalanceOfUnderlying(LENS_SUPPLIED_AMOUNT);
+
+                // Mint the OHM for the silo
+                ohm.mint(address(siloLens), LENS_SUPPLIED_AMOUNT);
+
+                MockBaseSilo siloBase = new MockBaseSilo();
+                siloBase.setCollateralToken(0x907136B74abA7D5978341eBA903544134A66B065);
+
+                address[] memory users = userFactory.create(1);
+                address siloAmo = users[0];
+
+                submoduleSiloSupply = new SiloSupply(
+                    moduleSupply,
+                    siloAmo,
+                    address(siloLens),
+                    address(siloBase)
+                );
+            }
+
+            // Install submodules
+            {
+                vm.startPrank(writer);
+                moduleSupply.installSubmodule(submoduleSiloSupply);
+                vm.stopPrank();
+            }
+        }
+
+        // Get metric
+        uint256 metric = moduleSupply.getMetric(SPPLYv1.Metric.COLLATERALIZED_SUPPLY);
+
+        // collateralized only
+        assertEq(metric, 0);
+    }
+
+    function test_getMetric_collateralizedSupply_submoduleError_reverts() public {
+        _setupMetricLocations();
+
+        // Set up submodules
+        {
+            MockSiloLens siloLens = new MockSiloLens();
+            siloLens.setTotalDepositsWithInterest(LENS_TOTAL_DEPOSITS);
+            siloLens.setTotalBorrowAmountWithInterest(LENS_BORROW_AMOUNT);
+            siloLens.setBalanceOfUnderlying(LENS_SUPPLIED_AMOUNT);
+            siloLens.setBalanceOfUnderlyingReverts(true);
+
+            MockBaseSilo siloBase = new MockBaseSilo();
+            siloBase.setCollateralToken(0x907136B74abA7D5978341eBA903544134A66B065);
+                
+            address[] memory users = userFactory.create(1);
+            address siloAmo = users[0];
+
+            submoduleSiloSupply = new SiloSupply(
+                    moduleSupply,
+                    siloAmo,
+                    address(siloLens),
+                    address(siloBase)
+                );
+
+            vm.startPrank(writer);
+            moduleSupply.installSubmodule(submoduleSiloSupply);
+            vm.stopPrank();
+        }
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_SubmoduleFailed(address,bytes4)",
+            address(submoduleSiloSupply),
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
+        vm.expectRevert(err);
+
+        // Get metric
+        moduleSupply.getMetric(SPPLYv1.Metric.COLLATERALIZED_SUPPLY);
     }
 
     function test_getMetric_invalidMetric_reverts() public {
