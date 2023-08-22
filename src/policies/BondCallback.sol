@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 import {IBondCallback} from "interfaces/IBondCallback.sol";
@@ -42,14 +43,24 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
 
     IBondAggregator public aggregator;
     ERC20 public ohm;
+    ERC20 public dai;
+    ERC4626 public sdai;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
     //============================================================================================//
 
-    constructor(Kernel kernel_, IBondAggregator aggregator_, ERC20 ohm_) Policy(kernel_) {
+    constructor(
+        Kernel kernel_,
+        IBondAggregator aggregator_,
+        ERC20 ohm_,
+        ERC20 dai_,
+        ERC4626 sdai_
+    ) Policy(kernel_) {
         aggregator = aggregator_;
         ohm = ohm_;
+        dai = dai_;
+        sdai = sdai_;
     }
 
     /// @inheritdoc Policy
@@ -138,12 +149,15 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
 
         uint256 toApprove = capacityInQuote ? capacity.mulDiv(scale, minPrice) : capacity;
 
-        // If payout token is in OHM, request mint approval for the capacity in OHM
+        // If payout token is OHM, request mint approval for the capacity in OHM
         // Otherwise, request withdrawal approval for the capacity from the TRSRY
         if (address(payoutToken) == address(ohm)) {
             MINTR.increaseMintApproval(address(this), toApprove);
-        } else {
+        } else if (address(payoutToken) != address(dai)) {
             TRSRY.increaseWithdrawApproval(address(this), payoutToken, toApprove);
+        } else {
+            // Since TRSRY holds sDAI, if the payout token is DAI, request approval for sDAI
+            TRSRY.increaseWithdrawApproval(address(this), sdai, toApprove);
         }
     }
 
@@ -188,7 +202,14 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
             MINTR.mintOhm(msg.sender, outputAmount_);
         } else if (quoteToken == ohm) {
             // If inverse bond (buying ohm), transfer payout tokens to sender
-            TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
+            if (payoutToken != dai) {
+                TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
+            } else {
+                // Since TRSRY hold sDAI, if payoutToken is DAI, it must be unwrapped first.
+                uint256 sdaiOutputAmount = sdai.previewWithdraw(outputAmount_);
+                TRSRY.withdrawReserves(address(this), sdai, sdaiOutputAmount);
+                sdai.withdraw(sdaiOutputAmount, msg.sender, address(this));
+            }
 
             // Burn OHM received from sender
             MINTR.burnOhm(address(this), inputAmount_);

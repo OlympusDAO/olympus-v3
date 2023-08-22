@@ -8,6 +8,7 @@ import {console2} from "forge-std/console2.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockLegacyAuthority} from "../modules/MINTR.t.sol";
 
 import "src/Kernel.sol";
@@ -41,6 +42,7 @@ contract BondManagerTest is Test {
     IOlympusAuthority internal legacyAuth;
     OlympusERC20Token internal ohm;
     MockERC20 internal reserve;
+    MockERC4626 internal wrappedReserve;
 
     Kernel internal kernel;
     OlympusMinter internal mintr;
@@ -94,6 +96,8 @@ contract BondManagerTest is Test {
         // Deploy tokens
         {
             ohm = new OlympusERC20Token(address(legacyAuth));
+            reserve = new MockERC20("Reserve", "RSV", 18);
+            wrappedReserve = new MockERC4626(reserve, "wrappedReserve", "sRSV");
         }
 
         // Deploy kernel and modules
@@ -111,7 +115,9 @@ contract BondManagerTest is Test {
             bondCallback = new BondCallback(
                 kernel,
                 IBondAggregator(address(aggregator)),
-                ERC20(address(ohm))
+                ERC20(address(ohm)),
+                ERC20(address(reserve)),
+                ERC4626(address(wrappedReserve))
             );
             bondManager = new BondManager(
                 kernel,

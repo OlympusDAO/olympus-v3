@@ -63,7 +63,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice OHM token contract
     ERC20 public immutable ohm;
     uint8 internal immutable _ohmDecimals;
-    uint8 internal immutable _ohmDecimals;
     /// @notice Reserve token contract
     ERC20 public immutable reserve;
     uint8 internal immutable _reserveDecimals;
@@ -71,8 +70,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     uint8 internal _oracleDecimals;
 
     // Constants
-    uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
-    uint32 internal constant ONE_PERCENT = 1e2;
     uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
     uint32 internal constant ONE_PERCENT = 1e2;
 
@@ -401,20 +398,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             int8 scaleAdjustment = int8(_ohmDecimals) -
                 int8(_reserveDecimals) +
                 (priceDecimals / 2);
-            int8 scaleAdjustment = int8(_ohmDecimals) -
-                int8(_reserveDecimals) +
-                (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
             uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-            uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
-                    36 +
-                        scaleAdjustment +
-                        int8(_reserveDecimals) -
-                        int8(_ohmDecimals) -
-                        priceDecimals
                     36 +
                         scaleAdjustment +
                         int8(_reserveDecimals) -
@@ -461,8 +449,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Calculate inverse prices from the oracle feed for the low side
             uint256 invCushionPrice = 10 ** (_oracleDecimals * 2) / range.low.cushion.price;
             uint256 invCurrentPrice = 10 ** (_oracleDecimals * 2) / PRICE.getLastPrice();
-            uint256 invCushionPrice = 10 ** (_oracleDecimals * 2) / range.low.cushion.price;
-            uint256 invCurrentPrice = 10 ** (_oracleDecimals * 2) / PRICE.getLastPrice();
 
             // Calculate scaleAdjustment for bond market
             // Price decimals are returned from the perspective of the quote token
@@ -472,19 +458,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             int8 scaleAdjustment = int8(_reserveDecimals) -
                 int8(_ohmDecimals) +
                 (priceDecimals / 2);
-            int8 scaleAdjustment = int8(_reserveDecimals) -
-                int8(_ohmDecimals) +
-                (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
             uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
-                    36 +
-                        scaleAdjustment +
-                        int8(_ohmDecimals) -
-                        int8(_reserveDecimals) -
-                        priceDecimals
                     36 +
                         scaleAdjustment +
                         int8(_ohmDecimals) -
@@ -889,8 +867,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             uint256 amountOut = amountIn_.mulDiv(
                 10 ** _reserveDecimals * RANGE.price(false, true),
                 10 ** _ohmDecimals * 10 ** _oracleDecimals
-                10 ** _reserveDecimals * RANGE.price(false, true),
-                10 ** _ohmDecimals * 10 ** _oracleDecimals
             );
 
             // Revert if amount out exceeds capacity
@@ -900,8 +876,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         } else if (tokenIn_ == reserve) {
             // Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
-                10 ** _ohmDecimals * 10 ** _oracleDecimals,
-                10 ** _reserveDecimals * RANGE.price(true, true)
                 10 ** _ohmDecimals * 10 ** _oracleDecimals,
                 10 ** _reserveDecimals * RANGE.price(true, true)
             );

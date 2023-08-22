@@ -117,7 +117,13 @@ contract OperatorTest is Test {
 
         {
             /// Deploy bond callback
-            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
+            callback = new BondCallback(
+                kernel,
+                IBondAggregator(address(aggregator)),
+                ohm,
+                reserve,
+                wrappedReserve
+            );
 
             /// Deploy operator
             operator = new Operator(
@@ -1984,7 +1990,13 @@ contract OperatorTest is Test {
 
         /// Create new bond contracts
         BondFixedTermSDA newSDA = new BondFixedTermSDA(teller, aggregator, guardian, auth);
-        BondCallback newCb = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
+        BondCallback newCb = new BondCallback(
+            kernel,
+            IBondAggregator(address(aggregator)),
+            ohm,
+            reserve,
+            wrappedReserve
+        );
 
         /// Update the bond contracts as guardian
         vm.prank(policy);

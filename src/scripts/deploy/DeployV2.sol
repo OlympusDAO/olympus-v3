@@ -478,7 +478,7 @@ contract OlympusDeploy is Script {
 
         // Deploy BondCallback policy
         vm.broadcast();
-        callback = new BondCallback(kernel, bondAggregator, ohm);
+        callback = new BondCallback(kernel, bondAggregator, ohm, reserve, wrappedReserve);
         console2.log("BondCallback deployed at:", address(callback));
 
         return address(callback);

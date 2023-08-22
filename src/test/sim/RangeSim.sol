@@ -375,7 +375,13 @@ abstract contract RangeSim is Test {
 
         {
             /// Deploy bond callback
-            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
+            callback = new BondCallback(
+                kernel,
+                IBondAggregator(address(aggregator)),
+                ohm,
+                reserve,
+                wrappedReserve
+            );
 
             /// Deploy operator
             operator = new Operator(
