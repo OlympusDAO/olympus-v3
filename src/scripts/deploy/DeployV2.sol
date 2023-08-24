@@ -5,6 +5,7 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {Script, console2} from "forge-std/Script.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 // Bond Protocol
 import {IBondAggregator} from "interfaces/IBondAggregator.sol";
@@ -100,7 +101,7 @@ contract OlympusDeploy is Script {
     ERC20 public lusd;
     ERC20 public aura;
     ERC20 public bal;
-    ERC20 public sdai;
+    ERC4626 public wrappedReserve;
 
     /// Bond system addresses
     IBondSDA public bondAuctioneer;
@@ -181,7 +182,7 @@ contract OlympusDeploy is Script {
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
         aura = ERC20(envAddress("external.tokens.AURA"));
         bal = ERC20(envAddress("external.tokens.BAL"));
-        sdai = ERC20(envAddress("external.tokens.sDAI"));
+        wrappedReserve = ERC4626(envAddress("external.tokens.sDAI"));
         bondAuctioneer = IBondSDA(envAddress("external.bond-protocol.BondFixedTermAuctioneer"));
         bondFixedExpiryAuctioneer = IBondSDA(
             envAddress("external.bond-protocol.BondFixedExpiryAuctioneer")
@@ -758,7 +759,7 @@ contract OlympusDeploy is Script {
         clearinghouse = new Clearinghouse({
             gohm_: address(gohm),
             staking_: address(staking),
-            sdai_: address(sdai),
+            sdai_: address(wrappedReserve),
             coolerFactory_: address(coolerFactory),
             kernel_: address(kernel)
         });
