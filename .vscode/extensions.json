@@ -2,6 +2,7 @@
   "recommendations": [
     "nomicfoundation.hardhat-solidity",
     "gruntfuggly.todo-tree",
-    "ryanluker.vscode-coverage-gutters"
+    "ryanluker.vscode-coverage-gutters",
+    "github.vscode-github-actions"
   ]
 }
