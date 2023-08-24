@@ -149,7 +149,7 @@
 //     string[] public deployments;
 //     mapping(string => address) public deployedTo;
 
-//     function _setUp(string calldata chain_) internal {
+//     function _setUp(string calldata chain_, string calldata deployFilePath) internal {
 //         chain = chain_;
 
 //         // Setup contract -> selector mappings
@@ -263,7 +263,7 @@
 //         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
 
 //         // Load deployment data
-//         string memory data = vm.readFile("./src/scripts/deploy/deploy.json");
+//         string memory data = vm.readFile(deployFilePath);
 
 //         // Parse deployment sequence and names
 //         string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
@@ -309,9 +309,9 @@
 //     //     kernel.executeAction(Actions.ActivatePolicy, address(policy_));
 //     // }
 
-//     function deploy(string calldata chain_) external {
+//     function deploy(string calldata chain_, string calldata deployFilePath) external {
 //         // Setup
-//         _setUp(chain_);
+//         _setUp(chain_, deployFilePath);
 
 //         // Check that deployments is not empty
 //         uint256 len = deployments.length;

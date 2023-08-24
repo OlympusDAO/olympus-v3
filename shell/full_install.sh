@@ -1,6 +1,6 @@
 #!/bin/bash
 
-npm install
+pnpm install
 git submodule init
 git submodule update
 forge install

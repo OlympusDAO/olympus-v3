@@ -2,17 +2,18 @@
 ffi = true
 remappings = [
     'ds-test/=lib/ds-test/src/',
-    'solmate/=lib/solmate/src/',
     'forge-std/=lib/forge-std/src/',
-    'balancer-v2/=lib/balancer-v2/',
-    'layer-zero/=lib/solidity-examples/contracts/',
-    '@openzeppelin/=lib/openzeppelin-contracts/',
-
     'interfaces/=src/interfaces',
     'modules/=src/modules',
     'policies/=src/policies',
     'libraries/=src/libraries',
-    'test/=src/test'
+    'solmate/=lib/solmate/src/',
+    'balancer-v2/=lib/balancer-v2/',
+    'layer-zero/=lib/solidity-examples/contracts/',
+    '@openzeppelin/=lib/openzeppelin-contracts/',
+    'bonds/=lib/bonds/src/',
+    'test/=src/test/',
+    'clones/=lib/clones-with-immutable-args/src/',
 ]
 fs_permissions = [
     {access = "write", path = "./src/test/sim/out/"},

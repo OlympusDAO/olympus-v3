@@ -495,6 +495,7 @@ contract BLVaultLidoTestFork is Test {
         aliceVault.claimRewards();
 
         // Check state after
+        // NOTE: These checks are currently failing as rewards are disabled on the live aura pools
         assertTrue(bal.balanceOf(address(alice)) > 0);
         assertTrue(aura.balanceOf(address(alice)) > 0);
     }
