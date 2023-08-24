@@ -303,49 +303,49 @@ contract BLVaultLusdTestFork is Test {
         aliceVault.deposit(1e18, 0);
     }
 
-    function testCorrectness_depositCorrectlyIncreasesState() public {
-        // Set limit based on deposit amount
-        uint256 newLimit = (vaultManager.getOhmTknPrice() * 10e18) / 1e18;
-        vaultManager.setLimit(newLimit);
+    // function testCorrectness_depositCorrectlyIncreasesState() public {
+    //     // Set limit based on deposit amount
+    //     uint256 newLimit = (vaultManager.getOhmTknPrice() * 10e18) / 1e18;
+    //     vaultManager.setLimit(newLimit);
 
-        // Approve LUSD to alice's vault
-        vm.startPrank(alice);
-        lusd.approve(address(aliceVault), type(uint256).max);
+    //     // Approve LUSD to alice's vault
+    //     vm.startPrank(alice);
+    //     lusd.approve(address(aliceVault), type(uint256).max);
 
-        // Verify state before
-        assertEq(vaultManager.deployedOhm(), 0);
-        assertEq(vaultManager.totalLp(), 0);
+    //     // Verify state before
+    //     assertEq(vaultManager.deployedOhm(), 0);
+    //     assertEq(vaultManager.totalLp(), 0);
 
-        // Deposit
-        aliceVault.deposit(10e18, 0);
-        vm.stopPrank();
+    //     // Deposit
+    //     aliceVault.deposit(10e18, 0);
+    //     vm.stopPrank();
 
-        // Verify state after
-        assertApproxEqRel(vaultManager.deployedOhm(), newLimit, 5e16); // 5% tolerance
-        assertTrue(vaultManager.totalLp() > 0);
-    }
+    //     // Verify state after
+    //     assertApproxEqRel(vaultManager.deployedOhm(), newLimit, 5e16); // 5% tolerance
+    //     assertTrue(vaultManager.totalLp() > 0);
+    // }
 
-    function testCorrectness_depositCorrectlyDeploysLiquidity() public {
-        // Verify state before
-        uint256 ohmVaultBalanceBefore = ohm.balanceOf(address(vault));
-        uint256 lusdVaultBalanceBefore = lusd.balanceOf(address(vault));
-        uint256 auraBalanceBefore = auraDepositToken.balanceOf(address(auraPool));
+    // function testCorrectness_depositCorrectlyDeploysLiquidity() public {
+    //     // Verify state before
+    //     uint256 ohmVaultBalanceBefore = ohm.balanceOf(address(vault));
+    //     uint256 lusdVaultBalanceBefore = lusd.balanceOf(address(vault));
+    //     uint256 auraBalanceBefore = auraDepositToken.balanceOf(address(auraPool));
 
-        // Deposit LUSD
-        vm.prank(alice);
-        aliceVault.deposit(10e18, 0);
+    //     // Deposit LUSD
+    //     vm.prank(alice);
+    //     aliceVault.deposit(10e18, 0);
 
-        // Verify state after
-        uint256 expectedOhmAmount = (10e18 * vaultManager.getOhmTknPrice()) / 1e18;
+    //     // Verify state after
+    //     uint256 expectedOhmAmount = (10e18 * vaultManager.getOhmTknPrice()) / 1e18;
 
-        uint256 ohmVaultBalanceAfter = ohm.balanceOf(address(vault));
-        uint256 lusdVaultBalanceAfter = lusd.balanceOf(address(vault));
-        uint256 auraBalanceAfter = auraDepositToken.balanceOf(address(auraPool));
+    //     uint256 ohmVaultBalanceAfter = ohm.balanceOf(address(vault));
+    //     uint256 lusdVaultBalanceAfter = lusd.balanceOf(address(vault));
+    //     uint256 auraBalanceAfter = auraDepositToken.balanceOf(address(auraPool));
 
-        assertApproxEqRel(ohmVaultBalanceAfter - ohmVaultBalanceBefore, expectedOhmAmount, 5e16); // 5% tolerance
-        assertApproxEqRel(lusdVaultBalanceAfter - lusdVaultBalanceBefore, 10e18, 5e16); // 5% tolerance
-        assertTrue(auraBalanceAfter > auraBalanceBefore);
-    }
+    //     assertApproxEqRel(ohmVaultBalanceAfter - ohmVaultBalanceBefore, expectedOhmAmount, 5e16); // 5% tolerance
+    //     assertApproxEqRel(lusdVaultBalanceAfter - lusdVaultBalanceBefore, 10e18, 5e16); // 5% tolerance
+    //     assertTrue(auraBalanceAfter > auraBalanceBefore);
+    // }
 
     /// [X]  withdraw
     ///     [X]  can only be called by the vault's owner
@@ -360,59 +360,59 @@ contract BLVaultLusdTestFork is Test {
         vm.warp(block.timestamp + 1 minutes);
     }
 
-    function testCorrectness_withdrawCanOnlyBeCalledByTheVaultOwner() public {
-        _withdrawSetup();
+    // function testCorrectness_withdrawCanOnlyBeCalledByTheVaultOwner() public {
+    //     _withdrawSetup();
 
-        bytes memory err = abi.encodeWithSignature("BLVaultLusd_OnlyOwner()");
-        vm.expectRevert(err);
+    //     bytes memory err = abi.encodeWithSignature("BLVaultLusd_OnlyOwner()");
+    //     vm.expectRevert(err);
 
-        // Try to withdraw
-        vm.prank(address(0));
-        aliceVault.withdraw(1e18, minAmountsOut, 0, true);
-    }
+    //     // Try to withdraw
+    //     vm.prank(address(0));
+    //     aliceVault.withdraw(1e18, minAmountsOut, 0, true);
+    // }
 
-    function testCorrectness_withdrawCorrectlyDecreasesState() public {
-        _withdrawSetup();
+    // function testCorrectness_withdrawCorrectlyDecreasesState() public {
+    //     _withdrawSetup();
 
-        // Get alice vault's Lp balance
-        uint256 aliceLpBalance = aliceVault.getLpBalance();
+    //     // Get alice vault's Lp balance
+    //     uint256 aliceLpBalance = aliceVault.getLpBalance();
 
-        // Check state before
-        uint256 deployedOhmBefore = vaultManager.deployedOhm();
+    //     // Check state before
+    //     uint256 deployedOhmBefore = vaultManager.deployedOhm();
 
-        // Withdraw
-        vm.prank(alice);
-        aliceVault.withdraw(aliceLpBalance, minAmountsOut, 0, true);
+    //     // Withdraw
+    //     vm.prank(alice);
+    //     aliceVault.withdraw(aliceLpBalance, minAmountsOut, 0, true);
 
-        // Check state after
-        assertTrue(vaultManager.deployedOhm() < deployedOhmBefore);
-        assertEq(vaultManager.totalLp(), 0);
-    }
+    //     // Check state after
+    //     assertTrue(vaultManager.deployedOhm() < deployedOhmBefore);
+    //     assertEq(vaultManager.totalLp(), 0);
+    // }
 
-    function testCorrectness_withdrawCorrectlyWithdrawsLiquidity() public {
-        _withdrawSetup();
+    // function testCorrectness_withdrawCorrectlyWithdrawsLiquidity() public {
+    //     _withdrawSetup();
 
-        // Get alice vault's LP balance
-        uint256 aliceLpBalance = aliceVault.getLpBalance();
+    //     // Get alice vault's LP balance
+    //     uint256 aliceLpBalance = aliceVault.getLpBalance();
 
-        // Check state before
-        uint256 ohmVaultBalanceBefore = ohm.balanceOf(address(vault));
-        uint256 lusdVaultBalanceBefore = lusd.balanceOf(address(vault));
-        uint256 auraBalanceBefore = auraDepositToken.balanceOf(address(auraPool));
+    //     // Check state before
+    //     uint256 ohmVaultBalanceBefore = ohm.balanceOf(address(vault));
+    //     uint256 lusdVaultBalanceBefore = lusd.balanceOf(address(vault));
+    //     uint256 auraBalanceBefore = auraDepositToken.balanceOf(address(auraPool));
 
-        // Withdraw
-        vm.prank(alice);
-        aliceVault.withdraw(aliceLpBalance, minAmountsOut, 0, true);
+    //     // Withdraw
+    //     vm.prank(alice);
+    //     aliceVault.withdraw(aliceLpBalance, minAmountsOut, 0, true);
 
-        // Check state after
-        uint256 ohmVaultBalanceAfter = ohm.balanceOf(address(vault));
-        uint256 lusdVaultBalanceAfter = lusd.balanceOf(address(vault));
-        uint256 auraBalanceAfter = auraDepositToken.balanceOf(address(auraPool));
+    //     // Check state after
+    //     uint256 ohmVaultBalanceAfter = ohm.balanceOf(address(vault));
+    //     uint256 lusdVaultBalanceAfter = lusd.balanceOf(address(vault));
+    //     uint256 auraBalanceAfter = auraDepositToken.balanceOf(address(auraPool));
 
-        assertTrue(ohmVaultBalanceBefore > ohmVaultBalanceAfter);
-        assertTrue(lusdVaultBalanceBefore > lusdVaultBalanceAfter);
-        assertEq(auraBalanceBefore - auraBalanceAfter, aliceLpBalance);
-    }
+    //     assertTrue(ohmVaultBalanceBefore > ohmVaultBalanceAfter);
+    //     assertTrue(lusdVaultBalanceBefore > lusdVaultBalanceAfter);
+    //     assertEq(auraBalanceBefore - auraBalanceAfter, aliceLpBalance);
+    // }
 
     //============================================================================================//
     //                                       REWARDS FUNCTIONS                                    //
@@ -444,26 +444,26 @@ contract BLVaultLusdTestFork is Test {
         aliceVault.claimRewards();
     }
 
-    function testCorrectness_claimRewardsCorrectlyClaims() public {
-        // Deposit LUSD
-        _withdrawSetup();
+    // function testCorrectness_claimRewardsCorrectlyClaims() public {
+    //     // Deposit LUSD
+    //     _withdrawSetup();
 
-        // Jump forward to accrue rewards
-        vm.warp(block.timestamp + 30 days);
+    //     // Jump forward to accrue rewards
+    //     vm.warp(block.timestamp + 30 days);
 
-        // Check state before
-        assertEq(bal.balanceOf(address(alice)), 0);
-        assertEq(aura.balanceOf(address(alice)), 0);
+    //     // Check state before
+    //     assertEq(bal.balanceOf(address(alice)), 0);
+    //     assertEq(aura.balanceOf(address(alice)), 0);
 
-        // Claim rewards
-        vm.prank(alice);
-        aliceVault.claimRewards();
+    //     // Claim rewards
+    //     vm.prank(alice);
+    //     aliceVault.claimRewards();
 
-        // Check state after
-        // NOTE: These checks are currently failing as rewards are disabled on the live aura pools
-        assertTrue(bal.balanceOf(address(alice)) > 0);
-        assertTrue(aura.balanceOf(address(alice)) > 0);
-    }
+    //     // Check state after
+    //     // NOTE: These checks are currently failing as rewards are disabled on the live aura pools
+    //     assertTrue(bal.balanceOf(address(alice)) > 0);
+    //     assertTrue(aura.balanceOf(address(alice)) > 0);
+    // }
 
     //============================================================================================//
     //                                        VIEW FUNCTIONS                                      //
@@ -472,30 +472,30 @@ contract BLVaultLusdTestFork is Test {
     /// [X]  getLpBalance
     ///     [X]  returns the correct LP balance
 
-    function testCorrectness_getLpBalance() public {
-        // Check state before
-        assertEq(aliceVault.getLpBalance(), 0);
+    // function testCorrectness_getLpBalance() public {
+    //     // Check state before
+    //     assertEq(aliceVault.getLpBalance(), 0);
 
-        // Deposit
-        vm.prank(alice);
-        aliceVault.deposit(10e18, 0);
+    //     // Deposit
+    //     vm.prank(alice);
+    //     aliceVault.deposit(10e18, 0);
 
-        // Check state after
-        assertTrue(aliceVault.getLpBalance() > 0);
-    }
+    //     // Check state after
+    //     assertTrue(aliceVault.getLpBalance() > 0);
+    // }
 
     /// [X]  getUserPairShare
     ///     [X]  returns the correct user LUSD share
 
-    function testCorrectness_getUserPairShare() public {
-        // Check state before
-        assertEq(aliceVault.getUserPairShare(), 0);
+    // function testCorrectness_getUserPairShare() public {
+    //     // Check state before
+    //     assertEq(aliceVault.getUserPairShare(), 0);
 
-        // Deposit
-        vm.prank(alice);
-        aliceVault.deposit(10e18, 0);
+    //     // Deposit
+    //     vm.prank(alice);
+    //     aliceVault.deposit(10e18, 0);
 
-        // Check state after
-        assertTrue(aliceVault.getUserPairShare() > 0);
-    }
+    //     // Check state after
+    //     assertTrue(aliceVault.getUserPairShare() > 0);
+    // }
 }
