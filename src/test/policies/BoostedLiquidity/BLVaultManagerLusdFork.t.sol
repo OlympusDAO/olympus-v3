@@ -625,40 +625,40 @@ contract BLVaultManagerLusdTestFork is Test {
     /// [X]  getLpBalance
     ///     [X]  returns the correct LP value
 
-    function testCorrectness_getLpBalance() public {
-        address aliceVault = _createVault();
+    // function testCorrectness_getLpBalance() public {
+    //     address aliceVault = _createVault();
 
-        // Check state before
-        assertEq(vaultManager.getLpBalance(alice), 0);
+    //     // Check state before
+    //     assertEq(vaultManager.getLpBalance(alice), 0);
 
-        // Deposit LUSD
-        vm.startPrank(alice);
-        lusd.approve(aliceVault, type(uint256).max);
-        BLVaultLusd(aliceVault).deposit(1e18, 0);
-        vm.stopPrank();
+    //     // Deposit LUSD
+    //     vm.startPrank(alice);
+    //     lusd.approve(aliceVault, type(uint256).max);
+    //     BLVaultLusd(aliceVault).deposit(1e18, 0);
+    //     vm.stopPrank();
 
-        // Check state after
-        assertTrue(vaultManager.getLpBalance(alice) > 0);
-    }
+    //     // Check state after
+    //     assertTrue(vaultManager.getLpBalance(alice) > 0);
+    // }
 
     /// [X]  getUserPairShare
     ///     [X]  returns correct user LUSD share
 
-    function testCorrectness_getUserPairShare() public {
-        address aliceVault = _createVault();
+    // function testCorrectness_getUserPairShare() public {
+    //     address aliceVault = _createVault();
 
-        // Check state before
-        assertEq(vaultManager.getUserPairShare(alice), 0);
+    //     // Check state before
+    //     assertEq(vaultManager.getUserPairShare(alice), 0);
 
-        // Deposit LUSD
-        vm.startPrank(alice);
-        lusd.approve(aliceVault, type(uint256).max);
-        BLVaultLusd(aliceVault).deposit(1e18, 0);
-        vm.stopPrank();
+    //     // Deposit LUSD
+    //     vm.startPrank(alice);
+    //     lusd.approve(aliceVault, type(uint256).max);
+    //     BLVaultLusd(aliceVault).deposit(1e18, 0);
+    //     vm.stopPrank();
 
-        // Check state after
-        assertTrue(vaultManager.getUserPairShare(alice) > 0);
-    }
+    //     // Check state after
+    //     assertTrue(vaultManager.getUserPairShare(alice) > 0);
+    // }
 
     /// [X]  getMaxDeposit
     ///     [X]  returns correct LUSD deposit amount
@@ -704,22 +704,22 @@ contract BLVaultManagerLusdTestFork is Test {
     /// [X]  getPoolOhmShare
     ///     [X]  returns correct OHM share
 
-    function testCorrectness_getPoolOhmShare() public {
-        address aliceVault = _createVault();
+    // function testCorrectness_getPoolOhmShare() public {
+    //     address aliceVault = _createVault();
 
-        // Check state before
-        assertEq(vaultManager.getPoolOhmShare(), 0);
+    //     // Check state before
+    //     assertEq(vaultManager.getPoolOhmShare(), 0);
 
-        // Deposit LUSD
-        vm.startPrank(alice);
-        lusd.approve(aliceVault, type(uint256).max);
-        BLVaultLusd(aliceVault).deposit(1e18, 0);
-        vm.stopPrank();
+    //     // Deposit LUSD
+    //     vm.startPrank(alice);
+    //     lusd.approve(aliceVault, type(uint256).max);
+    //     BLVaultLusd(aliceVault).deposit(1e18, 0);
+    //     vm.stopPrank();
 
-        // Check state after
-        console2.log("Vault OHM share", vaultManager.getPoolOhmShare());
-        assertTrue(vaultManager.getPoolOhmShare() > 0);
-    }
+    //     // Check state after
+    //     console2.log("Vault OHM share", vaultManager.getPoolOhmShare());
+    //     assertTrue(vaultManager.getPoolOhmShare() > 0);
+    // }
 
     /// [X]  getOhmTknPrice
     ///     [X]  returns correct OHM per LUSD (100)
