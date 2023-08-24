@@ -1,6 +1,6 @@
 # Olympus Bophades
 
-Use yarn build to refresh deps.
+Use `pnpm run build` to refresh deps.
 
 Set up a foundry config in foundry.toml.
 
@@ -105,9 +105,8 @@ Copy the `.env.deploy.example` file into one file per chain, e.g. `.env_deploy_g
 ## How To Deploy
 
 - Develop the deployment configuration in `src/scripts/savedDeployments`. Can be based on an existing file. Commit this to git.
-- Copy to `src/scripts/deploy.json`, but don't commit to git.
-- Ensure that the deploy script (`src/scripts/DeployV2.sol`) has function(s) for deploying the contract(s), and the correct mapping from the contract name in `src/scripts/deploy.json` and the selector added to `selectorMap`
-- Run the deployment bash script (e.g. `shell/deploy.sh`) against the local fork
+- Ensure that the deploy script (`src/scripts/DeployV2.sol`) has function(s) for deploying the contract(s), and the correct mapping from the contract name in the deployment JSON file and the selector added to `selectorMap`
+- Run the deployment bash script against the local fork and pass the deployment file as an argument, e.g. `shell/deploy.sh src/scripts/savedDeployments/rbs_v1_3.json`
 - Uncomment the line containing `--broadcast` in the deployment bash script after testing in order to push the changes to the live chain
 - The deployment output will be saved in `deployments/`
 - Update the `src/scripts/env.json` file with the new contract addresses (which can be copied from the deployment output)

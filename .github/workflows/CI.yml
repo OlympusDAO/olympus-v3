@@ -19,25 +19,31 @@ jobs:
 
             - uses: actions/setup-node@v2
 
+            - uses: pnpm/action-setup@v2
+              with:
+                version: 8
+
             - name: Install Node dependencies
-              run: npm install
+              run: pnpm install
 
             - name: Install Foundry
               uses: foundry-rs/foundry-toolchain@v1
               with:
-                  version: nightly
+                  version: nightly-ca67d15f4abd46394b324c50e21e66f306a1162d
 
             - name: Install Foundry dependencies
               run: forge install
 
             - name: Run lint check
-              run: npm run lint:check
+              run: pnpm run lint:check
 
             - name: Run non-fork tests
-              run: forge test --no-match-contract Fork
+              run: pnpm run test:unit
 
             - name: Run fork tests
-              run: forge test --match-contract "$1.*Fork$" --fork-url ${{ secrets.FORK_TEST_RPC_URL }}
+              run: pnpm run test:fork
+              env:
+                FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
 
             - name: Run cross-chain fork tests
-              run: forge test --match-contract CrossChainBridgeFork
+              run: pnpm run test:crosschainfork
