@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
-import {console2} from "forge-std/console2.sol";
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -160,9 +159,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
-
-        // Store the price decimals for use in calculations (cached here to avoid extra external calls)
-        _oracleDecimals = PRICE.decimals();
 
         // Store the price decimals for use in calculations (cached here to avoid extra external calls)
         _oracleDecimals = PRICE.decimals();
@@ -505,18 +501,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
             // Update the market information on the range module
             RANGE.updateMarket(false, market, marketCapacity);
-
-            // Reserves stored in the TRSRY are wrapped to generate yield
-            // We must withdraw some of those reserves, unwrap them,
-            // and send them back to the TRSRY so that the BondCallback
-            // has access to the right amount of reserves.
-            // The amount withdrawn is equal to the market capacity.
-            uint256 amountToConvert = wrappedReserve.previewWithdraw(marketCapacity);
-            /// TODO: increasing withdraw approval here because we are withdrawing capacity that may not all be used
-            /// Tried to see if we could increment approval back up as needed on deactivate, but it's not precise because the conversion changes
-            TRSRY.increaseWithdrawApproval(address(this), wrappedReserve, amountToConvert);
-            TRSRY.withdrawReserves(address(this), wrappedReserve, amountToConvert);
-            wrappedReserve.withdraw(marketCapacity, address(TRSRY), address(this));
         }
     }
 
@@ -527,18 +511,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (auctioneer.isLive(market)) {
             auctioneer.closeMarket(market);
             RANGE.updateMarket(high_, type(uint256).max, 0);
-        }
-
-        // If a lower cushion is being deactivated, withdraw excess reserve from TRSRY
-        // wrap it to generate yield, and re-deposit it into the TRSRY
-        if (!high_) {
-            uint256 excessReserve = reserve.balanceOf(address(TRSRY));
-            if (excessReserve > 0) {
-                TRSRY.increaseWithdrawApproval(address(this), reserve, excessReserve);
-                TRSRY.withdrawReserves(address(this), reserve, excessReserve);
-                reserve.approve(address(wrappedReserve), excessReserve);
-                wrappedReserve.deposit(excessReserve, address(TRSRY));
-            }
         }
     }
 
@@ -554,7 +526,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         // Subtract the stated decimals from the calculated decimals to get the relative price decimals.
         // Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
-        return decimals - int8(_oracleDecimals);
         return decimals - int8(_oracleDecimals);
     }
 

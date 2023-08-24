@@ -35,6 +35,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     mapping(address => mapping(uint256 => bool)) public approvedMarkets;
     mapping(uint256 => uint256[2]) internal _amountsPerMarket;
     mapping(ERC20 => uint256) public priorBalances;
+    mapping(address => address) public wrapped;
 
     TRSRYv1 public TRSRY;
     MINTRv1 public MINTR;
@@ -43,24 +44,14 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
 
     IBondAggregator public aggregator;
     ERC20 public ohm;
-    ERC20 public dai;
-    ERC4626 public sdai;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
     //============================================================================================//
 
-    constructor(
-        Kernel kernel_,
-        IBondAggregator aggregator_,
-        ERC20 ohm_,
-        ERC20 dai_,
-        ERC4626 sdai_
-    ) Policy(kernel_) {
+    constructor(Kernel kernel_, IBondAggregator aggregator_, ERC20 ohm_) Policy(kernel_) {
         aggregator = aggregator_;
         ohm = ohm_;
-        dai = dai_;
-        sdai = sdai_;
     }
 
     /// @inheritdoc Policy
@@ -153,11 +144,18 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         // Otherwise, request withdrawal approval for the capacity from the TRSRY
         if (address(payoutToken) == address(ohm)) {
             MINTR.increaseMintApproval(address(this), toApprove);
-        } else if (address(payoutToken) != address(dai)) {
-            TRSRY.increaseWithdrawApproval(address(this), payoutToken, toApprove);
         } else {
-            // Since TRSRY holds sDAI, if the payout token is DAI, request approval for sDAI
-            TRSRY.increaseWithdrawApproval(address(this), sdai, toApprove);
+            ERC4626 wrappedPayoutToken = ERC4626(wrapped[address(payoutToken)]);
+            if (address(wrappedPayoutToken) == address(0)) {
+                TRSRY.increaseWithdrawApproval(address(this), payoutToken, toApprove);
+            } else {
+                // Since TRSRY hold a wrapped version of the payoutToken, a conversion must take place.
+                TRSRY.increaseWithdrawApproval(
+                    address(this),
+                    wrappedPayoutToken,
+                    wrappedPayoutToken.previewWithdraw(toApprove)
+                );
+            }
         }
     }
 
@@ -201,14 +199,15 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
             MINTR.burnOhm(address(this), inputAmount_);
             MINTR.mintOhm(msg.sender, outputAmount_);
         } else if (quoteToken == ohm) {
+            ERC4626 wrappedPayoutToken = ERC4626(wrapped[address(payoutToken)]);
             // If inverse bond (buying ohm), transfer payout tokens to sender
-            if (payoutToken != dai) {
+            if (address(wrappedPayoutToken) == address(0)) {
                 TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
             } else {
-                // Since TRSRY hold sDAI, if payoutToken is DAI, it must be unwrapped first.
-                uint256 sdaiOutputAmount = sdai.previewWithdraw(outputAmount_);
-                TRSRY.withdrawReserves(address(this), sdai, sdaiOutputAmount);
-                sdai.withdraw(sdaiOutputAmount, msg.sender, address(this));
+                // Since TRSRY hold a wrapped version of the payoutToken, it must be unwrapped first.
+                uint256 wrappedOutputAmount = wrappedPayoutToken.previewWithdraw(outputAmount_);
+                TRSRY.withdrawReserves(address(this), wrappedPayoutToken, wrappedOutputAmount);
+                wrappedPayoutToken.withdraw(wrappedOutputAmount, msg.sender, address(this));
             }
 
             // Burn OHM received from sender
@@ -260,6 +259,18 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     function setOperator(Operator operator_) external onlyRole("callback_admin") {
         if (address(operator_) == address(0)) revert Callback_InvalidParams();
         operator = operator_;
+    }
+
+    /// @notice Inform the whether the TRSRY holds the payout token in a naked or a wrapped version
+    /// @dev    Must be called before whitelisting to ensure a proper TRSRY withdraw approval
+    /// @param  payoutToken_ Address of the payout token
+    /// @param  wrappedToken_ Address of the token wrapper held by the TRSRY. If the TRSRY moves
+    ///                       back to the naked token, input address(0) as the wrapped version
+    function useWrappedVersion(
+        address payoutToken_,
+        address wrappedToken_
+    ) external onlyRole("callback_admin") {
+        wrapped[payoutToken_] = wrappedToken_;
     }
 
     //============================================================================================//

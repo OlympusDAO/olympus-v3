@@ -117,13 +117,7 @@ contract OperatorTest is Test {
 
         {
             /// Deploy bond callback
-            callback = new BondCallback(
-                kernel,
-                IBondAggregator(address(aggregator)),
-                ohm,
-                reserve,
-                wrappedReserve
-            );
+            callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
             /// Deploy operator
             operator = new Operator(
@@ -184,6 +178,9 @@ contract OperatorTest is Test {
         /// Set operator on the callback
         vm.prank(guardian);
         callback.setOperator(operator);
+        // Signal that reserve is held as wrappedReserve in TRSRY
+        vm.prank(guardian);
+        callback.useWrappedVersion(address(reserve), address(wrappedReserve));
 
         // Mint tokens to users and treasury for testing
         uint256 testOhm = 1_000_000 * 1e9;
@@ -1990,13 +1987,7 @@ contract OperatorTest is Test {
 
         /// Create new bond contracts
         BondFixedTermSDA newSDA = new BondFixedTermSDA(teller, aggregator, guardian, auth);
-        BondCallback newCb = new BondCallback(
-            kernel,
-            IBondAggregator(address(aggregator)),
-            ohm,
-            reserve,
-            wrappedReserve
-        );
+        BondCallback newCb = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
 
         /// Update the bond contracts as guardian
         vm.prank(policy);

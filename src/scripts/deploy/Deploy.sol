@@ -136,7 +136,7 @@ contract OlympusDeploy is Script {
         console2.log("Roles module deployed at:", address(ROLES));
 
         /// Deploy policies
-        callback = new BondCallback(kernel, bondAggregator, ohm, reserve, wrappedReserve);
+        callback = new BondCallback(kernel, bondAggregator, ohm);
         console2.log("Bond Callback deployed at:", address(callback));
 
         operator = new Operator(

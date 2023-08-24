@@ -378,9 +378,7 @@ abstract contract RangeSim is Test {
             callback = new BondCallback(
                 kernel,
                 IBondAggregator(address(aggregator)),
-                ohm,
-                reserve,
-                wrappedReserve
+                ohm
             );
 
             /// Deploy operator
@@ -522,6 +520,8 @@ abstract contract RangeSim is Test {
 
             // Set operator on the callback
             callback.setOperator(operator);
+            // Signal that reserve is held as wrappedReserve in TRSRY
+            callback.useWrappedVersion(address(reserve), address(wrappedReserve));
 
             // Initialize Operator
             operator.initialize();

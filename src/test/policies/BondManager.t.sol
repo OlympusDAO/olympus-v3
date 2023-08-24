@@ -115,9 +115,7 @@ contract BondManagerTest is Test {
             bondCallback = new BondCallback(
                 kernel,
                 IBondAggregator(address(aggregator)),
-                ERC20(address(ohm)),
-                ERC20(address(reserve)),
-                ERC4626(address(wrappedReserve))
+                ERC20(address(ohm))
             );
             bondManager = new BondManager(
                 kernel,
