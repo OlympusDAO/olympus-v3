@@ -13,11 +13,11 @@ import {FullMath} from "libraries/FullMath.sol";
 import {Math as OZMath} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "src/modules/SPPLY/OlympusSupply.sol";
-import {SiloArbSupply} from "src/modules/SPPLY/submodules/SiloArbSupply.sol";
+import {SentimentArbSupply} from "src/modules/SPPLY/submodules/SentimentArbSupply.sol";
 
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 
-contract SiloArbSupplyTest is Test {
+contract SentimentArbSupplyTest is Test {
     using FullMath for uint256;
     using ModuleTestFixtureGenerator for OlympusSupply;
 
@@ -28,7 +28,7 @@ contract SiloArbSupplyTest is Test {
 
     OlympusSupply internal moduleSupply;
 
-    SiloArbSupply internal submoduleSiloArbSupply;
+    SentimentArbSupply internal submoduleSentimentArbSupply;
 
     address internal writer;
 
@@ -74,7 +74,7 @@ contract SiloArbSupplyTest is Test {
 
         // Deploy Silo submodule
         {
-            submoduleSiloArbSupply = new SiloArbSupply(
+            submoduleSentimentArbSupply = new SentimentArbSupply(
                 moduleSupply,
                 COLLATERALIZED_OHM,
                 PROTOCOL_OWNED_BORROWABLE_OHM,
@@ -90,7 +90,7 @@ contract SiloArbSupplyTest is Test {
 
             // Install submodules on SPPLY module
             vm.startPrank(writer);
-            moduleSupply.installSubmodule(submoduleSiloArbSupply);
+            moduleSupply.installSubmodule(submoduleSentimentArbSupply);
             vm.stopPrank();
         }
     }
@@ -123,17 +123,17 @@ contract SiloArbSupplyTest is Test {
     function test_submodule_version() public {
         uint8 major;
         uint8 minor;
-        (major, minor) = submoduleSiloArbSupply.VERSION();
+        (major, minor) = submoduleSentimentArbSupply.VERSION();
         assertEq(major, 1);
         assertEq(minor, 0);
     }
 
     function test_submodule_parent() public {
-        assertEq(fromKeycode(submoduleSiloArbSupply.PARENT()), "SPPLY");
+        assertEq(fromKeycode(submoduleSentimentArbSupply.PARENT()), "SPPLY");
     }
 
     function test_submodule_subkeycode() public {
-        assertEq(fromSubKeycode(submoduleSiloArbSupply.SUBKEYCODE()), "SPPLY.SILOARB");
+        assertEq(fromSubKeycode(submoduleSentimentArbSupply.SUBKEYCODE()), "SPPLY.SENTIMENTARB");
     }
 
     // =========  Constructor ========= //
@@ -145,7 +145,7 @@ contract SiloArbSupplyTest is Test {
         // There's no error message, so just check that a revert happens when attempting to call the module
         vm.expectRevert();
 
-        new SiloArbSupply(Module(newLocations[0]),
+        new SentimentArbSupply(Module(newLocations[0]),
                 COLLATERALIZED_OHM,
                 PROTOCOL_OWNED_BORROWABLE_OHM,
                 PROTOCOL_OWNED_LIQUIDITY_OHM);
@@ -158,7 +158,7 @@ contract SiloArbSupplyTest is Test {
         bytes memory err = abi.encodeWithSignature("Submodule_InvalidParent()");
         vm.expectRevert(err);
 
-        new SiloArbSupply(modulePrice,
+        new SentimentArbSupply(modulePrice,
                 COLLATERALIZED_OHM,
                 PROTOCOL_OWNED_BORROWABLE_OHM,
                 PROTOCOL_OWNED_LIQUIDITY_OHM);
@@ -173,7 +173,7 @@ contract SiloArbSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new SiloArbSupply(moduleSupply,
+        new SentimentArbSupply(moduleSupply,
                 COLLATERALIZED_OHM,
                 PROTOCOL_OWNED_BORROWABLE_OHM,
                 PROTOCOL_OWNED_LIQUIDITY_OHM);
@@ -183,19 +183,19 @@ contract SiloArbSupplyTest is Test {
     // =========  getCollateralizedOhm ========= //
 
     function test_getCollateralizedOhm() public {
-        assertEq(submoduleSiloArbSupply.getCollateralizedOhm(), COLLATERALIZED_OHM);
+        assertEq(submoduleSentimentArbSupply.getCollateralizedOhm(), COLLATERALIZED_OHM);
     }
 
     // =========  getProtocolOwnedBorrowableOhm ========= //
 
     function test_getProtocolOwnedBorrowableOhm() public {
-        assertEq(submoduleSiloArbSupply.getProtocolOwnedBorrowableOhm(), PROTOCOL_OWNED_BORROWABLE_OHM);
+        assertEq(submoduleSentimentArbSupply.getProtocolOwnedBorrowableOhm(), PROTOCOL_OWNED_BORROWABLE_OHM);
     }
 
     // =========  getProtocolOwnedLiquidityOhm ========= //
 
     function test_getProtocolOwnedLiquidityOhm() public {
-        assertEq(submoduleSiloArbSupply.getProtocolOwnedLiquidityOhm(), PROTOCOL_OWNED_LIQUIDITY_OHM);
+        assertEq(submoduleSentimentArbSupply.getProtocolOwnedLiquidityOhm(), PROTOCOL_OWNED_LIQUIDITY_OHM);
     }
 
     // =========  setCollateralizedOhm ========= //
@@ -204,7 +204,7 @@ contract SiloArbSupplyTest is Test {
         bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(this));
         vm.expectRevert(err);
 
-        submoduleSiloArbSupply.setCollateralizedOhm(10e9);
+        submoduleSentimentArbSupply.setCollateralizedOhm(10e9);
     }
 
     function test_setCollateralizedOhm_notParent_writer_reverts() public {
@@ -215,7 +215,7 @@ contract SiloArbSupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        submoduleSiloArbSupply.setCollateralizedOhm(10e9);
+        submoduleSentimentArbSupply.setCollateralizedOhm(10e9);
         vm.stopPrank();
     }
 
@@ -226,11 +226,11 @@ contract SiloArbSupplyTest is Test {
 
         // Set the value
         vm.startPrank(address(moduleSupply));
-        submoduleSiloArbSupply.setCollateralizedOhm(10e9);
+        submoduleSentimentArbSupply.setCollateralizedOhm(10e9);
         vm.stopPrank();
 
         // Check the value
-        assertEq(submoduleSiloArbSupply.getCollateralizedOhm(), 10e9);
+        assertEq(submoduleSentimentArbSupply.getCollateralizedOhm(), 10e9);
     }
 
     // =========  setProtocolOwnedBorrowableOhm ========= //
@@ -239,7 +239,7 @@ contract SiloArbSupplyTest is Test {
         bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(this));
         vm.expectRevert(err);
 
-        submoduleSiloArbSupply.setProtocolOwnedBorrowableOhm(10e9);
+        submoduleSentimentArbSupply.setProtocolOwnedBorrowableOhm(10e9);
     }
 
     function test_setProtocolOwnedBorrowableOhm_notParent_writer_reverts() public {
@@ -250,7 +250,7 @@ contract SiloArbSupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        submoduleSiloArbSupply.setProtocolOwnedBorrowableOhm(10e9);
+        submoduleSentimentArbSupply.setProtocolOwnedBorrowableOhm(10e9);
         vm.stopPrank();
     }
 
@@ -261,11 +261,11 @@ contract SiloArbSupplyTest is Test {
 
         // Set the value
         vm.startPrank(address(moduleSupply));
-        submoduleSiloArbSupply.setProtocolOwnedBorrowableOhm(10e9);
+        submoduleSentimentArbSupply.setProtocolOwnedBorrowableOhm(10e9);
         vm.stopPrank();
 
         // Check the value
-        assertEq(submoduleSiloArbSupply.getProtocolOwnedBorrowableOhm(), 10e9);
+        assertEq(submoduleSentimentArbSupply.getProtocolOwnedBorrowableOhm(), 10e9);
     }
 
     // =========  setProtocolOwnedLiquidityOhm ========= //
@@ -274,7 +274,7 @@ contract SiloArbSupplyTest is Test {
         bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(this));
         vm.expectRevert(err);
 
-        submoduleSiloArbSupply.setProtocolOwnedLiquidityOhm(10e9);
+        submoduleSentimentArbSupply.setProtocolOwnedLiquidityOhm(10e9);
     }
 
     function test_setProtocolOwnedLiquidityOhm_notParent_writer_reverts() public {
@@ -285,7 +285,7 @@ contract SiloArbSupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        submoduleSiloArbSupply.setProtocolOwnedLiquidityOhm(10e9);
+        submoduleSentimentArbSupply.setProtocolOwnedLiquidityOhm(10e9);
         vm.stopPrank();
     }
 
@@ -296,10 +296,10 @@ contract SiloArbSupplyTest is Test {
 
         // Set the value
         vm.startPrank(address(moduleSupply));
-        submoduleSiloArbSupply.setProtocolOwnedLiquidityOhm(10e9);
+        submoduleSentimentArbSupply.setProtocolOwnedLiquidityOhm(10e9);
         vm.stopPrank();
 
         // Check the value
-        assertEq(submoduleSiloArbSupply.getProtocolOwnedLiquidityOhm(), 10e9);
+        assertEq(submoduleSentimentArbSupply.getProtocolOwnedLiquidityOhm(), 10e9);
     }
 }
