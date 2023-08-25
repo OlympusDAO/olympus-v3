@@ -17,7 +17,7 @@ abstract contract RANGEv1 is Module {
         uint256 cushionHighPrice_,
         uint256 wallHighPrice_
     );
-    event SpreadsChanged(bool high_, uint256 cushionSpread_, uint256 wallSpread_);
+    event SpreadsChanged(uint256 cushionSpread_, uint256 wallSpread_);
     event ThresholdFactorChanged(uint256 thresholdFactor_);
 
     // =========  ERRORS ========= //
@@ -28,7 +28,12 @@ abstract contract RANGEv1 is Module {
 
     struct Line {
         uint256 price; // Price for the specified level
-        uint256 spread; // Spread of the level, percent with 2 decimal places (i.e. 1000 = 10% spread)
+    }
+
+    struct Band {
+        Line high; // Price of the high side of the band
+        Line low; // Price of the low side of the band
+        uint256 spread; // Spread of the band (increase/decrease from the moving average to set the band prices), percent with 2 decimal places (i.e. 1000 = 10% spread)
     }
 
     struct Side {
@@ -37,13 +42,13 @@ abstract contract RANGEv1 is Module {
         uint256 capacity; // Amount of tokens that can be used to defend the side of the range. Specified in OHM tokens on the high side and Reserve tokens on the low side.
         uint256 threshold; // Minimum number of tokens required in capacity to maintain an active side. Specified in OHM tokens on the high side and Reserve tokens on the low side.
         uint256 market; // Market ID of the cushion bond market for the side. If no market is active, the market ID is set to max uint256 value.
-        Line cushion; // Cushion data for the side
-        Line wall; // Wall data for the side
     }
 
     struct Range {
         Side low; // Data specific to the low side of the range
         Side high; // Data specific to the high side of the range
+        Band cushion; // Data relevant to cushions on both sides of the range
+        Band wall; // Data relevant to walls on both sides of the range
     }
 
     // Range data singleton. See range().
@@ -69,8 +74,8 @@ abstract contract RANGEv1 is Module {
 
     /// @notice Update the prices for the low and high sides.
     /// @notice Access restricted to activated policies.
-    /// @param  target_ - Target price to set range prices from.
-    function updatePrices(uint256 target_) external virtual;
+    /// @param  movingAverage_ - Current moving average price to set range prices from.
+    function updatePrices(uint256 movingAverage_) external virtual;
 
     /// @notice Regenerate a side of the range to a specific capacity.
     /// @notice Access restricted to activated policies.
@@ -87,11 +92,10 @@ abstract contract RANGEv1 is Module {
 
     /// @notice Set the wall and cushion spreads.
     /// @notice Access restricted to activated policies.
-    /// @param  high_ - Specifies the side of the range to set spreads for (true = high side, false = low side).
     /// @param  cushionSpread_ - Percent spread to set the cushions at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
     /// @param  wallSpread_ - Percent spread to set the walls at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%).
     /// @dev    The new spreads will not go into effect until the next time updatePrices() is called.
-    function setSpreads(bool high_, uint256 cushionSpread_, uint256 wallSpread_) external virtual;
+    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external virtual;
 
     /// @notice Set the threshold factor for when a wall is considered "down".
     /// @notice Access restricted to activated policies.
@@ -111,14 +115,13 @@ abstract contract RANGEv1 is Module {
     function active(bool high_) external view virtual returns (bool);
 
     /// @notice Get the price for the wall or cushion for a side of the range.
-    /// @param  high_ - Specifies the side of the range to get the price for (true = high side, false = low side).
     /// @param  wall_ - Specifies the band to get the price for (true = wall, false = cushion).
-    function price(bool high_, bool wall_) external view virtual returns (uint256);
+    /// @param  high_ - Specifies the side of the range to get the price for (true = high side, false = low side).
+    function price(bool wall_, bool high_) external view virtual returns (uint256);
 
     /// @notice Get the spread for the wall or cushion band.
-    /// @param  high_ - Specifies the side of the range to get the spread for (true = high side, false = low side).
     /// @param  wall_ - Specifies the band to get the spread for (true = wall, false = cushion).
-    function spread(bool high_, bool wall_) external view virtual returns (uint256);
+    function spread(bool wall_) external view virtual returns (uint256);
 
     /// @notice Get the market ID for a side of the range.
     /// @param  high_ - Specifies the side of the range to get market for (true = high side, false = low side).

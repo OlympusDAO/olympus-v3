@@ -342,30 +342,18 @@ contract OlympusDeploy is Script {
 
     function _deployRange(bytes memory args) public returns (address) {
         // Decode arguments for Range module
-        (
-            uint256 highCushionSpread,
-            uint256 highWallSpread,
-            uint256 lowCushionSpread,
-            uint256 lowWallSpread,
-            uint256 thresholdFactor
-        ) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
+        (uint256 thresholdFactor, uint256 cushionSpread, uint256 wallSpread) = abi.decode(
+            args,
+            (uint256, uint256, uint256)
+        );
 
-        console2.log("highCushionSpread", highCushionSpread);
-        console2.log("highWallSpread", highWallSpread);
-        console2.log("lowCushionSpread", lowCushionSpread);
-        console2.log("lowWallSpread", lowWallSpread);
+        console2.log("CushionSpread", cushionSpread);
+        console2.log("WallSpread", wallSpread);
         console2.log("thresholdFactor", thresholdFactor);
 
         // Deploy Range module
         vm.broadcast();
-        RANGE = new OlympusRange(
-            kernel,
-            ohm,
-            reserve,
-            thresholdFactor,
-            [lowCushionSpread, lowWallSpread],
-            [highCushionSpread, highWallSpread]
-        );
+        RANGE = new OlympusRange(kernel, ohm, reserve, thresholdFactor, cushionSpread, wallSpread);
         console2.log("Range deployed at:", address(RANGE));
 
         return address(RANGE);

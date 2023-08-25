@@ -245,13 +245,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
                 // if active, check if the price is back above the cushion
                 // or if the price is below the wall
                 // if so, close the market
-                if (currentPrice > range.low.cushion.price || currentPrice < range.low.wall.price) {
+                if (currentPrice > range.cushion.low.price || currentPrice < range.wall.low.price) {
                     _deactivate(false);
                 }
             } else {
                 // if not active, check if the price is below the cushion
                 // if so, open a new bond market
-                if (currentPrice < range.low.cushion.price && currentPrice > range.low.wall.price) {
+                if (currentPrice < range.cushion.low.price && currentPrice > range.wall.low.price) {
                     _activate(false);
                 }
             }
@@ -262,7 +262,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
                 // or if the price is above the wall
                 // if so, close the market
                 if (
-                    currentPrice < range.high.cushion.price || currentPrice > range.high.wall.price
+                    currentPrice < range.cushion.high.price || currentPrice > range.wall.high.price
                 ) {
                     _deactivate(true);
                 }
@@ -270,7 +270,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
                 // if not active, check if the price is above the cushion
                 // if so, open a new bond market
                 if (
-                    currentPrice > range.high.cushion.price && currentPrice < range.high.wall.price
+                    currentPrice > range.cushion.high.price && currentPrice < range.wall.high.price
                 ) {
                     _activate(true);
                 }
@@ -390,7 +390,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Price decimals are returned from the perspective of the quote token
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
-            int8 priceDecimals = _getPriceDecimals(range.high.cushion.price);
+            int8 priceDecimals = _getPriceDecimals(range.cushion.high.price);
             int8 scaleAdjustment = int8(_ohmDecimals) -
                 int8(_reserveDecimals) +
                 (priceDecimals / 2);
@@ -407,7 +407,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
                 );
 
             uint256 initialPrice = PRICE.getLastPrice().mulDiv(bondScale, oracleScale);
-            uint256 minimumPrice = range.high.cushion.price.mulDiv(bondScale, oracleScale);
+            uint256 minimumPrice = range.cushion.high.price.mulDiv(bondScale, oracleScale);
 
             // Cache config struct to avoid multiple SLOADs
             Config memory config_ = _config;
@@ -443,7 +443,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             RANGE.updateMarket(true, market, marketCapacity);
         } else {
             // Calculate inverse prices from the oracle feed for the low side
-            uint256 invCushionPrice = 10 ** (_oracleDecimals * 2) / range.low.cushion.price;
+            uint256 invCushionPrice = 10 ** (_oracleDecimals * 2) / range.cushion.low.price;
             uint256 invCurrentPrice = 10 ** (_oracleDecimals * 2) / PRICE.getLastPrice();
 
             // Calculate scaleAdjustment for bond market
@@ -679,12 +679,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IOperator
     function setSpreads(
-        bool high_,
         uint256 cushionSpread_,
         uint256 wallSpread_
     ) external onlyRole("operator_policy") {
         // Set spreads on the range module
-        RANGE.setSpreads(high_, cushionSpread_, wallSpread_);
+        RANGE.setSpreads(cushionSpread_, wallSpread_);
 
         // Update range prices (wall and cushion)
         _updateRangePrices();
@@ -836,7 +835,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (tokenIn_ == ohm) {
             // Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
-                10 ** _reserveDecimals * RANGE.price(false, true),
+                10 ** _reserveDecimals * RANGE.price(true, false),
                 10 ** _ohmDecimals * 10 ** _oracleDecimals
             );
 
@@ -871,7 +870,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
                 (capacity.mulDiv(
                     10 ** _ohmDecimals * 10 ** _oracleDecimals,
                     10 ** _reserveDecimals * RANGE.price(true, true)
-                ) * (ONE_HUNDRED_PERCENT + RANGE.spread(true, true) + RANGE.spread(false, true))) /
+                ) * (ONE_HUNDRED_PERCENT + RANGE.spread(true) * 2)) /
                 ONE_HUNDRED_PERCENT;
         }
         return capacity;
