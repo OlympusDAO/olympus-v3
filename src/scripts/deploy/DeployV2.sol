@@ -478,7 +478,7 @@ contract OlympusDeploy is Script {
 
         // Deploy OlympusHeart policy
         vm.broadcast();
-        heart = new OlympusHeart(kernel, operator, maxReward, auctionDuration);
+        heart = new OlympusHeart(kernel, operator, ohm, maxReward, auctionDuration);
         console2.log("OlympusHeart deployed at:", address(heart));
 
         return address(heart);

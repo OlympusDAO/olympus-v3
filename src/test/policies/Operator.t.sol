@@ -468,7 +468,7 @@ contract OperatorTest is Test {
 
         /// Set amounts for low wall swap with minAmountOut greater than expAmountOut
         amountIn = 100 * 1e9;
-        expAmountOut = amountIn.mulDiv(1e18 * range.price(false, true), 1e9 * 1e18);
+        expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
         minAmountOut = expAmountOut + 1;
 
         /// Try to swap at low wall, expect to fail
@@ -1674,7 +1674,8 @@ contract OperatorTest is Test {
         /// Get new bands
         OlympusRange.Range memory newRange = range.range();
 
-        /// Check that the spreads have been set and prices are updated        assertEq(newRange.cushion.spread, 1500);
+        /// Check that the spreads have been set and prices are updated
+        assertEq(newRange.cushion.spread, 1500);
         assertEq(newRange.wall.spread, 3000);
         assertLt(newRange.cushion.low.price, startRange.cushion.low.price);
         assertLt(newRange.wall.low.price, startRange.wall.low.price);
@@ -1688,7 +1689,8 @@ contract OperatorTest is Test {
         /// Get new bands
         newRange = range.range();
 
-        /// Check that the spreads have been set and prices are updated        assertEq(newRange.cushion.spread, 500);
+        /// Check that the spreads have been set and prices are updated
+        assertEq(newRange.cushion.spread, 500);
         assertEq(newRange.wall.spread, 1000);
         assertGt(newRange.cushion.low.price, startRange.cushion.low.price);
         assertGt(newRange.wall.low.price, startRange.wall.low.price);
