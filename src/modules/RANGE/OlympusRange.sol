@@ -45,6 +45,13 @@ contract OlympusRange is RANGEv1 {
                 threshold: 0,
                 market: type(uint256).max
             }),
+            high: Side({
+                active: false,
+                lastActive: uint48(block.timestamp),
+                capacity: 0,
+                threshold: 0,
+                market: type(uint256).max
+            }),
             cushion: Band({low: Line({price: 0}), high: Line({price: 0}), spread: cushionSpread_}),
             wall: Band({low: Line({price: 0}), high: Line({price: 0}), spread: wallSpread_})
         });
