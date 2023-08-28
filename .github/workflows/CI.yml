@@ -48,6 +48,7 @@ jobs:
             - name: Run cross-chain fork tests
               run: pnpm run test:crosschainfork
 
+            # FYI: currently version 1.14
             - name: Setup lcov
               uses: hrishikesh-kadam/setup-lcov@v1
 
