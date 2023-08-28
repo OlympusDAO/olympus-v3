@@ -55,8 +55,7 @@ jobs:
               run: pnpm run test:coverage
 
             - name: Report Code Coverage
-              uses: zgosalvez/github-actions-report-lcov@v3
+              uses: ScaCap/code-coverage-assistant@v1.1
               with:
-                coverage-files: lcov.info
-                github-token: ${{ secrets.GITHUB_TOKEN }}
-                update-comment: true
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  lcov-file: "lcov.info"
