@@ -59,6 +59,9 @@ contract Pohm is Policy, RolesConsumer {
     IgOHM public gOHM;
     ERC20 public DAI;
 
+    // Addresses
+    address public dao;
+
     // Accounting
     mapping(address => Term) public terms;
     mapping(address => address) public walletChange;
@@ -75,12 +78,14 @@ contract Pohm is Policy, RolesConsumer {
         address ohm_,
         address gohm_,
         address dai_,
+        address dao_,
         uint256 maximumAllocated_
     ) Policy(kernel_) {
         previous = IpOHM(previous_);
         OHM = ERC20(ohm_);
         gOHM = IgOHM(gohm_);
         DAI = ERC20(dai_);
+        dao = dao_;
         maximumAllocated = maximumAllocated_;
     }
 
@@ -155,9 +160,9 @@ contract Pohm is Policy, RolesConsumer {
         return max - accountClaimed;
     }
 
+    // Note: This is not the true circulating supply, but it matches that of the previous pOHM contracts
     function getCirculatingSupply() public view returns (uint256) {
-        // TODO
-        return 100_000_000e9;
+        return OHM.totalSupply() - OHM.balanceOf(dao);
     }
 
     function getAccountClaimed(address account_) public view returns (uint256) {

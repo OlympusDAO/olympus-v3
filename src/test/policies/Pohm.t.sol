@@ -85,6 +85,7 @@ contract PohmTest is Test {
                 address(ohm),
                 address(gohm),
                 address(dai),
+                address(this),
                 100_000
             );
             pohm = new Pohm(
@@ -93,6 +94,7 @@ contract PohmTest is Test {
                 address(ohm),
                 address(gohm),
                 address(dai),
+                address(this),
                 100_000
             );
             rolesAdmin = new RolesAdmin(kernel);
@@ -123,6 +125,9 @@ contract PohmTest is Test {
 
             pohm.setTerms(alice, 10_000, 0, 100_000e9);
             pohm.setTerms(bob, 10_000, 0, 100_000e9);
+
+            // Set OHM circulating supply
+            ohm.mint(address(0), 100_000_000e9);
         }
     }
 
@@ -486,7 +491,17 @@ contract PohmTest is Test {
     }
 
     function test_getCirculatingSupply() public {
-        // TODO FIX ONCE CALCULATION IS ACTUALLY WRITTEN
+        assertEq(pohm.getCirculatingSupply(), 100_000_000e9);
+
+        vm.prank(address(0));
+        ohm.transfer(address(this), 10_000_000e9);
+
+        assertEq(pohm.getCirculatingSupply(), 90_000_000e9);
+
+        ohm.mint(address(this), 10_000_000e9);
+        assertEq(pohm.getCirculatingSupply(), 90_000_000e9);
+
+        ohm.mint(address(0), 10_000_000e9);
         assertEq(pohm.getCirculatingSupply(), 100_000_000e9);
     }
 
