@@ -55,6 +55,8 @@ jobs:
               run: pnpm run test:coverage
 
             - name: Report Code Coverage
-              uses: livewing/lcov-job-summary@v1.1.0
+              uses: kefasjw/lcov-pull-request-report@v1
               with:
-                lcov: lcov.info
+                lcov-file: lcov.info
+                github-token: ${{ secrets.GITHUB_TOKEN }}
+                
