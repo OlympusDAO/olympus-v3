@@ -10,3 +10,5 @@ src/test/sim/sims/*.t.sol
 # deployments/* idea is that deployments should be saved for each chain, you can manually delete them from sims
 .env_deploy*
 docs/
+coverage/
+lcov.info
