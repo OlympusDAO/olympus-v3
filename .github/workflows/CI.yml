@@ -54,9 +54,13 @@ jobs:
             - name: Run Code Coverage
               run: pnpm run test:coverage
 
+            - uses: actions/upload-artifact@v3
+              with:
+                name: lcov-pruned.info
+                path: lcov-pruned.info
+              
             - name: Report Code Coverage
               uses: kefasjw/lcov-pull-request-report@v1
               with:
-                lcov-file: lcov.info
+                lcov-file: lcov-pruned.info
                 github-token: ${{ secrets.GITHUB_TOKEN }}
-                
