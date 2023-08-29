@@ -283,7 +283,10 @@ contract OperatorTest is Test {
         assertEq(endCapacity, startCapacity - amountOut);
         assertEq(ohm.balanceOf(alice), ohmBalance + amountOut);
         assertEq(reserve.balanceOf(alice), reserveBalance - amountIn);
-        assertEq(wrappedReserve.balanceOf(address(treasury)), wrappedReserveBalanceBefore + amountIn);
+        assertEq(
+            wrappedReserve.balanceOf(address(treasury)),
+            wrappedReserveBalanceBefore + amountIn
+        );
     }
 
     function testCorrectness_swapLowWall() public {
@@ -316,7 +319,10 @@ contract OperatorTest is Test {
         assertEq(endCapacity, startCapacity - amountOut);
         assertEq(ohm.balanceOf(alice), ohmBalance - amountIn);
         assertEq(reserve.balanceOf(alice), reserveBalance + amountOut);
-        assertEq(wrappedReserve.balanceOf(address(treasury)), wrappedReserveBalanceBefore - expAmountOut);
+        assertEq(
+            wrappedReserve.balanceOf(address(treasury)),
+            wrappedReserveBalanceBefore - expAmountOut
+        );
     }
 
     function testCorrectness_highWallBreaksAtThreshold() public {
