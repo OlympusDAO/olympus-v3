@@ -62,8 +62,14 @@ jobs:
             - name: Run Code Coverage
               run: pnpm run test:coverage
 
+            - name: Get branch names
+              id: branch-name
+              uses: tj-actions/branch-names@v7
+
             - name: Commit Code Coverage
               uses: stefanzweifel/git-auto-commit-action@v4
+              # Don't commit changes to master or develop branches. Assume they are protected.
+              if: steps.branch-name.outputs.current_branch != 'master' && steps.branch-name.outputs.current_branch != 'develop'
               with:
                 commit_message: "chore: update code coverage"
                 commit_options: "--no-verify"
