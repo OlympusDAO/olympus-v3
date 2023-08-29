@@ -129,6 +129,25 @@ contract Pohm is Policy, RolesConsumer {
     //                                   MANAGEMENT FUNCTIONS                                     //
     //============================================================================================//
 
+    function transfer(address to_, uint256 amount_) external {
+        if (terms[msg.sender].percent == 0) revert POHM_NoClaim();
+
+        Term memory accountTerms = terms[msg.sender];
+
+        uint256 percentTransfered = (amount_ * 1e6) / accountTerms.percent;
+        uint256 gTransfered = (accountTerms.gClaimed * percentTransfered) / 1e6;
+        uint256 maxTransfered = (accountTerms.max * percentTransfered) / 1e6;
+
+        accountTerms.percent -= amount_;
+        accountTerms.gClaimed -= gTransfered;
+        accountTerms.max -= maxTransfered;
+        terms[msg.sender] = accountTerms;
+
+        terms[to_].percent += amount_;
+        terms[to_].gClaimed += gTransfered;
+        terms[to_].max += maxTransfered;
+    }
+
     function pushWalletChange(address newAddress_) external {
         if (terms[msg.sender].percent == 0) revert POHM_NoClaim();
         walletChange[msg.sender] = newAddress_;

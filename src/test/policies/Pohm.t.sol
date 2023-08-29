@@ -235,6 +235,128 @@ contract PohmTest is Test {
     //                                   MANAGEMENT FUNCTIONS                                     //
     //============================================================================================//
 
+    /// [X]  transfer
+    ///     [X]  cannot be called by someone without a claim
+    ///     [X]  transfers portion of terms to another wallet
+    ///     [X]  transfer behaves correctly post claim
+    ///     [X]  does not introduce additional claimability
+
+    function test_transferCannotBeCalledBySomeoneWithoutAClaim(address user_) public {
+        vm.assume(user_ != alice && user_ != bob);
+
+        vm.startPrank(user_);
+
+        bytes memory err = abi.encodeWithSignature("POHM_NoClaim()");
+        vm.expectRevert(err);
+
+        pohm.transfer(bob, 10_000);
+        vm.stopPrank();
+    }
+
+    function test_transferSendsPortionOfTermsToNewWallet(address to_) public {
+        vm.assume(to_ != alice && to_ != bob);
+
+        (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(alice);
+        assertEq(percent, 10_000);
+        assertEq(gClaimed, 0);
+        assertEq(max, 100_000e9);
+
+        (uint256 toPercent, uint256 toGClaimed, uint256 toMax) = pohm.terms(to_);
+        assertEq(toPercent, 0);
+        assertEq(toGClaimed, 0);
+        assertEq(toMax, 0);
+
+        vm.prank(alice);
+        pohm.transfer(to_, 1_000);
+
+        (percent, gClaimed, max) = pohm.terms(alice);
+        assertEq(percent, 9_000);
+        assertEq(gClaimed, 0);
+        assertEq(max, 90_000e9);
+
+        (toPercent, toGClaimed, toMax) = pohm.terms(to_);
+        assertEq(toPercent, 1_000);
+        assertEq(toGClaimed, 0);
+        assertEq(toMax, 10_000e9);
+    }
+
+    function test_transferCorrectlyHandlesClaimedAmounts(address to_) public {
+        vm.assume(to_ != alice && to_ != bob);
+
+        // Claim half of max
+        vm.startPrank(alice);
+        dai.approve(address(pohm), 50_000e18);
+        pohm.claim(alice, 50_000e18);
+
+        (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(alice);
+        assertEq(percent, 10_000);
+        assertEq(gClaimed, 500e18);
+        assertEq(max, 100_000e9);
+
+        (uint256 toPercent, uint256 toGClaimed, uint256 toMax) = pohm.terms(to_);
+        assertEq(toPercent, 0);
+        assertEq(toGClaimed, 0);
+        assertEq(toMax, 0);
+
+        // Transfer half of claim
+        vm.prank(alice);
+        pohm.transfer(to_, 5_000);
+
+        (percent, gClaimed, max) = pohm.terms(alice);
+        assertEq(percent, 5_000);
+        assertEq(gClaimed, 250e18);
+        assertEq(max, 50_000e9);
+
+        (toPercent, toGClaimed, toMax) = pohm.terms(to_);
+        assertEq(toPercent, 5_000);
+        assertEq(toGClaimed, 250e18);
+        assertEq(toMax, 50_000e9);
+    }
+
+    function test_transferDoesNotIntroduceAdditionalClaims(address to_) public {
+        vm.assume(to_ != alice && to_ != bob);
+
+        // Claim max amount
+        vm.startPrank(alice);
+        dai.approve(address(pohm), 100_000e18);
+        pohm.claim(alice, 100_000e18);
+
+        (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(alice);
+        assertEq(percent, 10_000);
+        assertEq(gClaimed, 1000e18);
+        assertEq(max, 100_000e9);
+
+        (uint256 toPercent, uint256 toGClaimed, uint256 toMax) = pohm.terms(to_);
+        assertEq(toPercent, 0);
+        assertEq(toGClaimed, 0);
+        assertEq(toMax, 0);
+
+        // Transfer half of claim
+        pohm.transfer(to_, 5_000);
+
+        (percent, gClaimed, max) = pohm.terms(alice);
+        assertEq(percent, 5_000);
+        assertEq(gClaimed, 500e18);
+        assertEq(max, 50_000e9);
+
+        (toPercent, toGClaimed, toMax) = pohm.terms(to_);
+        assertEq(toPercent, 5_000);
+        assertEq(toGClaimed, 500e18);
+        assertEq(toMax, 50_000e9);
+
+        // Alice can't claim more
+        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested()");
+        vm.expectRevert(err);
+        pohm.claim(alice, 100_000e18);
+        vm.stopPrank();
+
+        // to_ can't claim more
+        vm.startPrank(to_);
+        vm.expectRevert(err);
+        pohm.claim(to_, 100_000e18);
+        vm.stopPrank();
+    }
+
     /// [X]  pushWalletChange
     ///     [X]  cannot be called by someone without a claim
     ///     [X]  flags a wallet change for the user
