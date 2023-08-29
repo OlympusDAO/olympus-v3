@@ -13,18 +13,10 @@ jobs:
     run-ci:
         runs-on: ubuntu-latest
 
-        permissions:
-          # Give the default GITHUB_TOKEN write permission to commit and push the
-          # added or changed files to the repository.
-          contents: write
-          # Give the report code coverage action permission to add a comment to the PR
-          pull-requests: write
-
         steps:
             - uses: actions/checkout@v3
               with:
                   submodules: recursive
-                  ref: ${{ github.head_ref }} # Prevents checkout in detatched HEAD state. The Commit Code Coverage step requires a branch to commit to.
 
             - uses: actions/setup-node@v2
 
@@ -64,21 +56,6 @@ jobs:
             - name: Run Code Coverage
               run: pnpm run test:coverage
 
-            - name: Get branch names
-              id: branch-name
-              uses: tj-actions/branch-names@v7
-
-            - name: Commit Code Coverage
-              uses: stefanzweifel/git-auto-commit-action@v4
-              # Don't commit changes to master or develop branches. Assume they are protected.
-              if: steps.branch-name.outputs.current_branch != 'master' && steps.branch-name.outputs.current_branch != 'develop'
-              with:
-                commit_message: "chore: update code coverage"
-                commit_options: "--no-verify"
-                file_pattern: "lcov.info"
-                skip_dirty_check: false
-                create_branch: false
-
             - name: Add Artifacts
               uses: actions/upload-artifact@v3
               with:
@@ -86,7 +63,8 @@ jobs:
                 path: lcov.info
               
             - name: Report Code Coverage
-              uses: kefasjw/lcov-pull-request-report@v1
+              uses: zgosalvez/github-actions-report-lcov@v3
               with:
-                lcov-file: lcov.info
+                coverage-files: lcov.info
                 github-token: ${{ secrets.GITHUB_TOKEN }}
+                update-comment: true
