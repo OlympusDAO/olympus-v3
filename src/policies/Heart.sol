@@ -47,8 +47,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     // Policies
     IOperator public operator;
 
-    event RandomEvent();
-
     //============================================================================================//
     //                                      POLICY SETUP                                          //
     //============================================================================================//
