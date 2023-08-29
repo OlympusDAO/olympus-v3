@@ -60,6 +60,13 @@ contract OperatorTest is Test {
     BondCallback internal callback;
     RolesAdmin internal rolesAdmin;
 
+    event Swap(
+        ERC20 indexed tokenIn_,
+        ERC20 indexed tokenOut_,
+        uint256 amountIn_,
+        uint256 amountOut_
+    );
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -260,6 +267,10 @@ contract OperatorTest is Test {
         /// Calculate expected difference
         uint256 highWallPrice = range.price(true, true);
         uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * highWallPrice);
+        uint256 wrappedReserveBalanceBefore = wrappedReserve.balanceOf(address(treasury));
+
+        vm.expectEmit(false, false, false, true);
+        emit Swap(reserve, ohm, amountIn, expAmountOut);
 
         /// Swap at the high wall
         vm.prank(alice);
@@ -272,6 +283,7 @@ contract OperatorTest is Test {
         assertEq(endCapacity, startCapacity - amountOut);
         assertEq(ohm.balanceOf(alice), ohmBalance + amountOut);
         assertEq(reserve.balanceOf(alice), reserveBalance - amountIn);
+        assertEq(wrappedReserve.balanceOf(address(treasury)), wrappedReserveBalanceBefore + amountIn);
     }
 
     function testCorrectness_swapLowWall() public {
@@ -288,6 +300,10 @@ contract OperatorTest is Test {
         /// Calculate expected difference
         uint256 lowWallPrice = range.price(true, false);
         uint256 expAmountOut = amountIn.mulDiv(1e18 * lowWallPrice, 1e9 * 1e18);
+        uint256 wrappedReserveBalanceBefore = wrappedReserve.balanceOf(address(treasury));
+
+        vm.expectEmit(false, false, false, true);
+        emit Swap(ohm, reserve, amountIn, expAmountOut);
 
         /// Swap at the high wall
         vm.prank(alice);
@@ -300,6 +316,7 @@ contract OperatorTest is Test {
         assertEq(endCapacity, startCapacity - amountOut);
         assertEq(ohm.balanceOf(alice), ohmBalance - amountIn);
         assertEq(reserve.balanceOf(alice), reserveBalance + amountOut);
+        assertEq(wrappedReserve.balanceOf(address(treasury)), wrappedReserveBalanceBefore - expAmountOut);
     }
 
     function testCorrectness_highWallBreaksAtThreshold() public {
@@ -471,7 +488,7 @@ contract OperatorTest is Test {
         expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
         minAmountOut = expAmountOut + 1;
 
-        /// Try to swap at low wall, expect to fail
+        /// Try to swap at high wall, expect to fail
         err = abi.encodeWithSignature(
             "Operator_AmountLessThanMinimum(uint256,uint256)",
             expAmountOut,
