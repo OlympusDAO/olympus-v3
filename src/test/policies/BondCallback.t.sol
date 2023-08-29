@@ -536,7 +536,7 @@ contract BondCallbackTest is Test {
     /// [X] batchToTreasury
 
     function testCorrectness_whitelist() public {
-        // Create two new markets to test whitelist functionality
+        // Create three new markets to test whitelist functionality
         uint256 wlOne = createMarket(reserve, ohm, 0, 1, 3);
         uint256 wlTwo = createMarket(ohm, nakedReserve, 1, 0, 3);
         uint256 wlThree = createMarket(ohm, wrappedReserve, 1, 0, 3);
@@ -554,17 +554,52 @@ contract BondCallbackTest is Test {
         // Cache initial approval
         uint256 initApproval = minter.mintApproval(address(callback));
 
+        // Cache approvals
+        uint256 previousReserveWithdrawApproval = treasury.withdrawApproval(
+            address(callback),
+            reserve
+        );
+        uint256 previousNakedReserveWithdrawApproval = treasury.withdrawApproval(
+            address(callback),
+            nakedReserve
+        );
+        uint256 previousWrappedReserveWithdrawApproval = treasury.withdrawApproval(
+            address(callback),
+            wrappedReserve
+        );
+        uint256 previousMintApproval = minter.mintApproval(address(callback));
+
         // Whitelist the first bond market from the policy address
         vm.prank(policy);
         callback.whitelist(address(teller), wlOne);
 
         // Check whitelist is applied
         assert(callback.approvedMarkets(address(teller), wlOne));
-        assertGt(minter.mintApproval(address(callback)), 0);
+        assertEq(minter.mintApproval(address(callback)), previousMintApproval + auctioneer.currentCapacity(wlOne));
+
+        // Payout token is OHM, so no change in withdraw approval
+        assertEq(treasury.withdrawApproval(address(callback), reserve), previousReserveWithdrawApproval);
+        assertEq(treasury.withdrawApproval(address(callback), nakedReserve), previousNakedReserveWithdrawApproval);
+        assertEq(treasury.withdrawApproval(address(callback), wrappedReserve), previousWrappedReserveWithdrawApproval);
 
         // -- Whitelist 2:
         // Cache initial approval
         initApproval = treasury.withdrawApproval(address(callback), nakedReserve);
+
+        // Cache approvals
+        previousReserveWithdrawApproval = treasury.withdrawApproval(
+            address(callback),
+            reserve
+        );
+        previousNakedReserveWithdrawApproval = treasury.withdrawApproval(
+            address(callback),
+            nakedReserve
+        );
+        previousWrappedReserveWithdrawApproval = treasury.withdrawApproval(
+            address(callback),
+            wrappedReserve
+        );
+        previousMintApproval = minter.mintApproval(address(callback));
 
         // Whitelist the second bond market from the operator address
         vm.prank(address(operator));
@@ -572,11 +607,31 @@ contract BondCallbackTest is Test {
 
         // Check whitelist is applied
         assert(callback.approvedMarkets(address(teller), wlTwo));
-        assertGt(treasury.withdrawApproval(address(callback), nakedReserve), 0);
+        assertEq(minter.mintApproval(address(callback)), previousMintApproval);
+
+        // Payout token is nakedReserve, so it has a change in withdraw approval
+        assertEq(treasury.withdrawApproval(address(callback), reserve), previousReserveWithdrawApproval);
+        assertEq(treasury.withdrawApproval(address(callback), nakedReserve), previousNakedReserveWithdrawApproval + auctioneer.currentCapacity(wlTwo));
+        assertEq(treasury.withdrawApproval(address(callback), wrappedReserve), previousWrappedReserveWithdrawApproval);
 
         // -- Whitelist 3:
         // Cache initial approval
         initApproval = treasury.withdrawApproval(address(callback), wrappedReserve);
+
+        // Cache approvals
+        previousReserveWithdrawApproval = treasury.withdrawApproval(
+            address(callback),
+            reserve
+        );
+        previousNakedReserveWithdrawApproval = treasury.withdrawApproval(
+            address(callback),
+            nakedReserve
+        );
+        previousWrappedReserveWithdrawApproval = treasury.withdrawApproval(
+            address(callback),
+            wrappedReserve
+        );
+        previousMintApproval = minter.mintApproval(address(callback));
 
         // Whitelist the second bond market from the operator address
         vm.prank(address(operator));
@@ -584,7 +639,12 @@ contract BondCallbackTest is Test {
 
         // Check whitelist is applied
         assert(callback.approvedMarkets(address(teller), wlThree));
-        assertGt(treasury.withdrawApproval(address(callback), wrappedReserve), 0);
+        assertEq(minter.mintApproval(address(callback)), previousMintApproval);
+
+        // Payout token is wrappedReserve, so it has a change in withdraw approval
+        assertEq(treasury.withdrawApproval(address(callback), reserve), previousReserveWithdrawApproval);
+        assertEq(treasury.withdrawApproval(address(callback), nakedReserve), previousNakedReserveWithdrawApproval);
+        assertEq(treasury.withdrawApproval(address(callback), wrappedReserve), previousWrappedReserveWithdrawApproval + wrappedReserve.previewWithdraw(auctioneer.currentCapacity(wlThree)));
     }
 
     function testCorrectness_blacklist() public {
