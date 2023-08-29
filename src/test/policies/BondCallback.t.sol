@@ -575,22 +575,31 @@ contract BondCallbackTest is Test {
 
         // Check whitelist is applied
         assert(callback.approvedMarkets(address(teller), wlOne));
-        assertEq(minter.mintApproval(address(callback)), previousMintApproval + auctioneer.currentCapacity(wlOne));
+        assertEq(
+            minter.mintApproval(address(callback)),
+            previousMintApproval + auctioneer.currentCapacity(wlOne)
+        );
 
         // Payout token is OHM, so no change in withdraw approval
-        assertEq(treasury.withdrawApproval(address(callback), reserve), previousReserveWithdrawApproval);
-        assertEq(treasury.withdrawApproval(address(callback), nakedReserve), previousNakedReserveWithdrawApproval);
-        assertEq(treasury.withdrawApproval(address(callback), wrappedReserve), previousWrappedReserveWithdrawApproval);
+        assertEq(
+            treasury.withdrawApproval(address(callback), reserve),
+            previousReserveWithdrawApproval
+        );
+        assertEq(
+            treasury.withdrawApproval(address(callback), nakedReserve),
+            previousNakedReserveWithdrawApproval
+        );
+        assertEq(
+            treasury.withdrawApproval(address(callback), wrappedReserve),
+            previousWrappedReserveWithdrawApproval
+        );
 
         // -- Whitelist 2:
         // Cache initial approval
         initApproval = treasury.withdrawApproval(address(callback), nakedReserve);
 
         // Cache approvals
-        previousReserveWithdrawApproval = treasury.withdrawApproval(
-            address(callback),
-            reserve
-        );
+        previousReserveWithdrawApproval = treasury.withdrawApproval(address(callback), reserve);
         previousNakedReserveWithdrawApproval = treasury.withdrawApproval(
             address(callback),
             nakedReserve
@@ -610,19 +619,25 @@ contract BondCallbackTest is Test {
         assertEq(minter.mintApproval(address(callback)), previousMintApproval);
 
         // Payout token is nakedReserve, so it has a change in withdraw approval
-        assertEq(treasury.withdrawApproval(address(callback), reserve), previousReserveWithdrawApproval);
-        assertEq(treasury.withdrawApproval(address(callback), nakedReserve), previousNakedReserveWithdrawApproval + auctioneer.currentCapacity(wlTwo));
-        assertEq(treasury.withdrawApproval(address(callback), wrappedReserve), previousWrappedReserveWithdrawApproval);
+        assertEq(
+            treasury.withdrawApproval(address(callback), reserve),
+            previousReserveWithdrawApproval
+        );
+        assertEq(
+            treasury.withdrawApproval(address(callback), nakedReserve),
+            previousNakedReserveWithdrawApproval + auctioneer.currentCapacity(wlTwo)
+        );
+        assertEq(
+            treasury.withdrawApproval(address(callback), wrappedReserve),
+            previousWrappedReserveWithdrawApproval
+        );
 
         // -- Whitelist 3:
         // Cache initial approval
         initApproval = treasury.withdrawApproval(address(callback), wrappedReserve);
 
         // Cache approvals
-        previousReserveWithdrawApproval = treasury.withdrawApproval(
-            address(callback),
-            reserve
-        );
+        previousReserveWithdrawApproval = treasury.withdrawApproval(address(callback), reserve);
         previousNakedReserveWithdrawApproval = treasury.withdrawApproval(
             address(callback),
             nakedReserve
@@ -642,9 +657,19 @@ contract BondCallbackTest is Test {
         assertEq(minter.mintApproval(address(callback)), previousMintApproval);
 
         // Payout token is wrappedReserve, so it has a change in withdraw approval
-        assertEq(treasury.withdrawApproval(address(callback), reserve), previousReserveWithdrawApproval);
-        assertEq(treasury.withdrawApproval(address(callback), nakedReserve), previousNakedReserveWithdrawApproval);
-        assertEq(treasury.withdrawApproval(address(callback), wrappedReserve), previousWrappedReserveWithdrawApproval + wrappedReserve.previewWithdraw(auctioneer.currentCapacity(wlThree)));
+        assertEq(
+            treasury.withdrawApproval(address(callback), reserve),
+            previousReserveWithdrawApproval
+        );
+        assertEq(
+            treasury.withdrawApproval(address(callback), nakedReserve),
+            previousNakedReserveWithdrawApproval
+        );
+        assertEq(
+            treasury.withdrawApproval(address(callback), wrappedReserve),
+            previousWrappedReserveWithdrawApproval +
+                wrappedReserve.previewWithdraw(auctioneer.currentCapacity(wlThree))
+        );
     }
 
     function testCorrectness_blacklist() public {
