@@ -111,6 +111,8 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         // Calculate the reward
         uint256 reward = currentReward();
 
+        
+
         // Update the last beat timestamp
         // Ensure that update frequency doesn't change, but do not allow multiple beats if one is skipped
         lastBeat = currentTime - ((currentTime - lastBeat) % frequency());
