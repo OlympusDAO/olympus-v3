@@ -398,6 +398,14 @@ contract HeartTest is Test {
         assertEq(endBalance, startBalance + 1e18);
     }
 
+    function testFail_setRewardAuctionParams_auctionDuration() public {
+        // Try to set a new auction duration greater than the PRICE observation frequency, expect revert
+        bytes memory err = abi.encodeWithSignature("Heart_InvalidParams()");
+        vm.expectRevert(err);
+        vm.prank(policy);
+        heart.setRewardAuctionParams(rewardToken, uint256(10e18), PRICE_FREQUENCY + 10);
+    }
+
     function testCorrectness_withdrawUnspentRewards() public {
         // Set timestamp so that a heart beat is available
         vm.warp(block.timestamp + heart.frequency());
