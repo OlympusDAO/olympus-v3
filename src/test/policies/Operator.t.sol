@@ -1974,6 +1974,7 @@ contract OperatorTest is Test {
         assertTrue(!range.active(true));
         assertTrue(!range.active(false));
         assertEq(treasury.withdrawApproval(address(operator), reserve), 0);
+        assertEq(treasury.withdrawApproval(address(operator), wrappedReserve), 0);
         assertEq(range.price(false, false), 0);
         assertEq(range.price(true, false), 0);
         assertEq(range.price(false, true), 0);
@@ -1990,7 +1991,8 @@ contract OperatorTest is Test {
         assertTrue(operator.active());
         assertTrue(range.active(true));
         assertTrue(range.active(false));
-        assertEq(treasury.withdrawApproval(address(operator), reserve), range.capacity(false));
+        assertEq(treasury.withdrawApproval(address(operator), reserve), 0);
+        assertEq(treasury.withdrawApproval(address(operator), wrappedReserve), range.capacity(false));
         assertGt(range.price(false, false), 0);
         assertGt(range.price(true, false), 0);
         assertGt(range.price(false, true), 0);
