@@ -11,4 +11,3 @@ src/test/sim/sims/*.t.sol
 .env_deploy*
 docs/
 coverage/
-lcov*.info

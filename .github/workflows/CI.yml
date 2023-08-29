@@ -12,10 +12,17 @@ env:
 jobs:
     run-ci:
         runs-on: ubuntu-latest
+
+        permissions:
+          # Give the default GITHUB_TOKEN write permission to commit and push the
+          # added or changed files to the repository.
+          contents: write
+
         steps:
             - uses: actions/checkout@v3
               with:
                   submodules: recursive
+                  ref: ${{ github.head_ref }} # Prevents checkout in detatched HEAD state. The Commit Code Coverage step requires a branch to commit to.
 
             - uses: actions/setup-node@v2
 
@@ -55,13 +62,23 @@ jobs:
             - name: Run Code Coverage
               run: pnpm run test:coverage
 
-            - uses: actions/upload-artifact@v3
+            - name: Commit Code Coverage
+              uses: stefanzweifel/git-auto-commit-action@v4
               with:
-                name: lcov-pruned.info
-                path: lcov-pruned.info
+                commit_message: "chore: update code coverage"
+                commit_options: "--no-verify"
+                file_pattern: "lcov.info"
+                skip_dirty_check: false
+                create_branch: false
+
+            - name: Add Artifacts
+              uses: actions/upload-artifact@v3
+              with:
+                name: lcov.info
+                path: lcov.info
               
             - name: Report Code Coverage
               uses: kefasjw/lcov-pull-request-report@v1
               with:
-                lcov-file: lcov-pruned.info
+                lcov-file: lcov.info
                 github-token: ${{ secrets.GITHUB_TOKEN }}
