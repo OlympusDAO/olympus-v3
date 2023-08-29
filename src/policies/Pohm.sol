@@ -8,7 +8,7 @@ import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import "src/Kernel.sol";
 
 // Import interfaces
-// import {IPohm} from "policies/interfaces/IPohm.sol";
+import {IPohm, IPreviousPohm} from "policies/interfaces/IPohm.sol";
 import {IgOHM} from "interfaces/IgOHM.sol";
 
 // Import types
@@ -17,33 +17,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 // Import libraries
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
-interface IpOHM {
-    function terms(address account_) external view returns (Pohm.Term memory);
-}
-
-contract Pohm is Policy, RolesConsumer {
+contract Pohm is IPohm, Policy, RolesConsumer {
     using TransferHelper for ERC20;
-
-    // ========= ERRORS ========= //
-
-    error POHM_NoClaim();
-    error POHM_AlreadyHasClaim();
-    error POHM_NoWalletChange();
-    error POHM_AllocationLimitViolation();
-    error POHM_ClaimMoreThanVested();
-    error POHM_ClaimMoreThanMax();
-
-    // ========= EVENTS ========= //
-
-    event Claim(address indexed account, uint256 amount, bool stake);
-
-    // ========= DATA STRUCTURES ========= //
-
-    struct Term {
-        uint256 percent; // PRECISION = 1_000_000 (i.e. 5000 = 0.5%)
-        uint256 gClaimed; // Rebase agnostic # of tokens claimed
-        uint256 max; // Maximum nominal OHM amount claimable
-    }
 
     // ========= STATE VARIABLES ========= //
 
@@ -52,7 +27,7 @@ contract Pohm is Policy, RolesConsumer {
     TRSRYv1 public TRSRY;
 
     // Olympus Contracts
-    IpOHM public previous; // TODO wrap in some interface
+    IPreviousPohm public previous;
 
     // Tokens
     ERC20 public OHM;
@@ -81,7 +56,7 @@ contract Pohm is Policy, RolesConsumer {
         address dao_,
         uint256 maximumAllocated_
     ) Policy(kernel_) {
-        previous = IpOHM(previous_);
+        previous = IPreviousPohm(previous_);
         OHM = ERC20(ohm_);
         gOHM = IgOHM(gohm_);
         DAI = ERC20(dai_);
@@ -119,8 +94,12 @@ contract Pohm is Policy, RolesConsumer {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
+    /// @inheritdoc IPohm
     function claim(address to_, uint256 amount_) external {
+        // Calculate OHM amount to mint based on DAI amount, current circulating supply, and previously claimed OHM
         uint256 ohmAmount = _claim(amount_);
+
+        // Mint OHM to user
         MINTR.increaseMintApproval(address(this), ohmAmount);
         MINTR.mintOhm(to_, ohmAmount);
     }
@@ -129,32 +108,38 @@ contract Pohm is Policy, RolesConsumer {
     //                                   MANAGEMENT FUNCTIONS                                     //
     //============================================================================================//
 
+    /// @inheritdoc IPohm
     function transfer(address to_, uint256 amount_) external {
         if (terms[msg.sender].percent == 0) revert POHM_NoClaim();
 
+        // Cache storage variables
         Term memory accountTerms = terms[msg.sender];
 
+        // Calculate pro-rata portion of sender's claim terms to transfer
         uint256 percentTransfered = (amount_ * 1e6) / accountTerms.percent;
         uint256 gTransfered = (accountTerms.gClaimed * percentTransfered) / 1e6;
         uint256 maxTransfered = (accountTerms.max * percentTransfered) / 1e6;
 
+        // Reduce sender's claim terms
         accountTerms.percent -= amount_;
         accountTerms.gClaimed -= gTransfered;
         accountTerms.max -= maxTransfered;
         terms[msg.sender] = accountTerms;
 
+        // Increase receiver's claim terms
         terms[to_].percent += amount_;
         terms[to_].gClaimed += gTransfered;
         terms[to_].max += maxTransfered;
     }
 
+    /// @inheritdoc IPohm
     function pushWalletChange(address newAddress_) external {
         if (terms[msg.sender].percent == 0) revert POHM_NoClaim();
         walletChange[msg.sender] = newAddress_;
     }
 
+    /// @inheritdoc IPohm
     function pullWalletChange(address oldAddress_) external {
-        // TODO: Do we need to check that the old address had a non-zero percent claim?
         if (walletChange[oldAddress_] != msg.sender) revert POHM_NoWalletChange();
         if (terms[msg.sender].percent != 0) revert POHM_AlreadyHasClaim();
 
@@ -167,23 +152,30 @@ contract Pohm is Policy, RolesConsumer {
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
 
+    /// @inheritdoc IPohm
     function redeemableFor(address account_) public view returns (uint256) {
+        // Cache storage variables
         Term memory accountTerms = terms[account_];
 
         uint256 circulatingSupply = getCirculatingSupply();
         uint256 accountClaimed = getAccountClaimed(account_);
 
+        // Calculate max amount of OHM that can be claimed based on user's percentage term and current circulating supply
+        // Make sure that this does not exceed the user's max term
         uint256 max = (circulatingSupply * accountTerms.percent) / 1e6;
         max = max > accountTerms.max ? accountTerms.max : max;
 
+        // Return the difference between the max and the amount already claimed
         return max - accountClaimed;
     }
 
-    // Note: This is not the true circulating supply, but it matches that of the previous pOHM contracts
+    /// Note: This is not the true circulating supply, but it matches that of the previous pOHM contracts
+    /// @inheritdoc IPohm
     function getCirculatingSupply() public view returns (uint256) {
         return OHM.totalSupply() - OHM.balanceOf(dao);
     }
 
+    /// @inheritdoc IPohm
     function getAccountClaimed(address account_) public view returns (uint256) {
         Term memory accountTerms = terms[account_];
         return gOHM.balanceFrom(accountTerms.gClaimed);
@@ -193,6 +185,7 @@ contract Pohm is Policy, RolesConsumer {
     //                                       ADMIN FUNCTIONS                                      //
     //============================================================================================//
 
+    /// @inheritdoc IPohm
     function migrate(address[] calldata accounts_) external onlyRole("pohm_admin") {
         uint256 length = accounts_.length;
         for (uint256 i; i < length; ) {
@@ -205,6 +198,7 @@ contract Pohm is Policy, RolesConsumer {
         }
     }
 
+    /// @inheritdoc IPohm
     function setTerms(
         address account_,
         uint256 percent_,
@@ -225,14 +219,18 @@ contract Pohm is Policy, RolesConsumer {
     function _claim(uint256 amount_) internal returns (uint256 toSend) {
         Term memory accountTerms = terms[msg.sender];
 
+        // Value OHM at 1 DAI. So convert 18 decimal DAI value to 9 decimal OHM value
         toSend = (amount_ * 1e9) / 1e18;
 
+        // Make sure user isn't violating claim terms
         if (redeemableFor(msg.sender) < toSend) revert POHM_ClaimMoreThanVested();
         if ((accountTerms.max - getAccountClaimed(msg.sender)) < toSend)
-            revert POHM_ClaimMoreThanMax(); // TODO this is actually redundant since redeemableFor limits to max
+            revert POHM_ClaimMoreThanMax();
 
+        // Increment user's claimed amount based on rebase-agnostic gOHM value
         terms[msg.sender].gClaimed += gOHM.balanceTo(toSend);
 
+        // Pull DAI from user
         DAI.safeTransferFrom(msg.sender, address(TRSRY), amount_);
     }
 }
