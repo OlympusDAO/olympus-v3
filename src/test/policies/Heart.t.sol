@@ -398,7 +398,7 @@ contract HeartTest is Test {
         assertEq(endBalance, startBalance + 1e18);
     }
 
-    function testFail_setRewardAuctionParams_auctionDuration() public {
+    function testReverts_setRewardAuctionParams_auctionDuration() public {
         // Try to set a new auction duration greater than the PRICE observation frequency, expect revert
         bytes memory err = abi.encodeWithSignature("Heart_InvalidParams()");
         vm.expectRevert(err);
