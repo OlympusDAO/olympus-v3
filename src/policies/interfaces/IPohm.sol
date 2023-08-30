@@ -13,8 +13,10 @@ interface IPohm {
 
     // ========= EVENTS ========= //
 
-    event Claim(address indexed account, uint256 amount);
+    event Claim(address indexed account, address indexed to, uint256 amount);
     event Transfer(address indexed from, address indexed to, uint256 amount);
+    event WalletChange(address indexed account, address indexed newAddress, bool isPull);
+    event TermsSet(address indexed account, uint256 percent, uint256 gClaimed, uint256 max);
 
     // ========= DATA STRUCTURES ========= //
 

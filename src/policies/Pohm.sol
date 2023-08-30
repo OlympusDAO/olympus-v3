@@ -102,6 +102,8 @@ contract Pohm is IPohm, Policy, RolesConsumer {
         // Mint OHM to user
         MINTR.increaseMintApproval(address(this), ohmAmount);
         MINTR.mintOhm(to_, ohmAmount);
+
+        emit Claim(msg.sender, to_, amount_);
     }
 
     //============================================================================================//
@@ -130,12 +132,15 @@ contract Pohm is IPohm, Policy, RolesConsumer {
         terms[to_].percent += amount_;
         terms[to_].gClaimed += gTransfered;
         terms[to_].max += maxTransfered;
+
+        emit Transfer(msg.sender, to_, amount_);
     }
 
     /// @inheritdoc IPohm
     function pushWalletChange(address newAddress_) external {
         if (terms[msg.sender].percent == 0) revert POHM_NoClaim();
         walletChange[msg.sender] = newAddress_;
+        emit WalletChange(msg.sender, newAddress_, false);
     }
 
     /// @inheritdoc IPohm
@@ -146,6 +151,8 @@ contract Pohm is IPohm, Policy, RolesConsumer {
         walletChange[oldAddress_] = address(0);
         terms[msg.sender] = terms[oldAddress_];
         delete terms[oldAddress_];
+
+        emit WalletChange(oldAddress_, msg.sender, true);
     }
 
     //============================================================================================//
@@ -210,6 +217,8 @@ contract Pohm is IPohm, Policy, RolesConsumer {
 
         terms[account_] = Term(percent_, gClaimed_, max_);
         totalAllocated += percent_;
+
+        emit TermsSet(account_, percent_, gClaimed_, max_);
     }
 
     //============================================================================================//
