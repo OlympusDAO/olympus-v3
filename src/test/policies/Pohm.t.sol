@@ -287,6 +287,7 @@ contract PohmTest is Test {
         vm.startPrank(alice);
         dai.approve(address(pohm), 50_000e18);
         pohm.claim(alice, 50_000e18);
+        vm.stopPrank();
 
         (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(alice);
         assertEq(percent, 10_000);
