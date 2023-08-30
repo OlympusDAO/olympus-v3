@@ -8,8 +8,8 @@ interface IPohm {
     error POHM_AlreadyHasClaim();
     error POHM_NoWalletChange();
     error POHM_AllocationLimitViolation();
-    error POHM_ClaimMoreThanVested();
-    error POHM_ClaimMoreThanMax();
+    error POHM_ClaimMoreThanVested(uint256 vested_);
+    error POHM_ClaimMoreThanMax(uint256 max_);
 
     // ========= EVENTS ========= //
 
@@ -57,7 +57,7 @@ interface IPohm {
     //============================================================================================//
 
     /// @notice Calculates the current amount a user is eligible to redeem
-    /// @param account_ The account to check the redeemable amount for
+    /// @param  account_ The account to check the redeemable amount for
     /// @return uint256 The amount of OHM the account can redeem
     function redeemableFor(address account_) external view returns (uint256);
 
@@ -66,7 +66,7 @@ interface IPohm {
     function getCirculatingSupply() external view returns (uint256);
 
     /// @notice Calculates the effective amount of OHM claimed taking into consideration rebasing since claim
-    /// @param account_ The account to check the claim for
+    /// @param  account_ The account to check the claim for
     /// @return uint256 The amount of OHM the account has claimed
     function getAccountClaimed(address account_) external returns (uint256);
 

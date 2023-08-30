@@ -176,8 +176,8 @@ contract Pohm is IPohm, Policy, RolesConsumer {
         return max - accountClaimed;
     }
 
-    /// Note: This is not the true circulating supply, but it matches that of the previous pOHM contracts
     /// @inheritdoc IPohm
+    /// @dev        This is not the true circulating supply, but it matches that of the previous pOHM contracts
     function getCirculatingSupply() public view returns (uint256) {
         return OHM.totalSupply() - OHM.balanceOf(dao);
     }
@@ -232,9 +232,11 @@ contract Pohm is IPohm, Policy, RolesConsumer {
         toSend = (amount_ * 1e9) / 1e18;
 
         // Make sure user isn't violating claim terms
-        if (redeemableFor(msg.sender) < toSend) revert POHM_ClaimMoreThanVested();
-        if ((accountTerms.max - getAccountClaimed(msg.sender)) < toSend)
-            revert POHM_ClaimMoreThanMax();
+        uint256 redeemable = redeemableFor(msg.sender);
+        uint256 claimed = getAccountClaimed(msg.sender);
+        if (redeemable < toSend) revert POHM_ClaimMoreThanVested(redeemable);
+        if ((accountTerms.max - claimed) < toSend)
+            revert POHM_ClaimMoreThanMax(accountTerms.max - claimed);
 
         // Increment user's claimed amount based on rebase-agnostic gOHM value
         terms[msg.sender].gClaimed += gOHM.balanceTo(toSend);

@@ -151,7 +151,7 @@ contract PohmTest is Test {
         vm.startPrank(user_);
         dai.approve(address(pohm), 1000e18);
 
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested()");
+        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 0);
         vm.expectRevert(err);
 
         pohm.claim(user_, 100e18);
@@ -163,7 +163,7 @@ contract PohmTest is Test {
 
         dai.approve(address(pohm), 2_500_000e18); // 2.5%
 
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested()");
+        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 100000000000000);
         vm.expectRevert(err);
 
         pohm.claim(alice, 2_500_000e18);
@@ -176,7 +176,7 @@ contract PohmTest is Test {
         dai.approve(address(pohm), 150_000e18);
 
         // TODO revise, this is actually caught by redeemableFor and the ensuing POHM_ClaimMoreThanVested error
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested()");
+        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 100000000000000);
         vm.expectRevert(err);
 
         pohm.claim(alice, 150_000e18);
@@ -346,7 +346,7 @@ contract PohmTest is Test {
         assertEq(toMax, 50_000e9);
 
         // Alice can't claim more
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested()");
+        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 0);
         vm.expectRevert(err);
         pohm.claim(alice, 100_000e18);
         vm.stopPrank();
@@ -396,6 +396,7 @@ contract PohmTest is Test {
     ///     [X]  deletes terms for old wallet
 
     function test_pullWalletCannotBeCalledByUnflaggedWallet(address user_) public {
+        vm.assume(user_ != address(0));
         vm.startPrank(user_);
 
         bytes memory err = abi.encodeWithSignature("POHM_NoWalletChange()");
