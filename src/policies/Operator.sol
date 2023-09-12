@@ -84,24 +84,18 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         uint32[8] memory configParams // [cushionFactor, cushionDuration, cushionDebtBuffer, cushionDepositInterval, reserveFactor, regenWait, regenThreshold, regenObserve] ensure the following holds: regenWait / PRICE.observationFrequency() >= regenObserve - regenThreshold
     ) Policy(kernel_) {
         // Check params are valid
-        if (address(auctioneer_) == address(0) || address(callback_) == address(0))
-            revert Operator_InvalidParams();
-
-        if (configParams[1] > uint256(7 days) || configParams[1] < uint256(1 days))
-            revert Operator_InvalidParams();
-
-        if (configParams[2] < uint32(10e3)) revert Operator_InvalidParams();
-
-        if (configParams[3] < uint32(1 hours) || configParams[3] > configParams[1])
-            revert Operator_InvalidParams();
-
-        if (configParams[0] > ONE_HUNDRED_PERCENT || configParams[0] < ONE_PERCENT)
-            revert Operator_InvalidParams();
-
-        if (configParams[4] > ONE_HUNDRED_PERCENT || configParams[4] < ONE_PERCENT)
-            revert Operator_InvalidParams();
-
         if (
+            address(auctioneer_) == address(0) ||
+            address(callback_) == address(0) ||
+            configParams[1] > uint256(7 days) ||
+            configParams[1] < uint256(1 days) ||
+            configParams[2] < uint32(10e3) ||
+            configParams[3] < uint32(1 hours) ||
+            configParams[3] > configParams[1] ||
+            configParams[0] > ONE_HUNDRED_PERCENT ||
+            configParams[0] < ONE_PERCENT ||
+            configParams[4] > ONE_HUNDRED_PERCENT ||
+            configParams[4] < ONE_PERCENT ||
             configParams[5] < 1 hours ||
             configParams[6] > configParams[7] ||
             configParams[7] == uint32(0) ||
@@ -195,11 +189,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     ///      The PRICE module checks new price feed data for staleness when storing a new observations,
     ///      whereas this check ensures that the range data is using a recent observation.
     modifier onlyWhileActive() {
+        _onlyWhileActive();
+        _;
+    }
+
+    function _onlyWhileActive() internal {
         if (
             !active ||
             uint48(block.timestamp) > PRICE.lastObservationTime() + 3 * PRICE.observationFrequency()
         ) revert Operator_Inactive();
-        _;
     }
 
     // =========  HEART FUNCTIONS ========= //
@@ -285,7 +283,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         ERC20 tokenIn_,
         uint256 amountIn_,
         uint256 minAmountOut_
-    ) external override onlyWhileActive nonReentrant returns (uint256 amountOut) {
+    ) external override nonReentrant onlyWhileActive returns (uint256 amountOut) {
         if (tokenIn_ == ohm) {
             // Revert if lower wall is inactive
             if (!RANGE.active(false)) revert Operator_WallDown();
@@ -313,11 +311,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Burn OHM
             MINTR.burnOhm(address(this), amountIn_);
 
-            // Calculate amount of wrappedReserve to withdraw from the TRSRY
-            uint256 amountWrapped = wrappedReserve.previewWithdraw(amountOut);
-
-            // Withdraw wrapped reserves from TRSRY
-            TRSRY.withdrawReserves(address(this), wrappedReserve, amountWrapped);
+            // Calculate amount of wrappedReserve equivalent to amountOut
+            // and withdraw wrapped reserves from TRSRY
+            TRSRY.withdrawReserves(
+                address(this),
+                wrappedReserve,
+                wrappedReserve.previewWithdraw(amountOut)
+            );
 
             // Unwrap reserves and transfer to sender
             wrappedReserve.withdraw(amountOut, msg.sender, address(this));
@@ -861,9 +861,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IOperator
     function fullCapacity(bool high_) public view override returns (uint256) {
-        uint256 wrappedReservesInTreasury = TRSRY.getReserveBalance(wrappedReserve);
-        uint256 reservesInTreasury = wrappedReserve.previewRedeem(wrappedReservesInTreasury) +
-            TRSRY.getReserveBalance(reserve);
+        uint256 reservesInTreasury = wrappedReserve.previewRedeem(
+            TRSRY.getReserveBalance(wrappedReserve)
+        ) + TRSRY.getReserveBalance(reserve);
         uint256 capacity = (reservesInTreasury * _config.reserveFactor) / ONE_HUNDRED_PERCENT;
         if (high_) {
             capacity =
