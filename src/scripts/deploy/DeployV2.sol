@@ -757,6 +757,7 @@ contract OlympusDeploy is Script {
         // Deploy Clearinghouse policy
         vm.broadcast();
         clearinghouse = new Clearinghouse({
+            ohm_: address(ohm),
             gohm_: address(gohm),
             staking_: address(staking),
             sdai_: address(wrappedReserve),
