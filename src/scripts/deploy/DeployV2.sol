@@ -43,6 +43,7 @@ import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
+import {Pohm} from "policies/Pohm.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
@@ -84,11 +85,13 @@ contract OlympusDeploy is Script {
     BLVaultManagerLusd public lusdVaultManager;
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
+    Pohm public pohm;
 
     /// Construction variables
 
     /// Token addresses
     ERC20 public ohm;
+    ERC20 public gohm;
     ERC20 public reserve;
     ERC20 public wsteth;
     ERC20 public lusd;
@@ -111,6 +114,7 @@ contract OlympusDeploy is Script {
     /// External contracts
     address public staking;
     address public gnosisEasyAuction;
+    address public previousPohm;
 
     /// Balancer Contracts
     IVault public balancerVault;
@@ -159,12 +163,14 @@ contract OlympusDeploy is Script {
         selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
+        selectorMap["Pohm"] = this._deployPohm.selector;
 
         // Load environment addresses
         env = vm.readFile("./src/scripts/env.json");
 
         // Non-bophades contracts
         ohm = ERC20(envAddress("olympus.legacy.OHM"));
+        gohm = ERC20(envAddress("olympus.legacy.gOHM"));
         reserve = ERC20(envAddress("external.tokens.DAI"));
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
         aura = ERC20(envAddress("external.tokens.AURA"));
@@ -187,6 +193,7 @@ contract OlympusDeploy is Script {
         );
         staking = envAddress("olympus.legacy.Staking");
         gnosisEasyAuction = envAddress("external.gnosis.EasyAuction");
+        previousPohm = envAddress("olympus.legacy.OldPohm");
         balancerVault = IVault(envAddress("external.balancer.BalancerVault"));
         balancerHelper = IBalancerHelper(envAddress("external.balancer.BalancerHelper"));
         ohmWstethPool = IBasePool(envAddress("external.balancer.OhmWstethPool"));
@@ -222,12 +229,15 @@ contract OlympusDeploy is Script {
         bridge = CrossChainBridge(envAddress("olympus.policies.CrossChainBridge"));
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
+        pohm = Pohm(envAddress("olympus.policies.POHM"));
 
         // Load deployment data
         string memory data = vm.readFile(deployFilePath);
 
         // Parse deployment sequence and names
-        string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
+        // string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
+        string[] memory names = new string[](1);
+        names[0] = "Pohm";
         uint256 len = names.length;
 
         // Iterate through deployment sequence and set deployment args
@@ -726,6 +736,18 @@ contract OlympusDeploy is Script {
         console2.log("Bridge deployed at:", address(bridge));
 
         return address(bridge);
+    }
+
+    function _deployPohm(bytes memory args) public returns (address) {
+        // Decode arguments for pOHM policy
+        (address dao, uint256 maximumAllocated) = abi.decode(args, (address, uint256));
+
+        // Deploy pOHM policy
+        vm.broadcast();
+        pohm = new Pohm(kernel, previousPohm, address(ohm), address(gohm), address(reserve), dao, maximumAllocated);
+        console2.log("pOHM deployed at:", address(pohm));
+
+        return address(pohm);
     }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
