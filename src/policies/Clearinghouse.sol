@@ -60,7 +60,7 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     // --- PARAMETER BOUNDS ------------------------------------------
 
     uint256 public constant INTEREST_RATE = 5e15; // 0.5% anually
-    uint256 public constant LOAN_TO_COLLATERAL = 3000e18; // 3,000 DAI/gOHM
+    uint256 public constant LOAN_TO_COLLATERAL = 289292e16; // 2,892.92 DAI/gOHM
     uint256 public constant DURATION = 121 days; // Four months
     uint256 public constant FUND_CADENCE = 7 days; // One week
     uint256 public constant FUND_AMOUNT = 18_000_000e18; // 18 million
@@ -172,6 +172,8 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     }
 
     /// @notice Extend the loan expiry by repaying the extension interest in advance.
+    ///         The extension cost is paid by the caller. If a third-party executes the
+    ///         extension, the loan period is extended, but the borrower debt does not increase.
     /// @param  cooler_ holding the loan to be extended.
     /// @param  loanID_ index of loan in loans[].
     /// @param  times_ Amount of times that the fixed-term loan duration is extended.
@@ -184,18 +186,10 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         // Ensure Clearinghouse is the lender.
         if (loan.lender != address(this)) revert NotLender();
 
-        uint256 interestNew;
-        if (loan.interestDue == 0) {
-            // If interest has manually been repaid, user only pays for the subsequent extensions.
-            interestNew = interestForLoan(loan.principal, loan.request.duration * (times_ - 1));
-            // Receivables need to be updated.
-            interestReceivables += interestForLoan(loan.principal, loan.request.duration);
-        } else {
-            // Otherwise, user pays for all the extensions.
-            interestNew = interestForLoan(loan.principal, loan.request.duration * times_);
-        }
+        // Calculate extension interest based on the remaining principal.
+        uint256 interestBase = interestForLoan(loan.principal, loan.request.duration);
         // Transfer in extension interest from the caller.
-        dai.transferFrom(msg.sender, loan.recipient, interestNew);
+        dai.transferFrom(msg.sender, loan.recipient, interestBase * times_);
 
         // Signal to cooler that loan can be extended.
         cooler_.extendLoanTerms(loanID_, times_);
@@ -226,7 +220,6 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
                 coolers_[i]
             ).claimDefaulted(loans_[i]);
 
-            // TODO make sure recievables is updated properly with interest split
             unchecked {
                 // Cannot overflow due to max supply limits for both tokens
                 totalPrincipal += principal;
@@ -268,13 +261,8 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
 
         // Reward keeper.
         gohm.transfer(msg.sender, keeperRewards);
-
-        // Unstake and burn the collateral of the defaulted loans.
-        gohm.approve(address(staking), totalCollateral - keeperRewards);
-        MINTR.burnOhm(
-            address(this),
-            staking.unstake(address(this), totalCollateral - keeperRewards, false, false)
-        );
+        // Burn the outstanding collateral of defaulted loans.
+        burn();
     }
 
     // --- CALLBACKS -----------------------------------------------------
@@ -319,6 +307,10 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         if (fundTime > block.timestamp) return false;
         fundTime += FUND_CADENCE;
 
+        // Sweep DAI into DSR if necessary.
+        uint256 idle = dai.balanceOf(address(this));
+        if (idle != 0) _sweepIntoDSR(idle);
+
         uint256 daiBalance = sdai.maxWithdraw(address(this));
         uint256 outstandingDebt = TRSRY.reserveDebt(dai, address(this));
         // Rebalance funds on hand with treasury's reserves.
@@ -338,10 +330,6 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
             TRSRY.increaseWithdrawApproval(address(this), sdai, sdaiAmount);
             TRSRY.withdrawReserves(address(this), sdai, sdaiAmount);
 
-            // Sweep DAI into DSR if necessary.
-            uint256 idle = dai.balanceOf(address(this));
-            if (idle != 0) _sweepIntoDSR(idle);
-
             // Log the event.
             emit Rebalance(false, fundAmount);
         } else if (daiBalance > maxFundAmount) {
@@ -357,7 +345,6 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
             // Since TRSRY holds sDAI, a conversion must be done before
             // sending sDAI back.
             uint256 sdaiAmount = sdai.previewWithdraw(defundAmount);
-            sdai.approve(address(TRSRY), sdaiAmount);
             sdai.transfer(address(TRSRY), sdaiAmount);
 
             // Log the event.
@@ -409,10 +396,10 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         emit Defund(address(token_), amount_);
     }
 
-    /// @notice Burn any gOHM defaulted using the Cooler instead of the Clearinghouse.
-    function burn() external {
+    /// @notice Public function to burn gOHM.
+    /// @dev    Can be used to burn any gOHM defaulted using the Cooler instead of the Clearinghouse.
+    function burn() public {
         uint256 gohmBalance = gohm.balanceOf(address(this));
-
         // Unstake and burn gOHM holdings.
         gohm.approve(address(staking), gohmBalance);
         MINTR.burnOhm(address(this), staking.unstake(address(this), gohmBalance, false, false));
@@ -436,6 +423,7 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     /// @notice Reactivate the contract.
     function reactivate() external onlyRole("cooler_overseer") {
         active = true;
+        fundTime = block.timestamp;
 
         emit Reactivate();
     }
