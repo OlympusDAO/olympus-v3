@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
@@ -16,7 +16,6 @@ interface IInverseBondDepo {
 
 /// @title Olympus Legacy Burner Policy
 contract LegacyBurner is Policy {
-    using TransferHelper for ERC20;
 
     // ========= ERRORS ========= //
 
@@ -30,7 +29,7 @@ contract LegacyBurner is Policy {
     MINTRv1 internal MINTR;
 
     // Token
-    ERC20 public immutable ohm;
+    OlympusERC20Token public immutable ohm;
 
     // Burn Targets
     address public bondManager;
@@ -47,7 +46,7 @@ contract LegacyBurner is Policy {
 
     constructor(
         Kernel kernel_,
-        ERC20 ohm_,
+        OlympusERC20Token ohm_,
         address bondManager_,
         address inverseBondDepo_,
         uint256 maxRewardRate_,
@@ -59,7 +58,6 @@ contract LegacyBurner is Policy {
         inverseBondDepo = inverseBondDepo_;
 
         // Rewards config
-        lastRewardTime = block.timestamp;
         maxRewardRate = maxRewardRate_;
         duration = duration_;
     }
@@ -71,8 +69,11 @@ contract LegacyBurner is Policy {
 
         MINTR = MINTRv1(getModuleAddress(dependencies[0]));
 
+        // Set last reward time at time of activation
+        lastRewardTime = block.timestamp;
+
         // Approve MINTR to burn OHM
-        ohm.safeApprove(address(MINTR), type(uint256).max);
+        ohm.increaseAllowance(address(MINTR), type(uint256).max);
     }
 
     /// @inheritdoc Policy
@@ -87,6 +88,8 @@ contract LegacyBurner is Policy {
     //============================================================================================//
 
     /// @notice Burn OHM from desired sources, send rewards to the caller
+    /// @dev    Calculates linearly increasing reward (up to cap) for the amount of OHM burned, burns OHM from
+    ///         BondManager and InverseBondDepo, and mints rewards to the caller
     function burn() external {
         // Determine balance of burnable OHM
         uint256 bondManagerOhm = ohm.balanceOf(bondManager);
@@ -110,6 +113,8 @@ contract LegacyBurner is Policy {
     //                                       INTERNAL FUNCTIONS                                   //
     //============================================================================================//
 
+    /// @notice Calculates the reward as a percentage of a given amount of OHM being burned. Reward rate linearly increases from the
+    ///         last reward time to the current time, up to the max reward rate.
     function _getReward(uint256 amount) internal view returns (uint256 reward) {
         // Calculate reward rate
         uint256 timeElapsed = block.timestamp - lastRewardTime;
@@ -125,14 +130,18 @@ contract LegacyBurner is Policy {
         reward = amount * rewardRate / 100_000_000;
     }
 
+    /// @notice Burns OHM from the bond manager
+    /// @dev    An infinite approval (via Policy MS) for this contract to spend OHM from the bond manager is required
     function _burnBondManagerOhm(uint256 amount_) internal {
         // Transfer from BondManager
-        ohm.safeTransferFrom(bondManager, address(this), amount_);
+        ohm.transferFrom(bondManager, address(this), amount_);
 
         // Burn the OHM
         MINTR.burnOhm(address(this), amount_);
     }
 
+    /// @notice Burns OHM from the legacy inverse bond depository
+    /// @dev    The only way to burn is to burn the entire amount of OHM in the contract, cannot transfer here first
     function _burnInverseBondDepoOhm() internal {
         // Cast address to interface
         IInverseBondDepo inverseBondDepo_ = IInverseBondDepo(inverseBondDepo);

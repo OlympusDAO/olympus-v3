@@ -26,3 +26,42 @@ contract MockLegacyAuthority is IOlympusAuthority {
         return kernel;
     }
 }
+
+contract MockLegacyAuthorityV2 is IOlympusAuthority {
+    address internal governorAddr;
+    address internal guardianAddr;
+    address internal policyAddr;
+    address internal vaultAddr;
+
+    constructor(
+        address governor_,
+        address guardian_,
+        address policy_,
+        address vault_
+    ) {
+        governorAddr = governor_;
+        guardianAddr = guardian_;
+        policyAddr = policy_;
+        vaultAddr = vault_;
+    }
+
+    function governor() external view returns (address) {
+        return governorAddr;
+    }
+
+    function guardian() external view returns (address) {
+        return guardianAddr;
+    }
+
+    function policy() external view returns (address) {
+        return policyAddr;
+    }
+
+    function vault() external view returns (address) {
+        return vaultAddr;
+    }
+
+    function setVault(address newVault_) external {
+        vaultAddr = newVault_;
+    }
+}
