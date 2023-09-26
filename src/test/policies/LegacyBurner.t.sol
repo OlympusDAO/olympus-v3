@@ -102,6 +102,8 @@ contract LegacyBurnerTest is Test {
         }
 
         // Initialize replacement authority
+        // To burn from the legacy inverse bond depository, we'll need to swap out the authority as tracked on that contract
+        // so that the burner can call burn on it
         {
             replacementAuthority = new MockLegacyAuthorityV2(
                 guardian,
