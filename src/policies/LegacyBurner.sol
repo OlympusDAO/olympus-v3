@@ -5,7 +5,6 @@ import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
-
 import "src/Kernel.sol";
 
 
@@ -37,8 +36,10 @@ contract LegacyBurner is Policy {
 
     // Rewards Calculation
     uint256 internal lastRewardTime;
-    uint256 internal maxRewardRate;
-    uint256 internal duration; // in seconds
+    uint256 internal rewardsPerSecond;
+    uint256 internal maxRewardRate; // out of 100_000_000
+
+    uint256 internal constant DENOMINATOR = 100_000_000;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -49,8 +50,8 @@ contract LegacyBurner is Policy {
         OlympusERC20Token ohm_,
         address bondManager_,
         address inverseBondDepo_,
-        uint256 maxRewardRate_,
-        uint256 duration_
+        uint256 rewardsPerSecond_,
+        uint256 maxRewardRate_ // out of 100_000_000
     ) Policy(kernel_) {
         // Address config
         ohm = ohm_;
@@ -58,8 +59,8 @@ contract LegacyBurner is Policy {
         inverseBondDepo = inverseBondDepo_;
 
         // Rewards config
+        rewardsPerSecond = rewardsPerSecond_;
         maxRewardRate = maxRewardRate_;
-        duration = duration_;
     }
 
     /// @inheritdoc Policy
@@ -78,9 +79,12 @@ contract LegacyBurner is Policy {
 
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
-        requests = new Permissions[](2);
-        requests[0] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
-        requests[1] = Permissions(MINTR.KEYCODE(), MINTR.burnOhm.selector);
+        Keycode MINTR_KEYCODE = MINTR.KEYCODE();
+        
+        requests = new Permissions[](3);
+        requests[0] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        requests[1] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[2] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
     //============================================================================================//
@@ -103,6 +107,7 @@ contract LegacyBurner is Policy {
         _burnInverseBondDepoOhm();
 
         // Mint reward
+        MINTR.increaseMintApproval(address(this), reward);
         MINTR.mintOhm(msg.sender, reward);
 
         // Emit event
@@ -118,7 +123,6 @@ contract LegacyBurner is Policy {
     function _getReward(uint256 amount) internal view returns (uint256 reward) {
         // Calculate reward rate
         uint256 timeElapsed = block.timestamp - lastRewardTime;
-        uint256 rewardsPerSecond = maxRewardRate / duration;
         uint256 rewardRate = timeElapsed * rewardsPerSecond;
 
         // Bound by max
@@ -127,7 +131,7 @@ contract LegacyBurner is Policy {
         }
 
         // Calculate reward
-        reward = amount * rewardRate / 100_000_000;
+        reward = amount * rewardRate / DENOMINATOR;
     }
 
     /// @notice Burns OHM from the bond manager
