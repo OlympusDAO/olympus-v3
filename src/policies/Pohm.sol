@@ -17,6 +17,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 // Import libraries
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
+
 contract Pohm is IPohm, Policy, RolesConsumer {
     using TransferHelper for ERC20;
 
@@ -117,20 +118,23 @@ contract Pohm is IPohm, Policy, RolesConsumer {
         // Cache storage variables
         Term memory accountTerms = terms[msg.sender];
 
+        // Cache claimed value
+        uint256 claimed = getAccountClaimed(msg.sender);
+
         // Calculate pro-rata portion of sender's claim terms to transfer
         uint256 percentTransfered = (amount_ * 1e6) / accountTerms.percent;
-        uint256 gTransfered = (accountTerms.gClaimed * percentTransfered) / 1e6;
         uint256 maxTransfered = (accountTerms.max * percentTransfered) / 1e6;
+
+        // Make sure that the receiver's claim terms are not violated
+        if (accountTerms.max - maxTransfered < claimed) revert POHM_IllegalTransfer();
 
         // Reduce sender's claim terms
         accountTerms.percent -= amount_;
-        accountTerms.gClaimed -= gTransfered;
         accountTerms.max -= maxTransfered;
         terms[msg.sender] = accountTerms;
 
         // Increase receiver's claim terms
         terms[to_].percent += amount_;
-        terms[to_].gClaimed += gTransfered;
         terms[to_].max += maxTransfered;
 
         emit Transfer(msg.sender, to_, amount_);

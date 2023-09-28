@@ -305,13 +305,39 @@ contract PohmTest is Test {
 
         (percent, gClaimed, max) = pohm.terms(alice);
         assertEq(percent, 5_000);
-        assertEq(gClaimed, 250e18);
+        assertEq(gClaimed, 500e18);
         assertEq(max, 50_000e9);
 
         (toPercent, toGClaimed, toMax) = pohm.terms(to_);
         assertEq(toPercent, 5_000);
-        assertEq(toGClaimed, 250e18);
+        assertEq(toGClaimed, 0);
         assertEq(toMax, 50_000e9);
+
+        // Alice can't claim any more
+        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 0);
+        vm.expectRevert(err);
+
+        vm.prank(alice);
+        pohm.claim(alice, 100_000e18);
+
+        // to_ can claim 50k
+        dai.mint(to_, 50_000e18);
+        vm.startPrank(to_);
+        dai.approve(address(pohm), 50_000e18);
+        pohm.claim(to_, 50_000e18);
+        vm.stopPrank();
+
+        (percent, gClaimed, max) = pohm.terms(to_);
+        assertEq(percent, 5_000);
+        assertEq(gClaimed, 500e18);
+        assertEq(max, 50_000e9);
+
+        // to_ can't claim any more
+        err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 0);
+        vm.expectRevert(err);
+
+        vm.prank(to_);
+        pohm.claim(to_, 100_000e18);
     }
 
     function test_transferDoesNotIntroduceAdditionalClaims(address to_) public {
@@ -332,30 +358,12 @@ contract PohmTest is Test {
         assertEq(toGClaimed, 0);
         assertEq(toMax, 0);
 
-        // Transfer half of claim
+        // Can't transfer any of claim
+        bytes memory err = abi.encodeWithSignature("POHM_IllegalTransfer()");
+        vm.expectRevert(err);
+
+        vm.prank(alice);
         pohm.transfer(to_, 5_000);
-
-        (percent, gClaimed, max) = pohm.terms(alice);
-        assertEq(percent, 5_000);
-        assertEq(gClaimed, 500e18);
-        assertEq(max, 50_000e9);
-
-        (toPercent, toGClaimed, toMax) = pohm.terms(to_);
-        assertEq(toPercent, 5_000);
-        assertEq(toGClaimed, 500e18);
-        assertEq(toMax, 50_000e9);
-
-        // Alice can't claim more
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 0);
-        vm.expectRevert(err);
-        pohm.claim(alice, 100_000e18);
-        vm.stopPrank();
-
-        // to_ can't claim more
-        vm.startPrank(to_);
-        vm.expectRevert(err);
-        pohm.claim(to_, 100_000e18);
-        vm.stopPrank();
     }
 
     /// [X]  pushWalletChange

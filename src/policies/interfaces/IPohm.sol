@@ -10,6 +10,7 @@ interface IPohm {
     error POHM_AllocationLimitViolation();
     error POHM_ClaimMoreThanVested(uint256 vested_);
     error POHM_ClaimMoreThanMax(uint256 max_);
+    error POHM_IllegalTransfer();
 
     // ========= EVENTS ========= //
 
