@@ -143,7 +143,7 @@ contract OlympusDeploy is Script {
     string[] public deployments;
     mapping(string => address) public deployedTo;
 
-    function _setUp(string calldata chain_) internal {
+    function _setUp(string calldata chain_, string calldata deployFilePath) internal {
         chain = chain_;
 
         // Setup contract -> selector mappings
@@ -240,7 +240,7 @@ contract OlympusDeploy is Script {
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
 
         // Load deployment data
-        string memory data = vm.readFile("./src/scripts/deploy/deploy.json");
+        string memory data = vm.readFile(deployFilePath);
 
         // Parse deployment sequence and names
         bytes[] memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes[]));
@@ -285,9 +285,9 @@ contract OlympusDeploy is Script {
         return env.readAddress(string.concat(".current.", chain, ".", key_));
     }
 
-    function deploy(string calldata chain_) external {
+    function deploy(string calldata chain_, string calldata deployFilePath) external {
         // Setup
-        _setUp(chain_);
+        _setUp(chain_, deployFilePath);
 
         // Check that deployments is not empty
         uint256 len = deployments.length;
