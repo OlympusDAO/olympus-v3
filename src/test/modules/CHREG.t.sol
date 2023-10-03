@@ -7,6 +7,20 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 import "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import "src/Kernel.sol";
 
+/// Clearinghouse Registry Tests:
+///
+/// [X]  Module Data
+///     [X]  KEYCODE returns correctly
+///     [X]  VERSION returns correctly
+/// [X]  activateClearinghouse
+///     [X]  Unapproved addresses cannot call
+///     [X]  Approved policies can activate clearinghouse
+///     [X]  Kernel executor can activate clearinghouse manually
+/// [X]  deactivateClearinghouse
+///     [X]  Unapproved addresses cannot call
+///     [X]  Approved policies can deactivate clearinghouse
+///     [X]  Kernel executor can deactivate clearinghouse manually
+
 contract CHREGTest is Test {
     using ModuleTestFixtureGenerator for OlympusClearinghouseRegistry;
 
@@ -17,26 +31,16 @@ contract CHREGTest is Test {
 
     function setUp() public {
         // Deploy Kernel and modules
-        {
-            kernel = new Kernel();
-            chreg = new OlympusClearinghouseRegistry(kernel);
-        }
+        kernel = new Kernel();
+        chreg = new OlympusClearinghouseRegistry(kernel);
 
         // Generate fixtures
-        {
-            godmode = chreg.generateGodmodeFixture(type(OlympusClearinghouseRegistry).name);
-        }
+        godmode = chreg.generateGodmodeFixture(type(OlympusClearinghouseRegistry).name);
 
         // Install modules and policies on Kernel
-        {
-            kernel.executeAction(Actions.InstallModule, address(chreg));
-            kernel.executeAction(Actions.ActivatePolicy, godmode);
-        }
+        kernel.executeAction(Actions.InstallModule, address(chreg));
+        kernel.executeAction(Actions.ActivatePolicy, godmode);
     }
-
-    /// [X]  Module Data
-    ///     [X]  KEYCODE returns correctly
-    ///     [X]  VERSION returns correctly
 
     function test_KEYCODE() public {
         assertEq("CHREG", fromKeycode(chreg.KEYCODE()));
@@ -47,10 +51,6 @@ contract CHREGTest is Test {
         assertEq(major, 1);
         assertEq(minor, 0);
     }
-
-    /// [X]  activateClearinghouse
-    ///     [X]  Unapproved address cannot call
-    ///     [X]  Approved address can activate clearinghouse
 
     function testCorrectness_unapprovedAddressCannotActivateClearinghouse(address user_) public {
         vm.assume(user_ != godmode && user_ != kernel.executor());
@@ -95,10 +95,6 @@ contract CHREGTest is Test {
         assertEq(chreg.active(1), address(2));
         assertEq(chreg.registry(1), address(2));
     }
-
-    /// [X]  deactivateClearinghouse
-    ///     [X]  Unapproved address cannot call
-    ///     [X]  Approved address can deactivate clearinghouse
 
     function _deactivateClearinghouseSetup() internal {
         vm.startPrank(godmode);
