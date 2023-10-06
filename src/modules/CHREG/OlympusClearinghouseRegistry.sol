@@ -6,7 +6,7 @@ import "src/Kernel.sol";
 
 /// @title  Olympus Clearinghouse Registry
 /// @notice Olympus Clearinghouse Registry (Module) Contract
-/// @dev    The Olympus Clearinghouse Registry Module tracks the leanding facilities that the Olympus
+/// @dev    The Olympus Clearinghouse Registry Module tracks the lending facilities that the Olympus
 ///         protocol deploys to satisfy the Cooler Loan demand. This allows for a single-soure of truth
 ///         for reporting purposes around the total Treasury holdings as well as its projected receivables.
 contract OlympusClearinghouseRegistry is CHREGv1 {
@@ -59,11 +59,29 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
 
     /// @notice internal function to add a new Clearinghouse to the registry.
     function _activateClearinghouse(address clearinghouse_) internal {
+        // Ensure Clearinghouse is not currently registered as active.
+        uint256 count = activeCount;
+        for (uint256 i; i < count; ) {
+            if (active[i] == clearinghouse_) revert CHREG_AlreadyRegistered(clearinghouse_);
+            unchecked {
+                ++i;
+            }
+        }
         active.push(clearinghouse_);
-        registry.push(clearinghouse_);
         unchecked {
             ++activeCount;
         }
+
+        // Only add to registry if it is a new Clearinghouse.
+        count = registry.length;
+        bool registered;
+        for (uint256 i; i < count; ) {
+            if (registry[i] == clearinghouse_) registered = true;
+            unchecked {
+                ++i;
+            }
+        }
+        if (!registered) registry.push(clearinghouse_);
 
         emit ClearinghouseActivated(clearinghouse_);
     }

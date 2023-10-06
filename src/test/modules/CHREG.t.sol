@@ -10,16 +10,20 @@ import "src/Kernel.sol";
 /// Clearinghouse Registry Tests:
 ///
 /// [X]  Module Data
-///     [X]  KEYCODE returns correctly
-///     [X]  VERSION returns correctly
+///     [X]  KEYCODE returns correctly.
+///     [X]  VERSION returns correctly.
 /// [X]  activateClearinghouse
-///     [X]  Unapproved addresses cannot call
-///     [X]  Approved policies can activate clearinghouse
-///     [X]  Kernel executor can activate clearinghouse manually
+///     [X]  Unapproved addresses cannot call.
+///     [X]  Approved policies can activate clearinghouse.
+///     [X]  Kernel executor can activate clearinghouse manually.
+///     [X]  Cannot activate twice.
+///     [X]  Address is only registered once.
+///     [X]  Storage is properly updated.
 /// [X]  deactivateClearinghouse
-///     [X]  Unapproved addresses cannot call
-///     [X]  Approved policies can deactivate clearinghouse
-///     [X]  Kernel executor can deactivate clearinghouse manually
+///     [X]  Unapproved addresses cannot call.
+///     [X]  Approved policies can deactivate clearinghouse.
+///     [X]  Kernel executor can deactivate clearinghouse manually.
+///     [X]  Storage is properly updated.
 
 contract CHREGTest is Test {
     using ModuleTestFixtureGenerator for OlympusClearinghouseRegistry;
@@ -42,6 +46,18 @@ contract CHREGTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, godmode);
     }
 
+    /// --- AUX FUNCTIONS -------------------------------------------------------------------------
+
+    function _deactivateClearinghouseSetup() internal {
+        vm.startPrank(godmode);
+        chreg.activateClearinghouse(address(1));
+        chreg.activateClearinghouse(address(2));
+        chreg.activateClearinghouse(address(3));
+        vm.stopPrank();
+    }
+
+    /// --- REGISTRY TESTS ------------------------------------------------------------------------
+
     function test_KEYCODE() public {
         assertEq("CHREG", fromKeycode(chreg.KEYCODE()));
     }
@@ -52,7 +68,59 @@ contract CHREGTest is Test {
         assertEq(minor, 0);
     }
 
-    function testCorrectness_unapprovedAddressCannotActivateClearinghouse(address user_) public {
+    function test_approvedAddressCanActivateClearinghouse() public {
+        // Verify initial state
+        assertEq(chreg.activeCount(), 0);
+
+        vm.prank(godmode);
+        chreg.activateClearinghouse(address(1));
+
+        // Verify clearinghouse was activateed
+        assertEq(chreg.activeCount(), 1);
+        assertEq(chreg.active(0), address(1));
+        assertEq(chreg.registry(0), address(1));
+
+        vm.prank(kernel.executor());
+        chreg.manuallyActivateClearinghouse(address(2));
+
+        // Verify clearinghouse was activateed
+        assertEq(chreg.activeCount(), 2);
+        assertEq(chreg.active(1), address(2));
+        assertEq(chreg.registry(1), address(2));
+    }
+
+    function test_addressIsNotRegisteredTwice() public {
+        // Verify initial state
+        assertEq(chreg.activeCount(), 0);
+
+        vm.prank(godmode);
+        chreg.activateClearinghouse(address(1));
+
+        // Verify clearinghouse was activateed
+        assertEq(chreg.activeCount(), 1);
+        assertEq(chreg.active(0), address(1));
+        assertEq(chreg.registry(0), address(1));
+
+        vm.prank(kernel.executor());
+        chreg.manuallyDeactivateClearinghouse(address(1));
+
+        // Verify clearinghouse was deactivateed
+        assertEq(chreg.activeCount(), 0);
+        assertEq(chreg.registry(0), address(1));
+
+        vm.prank(kernel.executor());
+        chreg.manuallyActivateClearinghouse(address(1));
+
+        // Verify clearinghouse was activateed
+        assertEq(chreg.activeCount(), 1);
+        assertEq(chreg.active(0), address(1));
+        assertEq(chreg.registry(0), address(1));
+        // Verify any element wasn't pushed to registry.
+        vm.expectRevert();
+        chreg.registry(1);
+    }
+
+    function testRevert_unapprovedAddressCannotActivateClearinghouse(address user_) public {
         vm.assume(user_ != godmode && user_ != kernel.executor());
 
         // Expected error
@@ -75,10 +143,7 @@ contract CHREGTest is Test {
         chreg.manuallyActivateClearinghouse(address(1));
     }
 
-    function testCorrectness_approvedAddressCanActivateClearinghouse() public {
-        // Verify initial state
-        assertEq(chreg.activeCount(), 0);
-
+    function testRevert_cannotActivateTwice() public {
         vm.prank(godmode);
         chreg.activateClearinghouse(address(1));
 
@@ -87,24 +152,18 @@ contract CHREGTest is Test {
         assertEq(chreg.active(0), address(1));
         assertEq(chreg.registry(0), address(1));
 
+        // Expected error
+        bytes memory err = abi.encodeWithSelector(
+            CHREGv1.CHREG_AlreadyRegistered.selector,
+            address(1)
+        );
+
         vm.prank(kernel.executor());
-        chreg.manuallyActivateClearinghouse(address(2));
-
-        // Verify clearinghouse was activateed
-        assertEq(chreg.activeCount(), 2);
-        assertEq(chreg.active(1), address(2));
-        assertEq(chreg.registry(1), address(2));
+        vm.expectRevert(err);
+        chreg.manuallyActivateClearinghouse(address(1));
     }
 
-    function _deactivateClearinghouseSetup() internal {
-        vm.startPrank(godmode);
-        chreg.activateClearinghouse(address(1));
-        chreg.activateClearinghouse(address(2));
-        chreg.activateClearinghouse(address(3));
-        vm.stopPrank();
-    }
-
-    function testCorrectness_unapprovedAddressCannotDeactivateClearinghouse(address user_) public {
+    function testRevert_unapprovedAddressCannotDeactivateClearinghouse(address user_) public {
         vm.assume(user_ != godmode && user_ != kernel.executor());
 
         // Expected error
@@ -127,7 +186,7 @@ contract CHREGTest is Test {
         chreg.manuallyDeactivateClearinghouse(address(1));
     }
 
-    function testCorrectness_approvedAddressCanDeactivateClearinghouse() public {
+    function test_approvedAddressCanDeactivateClearinghouse() public {
         _deactivateClearinghouseSetup();
 
         // Verify initial state
