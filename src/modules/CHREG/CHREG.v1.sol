@@ -11,8 +11,8 @@ import "src/Kernel.sol";
 abstract contract CHREGv1 is Module {
     // =========  ERRORS ========= //
 
-    error Module_OnlyKernelExecutor(address caller_);
     error CHREG_AlreadyRegistered(address clearinghouse_);
+    error CHREG_InvalidConstructor();
 
     // ========= EVENTS ========= //
 
@@ -25,6 +25,7 @@ abstract contract CHREGv1 is Module {
     /// @dev    This is a useless variable in contracts but useful for any frontends or
     ///         off-chain requests where the array is not easily accessible.
     uint256 public activeCount;
+    uint256 public registryCount;
 
     /// @notice Tracks the addresses of all the active Clearinghouses.
     address[] public active;
@@ -34,29 +35,13 @@ abstract contract CHREGv1 is Module {
 
     // ========= FUNCTIONS ========= //
 
-    /// @notice Modifier to check if caller is the kernel executor.
-    modifier onlyKernelExecutor() {
-        if (msg.sender != kernel.executor()) revert Module_OnlyKernelExecutor(msg.sender);
-        _;
-    }
-
     /// @notice Adds a Clearinghouse to the registry.
     ///         Only callable by permissioned policies.
     /// @param  clearinghouse_ The address of the clearinghouse.
     function activateClearinghouse(address clearinghouse_) external virtual;
 
-    /// @notice Adds a Clearinghouse to the registry.
-    ///         Only callable by the kernel executor.
-    /// @param  clearinghouse_ The address of the clearinghouse.
-    function manuallyActivateClearinghouse(address clearinghouse_) external virtual;
-
     /// @notice Deactivates a clearinghouse from the registry.
     ///         Only callable by permissioned policies.
     /// @param  clearinghouse_ The address of the clearginhouse.
     function deactivateClearinghouse(address clearinghouse_) external virtual;
-
-    /// @notice Deactivates a clearinghouse from the registry.
-    ///         Only callable by the kernel executor.
-    /// @param  clearinghouse_ The address of the clearginhouse.
-    function manuallyDeactivateClearinghouse(address clearinghouse_) external virtual;
 }

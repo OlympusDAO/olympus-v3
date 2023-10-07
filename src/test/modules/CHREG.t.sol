@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
+import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import "modules/CHREG/OlympusClearinghouseRegistry.sol";
@@ -9,26 +10,30 @@ import "src/Kernel.sol";
 
 /// Clearinghouse Registry Tests:
 ///
+/// [X]  Constructor
+///     [X]  Cannot pass a duplicated address.
+///     [X]  Cannot pass the same address as active and inactive.
+///     [X]  Storage is properly updated.
 /// [X]  Module Data
 ///     [X]  KEYCODE returns correctly.
 ///     [X]  VERSION returns correctly.
 /// [X]  activateClearinghouse
 ///     [X]  Unapproved addresses cannot call.
 ///     [X]  Approved policies can activate clearinghouse.
-///     [X]  Kernel executor can activate clearinghouse manually.
 ///     [X]  Cannot activate twice.
 ///     [X]  Address is only registered once.
 ///     [X]  Storage is properly updated.
 /// [X]  deactivateClearinghouse
 ///     [X]  Unapproved addresses cannot call.
 ///     [X]  Approved policies can deactivate clearinghouse.
-///     [X]  Kernel executor can deactivate clearinghouse manually.
 ///     [X]  Storage is properly updated.
 
 contract CHREGTest is Test {
     using ModuleTestFixtureGenerator for OlympusClearinghouseRegistry;
 
     address public godmode;
+    address[] public active;
+    address[] public inactive;
 
     Kernel internal kernel;
     OlympusClearinghouseRegistry internal chreg;
@@ -36,7 +41,7 @@ contract CHREGTest is Test {
     function setUp() public {
         // Deploy Kernel and modules
         kernel = new Kernel();
-        chreg = new OlympusClearinghouseRegistry(kernel);
+        chreg = new OlympusClearinghouseRegistry(kernel, active, inactive);
 
         // Generate fixtures
         godmode = chreg.generateGodmodeFixture(type(OlympusClearinghouseRegistry).name);
@@ -57,6 +62,59 @@ contract CHREGTest is Test {
     }
 
     /// --- REGISTRY TESTS ------------------------------------------------------------------------
+
+    function test_constructor() public {
+        inactive.push(address(1));
+        inactive.push(address(2));
+        active.push(address(3));
+
+        chreg = new OlympusClearinghouseRegistry(kernel, active, inactive);
+
+        // Check: Storage
+        assertEq(chreg.activeCount(), 1);
+        assertEq(chreg.registryCount(), 3);
+        assertEq(chreg.active(0), address(3));
+        assertEq(chreg.registry(0), address(1));
+        assertEq(chreg.registry(1), address(2));
+        assertEq(chreg.registry(2), address(3));
+    }
+
+    function testRevert_constructor_duplicateAddress_inactive() public {
+        inactive.push(address(1));
+        inactive.push(address(1));
+        active.push(address(3));
+
+        // Expected error
+        bytes memory err = abi.encodeWithSelector(CHREGv1.CHREG_InvalidConstructor.selector);
+        vm.expectRevert(err);
+
+        chreg = new OlympusClearinghouseRegistry(kernel, active, inactive);
+    }
+
+    function testRevert_constructor_duplicateAddress_active() public {
+        inactive.push(address(1));
+        inactive.push(address(2));
+        active.push(address(3));
+        active.push(address(3));
+
+        // Expected error
+        bytes memory err = abi.encodeWithSelector(CHREGv1.CHREG_InvalidConstructor.selector);
+        vm.expectRevert(err);
+
+        chreg = new OlympusClearinghouseRegistry(kernel, active, inactive);
+    }
+
+    function testRevert_constructor_bothActiveAndInactive() public {
+        inactive.push(address(1));
+        inactive.push(address(2));
+        active.push(address(2));
+
+        // Expected error
+        bytes memory err = abi.encodeWithSelector(CHREGv1.CHREG_InvalidConstructor.selector);
+        vm.expectRevert(err);
+
+        chreg = new OlympusClearinghouseRegistry(kernel, active, inactive);
+    }
 
     function test_KEYCODE() public {
         assertEq("CHREG", fromKeycode(chreg.KEYCODE()));
@@ -79,14 +137,6 @@ contract CHREGTest is Test {
         assertEq(chreg.activeCount(), 1);
         assertEq(chreg.active(0), address(1));
         assertEq(chreg.registry(0), address(1));
-
-        vm.prank(kernel.executor());
-        chreg.manuallyActivateClearinghouse(address(2));
-
-        // Verify clearinghouse was activateed
-        assertEq(chreg.activeCount(), 2);
-        assertEq(chreg.active(1), address(2));
-        assertEq(chreg.registry(1), address(2));
     }
 
     function test_addressIsNotRegisteredTwice() public {
@@ -101,15 +151,15 @@ contract CHREGTest is Test {
         assertEq(chreg.active(0), address(1));
         assertEq(chreg.registry(0), address(1));
 
-        vm.prank(kernel.executor());
-        chreg.manuallyDeactivateClearinghouse(address(1));
+        vm.prank(godmode);
+        chreg.deactivateClearinghouse(address(1));
 
         // Verify clearinghouse was deactivateed
         assertEq(chreg.activeCount(), 0);
         assertEq(chreg.registry(0), address(1));
 
-        vm.prank(kernel.executor());
-        chreg.manuallyActivateClearinghouse(address(1));
+        vm.prank(godmode);
+        chreg.activateClearinghouse(address(1));
 
         // Verify clearinghouse was activateed
         assertEq(chreg.activeCount(), 1);
@@ -121,7 +171,7 @@ contract CHREGTest is Test {
     }
 
     function testRevert_unapprovedAddressCannotActivateClearinghouse(address user_) public {
-        vm.assume(user_ != godmode && user_ != kernel.executor());
+        vm.assume(user_ != godmode);
 
         // Expected error
         bytes memory err = abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, user_);
@@ -130,17 +180,6 @@ contract CHREGTest is Test {
         // Try to activate clearinghouse as unapproved user
         vm.prank(user_);
         chreg.activateClearinghouse(address(1));
-
-        // Expected error
-        bytes memory err2 = abi.encodeWithSelector(
-            CHREGv1.Module_OnlyKernelExecutor.selector,
-            user_
-        );
-        vm.expectRevert(err2);
-
-        // Try to activate clearinghouse as unapproved user
-        vm.prank(user_);
-        chreg.manuallyActivateClearinghouse(address(1));
     }
 
     function testRevert_cannotActivateTwice() public {
@@ -158,13 +197,13 @@ contract CHREGTest is Test {
             address(1)
         );
 
-        vm.prank(kernel.executor());
+        vm.prank(godmode);
         vm.expectRevert(err);
-        chreg.manuallyActivateClearinghouse(address(1));
+        chreg.activateClearinghouse(address(1));
     }
 
     function testRevert_unapprovedAddressCannotDeactivateClearinghouse(address user_) public {
-        vm.assume(user_ != godmode && user_ != kernel.executor());
+        vm.assume(user_ != godmode);
 
         // Expected error
         bytes memory err = abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, user_);
@@ -173,17 +212,6 @@ contract CHREGTest is Test {
         // Try to activate clearinghouse as unapproved user
         vm.prank(user_);
         chreg.deactivateClearinghouse(address(1));
-
-        // Expected error
-        bytes memory err2 = abi.encodeWithSelector(
-            CHREGv1.Module_OnlyKernelExecutor.selector,
-            user_
-        );
-        vm.expectRevert(err2);
-
-        // Try to activate clearinghouse as unapproved user
-        vm.prank(user_);
-        chreg.manuallyDeactivateClearinghouse(address(1));
     }
 
     function test_approvedAddressCanDeactivateClearinghouse() public {
@@ -204,16 +232,6 @@ contract CHREGTest is Test {
         // Verify clearinghouse was deactivated
         assertEq(chreg.activeCount(), 2);
         assertEq(chreg.active(1), address(2));
-        assertEq(chreg.active(0), address(3));
-        assertEq(chreg.registry(0), address(1));
-        assertEq(chreg.registry(1), address(2));
-        assertEq(chreg.registry(2), address(3));
-
-        vm.prank(kernel.executor());
-        chreg.manuallyDeactivateClearinghouse(address(2));
-
-        // Verify clearinghouse was deactivated
-        assertEq(chreg.activeCount(), 1);
         assertEq(chreg.active(0), address(3));
         assertEq(chreg.registry(0), address(1));
         assertEq(chreg.registry(1), address(2));

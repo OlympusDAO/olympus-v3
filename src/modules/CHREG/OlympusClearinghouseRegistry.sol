@@ -14,7 +14,51 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
     //                                      MODULE SETUP                                          //
     //============================================================================================//
 
-    constructor(Kernel kernel_) Module(kernel_) {}
+    constructor(Kernel kernel_, address[] memory active_, address[] memory inactive_) Module(kernel_) {
+        // Process inactive addresses.
+        uint256 toRegister = inactive_.length;
+        for (uint256 i; i < toRegister; ) {
+            // Ensure no duplicates in active addresses.
+            for (uint256 j; j < toRegister; ) {
+                if (i != j && inactive_[i] == inactive_[j]) revert CHREG_InvalidConstructor();
+                unchecked {
+                ++j;
+                }
+            }
+            // Add to storage.
+            registry.push(inactive_[i]);
+            unchecked {
+                ++i;
+            }
+        }
+        // Process active addresses.
+        uint256 toActivate = active_.length;
+        for (uint256 i; i < toActivate; ) {
+            // Ensure no duplicates in active addresses.
+            for (uint256 j; j < toActivate; ) {
+                if (i != j && active_[i] == active_[j]) revert CHREG_InvalidConstructor();
+                unchecked {
+                ++j;
+                }
+            }
+            // Ensure clearinghouses are either active or inactive.
+            for (uint256 k; k < toRegister; ) {
+                if (active_[i] == inactive_[k]) revert CHREG_InvalidConstructor();
+                unchecked {
+                ++k;
+                }
+            }
+            // Add to storage.
+            active.push(active_[i]);
+            registry.push(active_[i]);
+            unchecked {
+                ++i;
+            }
+        }
+
+        activeCount = toActivate;
+        registryCount = toActivate + toRegister;
+    }
 
     /// @inheritdoc Module
     function KEYCODE() public pure override returns (Keycode) {
@@ -33,32 +77,6 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
 
     /// @inheritdoc CHREGv1
     function activateClearinghouse(address clearinghouse_) external override permissioned {
-        _activateClearinghouse(clearinghouse_);
-    }
-
-    /// @inheritdoc CHREGv1
-    function manuallyActivateClearinghouse(
-        address clearinghouse_
-    ) external override onlyKernelExecutor {
-        _activateClearinghouse(clearinghouse_);
-    }
-
-    /// @inheritdoc CHREGv1
-    function deactivateClearinghouse(address clearinghouse_) external override permissioned {
-        _deactivateClearinghouse(clearinghouse_);
-    }
-
-    /// @inheritdoc CHREGv1
-    function manuallyDeactivateClearinghouse(
-        address clearinghouse_
-    ) external override onlyKernelExecutor {
-        _deactivateClearinghouse(clearinghouse_);
-    }
-
-    // ========= INTERNAL FUNCTIONS ========= //
-
-    /// @notice internal function to add a new Clearinghouse to the registry.
-    function _activateClearinghouse(address clearinghouse_) internal {
         // Ensure Clearinghouse is not currently registered as active.
         uint256 count = activeCount;
         for (uint256 i; i < count; ) {
@@ -86,8 +104,8 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
         emit ClearinghouseActivated(clearinghouse_);
     }
 
-    /// @notice internal function to deactivate a clearinghouse from the registry.
-    function _deactivateClearinghouse(address clearinghouse_) internal {
+    /// @inheritdoc CHREGv1
+    function deactivateClearinghouse(address clearinghouse_) external override permissioned {
         // Find index of vault in array
         uint256 count = activeCount;
         for (uint256 i; i < count; ) {
