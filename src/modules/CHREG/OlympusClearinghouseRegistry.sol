@@ -14,7 +14,11 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
     //                                      MODULE SETUP                                          //
     //============================================================================================//
 
-    constructor(Kernel kernel_, address[] memory active_, address[] memory inactive_) Module(kernel_) {
+    constructor(
+        Kernel kernel_,
+        address[] memory active_,
+        address[] memory inactive_
+    ) Module(kernel_) {
         // Process inactive addresses.
         uint256 toRegister = inactive_.length;
         for (uint256 i; i < toRegister; ) {
@@ -22,7 +26,7 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
             for (uint256 j; j < toRegister; ) {
                 if (i != j && inactive_[i] == inactive_[j]) revert CHREG_InvalidConstructor();
                 unchecked {
-                ++j;
+                    ++j;
                 }
             }
             // Add to storage.
@@ -38,14 +42,14 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
             for (uint256 j; j < toActivate; ) {
                 if (i != j && active_[i] == active_[j]) revert CHREG_InvalidConstructor();
                 unchecked {
-                ++j;
+                    ++j;
                 }
             }
             // Ensure clearinghouses are either active or inactive.
             for (uint256 k; k < toRegister; ) {
                 if (active_[i] == inactive_[k]) revert CHREG_InvalidConstructor();
                 unchecked {
-                ++k;
+                    ++k;
                 }
             }
             // Add to storage.
