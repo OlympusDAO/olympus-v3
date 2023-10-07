@@ -21,9 +21,9 @@ abstract contract CHREGv1 is Module {
 
     // ========= STATE ========= //
 
-    /// @notice Count of active clearinghouses.
-    /// @dev    This is a useless variable in contracts but useful for any frontends or
-    ///         off-chain requests where the array is not easily accessible.
+    /// @notice Count of active and historical clearinghouses.
+    /// @dev    These are useless variables in contracts, but useful for any frontends
+    ///         or off-chain requests where the array is not easily accessible.
     uint256 public activeCount;
     uint256 public registryCount;
 

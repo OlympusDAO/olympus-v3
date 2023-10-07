@@ -90,7 +90,7 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
             ++activeCount;
         }
 
-        // Only add to registry if it is a new Clearinghouse.
+        // Only add to registry if Clearinghouse is new.
         count = registry.length;
         bool registered;
         for (uint256 i; i < count; ) {
@@ -106,11 +106,11 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
 
     /// @inheritdoc CHREGv1
     function deactivateClearinghouse(address clearinghouse_) external override permissioned {
-        // Find index of vault in array
+        // Find index of address in the array.
         uint256 count = activeCount;
         for (uint256 i; i < count; ) {
             if (active[i] == clearinghouse_) {
-                // Delete vault from array by swapping with last element and popping
+                // Delete address from array by swapping with last element and popping.
                 active[i] = active[count - 1];
                 active.pop();
                 --activeCount;
