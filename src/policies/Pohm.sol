@@ -121,10 +121,13 @@ contract Pohm is IPohm, Policy, RolesConsumer {
     /// @inheritdoc IPohm
     function pullWalletChange(address oldAddress_) external {
         if (walletChange[oldAddress_] != msg.sender) revert POHM_NoWalletChange();
-        if (terms[msg.sender].percent != 0) revert POHM_AlreadyHasClaim();
 
         walletChange[oldAddress_] = address(0);
-        terms[msg.sender] = terms[oldAddress_];
+        
+        terms[msg.sender].percent += terms[oldAddress_].percent;
+        terms[msg.sender].gClaimed += terms[oldAddress_].gClaimed;
+        terms[msg.sender].max += terms[oldAddress_].max;
+
         delete terms[oldAddress_];
 
         emit WalletChange(oldAddress_, msg.sender, true);

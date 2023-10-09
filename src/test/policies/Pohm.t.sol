@@ -267,7 +267,7 @@ contract PohmTest is Test {
 
     /// [X]  pullWalletChange
     ///     [X]  cannot be called unless the caller is flagged as the user's wallet change
-    ///     [X]  cannot be called if the new wallet already has a claim
+    ///     [X]  adds to the user's terms
     ///     [X]  sets the wallet change to the zero address
     ///     [X]  copies terms from old wallet to new wallet
     ///     [X]  deletes terms for old wallet
@@ -283,15 +283,22 @@ contract PohmTest is Test {
         vm.stopPrank();
     }
 
-    function test_pullWalletCannotBeCalledIfNewWalletHasClaim() public {
+    function test_pullWalletAddsToUsersTerms() public {
         vm.prank(alice);
         pohm.pushWalletChange(bob);
 
-        bytes memory err = abi.encodeWithSignature("POHM_AlreadyHasClaim()");
-        vm.expectRevert(err);
+        (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(bob);
+        assertEq(percent, 10_000);
+        assertEq(gClaimed, 0);
+        assertEq(max, 100_000e9);
 
         vm.prank(bob);
         pohm.pullWalletChange(alice);
+
+        (percent, gClaimed, max) = pohm.terms(bob);
+        assertEq(percent, 20_000);
+        assertEq(gClaimed, 0);
+        assertEq(max, 200_000e9);
     }
 
     function test_pullWalletSetsWalletChangeToZeroAddress(address newWallet_) public {
