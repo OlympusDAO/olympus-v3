@@ -112,35 +112,6 @@ contract Pohm is IPohm, Policy, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IPohm
-    function transfer(address to_, uint256 amount_) external {
-        if (terms[msg.sender].percent == 0) revert POHM_NoClaim();
-
-        // Cache storage variables
-        Term memory accountTerms = terms[msg.sender];
-
-        // Cache claimed value
-        uint256 claimed = getAccountClaimed(msg.sender);
-
-        // Calculate pro-rata portion of sender's claim terms to transfer
-        uint256 percentTransfered = (amount_ * 1e6) / accountTerms.percent;
-        uint256 maxTransfered = (accountTerms.max * percentTransfered) / 1e6;
-
-        // Make sure that the receiver's claim terms are not violated
-        if (accountTerms.max - maxTransfered < claimed) revert POHM_IllegalTransfer();
-
-        // Reduce sender's claim terms
-        accountTerms.percent -= amount_;
-        accountTerms.max -= maxTransfered;
-        terms[msg.sender] = accountTerms;
-
-        // Increase receiver's claim terms
-        terms[to_].percent += amount_;
-        terms[to_].max += maxTransfered;
-
-        emit Transfer(msg.sender, to_, amount_);
-    }
-
-    /// @inheritdoc IPohm
     function pushWalletChange(address newAddress_) external {
         if (terms[msg.sender].percent == 0) revert POHM_NoClaim();
         walletChange[msg.sender] = newAddress_;

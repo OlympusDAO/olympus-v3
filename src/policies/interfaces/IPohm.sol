@@ -10,7 +10,6 @@ interface IPohm {
     error POHM_AllocationLimitViolation();
     error POHM_ClaimMoreThanVested(uint256 vested_);
     error POHM_ClaimMoreThanMax(uint256 max_);
-    error POHM_IllegalTransfer();
 
     // ========= EVENTS ========= //
 
@@ -39,11 +38,6 @@ interface IPohm {
     //============================================================================================//
     //                                   MANAGEMENT FUNCTIONS                                     //
     //============================================================================================//
-
-    /// @notice Transfers a portion of a user's claim to another address
-    /// @param  to_ Address to send claim to
-    /// @param  amount_ Amount of claim to send. Represents a chunk of the user's "percent" value in their terms
-    function transfer(address to_, uint256 amount_) external;
 
     /// @notice Pushes entirety of a user's claim to a new address
     /// @param  newAddress_ Address to send claim to
