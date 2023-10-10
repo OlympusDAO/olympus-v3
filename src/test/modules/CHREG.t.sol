@@ -138,7 +138,7 @@ contract CHREGTest is Test {
         assertEq(chreg.activeCount(), 0);
 
         vm.prank(godmode);
-        
+
         // Ensure that the event is emitted
         vm.expectEmit(address(chreg));
         emit ClearinghouseActivated(address(1));
@@ -156,7 +156,7 @@ contract CHREGTest is Test {
         assertEq(chreg.activeCount(), 0);
 
         vm.startPrank(godmode);
-        
+
         // Ensure that the event is emitted
         vm.expectEmit(address(chreg));
         emit ClearinghouseActivated(address(1));
@@ -174,7 +174,6 @@ contract CHREGTest is Test {
         assertEq(chreg.activeCount(), 0);
         assertEq(chreg.registry(0), address(1));
 
-        
         // Ensure that the event is emitted
         vm.expectEmit(address(chreg));
         emit ClearinghouseActivated(address(1));
@@ -247,7 +246,7 @@ contract CHREGTest is Test {
         assertEq(chreg.registry(2), address(3));
 
         vm.prank(godmode);
-        
+
         // Ensure that the event is emitted
         vm.expectEmit(address(chreg));
         emit ClearinghouseDeactivated(address(1));
@@ -276,7 +275,7 @@ contract CHREGTest is Test {
         assertEq(chreg.registry(2), address(3));
 
         vm.startPrank(godmode);
-        
+
         // Ensure that the event is emitted
         vm.expectEmit(address(chreg));
         emit ClearinghouseDeactivated(address(1));
@@ -290,12 +289,9 @@ contract CHREGTest is Test {
         assertEq(chreg.registry(0), address(1));
         assertEq(chreg.registry(1), address(2));
         assertEq(chreg.registry(2), address(3));
-        
+
         // Expected error
-        bytes memory err = abi.encodeWithSelector(
-            CHREGv1.CHREG_NotActivated.selector,
-            address(1)
-        );
+        bytes memory err = abi.encodeWithSelector(CHREGv1.CHREG_NotActivated.selector, address(1));
         vm.expectRevert(err);
         chreg.deactivateClearinghouse(address(1));
     }
