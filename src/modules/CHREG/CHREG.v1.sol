@@ -11,12 +11,17 @@ import "src/Kernel.sol";
 abstract contract CHREGv1 is Module {
     // =========  ERRORS ========= //
 
-    error CHREG_AlreadyRegistered(address clearinghouse_);
     error CHREG_InvalidConstructor();
+    error CHREG_NotActivated(address clearinghouse_);
+    error CHREG_AlreadyActivated(address clearinghouse_);
 
     // ========= EVENTS ========= //
 
+    /// @notice Logs whenever a Clearinghouse is activated.
+    ///         If it is the first time, it is also added to the registry.
     event ClearinghouseActivated(address indexed clearinghouse);
+
+    /// @notice Logs whenever an active Clearinghouse is deactivated.
     event ClearinghouseDeactivated(address indexed clearinghouse);
 
     // ========= STATE ========= //

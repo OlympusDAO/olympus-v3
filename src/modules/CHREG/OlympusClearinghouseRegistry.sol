@@ -84,7 +84,7 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
         // Ensure Clearinghouse is not currently registered as active.
         uint256 count = activeCount;
         for (uint256 i; i < count; ) {
-            if (active[i] == clearinghouse_) revert CHREG_AlreadyRegistered(clearinghouse_);
+            if (active[i] == clearinghouse_) revert CHREG_AlreadyActivated(clearinghouse_);
             unchecked {
                 ++i;
             }
@@ -110,7 +110,7 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
 
     /// @inheritdoc CHREGv1
     function deactivateClearinghouse(address clearinghouse_) external override permissioned {
-        // Find index of address in the array.
+        bool found;
         uint256 count = activeCount;
         for (uint256 i; i < count; ) {
             if (active[i] == clearinghouse_) {
@@ -118,6 +118,7 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
                 active[i] = active[count - 1];
                 active.pop();
                 --activeCount;
+                found = true;
                 break;
             }
 
@@ -126,6 +127,8 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
             }
         }
 
+        // If Clearinghouse was not active, revert. Otherwise, emit event.
+        if (!found) revert CHREG_NotActivated(clearinghouse_);
         emit ClearinghouseDeactivated(clearinghouse_);
     }
 }

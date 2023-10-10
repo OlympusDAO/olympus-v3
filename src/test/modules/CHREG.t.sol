@@ -23,10 +23,13 @@ import "src/Kernel.sol";
 ///     [X]  Cannot activate twice.
 ///     [X]  Address is only registered once.
 ///     [X]  Storage is properly updated.
+///     [X]  Event is emitted.
 /// [X]  deactivateClearinghouse
 ///     [X]  Unapproved addresses cannot call.
 ///     [X]  Approved policies can deactivate clearinghouse.
+///     [X]  Inactive Clearinghouses can't be deactivated.
 ///     [X]  Storage is properly updated.
+///     [X]  Event is emitted.
 
 contract CHREGTest is Test {
     using ModuleTestFixtureGenerator for OlympusClearinghouseRegistry;
@@ -37,6 +40,10 @@ contract CHREGTest is Test {
 
     Kernel internal kernel;
     OlympusClearinghouseRegistry internal chreg;
+
+    // Clearinghouse Expected events
+    event ClearinghouseActivated(address indexed clearinghouse);
+    event ClearinghouseDeactivated(address indexed clearinghouse);
 
     function setUp() public {
         // Deploy Kernel and modules
@@ -131,6 +138,11 @@ contract CHREGTest is Test {
         assertEq(chreg.activeCount(), 0);
 
         vm.prank(godmode);
+        
+        // Ensure that the event is emitted
+        vm.expectEmit(address(chreg));
+        emit ClearinghouseActivated(address(1));
+
         chreg.activateClearinghouse(address(1));
 
         // Verify clearinghouse was activateed
@@ -143,7 +155,12 @@ contract CHREGTest is Test {
         // Verify initial state
         assertEq(chreg.activeCount(), 0);
 
-        vm.prank(godmode);
+        vm.startPrank(godmode);
+        
+        // Ensure that the event is emitted
+        vm.expectEmit(address(chreg));
+        emit ClearinghouseActivated(address(1));
+
         chreg.activateClearinghouse(address(1));
 
         // Verify clearinghouse was activateed
@@ -151,14 +168,17 @@ contract CHREGTest is Test {
         assertEq(chreg.active(0), address(1));
         assertEq(chreg.registry(0), address(1));
 
-        vm.prank(godmode);
         chreg.deactivateClearinghouse(address(1));
 
         // Verify clearinghouse was deactivateed
         assertEq(chreg.activeCount(), 0);
         assertEq(chreg.registry(0), address(1));
 
-        vm.prank(godmode);
+        
+        // Ensure that the event is emitted
+        vm.expectEmit(address(chreg));
+        emit ClearinghouseActivated(address(1));
+
         chreg.activateClearinghouse(address(1));
 
         // Verify clearinghouse was activateed
@@ -193,7 +213,7 @@ contract CHREGTest is Test {
 
         // Expected error
         bytes memory err = abi.encodeWithSelector(
-            CHREGv1.CHREG_AlreadyRegistered.selector,
+            CHREGv1.CHREG_AlreadyActivated.selector,
             address(1)
         );
 
@@ -227,6 +247,11 @@ contract CHREGTest is Test {
         assertEq(chreg.registry(2), address(3));
 
         vm.prank(godmode);
+        
+        // Ensure that the event is emitted
+        vm.expectEmit(address(chreg));
+        emit ClearinghouseDeactivated(address(1));
+
         chreg.deactivateClearinghouse(address(1));
 
         // Verify clearinghouse was deactivated
@@ -236,5 +261,42 @@ contract CHREGTest is Test {
         assertEq(chreg.registry(0), address(1));
         assertEq(chreg.registry(1), address(2));
         assertEq(chreg.registry(2), address(3));
+    }
+
+    function testRevert_deactivateInactiveClearinghouse() public {
+        _deactivateClearinghouseSetup();
+
+        // Verify initial state
+        assertEq(chreg.activeCount(), 3);
+        assertEq(chreg.active(0), address(1));
+        assertEq(chreg.active(1), address(2));
+        assertEq(chreg.active(2), address(3));
+        assertEq(chreg.registry(0), address(1));
+        assertEq(chreg.registry(1), address(2));
+        assertEq(chreg.registry(2), address(3));
+
+        vm.startPrank(godmode);
+        
+        // Ensure that the event is emitted
+        vm.expectEmit(address(chreg));
+        emit ClearinghouseDeactivated(address(1));
+
+        chreg.deactivateClearinghouse(address(1));
+
+        // Verify clearinghouse was deactivated
+        assertEq(chreg.activeCount(), 2);
+        assertEq(chreg.active(1), address(2));
+        assertEq(chreg.active(0), address(3));
+        assertEq(chreg.registry(0), address(1));
+        assertEq(chreg.registry(1), address(2));
+        assertEq(chreg.registry(2), address(3));
+        
+        // Expected error
+        bytes memory err = abi.encodeWithSelector(
+            CHREGv1.CHREG_NotActivated.selector,
+            address(1)
+        );
+        vm.expectRevert(err);
+        chreg.deactivateClearinghouse(address(1));
     }
 }
