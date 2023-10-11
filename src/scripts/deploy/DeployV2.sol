@@ -773,9 +773,8 @@ contract OlympusDeploy is Script {
         return address(clearinghouse);
     }
 
-    function _deployClearinghouseRegistry(bytes memory args) public returns (address) {
-        (address[] memory active, address[] memory inactive) = abi.decode(args, (address[], address[]));
-
+    function _deployClearinghouseRegistry(bytes calldata args) public returns (address) {
+        (address[] memory active, address[] memory inactive) = abi.decode(args[32:], (address[],address[]));
         // Deploy Clearinghouse Registry module
         vm.broadcast();
         CHREG = new OlympusClearinghouseRegistry(kernel, active, inactive);
