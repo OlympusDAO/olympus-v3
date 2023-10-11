@@ -1,0 +1,11 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusClearinghouseRegistry",
+            "args": {
+                "active": ["0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c"],
+                "inactive": ["0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880"]
+            }
+        }
+    ]
+}
