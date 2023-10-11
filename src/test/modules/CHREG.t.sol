@@ -20,7 +20,6 @@ import "src/Kernel.sol";
 /// [X]  activateClearinghouse
 ///     [X]  Unapproved addresses cannot call.
 ///     [X]  Approved policies can activate clearinghouse.
-///     [X]  Cannot activate twice.
 ///     [X]  Address is only registered once.
 ///     [X]  Storage is properly updated.
 ///     [X]  Event is emitted.
@@ -35,7 +34,7 @@ contract CHREGTest is Test {
     using ModuleTestFixtureGenerator for OlympusClearinghouseRegistry;
 
     address public godmode;
-    address[] public active;
+    address public active;
     address[] public inactive;
 
     Kernel internal kernel;
@@ -73,7 +72,7 @@ contract CHREGTest is Test {
     function test_constructor() public {
         inactive.push(address(1));
         inactive.push(address(2));
-        active.push(address(3));
+        active = address(3);
 
         chreg = new OlympusClearinghouseRegistry(kernel, active, inactive);
 
@@ -89,20 +88,7 @@ contract CHREGTest is Test {
     function testRevert_constructor_duplicateAddress_inactive() public {
         inactive.push(address(1));
         inactive.push(address(1));
-        active.push(address(3));
-
-        // Expected error
-        bytes memory err = abi.encodeWithSelector(CHREGv1.CHREG_InvalidConstructor.selector);
-        vm.expectRevert(err);
-
-        chreg = new OlympusClearinghouseRegistry(kernel, active, inactive);
-    }
-
-    function testRevert_constructor_duplicateAddress_active() public {
-        inactive.push(address(1));
-        inactive.push(address(2));
-        active.push(address(3));
-        active.push(address(3));
+        active = address(3);
 
         // Expected error
         bytes memory err = abi.encodeWithSelector(CHREGv1.CHREG_InvalidConstructor.selector);
@@ -114,7 +100,7 @@ contract CHREGTest is Test {
     function testRevert_constructor_bothActiveAndInactive() public {
         inactive.push(address(1));
         inactive.push(address(2));
-        active.push(address(2));
+        active = address(2);
 
         // Expected error
         bytes memory err = abi.encodeWithSelector(CHREGv1.CHREG_InvalidConstructor.selector);

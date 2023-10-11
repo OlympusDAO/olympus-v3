@@ -14,14 +14,16 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
     //                                      MODULE SETUP                                          //
     //============================================================================================//
 
-    constructor(
-        Kernel kernel_,
-        address[] memory active_,
-        address[] memory inactive_
-    ) Module(kernel_) {
+    /// @notice Can be initialized with an active Clearinghouse and list of inactive ones.
+    /// @param  kernel_ contract address.
+    /// @param  active_ Address of the active Clearinghouse. Set to address(0) if none.
+    /// @param  inactive_ List of inactive Clearinghouses. Leave empty if none.
+    constructor(Kernel kernel_, address active_, address[] memory inactive_) Module(kernel_) {
         // Process inactive addresses.
         uint256 toRegister = inactive_.length;
         for (uint256 i; i < toRegister; ) {
+            // Ensure clearinghouses are either active or inactive.
+            if (inactive_[i] == active_) revert CHREG_InvalidConstructor();
             // Ensure no duplicates in active addresses.
             for (uint256 j; j < toRegister; ) {
                 if (i != j && inactive_[i] == inactive_[j]) revert CHREG_InvalidConstructor();
@@ -35,33 +37,15 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
                 ++i;
             }
         }
-        // Process active addresses.
-        uint256 toActivate = active_.length;
-        for (uint256 i; i < toActivate; ) {
-            // Ensure no duplicates in active addresses.
-            for (uint256 j; j < toActivate; ) {
-                if (i != j && active_[i] == active_[j]) revert CHREG_InvalidConstructor();
-                unchecked {
-                    ++j;
-                }
-            }
-            // Ensure clearinghouses are either active or inactive.
-            for (uint256 k; k < toRegister; ) {
-                if (active_[i] == inactive_[k]) revert CHREG_InvalidConstructor();
-                unchecked {
-                    ++k;
-                }
-            }
-            // Add to storage.
-            active.push(active_[i]);
-            registry.push(active_[i]);
-            unchecked {
-                ++i;
-            }
+        // Process active address.
+        if (active_ == address(0)) {
+            registryCount = toRegister;
+        } else {
+            active.push(active_);
+            registry.push(active_);
+            registryCount = toRegister + 1;
+            activeCount = 1;
         }
-
-        activeCount = toActivate;
-        registryCount = toActivate + toRegister;
     }
 
     /// @inheritdoc Module

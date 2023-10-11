@@ -774,10 +774,12 @@ contract OlympusDeploy is Script {
     }
 
     function _deployClearinghouseRegistry(bytes calldata args) public returns (address) {
-        (address[] memory active, address[] memory inactive) = abi.decode(args[32:], (address[],address[]));
+        // Necessary to truncate the first word (32 bytes) of args due to a potential bug in the JSON parser.
+        address[] memory inactive = abi.decode(args[32:], (address[]));
+
         // Deploy Clearinghouse Registry module
         vm.broadcast();
-        CHREG = new OlympusClearinghouseRegistry(kernel, active, inactive);
+        CHREG = new OlympusClearinghouseRegistry(kernel, address(clearinghouse), inactive);
         console2.log("CHREG deployed at:", address(CHREG));
 
         return address(CHREG);
