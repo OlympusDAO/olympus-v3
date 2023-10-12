@@ -342,10 +342,19 @@ contract OlympusDeploy is Script {
 
     function _deployRange(bytes memory args) public returns (address) {
         // Decode arguments for Range module
-        (uint256 thresholdFactor, uint256 cushionSpread, uint256 wallSpread) = abi.decode(
-            args,
-            (uint256, uint256, uint256)
-        );
+        (
+            uint256 highCushionSpread,
+            uint256 highWallSpread,
+            uint256 lowCushionSpread,
+            uint256 lowWallSpread,
+            uint256 thresholdFactor
+        ) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
+
+        console2.log("highCushionSpread", highCushionSpread);
+        console2.log("highWallSpread", highWallSpread);
+        console2.log("lowCushionSpread", lowCushionSpread);
+        console2.log("lowWallSpread", lowWallSpread);
+        console2.log("thresholdFactor", thresholdFactor);
 
         console2.log("CushionSpread", cushionSpread);
         console2.log("WallSpread", wallSpread);
@@ -353,7 +362,14 @@ contract OlympusDeploy is Script {
 
         // Deploy Range module
         vm.broadcast();
-        RANGE = new OlympusRange(kernel, ohm, reserve, thresholdFactor, cushionSpread, wallSpread);
+        RANGE = new OlympusRange(
+            kernel,
+            ohm,
+            reserve,
+            thresholdFactor,
+            [lowCushionSpread, lowWallSpread],
+            [highCushionSpread, highWallSpread]
+        );
         console2.log("Range deployed at:", address(RANGE));
 
         return address(RANGE);
@@ -478,7 +494,7 @@ contract OlympusDeploy is Script {
 
         // Deploy OlympusHeart policy
         vm.broadcast();
-        heart = new OlympusHeart(kernel, operator, ohm, maxReward, auctionDuration);
+        heart = new OlympusHeart(kernel, operator, maxReward, auctionDuration);
         console2.log("OlympusHeart deployed at:", address(heart));
 
         return address(heart);

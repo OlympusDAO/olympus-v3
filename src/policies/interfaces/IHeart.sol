@@ -8,7 +8,7 @@ interface IHeart {
 
     event Beat(uint256 timestamp_);
     event RewardIssued(address to_, uint256 rewardAmount_);
-    event RewardUpdated(ERC20 token_, uint256 maxRewardAmount_, uint48 auctionDuration_);
+    event RewardUpdated(uint256 maxRewardAmount_, uint48 auctionDuration_);
 
     // =========  ERRORS ========= //
 
@@ -46,20 +46,11 @@ interface IHeart {
     /// @param  operator_ The address of the new Operator contract
     function setOperator(address operator_) external;
 
-    /// @notice Sets the reward token, max reward amount, and auction duration for the beat function
+    /// @notice Sets the max reward amount, and auction duration for the beat function
     /// @notice Access restricted
-    /// @param  token_ - New reward token address
     /// @param  maxReward_ - New max reward amount, in units of the reward token
     /// @param  auctionDuration_ - New auction duration, in seconds
-    function setRewardAuctionParams(
-        ERC20 token_,
-        uint256 maxReward_,
-        uint48 auctionDuration_
-    ) external;
-
-    /// @notice Withdraws unspent balance of provided token to sender
-    /// @notice Access restricted
-    function withdrawUnspentRewards(ERC20 token_) external;
+    function setRewardAuctionParams(uint256 maxReward_, uint48 auctionDuration_) external;
 
     // =========  VIEW FUNCTIONS ========= //
 
