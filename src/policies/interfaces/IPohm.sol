@@ -26,6 +26,10 @@ interface IPohm {
         uint256 max; // Maximum nominal OHM amount claimable
     }
 
+    // ========= STATE VARIABLES ========= //
+
+    function terms(address account_) external view returns (Term memory);
+
     //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//

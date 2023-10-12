@@ -2,59 +2,47 @@
 pragma solidity 0.8.15;
 
 // Import dependencies
+import {IPohm} from "policies/interfaces/IPohm.sol";
+import {IgOHM} from "interfaces/IgOHM.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // Import libraries
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
-interface IClaimContract {
-    struct Terms {
-        uint256 percent;
-        uint256 gClaimed;
-        uint256 max;
-    }
-
-    function terms(address account_) external view returns (Terms memory);
-
-    function pullWalletChange(address oldAddress_) external;
-}
-
 contract ClaimTransfer {
     using TransferHelper for ERC20;
 
-    // ========= ERRORS ========= //
-
-    error CT_UnapprovedClaimContract(address contract_);
-    error CT_ClaimContractAlreadyExists(address contract_);
-
     // ========= DATA STRUCTURES ========= //
 
-    struct ClaimContract {
-        address claimToken;
-        address depositToken;
-        uint256 decimals;
+    struct Term {
+        uint256 percent; // PRECISION = 1_000_000 (i.e. 5000 = 0.5%)
+        uint256 gClaimed; // Rebase agnostic # of tokens claimed
+        uint256 max; // Maximum nominal OHM amount claimable
     }
 
     // ========= STATE VARIABLES ========= //
 
+    // Olympus Contracts
+    IPohm public pohm;
+
+    // Tokens
+    ERC20 public OHM;
+    ERC20 public DAI;
+    IgOHM public gOHM;
+
     // Accounting
-    mapping(address => ClaimContract) public claimContracts;
-    mapping(address => mapping(address => mapping(address => uint256))) public allowance; // claimContract => owner => spender => allowance
-    mapping(address => mapping(address => uint256)) public balanceOf; // claimContract => user => balance
+    mapping(address => Term) public fractionalizedTerms;
+    mapping(address => mapping(address => uint256)) public allowance;
 
     constructor() {}
 
     // ========= CORE FUNCTIONS ========= //
 
-    function fractionalizeClaim(address contract_) external {
-        if (claimContracts[contract_].claimToken == address(0)) revert CT_UnapprovedClaimContract(contract_);
-
-        IClaimContract claimContract = IClaimContract(contract_);
-        IClaimContract.Terms memory terms = claimContract.terms(msg.sender);
-
-        balanceOf[contract_][msg.sender] += terms.percent;
-
-        claimContract.pullWalletChange(msg.sender); 
+    function fractionalizeClaim() external {
+        IPohm.Term memory terms = pohm.terms(msg.sender);
+        fractionalizedTerms[msg.sender] = Term(terms.percent, terms.gClaimed, terms.max);
+        
+        pohm.pullWalletChange(msg.sender); 
     }
 
     function claim(address contract_) external {
@@ -63,43 +51,55 @@ contract ClaimTransfer {
 
     // ========= TRANSFER FUNCTIONS ========= //
 
-    function transfer(address contract_, address to_, uint256 amount_) external {
-        // Check that contract is valid
-        if (claimContracts[contract_].claimToken == address(0)) revert CT_UnapprovedClaimContract(contract_);
+    function approve(address spender_, uint256 amount_) external returns (bool) {
+        allowance[msg.sender][spender_] = amount_;
+        return true;
+    }
+
+    function transfer(address to_, uint256 amount_) external returns (bool) {
+        // Get fractionalized terms
+        Term memory terms = fractionalizedTerms[msg.sender];
+
+        uint256 gClaimedToTransfer = (amount_ * terms.gClaimed) / terms.percent;
+        uint256 maxToTransfer = (amount_ * terms.max) / terms.percent;
+        uint256 maxAdjustment = gOHM.balanceFrom(gClaimedToTransfer);
 
         // Balance updates
-        balanceOf[contract_][msg.sender] -= amount_;
-        balanceOf[contract_][to_] += amount_;
+        fractionalizedTerms[msg.sender].percent -= amount_;
+        fractionalizedTerms[msg.sender].gClaimed -= gClaimedToTransfer;
+        fractionalizedTerms[msg.sender].max -= maxToTransfer + maxAdjustment;
+
+        fractionalizedTerms[to_].percent += amount_;
+        fractionalizedTerms[to_].gClaimed += gClaimedToTransfer;
+        fractionalizedTerms[to_].max += maxToTransfer + maxAdjustment;
+
+        return true;
     }
 
     function transferFrom(
-        address contract_,
         address from_,
         address to_,
         uint256 amount_
-    ) external {
-        // Check that contract is valid
-        if (claimContracts[contract_].claimToken == address(0)) revert CT_UnapprovedClaimContract(contract_);
+    ) external returns (bool) {
+        // Get fractionalized terms
+        Term memory terms = fractionalizedTerms[from_];
+
+        uint256 gClaimedToTransfer = (amount_ * terms.gClaimed) / terms.percent;
+        uint256 maxToTransfer = (amount_ * terms.max) / terms.percent;
+        uint256 maxAdjustment = gOHM.balanceFrom(gClaimedToTransfer);
 
         // Check that allowance is sufficient
-        allowance[contract_][from_][msg.sender] -= amount_;
+        allowance[from_][msg.sender] -= amount_;
         
         // Balance updates
-        balanceOf[contract_][from_] -= amount_;
-        balanceOf[contract_][to_] += amount_;
-    }
+        fractionalizedTerms[from_].percent -= amount_;
+        fractionalizedTerms[from_].gClaimed -= gClaimedToTransfer;
+        fractionalizedTerms[from_].max -= maxToTransfer + maxAdjustment;
 
-    // ========= ADMIN FUNCTIONS ========= //
+        fractionalizedTerms[to_].percent += amount_;
+        fractionalizedTerms[to_].gClaimed += gClaimedToTransfer;
+        fractionalizedTerms[to_].max += maxToTransfer + maxAdjustment;
 
-    // TODO Add access control
-    function addClaimContract(
-        address contract_,
-        address claimToken_,
-        address depositToken_,
-        uint256 decimals_
-    ) external {
-        // Check that contract is not already added
-        if (claimContracts[contract_].claimToken != address(0)) revert CT_ClaimContractAlreadyExists(contract_);
-        claimContracts[contract_] = ClaimContract(claimToken_, depositToken_, decimals_);
+        return true;
     }
 }
