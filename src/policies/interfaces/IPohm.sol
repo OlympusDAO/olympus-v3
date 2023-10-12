@@ -28,7 +28,7 @@ interface IPohm {
 
     // ========= STATE VARIABLES ========= //
 
-    function terms(address account_) external view returns (Term memory);
+    function terms(address account_) external view returns (uint256, uint256, uint256);
 
     //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
