@@ -67,10 +67,14 @@ contract HeartTest is Test {
     OlympusHeart internal heart;
     RolesAdmin internal rolesAdmin;
 
+    uint48 internal constant PRICE_FREQUENCY = uint48(8 hours)
+    
     // MINTR
     event Mint(address indexed policy_, address indexed to_, uint256 amount_);
 
     // Heart
+    event Beat(uint256 timestamp_);
+    event RewardIssued(address to_, uint256 rewardAmount_);
     event RewardUpdated(uint256 maxRewardAmount_, uint48 auctionDuration_);
 
     function setUp() public {
@@ -91,7 +95,7 @@ contract HeartTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy modules (some mocks)
-            price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
+            price = new MockPrice(kernel, PRICE_FREQUENCY, 10 * 1e18);
             roles = new OlympusRoles(kernel);
             mintr = new OlympusMinter(kernel, address(ohm));
 
@@ -152,11 +156,18 @@ contract HeartTest is Test {
         uint48 frequency = heart.frequency();
         vm.warp(block.timestamp + frequency);
 
+        vm.expectEmit(false, false, false, true);
+        emit RewardIssued(address(this), heart.currentReward());
+        emit Beat(block.timestamp);
+
         // Beat the heart
         heart.beat();
 
         // Check that last beat has been updated to the current timestamp
         assertEq(heart.lastBeat(), block.timestamp);
+
+        // Check that the reward token has been transferred to this contract
+        assertEq(rewardToken.balanceOf(address(this)), heart.currentReward());
     }
 
     function testCorrectness_cannotBeatIfInactive() public {

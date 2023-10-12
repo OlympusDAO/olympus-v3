@@ -11,6 +11,7 @@ import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
 
@@ -46,6 +47,7 @@ contract OperatorTest is Test {
     BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
+    MockERC4626 internal wrappedReserve;
 
     Kernel internal kernel;
     MockPrice internal price;
@@ -57,6 +59,13 @@ contract OperatorTest is Test {
     Operator internal operator;
     BondCallback internal callback;
     RolesAdmin internal rolesAdmin;
+
+    event Swap(
+        ERC20 indexed tokenIn_,
+        ERC20 indexed tokenOut_,
+        uint256 amountIn_,
+        uint256 amountOut_
+    );
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -85,6 +94,7 @@ contract OperatorTest is Test {
             /// Deploy mock tokens
             ohm = new MockOhm("Olympus", "OHM", 9);
             reserve = new MockERC20("Reserve", "RSV", 18);
+            wrappedReserve = new MockERC4626(reserve, "wrappedReserve", "sRSV");
         }
 
         {
@@ -121,7 +131,7 @@ contract OperatorTest is Test {
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [address(ohm), address(reserve)],
+                [address(ohm), address(reserve), address(wrappedReserve)],
                 [
                     uint32(2000), // cushionFactor
                     uint32(5 days), // duration
@@ -175,6 +185,9 @@ contract OperatorTest is Test {
         /// Set operator on the callback
         vm.prank(guardian);
         callback.setOperator(operator);
+        // Signal that reserve is held as wrappedReserve in TRSRY
+        vm.prank(guardian);
+        callback.useWrappedVersion(address(reserve), address(wrappedReserve));
 
         // Mint tokens to users and treasury for testing
         uint256 testOhm = 1_000_000 * 1e9;
@@ -184,6 +197,11 @@ contract OperatorTest is Test {
         reserve.mint(alice, testReserve * 20);
 
         reserve.mint(address(treasury), testReserve * 100);
+        // Deposit TRSRY reserves into wrappedReserve
+        vm.startPrank(address(treasury));
+        reserve.approve(address(wrappedReserve), testReserve * 100);
+        wrappedReserve.deposit(testReserve * 100, address(treasury));
+        vm.stopPrank();
 
         // Approve the operator and bond teller for the tokens to swap
         vm.prank(alice);
@@ -249,6 +267,10 @@ contract OperatorTest is Test {
         /// Calculate expected difference
         uint256 highWallPrice = range.price(true, true);
         uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * highWallPrice);
+        uint256 wrappedReserveBalanceBefore = wrappedReserve.balanceOf(address(treasury));
+
+        vm.expectEmit(false, false, false, true);
+        emit Swap(reserve, ohm, amountIn, expAmountOut);
 
         /// Swap at the high wall
         vm.prank(alice);
@@ -261,6 +283,10 @@ contract OperatorTest is Test {
         assertEq(endCapacity, startCapacity - amountOut);
         assertEq(ohm.balanceOf(alice), ohmBalance + amountOut);
         assertEq(reserve.balanceOf(alice), reserveBalance - amountIn);
+        assertEq(
+            wrappedReserve.balanceOf(address(treasury)),
+            wrappedReserveBalanceBefore + amountIn
+        );
     }
 
     function testCorrectness_swapLowWall() public {
@@ -277,6 +303,10 @@ contract OperatorTest is Test {
         /// Calculate expected difference
         uint256 lowWallPrice = range.price(false, true);
         uint256 expAmountOut = amountIn.mulDiv(1e18 * lowWallPrice, 1e9 * 1e18);
+        uint256 wrappedReserveBalanceBefore = wrappedReserve.balanceOf(address(treasury));
+
+        vm.expectEmit(false, false, false, true);
+        emit Swap(ohm, reserve, amountIn, expAmountOut);
 
         /// Swap at the high wall
         vm.prank(alice);
@@ -289,6 +319,10 @@ contract OperatorTest is Test {
         assertEq(endCapacity, startCapacity - amountOut);
         assertEq(ohm.balanceOf(alice), ohmBalance - amountIn);
         assertEq(reserve.balanceOf(alice), reserveBalance + amountOut);
+        assertEq(
+            wrappedReserve.balanceOf(address(treasury)),
+            wrappedReserveBalanceBefore - expAmountOut
+        );
     }
 
     function testCorrectness_highWallBreaksAtThreshold() public {
@@ -460,7 +494,7 @@ contract OperatorTest is Test {
         expAmountOut = amountIn.mulDiv(1e18 * range.price(false, true), 1e9 * 1e18);
         minAmountOut = expAmountOut + 1;
 
-        /// Try to swap at low wall, expect to fail
+        /// Try to swap at high wall, expect to fail
         err = abi.encodeWithSignature(
             "Operator_AmountLessThanMinimum(uint256,uint256)",
             expAmountOut,
@@ -1994,6 +2028,7 @@ contract OperatorTest is Test {
         assertTrue(!range.active(true));
         assertTrue(!range.active(false));
         assertEq(treasury.withdrawApproval(address(operator), reserve), 0);
+        assertEq(treasury.withdrawApproval(address(operator), wrappedReserve), 0);
         assertEq(range.price(false, false), 0);
         assertEq(range.price(false, true), 0);
         assertEq(range.price(true, false), 0);
@@ -2010,7 +2045,11 @@ contract OperatorTest is Test {
         assertTrue(operator.active());
         assertTrue(range.active(true));
         assertTrue(range.active(false));
-        assertEq(treasury.withdrawApproval(address(operator), reserve), range.capacity(false));
+        assertEq(treasury.withdrawApproval(address(operator), reserve), 0);
+        assertEq(
+            treasury.withdrawApproval(address(operator), wrappedReserve),
+            range.capacity(false)
+        );
         assertGt(range.price(false, false), 0);
         assertGt(range.price(false, true), 0);
         assertGt(range.price(true, false), 0);
@@ -2235,7 +2274,9 @@ contract OperatorTest is Test {
         Operator.Config memory config = operator.config();
 
         /// Check that fullCapacity returns the full capacity based on the reserveFactor
-        uint256 resInTreasury = treasury.getReserveBalance(reserve);
+        uint256 resInTreasury = wrappedReserve.previewRedeem(
+            treasury.getReserveBalance(wrappedReserve)
+        );
         uint256 lowCapacity = resInTreasury.mulDiv(config.reserveFactor, 1e4);
         uint256 highCapacity = (lowCapacity.mulDiv(
             1e9 * 10 ** price.decimals(),
