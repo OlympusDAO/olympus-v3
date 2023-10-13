@@ -258,6 +258,8 @@ contract HeartTest is Test {
 
         // Balance of this contract has increased by the reward amount.
         assertEq(ohm.balanceOf(address(this)), startBalance + expectedReward);
+        // Mint capabilities are limited to the reward amount when the beat happens.
+        assertEq(mintr.mintApproval(address(heart)), 0);
     }
 
     // =========  VIEW FUNCTIONS ========= //
@@ -272,7 +274,7 @@ contract HeartTest is Test {
         assertEq(frequency, uint256(8 hours));
     }
 
-    function test_currentReward(uint48 wait_) public {
+    function testFuzz_currentReward(uint48 wait_) public {
         // Expect current reward to return zero since beat is not available
         assertEq(heart.currentReward(), uint256(0));
 

@@ -706,6 +706,20 @@ contract BondCallbackTest is Test {
         assertEq(address(callback.operator()), alice);
     }
 
+    function testCorrectness_useWrappedVersion() public {
+        // Configure callback to use a wrapped reserve for reserve
+        vm.prank(guardian);
+        callback.useWrappedVersion(address(reserve), address(wrappedReserve));
+
+        assertEq(callback.wrapped(address(reserve)), address(wrappedReserve));
+
+        // Configure callback to use the naked reserve.
+        vm.prank(guardian);
+        callback.useWrappedVersion(address(reserve), address(0));
+
+        assertEq(callback.wrapped(address(reserve)), address(0));
+    }
+
     function testCorrectness_batchToTreasury() public {
         /// Create an extra market with the other token as the quote token
         uint256 otherBond = createMarket(other, ohm, 2, 1, 5);
