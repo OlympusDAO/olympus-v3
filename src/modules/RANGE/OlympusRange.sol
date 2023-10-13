@@ -78,7 +78,7 @@ contract OlympusRange is RANGEv1 {
     /// @inheritdoc Module
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
         major = 1;
-        minor = 0;
+        minor = 1;
     }
 
     //============================================================================================//
@@ -188,27 +188,23 @@ contract OlympusRange is RANGEv1 {
         uint256 cushionSpread_,
         uint256 wallSpread_
     ) external override permissioned {
+        // Confirm spreads are within allowed values
+        if (
+            wallSpread_ < ONE_PERCENT ||
+            cushionSpread_ < ONE_PERCENT ||
+            cushionSpread_ > wallSpread_
+        ) revert RANGE_InvalidParams();
+
         if (high_) {
-            // Confirm spreads are within allowed values
             // No upper limit on high side
-            if (
-                wallSpread_ < ONE_PERCENT ||
-                cushionSpread_ < ONE_PERCENT ||
-                cushionSpread_ > wallSpread_
-            ) revert RANGE_InvalidParams();
 
             // Set spreads
             _range.high.wall.spread = wallSpread_;
             _range.high.cushion.spread = cushionSpread_;
         } else {
             // Confirm spreads are within allowed values
-            if (
-                wallSpread_ >= ONE_HUNDRED_PERCENT ||
-                wallSpread_ < ONE_PERCENT ||
-                cushionSpread_ >= ONE_HUNDRED_PERCENT ||
-                cushionSpread_ < ONE_PERCENT ||
-                cushionSpread_ > wallSpread_
-            ) revert RANGE_InvalidParams();
+            if (wallSpread_ >= ONE_HUNDRED_PERCENT || cushionSpread_ >= ONE_HUNDRED_PERCENT)
+                revert RANGE_InvalidParams();
 
             // Set spreads
             _range.low.wall.spread = wallSpread_;

@@ -261,11 +261,11 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         operator = operator_;
     }
 
-    /// @notice Inform the whether the TRSRY holds the payout token in a naked or a wrapped version
+    /// @notice Inform whether the TRSRY holds the payout token in a naked or a wrapped version
     /// @dev    Must be called before whitelisting to ensure a proper TRSRY withdraw approval
     /// @param  payoutToken_ Address of the payout token
     /// @param  wrappedToken_ Address of the token wrapper held by the TRSRY. If the TRSRY moves
-    ///                       back to the naked token, input address(0) as the wrapped version
+    ///                       back to the naked token, input address(0) as the wrapped version.
     function useWrappedVersion(
         address payoutToken_,
         address wrappedToken_

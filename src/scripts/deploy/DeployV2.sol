@@ -356,10 +356,6 @@ contract OlympusDeploy is Script {
         console2.log("lowWallSpread", lowWallSpread);
         console2.log("thresholdFactor", thresholdFactor);
 
-        console2.log("CushionSpread", cushionSpread);
-        console2.log("WallSpread", wallSpread);
-        console2.log("thresholdFactor", thresholdFactor);
-
         // Deploy Range module
         vm.broadcast();
         RANGE = new OlympusRange(

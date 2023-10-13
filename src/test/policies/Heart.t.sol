@@ -67,8 +67,8 @@ contract HeartTest is Test {
     OlympusHeart internal heart;
     RolesAdmin internal rolesAdmin;
 
-    uint48 internal constant PRICE_FREQUENCY = uint48(8 hours)
-    
+    uint48 internal constant PRICE_FREQUENCY = uint48(8 hours);
+
     // MINTR
     event Mint(address indexed policy_, address indexed to_, uint256 amount_);
 
@@ -157,7 +157,6 @@ contract HeartTest is Test {
         vm.warp(block.timestamp + frequency);
 
         vm.expectEmit(false, false, false, true);
-        emit RewardIssued(address(this), heart.currentReward());
         emit Beat(block.timestamp);
 
         // Beat the heart
@@ -165,9 +164,6 @@ contract HeartTest is Test {
 
         // Check that last beat has been updated to the current timestamp
         assertEq(heart.lastBeat(), block.timestamp);
-
-        // Check that the reward token has been transferred to this contract
-        assertEq(rewardToken.balanceOf(address(this)), heart.currentReward());
     }
 
     function testCorrectness_cannotBeatIfInactive() public {
@@ -254,12 +250,13 @@ contract HeartTest is Test {
         if (expectedReward > 0) {
             vm.expectEmit(false, false, false, true);
             emit Mint(address(heart), address(this), expectedReward);
+            emit RewardIssued(address(this), expectedReward);
         }
 
         // Beat the heart
         heart.beat();
 
-        // Reward issued should be half the max reward
+        // Balance of this contract has increased by the reward amount.
         assertEq(ohm.balanceOf(address(this)), startBalance + expectedReward);
     }
 
