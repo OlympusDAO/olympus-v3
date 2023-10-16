@@ -8,13 +8,12 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
-import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
-
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Pohm} from "policies/Pohm.sol";
+import {ClaimTransfer} from "policies/ClaimTransfer.sol";
 import "src/Kernel.sol";
 
 import {IgOHM} from "interfaces/IgOHM.sol";
@@ -296,6 +295,7 @@ contract ClaimTransferTest is Test {
     ///     [X]  cannot transfer more than percent
     ///     [X]  transfer properly updates max
     ///     [X]  cannot transfer more than unclaimed portion of max
+    ///     [X]  transfer does not allow illegal vesting
     ///     [X]  updates fractionalizedTerms
     ///     [X]  returns true
 
@@ -364,6 +364,33 @@ contract ClaimTransferTest is Test {
         vm.stopPrank();
     }
 
+    function testCorrectness_transferDoesNotAllowIllegalVesting() public {
+        // Burn almost all of the supply so only 50k OHM should be claimable
+        ohm.burn(address(0), 95_000_000e9);
+
+        // Alice claims 50k OHM (max for given circulating supply)
+        vm.startPrank(alice);
+        pohm.pushWalletChange(address(claimTransfer));
+        claimTransfer.fractionalizeClaim();
+
+        dai.approve(address(claimTransfer), 50_000e18);
+        claimTransfer.claim(50_000e18);
+        
+        // Alice tries to transfer rest of claim to bob to try to claim more
+        claimTransfer.transfer(bob, 5_000);
+        vm.stopPrank();
+
+        // Bob tries to claim
+        vm.startPrank(bob);
+        dai.approve(address(claimTransfer), 50_000e18);
+
+        bytes memory err = abi.encodeWithSignature("CT_IllegalClaim()");
+        vm.expectRevert(err);
+
+        claimTransfer.claim(50_000e18);
+        vm.stopPrank();
+    }
+
     function testCorrectness_transferUpdatesFractionalizedTerms() public {
         vm.startPrank(alice);
         pohm.pushWalletChange(address(claimTransfer));
@@ -393,11 +420,12 @@ contract ClaimTransferTest is Test {
         vm.stopPrank();
     }
 
-    /// []  transferFrom
+    /// [X]  transferFrom
     ///     [X]  cannot be called without allowance
     ///     [X]  cannot transfer more than percent
-    ///     []  transferFrom properly updates max
-    ///     []  cannot transfer more than unclaimed portion of max
+    ///     [X]  transferFrom properly updates max
+    ///     [X]  cannot transfer more than unclaimed portion of max
+    ///     [X]  transferFrom does not allow illegal vesting
     ///     [X]  updates fractionalizedTerms
     ///     [X]  returns true
 
@@ -472,6 +500,35 @@ contract ClaimTransferTest is Test {
 
         vm.expectRevert(stdError.arithmeticError);
         claimTransfer.transferFrom(alice, bob, 10_000);
+    }
+
+    function testCorrectness_transferFromDoesNotAllowIllegalVesting() public {
+        // Burn almost all of the supply so only 50k OHM should be claimable
+        ohm.burn(address(0), 95_000_000e9);
+
+        // Alice claims 50k OHM (max for given circulating supply)
+        vm.startPrank(alice);
+        pohm.pushWalletChange(address(claimTransfer));
+        claimTransfer.fractionalizeClaim();
+
+        dai.approve(address(claimTransfer), 50_000e18);
+        claimTransfer.claim(50_000e18);
+        
+        claimTransfer.approve(address(this), 5_000);
+        vm.stopPrank();
+
+        // transferFrom to bob
+        claimTransfer.transferFrom(alice, bob, 5_000);
+
+        // Bob tries to claim
+        vm.startPrank(bob);
+        dai.approve(address(claimTransfer), 50_000e18);
+
+        bytes memory err = abi.encodeWithSignature("CT_IllegalClaim()");
+        vm.expectRevert(err);
+
+        claimTransfer.claim(50_000e18);
+        vm.stopPrank();
     }
 
     function testCorrectness_transferFromUpdatesFractionalizedTerms() public {

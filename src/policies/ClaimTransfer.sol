@@ -55,6 +55,7 @@ contract ClaimTransfer {
 
     // ========= CORE FUNCTIONS ========= //
 
+    /// @notice Convert pOHM claim that can only be fully transfered to a new wallet to a fractionalized claim
     function fractionalizeClaim() external {
         (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(msg.sender);
         fractionalizedTerms[msg.sender] = Term(percent, gClaimed, max);
@@ -62,12 +63,13 @@ contract ClaimTransfer {
         pohm.pullWalletChange(msg.sender); 
     }
 
+    /// @notice Claim OHM from the pOHM contract via your fractionalized claim
+    /// @param amount_ Amount of DAI to send to the pOHM contract
     function claim(uint256 amount_) external {
         uint256 toSend = (amount_ * 1e9) / 1e18;
 
         // Get fractionalized terms
         Term memory terms = fractionalizedTerms[msg.sender];
-        (, uint256 gClaimedBefore,) = pohm.terms(address(this));
         uint256 circulatingSupply = pohm.getCirculatingSupply();
         uint256 accountClaimed = gOHM.balanceFrom(terms.gClaimed);
 
@@ -75,7 +77,7 @@ contract ClaimTransfer {
         uint256 max = (circulatingSupply * fractionalizedTerms[msg.sender].percent) / 1e6;
         max = max > terms.max ? terms.max : max;
         uint256 maxClaimable = max - accountClaimed;
-        if ((terms.max - accountClaimed) < toSend) revert CT_IllegalClaim();
+        if (maxClaimable < toSend) revert CT_IllegalClaim();
 
         // Update fractionalized terms
         fractionalizedTerms[msg.sender].gClaimed += gOHM.balanceTo(toSend);
@@ -86,11 +88,19 @@ contract ClaimTransfer {
 
     // ========= TRANSFER FUNCTIONS ========= //
 
+    /// @notice Approve a spender to spend a certain amount of your fractionalized claim (denominated in the `percent` value of a Term)
+    /// @param spender_ Address of the spender
+    /// @param amount_ Amount of your fractionalized claim to approve
+    /// @return bool
     function approve(address spender_, uint256 amount_) external returns (bool) {
         allowance[msg.sender][spender_] = amount_;
         return true;
     }
 
+    /// @notice Transfer a portion of your fractionalized claim to another address
+    /// @param to_ Address of the recipient
+    /// @param amount_ Amount of your fractionalized claim to transfer
+    /// @return bool
     /// @dev    Transfering a portion of your claim should not result in the recipient getting a small amount of max claimable
     ///         OHM due to what you've already claimed. This function will adjust the max claimable amount to account for this.
     ///         That is, if you transfer 50% of your claim, the recipient will be able to claim 50% of the original max claimable OHM 
@@ -101,19 +111,25 @@ contract ClaimTransfer {
         uint256 gClaimedToTransfer = (amount_ * terms.gClaimed) / terms.percent;
         uint256 maxToTransfer = (amount_ * terms.max) / terms.percent;
         uint256 maxAdjustment = gOHM.balanceFrom(gClaimedToTransfer);
+        maxToTransfer += maxAdjustment;
 
         // Balance updates
         fractionalizedTerms[msg.sender].percent -= amount_;
         fractionalizedTerms[msg.sender].gClaimed -= gClaimedToTransfer;
-        fractionalizedTerms[msg.sender].max -= maxToTransfer + maxAdjustment;
+        fractionalizedTerms[msg.sender].max -= maxToTransfer;
 
         fractionalizedTerms[to_].percent += amount_;
         fractionalizedTerms[to_].gClaimed += gClaimedToTransfer;
-        fractionalizedTerms[to_].max += maxToTransfer + maxAdjustment;
+        fractionalizedTerms[to_].max += maxToTransfer;
 
         return true;
     }
 
+    /// @notice Transfer a portion of a fractionalized claim from another address to a recipient (must have approval)
+    /// @param from_ Address of the sender
+    /// @param to_ Address of the recipient
+    /// @param amount_ Amount of the sender's fractionalized claim to transfer
+    /// @return bool
     /// @dev    Transfering a portion of your claim should not result in the recipient getting a small amount of max claimable
     ///         OHM due to what you've already claimed. This function will adjust the max claimable amount to account for this.
     ///         That is, if you transfer 50% of your claim, the recipient will be able to claim 50% of the original max claimable OHM
@@ -128,6 +144,7 @@ contract ClaimTransfer {
         uint256 gClaimedToTransfer = (amount_ * terms.gClaimed) / terms.percent;
         uint256 maxToTransfer = (amount_ * terms.max) / terms.percent;
         uint256 maxAdjustment = gOHM.balanceFrom(gClaimedToTransfer);
+        maxToTransfer += maxAdjustment;
 
         // Check that allowance is sufficient
         allowance[from_][msg.sender] -= amount_;
@@ -135,11 +152,11 @@ contract ClaimTransfer {
         // Balance updates
         fractionalizedTerms[from_].percent -= amount_;
         fractionalizedTerms[from_].gClaimed -= gClaimedToTransfer;
-        fractionalizedTerms[from_].max -= maxToTransfer + maxAdjustment;
+        fractionalizedTerms[from_].max -= maxToTransfer;
 
         fractionalizedTerms[to_].percent += amount_;
         fractionalizedTerms[to_].gClaimed += gClaimedToTransfer;
-        fractionalizedTerms[to_].max += maxToTransfer + maxAdjustment;
+        fractionalizedTerms[to_].max += maxToTransfer;
 
         return true;
     }
