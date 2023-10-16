@@ -48,6 +48,9 @@ contract ClaimTransfer {
         OHM = ERC20(ohm_);
         DAI = ERC20(dai_);
         gOHM = IgOHM(gohm_);
+
+        // Approve pohm to spend DAI
+        DAI.approve(pohm_, type(uint256).max);
     }
 
     // ========= CORE FUNCTIONS ========= //
@@ -88,6 +91,9 @@ contract ClaimTransfer {
         return true;
     }
 
+    /// @dev    Transfering a portion of your claim should not result in the recipient getting a small amount of max claimable
+    ///         OHM due to what you've already claimed. This function will adjust the max claimable amount to account for this.
+    ///         That is, if you transfer 50% of your claim, the recipient will be able to claim 50% of the original max claimable OHM 
     function transfer(address to_, uint256 amount_) external returns (bool) {
         // Get fractionalized terms
         Term memory terms = fractionalizedTerms[msg.sender];
@@ -108,6 +114,9 @@ contract ClaimTransfer {
         return true;
     }
 
+    /// @dev    Transfering a portion of your claim should not result in the recipient getting a small amount of max claimable
+    ///         OHM due to what you've already claimed. This function will adjust the max claimable amount to account for this.
+    ///         That is, if you transfer 50% of your claim, the recipient will be able to claim 50% of the original max claimable OHM
     function transferFrom(
         address from_,
         address to_,

@@ -168,8 +168,108 @@ contract ClaimTransferTest is Test {
         assertEq(max, 100_000e9);
     }
 
-    /// []  claim
-    ///     [] TODO
+    /// [X]  claim
+    ///     [X]  fails if user has no fractionalized claim
+    ///     [X]  cannot claim more than vested
+    ///     [X]  cannot claim more than max
+    ///     [X]  increases user's gClaimed
+    ///     [X]  transfers DAI from user
+    ///     [X]  sends OHM to user
+
+    function testCorrectness_claimRevertsIfUserHasNoClaim(address user_) public {
+        dai.mint(user_, 1_000e18);
+
+        vm.startPrank(user_);
+        dai.approve(address(claimTransfer), 1_000e18);
+
+        bytes memory err = abi.encodeWithSignature("CT_IllegalClaim()");
+        vm.expectRevert(err);
+
+        claimTransfer.claim(1_000e18);
+        vm.stopPrank();
+    }
+
+    function testCorrectness_claimRevertsIfClaimMoreThanVested() public {
+        vm.startPrank(alice);
+        pohm.pushWalletChange(address(claimTransfer));
+
+        claimTransfer.fractionalizeClaim();
+        
+        dai.approve(address(claimTransfer), 250_000e18);
+
+        bytes memory err = abi.encodeWithSignature("CT_IllegalClaim()");
+        vm.expectRevert(err);
+
+        claimTransfer.claim(250_000e18);
+        vm.stopPrank();
+    }
+
+    function testCorrectness_claimRevertsIfClaimMoreThanMax() public {
+        vm.startPrank(alice);
+        pohm.pushWalletChange(address(claimTransfer));
+
+        claimTransfer.fractionalizeClaim();
+        
+        dai.approve(address(claimTransfer), 100_001e18);
+
+        // Set circulating supply to be massive
+        ohm.mint(address(0), 100_000_000_000e9);
+
+        bytes memory err = abi.encodeWithSignature("CT_IllegalClaim()");
+        vm.expectRevert(err);
+
+        claimTransfer.claim(100_001e18);
+        vm.stopPrank();
+    }
+
+    function testCorrectness_claimIncreasesGClaimed() public {
+        vm.startPrank(alice);
+        pohm.pushWalletChange(address(claimTransfer));
+
+        claimTransfer.fractionalizeClaim();
+        
+        dai.approve(address(claimTransfer), 1_000e18);
+
+        claimTransfer.claim(1_000e18);
+        vm.stopPrank();
+
+        (uint256 percent, uint256 gClaimed, uint256 max) = claimTransfer.fractionalizedTerms(alice);
+        assertEq(percent, 10_000);
+        assertEq(gClaimed, 10e18);
+        assertEq(max, 100_000e9);
+    }
+
+    function testCorrectness_claimTransfersDaiFromUser() public {
+        assertEq(dai.balanceOf(alice), 10_000_000e18);
+
+        vm.startPrank(alice);
+        pohm.pushWalletChange(address(claimTransfer));
+
+        claimTransfer.fractionalizeClaim();
+        
+        dai.approve(address(claimTransfer), 1_000e18);
+
+        claimTransfer.claim(1_000e18);
+        vm.stopPrank();
+
+        assertEq(dai.balanceOf(alice), 9_999_000e18);
+    }
+
+    function testCorrectness_claimSendsOhmToUser() public {
+        assertEq(ohm.balanceOf(alice), 0);
+
+        vm.startPrank(alice);
+        pohm.pushWalletChange(address(claimTransfer));
+
+        claimTransfer.fractionalizeClaim();
+        
+        dai.approve(address(claimTransfer), 1_000e18);
+
+        claimTransfer.claim(1_000e18);
+        vm.stopPrank();
+
+        assertEq(ohm.balanceOf(alice), 1_000e9);
+    }
 
     /// [X]  approve
     ///     [X]  can be called by anyone
@@ -191,10 +291,11 @@ contract ClaimTransferTest is Test {
         assertEq(claimTransfer.approve(address(this), 100), true);
     }
 
-    /// []  transfer
+    /// [X]  transfer
     ///     [X]  cannot transfer if you have no claim
     ///     [X]  cannot transfer more than percent
-    ///     []  cannot transfer more than unclaimed portion of max
+    ///     [X]  transfer properly updates max
+    ///     [X]  cannot transfer more than unclaimed portion of max
     ///     [X]  updates fractionalizedTerms
     ///     [X]  returns true
 
@@ -214,8 +315,53 @@ contract ClaimTransferTest is Test {
         claimTransfer.transfer(bob, 100_000);
     }
 
+    function testCorrectness_transferProperlyUpdatesMax() public {
+        // CASE: User claims 10000 OHM (100 gOHM). They can only then transfer up to 90000 OHM (900 gOHM).
+        // Their max is reduced by taking into consideration their gClaimed. Transfer 50% of their claim,
+        // and their max is reduced by 50000 OHM + 50% of their gClaimed converted to OHM (5000 OHM).
+        // Their max is now 45000 OHM.
+
+        vm.startPrank(alice);
+        pohm.pushWalletChange(address(claimTransfer));
+        claimTransfer.fractionalizeClaim();
+
+        dai.approve(address(claimTransfer), 10_000e18);   
+        claimTransfer.claim(10_000e18);
+
+        // Make assertions
+        (uint256 percent, uint256 gClaimed, uint256 max) = claimTransfer.fractionalizedTerms(alice);
+        assertEq(percent, 10_000);
+        assertEq(gClaimed, 100e18);
+        assertEq(max, 100_000e9);
+
+        // Transfer 50% of alice's claim
+        claimTransfer.transfer(bob, 5_000);
+
+        // Make assertions
+        (percent, gClaimed, max) = claimTransfer.fractionalizedTerms(alice);
+        assertEq(percent, 5_000);
+        assertEq(gClaimed, 50e18);
+        assertEq(max, 45_000e9);
+
+        (uint256 bobPercent, uint256 bobGClaimed, uint256 bobMax) = claimTransfer.fractionalizedTerms(bob);
+        assertEq(bobPercent, 5_000);
+        assertEq(bobGClaimed, 50e18);
+        assertEq(bobMax, 55_000e9);
+        vm.stopPrank();
+    }
+
     function testCorrectness_transferCannotTransferMoreThanUnclaimedPortionOfMax() public {
-        // TODO: add after claim
+        vm.startPrank(alice);
+        pohm.pushWalletChange(address(claimTransfer));
+        claimTransfer.fractionalizeClaim();
+
+        dai.approve(address(claimTransfer), 10_000e18);
+        claimTransfer.claim(10_000e18);
+
+        // Try to transfer 100% of alice's claim
+        vm.expectRevert(stdError.arithmeticError);
+        claimTransfer.transfer(bob, 10_000e9);
+        vm.stopPrank();
     }
 
     function testCorrectness_transferUpdatesFractionalizedTerms() public {
@@ -250,6 +396,7 @@ contract ClaimTransferTest is Test {
     /// []  transferFrom
     ///     [X]  cannot be called without allowance
     ///     [X]  cannot transfer more than percent
+    ///     []  transferFrom properly updates max
     ///     []  cannot transfer more than unclaimed portion of max
     ///     [X]  updates fractionalizedTerms
     ///     [X]  returns true
@@ -276,8 +423,55 @@ contract ClaimTransferTest is Test {
         claimTransfer.transferFrom(alice, bob, 100_000);
     }
 
+    function testCorrectness_transferFromProperlyUpdatesMax() public {
+        // CASE: User claims 10000 OHM (100 gOHM). They can only then transfer up to 90000 OHM (900 gOHM).
+        // Their max is reduced by taking into consideration their gClaimed. Transfer 50% of their claim,
+        // and their max is reduced by 50000 OHM + 50% of their gClaimed converted to OHM (5000 OHM).
+        // Their max is now 45000 OHM.
+
+        vm.startPrank(alice);
+        pohm.pushWalletChange(address(claimTransfer));
+        claimTransfer.fractionalizeClaim();
+
+        dai.approve(address(claimTransfer), 10_000e18);   
+        claimTransfer.claim(10_000e18);
+
+        // Make assertions
+        (uint256 percent, uint256 gClaimed, uint256 max) = claimTransfer.fractionalizedTerms(alice);
+        assertEq(percent, 10_000);
+        assertEq(gClaimed, 100e18);
+        assertEq(max, 100_000e9);
+
+        claimTransfer.approve(address(this), 5_000);
+        vm.stopPrank();
+
+        // Transfer 50% of alice's claim
+        claimTransfer.transferFrom(alice, bob, 5_000);
+
+        // Make assertions
+        (percent, gClaimed, max) = claimTransfer.fractionalizedTerms(alice);
+        assertEq(percent, 5_000);
+        assertEq(gClaimed, 50e18);
+        assertEq(max, 45_000e9);
+
+        (uint256 bobPercent, uint256 bobGClaimed, uint256 bobMax) = claimTransfer.fractionalizedTerms(bob);
+        assertEq(bobPercent, 5_000);
+        assertEq(bobGClaimed, 50e18);
+        assertEq(bobMax, 55_000e9);
+    }
+
     function testCorrectness_transferFromCannotTransferMoreThanUnclaimedPortionOfMax() public {
-        // TODO: add after claim
+        vm.startPrank(alice);
+        pohm.pushWalletChange(address(claimTransfer));
+        claimTransfer.fractionalizeClaim();
+        claimTransfer.approve(address(this), 10_000);
+
+        dai.approve(address(claimTransfer), 10_000e18);
+        claimTransfer.claim(10_000e18);
+        vm.stopPrank();
+
+        vm.expectRevert(stdError.arithmeticError);
+        claimTransfer.transferFrom(alice, bob, 10_000);
     }
 
     function testCorrectness_transferFromUpdatesFractionalizedTerms() public {
