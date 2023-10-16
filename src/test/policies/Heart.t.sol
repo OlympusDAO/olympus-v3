@@ -63,6 +63,13 @@ contract HeartTest is Test {
     OlympusHeart internal heart;
     RolesAdmin internal rolesAdmin;
 
+    uint48 internal constant PRICE_FREQUENCY = uint48(8 hours);
+
+    // Heart
+    event Beat(uint256 timestamp_);
+    event RewardIssued(address to_, uint256 rewardAmount_);
+    event RewardUpdated(ERC20 token_, uint256 maxRewardAmount_, uint48 auctionDuration_);
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -82,7 +89,7 @@ contract HeartTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy modules (some mocks)
-            price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
+            price = new MockPrice(kernel, PRICE_FREQUENCY, 10 * 1e18);
             roles = new OlympusRoles(kernel);
 
             // Configure mocks
@@ -148,11 +155,18 @@ contract HeartTest is Test {
         uint48 frequency = heart.frequency();
         vm.warp(block.timestamp + frequency);
 
+        vm.expectEmit(false, false, false, true);
+        emit RewardIssued(address(this), heart.currentReward());
+        emit Beat(block.timestamp);
+
         // Beat the heart
         heart.beat();
 
         // Check that last beat has been updated to the current timestamp
         assertEq(heart.lastBeat(), block.timestamp);
+
+        // Check that the reward token has been transferred to this contract
+        assertEq(rewardToken.balanceOf(address(this)), heart.currentReward());
     }
 
     function testCorrectness_cannotBeatIfInactive() public {
@@ -351,6 +365,10 @@ contract HeartTest is Test {
         // Beat the heart
         heart.beat();
 
+        // Expect the event to be emitted
+        vm.expectEmit(false, false, false, true);
+        emit RewardUpdated(newToken, newMaxReward, newAuctionDuration);
+
         // Set a new reward token and amount from the policy
         vm.prank(policy);
         heart.setRewardAuctionParams(newToken, newMaxReward, newAuctionDuration);
@@ -378,6 +396,14 @@ contract HeartTest is Test {
 
         endBalance = newToken.balanceOf(address(this));
         assertEq(endBalance, startBalance + 1e18);
+    }
+
+    function testReverts_setRewardAuctionParams_auctionDuration() public {
+        // Try to set a new auction duration greater than the PRICE observation frequency, expect revert
+        bytes memory err = abi.encodeWithSignature("Heart_InvalidParams()");
+        vm.expectRevert(err);
+        vm.prank(policy);
+        heart.setRewardAuctionParams(rewardToken, uint256(10e18), PRICE_FREQUENCY + 10);
     }
 
     function testCorrectness_withdrawUnspentRewards() public {

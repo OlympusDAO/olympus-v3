@@ -192,10 +192,10 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     function currentReward() public view returns (uint256) {
         // If beat not available, return 0
         // Otherwise, calculate reward from linearly increasing auction bounded by maxReward and heart balance
-        uint48 frequency = frequency();
-        uint48 nextBeat = lastBeat + frequency;
+        uint48 beatFrequency = frequency();
+        uint48 nextBeat = lastBeat + beatFrequency;
         uint48 currentTime = uint48(block.timestamp);
-        uint48 duration = auctionDuration > frequency ? frequency : auctionDuration;
+        uint48 duration = auctionDuration > beatFrequency ? beatFrequency : auctionDuration;
         if (currentTime <= nextBeat) {
             return 0;
         } else {
