@@ -10,6 +10,7 @@ import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {IDistributor} from "policies/interfaces/IDistributor.sol";
 
 /// Import interfaces
 import "src/interfaces/Uniswap/IUniswapV2Pair.sol";
@@ -24,12 +25,9 @@ interface IStaking {
     ) external returns (uint256);
 }
 
-contract Distributor is Policy, RolesConsumer {
+contract Distributor is IDistributor, Policy, RolesConsumer {
     // ========= ERRORS ========= //
     error Distributor_InvalidConstruction();
-    error Distributor_NoRebaseOccurred();
-    error Distributor_OnlyStaking();
-    error Distributor_NotUnlocked();
     error Distributor_SanityCheck();
     error Distributor_AdjustmentLimit();
     error Distributor_AdjustmentUnderflow();

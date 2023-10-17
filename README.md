@@ -104,15 +104,23 @@ Copy the `.env.deploy.example` file into one file per chain, e.g. `.env_deploy_g
 
 ## How To Deploy
 
-- Develop the deployment configuration in `src/scripts/savedDeployments`. Can be based on an existing file. Commit this to git.
-- Ensure that the deploy script (`src/scripts/DeployV2.sol`) has function(s) for deploying the contract(s), and the correct mapping from the contract name in the deployment JSON file and the selector added to `selectorMap`
-- Run the deployment bash script against the local fork and pass the deployment file as an argument, e.g. `shell/deploy.sh src/scripts/savedDeployments/rbs_v1_3.json`
-- Uncomment the line containing `--broadcast` in the deployment bash script after testing in order to push the changes to the live chain
-- The deployment output will be saved in `deployments/`
-- Update the `src/scripts/env.json` file with the new contract addresses (which can be copied from the deployment output)
+1. Update the solidity deployment script `src/scripts/deployment/DeployV2.sol`.
+    - If necessary, add external dependencies (e.g. `sdai = ERC20(envAddress("external.tokens.sDAI"));`)
+    - Create a function to handle the deployment of the new contracts (e.g. `_deployBLVaultLusd()`)
+    - Add the new contracts to the `selectorMap` with their corresponding keys.
+2. Update the configuration-input JSON file `src/scripts/deployment/deploy.json`
+    - Use the corresponding keys for the selectorMap in `#1.3`.
+    - Use any necessary configuration parameters.
+    - Create a copy the file under `src/scripts/deploy/savedDeployments/` and give it the same name as internal function created in `#1.2`.
+3. If external dependencies are required, add them in `src/scripts/env.json`, so that they can be used in `DeployV2.sol`.
+4. If necessary, update your `.env` file. It should, at least, have the same variables as in `.env.deploy.example`.
+5. Run `shell/deploy.sh $DEPLOY_FILE_PATH` to run the deployment shell script (e.g. `shell/deploy.sh src/scripts/savedDeployments/rbs_v1_3.json`).
+    - If you want to broadcast the tx to the network, uncomment the line of the script containing `--broadcast`. Only do so after having tested the deployment.
+6. After a successful deployment, update `src/scripts/env.json` with the new contract addresses.
+7. Finally, use [olymsig](https://github.com/OlympusDAO/olymsig) (or [olymsig-testnet](https://github.com/OlympusDAO/olymsig-testnet) if testing the deployment) to plug the newly deployed contracts into `olympus-v3`.
 
 ## Boosted Liquidity Vault Setup
 
-- Deploy any dependencies (if on testnet)
-- Deploy BLV contracts
-- Activate BLV contracts with the BLV registry (using an olymsig script)
+-   Deploy any dependencies (if on testnet)
+-   Deploy BLV contracts
+-   Activate BLV contracts with the BLV registry (using an olymsig script)

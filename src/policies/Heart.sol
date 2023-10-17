@@ -6,6 +6,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
+import {IDistributor} from "policies/interfaces/IDistributor.sol";
 import {IOperator} from "policies/interfaces/IOperator.sol";
 import {IHeart} from "policies/interfaces/IHeart.sol";
 
@@ -46,6 +47,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
     // Policies
     IOperator public operator;
+    IDistributor public distributor;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -56,10 +58,12 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     constructor(
         Kernel kernel_,
         IOperator operator_,
+        IDistributor distributor_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
         operator = operator_;
+        distributor = distributor_;
 
         active = true;
         lastBeat = uint48(block.timestamp);
@@ -111,6 +115,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
         // Trigger price range update and market operations
         operator.operate();
+
+        // Trigger distributor rebase
+        distributor.triggerRebase();
 
         // Calculate the reward
         uint256 reward = currentReward();

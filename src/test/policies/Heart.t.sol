@@ -11,6 +11,8 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
+import {MockStakingZD} from "test/mocks/MockStakingForZD.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -19,6 +21,7 @@ import "src/Kernel.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 
 import {IOperator} from "policies/interfaces/IOperator.sol";
+import {IDistributor} from "policies/interfaces/IDistributor.sol";
 
 /**
  * @notice Mock Operator to test Heart
@@ -67,6 +70,9 @@ contract HeartTest is Test {
     OlympusHeart internal heart;
     RolesAdmin internal rolesAdmin;
 
+    MockStakingZD internal staking;
+    ZeroDistributor internal distributor;
+
     uint48 internal constant PRICE_FREQUENCY = uint48(8 hours);
 
     // MINTR
@@ -110,10 +116,16 @@ contract HeartTest is Test {
             // Deploy mock operator
             operator = new MockOperator(kernel, address(ohm));
 
+            // Deploy mock staking and set distributor
+            staking = new MockStakingZD(8 hours, 0, block.timestamp);
+            distributor = new ZeroDistributor(address(staking));
+            staking.setDistributor(address(distributor));
+
             // Deploy heart
             heart = new OlympusHeart(
                 kernel,
                 IOperator(address(operator)),
+                IDistributor(address(distributor)),
                 uint256(10e9), // max reward = 10 reward tokens
                 uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
             );
@@ -145,6 +157,7 @@ contract HeartTest is Test {
     // DONE
     // [X] beat
     //     [X] active and frequency has passed
+    //     [X] distributor is called and the rebase is triggered
     //     [X] cannot beat if not active
     //     [X] cannot beat if not enough time has passed
     //     [X] fails if price or operator revert
@@ -152,9 +165,16 @@ contract HeartTest is Test {
     // [X] Mints rewardToken correctly
 
     function testCorrectness_beat() public {
+        // Manually trigger initial rebase to sync the distributor and staking
+        distributor.triggerRebase();
+        (uint256 epochLength, , , ) = staking.epoch();
+
         // Get the beat frequency of the heart and wait that amount of time
         uint48 frequency = heart.frequency();
         vm.warp(block.timestamp + frequency);
+
+        // Check that the rebase can be triggered
+        assertEq(0, staking.secondsToNextEpoch());
 
         vm.expectEmit(false, false, false, true);
         emit Beat(block.timestamp);
@@ -164,6 +184,8 @@ contract HeartTest is Test {
 
         // Check that last beat has been updated to the current timestamp
         assertEq(heart.lastBeat(), block.timestamp);
+        // Check that the last beat triggered a new rebase
+        assertEq(epochLength, staking.secondsToNextEpoch());
     }
 
     function testCorrectness_cannotBeatIfInactive() public {

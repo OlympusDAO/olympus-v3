@@ -33,7 +33,8 @@ import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
-import {Distributor} from "policies/Distributor.sol";
+import {Distributor} from "policies/Distributor/Distributor.sol";
+import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {Emergency} from "policies/Emergency.sol";
 import {BondManager} from "policies/BondManager.sol";
 import {Burner} from "policies/Burner.sol";
@@ -77,6 +78,7 @@ contract OlympusDeploy is Script {
     RolesAdmin public rolesAdmin;
     TreasuryCustodian public treasuryCustodian;
     Distributor public distributor;
+    ZeroDistributor public zeroDistributor;
     Emergency public emergency;
     BondManager public bondManager;
     Burner public burner;
@@ -134,7 +136,7 @@ contract OlympusDeploy is Script {
     string[] public deployments;
     mapping(string => address) public deployedTo;
 
-    function _setUp(string calldata chain_) internal {
+    function _setUp(string calldata chain_, string calldata deployFilePath) internal {
         chain = chain_;
 
         // Setup contract -> selector mappings
@@ -217,6 +219,7 @@ contract OlympusDeploy is Script {
         rolesAdmin = RolesAdmin(envAddress("olympus.policies.RolesAdmin"));
         treasuryCustodian = TreasuryCustodian(envAddress("olympus.policies.TreasuryCustodian"));
         distributor = Distributor(envAddress("olympus.policies.Distributor"));
+        zeroDistributor = ZeroDistributor(envAddress("olympus.policies.ZeroDistributor"));
         emergency = Emergency(envAddress("olympus.policies.Emergency"));
         bondManager = BondManager(envAddress("olympus.policies.BondManager"));
         burner = Burner(envAddress("olympus.policies.Burner"));
@@ -227,7 +230,7 @@ contract OlympusDeploy is Script {
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
 
         // Load deployment data
-        string memory data = vm.readFile("./src/scripts/deploy/deploy.json");
+        string memory data = vm.readFile(deployFilePath);
 
         // Parse deployment sequence and names
         string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
@@ -273,9 +276,9 @@ contract OlympusDeploy is Script {
     //     kernel.executeAction(Actions.ActivatePolicy, address(policy_));
     // }
 
-    function deploy(string calldata chain_) external {
+    function deploy(string calldata chain_, string calldata deployFilePath) external {
         // Setup
-        _setUp(chain_);
+        _setUp(chain_, deployFilePath);
 
         // Check that deployments is not empty
         uint256 len = deployments.length;
@@ -490,7 +493,7 @@ contract OlympusDeploy is Script {
 
         // Deploy OlympusHeart policy
         vm.broadcast();
-        heart = new OlympusHeart(kernel, operator, maxReward, auctionDuration);
+        heart = new OlympusHeart(kernel, operator, zeroDistributor, maxReward, auctionDuration);
         console2.log("OlympusHeart deployed at:", address(heart));
 
         return address(heart);
