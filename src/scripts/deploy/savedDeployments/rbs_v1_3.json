@@ -1,14 +1,7 @@
 {
     "sequence": [
         {
-            "name": "OlympusRange",
-            "args": {
-                "highCushionSpread": 750,
-                "highWallSpread": 1500,
-                "lowCushionSpread": 750,
-                "lowWallSpread": 1500,
-                "thresholdFactor": 100
-            }
+            "name": "BondCallback"
         },
         {
             "name": "Operator",
