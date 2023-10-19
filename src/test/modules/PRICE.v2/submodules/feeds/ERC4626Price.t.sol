@@ -27,7 +27,6 @@ contract ERC4626Test is Test {
     MockERC4626 internal sDai;
     uint8 internal constant SDAI_DECIMALS = 18;
 
-    uint8 internal constant MIN_DECIMALS = 6;
     uint8 internal constant MAX_DECIMALS = 50;
 
     uint8 internal constant PRICE_DECIMALS = 18;
@@ -44,7 +43,7 @@ contract ERC4626Test is Test {
             submodule = new ERC4626Price(mockPrice);
         }
 
-        // Set up the ERC4626 asset
+        // Set up tokens
         {
             dai = new MockERC20("DAI", "DAI", DAI_DECIMALS);
             sDai = new MockERC4626(dai, "Savings DAI", "sDAI");
@@ -71,19 +70,9 @@ contract ERC4626Test is Test {
         {
             mockAssetPrice(address(dai), 1e18);
         }
-
-        // // Mock ERC20 decimals
-        // {
-        //     mockERC20Decimals(address(dai), DAI_DECIMALS);
-        //     mockERC20Decimals(address(sDai), SDAI_DECIMALS);
-        // }
     }
 
     // =========  HELPER METHODS ========= //
-
-    function mockERC20Decimals(address asset_, uint8 decimals_) internal {
-        vm.mockCall(asset_, abi.encodeWithSignature("decimals()"), abi.encode(decimals_));
-    }
 
     function mockAssetPrice(address asset_, uint256 price_) internal {
         mockPrice.setPrice(asset_, price_);
@@ -100,7 +89,7 @@ contract ERC4626Test is Test {
     // TODO
     // [ ] getPriceFromUnderlying
     //  [X] output decimals within bounds
-    //  [ ] output decimals out of bounds
+    //  [X] output decimals out of bounds
     //  [ ] underlying asset decimals within bounds
     //  [ ] underlying asset decimals out of bounds
     //  [ ] asset decimals within bounds
@@ -110,7 +99,11 @@ contract ERC4626Test is Test {
     //  [ ] asset price is calculated correctly
 
     function test_outputDecimals_fuzz(uint8 outputDecimals_) public {
-        uint8 outputDecimals = uint8(bound(outputDecimals_, MIN_DECIMALS, MAX_DECIMALS));
+        uint8 outputDecimals = uint8(bound(outputDecimals_, 0, MAX_DECIMALS));
+
+        // Update PRICE
+        mockPrice.setPriceDecimals(outputDecimals);
+        mockAssetPrice(address(dai), 10 ** outputDecimals); // DAI = 1
 
         // Determine the share - asset conversion rate
         uint256 sDaiRate = sDai.convertToAssets(10**SDAI_DECIMALS);
@@ -121,5 +114,17 @@ contract ERC4626Test is Test {
         uint256 expectedPrice = sDaiRate.mulDiv(10**outputDecimals, 10**PRICE_DECIMALS);
 
         assertEq(assetPrice, expectedPrice);
+    }
+
+    function test_outputDecimals_maximumReverts(uint8 outputDecimals_) public {
+        uint8 outputDecimals = uint8(bound(outputDecimals_, MAX_DECIMALS + 1, type(uint8).max));
+
+        // Update PRICE
+        mockPrice.setPriceDecimals(outputDecimals);
+        mockAssetPrice(address(dai), 10 ** outputDecimals); // DAI = 1
+
+        // Call the function
+        vm.expectRevert(abi.encodeWithSelector(ERC4626Price.ERC4626_OutputDecimalsOutOfBounds.selector, outputDecimals, MAX_DECIMALS));
+        submodule.getPriceFromUnderlying(address(sDai), outputDecimals, "");
     }
 }
