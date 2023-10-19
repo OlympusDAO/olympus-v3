@@ -7,12 +7,12 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 
 import "src/Kernel.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
-import {MockERC4626} from "test/mocks/MockERC4626.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {ERC4626Price} from "modules/PRICE/submodules/feeds/ERC4626Price.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-// import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 contract ERC4626Test is Test {
     using FullMath for uint256;
@@ -21,10 +21,11 @@ contract ERC4626Test is Test {
     MockPrice internal mockPrice;
     ERC4626Price internal submodule;
 
-    address internal constant DAI_ADDRESS = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-    uint256 internal constant SDAI_CONVERT_TO_ASSETS = 1039077574409367874; // 1e18 sDAI = 1039077574409367874 DAI
+    MockERC20 internal dai;
+    uint8 internal constant DAI_DECIMALS = 18;
 
     MockERC4626 internal sDai;
+    uint8 internal constant SDAI_DECIMALS = 18;
 
     uint8 internal constant MIN_DECIMALS = 6;
     uint8 internal constant MAX_DECIMALS = 50;
@@ -37,7 +38,7 @@ contract ERC4626Test is Test {
         // Set up the submodule
         {
             Kernel kernel = new Kernel();
-            mockPrice = new MockPrice(kernel, uint8(18), uint32(8 hours));
+            mockPrice = new MockPrice(kernel, PRICE_DECIMALS, uint32(8 hours));
             mockPrice.setPriceDecimals(PRICE_DECIMALS);
             mockPrice.setTimestamp(uint48(block.timestamp));
             submodule = new ERC4626Price(mockPrice);
@@ -45,19 +46,37 @@ contract ERC4626Test is Test {
 
         // Set up the ERC4626 asset
         {
-            sDai = new MockERC4626(ERC20(DAI_ADDRESS), "Savings DAI", "sDAI");
+            dai = new MockERC20("DAI", "DAI", DAI_DECIMALS);
+            sDai = new MockERC4626(dai, "Savings DAI", "sDAI");
+        }
+
+        // Deposit into the ERC4626 asset (so that there is a conversion rate)
+        {
+            address alice = address(0xABCD);
+            dai.mint(alice, 1e18);
+
+            vm.prank(alice);
+            dai.approve(address(sDai), 1e18);
+
+            vm.prank(alice);
+            sDai.mint(1e18, alice);
+        }
+
+        // Simulate yield being deposited in the vault
+        {
+            mintDaiYield(1e18); // 2e18 DAI in the vault for 1e18 shares
         }
 
         // Mock prices from PRICE
         {
-            mockAssetPrice(DAI_ADDRESS, 1e18);
+            mockAssetPrice(address(dai), 1e18);
         }
 
-        // Mock ERC20 decimals
-        {
-            mockERC20Decimals(DAI_ADDRESS, 18);
-            mockERC20Decimals(address(sDai), 18);
-        }
+        // // Mock ERC20 decimals
+        // {
+        //     mockERC20Decimals(address(dai), DAI_DECIMALS);
+        //     mockERC20Decimals(address(sDai), SDAI_DECIMALS);
+        // }
     }
 
     // =========  HELPER METHODS ========= //
@@ -70,11 +89,17 @@ contract ERC4626Test is Test {
         mockPrice.setPrice(asset_, price_);
     }
 
+    /// @notice         Mints DAI into the sDai vault, which will update the conversion rate
+    /// @param amount_  The amount of DAI to mint (in DAI decimals)
+    function mintDaiYield(uint256 amount_) internal {
+        dai.mint(address(sDai), amount_);
+    }
+
     // ========= GET UNDERLYING PRICE ========= //
 
     // TODO
     // [ ] getPriceFromUnderlying
-    //  [ ] output decimals within bounds
+    //  [X] output decimals within bounds
     //  [ ] output decimals out of bounds
     //  [ ] underlying asset decimals within bounds
     //  [ ] underlying asset decimals out of bounds
@@ -84,4 +109,17 @@ contract ERC4626Test is Test {
     //  [ ] underlying asset price not set
     //  [ ] asset price is calculated correctly
 
+    function test_outputDecimals_fuzz(uint8 outputDecimals_) public {
+        uint8 outputDecimals = uint8(bound(outputDecimals_, MIN_DECIMALS, MAX_DECIMALS));
+
+        // Determine the share - asset conversion rate
+        uint256 sDaiRate = sDai.convertToAssets(10**SDAI_DECIMALS);
+
+        // Call the function
+        uint256 assetPrice = submodule.getPriceFromUnderlying(address(sDai), outputDecimals, "");
+
+        uint256 expectedPrice = sDaiRate.mulDiv(10**outputDecimals, 10**PRICE_DECIMALS);
+
+        assertEq(assetPrice, expectedPrice);
+    }
 }
