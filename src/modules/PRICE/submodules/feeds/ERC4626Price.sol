@@ -30,10 +30,10 @@ contract ERC4626Price is PriceSubmodule {
     /// @param maxDecimals_         The maximum decimals allowed
     error ERC4626_AssetDecimalsOutOfBounds(uint8 assetDecimals_, uint8 maxDecimals_);
 
-    /// @notice                     The value for the ERC4626 underlying asset's decimals is more than the maximum decimals allowed
-    /// @param underlyingDecimals_  The underlying asset decimals
-    /// @param maxDecimals_         The maximum decimals allowed
-    error ERC4626_UnderlyingDecimalsOutOfBounds(uint8 underlyingDecimals_, uint8 maxDecimals_);
+    /// @notice                     There is a mismatch between the decimals of the ERC4626 asset and underlying
+    /// @param assetDecimals_       The asset decimals
+    /// @param underlyingAssetDecimals_  The underlying asset decimals
+    error ERC4626_AssetDecimalsMismatch(uint8 assetDecimals_, uint8 underlyingAssetDecimals_);
 
     /// @notice                     The underlying asset is not set
     /// @param asset_               The address of the ERC4626 asset
