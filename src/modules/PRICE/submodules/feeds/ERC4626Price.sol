@@ -10,13 +10,12 @@ contract ERC4626Price is PriceSubmodule {
     using FullMath for uint256;
 
     /// @notice     Any token or pool with a decimal scale greater than this would result in an overflow
-    uint8 internal constant BASE_10_MAX_EXPONENT = 50;
+    uint8 internal constant BASE_10_MAX_EXPONENT = 38;
 
     // TODO
     // [X] handle different decimals between ERC4626 and underlying
-    // [ ] assert asset decimals within bounds
-    // [ ] assert underlying decimals within bounds
-    // [ ] assert underlying is set
+    // [X] assert underlying decimals within bounds
+    // [X] assert underlying is set
 
     // ========== ERRORS ========== //
 
@@ -63,24 +62,46 @@ contract ERC4626Price is PriceSubmodule {
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
+        // Check output decimals
+        if (outputDecimals_ > BASE_10_MAX_EXPONENT) {
+            revert ERC4626_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
+        }
         uint256 outputScale = 10 ** outputDecimals_;
 
         // We assume that the asset passed conforms to ERC4626
         ERC4626 asset = ERC4626(asset_);
-        uint256 assetScale = 10 ** asset.decimals();
-
-        // Get the underlying asset from the ERC4626
         address underlying = address(asset.asset());
 
-        // Get the decimals for the underlying asset
-        uint256 underlyingScale = 10 ** ERC20(underlying).decimals();
+        // Should not be possible, but we check anyway
+        if (underlying == address(0)) {
+            revert ERC4626_UnderlyingNotSet(asset_);
+        }
+
+        // Check decimals
+        uint256 assetScale;
+        {
+            uint8 assetDecimals = asset.decimals();
+            uint8 underlyingDecimals = ERC20(underlying).decimals();
+            // This shouldn't be possible, but we check anyway
+            if (assetDecimals != underlyingDecimals) {
+                revert ERC4626_AssetDecimalsMismatch(assetDecimals, underlyingDecimals);
+            }
+
+            // Don't allow an unreasonably large number of decimals that would result in an overflow
+            if (assetDecimals > BASE_10_MAX_EXPONENT) {
+                revert ERC4626_AssetDecimalsOutOfBounds(assetDecimals, BASE_10_MAX_EXPONENT);
+            }
+
+            assetScale = 10 ** assetDecimals;
+        }
 
         // Get the number of underlying tokens per share
         // Scale: output decimals
-        uint256 underlyingPerShare = asset.convertToAssets(assetScale).mulDiv(outputScale, underlyingScale);
+        uint256 underlyingPerShare = asset.convertToAssets(assetScale).mulDiv(outputScale, assetScale);
 
         // Get the price of the underlying asset
         // We assume that getPrice() returns in outputDecimals
+        // If the underlying price is not set, PRICE will revert
         uint256 underlyingPrice = _PRICE().getPrice(underlying);
 
         // Calculate the price of the asset

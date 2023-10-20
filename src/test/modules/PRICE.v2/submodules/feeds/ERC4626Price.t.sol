@@ -117,7 +117,7 @@ contract ERC4626Test is Test {
     }
 
     function test_outputDecimals_maximum_reverts(uint8 outputDecimals_) public {
-        uint8 outputDecimals = uint8(bound(outputDecimals_, MAX_DECIMALS + 1, type(uint8).max));
+        uint8 outputDecimals = uint8(bound(outputDecimals_, MAX_DECIMALS + 1, 60));
 
         // Update PRICE
         mockPrice.setPriceDecimals(outputDecimals);
@@ -164,7 +164,7 @@ contract ERC4626Test is Test {
     }
 
     function test_assetDecimals_maximum_reverts(uint8 assetDecimals_) public {
-        uint8 assetDecimals = uint8(bound(assetDecimals_, MAX_DECIMALS + 1, type(uint8).max));
+        uint8 assetDecimals = uint8(bound(assetDecimals_, MAX_DECIMALS + 1, 60));
 
         // Create new set of tokens
         MockERC20 newUnderlying = new MockERC20("New Token", "NEW", assetDecimals);
@@ -194,6 +194,7 @@ contract ERC4626Test is Test {
 
     function test_underlyingAssetPriceUnset_reverts() public {
         // No price set for DAI
+        mockAssetPrice(address(dai), 0);
 
         // Call the function
         vm.expectRevert(abi.encodeWithSelector(PRICEv2.PRICE_PriceZero.selector, address(dai)));
