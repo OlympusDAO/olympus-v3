@@ -17,7 +17,7 @@ import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
-import {RANGEv1} from "modules/RANGE/RANGE.v1.sol";
+import {RANGEv2} from "modules/RANGE/RANGE.v2.sol";
 
 import "src/Kernel.sol";
 
@@ -48,7 +48,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     // Modules
     PRICEv1 internal PRICE;
-    RANGEv1 internal RANGE;
+    RANGEv2 internal RANGE;
     TRSRYv1 internal TRSRY;
     MINTRv1 internal MINTR;
 
@@ -147,10 +147,25 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         dependencies[4] = toKeycode("ROLES");
 
         PRICE = PRICEv1(getModuleAddress(dependencies[0]));
-        RANGE = RANGEv1(getModuleAddress(dependencies[1]));
+        RANGE = RANGEv2(getModuleAddress(dependencies[1]));
         TRSRY = TRSRYv1(getModuleAddress(dependencies[2]));
         MINTR = MINTRv1(getModuleAddress(dependencies[3]));
         ROLES = ROLESv1(getModuleAddress(dependencies[4]));
+
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 RANGE_MAJOR, ) = RANGE.VERSION();
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        if (
+            PRICE_MAJOR != 1 ||
+            RANGE_MAJOR != 2 ||
+            TRSRY_MAJOR != 1 ||
+            MINTR_MAJOR != 1 ||
+            ROLES_MAJOR != 1
+        ) revert Operator_WrongModuleVersion();
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
@@ -230,7 +245,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         // Cache range data after potential regeneration
-        RANGEv1.Range memory range = RANGE.range();
+        RANGEv2.Range memory range = RANGE.range();
 
         // Get latest price
         // See note in addObservation() for more details
@@ -384,7 +399,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice      Activate a cushion by deploying a bond market
     /// @param high_ Whether the cushion is for the high or low side of the range (true = high, false = low)
     function _activate(bool high_) internal {
-        RANGEv1.Range memory range = RANGE.range();
+        RANGEv2.Range memory range = RANGE.range();
 
         if (high_) {
             // Calculate scaleAdjustment for bond market

@@ -27,6 +27,10 @@ import "src/Kernel.sol";
 contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
 
+    // =========  ERRORS ========= //
+
+    error Heart_WrongModuleVersion();
+
     // =========  STATE ========= //
 
     /// @notice Timestamp of the last beat (UTC, in seconds)
@@ -83,6 +87,14 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         PRICE = PRICEv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
         MINTR = MINTRv1(getModuleAddress(dependencies[2]));
+
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        if (PRICE_MAJOR != 1 || MINTR_MAJOR != 1 || ROLES_MAJOR != 1)
+            revert Heart_WrongModuleVersion();
     }
 
     /// @inheritdoc Policy

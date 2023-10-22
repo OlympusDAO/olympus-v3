@@ -21,6 +21,7 @@ interface IOperator {
 
     // =========  ERRORS ========= //
 
+    error Operator_WrongModuleVersion();
     error Operator_InvalidParams();
     error Operator_InsufficientCapacity();
     error Operator_AmountLessThanMinimum(uint256 amountOut, uint256 minAmountOut);
