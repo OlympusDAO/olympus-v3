@@ -12,7 +12,7 @@ import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import "src/Kernel.sol";
 
-contract TreasuryCustodianTest is Test {
+contract RolesAdminTest is Test {
     UserFactory public userCreator;
     address internal admin;
     address internal testUser;
@@ -44,7 +44,7 @@ contract TreasuryCustodianTest is Test {
     }
 
     function testCorrectness_OnlyAdmin() public {
-        bytes memory err = abi.encodeWithSelector(RolesAdmin.OnlyAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(RolesAdmin.Roles_OnlyAdmin.selector);
         vm.expectRevert(err);
         vm.prank(testUser);
         rolesAdmin.grantRole(testRole, testUser);
@@ -75,7 +75,7 @@ contract TreasuryCustodianTest is Test {
 
     function testCorrectness_ChangeAdmin() public {
         // try pulling admin without push
-        bytes memory err = abi.encodeWithSelector(RolesAdmin.OnlyNewAdmin.selector);
+        bytes memory err = abi.encodeWithSelector(RolesAdmin.Roles_OnlyNewAdmin.selector);
         vm.expectRevert(err);
         vm.prank(newAdmin);
         rolesAdmin.pullNewAdmin();

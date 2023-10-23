@@ -18,7 +18,8 @@ contract TreasuryCustodian is Policy, RolesConsumer {
 
     // =========  ERRORS ========= //
 
-    error PolicyStillActive();
+    error Custodian_WrongModuleVersion(uint8[2] expectedMajors);
+    error Custodian_PolicyStillActive();
 
     // =========  STATE ========= //
 
@@ -38,6 +39,12 @@ contract TreasuryCustodian is Policy, RolesConsumer {
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        if (TRSRY_MAJOR != 1 || ROLES_MAJOR != 1) revert Custodian_WrongModuleVersion([1, 1]);
     }
 
     /// @inheritdoc Policy
@@ -128,7 +135,7 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         address policy_,
         ERC20[] memory tokens_
     ) external onlyRole("custodian") {
-        if (Policy(policy_).isActive()) revert PolicyStillActive();
+        if (Policy(policy_).isActive()) revert Custodian_PolicyStillActive();
 
         uint256 len = tokens_.length;
         for (uint256 j; j < len; ) {

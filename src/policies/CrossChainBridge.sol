@@ -27,6 +27,7 @@ contract CrossChainBridge is
     using BytesLib for bytes;
 
     // Bridge errors
+    error Bridge_WrongModuleVersion(uint8[2] expectedMajors);
     error Bridge_InsufficientAmount();
     error Bridge_InvalidCaller();
     error Bridge_InvalidMessageSource();
@@ -99,6 +100,12 @@ contract CrossChainBridge is
 
         MINTR = MINTRv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1) revert Bridge_WrongModuleVersion([1, 1]);
 
         ohm = ERC20(address(MINTR.ohm()));
     }

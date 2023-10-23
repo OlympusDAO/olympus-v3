@@ -9,6 +9,10 @@ error VohmVault_NotVested();
 
 /// @notice Policy to mint and burn VOTES to arbitrary addresses
 contract VohmVault is Policy {
+    // =========  ERRORS ========= //
+
+    error WrongModuleVersion(uint8[1] expectedMajors);
+
     // =========  STATE ========= //
 
     ERC20 public gOHM;
@@ -31,6 +35,11 @@ contract VohmVault is Policy {
         VOTES = VOTESv1(getModuleAddress(dependencies[0]));
         gOHM = VOTES.gOHM();
         gOHM.approve(address(VOTES), type(uint256).max);
+
+        (uint8 VOTES_MAJOR, ) = VOTES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        if (VOTES_MAJOR != 1) revert WrongModuleVersion([1]);
     }
 
     /// @inheritdoc Policy

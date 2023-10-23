@@ -15,6 +15,7 @@ import "src/Kernel.sol";
 contract Minter is Policy, RolesConsumer {
     // ========== ERRORS ========== //
 
+    error Minter_WrongModuleVersion(uint8[2] expectedMajors);
     error Minter_CategoryNotApproved();
     error Minter_CategoryApproved();
 
@@ -48,6 +49,12 @@ contract Minter is Policy, RolesConsumer {
 
         MINTR = MINTRv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1) revert Minter_WrongModuleVersion([1, 1]);
     }
 
     /// @inheritdoc Policy

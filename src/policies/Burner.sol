@@ -22,6 +22,7 @@ contract Burner is Policy, RolesConsumer {
 
     // ========== ERRORS ========== //
 
+    error Burner_WrongModuleVersion(uint8[3] expectedMajors);
     error Burner_CategoryNotApproved();
     error Burner_CategoryApproved();
 
@@ -64,6 +65,14 @@ contract Burner is Policy, RolesConsumer {
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
+
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        if (TRSRY_MAJOR != 1 || MINTR_MAJOR != 1 || ROLES_MAJOR != 1)
+            revert Burner_WrongModuleVersion([1, 1, 1]);
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);

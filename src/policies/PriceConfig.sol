@@ -8,7 +8,11 @@ import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import "src/Kernel.sol";
 
 contract OlympusPriceConfig is Policy, RolesConsumer {
-    // =========  STATE ========= //
+    // ========= ERRORS ========== //
+
+    error PriceConfig_WrongModuleVersion(uint8[2] expectedMajors);
+
+    // ========= STATE ========= //
 
     PRICEv1 internal PRICE;
 
@@ -25,6 +29,12 @@ contract OlympusPriceConfig is Policy, RolesConsumer {
 
         PRICE = PRICEv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        if (PRICE_MAJOR != 1 || ROLES_MAJOR != 1) revert PriceConfig_WrongModuleVersion([1, 1]);
     }
 
     function requestPermissions()
