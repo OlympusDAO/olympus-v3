@@ -131,7 +131,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         // Trigger distributor rebase
         distributor.triggerRebase();
 
-        // Calculate the reward
+        // Calculate the reward (0 <= reward <= maxReward) for the keeper
         uint256 reward = currentReward();
 
         // Update the last beat timestamp
