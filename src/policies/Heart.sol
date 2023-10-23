@@ -29,7 +29,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
     // =========  ERRORS ========= //
 
-    error Heart_WrongModuleVersion();
+    error Heart_WrongModuleVersion(uint8[3] expectedMajors);
 
     // =========  STATE ========= //
 
@@ -94,7 +94,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
         // Ensure Modules are using the expected major version.
         if (PRICE_MAJOR != 1 || MINTR_MAJOR != 1 || ROLES_MAJOR != 1)
-            revert Heart_WrongModuleVersion();
+            revert Heart_WrongModuleVersion([1, 1, 1]);
     }
 
     /// @inheritdoc Policy

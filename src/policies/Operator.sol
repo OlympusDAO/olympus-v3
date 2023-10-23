@@ -165,7 +165,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             TRSRY_MAJOR != 1 ||
             MINTR_MAJOR != 1 ||
             ROLES_MAJOR != 1
-        ) revert Operator_WrongModuleVersion();
+        ) revert Operator_WrongModuleVersion([1, 2, 1, 1, 1]);
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
