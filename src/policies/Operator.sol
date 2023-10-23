@@ -589,19 +589,19 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         bool positive_,
         uint32 observe_
     ) internal {
-        Regen memory cache = regen_;
+        uint32 nextObservation = regen_.nextObservation;
         if (positive_) {
-            if (!cache.observations[cache.nextObservation]) {
-                regen_.observations[cache.nextObservation] = true;
+            if (!regen_.observations[nextObservation]) {
+                regen_.observations[nextObservation] = true;
                 regen_.count++;
             }
         } else {
-            if (!positive_ && cache.observations[cache.nextObservation]) {
-                regen_.observations[cache.nextObservation] = false;
+            if (regen_.observations[nextObservation]) {
+                regen_.observations[nextObservation] = false;
                 regen_.count--;
             }
         }
-        regen_.nextObservation = (cache.nextObservation + 1) % observe_;
+        regen_.nextObservation = (nextObservation + 1) % observe_;
     }
 
     /// @notice      Regenerate the wall for a side
