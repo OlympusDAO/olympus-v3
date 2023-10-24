@@ -14,6 +14,7 @@ import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 ///         - Managing positions that were not deployed by this policy. (This could be achieved by deploying a new BunniToken and depositing into it.)
 ///         - Harvesting pool fees. (There is a separate, public policy for this purpose.)
 ///         - Migrating LP tokens between addresses. (This could be achieved by transferring the ERC20 tokens to the new address.)
+///         - Setting the protocol fee on the BunniHub instance (applied when compounding pool fees), as there is no use for having the protocol fees applied.
 interface IBunniManager {
     // =========  EVENTS ========= //
 
