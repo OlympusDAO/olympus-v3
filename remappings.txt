@@ -10,5 +10,5 @@ layer-zero/=lib/solidity-examples/contracts/
 bonds/=lib/bonds/src/
 test/=src/test/
 clones/=lib/clones-with-immutable-args/src/
-@uniswap/v3-core/=lib/uniswap-v3-core/src/
-@uniswap/v3-periphery/=lib/uniswap-v3-periphery/src/
+@uniswap/v3-core/=lib/uniswap-v3-core/
+@uniswap/v3-periphery/=lib/uniswap-v3-periphery/
