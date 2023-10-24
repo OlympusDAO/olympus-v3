@@ -61,7 +61,7 @@ interface IBunniManager {
     ///
     /// @param pool_  The address of the Uniswap V3 pool
     /// @return token The ERC20-compatible BunniToken
-    function getToken(address pool_) external returns (IBunniToken token);
+    function getToken(address pool_) external view returns (IBunniToken token);
 
     /// @notice         Gets the balance in TRSRY of the ERC20 token for the given Uniswap V3 pool address
     ///
