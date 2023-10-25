@@ -57,10 +57,12 @@ interface IBunniManager {
 
     // =========  VIEW FUNCTIONS ========= //
 
-    /// @notice       Get the ERC20-compatible BunniToken for the given Uniswap V3 pool address
+    /// @notice         Get the ERC20-compatible BunniToken for the given Uniswap V3 pool address
+    /// @dev            Reverts if:
+    ///                 - `pool_` is not managed by this policy and its BunniHub instance
     ///
-    /// @param pool_  The address of the Uniswap V3 pool
-    /// @return token The ERC20-compatible BunniToken
+    /// @param pool_    The address of the Uniswap V3 pool
+    /// @return token   The ERC20-compatible BunniToken
     function getToken(address pool_) external view returns (IBunniToken token);
 
     /// @notice         Gets the balance in TRSRY of the ERC20 token for the given Uniswap V3 pool address
@@ -71,10 +73,14 @@ interface IBunniManager {
 
     // =========  ADMIN FUNCTIONS ========= //
 
-    /// @notice           Sets the owner of the BunniHub contract
-    /// @dev              This can be used when a new policy is deployed that needs to manage the
-    ///                   Uniswap V3 positions through the BunniHub.
+    /// @notice             Sets the BunniHub contract
+    /// @param newBunniHub_ The new address to use
+    function setBunniHub(address newBunniHub_) external;
+
+    /// @notice             Sets the owner of the BunniHub contract
+    /// @dev                This can be used when a new policy is deployed that needs to manage the
+    ///                     Uniswap V3 positions through the BunniHub.
     ///
-    /// @param newOwner_  The address of the new owner
+    /// @param newOwner_    The address of the new owner
     function setBunniOwner(address newOwner_) external;
 }
