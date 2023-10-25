@@ -43,7 +43,11 @@ interface IBunniManager {
     /// @param amount0_ The amount of token0 to deposit
     /// @param amount1_ The amount of token1 to deposit
     /// @return shares  The amount of shares minted
-    function deposit(address pool_, uint256 amount0_, uint256 amount1_) external returns (uint256 shares);
+    function deposit(
+        address pool_,
+        uint256 amount0_,
+        uint256 amount1_
+    ) external returns (uint256 shares);
 
     /// @notice         Withdraws liquidity from the given Uniswap V3 pool
     /// @dev            This can only be called after `deployToken` has been called
