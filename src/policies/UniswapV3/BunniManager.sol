@@ -37,7 +37,7 @@ import "src/Kernel.sol";
 ///         - Setting the protocol fee on the BunniHub instance (applied when compounding pool fees), as there is no use for having the protocol fees applied.
 contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     using FullMath for uint256;
-    
+
     /// @notice                 Emitted if any of the module dependencies are the wrong version
     /// @param expectedMajors_  The expected major versions of the modules
     error BunniManager_WrongModuleVersion(uint8[1] expectedMajors_);
@@ -82,11 +82,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
 
         (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
-        
+
         // Ensure Modules are using the expected major version.
-        if (
-            TRSRY_MAJOR != 1
-        ) revert BunniManager_WrongModuleVersion([1]);
+        if (TRSRY_MAJOR != 1) revert BunniManager_WrongModuleVersion([1]);
     }
 
     /// @inheritdoc Policy
@@ -107,12 +105,29 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        This function reverts if:
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
-    function deployToken(address pool_) external override nonReentrant onlyRole("bunni_admin") bunniHubSet() returns (IBunniToken token) {
+    function deployToken(
+        address pool_
+    )
+        external
+        override
+        nonReentrant
+        onlyRole("bunni_admin")
+        bunniHubSet
+        returns (IBunniToken token)
+    {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
 
         // Check that `pool_` is an actual Uniswap V3 pool
-        try IUniswapV3Pool(pool_).slot0() returns (uint160,int24,uint16,uint16,uint16,uint8,bool) {
+        try IUniswapV3Pool(pool_).slot0() returns (
+            uint160,
+            int24,
+            uint16,
+            uint16,
+            uint16,
+            uint8,
+            bool
+        ) {
             // Do nothing
         } catch (bytes memory) {
             // If slot0 throws, then pool_ is not a Uniswap V3 pool
@@ -135,7 +150,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         address pool_,
         uint256 amount0_,
         uint256 amount1_
-    ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet() returns (uint256) {
+    ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet returns (uint256) {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
 
@@ -151,7 +166,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         });
 
         // Deposit
-        (uint256 shares,,,) = bunniHub.deposit(params);
+        (uint256 shares, , , ) = bunniHub.deposit(params);
 
         return shares;
     }
@@ -160,7 +175,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        This function reverts if:
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
-    function withdraw(address pool_, uint256 shares_) external override nonReentrant onlyRole("bunni_admin") bunniHubSet() {
+    function withdraw(
+        address pool_,
+        uint256 shares_
+    ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
 
@@ -174,14 +192,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
             // Copied from BunniHub.deposit()
             (uint128 existingLiquidity, , , , ) = key.pool.positions(
-                        keccak256(
-                            abi.encodePacked(
-                                address(bunniHub),
-                                key.tickLower,
-                                key.tickUpper
-                            )
-                        )
-                    );
+                keccak256(abi.encodePacked(address(bunniHub), key.tickLower, key.tickUpper))
+            );
 
             (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
                 sqrtRatioX96,
@@ -215,7 +227,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
     ///             - The `bunniHub` state variable is not set
-    function getToken(address pool_) public view override bunniHubSet() returns (IBunniToken) {
+    function getToken(address pool_) public view override bunniHubSet returns (IBunniToken) {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
 
@@ -249,7 +261,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        This function reverts if:
     ///             - The caller is unauthorized
     ///             - `newBunniHub_` is the zero address
-    function setBunniHub(address newBunniHub_) external override nonReentrant onlyRole("bunni_admin") {
+    function setBunniHub(
+        address newBunniHub_
+    ) external override nonReentrant onlyRole("bunni_admin") {
         if (address(newBunniHub_) == address(0)) {
             revert BunniManager_Params_InvalidAddress(newBunniHub_);
         }
@@ -262,7 +276,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
     ///             - `newOwner_` is the zero address
-    function setBunniOwner(address newOwner_) external override nonReentrant onlyRole("bunni_admin") bunniHubSet() {
+    function setBunniOwner(
+        address newOwner_
+    ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet {
         if (address(newOwner_) == address(0)) {
             revert BunniManager_Params_InvalidAddress(newOwner_);
         }
@@ -285,11 +301,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param pool_    The address of the Uniswap V3 pool
     /// @return         The BunniKey identifier
     function _getBunniKey(address pool_) internal pure returns (BunniKey memory) {
-      return BunniKey({
-        pool: IUniswapV3Pool(pool_),
-        tickLower: TickMath.MIN_TICK,
-        tickUpper: TickMath.MAX_TICK
-      });
+        return
+            BunniKey({
+                pool: IUniswapV3Pool(pool_),
+                tickLower: TickMath.MIN_TICK,
+                tickUpper: TickMath.MAX_TICK
+            });
     }
 
     /// @notice         Modifier to assert that the `bunniHub` state variable is set
