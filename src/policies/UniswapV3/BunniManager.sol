@@ -18,6 +18,7 @@ import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/Liquid
 
 import {IBunniManager} from "policies/UniswapV3/interfaces/IBunniManager.sol";
 
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 
@@ -40,7 +41,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice                 Emitted if any of the module dependencies are the wrong version
     /// @param expectedMajors_  The expected major versions of the modules
-    error BunniManager_WrongModuleVersion(uint8[1] expectedMajors_);
+    error BunniManager_WrongModuleVersion(uint8[2] expectedMajors_);
 
     /// @notice                 Emitted if the given address is invalid
     /// @param address_         The invalid address
@@ -52,6 +53,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice         Emitted if the pool is not managed by this policy
     /// @param pool_    The address of the Uniswap V3 pool
     error BunniManager_PoolNotFound(address pool_);
+
+    /// @notice         Emitted if the pool has already been deployed as a token
+    /// @param pool_    The address of the Uniswap V3 pool
+    /// @param token_   The address of the existing BunniToken
+    error BunniManager_TokenDeployed(address pool_, address token_);
 
     //============================================================================================//
     //                                      STATE                                                 //
@@ -76,15 +82,21 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](0);
-        dependencies[0] = toKeycode("TRSRY");
+        dependencies = new Keycode[](2);
+        dependencies[0] = toKeycode("ROLES");
+        dependencies[1] = toKeycode("TRSRY");
 
-        TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
+        ROLESv1 roles = ROLESv1(getModuleAddress(dependencies[0]));
+        TRSRY = TRSRYv1(getModuleAddress(dependencies[1]));
 
+        (uint8 ROLES_MAJOR, ) = roles.VERSION();
         (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (TRSRY_MAJOR != 1) revert BunniManager_WrongModuleVersion([1]);
+        if (
+            ROLES_MAJOR != 1 ||
+            TRSRY_MAJOR != 1
+        ) revert BunniManager_WrongModuleVersion([1, 1]);
     }
 
     /// @inheritdoc Policy
@@ -132,6 +144,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         } catch (bytes memory) {
             // If slot0 throws, then pool_ is not a Uniswap V3 pool
             revert BunniManager_PoolNotFound(pool_);
+        }
+
+        // Check if a token for the pool has been deployed already
+        IBunniToken existingToken = bunniHub.getBunniToken(key);
+        if (address(existingToken) != address(0)) {
+            revert BunniManager_TokenDeployed(pool_, address(existingToken));
         }
 
         // Deploy
