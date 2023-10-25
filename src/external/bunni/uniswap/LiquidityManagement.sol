@@ -41,10 +41,7 @@ abstract contract LiquidityManagement is ILiquidityManagement {
         uint256 amount1Owed,
         bytes calldata data
     ) external override {
-        MintCallbackData memory decodedData = abi.decode(
-            data,
-            (MintCallbackData)
-        );
+        MintCallbackData memory decodedData = abi.decode(data, (MintCallbackData));
 
         // verify caller
         address computedPool = factory.getPool(
@@ -54,10 +51,8 @@ abstract contract LiquidityManagement is ILiquidityManagement {
         );
         require(msg.sender == computedPool, "WHO");
 
-        if (amount0Owed > 0)
-            pay(decodedData.token0, decodedData.payer, msg.sender, amount0Owed);
-        if (amount1Owed > 0)
-            pay(decodedData.token1, decodedData.payer, msg.sender, amount1Owed);
+        if (amount0Owed > 0) pay(decodedData.token0, decodedData.payer, msg.sender, amount0Owed);
+        if (amount1Owed > 0) pay(decodedData.token1, decodedData.payer, msg.sender, amount1Owed);
     }
 
     /// @param key The Bunni position's key
@@ -78,14 +73,9 @@ abstract contract LiquidityManagement is ILiquidityManagement {
     }
 
     /// @notice Add liquidity to an initialized pool
-    function _addLiquidity(AddLiquidityParams memory params)
-        internal
-        returns (
-            uint128 liquidity,
-            uint256 amount0,
-            uint256 amount1
-        )
-    {
+    function _addLiquidity(
+        AddLiquidityParams memory params
+    ) internal returns (uint128 liquidity, uint256 amount0, uint256 amount1) {
         if (params.amount0Desired == 0 && params.amount1Desired == 0) {
             return (0, 0, 0);
         }
@@ -93,12 +83,8 @@ abstract contract LiquidityManagement is ILiquidityManagement {
         // compute the liquidity amount
         {
             (uint160 sqrtPriceX96, , , , , , ) = params.key.pool.slot0();
-            uint160 sqrtRatioAX96 = TickMath.getSqrtRatioAtTick(
-                params.key.tickLower
-            );
-            uint160 sqrtRatioBX96 = TickMath.getSqrtRatioAtTick(
-                params.key.tickUpper
-            );
+            uint160 sqrtRatioAX96 = TickMath.getSqrtRatioAtTick(params.key.tickLower);
+            uint160 sqrtRatioBX96 = TickMath.getSqrtRatioAtTick(params.key.tickUpper);
 
             liquidity = LiquidityAmounts.getLiquidityForAmounts(
                 sqrtPriceX96,
@@ -124,22 +110,14 @@ abstract contract LiquidityManagement is ILiquidityManagement {
             )
         );
 
-        require(
-            amount0 >= params.amount0Min && amount1 >= params.amount1Min,
-            "SLIP"
-        );
+        require(amount0 >= params.amount0Min && amount1 >= params.amount1Min, "SLIP");
     }
 
     /// @param token The token to pay
     /// @param payer The entity that must pay
     /// @param recipient The entity that will receive payment
     /// @param value The amount to pay
-    function pay(
-        address token,
-        address payer,
-        address recipient,
-        uint256 value
-    ) internal {
+    function pay(address token, address payer, address recipient, uint256 value) internal {
         if (payer == address(this)) {
             // pay with tokens already in the contract (for the exact input multihop case)
             IERC20(token).safeTransfer(recipient, value);

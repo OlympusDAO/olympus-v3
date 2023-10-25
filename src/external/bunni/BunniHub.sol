@@ -27,13 +27,7 @@ import {LiquidityManagement} from "./uniswap/LiquidityManagement.sol";
 /// which is the ERC20 LP token for the Uniswap V3 position specified by the BunniKey.
 /// Use deposit()/withdraw() to mint/burn LP tokens, and use compound() to compound the swap fees
 /// back into the LP position.
-contract BunniHub is
-    IBunniHub,
-    Owned,
-    Multicall,
-    SelfPermit,
-    LiquidityManagement
-{
+contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagement {
     uint256 internal constant WAD = 1e18;
     uint256 internal constant MAX_PROTOCOL_FEE = 5e17;
     uint256 internal constant MIN_INITIAL_SHARES = 1e9;
@@ -70,27 +64,18 @@ contract BunniHub is
     /// -----------------------------------------------------------
 
     /// @inheritdoc IBunniHub
-    function deposit(DepositParams calldata params)
+    function deposit(
+        DepositParams calldata params
+    )
         external
         payable
         virtual
         override
         checkDeadline(params.deadline)
-        returns (
-            uint256 shares,
-            uint128 addedLiquidity,
-            uint256 amount0,
-            uint256 amount1
-        )
+        returns (uint256 shares, uint128 addedLiquidity, uint256 amount0, uint256 amount1)
     {
         (uint128 existingLiquidity, , , , ) = params.key.pool.positions(
-            keccak256(
-                abi.encodePacked(
-                    address(this),
-                    params.key.tickLower,
-                    params.key.tickUpper
-                )
-            )
+            keccak256(abi.encodePacked(address(this), params.key.tickLower, params.key.tickUpper))
         );
         (addedLiquidity, amount0, amount1) = _addLiquidity(
             LiquidityManagement.AddLiquidityParams({
@@ -103,12 +88,7 @@ contract BunniHub is
                 amount1Min: params.amount1Min
             })
         );
-        shares = _mintShares(
-            params.key,
-            params.recipient,
-            addedLiquidity,
-            existingLiquidity
-        );
+        shares = _mintShares(params.key, params.recipient, addedLiquidity, existingLiquidity);
 
         emit Deposit(
             msg.sender,
@@ -122,29 +102,21 @@ contract BunniHub is
     }
 
     /// @inheritdoc IBunniHub
-    function withdraw(WithdrawParams calldata params)
+    function withdraw(
+        WithdrawParams calldata params
+    )
         external
         virtual
         override
         checkDeadline(params.deadline)
-        returns (
-            uint128 removedLiquidity,
-            uint256 amount0,
-            uint256 amount1
-        )
+        returns (uint128 removedLiquidity, uint256 amount0, uint256 amount1)
     {
         IBunniToken shareToken = getBunniToken(params.key);
         require(address(shareToken) != address(0), "WHAT");
 
         uint256 currentTotalSupply = shareToken.totalSupply();
         (uint128 existingLiquidity, , , , ) = params.key.pool.positions(
-            keccak256(
-                abi.encodePacked(
-                    address(this),
-                    params.key.tickLower,
-                    params.key.tickUpper
-                )
-            )
+            keccak256(abi.encodePacked(address(this), params.key.tickLower, params.key.tickUpper))
         );
 
         // burn shares
@@ -156,11 +128,7 @@ contract BunniHub is
         // burn liquidity from pool
         // type cast is safe because we know removedLiquidity <= existingLiquidity
         removedLiquidity = uint128(
-            FullMath.mulDiv(
-                existingLiquidity,
-                params.shares,
-                currentTotalSupply
-            )
+            FullMath.mulDiv(existingLiquidity, params.shares, currentTotalSupply)
         );
         // burn liquidity
         // tokens are now collectable in the pool
@@ -177,10 +145,7 @@ contract BunniHub is
             uint128(amount0),
             uint128(amount1)
         );
-        require(
-            amount0 >= params.amount0Min && amount1 >= params.amount1Min,
-            "SLIP"
-        );
+        require(amount0 >= params.amount0Min && amount1 >= params.amount1Min, "SLIP");
 
         emit Withdraw(
             msg.sender,
@@ -194,31 +159,16 @@ contract BunniHub is
     }
 
     /// @inheritdoc IBunniHub
-    function compound(BunniKey calldata key)
-        external
-        virtual
-        override
-        returns (
-            uint128 addedLiquidity,
-            uint256 amount0,
-            uint256 amount1
-        )
-    {
+    function compound(
+        BunniKey calldata key
+    ) external virtual override returns (uint128 addedLiquidity, uint256 amount0, uint256 amount1) {
         uint256 protocolFee_ = protocolFee;
 
         // trigger an update of the position fees owed snapshots if it has any liquidity
         key.pool.burn(key.tickLower, key.tickUpper, 0);
-        (, , , uint128 cachedFeesOwed0, uint128 cachedFeesOwed1) = key
-            .pool
-            .positions(
-                keccak256(
-                    abi.encodePacked(
-                        address(this),
-                        key.tickLower,
-                        key.tickUpper
-                    )
-                )
-            );
+        (, , , uint128 cachedFeesOwed0, uint128 cachedFeesOwed1) = key.pool.positions(
+            keccak256(abi.encodePacked(address(this), key.tickLower, key.tickUpper))
+        );
 
         /// -----------------------------------------------------------
         /// amount0, amount1 are multi-purposed, see comments below
@@ -319,41 +269,22 @@ contract BunniHub is
         /// amount0, amount1 now store the tokens added as liquidity
         /// -----------------------------------------------------------
 
-        emit Compound(
-            msg.sender,
-            keccak256(abi.encode(key)),
-            addedLiquidity,
-            amount0,
-            amount1
-        );
+        emit Compound(msg.sender, keccak256(abi.encode(key)), addedLiquidity, amount0, amount1);
     }
 
     /// @inheritdoc IBunniHub
-    function deployBunniToken(BunniKey calldata key)
-        public
-        override
-        returns (IBunniToken token)
-    {
+    function deployBunniToken(BunniKey calldata key) public override returns (IBunniToken token) {
         bytes32 bunniKeyHash = keccak256(abi.encode(key));
 
         token = IBunniToken(
             CREATE3.deploy(
                 bunniKeyHash,
-                abi.encodePacked(
-                    type(BunniToken).creationCode,
-                    abi.encode(this, key)
-                ),
+                abi.encodePacked(type(BunniToken).creationCode, abi.encode(this, key)),
                 0
             )
         );
 
-        emit NewBunni(
-            token,
-            bunniKeyHash,
-            key.pool,
-            key.tickLower,
-            key.tickUpper
-        );
+        emit NewBunni(token, bunniKeyHash, key.pool, key.tickLower, key.tickUpper);
     }
 
     /// -----------------------------------------------------------------------
@@ -361,12 +292,7 @@ contract BunniHub is
     /// -----------------------------------------------------------------------
 
     /// @inheritdoc IBunniHub
-    function getBunniToken(BunniKey calldata key)
-        public
-        view
-        override
-        returns (IBunniToken token)
-    {
+    function getBunniToken(BunniKey calldata key) public view override returns (IBunniToken token) {
         token = IBunniToken(CREATE3.getDeployed(keccak256(abi.encode(key))));
 
         uint256 tokenCodeLength;
@@ -384,11 +310,10 @@ contract BunniHub is
     /// -----------------------------------------------------------------------
 
     /// @inheritdoc IBunniHub
-    function sweepTokens(IERC20[] calldata tokenList, address recipient)
-        external
-        override
-        onlyOwner
-    {
+    function sweepTokens(
+        IERC20[] calldata tokenList,
+        address recipient
+    ) external override onlyOwner {
         uint256 tokenListLength = tokenList.length;
         for (uint256 i; i < tokenListLength; ) {
             SafeTransferLib.safeTransfer(
@@ -438,11 +363,7 @@ contract BunniHub is
             require(shares > MIN_INITIAL_SHARES, "SMOL");
         } else {
             // shares = existingShareSupply * addedLiquidity / existingLiquidity;
-            shares = FullMath.mulDiv(
-                existingShareSupply,
-                addedLiquidity,
-                existingLiquidity
-            );
+            shares = FullMath.mulDiv(existingShareSupply, addedLiquidity, existingLiquidity);
             require(shares != 0, "0");
         }
 

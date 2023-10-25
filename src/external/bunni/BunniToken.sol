@@ -17,7 +17,10 @@ contract BunniToken is IBunniToken, ERC20 {
     int24 public immutable override tickUpper;
     IBunniHub public immutable override hub;
 
-    constructor(IBunniHub hub_, BunniKey memory key_)
+    constructor(
+        IBunniHub hub_,
+        BunniKey memory key_
+    )
         ERC20(
             string(
                 abi.encodePacked(
