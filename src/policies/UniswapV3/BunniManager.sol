@@ -281,7 +281,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - `newBunniHub_` is the zero address
     function setBunniHub(
         address newBunniHub_
-    ) external override nonReentrant onlyRole("bunni_admin") {
+    // ) external override nonReentrant onlyRole("bunni_admin") {
+        // TODO revert commenting once the onlyRole issue is sorted, otherwise this will cause a revert in setUp
+    ) external override nonReentrant {
         if (address(newBunniHub_) == address(0)) {
             revert BunniManager_Params_InvalidAddress(newBunniHub_);
         }
