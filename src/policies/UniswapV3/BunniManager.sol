@@ -86,10 +86,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         dependencies[0] = toKeycode("ROLES");
         dependencies[1] = toKeycode("TRSRY");
 
-        ROLESv1 roles = ROLESv1(getModuleAddress(dependencies[0]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[0]));
         TRSRY = TRSRYv1(getModuleAddress(dependencies[1]));
 
-        (uint8 ROLES_MAJOR, ) = roles.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
         (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
 
         // Ensure Modules are using the expected major version.
@@ -281,9 +281,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - `newBunniHub_` is the zero address
     function setBunniHub(
         address newBunniHub_
-    // ) external override nonReentrant onlyRole("bunni_admin") {
-        // TODO revert commenting once the onlyRole issue is sorted, otherwise this will cause a revert in setUp
-    ) external override nonReentrant {
+    ) external override nonReentrant onlyRole("bunni_admin") {
         if (address(newBunniHub_) == address(0)) {
             revert BunniManager_Params_InvalidAddress(newBunniHub_);
         }
