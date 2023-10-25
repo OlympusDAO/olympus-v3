@@ -146,7 +146,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             amount1Desired: amount1_,
             amount0Min: _calculateAmountMin(amount0_),
             amount1Min: _calculateAmountMin(amount1_),
-            deadline: block.timestamp, // TODO check that deadline is correct
+            deadline: block.timestamp, // Ensures that the action be executed in this block or reverted
             recipient: getModuleAddress(toKeycode("TRSRY")) // Transfers directly into TRSRY
         });
 
@@ -172,11 +172,22 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             uint160 sqrtRatioAX96 = TickMath.getSqrtRatioAtTick(key.tickLower);
             uint160 sqrtRatioBX96 = TickMath.getSqrtRatioAtTick(key.tickUpper);
 
+            // Copied from BunniHub.deposit()
+            (uint128 existingLiquidity, , , , ) = key.pool.positions(
+                        keccak256(
+                            abi.encodePacked(
+                                address(bunniHub),
+                                key.tickLower,
+                                key.tickUpper
+                            )
+                        )
+                    );
+
             (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(
                 sqrtRatioX96,
                 sqrtRatioAX96,
                 sqrtRatioBX96,
-                key.pool.liquidity() // TODO check this is correct
+                existingLiquidity
             );
 
             amount0Min = _calculateAmountMin(amount0);
@@ -190,7 +201,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             shares: shares_,
             amount0Min: amount0Min,
             amount1Min: amount1Min,
-            deadline: block.timestamp // TODO check that deadline is correct
+            deadline: block.timestamp // Ensures that the action be executed in this block or reverted
         });
 
         // Withdraw
