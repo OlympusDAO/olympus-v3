@@ -5,16 +5,22 @@ import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
 
-import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+
+import {RolesAdmin} from "policies/RolesAdmin.sol";
+
+import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
 import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
 
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
+import {BunniHub} from "src/external/bunni/BunniHub.sol";
 
 import "src/Kernel.sol";
 
@@ -25,11 +31,17 @@ contract BunniManagerTest is Test {
     address internal alice;
     address internal policy;
 
+    MockERC20 internal ohm;
+
     Kernel internal kernel;
     OlympusRoles internal roles;
     OlympusTreasury internal treasury;
+    OlympusMinter internal mintr;
+    OlympusPricev2 internal price;
 
     UniswapV3Factory internal uniswapFactory;
+
+    RolesAdmin internal rolesAdmin;
 
     BunniManager internal bunniManager;
     BunniHub internal bunniHub;
@@ -44,12 +56,18 @@ contract BunniManagerTest is Test {
         }
 
         {
+            ohm = new MockERC20("Olympus", "OHM", 9);
+        }
+
+        {
             // Deploy kernel
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy modules
             roles = new OlympusRoles(kernel);
             treasury = new OlympusTreasury(kernel);
+            mintr = new OlympusMinter(kernel, address(ohm));
+            price = new OlympusPricev2(kernel, uint8(8), uint32(8 hours));
         }
 
         {
@@ -75,6 +93,8 @@ contract BunniManagerTest is Test {
             // Install modules
             kernel.executeAction(Actions.InstallModule, address(treasury));
             kernel.executeAction(Actions.InstallModule, address(roles));
+            kernel.executeAction(Actions.InstallModule, address(mintr));
+            kernel.executeAction(Actions.InstallModule, address(price));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(bunniManager));
