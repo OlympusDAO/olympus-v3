@@ -117,15 +117,12 @@ interface IBunniHub is IMulticall, ISelfPermit, ILiquidityManagement {
     /// @return addedLiquidity The new liquidity amount as a result of the increase
     /// @return amount0 The amount of token0 to acheive resulting liquidity
     /// @return amount1 The amount of token1 to acheive resulting liquidity
-    function deposit(DepositParams calldata params)
+    function deposit(
+        DepositParams calldata params
+    )
         external
         payable
-        returns (
-            uint256 shares,
-            uint128 addedLiquidity,
-            uint256 amount0,
-            uint256 amount1
-        );
+        returns (uint256 shares, uint128 addedLiquidity, uint256 amount0, uint256 amount1);
 
     /// @param key The Bunni position's key
     /// @param recipient The user if not withdrawing ETH, address(0) if withdrawing ETH
@@ -155,13 +152,9 @@ interface IBunniHub is IMulticall, ISelfPermit, ILiquidityManagement {
     /// @return removedLiquidity The amount of liquidity decrease
     /// @return amount0 The amount of token0 withdrawn to the recipient
     /// @return amount1 The amount of token1 withdrawn to the recipient
-    function withdraw(WithdrawParams calldata params)
-        external
-        returns (
-            uint128 removedLiquidity,
-            uint256 amount0,
-            uint256 amount1
-        );
+    function withdraw(
+        WithdrawParams calldata params
+    ) external returns (uint128 removedLiquidity, uint256 amount0, uint256 amount1);
 
     /// @notice Claims the trading fees earned and uses it to add liquidity.
     /// @dev Must be called after the corresponding BunniToken has been deployed via deployBunniToken()
@@ -169,38 +162,28 @@ interface IBunniHub is IMulticall, ISelfPermit, ILiquidityManagement {
     /// @return addedLiquidity The new liquidity amount as a result of the increase
     /// @return amount0 The amount of token0 added to the liquidity position
     /// @return amount1 The amount of token1 added to the liquidity position
-    function compound(BunniKey calldata key)
-        external
-        returns (
-            uint128 addedLiquidity,
-            uint256 amount0,
-            uint256 amount1
-        );
+    function compound(
+        BunniKey calldata key
+    ) external returns (uint128 addedLiquidity, uint256 amount0, uint256 amount1);
 
     /// @notice Deploys the BunniToken contract for a Bunni position. This token
     /// represents a user's share in the Uniswap V3 LP position.
     /// @param key The Bunni position's key
     /// @return token The deployed BunniToken
-    function deployBunniToken(BunniKey calldata key)
-        external
-        returns (IBunniToken token);
+    function deployBunniToken(BunniKey calldata key) external returns (IBunniToken token);
 
     /// @notice Returns the BunniToken contract for a Bunni position. This token
     /// represents a user's share in the Uniswap V3 LP position.
     /// If the contract hasn't been created yet, returns 0.
     /// @param key The Bunni position's key
     /// @return token The BunniToken contract
-    function getBunniToken(BunniKey calldata key)
-        external
-        view
-        returns (IBunniToken token);
+    function getBunniToken(BunniKey calldata key) external view returns (IBunniToken token);
 
     /// @notice Sweeps ERC20 token balances to a recipient. Mainly used for extracting protocol fees.
     /// Only callable by the owner.
     /// @param tokenList The list of ERC20 tokens to sweep
     /// @param recipient The token recipient address
-    function sweepTokens(IERC20[] calldata tokenList, address recipient)
-        external;
+    function sweepTokens(IERC20[] calldata tokenList, address recipient) external;
 
     /// @notice Updates the protocol fee value. Scaled by 1e18. Only callable by the owner.
     /// @param value The new protocol fee value
