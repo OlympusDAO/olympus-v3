@@ -12,7 +12,7 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {UniswapV3Factory} from "@uniswap/v3-core/contracts/UniswapV3Factory.sol";
+import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
 
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 
