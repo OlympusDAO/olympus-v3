@@ -44,6 +44,7 @@ import "src/Kernel.sol";
 ///         - Setting the protocol fee on the BunniHub instance (applied when compounding pool fees), as there is no use for having the protocol fees applied.
 contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     using FullMath for uint256;
+    using TransferHelper for ERC20;
 
     /// @notice                 Emitted if any of the module dependencies are the wrong version
     /// @param expectedMajors_  The expected major versions of the modules
@@ -128,13 +129,15 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         Keycode PRICE_KEYCODE = PRICE.KEYCODE();
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        requests = new Permissions[](6);
+        requests = new Permissions[](8);
         requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
         requests[3] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
         requests[4] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         requests[5] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[6] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        requests[7] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
     }
 
     //============================================================================================//
@@ -202,7 +205,15 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IBunniManager
-    /// @dev        This function reverts if:
+    /// @dev        This function does the following:
+    ///             - Moves the required non-OHM token(s) from TRSRY to this contract
+    ///             - If one of the tokens is OHM, then mint the OHM
+    ///             - Deposit the tokens into the BunniHub, which mints share tokens
+    ///             - Transfer the share tokens to TRSRY
+    ///             - Return any non-OHM token(s) to the TRSRY
+    ///             - Burns any remaining OHM
+    ///
+    ///             This function reverts if:
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
     ///             - An ERC20 token for `pool_` has not been deployed
@@ -225,22 +236,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         IUniswapV3Pool pool = IUniswapV3Pool(pool_);
         ERC20 token0 = ERC20(pool.token0());
         ERC20 token1 = ERC20(pool.token1());
-        bool token0IsOhm = address(token0) == address(MINTR.ohm());
-        bool token1IsOhm = address(token1) == address(MINTR.ohm());
 
-        if (token0IsOhm) {
-            // Mint
-        }
-        else {
-            _transferFromTRSRY(token0, amount0_);
-        }
-
-        if (token1IsOhm) {
-            // Mint
-        }
-        else {
-            _transferFromTRSRY(token1, amount1_);
-        }
+        // Move tokens into the policy
+        _transferOrMint(token0, amount0_);
+        _transferOrMint(token1, amount1_);
 
         // Approve BunniHub to use the tokens
         token0.approve(address(bunniHub), amount0_);
@@ -259,6 +258,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         // Deposit
         (uint256 shares, , , ) = bunniHub.deposit(params);
+
+        // Return/burn remaining tokens
+        _transferOrBurn(token0, token0.balanceOf(address(this)));
+        _transferOrBurn(token1, token1.balanceOf(address(this)));
 
         return shares;
     }
@@ -415,6 +418,25 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         // Transfer into the policy
         TRSRY.withdrawReserves(address(this), token_, amount_);
+    }
+
+    function _transferOrMint(ERC20 token_, uint256 amount_) internal {
+        if (address(token_) == address(MINTR.ohm())) {
+            MINTR.increaseMintApproval(address(this), amount_);
+            MINTR.mintOhm(address(this), amount_);
+        }
+        else {
+            _transferFromTRSRY(token_, amount_);
+        }
+    }
+
+    function _transferOrBurn(ERC20 token_, uint256 amount_) internal {
+        if (address(token_) == address(MINTR.ohm())) {
+            MINTR.burnOhm(address(this), amount_);
+        }
+        else {
+            token_.safeTransfer(address(TRSRY), amount_);
+        }
     }
 
     /// @notice         Modifier to assert that the `bunniHub` state variable is set

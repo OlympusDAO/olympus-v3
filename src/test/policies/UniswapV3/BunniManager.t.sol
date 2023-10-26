@@ -6,6 +6,7 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockOhm} from "test/mocks/MockOhm.sol";
 
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
@@ -35,7 +36,7 @@ contract BunniManagerTest is Test {
     address internal alice;
     address internal policy;
 
-    MockERC20 internal ohm;
+    MockOhm internal ohm;
     MockERC20 internal usdc;
 
     Kernel internal kernel;
@@ -53,8 +54,9 @@ contract BunniManagerTest is Test {
     IUniswapV3Pool internal pool;
 
     uint24 constant POOL_FEE = 500;
-    uint160 constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC
-    uint160 constant DAI_USDC_SQRTPRICEX96 = 79227120762198600072084; // From DAI-USDC, = $1
+    uint256 constant OHM_USDC_PRICE = 115897 * 1e14; // 11.5897 USDC per OHM in 18 decimal places
+    uint160 constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
+    uint160 constant DAI_USDC_SQRTPRICEX96 = 79227120762198600072084; // From DAI-USDC, 1 DAI = 1 USDC
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -66,7 +68,7 @@ contract BunniManagerTest is Test {
         }
 
         {
-            ohm = new MockERC20("Olympus", "OHM", 9);
+            ohm = new MockOhm("Olympus", "OHM", 9);
             usdc = new MockERC20("USDC", "USDC", 6);
         }
 
@@ -124,7 +126,7 @@ contract BunniManagerTest is Test {
             pool = IUniswapV3Pool(uniswapFactory.createPool(address(ohm), address(usdc), POOL_FEE));
 
             // Initialize it
-            pool.initialize(DAI_USDC_SQRTPRICEX96);
+            pool.initialize(OHM_USDC_SQRTPRICEX96);
         }
 
         {
@@ -242,16 +244,16 @@ contract BunniManagerTest is Test {
         bunniManager.deployToken(address(pool));
     }
 
-    // [ ] deposit
+    // [X] deposit
     //  [X] caller is unauthorized
     //  [X] bunniHub not set
     //  [X] token not deployed
     //  [X] insufficient balance of token0 in TRSRY to deposit
     //  [X] insufficient balance of token1 in TRSRY to deposit
     //  [X] OHM minted, deposits and returns shares
-    //  [ ] burns excess OHM after deposit
-    //  [ ] deposits non-OHM tokens and returns shares
-    //  [ ] returns non-OHM tokens to TRSRY
+    //  [X] burns excess OHM after deposit
+    //  [X] deposits non-OHM tokens and returns shares
+    //  [X] returns non-OHM tokens to TRSRY
 
     function test_deposit_unauthorizedReverts() public {
         _expectRevert_unauthorized();
@@ -363,23 +365,31 @@ contract BunniManagerTest is Test {
 
         // The tokens should have been deposited into TRSRY
         assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
+
+        // No remaining balance in the policy
+        assertEq(dai.balanceOf(address(bunniManager)), 0);
+        assertEq(usdc.balanceOf(address(bunniManager)), 0);
+
+        // No remaining balance in the bunniHub
+        assertEq(dai.balanceOf(address(bunniHub)), 0);
+        assertEq(usdc.balanceOf(address(bunniHub)), 0);
     }
 
     function test_deposit_ohmToken() public {
-        uint256 OTHER_DEPOSIT = 1e18;
-        uint256 OHM_DEPOSIT = 1e9;
+        uint256 USDC_DEPOSIT = 10e6 * OHM_USDC_PRICE / 1e18; // Ensures that the token amounts are in the correct ratio
+        uint256 OHM_DEPOSIT = 10e9;
 
         // Determine which token is token0
         address token0 = pool.token0();
-        uint256 token0Amount = token0 == address(ohm) ? OHM_DEPOSIT : OTHER_DEPOSIT;
-        uint256 token1Amount = token0 == address(ohm) ? OTHER_DEPOSIT : OHM_DEPOSIT;
+        uint256 token0Amount = token0 == address(ohm) ? OHM_DEPOSIT : USDC_DEPOSIT;
+        uint256 token1Amount = token0 == address(ohm) ? USDC_DEPOSIT : OHM_DEPOSIT;
 
         // Deploy the token
         vm.prank(policy);
         IBunniToken bunniToken = bunniManager.deployToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
-        usdc.mint(address(treasury), OTHER_DEPOSIT);
+        usdc.mint(address(treasury), USDC_DEPOSIT);
 
         // Deposit
         vm.prank(policy);
@@ -387,6 +397,14 @@ contract BunniManagerTest is Test {
 
         // The tokens should have been deposited into TRSRY
         assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
+
+        // No remaining balance in the policy
+        assertEq(ohm.balanceOf(address(bunniManager)), 0);
+        assertEq(usdc.balanceOf(address(bunniManager)), 0);
+
+        // No remaining balance in the bunniHub
+        assertEq(ohm.balanceOf(address(bunniHub)), 0);
+        assertEq(usdc.balanceOf(address(bunniHub)), 0);
     }
 
     // [ ] withdraw
