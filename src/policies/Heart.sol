@@ -79,6 +79,13 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
         PRICE = PRICEv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        if (PRICE_MAJOR != 1 || ROLES_MAJOR != 1)
+            revert Heart_WrongModuleVersion([1, 1]);
     }
 
     /// @inheritdoc Policy
