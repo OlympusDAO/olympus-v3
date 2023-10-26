@@ -174,6 +174,7 @@ contract BunniManagerTest is Test {
     function test_deployToken_bunniHubNotSetReverts() public {
         // Create a new BunniManager policy, without the BunniHub set
         BunniManager newBunniManager = new BunniManager(kernel);
+        kernel.executeAction(Actions.ActivatePolicy, address(newBunniManager));
 
         _expectRevert_bunniHubNotSet();
 
