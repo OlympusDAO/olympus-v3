@@ -6,6 +6,8 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
+import {ERC20} from "solmate/tokens/ERC20.sol";
+
 import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
 import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
@@ -22,6 +24,7 @@ import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
+import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
 import "modules/PRICE/OlympusPrice.v2.sol";
 
@@ -44,7 +47,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice                 Emitted if any of the module dependencies are the wrong version
     /// @param expectedMajors_  The expected major versions of the modules
-    error BunniManager_WrongModuleVersion(uint8[3] expectedMajors_);
+    error BunniManager_WrongModuleVersion(uint8[4] expectedMajors_);
 
     /// @notice                 Emitted if the given address is invalid
     /// @param address_         The invalid address
@@ -62,6 +65,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param token_   The address of the existing BunniToken
     error BunniManager_TokenDeployed(address pool_, address token_);
 
+    /// @notice                 Emitted if the caller does not have sufficient balance to deposit
+    /// @param token_           The address of the token
+    /// @param requiredBalance_ The required balance
+    /// @param actualBalance_   The actual balance
+    error BunniManager_InsufficientBalance(address token_, uint256 requiredBalance_, uint256 actualBalance_);
+
     //============================================================================================//
     //                                      STATE                                                 //
     //============================================================================================//
@@ -71,10 +80,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     // Modules
     TRSRYv1 internal TRSRY;
     PRICEv2 internal PRICE;
+    MINTRv1 internal MINTR;
 
     // Constants
     uint256 constant SLIPPAGE_TOLERANCE = 100; // 1%
     uint256 constant SLIPPAGE_SCALE = 10000; // 100%
+    int24 constant TICK_SPACING_DIVISOR = 50;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -86,37 +97,44 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
+        dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("ROLES");
         dependencies[1] = toKeycode("TRSRY");
         dependencies[2] = toKeycode("PRICE");
+        dependencies[3] = toKeycode("MINTR");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
         TRSRY = TRSRYv1(getModuleAddress(dependencies[1]));
         PRICE = PRICEv2(getModuleAddress(dependencies[2]));
+        MINTR = MINTRv1(getModuleAddress(dependencies[3]));
 
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
         (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
         (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
 
         // Ensure Modules are using the expected major version.
         if (
             ROLES_MAJOR != 1 ||
             TRSRY_MAJOR != 1 ||
-            PRICE_MAJOR != 2
-        ) revert BunniManager_WrongModuleVersion([1, 1, 2]);
+            PRICE_MAJOR != 2 ||
+            MINTR_MAJOR != 1
+        ) revert BunniManager_WrongModuleVersion([1, 1, 2, 1]);
     }
 
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
         Keycode PRICE_KEYCODE = PRICE.KEYCODE();
+        Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        requests = new Permissions[](4);
+        requests = new Permissions[](6);
         requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
         requests[3] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
+        requests[4] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[5] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
     }
 
     //============================================================================================//
@@ -187,6 +205,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        This function reverts if:
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
+    ///             - An ERC20 token for `pool_` has not been deployed
+    ///             - There is insufficient balance of tokens
     function deposit(
         address pool_,
         uint256 amount0_,
@@ -194,6 +214,37 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet returns (uint256) {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
+
+        // Check that the token has been deployed
+        IBunniToken existingToken = bunniHub.getBunniToken(key);
+        if (address(existingToken) == address(0)) {
+            revert BunniManager_PoolNotFound(pool_);
+        }
+
+        // Move non-OHM tokens from TRSRY to this contract
+        IUniswapV3Pool pool = IUniswapV3Pool(pool_);
+        ERC20 token0 = ERC20(pool.token0());
+        ERC20 token1 = ERC20(pool.token1());
+        bool token0IsOhm = address(token0) == address(MINTR.ohm());
+        bool token1IsOhm = address(token1) == address(MINTR.ohm());
+
+        if (token0IsOhm) {
+            // Mint
+        }
+        else {
+            _transferFromTRSRY(token0, amount0_);
+        }
+
+        if (token1IsOhm) {
+            // Mint
+        }
+        else {
+            _transferFromTRSRY(token1, amount1_);
+        }
+
+        // Approve BunniHub to use the tokens
+        token0.approve(address(bunniHub), amount0_);
+        token1.approve(address(bunniHub), amount1_);
 
         // Construct the parameters
         IBunniHub.DepositParams memory params = IBunniHub.DepositParams({
@@ -345,9 +396,25 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         return
             BunniKey({
                 pool: IUniswapV3Pool(pool_),
-                tickLower: TickMath.MIN_TICK,
-                tickUpper: TickMath.MAX_TICK
+                // The ticks need to be divisible by the tick spacing
+                // Source: https://github.com/Aboudoc/Uniswap-v3/blob/7aa9db0d0bf3d188a8a53a1dbe542adf7483b746/contracts/UniswapV3Liquidity.sol#L49C23-L49C23
+                tickLower: (TickMath.MIN_TICK / TICK_SPACING_DIVISOR) * TICK_SPACING_DIVISOR,
+                tickUpper: (TickMath.MAX_TICK / TICK_SPACING_DIVISOR) * TICK_SPACING_DIVISOR
             });
+    }
+
+    function _transferFromTRSRY(ERC20 token_, uint256 amount_) internal {
+        // Check the balance
+        uint256 actualBalance = token_.balanceOf(address(TRSRY));
+        if (actualBalance < amount_) {
+            revert BunniManager_InsufficientBalance(address(token_), amount_, actualBalance);
+        }
+
+        // Increase the allowance
+        TRSRY.increaseWithdrawApproval(address(this), token_, amount_);
+
+        // Transfer into the policy
+        TRSRY.withdrawReserves(address(this), token_, amount_);
     }
 
     /// @notice         Modifier to assert that the `bunniHub` state variable is set
