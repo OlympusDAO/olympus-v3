@@ -21,6 +21,9 @@ import {IBunniManager} from "policies/UniswapV3/interfaces/IBunniManager.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
+
+import "modules/PRICE/OlympusPrice.v2.sol";
 
 import "src/Kernel.sol";
 
@@ -41,7 +44,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice                 Emitted if any of the module dependencies are the wrong version
     /// @param expectedMajors_  The expected major versions of the modules
-    error BunniManager_WrongModuleVersion(uint8[2] expectedMajors_);
+    error BunniManager_WrongModuleVersion(uint8[3] expectedMajors_);
 
     /// @notice                 Emitted if the given address is invalid
     /// @param address_         The invalid address
@@ -67,6 +70,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     // Modules
     TRSRYv1 internal TRSRY;
+    PRICEv2 internal PRICE;
 
     // Constants
     uint256 constant SLIPPAGE_TOLERANCE = 100; // 1%
@@ -82,31 +86,37 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](2);
+        dependencies = new Keycode[](3);
         dependencies[0] = toKeycode("ROLES");
         dependencies[1] = toKeycode("TRSRY");
+        dependencies[2] = toKeycode("PRICE");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
         TRSRY = TRSRYv1(getModuleAddress(dependencies[1]));
+        PRICE = PRICEv2(getModuleAddress(dependencies[2]));
 
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
         (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
 
         // Ensure Modules are using the expected major version.
         if (
             ROLES_MAJOR != 1 ||
-            TRSRY_MAJOR != 1
-        ) revert BunniManager_WrongModuleVersion([1, 1]);
+            TRSRY_MAJOR != 1 ||
+            PRICE_MAJOR != 2
+        ) revert BunniManager_WrongModuleVersion([1, 1, 2]);
     }
 
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
+        Keycode PRICE_KEYCODE = PRICE.KEYCODE();
 
-        requests = new Permissions[](3);
+        requests = new Permissions[](4);
         requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
+        requests[3] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
     }
 
     //============================================================================================//
@@ -155,7 +165,20 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Deploy
         IBunniToken deployedToken = bunniHub.deployBunniToken(key);
 
-        // TODO register the token with PRICEv2.addAsset (requires the PRICE submodule)
+        // Register the token for lookups
+        // PRICEv2.Component[] memory feeds = new PRICEv2.Component[](0);
+        // // TODO configure PRICE submodule
+
+        // PRICE.addAsset(
+        //     address(deployedToken), // asset_
+        //     false, // storeMovingAverage_
+        //     false, // useMovingAverage_
+        //     uint32(0), // movingAverageDuration_
+        //     uint48(0), // uint48 lastObservationTime_
+        //     new uint256[](0), // uint256[] memory observations_
+        //     PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+        //     feeds //
+        // );
 
         return deployedToken;
     }

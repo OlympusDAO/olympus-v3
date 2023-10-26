@@ -183,10 +183,10 @@ contract BunniManagerTest is Test {
     }
 
     function test_deployToken_invalidPoolReverts() public {
-        _expectRevert_poolNotFound(address(alice));
+        _expectRevert_poolNotFound(address(ohm));
 
         vm.prank(policy);
-        bunniManager.deployToken(address(alice));
+        bunniManager.deployToken(address(ohm));
     }
 
     function test_deployToken() public {
