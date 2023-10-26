@@ -36,7 +36,7 @@ contract BunniManagerTest is Test {
     address internal policy;
 
     MockERC20 internal ohm;
-    MockERC20 internal otherToken;
+    MockERC20 internal usdc;
 
     Kernel internal kernel;
     OlympusRoles internal roles;
@@ -53,6 +53,8 @@ contract BunniManagerTest is Test {
     IUniswapV3Pool internal pool;
 
     uint24 constant POOL_FEE = 500;
+    uint160 constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC
+    uint160 constant DAI_USDC_SQRTPRICEX96 = 79227120762198600072084; // From DAI-USDC, = $1
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -65,7 +67,7 @@ contract BunniManagerTest is Test {
 
         {
             ohm = new MockERC20("Olympus", "OHM", 9);
-            otherToken = new MockERC20("Other Token", "OTH", 18);
+            usdc = new MockERC20("USDC", "USDC", 6);
         }
 
         {
@@ -119,7 +121,10 @@ contract BunniManagerTest is Test {
 
         {
             // Create a Uniswap V3 pool
-            pool = IUniswapV3Pool(uniswapFactory.createPool(address(ohm), address(otherToken), POOL_FEE));
+            pool = IUniswapV3Pool(uniswapFactory.createPool(address(ohm), address(usdc), POOL_FEE));
+
+            // Initialize it
+            pool.initialize(DAI_USDC_SQRTPRICEX96);
         }
 
         {
@@ -152,6 +157,24 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
+    function _expectRevert_insufficientBalance(address token_, uint256 requiredBalance_, uint256 actualBalance_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_InsufficientBalance.selector,
+            token_,
+            requiredBalance_,
+            actualBalance_
+        );
+        vm.expectRevert(err);
+    }
+
+    function _setUpNewBunniManager() internal returns (BunniManager) {
+        // Create a new BunniManager policy, with the BunniHub set
+        BunniManager newBunniManager = new BunniManager(kernel);
+        kernel.executeAction(Actions.ActivatePolicy, address(newBunniManager));
+
+        return newBunniManager;
+    }
+
     // [ ] constructor
     // [ ] configureDependencies
     //  [ ] reverts if TRSRY version is unsupported
@@ -173,8 +196,7 @@ contract BunniManagerTest is Test {
 
     function test_deployToken_bunniHubNotSetReverts() public {
         // Create a new BunniManager policy, without the BunniHub set
-        BunniManager newBunniManager = new BunniManager(kernel);
-        kernel.executeAction(Actions.ActivatePolicy, address(newBunniManager));
+        BunniManager newBunniManager = _setUpNewBunniManager();
 
         _expectRevert_bunniHubNotSet();
 
@@ -221,15 +243,152 @@ contract BunniManagerTest is Test {
     }
 
     // [ ] deposit
-    //  [ ] caller is unauthorized
-    //  [ ] bunniHub not set
-    //  [ ] token not deployed
-    //  [ ] insufficient balance of token0 in policy to deposit
-    //  [ ] insufficient balance of token1 in policy to deposit
-    //  [ ] token0 is OHM, deposits and returns shares
-    //  [ ] token1 is OHM, deposits and returns shares
+    //  [X] caller is unauthorized
+    //  [X] bunniHub not set
+    //  [X] token not deployed
+    //  [X] insufficient balance of token0 in TRSRY to deposit
+    //  [X] insufficient balance of token1 in TRSRY to deposit
+    //  [X] OHM minted, deposits and returns shares
     //  [ ] burns excess OHM after deposit
     //  [ ] deposits non-OHM tokens and returns shares
+    //  [ ] returns non-OHM tokens to TRSRY
+
+    function test_deposit_unauthorizedReverts() public {
+        _expectRevert_unauthorized();
+
+        vm.prank(alice);
+        bunniManager.deposit(address(pool), 1e9, 1e18);
+    }
+
+    function test_deposit_bunniHubNotSetReverts() public {
+        // Create a new BunniManager policy, without the BunniHub set
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        _expectRevert_bunniHubNotSet();
+
+        vm.prank(policy);
+        newBunniManager.deposit(address(pool), 1e9, 1e18);
+    }
+
+    function test_deposit_tokenNotDeployedReverts() public {
+        _expectRevert_poolNotFound(address(pool));
+
+        vm.prank(policy);
+        bunniManager.deposit(address(pool), 1e9, 1e18);
+    }
+
+    function test_deposit_token0InsufficientBalanceReverts(uint256 token0Amount_) public {
+        // Create a pool with non-OHM tokens
+        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
+        newPool.initialize(DAI_USDC_SQRTPRICEX96);
+
+        // Determine balances
+        address token0 = newPool.token0();
+        bool token0IsDai = token0 == address(dai);
+        uint256 TOKEN0_DEPOSIT = token0IsDai ? 1e18 : 1e6;
+        uint256 TOKEN1_DEPOSIT = token0IsDai ? 1e6 : 1e18;
+        uint256 daiBalance = token0IsDai ? bound(token0Amount_, 0, TOKEN0_DEPOSIT - 1) : 1e18;
+        uint256 usdcBalance = token0IsDai ? 1e6 : bound(token0Amount_, 0, TOKEN0_DEPOSIT - 1);
+
+        // Deploy the token
+        vm.prank(policy);
+        bunniManager.deployToken(address(newPool));
+
+        // Mint tokens to the TRSRY
+        dai.mint(address(treasury), daiBalance);
+        usdc.mint(address(treasury), usdcBalance);
+
+        // Expect a revert
+        _expectRevert_insufficientBalance(token0, TOKEN0_DEPOSIT, token0IsDai ? daiBalance : usdcBalance);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(address(newPool), TOKEN0_DEPOSIT, TOKEN1_DEPOSIT);
+    }
+
+    function test_deposit_token1InsufficientBalanceReverts(uint256 token1Amount_) public {
+        // Create a pool with non-OHM tokens
+        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
+        newPool.initialize(DAI_USDC_SQRTPRICEX96);
+
+        // Determine balances
+        address token0 = newPool.token0();
+        bool token0IsDai = token0 == address(dai);
+        uint256 TOKEN0_DEPOSIT = token0IsDai ? 1e18 : 1e6;
+        uint256 TOKEN1_DEPOSIT = token0IsDai ? 1e6 : 1e18;
+        uint256 daiBalance = token0IsDai ? 1e18 : bound(token1Amount_, 0, TOKEN1_DEPOSIT - 1);
+        uint256 usdcBalance = token0IsDai ? bound(token1Amount_, 0, TOKEN1_DEPOSIT - 1) : 1e6;
+
+        // Deploy the token
+        vm.prank(policy);
+        bunniManager.deployToken(address(newPool));
+
+        // Mint tokens to the TRSRY
+        dai.mint(address(treasury), daiBalance);
+        usdc.mint(address(treasury), usdcBalance);
+
+        // Expect a revert
+        _expectRevert_insufficientBalance(newPool.token1(), TOKEN1_DEPOSIT, token0IsDai ? usdcBalance : daiBalance);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(address(newPool), TOKEN0_DEPOSIT, TOKEN1_DEPOSIT);
+    }
+
+    function test_deposit_nonOhmTokens() public {
+        // Create a pool with non-OHM tokens
+        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
+        newPool.initialize(DAI_USDC_SQRTPRICEX96);
+
+        // Determine balances
+        address token0 = newPool.token0();
+        bool token0IsDai = token0 == address(dai);
+        uint256 TOKEN0_DEPOSIT = token0IsDai ? 1e18 : 1e6;
+        uint256 TOKEN1_DEPOSIT = token0IsDai ? 1e6 : 1e18;
+
+        // Deploy the token
+        vm.prank(policy);
+        IBunniToken bunniToken = bunniManager.deployToken(address(newPool));
+
+        // Mint tokens to the TRSRY
+        dai.mint(address(treasury), token0IsDai ? TOKEN0_DEPOSIT : TOKEN1_DEPOSIT);
+        usdc.mint(address(treasury), token0IsDai ? TOKEN1_DEPOSIT : TOKEN0_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        uint256 bunniTokenShares = bunniManager.deposit(address(newPool), TOKEN0_DEPOSIT, TOKEN1_DEPOSIT);
+
+        // The tokens should have been deposited into TRSRY
+        assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
+    }
+
+    function test_deposit_ohmToken() public {
+        uint256 OTHER_DEPOSIT = 1e18;
+        uint256 OHM_DEPOSIT = 1e9;
+
+        // Determine which token is token0
+        address token0 = pool.token0();
+        uint256 token0Amount = token0 == address(ohm) ? OHM_DEPOSIT : OTHER_DEPOSIT;
+        uint256 token1Amount = token0 == address(ohm) ? OTHER_DEPOSIT : OHM_DEPOSIT;
+
+        // Deploy the token
+        vm.prank(policy);
+        IBunniToken bunniToken = bunniManager.deployToken(address(pool));
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(address(treasury), OTHER_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), token0Amount, token1Amount);
+
+        // The tokens should have been deposited into TRSRY
+        assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
+    }
+
     // [ ] withdraw
     //  [ ] caller is unauthorized
     //  [ ] bunniHub not set
