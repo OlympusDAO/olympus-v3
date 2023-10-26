@@ -84,8 +84,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (PRICE_MAJOR != 1 || ROLES_MAJOR != 1)
-            revert Heart_WrongModuleVersion([1, 1]);
+        if (PRICE_MAJOR != 1 || ROLES_MAJOR != 1) revert Heart_WrongModuleVersion([1, 1]);
     }
 
     /// @inheritdoc Policy
