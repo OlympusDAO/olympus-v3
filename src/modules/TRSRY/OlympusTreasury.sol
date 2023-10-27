@@ -188,6 +188,10 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         return assets;
     }
 
+    function getAssetData(address asset_) external view override returns (Asset memory) {
+        return assetData[asset_];
+    }
+
     function getAssetsByCategory(
         Category category_
     ) public view override returns (address[] memory) {

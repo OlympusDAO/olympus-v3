@@ -11,11 +11,13 @@
 // import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 // import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+// import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 // import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 // import {MockOhm} from "test/mocks/MockOhm.sol";
 
 // import {IBondSDA} from "interfaces/IBondSDA.sol";
 // import {IBondAggregator} from "interfaces/IBondAggregator.sol";
+// import {IAppraiser} from "policies/OCA/interfaces/IAppraiser.sol";
 
 // import {FullMath} from "libraries/FullMath.sol";
 
@@ -26,6 +28,8 @@
 // import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 // import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 // import {Operator} from "policies/RBS/Operator.sol";
+// import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
+// import {Appraiser, IAppraiser as IAppraiserMetric} from "policies/OCA/Appraiser.sol";
 // import {BondCallback} from "policies/Bonds/BondCallback.sol";
 // import {RolesAdmin} from "policies/RolesAdmin.sol";
 
@@ -39,6 +43,7 @@
 //     address internal guardian;
 //     address internal policy;
 //     address internal heart;
+//     address internal clearinghouse;
 
 //     RolesAuthority internal auth;
 //     BondAggregator internal aggregator;
@@ -46,6 +51,7 @@
 //     BondFixedTermSDA internal auctioneer;
 //     MockOhm internal ohm;
 //     MockERC20 internal reserve;
+//     MockERC4626 internal wrappedReserve;
 
 //     Kernel internal kernel;
 //     MockPrice internal price;
@@ -57,18 +63,21 @@
 //     Operator internal operator;
 //     BondCallback internal callback;
 //     RolesAdmin internal rolesAdmin;
+//     Bookkeeper internal bookkeeper;
+//     Appraiser internal appraiser;
 
 //     function setUp() public {
 //         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
 //         userCreator = new UserFactory();
 //         {
 //             /// Deploy bond system to test against
-//             address[] memory users = userCreator.create(5);
+//             address[] memory users = userCreator.create(6);
 //             alice = users[0];
 //             bob = users[1];
 //             guardian = users[2];
 //             policy = users[3];
 //             heart = users[4];
+//             clearinghouse = users[5];
 //             auth = new RolesAuthority(guardian, SolmateAuthority(address(0)));
 
 //             /// Deploy the bond system
@@ -85,6 +94,7 @@
 //             /// Deploy mock tokens
 //             ohm = new MockOhm("Olympus", "OHM", 9);
 //             reserve = new MockERC20("Reserve", "RSV", 18);
+//             wrappedReserve = new MockERC4626(reserve, "wrappedReserve", "sRSV");
 //         }
 
 //         {
@@ -98,30 +108,33 @@
 //                 ERC20(ohm),
 //                 ERC20(reserve),
 //                 uint256(100),
-//                 uint256(1000),
-//                 uint256(2000)
+//                 [uint256(1000), uint256(2000)],
+//                 [uint256(1000), uint256(2000)]
 //             );
 //             treasury = new OlympusTreasury(kernel);
 //             minter = new OlympusMinter(kernel, address(ohm));
 //             roles = new OlympusRoles(kernel);
 
-//             /// Configure mocks
+//             /// Configure Price mock
 //             price.setPrice(address(ohm), 100e18);
 //             price.setPrice(address(reserve), 1e18);
 //             price.setMovingAverage(address(ohm), 100e18);
 //             price.setMovingAverage(address(reserve), 1e18);
 //         }
-
 //         {
 //             /// Deploy bond callback
 //             callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
-
+//             // Deploy new bookkeeper
+//             bookkeeper = new Bookkeeper(kernel);
+//             // Deploy new appraiser
+//             appraiser = new Appraiser(kernel);
 //             /// Deploy operator
 //             operator = new Operator(
 //                 kernel,
+//                 IAppraiser(address(appraiser)),
 //                 IBondSDA(address(auctioneer)),
 //                 callback,
-//                 [ERC20(ohm), ERC20(reserve)],
+//                 [address(ohm), address(reserve), address(wrappedReserve)],
 //                 [
 //                     uint32(2000), // cushionFactor
 //                     uint32(5 days), // duration
@@ -131,8 +144,7 @@
 //                     uint32(1 hours), // regenWait
 //                     uint32(5), // regenThreshold
 //                     uint32(7) // regenObserve
-//                 ],
-//                 10e18 // minTargetPrice
+//                 ]
 //             );
 
 //             /// Deploy roles administrator
@@ -155,6 +167,8 @@
 //             /// Approve policies
 //             kernel.executeAction(Actions.ActivatePolicy, address(operator));
 //             kernel.executeAction(Actions.ActivatePolicy, address(callback));
+//             kernel.executeAction(Actions.ActivatePolicy, address(bookkeeper));
+//             kernel.executeAction(Actions.ActivatePolicy, address(auctioneer));
 //             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 //         }
 //         {
@@ -172,9 +186,20 @@
 //             rolesAdmin.grantRole("callback_admin", guardian);
 //         }
 
+//         /// Configure treasury assets
+//         address[] memory locations = new address[](1);
+//         locations[0] = address(clearinghouse);
+//         vm.startPrank(policy);
+//         treasury.addAsset(address(reserve), locations);
+//         treasury.addAsset(address(wrappedReserve), locations);
+//         vm.stopPrank();
+
 //         /// Set operator on the callback
 //         vm.prank(guardian);
 //         callback.setOperator(operator);
+//         // Signal that reserve is held as wrappedReserve in TRSRY
+//         vm.prank(guardian);
+//         callback.useWrappedVersion(address(reserve), address(wrappedReserve));
 
 //         // Mint tokens to users and treasury for testing
 //         uint256 testOhm = 1_000_000 * 1e9;
@@ -236,6 +261,9 @@
 //     /// [X] Not able to swap at the walls when price is stale
 
 //     function testCorrectness_swapHighWall() public {
+//         // Initialize appraiser liquid backing calculation
+//         appraiser.storeMetric(IAppraiserMetric.Metric.LIQUID_BACKING_PER_BACKED_OHM);
+
 //         /// Initialize operator
 //         vm.prank(guardian);
 //         operator.initialize();
@@ -1566,7 +1594,7 @@
 //         );
 //         vm.expectRevert(err);
 //         vm.prank(alice);
-//         operator.setSpreads(1500, 3000);
+//         operator.setSpreads(false, 1500, 3000);
 
 //         /// Try to set cushionFactor as random user, expect revert
 //         vm.expectRevert(err);
@@ -1658,31 +1686,62 @@
 
 //         /// Set spreads larger as admin
 //         vm.prank(policy);
-//         operator.setSpreads(1500, 3000);
+//         operator.setSpreads(false, 1500, 3000);
 
 //         /// Get new bands
 //         OlympusRange.Range memory newRange = range.range();
 
+//         /// Spreads not updated
+//         assertEq(newRange.high.cushion.spread, 1000);
+//         assertEq(newRange.high.wall.spread, 2000);
+//         assertEq(newRange.high.cushion.price, startRange.high.cushion.price);
+//         assertEq(newRange.high.wall.price, startRange.high.wall.price);
+
 //         /// Check that the spreads have been set and prices are updated
-//         assertEq(newRange.cushion.spread, 1500);
-//         assertEq(newRange.wall.spread, 3000);
+//         assertEq(newRange.low.cushion.spread, 1500);
+//         assertEq(newRange.low.wall.spread, 3000);
 //         assertLt(newRange.low.cushion.price, startRange.low.cushion.price);
 //         assertLt(newRange.low.wall.price, startRange.low.wall.price);
-//         assertGt(newRange.high.cushion.price, startRange.high.cushion.price);
-//         assertGt(newRange.high.wall.price, startRange.high.wall.price);
 
 //         /// Set spreads smaller as admin
 //         vm.prank(policy);
-//         operator.setSpreads(500, 1000);
+//         operator.setSpreads(false, 500, 1000);
 
 //         /// Get new bands
 //         newRange = range.range();
 
+//         /// Spreads not updated
+//         assertEq(newRange.high.cushion.spread, 1000);
+//         assertEq(newRange.high.wall.spread, 2000);
+//         assertEq(newRange.high.cushion.price, startRange.high.cushion.price);
+//         assertEq(newRange.high.wall.price, startRange.high.wall.price);
+
 //         /// Check that the spreads have been set and prices are updated
-//         assertEq(newRange.cushion.spread, 500);
-//         assertEq(newRange.wall.spread, 1000);
+//         assertEq(newRange.low.cushion.spread, 500);
+//         assertEq(newRange.low.wall.spread, 1000);
 //         assertGt(newRange.low.cushion.price, startRange.low.cushion.price);
 //         assertGt(newRange.low.wall.price, startRange.low.wall.price);
+
+//         // Reset lower spreads as admin
+//         vm.prank(policy);
+//         operator.setSpreads(false, 1000, 2000);
+
+//         // Set upper spreads as admin
+//         vm.prank(policy);
+//         operator.setSpreads(true, 500, 1000);
+
+//         /// Get new bands
+//         newRange = range.range();
+
+//         /// Lower spreads not updated
+//         assertEq(newRange.low.cushion.spread, 1000);
+//         assertEq(newRange.low.wall.spread, 2000);
+//         assertEq(newRange.low.cushion.price, startRange.low.cushion.price);
+//         assertEq(newRange.low.wall.price, startRange.low.wall.price);
+
+//         /// Upper spreads have been set and prices are updated
+//         assertEq(newRange.high.cushion.spread, 500);
+//         assertEq(newRange.high.wall.spread, 1000);
 //         assertLt(newRange.high.cushion.price, startRange.high.cushion.price);
 //         assertLt(newRange.high.wall.price, startRange.high.wall.price);
 //     }
@@ -1712,37 +1771,37 @@
 //         bytes memory err = abi.encodeWithSignature("RANGE_InvalidParams()");
 //         vm.expectRevert(err);
 //         vm.prank(policy);
-//         operator.setSpreads(99, 99);
+//         operator.setSpreads(false, 99, 99);
 
 //         /// Set spreads with invalid params as admin (both too high)
 //         vm.expectRevert(err);
 //         vm.prank(policy);
-//         operator.setSpreads(10001, 10001);
+//         operator.setSpreads(false, 10001, 10001);
 
 //         /// Set spreads with invalid params as admin (one high, one low)
 //         vm.expectRevert(err);
 //         vm.prank(policy);
-//         operator.setSpreads(99, 10001);
+//         operator.setSpreads(false, 99, 10001);
 
 //         /// Set spreads with invalid params as admin (one high, one low)
 //         vm.expectRevert(err);
 //         vm.prank(policy);
-//         operator.setSpreads(10001, 99);
+//         operator.setSpreads(false, 10001, 99);
 
 //         /// Set spreads with invalid params as admin (cushion > wall)
 //         vm.expectRevert(err);
 //         vm.prank(policy);
-//         operator.setSpreads(2000, 1000);
+//         operator.setSpreads(false, 2000, 1000);
 
 //         /// Set spreads with invalid params as admin (one in, one high)
 //         vm.expectRevert(err);
 //         vm.prank(policy);
-//         operator.setSpreads(1000, 10001);
+//         operator.setSpreads(false, 1000, 10001);
 
 //         /// Set spreads with invalid params as admin (one in, one low)
 //         vm.expectRevert(err);
 //         vm.prank(policy);
-//         operator.setSpreads(99, 2000);
+//         operator.setSpreads(false, 99, 2000);
 //     }
 
 //     function testCorrectness_setCushionFactor() public {
@@ -2204,12 +2263,14 @@
 //         Operator.Config memory config = operator.config();
 
 //         /// Check that fullCapacity returns the full capacity based on the reserveFactor
-//         uint256 resInTreasury = treasury.getReserveBalance(reserve);
+//         uint256 resInTreasury = wrappedReserve.previewRedeem(
+//             treasury.getReserveBalance(wrappedReserve)
+//         );
 //         uint256 lowCapacity = resInTreasury.mulDiv(config.reserveFactor, 1e4);
 //         uint256 highCapacity = (lowCapacity.mulDiv(
 //             1e9 * 10 ** price.decimals(),
 //             1e18 * range.price(true, true)
-//         ) * (1e4 + range.spread(true) * 2)) / 1e4;
+//         ) * (1e4 + range.spread(true, true) + range.spread(false, true))) / 1e4;
 
 //         assertEq(operator.fullCapacity(false), lowCapacity);
 //         assertEq(operator.fullCapacity(true), highCapacity);

@@ -10,7 +10,7 @@ import {TRSRYv1_1, Category, toCategory} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {SPPLYv1} from "src/modules/SPPLY/SPPLY.v1.sol";
 
-contract OlympusAppraiser is IAppraiser, Policy {
+contract Appraiser is IAppraiser, Policy {
     // ========== EVENTS ========== //
 
     // ========== ERRORS ========== //

@@ -182,6 +182,8 @@ abstract contract TRSRYv1_1 is TRSRYv1 {
 
     function getAssets() external view virtual returns (address[] memory);
 
+    function getAssetData(address asset_) external view virtual returns (Asset memory);
+
     function getAssetsByCategory(Category category_) public view virtual returns (address[] memory);
 
     /// @notice Returns the requested variant of the protocol balance of the asset and the timestamp at which it was calculated
