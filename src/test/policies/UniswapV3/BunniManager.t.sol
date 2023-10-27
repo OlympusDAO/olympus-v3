@@ -26,7 +26,9 @@ import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Po
 
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {BunniHub} from "src/external/bunni/BunniHub.sol";
+import {BunniLens} from "src/external/bunni/BunniLens.sol";
 import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
+import {BunniKey} from "src/external/bunni/base/Structs.sol";
 
 import "src/Kernel.sol";
 
@@ -176,6 +178,14 @@ contract BunniManagerTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(newBunniManager));
 
         return newBunniManager;
+    }
+
+    function _getBunniKey(IUniswapV3Pool pool_, IBunniToken token_) internal returns (BunniKey memory) {
+        return BunniKey({
+            pool: pool_,
+            tickLower: token_.tickLower(),
+            tickUpper: token_.tickUpper()
+        });
     }
 
     // [ ] constructor
@@ -351,6 +361,7 @@ contract BunniManagerTest is Test {
         // Mint tokens to the TRSRY
         dai.mint(address(treasury), 1e18);
         usdc.mint(address(treasury), 1e6);
+        uint256 ohmSupplyBefore = ohm.totalSupply();
 
         // Deposit
         vm.prank(policy);
@@ -366,6 +377,9 @@ contract BunniManagerTest is Test {
         // No remaining balance in the bunniHub
         assertEq(dai.balanceOf(address(bunniHub)), 0);
         assertEq(usdc.balanceOf(address(bunniHub)), 0);
+
+        // No OHM was minted
+        assertEq(ohm.totalSupply(), ohmSupplyBefore);
     }
 
     function test_deposit_ohmToken() public {
@@ -378,6 +392,7 @@ contract BunniManagerTest is Test {
 
         // Mint the non-OHM token to the TRSRY
         usdc.mint(address(treasury), USDC_DEPOSIT);
+        uint256 ohmSupplyBefore = ohm.totalSupply();
 
         // Deposit
         vm.prank(policy);
@@ -393,6 +408,15 @@ contract BunniManagerTest is Test {
         // No remaining balance in the bunniHub
         assertEq(ohm.balanceOf(address(bunniHub)), 0);
         assertEq(usdc.balanceOf(address(bunniHub)), 0);
+
+        // OHM was minted
+        // The exact amount of OHM is only known at run-time (due to slippage)
+        BunniLens bunniLens = new BunniLens(bunniHub);
+        (uint112 reserve0, uint112 reserve1) = bunniLens.getReserves(_getBunniKey(pool, bunniToken));
+        uint256 ohmReserve = pool.token0() == address(ohm) ? reserve0 : reserve1;
+
+        // Tolerant of rounding
+        assertApproxEqAbs(ohm.totalSupply(), ohmSupplyBefore + ohmReserve, 1);
     }
 
     // [ ] withdraw
