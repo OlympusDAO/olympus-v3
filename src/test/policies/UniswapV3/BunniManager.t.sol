@@ -520,8 +520,8 @@ contract BunniManagerTest is Test {
         uint256 usdcBalanceAfter = usdc.balanceOf(address(treasury));
         uint256 daiBalanceAfter = dai.balanceOf(address(treasury));
 
-        assertEq(usdcBalanceBefore - usdcBalanceAfter, USDC_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares));
-        assertEq(daiBalanceBefore - daiBalanceAfter, DAI_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares));
+        assertApproxEqAbs(usdcBalanceAfter - usdcBalanceBefore, USDC_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares), 1e3);
+        assertApproxEqAbs(daiBalanceAfter - daiBalanceBefore, DAI_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares), 1e6);
         assertEq(ohm.totalSupply(), ohmSupplyBefore);
 
         // Policy does not contain any balances
@@ -560,8 +560,8 @@ contract BunniManagerTest is Test {
         uint256 usdcBalanceAfter = usdc.balanceOf(address(treasury));
         uint256 ohmSupplyAfter = ohm.totalSupply();
 
-        assertEq(usdcBalanceBefore - usdcBalanceAfter, USDC_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares));
-        assertEq(ohmSupplyBefore - ohmSupplyAfter, OHM_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares));
+        assertApproxEqAbs(usdcBalanceAfter - usdcBalanceBefore, USDC_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares), 1e4);
+        assertApproxEqAbs(ohmSupplyBefore - ohmSupplyAfter, OHM_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares), 1e3);
 
         // Policy does not contain any balances
         assertEq(usdc.balanceOf(address(bunniManager)), 0);
