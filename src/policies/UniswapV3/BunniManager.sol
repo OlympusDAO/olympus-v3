@@ -206,6 +206,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function does the following:
+    ///             - Determines the correct ordering of tokens
     ///             - Moves the required non-OHM token(s) from TRSRY to this contract
     ///             - If one of the tokens is OHM, then mint the OHM
     ///             - Deposit the tokens into the BunniHub, which mints share tokens
@@ -220,8 +221,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - There is insufficient balance of tokens
     function deposit(
         address pool_,
-        uint256 amount0_,
-        uint256 amount1_
+        address tokenA_,
+        uint256 amountA_,
+        address,
+        uint256 amountB_
     ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet returns (uint256) {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
@@ -237,21 +240,25 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         ERC20 token0 = ERC20(pool.token0());
         ERC20 token1 = ERC20(pool.token1());
 
+        bool token0IsTokenA = address(token0) == tokenA_;
+        uint256 token0Amount = token0IsTokenA ? amountA_ : amountB_;
+        uint256 token1Amount = token0IsTokenA ? amountB_ : amountA_;
+
         // Move tokens into the policy
-        _transferOrMint(token0, amount0_);
-        _transferOrMint(token1, amount1_);
+        _transferOrMint(token0, token0Amount);
+        _transferOrMint(token1, token1Amount);
 
         // Approve BunniHub to use the tokens
-        token0.approve(address(bunniHub), amount0_);
-        token1.approve(address(bunniHub), amount1_);
+        token0.approve(address(bunniHub), token0Amount);
+        token1.approve(address(bunniHub), token1Amount);
 
         // Construct the parameters
         IBunniHub.DepositParams memory params = IBunniHub.DepositParams({
             key: key,
-            amount0Desired: amount0_,
-            amount1Desired: amount1_,
-            amount0Min: _calculateAmountMin(amount0_),
-            amount1Min: _calculateAmountMin(amount1_),
+            amount0Desired: token0Amount,
+            amount1Desired: token1Amount,
+            amount0Min: _calculateAmountMin(token0Amount),
+            amount1Min: _calculateAmountMin(token1Amount),
             deadline: block.timestamp, // Ensures that the action be executed in this block or reverted
             recipient: getModuleAddress(toKeycode("TRSRY")) // Transfers directly into TRSRY
         });

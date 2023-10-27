@@ -34,19 +34,25 @@ interface IBunniManager {
     function deployToken(address pool_) external returns (IBunniToken token);
 
     /// @notice         Deposits liquidity into the given Uniswap V3 pool
-    /// @dev            This can only be called after `deployToken` has been called
+    ///
+    ///                 This can only be called after `deployToken` has been called
     ///                 to deploy the ERC20 token for this pool.
     ///
-    ///                 The minted LP tokens will be deposited into TRSRY.
+    ///                 The ordering of tokenA and tokenB is irrelevant. The `deposit` function
+    ///                 will handle the ordering of the tokens.
     ///
     /// @param pool_    The address of the Uniswap V3 pool
-    /// @param amount0_ The amount of token0 to deposit
-    /// @param amount1_ The amount of token1 to deposit
+    /// @param tokenA_  The address of a token
+    /// @param amountA_ The amount of tokenA to deposit
+    /// @param tokenB_  The address of a token
+    /// @param amountB_ The amount of tokenB to deposit
     /// @return shares  The amount of shares minted
     function deposit(
         address pool_,
-        uint256 amount0_,
-        uint256 amount1_
+        address tokenA_,
+        uint256 amountA_,
+        address tokenB_,
+        uint256 amountB_
     ) external returns (uint256 shares);
 
     /// @notice         Withdraws liquidity from the given Uniswap V3 pool
