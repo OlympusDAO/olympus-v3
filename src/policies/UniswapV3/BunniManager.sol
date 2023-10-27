@@ -229,6 +229,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
 
+        // TODO take slippage as a parameter
+
         // Check that the token has been deployed
         IBunniToken existingToken = bunniHub.getBunniToken(key);
         if (address(existingToken) == address(0)) {
@@ -297,6 +299,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             revert BunniManager_PoolNotFound(pool_);
         }
 
+        // TODO take slippage as a parameter
+
         // Determine the minimum amounts
         uint256 amount0Min;
         uint256 amount1Min;
@@ -317,7 +321,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 existingLiquidity
             );
 
-            // TODO seems to be calculating an amount based on total liquidity
+            // Adjust for proportion of total supply
+            uint256 totalSupply = existingToken.totalSupply();
+            amount0 = amount0.mulDiv(shares_, totalSupply);
+            amount1 = amount1.mulDiv(shares_, totalSupply);
+
             amount0Min = _calculateAmountMin(amount0);
             amount1Min = _calculateAmountMin(amount1);
         }
