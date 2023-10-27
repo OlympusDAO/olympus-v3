@@ -61,6 +61,8 @@ contract BunniManagerTest is Test {
     uint160 constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
     uint160 constant DAI_USDC_SQRTPRICEX96 = 79227120762198600072084; // From DAI-USDC, 1 DAI = 1 USDC
 
+    int24 constant TICK = 887250; // (887272/50)*50
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -180,7 +182,7 @@ contract BunniManagerTest is Test {
         return newBunniManager;
     }
 
-    function _getBunniKey(IUniswapV3Pool pool_, IBunniToken token_) internal returns (BunniKey memory) {
+    function _getBunniKey(IUniswapV3Pool pool_, IBunniToken token_) internal view returns (BunniKey memory) {
         return BunniKey({
             pool: pool_,
             tickLower: token_.tickLower(),
@@ -230,8 +232,8 @@ contract BunniManagerTest is Test {
 
         // Check details of token
         assertEq(address(deployedToken.pool()), address(pool));
-        assertEq(deployedToken.tickLower(), TickMath.MIN_TICK);
-        assertEq(deployedToken.tickUpper(), TickMath.MAX_TICK);
+        assertEq(deployedToken.tickLower(), -1 * 887250);
+        assertEq(deployedToken.tickUpper(), 887250);
 
         // Check that the token has been added to PRICEv2
         PRICEv2.Asset memory priceAsset = price.getAssetData(address(deployedToken));
@@ -419,12 +421,148 @@ contract BunniManagerTest is Test {
         assertApproxEqAbs(ohm.totalSupply(), ohmSupplyBefore + ohmReserve, 1);
     }
 
-    // [ ] withdraw
-    //  [ ] caller is unauthorized
-    //  [ ] bunniHub not set
-    //  [ ] token not deployed
-    //  [ ] withdraws and returns non-OHM tokens to TRSRY
-    //  [ ] withdraws, burns OHM and returns non-OHM tokens to TRSRY
+    // [X] withdraw
+    //  [X] caller is unauthorized
+    //  [X] bunniHub not set
+    //  [X] token not deployed
+    //  [X] insufficient share balance
+    //  [X] withdraws and returns non-OHM tokens to TRSRY
+    //  [X] withdraws, burns OHM and returns non-OHM tokens to TRSRY
+
+    function test_withdraw_unauthorizedReverts() public {
+        _expectRevert_unauthorized();
+
+        vm.prank(alice);
+        bunniManager.withdraw(address(pool), 1e18);
+    }
+
+    function test_withdraw_bunniHubNotSetReverts() public {
+        // Create a new BunniManager policy, without the BunniHub set
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        _expectRevert_bunniHubNotSet();
+
+        vm.prank(policy);
+        newBunniManager.withdraw(address(pool), 1e18);
+    }
+
+    function test_withdraw_tokenNotDeployedReverts() public {
+        _expectRevert_poolNotFound(address(pool));
+
+        vm.prank(policy);
+        bunniManager.withdraw(address(pool), 1e18);
+    }
+
+    function test_withdraw_insufficientBalanceReverts() public {
+        uint256 USDC_DEPOSIT = 10e6 * OHM_USDC_PRICE / 1e18; // Ensures that the token amounts are in the correct ratio
+        uint256 OHM_DEPOSIT = 10e9;
+
+        // Deploy the token
+        vm.prank(policy);
+        IBunniToken token = bunniManager.deployToken(address(pool));
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(address(treasury), USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, address(usdc), USDC_DEPOSIT);
+
+        // Withdraw
+        uint256 bunniTokenSharesToWithdraw = bunniTokenShares * 2;
+
+        _expectRevert_insufficientBalance(address(token), bunniTokenSharesToWithdraw, bunniTokenShares);
+
+        vm.prank(policy);
+        bunniManager.withdraw(address(pool), bunniTokenSharesToWithdraw);
+    }
+
+    function test_withdraw_nonOhmTokens() public {
+        // Create a pool with non-OHM tokens
+        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
+        newPool.initialize(DAI_USDC_SQRTPRICEX96);
+
+        // Deploy the token
+        vm.prank(policy);
+        IBunniToken token = bunniManager.deployToken(address(newPool));
+
+        // Mint tokens to the TRSRY
+        dai.mint(address(treasury), 1e18);
+        usdc.mint(address(treasury), 1e6);
+
+        uint256 DAI_DEPOSIT = 1e18;
+        uint256 USDC_DEPOSIT = 1e6;
+
+        // Deposit
+        vm.prank(policy);
+        uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), DAI_DEPOSIT, address(usdc), USDC_DEPOSIT);
+
+        // Withdraw
+        uint256 usdcBalanceBefore = usdc.balanceOf(address(treasury));
+        uint256 daiBalanceBefore = dai.balanceOf(address(treasury));
+        uint256 ohmSupplyBefore = ohm.totalSupply();
+        uint256 bunniTokenSharesToWithdraw = bunniTokenShares / 2;
+
+        vm.prank(policy);
+        bunniManager.withdraw(address(newPool), bunniTokenSharesToWithdraw);
+
+        // Check that:
+        // withdrawn DAU has been returned to TRSRY
+        // withdrawn USDC has been returned to TRSRY
+        // OHM supply did not change
+        uint256 usdcBalanceAfter = usdc.balanceOf(address(treasury));
+        uint256 daiBalanceAfter = dai.balanceOf(address(treasury));
+
+        assertEq(usdcBalanceBefore - usdcBalanceAfter, USDC_DEPOSIT / 2);
+        assertEq(daiBalanceBefore - daiBalanceAfter, DAI_DEPOSIT / 2);
+        assertEq(ohm.totalSupply(), ohmSupplyBefore);
+
+        // Policy does not contain any balances
+        assertEq(usdc.balanceOf(address(bunniManager)), 0);
+        assertEq(dai.balanceOf(address(bunniManager)), 0);
+        assertEq(ohm.balanceOf(address(bunniManager)), 0);
+        assertEq(token.balanceOf(address(bunniManager)), 0);
+    }
+
+    function test_withdraw_ohmToken() public {
+        uint256 USDC_DEPOSIT = 10e6 * OHM_USDC_PRICE / 1e18; // Ensures that the token amounts are in the correct ratio
+        uint256 OHM_DEPOSIT = 10e9;
+
+        // Deploy the token
+        vm.prank(policy);
+        IBunniToken token = bunniManager.deployToken(address(pool));
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(address(treasury), USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, address(usdc), USDC_DEPOSIT);
+
+        // Withdraw
+        uint256 usdcBalanceBefore = usdc.balanceOf(address(treasury));
+        uint256 ohmSupplyBefore = ohm.totalSupply();
+        uint256 bunniTokenSharesToWithdraw = bunniTokenShares / 2;
+
+        vm.prank(policy);
+        bunniManager.withdraw(address(pool), bunniTokenSharesToWithdraw);
+
+        // Check that:
+        // withdrawn USDC has been returned to TRSRY
+        // withdrawn OHM has been burnt
+        uint256 usdcBalanceAfter = usdc.balanceOf(address(treasury));
+        uint256 ohmSupplyAfter = ohm.totalSupply();
+
+        assertEq(usdcBalanceBefore - usdcBalanceAfter, USDC_DEPOSIT / 2);
+        assertEq(ohmSupplyBefore - ohmSupplyAfter, OHM_DEPOSIT / 2);
+
+        // Policy does not contain any balances
+        assertEq(usdc.balanceOf(address(bunniManager)), 0);
+        assertEq(ohm.balanceOf(address(bunniManager)), 0);
+        assertEq(token.balanceOf(address(bunniManager)), 0);
+    }
+
     // [ ] getToken
     //  [ ] bunniHub is not set
     //  [ ] token is not deployed

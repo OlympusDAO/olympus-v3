@@ -56,7 +56,8 @@ interface IBunniManager {
     ) external returns (uint256 shares);
 
     /// @notice         Withdraws liquidity from the given Uniswap V3 pool
-    /// @dev            This can only be called after `deployToken` has been called
+    ///
+    ///                 This can only be called after `deployToken` has been called
     ///                 to deploy the ERC20 token for this pool.
     ///
     ///                 The LP tokens will be withdrawn from TRSRY and burned.
