@@ -461,6 +461,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     function _transferOrBurn(address token_, uint256 amount_) internal {
+        // Nothing to burn
+        if (amount_ == 0) return;
+
         if (token_ == address(MINTR.ohm())) {
             MINTR.burnOhm(address(this), amount_);
         }
