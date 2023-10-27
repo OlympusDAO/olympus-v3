@@ -245,8 +245,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         uint256 token1Amount = token0IsTokenA ? amountB_ : amountA_;
 
         // Move tokens into the policy
-        _transferOrMint(token0, token0Amount);
-        _transferOrMint(token1, token1Amount);
+        _transferOrMint(address(token0), token0Amount);
+        _transferOrMint(address(token1), token1Amount);
 
         // Approve BunniHub to use the tokens
         token0.approve(address(bunniHub), token0Amount);
@@ -267,16 +267,24 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         (uint256 shares, , , ) = bunniHub.deposit(params);
 
         // Return/burn remaining tokens
-        _transferOrBurn(token0, token0.balanceOf(address(this)));
-        _transferOrBurn(token1, token1.balanceOf(address(this)));
+        _transferOrBurn(address(token0), token0.balanceOf(address(this)));
+        _transferOrBurn(address(token1), token1.balanceOf(address(this)));
 
         return shares;
     }
 
     /// @inheritdoc IBunniManager
-    /// @dev        This function reverts if:
+    /// @dev        This function does the following:
+    ///             - Moves the required shares from TRSRY to this contract
+    ///             - Using BunniHub, withdraws shares from the pool and returns the tokens to this contract
+    ///             - If one of the tokens is OHM, then burn the OHM
+    ///             - Return any non-OHM token(s) to the TRSRY
+    ///
+    ///             This function reverts if:
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
+    ///             - An ERC20 token for `pool_` has not been deployed
+    ///             - There is insufficient balance of the token
     function withdraw(
         address pool_,
         uint256 shares_
@@ -308,10 +316,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             amount1Min = _calculateAmountMin(amount1);
         }
 
+        // Move the tokens into the policy
+        IBunniToken token = bunniHub.getBunniToken(key);
+        _transferFromTRSRY(address(token), shares_);
+
         // Construct the parameters
         IBunniHub.WithdrawParams memory params = IBunniHub.WithdrawParams({
             key: key,
-            recipient: getModuleAddress(toKeycode("TRSRY")), // Transfers directly into TRSRY
+            recipient: address(this),
             shares: shares_,
             amount0Min: amount0Min,
             amount1Min: amount1Min,
@@ -319,7 +331,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         });
 
         // Withdraw
-        bunniHub.withdraw(params);
+        (, uint256 amount0, uint256 amount1) = bunniHub.withdraw(params);
+
+        // Return/burn remaining tokens
+        IUniswapV3Pool pool = IUniswapV3Pool(pool_);
+        _transferOrBurn(pool.token0(), amount0);
+        _transferOrBurn(pool.token1(), amount1);
     }
 
     //============================================================================================//
@@ -413,22 +430,23 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             });
     }
 
-    function _transferFromTRSRY(ERC20 token_, uint256 amount_) internal {
+    function _transferFromTRSRY(address token_, uint256 amount_) internal {
         // Check the balance
-        uint256 actualBalance = token_.balanceOf(address(TRSRY));
+        ERC20 token = ERC20(token_);
+        uint256 actualBalance = token.balanceOf(address(TRSRY));
         if (actualBalance < amount_) {
-            revert BunniManager_InsufficientBalance(address(token_), amount_, actualBalance);
+            revert BunniManager_InsufficientBalance(token_, amount_, actualBalance);
         }
 
         // Increase the allowance
-        TRSRY.increaseWithdrawApproval(address(this), token_, amount_);
+        TRSRY.increaseWithdrawApproval(address(this), token, amount_);
 
         // Transfer into the policy
-        TRSRY.withdrawReserves(address(this), token_, amount_);
+        TRSRY.withdrawReserves(address(this), token, amount_);
     }
 
-    function _transferOrMint(ERC20 token_, uint256 amount_) internal {
-        if (address(token_) == address(MINTR.ohm())) {
+    function _transferOrMint(address token_, uint256 amount_) internal {
+        if (token_ == address(MINTR.ohm())) {
             MINTR.increaseMintApproval(address(this), amount_);
             MINTR.mintOhm(address(this), amount_);
         }
@@ -437,12 +455,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
     }
 
-    function _transferOrBurn(ERC20 token_, uint256 amount_) internal {
-        if (address(token_) == address(MINTR.ohm())) {
+    function _transferOrBurn(address token_, uint256 amount_) internal {
+        if (token_ == address(MINTR.ohm())) {
             MINTR.burnOhm(address(this), amount_);
         }
         else {
-            token_.safeTransfer(address(TRSRY), amount_);
+            ERC20(token_).safeTransfer(address(TRSRY), amount_);
         }
     }
 
