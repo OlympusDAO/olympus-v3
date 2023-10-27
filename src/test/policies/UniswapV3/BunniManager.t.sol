@@ -352,9 +352,10 @@ contract BunniManagerTest is Test {
         bunniManager.deposit(address(newPool), address(dai), 1e18, address(usdc), 1e6);
     }
 
-    // TODO add fuzz test for deposit amounts
+    function test_deposit_nonOhmTokens_fuzz(uint256 usdcAmount_) public {
+        uint256 usdcAmount = bound(usdcAmount_, 100e6, 1e12);
+        uint256 daiAmount = usdcAmount.mulDiv(1e18, 1e6); // Same price, different decimal scale
 
-    function test_deposit_nonOhmTokens() public {
         // Create a pool with non-OHM tokens
         MockERC20 dai = new MockERC20("DAI", "DAI", 18);
         IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
@@ -365,13 +366,13 @@ contract BunniManagerTest is Test {
         IBunniToken bunniToken = bunniManager.deployToken(address(newPool));
 
         // Mint tokens to the TRSRY
-        dai.mint(address(treasury), 1e18);
-        usdc.mint(address(treasury), 1e6);
+        dai.mint(address(treasury), daiAmount);
+        usdc.mint(address(treasury), usdcAmount);
         uint256 ohmSupplyBefore = ohm.totalSupply();
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), 1e18, address(usdc), 1e6);
+        uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), daiAmount, address(usdc), usdcAmount);
 
         // The tokens should have been deposited into TRSRY
         assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
@@ -388,9 +389,10 @@ contract BunniManagerTest is Test {
         assertEq(ohm.totalSupply(), ohmSupplyBefore);
     }
 
-    function test_deposit_ohmToken() public {
-        uint256 USDC_DEPOSIT = 10e6 * OHM_USDC_PRICE / 1e18; // Ensures that the token amounts are in the correct ratio
-        uint256 OHM_DEPOSIT = 10e9;
+    function test_deposit_ohmToken_fuzz(uint256 amount_) public {
+        uint256 amount = bound(amount_, 100e6, 1e12);
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
 
         // Deploy the token
         vm.prank(policy);
