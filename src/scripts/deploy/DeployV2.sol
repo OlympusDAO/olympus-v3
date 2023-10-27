@@ -45,6 +45,8 @@ import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultMana
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {Pohm} from "policies/Pohm.sol";
 
+import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
+
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
 import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
@@ -115,6 +117,7 @@ contract OlympusDeploy is Script {
     address public staking;
     address public gnosisEasyAuction;
     address public previousPohm;
+    ClaimTransfer public claimTransfer;
 
     /// Balancer Contracts
     IVault public balancerVault;
@@ -164,6 +167,7 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
         selectorMap["Pohm"] = this._deployPohm.selector;
+        selectorMap["ClaimTransfer"] = this._deployClaimTransfer.selector;
 
         // Load environment addresses
         env = vm.readFile("./src/scripts/env.json");
@@ -230,6 +234,7 @@ contract OlympusDeploy is Script {
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
         pohm = Pohm(envAddress("olympus.policies.POHM"));
+        claimTransfer = ClaimTransfer(envAddress("external.olympus.ClaimTransfer"));
 
         // Load deployment data
         string memory data = vm.readFile(deployFilePath);
@@ -748,6 +753,21 @@ contract OlympusDeploy is Script {
         console2.log("pOHM deployed at:", address(pohm));
 
         return address(pohm);
+    }
+
+    function _deployClaimTransfer(bytes memory args) public returns (address) {
+        // Doesn't need extra args
+        // Deploy ClaimTransfer contract
+        vm.broadcast();
+        claimTransfer = new ClaimTransfer(
+            address(pohm),
+            address(ohm),
+            address(reserve),
+            address(gohm)
+        );
+        console2.log("ClaimTransfer deployed at:", address(claimTransfer));
+
+        return address(claimTransfer);
     }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment

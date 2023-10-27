@@ -1,0 +1,15 @@
+{
+    "sequence": [
+        {
+            "name": "Pohm",
+            "args": {
+                "dao": "0x84C0C005cF574D0e5C602EA7b366aE9c707381E0",
+                "maximumAllocated": 100000
+            }
+        },
+        {
+            "name": "ClaimTransfer",
+            "args": {}
+        }
+    ]
+}
