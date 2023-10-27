@@ -1126,16 +1126,22 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test_asset_category_group"));
+        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
     }
 
     function test_addAssetCategoryGroup(address user_) public {
         vm.prank(policy);
-        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test_asset_category_group"));
+        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
 
         // Check TRSRY asset category groups
-        AssetCategoryGroup group = TRSRY.categoryGroups(0);
-        assertEq(AssetCategoryGroup.unwrap(group), bytes32("test_asset_category_group"));
+        AssetCategoryGroup group0 = TRSRY.categoryGroups(0);
+        assertEq(AssetCategoryGroup.unwrap(group0), bytes32("liquidity-preference"));
+        AssetCategoryGroup group1 = TRSRY.categoryGroups(1);
+        assertEq(AssetCategoryGroup.unwrap(group1), bytes32("value-baskets"));
+        AssetCategoryGroup group2 = TRSRY.categoryGroups(2);
+        assertEq(AssetCategoryGroup.unwrap(group2), bytes32("market-sensitivity"));
+        AssetCategoryGroup group3 = TRSRY.categoryGroups(3);
+        assertEq(AssetCategoryGroup.unwrap(group3), bytes32("test-asset-category-group"));
     }
 
     function testRevert_addAssetCategory_onlyPolicy(address user_) public {
@@ -1149,22 +1155,22 @@ contract BookkeeperTest is Test {
         vm.expectRevert(err);
         vm.prank(user_);
         bookkeeper.addAssetCategory(
-            AssetCategory.wrap("test_asset_category"),
-            AssetCategoryGroup.wrap("test_asset_category_group")
+            AssetCategory.wrap("test-asset-category"),
+            AssetCategoryGroup.wrap("test-asset-category-group")
         );
     }
 
     function test_addAssetCategory(address user_) public {
         vm.startPrank(policy);
-        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test_asset_category_group"));
+        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
         bookkeeper.addAssetCategory(
-            AssetCategory.wrap("test_asset_category"),
-            AssetCategoryGroup.wrap("test_asset_category_group")
+            AssetCategory.wrap("test-asset-category"),
+            AssetCategoryGroup.wrap("test-asset-category-group")
         );
 
         // Check TRSRY asset category for a given category group
-        AssetCategoryGroup group = TRSRY.categoryToGroup(AssetCategory.wrap("test_asset_category"));
-        assertEq(AssetCategoryGroup.unwrap(group), bytes32("test_asset_category_group"));
+        AssetCategoryGroup group = TRSRY.categoryToGroup(AssetCategory.wrap("test-asset-category"));
+        assertEq(AssetCategoryGroup.unwrap(group), bytes32("test-asset-category-group"));
     }
 
     function testRevert_categorizeAsset_onlyPolicy(address user_) public {
@@ -1177,7 +1183,7 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("test_asset_category"));
+        bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("test-asset-category"));
     }
 
     function test_categorizeAsset() public {
@@ -1186,17 +1192,17 @@ contract BookkeeperTest is Test {
         locations[1] = address(2);
 
         vm.startPrank(policy);
-        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test_asset_category_group"));
+        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
         bookkeeper.addAssetCategory(
-            AssetCategory.wrap("test_asset_category"),
-            AssetCategoryGroup.wrap("test_asset_category_group")
+            AssetCategory.wrap("test-asset-category"),
+            AssetCategoryGroup.wrap("test-asset-category-group")
         );
         bookkeeper.addAsset(address(reserve), locations);
-        bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("test_asset_category"));
+        bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("test-asset-category"));
 
         // Check TRSRY asset by category
         address[] memory assets = TRSRY.getAssetsByCategory(
-            AssetCategory.wrap("test_asset_category")
+            AssetCategory.wrap("test-asset-category")
         );
         assertEq(assets.length, 1);
         assertEq(assets[0], address(reserve));

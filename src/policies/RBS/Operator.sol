@@ -357,6 +357,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             _reserve.safeTransferFrom(msg.sender, address(this), amountIn_);
 
             // Wrap reserves and transfer to TRSRY
+            _reserve.approve(address(_wrappedReserve), amountIn_);
             _wrappedReserve.deposit(amountIn_, address(TRSRY));
 
             // Mint OHM to sender
