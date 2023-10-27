@@ -63,6 +63,8 @@ contract BunniManagerTest is Test {
 
     int24 constant TICK = 887250; // (887272/50)*50
 
+    uint8 constant BUNNI_TOKEN_DECIMALS = 18;
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -350,6 +352,8 @@ contract BunniManagerTest is Test {
         bunniManager.deposit(address(newPool), address(dai), 1e18, address(usdc), 1e6);
     }
 
+    // TODO add fuzz test for deposit amounts
+
     function test_deposit_nonOhmTokens() public {
         // Create a pool with non-OHM tokens
         MockERC20 dai = new MockERC20("DAI", "DAI", 18);
@@ -477,7 +481,7 @@ contract BunniManagerTest is Test {
         bunniManager.withdraw(address(pool), bunniTokenSharesToWithdraw);
     }
 
-    function test_withdraw_nonOhmTokens() public {
+    function test_withdraw_nonOhmTokens(uint256 shareToWithdraw_) public {
         // Create a pool with non-OHM tokens
         MockERC20 dai = new MockERC20("DAI", "DAI", 18);
         IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
@@ -497,12 +501,12 @@ contract BunniManagerTest is Test {
         // Deposit
         vm.prank(policy);
         uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), DAI_DEPOSIT, address(usdc), USDC_DEPOSIT);
+        uint256 bunniTokenSharesToWithdraw = bound(shareToWithdraw_, 1e9, bunniTokenShares);
 
         // Withdraw
         uint256 usdcBalanceBefore = usdc.balanceOf(address(treasury));
         uint256 daiBalanceBefore = dai.balanceOf(address(treasury));
         uint256 ohmSupplyBefore = ohm.totalSupply();
-        uint256 bunniTokenSharesToWithdraw = bunniTokenShares / 2;
 
         vm.prank(policy);
         bunniManager.withdraw(address(newPool), bunniTokenSharesToWithdraw);
@@ -514,8 +518,8 @@ contract BunniManagerTest is Test {
         uint256 usdcBalanceAfter = usdc.balanceOf(address(treasury));
         uint256 daiBalanceAfter = dai.balanceOf(address(treasury));
 
-        assertEq(usdcBalanceBefore - usdcBalanceAfter, USDC_DEPOSIT / 2);
-        assertEq(daiBalanceBefore - daiBalanceAfter, DAI_DEPOSIT / 2);
+        assertEq(usdcBalanceBefore - usdcBalanceAfter, USDC_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares));
+        assertEq(daiBalanceBefore - daiBalanceAfter, DAI_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares));
         assertEq(ohm.totalSupply(), ohmSupplyBefore);
 
         // Policy does not contain any balances
@@ -525,7 +529,7 @@ contract BunniManagerTest is Test {
         assertEq(token.balanceOf(address(bunniManager)), 0);
     }
 
-    function test_withdraw_ohmToken() public {
+    function test_withdraw_ohmToken(uint256 shareToWithdraw_) public {
         uint256 USDC_DEPOSIT = 10e6 * OHM_USDC_PRICE / 1e18; // Ensures that the token amounts are in the correct ratio
         uint256 OHM_DEPOSIT = 10e9;
 
@@ -539,11 +543,11 @@ contract BunniManagerTest is Test {
         // Deposit
         vm.prank(policy);
         uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, address(usdc), USDC_DEPOSIT);
+        uint256 bunniTokenSharesToWithdraw = bound(shareToWithdraw_, 1e9, bunniTokenShares);
 
         // Withdraw
         uint256 usdcBalanceBefore = usdc.balanceOf(address(treasury));
         uint256 ohmSupplyBefore = ohm.totalSupply();
-        uint256 bunniTokenSharesToWithdraw = bunniTokenShares / 2;
 
         vm.prank(policy);
         bunniManager.withdraw(address(pool), bunniTokenSharesToWithdraw);
@@ -554,8 +558,8 @@ contract BunniManagerTest is Test {
         uint256 usdcBalanceAfter = usdc.balanceOf(address(treasury));
         uint256 ohmSupplyAfter = ohm.totalSupply();
 
-        assertEq(usdcBalanceBefore - usdcBalanceAfter, USDC_DEPOSIT / 2);
-        assertEq(ohmSupplyBefore - ohmSupplyAfter, OHM_DEPOSIT / 2);
+        assertEq(usdcBalanceBefore - usdcBalanceAfter, USDC_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares));
+        assertEq(ohmSupplyBefore - ohmSupplyAfter, OHM_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares));
 
         // Policy does not contain any balances
         assertEq(usdc.balanceOf(address(bunniManager)), 0);
