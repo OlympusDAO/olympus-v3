@@ -292,6 +292,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
 
+        IBunniToken existingToken = bunniHub.getBunniToken(key);
+        if (address(existingToken) == address(0)) {
+            revert BunniManager_PoolNotFound(pool_);
+        }
+
         // Determine the minimum amounts
         uint256 amount0Min;
         uint256 amount1Min;
@@ -312,13 +317,13 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 existingLiquidity
             );
 
+            // TODO seems to be calculating an amount based on total liquidity
             amount0Min = _calculateAmountMin(amount0);
             amount1Min = _calculateAmountMin(amount1);
         }
 
         // Move the tokens into the policy
-        IBunniToken token = bunniHub.getBunniToken(key);
-        _transferFromTRSRY(address(token), shares_);
+        _transferFromTRSRY(address(existingToken), shares_);
 
         // Construct the parameters
         IBunniHub.WithdrawParams memory params = IBunniHub.WithdrawParams({
@@ -331,12 +336,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         });
 
         // Withdraw
-        (, uint256 amount0, uint256 amount1) = bunniHub.withdraw(params);
+        (, uint256 withdrawnAmount0, uint256 withdrawnAmount1) = bunniHub.withdraw(params);
 
         // Return/burn remaining tokens
         IUniswapV3Pool pool = IUniswapV3Pool(pool_);
-        _transferOrBurn(pool.token0(), amount0);
-        _transferOrBurn(pool.token1(), amount1);
+        _transferOrBurn(pool.token0(), withdrawnAmount0);
+        _transferOrBurn(pool.token1(), withdrawnAmount1);
     }
 
     //============================================================================================//
