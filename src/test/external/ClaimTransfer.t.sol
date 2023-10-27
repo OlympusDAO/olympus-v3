@@ -13,9 +13,10 @@ import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Pohm} from "policies/Pohm.sol";
-import {ClaimTransfer} from "policies/ClaimTransfer.sol";
+import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
 import "src/Kernel.sol";
 
+import {IPohm} from "policies/interfaces/IPohm.sol";
 import {IgOHM} from "interfaces/IgOHM.sol";
 
 // Mock gOHM
@@ -181,7 +182,7 @@ contract ClaimTransferTest is Test {
         vm.startPrank(user_);
         dai.approve(address(claimTransfer), 1_000e18);
 
-        bytes memory err = abi.encodeWithSignature("CT_IllegalClaim()");
+        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 0);
         vm.expectRevert(err);
 
         claimTransfer.claim(1_000e18);
@@ -196,7 +197,7 @@ contract ClaimTransferTest is Test {
         
         dai.approve(address(claimTransfer), 250_000e18);
 
-        bytes memory err = abi.encodeWithSignature("CT_IllegalClaim()");
+        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 100_000e9);
         vm.expectRevert(err);
 
         claimTransfer.claim(250_000e18);
@@ -214,7 +215,7 @@ contract ClaimTransferTest is Test {
         // Set circulating supply to be massive
         ohm.mint(address(0), 100_000_000_000e9);
 
-        bytes memory err = abi.encodeWithSignature("CT_IllegalClaim()");
+        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 100_000e9);
         vm.expectRevert(err);
 
         claimTransfer.claim(100_001e18);
@@ -380,14 +381,14 @@ contract ClaimTransferTest is Test {
         claimTransfer.transfer(bob, 5_000);
         vm.stopPrank();
 
-        // Bob tries to claim
+        // Bob tries to claim. Technically alice's claim increases the circulating supply so he's eligible to claim 250 OHM. We try to claim one above that.
         vm.startPrank(bob);
-        dai.approve(address(claimTransfer), 50_000e18);
+        dai.approve(address(claimTransfer), 251e18);
 
-        bytes memory err = abi.encodeWithSignature("CT_IllegalClaim()");
+        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 250e9);
         vm.expectRevert(err);
 
-        claimTransfer.claim(50_000e18);
+        claimTransfer.claim(251e18);
         vm.stopPrank();
     }
 
@@ -520,14 +521,14 @@ contract ClaimTransferTest is Test {
         // transferFrom to bob
         claimTransfer.transferFrom(alice, bob, 5_000);
 
-        // Bob tries to claim
+        // Bob tries to claim. Technically alice's claim increases the circulating supply so he's eligible to claim 250 OHM. We try to claim one above that.
         vm.startPrank(bob);
-        dai.approve(address(claimTransfer), 50_000e18);
+        dai.approve(address(claimTransfer), 251e18);
 
-        bytes memory err = abi.encodeWithSignature("CT_IllegalClaim()");
+        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 250e9);
         vm.expectRevert(err);
 
-        claimTransfer.claim(50_000e18);
+        claimTransfer.claim(251e18);
         vm.stopPrank();
     }
 

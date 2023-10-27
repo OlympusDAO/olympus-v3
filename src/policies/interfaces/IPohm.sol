@@ -36,7 +36,7 @@ interface IPohm {
 
     /// @notice Claims vested OHM by exchanging DAI
     /// @param  to_ Address to send OHM to
-    /// @param  amount_ Amount of OHM to claim
+    /// @param  amount_ DAI amount to exchange for OHM
     function claim(address to_, uint256 amount_) external;
 
     //============================================================================================//
@@ -60,6 +60,11 @@ interface IPohm {
     /// @return uint256 The amount of OHM the account can redeem
     function redeemableFor(address account_) external view returns (uint256);
 
+    /// @notice Calculates the current amount a user is eligible to redeem
+    /// @param  accountTerms_ The terms of the account to check the redeemable amount for
+    /// @return uint256 The amount of OHM the account can redeem
+    function redeemableFor(Term memory accountTerms_) external view returns (uint256);
+
     /// @notice Returns a calculation of OHM circulating supply to be used to determine vested positions
     /// @return uint256 OHM circulating supply
     function getCirculatingSupply() external view returns (uint256);
@@ -68,6 +73,17 @@ interface IPohm {
     /// @param  account_ The account to check the claim for
     /// @return uint256 The amount of OHM the account has claimed
     function getAccountClaimed(address account_) external returns (uint256);
+
+    /// @notice Calculates the effective amount of OHM claimed taking into consideration rebasing since claim
+    /// @param  accountTerms_ The terms of the account to check the claim for
+    /// @return uint256 The amount of OHM the account has claimed
+    function getAccountClaimed(Term memory accountTerms_) external returns (uint256);
+
+    /// @notice Calculates the amount of OHM to send to the user and validates the claim
+    /// @param  amount_ The amount of DAI to exchange for OHM
+    /// @param  accountTerms_ The terms to check the claim against
+    /// @return uint256 The amount of OHM to send to the user
+    function validateClaim(uint256 amount_, Term memory accountTerms_) external view returns (uint256);
 
     //============================================================================================//
     //                                       ADMIN FUNCTIONS                                      //

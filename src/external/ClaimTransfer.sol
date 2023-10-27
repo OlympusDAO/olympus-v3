@@ -9,6 +9,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 // Import libraries
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
+/// @title Olympus Claim Transfer Contract
+/// @dev This contract is used to fractionalize pOHM claims and transfer portions of a user's claim to other addresses
 contract ClaimTransfer {
     using TransferHelper for ERC20;
 
@@ -68,16 +70,9 @@ contract ClaimTransfer {
     function claim(uint256 amount_) external {
         uint256 toSend = (amount_ * 1e9) / 1e18;
 
-        // Get fractionalized terms
+        // Get fractionalized terms and validate claim
         Term memory terms = fractionalizedTerms[msg.sender];
-        uint256 circulatingSupply = pohm.getCirculatingSupply();
-        uint256 accountClaimed = gOHM.balanceFrom(terms.gClaimed);
-
-        // Perform checks
-        uint256 max = (circulatingSupply * fractionalizedTerms[msg.sender].percent) / 1e6;
-        max = max > terms.max ? terms.max : max;
-        uint256 maxClaimable = max - accountClaimed;
-        if (maxClaimable < toSend) revert CT_IllegalClaim();
+        pohm.validateClaim(amount_, IPohm.Term({percent: terms.percent, gClaimed: terms.gClaimed, max: terms.max}));
 
         // Update fractionalized terms
         fractionalizedTerms[msg.sender].gClaimed += gOHM.balanceTo(toSend);
@@ -105,22 +100,8 @@ contract ClaimTransfer {
     ///         OHM due to what you've already claimed. This function will adjust the max claimable amount to account for this.
     ///         That is, if you transfer 50% of your claim, the recipient will be able to claim 50% of the original max claimable OHM 
     function transfer(address to_, uint256 amount_) external returns (bool) {
-        // Get fractionalized terms
-        Term memory terms = fractionalizedTerms[msg.sender];
-
-        uint256 gClaimedToTransfer = (amount_ * terms.gClaimed) / terms.percent;
-        uint256 maxToTransfer = (amount_ * terms.max) / terms.percent;
-        uint256 maxAdjustment = gOHM.balanceFrom(gClaimedToTransfer);
-        maxToTransfer += maxAdjustment;
-
-        // Balance updates
-        fractionalizedTerms[msg.sender].percent -= amount_;
-        fractionalizedTerms[msg.sender].gClaimed -= gClaimedToTransfer;
-        fractionalizedTerms[msg.sender].max -= maxToTransfer;
-
-        fractionalizedTerms[to_].percent += amount_;
-        fractionalizedTerms[to_].gClaimed += gClaimedToTransfer;
-        fractionalizedTerms[to_].max += maxToTransfer;
+        // Transfer
+        _transfer(msg.sender, to_, amount_);
 
         return true;
     }
@@ -138,6 +119,18 @@ contract ClaimTransfer {
         address to_,
         uint256 amount_
     ) external returns (bool) {
+        // Check that allowance is sufficient
+        allowance[from_][msg.sender] -= amount_;
+
+        // Transfer
+        _transfer(from_, to_, amount_);
+
+        return true;
+    }
+
+    // ========= INTERNAL FUNCTIONS ========= //
+
+    function _transfer(address from_, address to_, uint256 amount_) internal {
         // Get fractionalized terms
         Term memory terms = fractionalizedTerms[from_];
 
@@ -146,9 +139,6 @@ contract ClaimTransfer {
         uint256 maxAdjustment = gOHM.balanceFrom(gClaimedToTransfer);
         maxToTransfer += maxAdjustment;
 
-        // Check that allowance is sufficient
-        allowance[from_][msg.sender] -= amount_;
-        
         // Balance updates
         fractionalizedTerms[from_].percent -= amount_;
         fractionalizedTerms[from_].gClaimed -= gClaimedToTransfer;
@@ -157,7 +147,5 @@ contract ClaimTransfer {
         fractionalizedTerms[to_].percent += amount_;
         fractionalizedTerms[to_].gClaimed += gClaimedToTransfer;
         fractionalizedTerms[to_].max += maxToTransfer;
-
-        return true;
     }
 }

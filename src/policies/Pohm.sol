@@ -44,6 +44,11 @@ contract Pohm is IPohm, Policy, RolesConsumer {
     uint256 public totalAllocated; // PRECISION = 1_000_000 (i.e. 5000 = 0.5%)
     uint256 public maximumAllocated; // PRECISION = 1_000_000 (i.e. 5000 = 0.5%)
 
+    // Constants
+    uint256 public constant PERCENT_PRECISION = 1_000_000;
+    uint256 public constant OHM_PRECISION = 1_000_000_000;
+    uint256 public constant DAI_PRECISION = 1_000_000_000_000_000_000;
+
     //============================================================================================//
     //                                      POLICY SETUP                                          //
     //============================================================================================//
@@ -147,8 +152,23 @@ contract Pohm is IPohm, Policy, RolesConsumer {
 
         // Calculate max amount of OHM that can be claimed based on user's percentage term and current circulating supply
         // Make sure that this does not exceed the user's max term
-        uint256 max = (circulatingSupply * accountTerms.percent) / 1e6;
+        uint256 max = (circulatingSupply * accountTerms.percent) / PERCENT_PRECISION;
         max = max > accountTerms.max ? accountTerms.max : max;
+
+        // Return the difference between the max and the amount already claimed
+        return max - accountClaimed;
+    }
+
+    /// @inheritdoc IPohm
+    function redeemableFor(Term memory accountTerms_) public view returns (uint256) {
+        // Cache storage variables
+        uint256 circulatingSupply = getCirculatingSupply();
+        uint256 accountClaimed = getAccountClaimed(accountTerms_);
+
+        // Calculate max amount of OHM that can be claimed based on user's percentage term and current circulating supply
+        // Make sure that this does not exceed the user's max term
+        uint256 max = (circulatingSupply * accountTerms_.percent) / PERCENT_PRECISION;
+        max = max > accountTerms_.max ? accountTerms_.max : max;
 
         // Return the difference between the max and the amount already claimed
         return max - accountClaimed;
@@ -164,6 +184,26 @@ contract Pohm is IPohm, Policy, RolesConsumer {
     function getAccountClaimed(address account_) public view returns (uint256) {
         Term memory accountTerms = terms[account_];
         return gOHM.balanceFrom(accountTerms.gClaimed);
+    }
+
+    /// @inheritdoc IPohm
+    function getAccountClaimed(Term memory accountTerms_) public view returns (uint256) {
+        return gOHM.balanceFrom(accountTerms_.gClaimed);
+    }
+
+    /// @inheritdoc IPohm
+    function validateClaim(uint256 amount_, Term memory accountTerms_) public view returns (uint256) {
+        // Value OHM at 1 DAI. So convert 18 decimal DAI value to 9 decimal OHM value
+        uint256 toSend = (amount_ * OHM_PRECISION) / DAI_PRECISION;
+
+        // Make sure user isn't violating claim terms
+        uint256 redeemable = redeemableFor(accountTerms_);
+        uint256 claimed = getAccountClaimed(accountTerms_);
+        if (redeemable < toSend) revert POHM_ClaimMoreThanVested(redeemable);
+        if ((accountTerms_.max - claimed) < toSend)
+            revert POHM_ClaimMoreThanMax(accountTerms_.max - claimed);
+
+        return toSend;
     }
 
     //============================================================================================//
@@ -206,15 +246,8 @@ contract Pohm is IPohm, Policy, RolesConsumer {
     function _claim(uint256 amount_) internal returns (uint256 toSend) {
         Term memory accountTerms = terms[msg.sender];
 
-        // Value OHM at 1 DAI. So convert 18 decimal DAI value to 9 decimal OHM value
-        toSend = (amount_ * 1e9) / 1e18;
-
-        // Make sure user isn't violating claim terms
-        uint256 redeemable = redeemableFor(msg.sender);
-        uint256 claimed = getAccountClaimed(msg.sender);
-        if (redeemable < toSend) revert POHM_ClaimMoreThanVested(redeemable);
-        if ((accountTerms.max - claimed) < toSend)
-            revert POHM_ClaimMoreThanMax(accountTerms.max - claimed);
+        // Validate claim
+        toSend = validateClaim(amount_, accountTerms);
 
         // Increment user's claimed amount based on rebase-agnostic gOHM value
         terms[msg.sender].gClaimed += gOHM.balanceTo(toSend);
