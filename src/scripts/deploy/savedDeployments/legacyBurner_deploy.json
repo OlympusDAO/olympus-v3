@@ -1,0 +1,11 @@
+{
+    "sequence": [
+        {
+            "name": "LegacyBurner",
+            "args": {
+                "rewardsPerSecond": 2,
+                "maxRewardRate": 500000
+            }
+        }
+    ]
+}

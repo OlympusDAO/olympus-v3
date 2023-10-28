@@ -43,6 +43,7 @@ import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
+import {LegacyBurner} from "policies/LegacyBurner.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
@@ -84,6 +85,10 @@ contract OlympusDeploy is Script {
     BLVaultManagerLusd public lusdVaultManager;
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
+    LegacyBurner public legacyBurner;
+
+    /// Legacy Olympus contracts
+    address public inverseBondDepository;
 
     /// Construction variables
 
@@ -159,6 +164,7 @@ contract OlympusDeploy is Script {
         selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
+        selectorMap["LegacyBurner"] = this._deployLegacyBurner.selector;
 
         // Load environment addresses
         env = vm.readFile("./src/scripts/env.json");
@@ -195,6 +201,7 @@ contract OlympusDeploy is Script {
         auraMiningLib = IAuraMiningLib(envAddress("external.aura.AuraMiningLib"));
         ohmWstethRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmWstethRewardsPool"));
         ohmLusdRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmLusdRewardsPool"));
+        inverseBondDepository = envAddress("olympus.legacy.InverseBondDepository");
 
         // Bophades contracts
         kernel = Kernel(envAddress("olympus.Kernel"));
@@ -222,6 +229,7 @@ contract OlympusDeploy is Script {
         bridge = CrossChainBridge(envAddress("olympus.policies.CrossChainBridge"));
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
+        legacyBurner = LegacyBurner(envAddress("olympus.policies.LegacyBurner"));
 
         // Load deployment data
         string memory data = vm.readFile(deployFilePath);
@@ -726,6 +734,24 @@ contract OlympusDeploy is Script {
         console2.log("Bridge deployed at:", address(bridge));
 
         return address(bridge);
+    }
+
+    function _deployLegacyBurner(bytes memory args) public returns (address) {
+        (uint256 rewardsPerSecond, uint256 maxRewardRate) = abi.decode(args, (uint256, uint256));
+
+        // Deploy LegacyBurner policy
+        vm.broadcast();
+        legacyBurner = new LegacyBurner(
+            kernel,
+            address(ohm),
+            address(bondManager),
+            inverseBondDepository,
+            rewardsPerSecond,
+            maxRewardRate
+        );
+        console2.log("LegacyBurner deployed at:", address(legacyBurner));
+
+        return address(legacyBurner);
     }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment

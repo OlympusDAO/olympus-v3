@@ -47,14 +47,14 @@ contract LegacyBurner is Policy {
 
     constructor(
         Kernel kernel_,
-        OlympusERC20Token ohm_,
+        address ohm_,
         address bondManager_,
         address inverseBondDepo_,
         uint256 rewardsPerSecond_,
         uint256 maxRewardRate_ // out of 100_000_000
     ) Policy(kernel_) {
         // Address config
-        ohm = ohm_;
+        ohm = OlympusERC20Token(ohm_);
         bondManager = bondManager_;
         inverseBondDepo = inverseBondDepo_;
 
@@ -93,7 +93,10 @@ contract LegacyBurner is Policy {
 
     /// @notice Burn OHM from desired sources, send rewards to the caller
     /// @dev    Calculates linearly increasing reward (up to cap) for the amount of OHM burned, burns OHM from
-    ///         BondManager and InverseBondDepo, and mints rewards to the caller
+    ///         BondManager and InverseBondDepo, and mints rewards to the caller. We use this approach of burning
+    ///         everything and then reminting the rewards because the InverseBondDepo does not allow partial burns
+    ///         or the transfer of OHM to another address. We have to burn the entire amount of OHM in the contract.
+    ///         So we burn everything, then mint the rewards to the caller.
     function burn() external {
         // Determine balance of burnable OHM
         uint256 bondManagerOhm = ohm.balanceOf(bondManager);
@@ -145,7 +148,11 @@ contract LegacyBurner is Policy {
     }
 
     /// @notice Burns OHM from the legacy inverse bond depository
-    /// @dev    The only way to burn is to burn the entire amount of OHM in the contract, cannot transfer here first
+    /// @dev    The only way to burn is to burn the entire amount of OHM in the contract, cannot transfer here first.
+    ///         The burn function requires the caller to be specified as the `policy` address on an OlympusAuthority
+    ///         contract. So in order for this to work we have to also deploy a mock OlympusAuthority contract that
+    ///         specifies this contract as the policy address and then update the authority address on the inverse
+    ///         bond depository contract.
     function _burnInverseBondDepoOhm() internal {
         // Cast address to interface
         IInverseBondDepo inverseBondDepo_ = IInverseBondDepo(inverseBondDepo);

@@ -93,7 +93,7 @@ contract LegacyBurnerTest is Test {
 
             burner = new LegacyBurner(
                 kernel,
-                ohm,
+                address(ohm),
                 address(bondManager),
                 address(inverseBondDepo),
                 1,
