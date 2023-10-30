@@ -76,7 +76,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     //                                      STATE                                                 //
     //============================================================================================//
 
-    BunniHub bunniHub;
+    BunniHub public bunniHub;
 
     // Modules
     TRSRYv1 internal TRSRY;
