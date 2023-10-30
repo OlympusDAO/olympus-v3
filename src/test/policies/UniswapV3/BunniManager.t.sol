@@ -158,6 +158,14 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
+    function _expectRevert_invalidAddress(address address_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_Params_InvalidAddress.selector,
+            address_
+        );
+        vm.expectRevert(err);
+    }
+
     function _expectRevert_poolNotFound(address pool_) internal {
         bytes memory err = abi.encodeWithSelector(
             BunniManager.BunniManager_PoolNotFound.selector,
@@ -569,21 +577,188 @@ contract BunniManagerTest is Test {
         assertEq(token.balanceOf(address(bunniManager)), 0);
     }
 
-    // [ ] getToken
-    //  [ ] bunniHub is not set
-    //  [ ] token is not deployed
-    //  [ ] returns token struct
-    // [ ] getTRSRYBalance
-    //  [ ] bunniHub is not set
-    //  [ ] token is not deployed
-    //  [ ] returns token balance
-    // [ ] setBunniHub
-    //  [ ] caller is unauthorized
-    //  [ ] zero address
-    //  [ ] sets bunniHub variable
-    // [ ] setBunniOwner
-    //  [ ] caller is unauthorized
-    //  [ ] bunniHub is not set
-    //  [ ] zero address
-    //  [ ] sets owner of bunniHub
+    // [X] getToken
+    //  [X] bunniHub is not set
+    //  [X] token is not deployed
+    //  [X] returns token struct
+
+    function test_getToken_bunniHubNotSetReverts() public {
+        // Create a new BunniManager policy, without the BunniHub set
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        _expectRevert_bunniHubNotSet();
+
+        newBunniManager.getToken(address(pool));
+    }
+
+    function test_getToken_tokenNotDeployedReverts() public {
+        _expectRevert_poolNotFound(address(pool));
+
+        bunniManager.getToken(address(pool));
+    }
+
+    function test_getToken() public {
+        // Deploy the token
+        vm.prank(policy);
+        bunniManager.deployToken(address(pool));
+
+        // Get the token
+        IBunniToken token = bunniManager.getToken(address(pool));
+
+        // Check return value
+        assertEq(address(token.pool()), address(pool));
+        assertEq(token.tickLower(), int24(-1 * TICK));
+        assertEq(token.tickUpper(), TICK);
+    }
+
+    // [X] getTRSRYBalance
+    //  [X] bunniHub is not set
+    //  [X] token is not deployed
+    //  [X] returns token balance
+
+    function test_getTRSRYBalance_bunniHubNotSetReverts() public {
+        // Create a new BunniManager policy, without the BunniHub set
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        _expectRevert_bunniHubNotSet();
+
+        newBunniManager.getTRSRYBalance(address(pool));
+    }
+
+    function test_getTRSRYBalance_tokenNotDeployedReverts() public {
+        _expectRevert_poolNotFound(address(pool));
+
+        bunniManager.getTRSRYBalance(address(pool));
+    }
+
+    function test_getTRSRYBalance_zeroBalance() public {
+        // Deploy the token
+        vm.prank(policy);
+        bunniManager.deployToken(address(pool));
+
+        // Get the token
+        uint256 balance = bunniManager.getTRSRYBalance(address(pool));
+
+        // Check return value
+        assertEq(balance, 0);
+    }
+
+    function test_getTRSRYBalance_fuzz(uint256 amount_) public {
+        uint256 amount = bound(amount_, 100e6, 1e12);
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Deploy the token
+        vm.prank(policy);
+        bunniManager.deployToken(address(pool));
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(address(treasury), USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, address(usdc), USDC_DEPOSIT);
+
+        // Check that the value is consistent
+        uint256 balance = bunniManager.getTRSRYBalance(address(pool));
+        assertEq(balance, bunniTokenShares);
+    }
+
+    // [X] setBunniHub
+    //  [X] caller is unauthorized
+    //  [X] zero address
+    //  [X] sets bunniHub variable
+
+    function test_setBunniHub_unauthorizedReverts() public {
+        // Create a new BunniHub
+        BunniHub newBunniHub = new BunniHub(
+            uniswapFactory,
+            address(bunniManager),
+            0 // No protocol fee
+        );
+
+        _expectRevert_unauthorized();
+
+        // Call as an unauthorized user
+        vm.prank(alice);
+        bunniManager.setBunniHub(address(newBunniHub));
+    }
+
+    function test_setBunniHub_zeroAddressReverts() public {
+        _expectRevert_invalidAddress(address(0));
+
+        // Call with a zero address
+        vm.prank(policy);
+        bunniManager.setBunniHub(address(0));
+    }
+
+    function test_setBunniHub() public {
+        // Create a new BunniHub
+        BunniHub newBunniHub = new BunniHub(
+            uniswapFactory,
+            address(bunniManager),
+            0 // No protocol fee
+        );
+
+        // Call
+        vm.prank(policy);
+        bunniManager.setBunniHub(address(newBunniHub));
+
+        // Check that the value has been updated
+        assertEq(address(bunniManager.bunniHub()), address(newBunniHub));
+    }
+
+    // [X] setBunniOwner
+    //  [X] caller is unauthorized
+    //  [X] bunniHub is not set
+    //  [X] zero address
+    //  [X] sets owner of bunniHub
+
+    function test_setBunniOwner_unauthorizedReverts() public {
+        _expectRevert_unauthorized();
+
+        // Call as an unauthorized user
+        vm.prank(alice);
+        bunniManager.setBunniOwner(alice);
+    }
+
+    function test_setBunniOwner_zeroAddressReverts() public {
+        _expectRevert_invalidAddress(address(0));
+
+        // Call with a zero address
+        vm.prank(policy);
+        bunniManager.setBunniOwner(address(0));
+    }
+
+    function test_setBunniOwner_bunniHubNotSetReverts() public {
+        // Create a new BunniManager policy, without the BunniHub set
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        _expectRevert_bunniHubNotSet();
+
+        // Call
+        vm.prank(policy);
+        newBunniManager.setBunniOwner(address(alice));
+    }
+
+    function test_setBunniOwner() public {
+        // Call
+        vm.prank(policy);
+        bunniManager.setBunniOwner(address(alice));
+
+        // Check that the value has been updated
+        assertEq(bunniManager.bunniHub().owner(), address(alice));
+
+        // Attempt to perform an action on the BunniHub as the old owner
+        vm.expectRevert(
+            bytes("UNAUTHORIZED")
+        ); // Reverts with "UNAUTHORIZED" from the BunniHub (not Bophades)
+        vm.prank(policy);
+        bunniHub.setProtocolFee(1);
+
+        // Attempt to perform an action on the BunniHub as the new owner
+        vm.prank(alice);
+        bunniHub.setProtocolFee(1);
+        assertEq(bunniHub.protocolFee(), 1);
+    }
 }
