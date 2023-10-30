@@ -149,7 +149,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
             if (address(wrappedPayoutToken) == address(0)) {
                 TRSRY.increaseWithdrawApproval(address(this), payoutToken, toApprove);
             } else {
-                // Since TRSRY hold a wrapped version of the payoutToken, a conversion must take place.
+                // Since TRSRY holds a wrapped version of the payoutToken, a conversion must take place.
                 TRSRY.increaseWithdrawApproval(
                     address(this),
                     wrappedPayoutToken,

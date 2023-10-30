@@ -322,11 +322,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Burn OHM
             MINTR.burnOhm(address(this), amountIn_);
 
-            // Calculate amount of wrappedReserve to withdraw from the TRSRY
-            uint256 amountWrapped = _wrappedReserve.convertToShares(amountOut);
-
-            // Withdraw wrapped reserves from TRSRY
-            TRSRY.withdrawReserves(msg.sender, ERC20(address(_wrappedReserve)), amountWrapped);
+            // Calculate amount of wrappedReserve equivalent to amountOut
+            // and withdraw wrapped reserves from TRSRY
+            TRSRY.withdrawReserves(
+                address(this),
+                _wrappedReserve,
+                _wrappedReserve.previewWithdraw(amountOut)
+            );
 
             // Unwrap reserves and transfer to sender
             _wrappedReserve.withdraw(amountOut, msg.sender, address(this));
