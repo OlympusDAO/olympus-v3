@@ -65,6 +65,14 @@ contract BunniManagerTest is Test {
 
     uint8 constant BUNNI_TOKEN_DECIMALS = 18;
 
+    uint256 constant SLIPPAGE_DEFAULT = 100; // 1%
+    uint256 constant SLIPPAGE_MAX = 10000; // 100%
+
+    uint8 constant PRICE_VERSION = 2;
+    uint8 constant TRSRY_VERSION = 1;
+    uint8 constant ROLES_VERSION = 1;
+    uint8 constant MINTR_VERSION = 1;
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -184,6 +192,23 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
+    function _expectRevert_invalidSlippage(uint256 slippage_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_Params_InvalidSlippage.selector,
+            slippage_,
+            SLIPPAGE_MAX
+        );
+        vm.expectRevert(err);
+    }
+
+    function _expectRevert_wrongModuleVersion() internal {
+        uint8[4] memory expectedVersions = [1, 1, 2, 1];
+
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_WrongModuleVersion.selector, expectedVersions);
+        vm.expectRevert(err);
+    }
+
     function _setUpNewBunniManager() internal returns (BunniManager) {
         // Create a new BunniManager policy, with the BunniHub set
         BunniManager newBunniManager = new BunniManager(kernel);
@@ -200,11 +225,130 @@ contract BunniManagerTest is Test {
         });
     }
 
-    // [ ] constructor
-    // [ ] configureDependencies
-    //  [ ] reverts if TRSRY version is unsupported
-    //  [ ] configures correctly
-    // [ ] requestPermissions
+    // [X] constructor (tested in setUp)
+    // [X] configureDependencies
+    //  [X] reverts if TRSRY version is unsupported
+    //  [X] configures correctly
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDependencies = new Keycode[](4);
+        expectedDependencies[0] = toKeycode("ROLES");
+        expectedDependencies[1] = toKeycode("TRSRY");
+        expectedDependencies[2] = toKeycode("PRICE");
+        expectedDependencies[3] = toKeycode("MINTR");
+
+        Keycode[] memory deps = bunniManager.configureDependencies();
+        assertEq(deps.length, expectedDependencies.length);
+        for (uint256 i = 0; i < deps.length; i++) {
+            assertEq(fromKeycode(deps[i]), fromKeycode(expectedDependencies[i]));
+        }
+    }
+
+    function test_configureDependencies_priceVersionReverts(uint8 version_) public {
+        vm.assume(version_ != PRICE_VERSION);
+
+        Keycode[] memory expectedDependencies = new Keycode[](4);
+        expectedDependencies[0] = toKeycode("ROLES");
+        expectedDependencies[1] = toKeycode("TRSRY");
+        expectedDependencies[2] = toKeycode("PRICE");
+        expectedDependencies[3] = toKeycode("MINTR");
+
+        // Mock an incompatibility with the module
+        vm.mockCall(
+            address(price), 
+            abi.encodeWithSelector(OlympusPricev2.VERSION.selector), 
+            abi.encode(version_, 0)
+        );
+        _expectRevert_wrongModuleVersion();
+
+        bunniManager.configureDependencies();
+    }
+
+    function test_configureDependencies_treasuryVersionReverts(uint8 version_) public {
+        vm.assume(version_ != TRSRY_VERSION);
+
+        Keycode[] memory expectedDependencies = new Keycode[](4);
+        expectedDependencies[0] = toKeycode("ROLES");
+        expectedDependencies[1] = toKeycode("TRSRY");
+        expectedDependencies[2] = toKeycode("PRICE");
+        expectedDependencies[3] = toKeycode("MINTR");
+
+        // Mock an incompatibility with the module
+        vm.mockCall(
+            address(treasury), 
+            abi.encodeWithSelector(OlympusTreasury.VERSION.selector), 
+            abi.encode(version_, 0)
+        );
+        _expectRevert_wrongModuleVersion();
+
+        bunniManager.configureDependencies();
+    }
+
+    function test_configureDependencies_rolesVersionReverts(uint8 version_) public {
+        vm.assume(version_ != ROLES_VERSION);
+
+        Keycode[] memory expectedDependencies = new Keycode[](4);
+        expectedDependencies[0] = toKeycode("ROLES");
+        expectedDependencies[1] = toKeycode("TRSRY");
+        expectedDependencies[2] = toKeycode("PRICE");
+        expectedDependencies[3] = toKeycode("MINTR");
+
+        // Mock an incompatibility with the module
+        vm.mockCall(
+            address(roles), 
+            abi.encodeWithSelector(OlympusRoles.VERSION.selector), 
+            abi.encode(version_, 0)
+        );
+        _expectRevert_wrongModuleVersion();
+
+        bunniManager.configureDependencies();
+    }
+
+    function test_configureDependencies_mintrVersionReverts(uint8 version_) public {
+        vm.assume(version_ != MINTR_VERSION);
+
+        Keycode[] memory expectedDependencies = new Keycode[](4);
+        expectedDependencies[0] = toKeycode("ROLES");
+        expectedDependencies[1] = toKeycode("TRSRY");
+        expectedDependencies[2] = toKeycode("PRICE");
+        expectedDependencies[3] = toKeycode("MINTR");
+
+        // Mock an incompatibility with the module
+        vm.mockCall(
+            address(mintr), 
+            abi.encodeWithSelector(OlympusMinter.VERSION.selector), 
+            abi.encode(version_, 0)
+        );
+        _expectRevert_wrongModuleVersion();
+
+        bunniManager.configureDependencies();
+    }
+
+    // [X] requestPermissions
+
+    function test_requestPermissions() public {
+        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+        Keycode PRICE_KEYCODE = toKeycode("PRICE");
+        Keycode MINTR_KEYCODE = toKeycode("MINTR");
+
+        Permissions[] memory expectedPermissions = new Permissions[](8);
+        expectedPermissions[0] = Permissions(TRSRY_KEYCODE, treasury.withdrawReserves.selector);
+        expectedPermissions[1] = Permissions(TRSRY_KEYCODE, treasury.increaseWithdrawApproval.selector);
+        expectedPermissions[2] = Permissions(TRSRY_KEYCODE, treasury.decreaseWithdrawApproval.selector);
+        expectedPermissions[3] = Permissions(PRICE_KEYCODE, price.addAsset.selector);
+        expectedPermissions[4] = Permissions(MINTR_KEYCODE, mintr.mintOhm.selector);
+        expectedPermissions[5] = Permissions(MINTR_KEYCODE, mintr.burnOhm.selector);
+        expectedPermissions[6] = Permissions(MINTR_KEYCODE, mintr.increaseMintApproval.selector);
+        expectedPermissions[7] = Permissions(MINTR_KEYCODE, mintr.decreaseMintApproval.selector);
+
+        Permissions[] memory perms = bunniManager.requestPermissions();
+        assertEq(perms.length, expectedPermissions.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPermissions[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPermissions[i].funcSelector);
+        }
+    }
+
     // [X] deployToken
     //  [X] caller is unauthorized
     //  [X] bunniHub not set
@@ -282,7 +426,7 @@ contract BunniManagerTest is Test {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
-        bunniManager.deposit(address(pool), address(ohm), 1e9, 1e18);
+        bunniManager.deposit(address(pool), address(ohm), 1e9, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_bunniHubNotSetReverts() public {
@@ -292,14 +436,14 @@ contract BunniManagerTest is Test {
         _expectRevert_bunniHubNotSet();
 
         vm.prank(policy);
-        newBunniManager.deposit(address(pool), address(ohm), 1e9, 1e18);
+        newBunniManager.deposit(address(pool), address(ohm), 1e9, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_tokenNotDeployedReverts() public {
         _expectRevert_poolNotFound(address(pool));
 
         vm.prank(policy);
-        bunniManager.deposit(address(pool), address(ohm), 1e9, 1e18);
+        bunniManager.deposit(address(pool), address(ohm), 1e9, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_token0InsufficientBalanceReverts(uint256 token0Amount_) public {
@@ -328,7 +472,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        bunniManager.deposit(address(newPool), address(dai), 1e18, 1e6);
+        bunniManager.deposit(address(newPool), address(dai), 1e18, 1e6, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_token1InsufficientBalanceReverts(uint256 token1Amount_) public {
@@ -357,7 +501,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        bunniManager.deposit(address(newPool), address(dai), 1e18, 1e6);
+        bunniManager.deposit(address(newPool), address(dai), 1e18, 1e6, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_nonOhmTokens_fuzz(uint256 usdcAmount_) public {
@@ -380,7 +524,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), daiAmount, usdcAmount);
+        uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), daiAmount, usdcAmount, SLIPPAGE_DEFAULT);
 
         // The tokens should have been deposited into TRSRY
         assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
@@ -412,7 +556,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
 
         // The tokens should have been deposited into TRSRY
         assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
@@ -435,6 +579,73 @@ contract BunniManagerTest is Test {
         assertApproxEqAbs(ohm.totalSupply(), ohmSupplyBefore + ohmReserve, 1);
     }
 
+    function test_deposit_slippage_fuzz(uint256 amount_, uint256 slippage_) public {
+        uint256 slippage = bound(slippage_, 50, 500); // 0.5 - 5%
+
+        /**
+         * Get a random amount of OHM to deposit
+         * Calculate the amount of USDC to match that (so they are in proportion),
+         * with the slippage parameter applied.
+         */
+        uint256 amount = bound(amount_, 100e6, 1e12);
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18).mulDiv(SLIPPAGE_MAX - slippage, SLIPPAGE_MAX);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Deploy the token
+        vm.prank(policy);
+        IBunniToken bunniToken = bunniManager.deployToken(address(pool));
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(address(treasury), USDC_DEPOSIT);
+        uint256 ohmSupplyBefore = ohm.totalSupply();
+
+        // Deposit
+        vm.prank(policy);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, slippage);
+
+        // The tokens should have been deposited into TRSRY
+        assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
+
+        // No remaining balance in the policy
+        assertEq(ohm.balanceOf(address(bunniManager)), 0);
+        assertEq(usdc.balanceOf(address(bunniManager)), 0);
+
+        // No remaining balance in the bunniHub
+        assertEq(ohm.balanceOf(address(bunniHub)), 0);
+        assertEq(usdc.balanceOf(address(bunniHub)), 0);
+
+        // OHM was minted
+        // The exact amount of OHM is only known at run-time (due to slippage)
+        BunniLens bunniLens = new BunniLens(bunniHub);
+        (uint112 reserve0, uint112 reserve1) = bunniLens.getReserves(_getBunniKey(pool, bunniToken));
+        uint256 ohmReserve = pool.token0() == address(ohm) ? reserve0 : reserve1;
+        uint256 usdcReserve = pool.token0() == address(usdc) ? reserve0 : reserve1;
+
+        // Tolerant of rounding
+        assertApproxEqAbs(ohm.totalSupply(), ohmSupplyBefore + ohmReserve, 1);
+        assertApproxEqAbs(usdcReserve, USDC_DEPOSIT, 1);
+    }
+
+    function test_deposit_invalidSlippage() public {
+        uint256 OHM_DEPOSIT = 1000e9;
+        uint256 USDC_DEPOSIT = OHM_DEPOSIT.mulDiv(1e6, 1e9).mulDiv(OHM_USDC_PRICE, 1e18);
+
+        // Deploy the token
+        vm.prank(policy);
+        bunniManager.deployToken(address(pool));
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(address(treasury), USDC_DEPOSIT);
+        
+        // Set up the invalid slippage
+        uint256 slippage = SLIPPAGE_MAX + 1;
+        _expectRevert_invalidSlippage(slippage);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, slippage);
+    }
+
     // [X] withdraw
     //  [X] caller is unauthorized
     //  [X] bunniHub not set
@@ -447,7 +658,7 @@ contract BunniManagerTest is Test {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
-        bunniManager.withdraw(address(pool), 1e18);
+        bunniManager.withdraw(address(pool), 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_withdraw_bunniHubNotSetReverts() public {
@@ -457,14 +668,14 @@ contract BunniManagerTest is Test {
         _expectRevert_bunniHubNotSet();
 
         vm.prank(policy);
-        newBunniManager.withdraw(address(pool), 1e18);
+        newBunniManager.withdraw(address(pool), 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_withdraw_tokenNotDeployedReverts() public {
         _expectRevert_poolNotFound(address(pool));
 
         vm.prank(policy);
-        bunniManager.withdraw(address(pool), 1e18);
+        bunniManager.withdraw(address(pool), 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_withdraw_insufficientBalanceReverts() public {
@@ -480,7 +691,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
 
         // Withdraw
         uint256 bunniTokenSharesToWithdraw = bunniTokenShares * 2;
@@ -488,7 +699,7 @@ contract BunniManagerTest is Test {
         _expectRevert_insufficientBalance(address(token), bunniTokenSharesToWithdraw, bunniTokenShares);
 
         vm.prank(policy);
-        bunniManager.withdraw(address(pool), bunniTokenSharesToWithdraw);
+        bunniManager.withdraw(address(pool), bunniTokenSharesToWithdraw, SLIPPAGE_DEFAULT);
     }
 
     function test_withdraw_nonOhmTokens(uint256 shareToWithdraw_) public {
@@ -510,7 +721,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), DAI_DEPOSIT, USDC_DEPOSIT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), DAI_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
         uint256 bunniTokenSharesToWithdraw = bound(shareToWithdraw_, 1e9, bunniTokenShares);
 
         // Withdraw
@@ -519,7 +730,7 @@ contract BunniManagerTest is Test {
         uint256 ohmSupplyBefore = ohm.totalSupply();
 
         vm.prank(policy);
-        bunniManager.withdraw(address(newPool), bunniTokenSharesToWithdraw);
+        bunniManager.withdraw(address(newPool), bunniTokenSharesToWithdraw, SLIPPAGE_DEFAULT);
 
         // Check that:
         // withdrawn DAU has been returned to TRSRY
@@ -552,7 +763,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
         uint256 bunniTokenSharesToWithdraw = bound(shareToWithdraw_, 1e9, bunniTokenShares);
 
         // Withdraw
@@ -560,7 +771,7 @@ contract BunniManagerTest is Test {
         uint256 ohmSupplyBefore = ohm.totalSupply();
 
         vm.prank(policy);
-        bunniManager.withdraw(address(pool), bunniTokenSharesToWithdraw);
+        bunniManager.withdraw(address(pool), bunniTokenSharesToWithdraw, SLIPPAGE_DEFAULT);
 
         // Check that:
         // withdrawn USDC has been returned to TRSRY
@@ -575,6 +786,30 @@ contract BunniManagerTest is Test {
         assertEq(usdc.balanceOf(address(bunniManager)), 0);
         assertEq(ohm.balanceOf(address(bunniManager)), 0);
         assertEq(token.balanceOf(address(bunniManager)), 0);
+    }
+
+    function test_withdraw_invalidSlippage() public {
+        uint256 OHM_DEPOSIT = 1000e9;
+        uint256 USDC_DEPOSIT = OHM_DEPOSIT.mulDiv(1e6, 1e9).mulDiv(OHM_USDC_PRICE, 1e18);
+
+        // Deploy the token
+        vm.prank(policy);
+        bunniManager.deployToken(address(pool));
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(address(treasury), USDC_DEPOSIT);
+        
+        // Deposit
+        vm.prank(policy);
+        uint256 shares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+
+        // Set up the incorrect slippage
+        uint256 slippage = SLIPPAGE_MAX + 1;
+        _expectRevert_invalidSlippage(slippage);
+
+        // Withdraw
+        vm.prank(policy);
+        bunniManager.withdraw(address(pool), shares, slippage);
     }
 
     // [X] getToken
@@ -657,7 +892,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
 
         // Check that the value is consistent
         uint256 balance = bunniManager.getTRSRYBalance(address(pool));
