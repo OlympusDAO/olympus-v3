@@ -223,7 +223,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         address pool_,
         address tokenA_,
         uint256 amountA_,
-        address,
         uint256 amountB_
     ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet returns (uint256) {
         // Create a BunniKey
