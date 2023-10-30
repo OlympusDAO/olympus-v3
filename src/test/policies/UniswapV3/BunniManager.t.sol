@@ -209,6 +209,13 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
+    function _expectRevert_inactive() internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_Inactive.selector
+        );
+        vm.expectRevert(err);
+    }
+
     function _setUpNewBunniManager() internal returns (BunniManager) {
         // Create a new BunniManager policy, with the BunniHub set
         BunniManager newBunniManager = new BunniManager(kernel);
@@ -355,12 +362,23 @@ contract BunniManagerTest is Test {
     //  [X] token already deployed
     //  [X] not a Uniswap V3 pool
     //  [X] deploys and returns token, registers with PRICEv2
+    //  [X] reverts when inactive
 
     function test_deployToken_unauthorizedReverts() public {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
         bunniManager.deployToken(address(pool));
+    }
+
+    function test_deployToken_inactiveReverts() public {
+        // Create a new BunniManager policy, but don't install/activate it
+        BunniManager newBunniManager = new BunniManager(kernel);
+
+        _expectRevert_inactive();
+
+        vm.prank(policy);
+        newBunniManager.deployToken(address(pool));
     }
 
     function test_deployToken_bunniHubNotSetReverts() public {
@@ -421,12 +439,23 @@ contract BunniManagerTest is Test {
     //  [X] burns excess OHM after deposit
     //  [X] deposits non-OHM tokens and returns shares
     //  [X] returns non-OHM tokens to TRSRY
+    //  [X] reverts when inactive
 
     function test_deposit_unauthorizedReverts() public {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
         bunniManager.deposit(address(pool), address(ohm), 1e9, 1e18, SLIPPAGE_DEFAULT);
+    }
+
+    function test_deposit_inactiveReverts() public {
+        // Create a new BunniManager policy, but don't install/activate it
+        BunniManager newBunniManager = new BunniManager(kernel);
+
+        _expectRevert_inactive();
+
+        vm.prank(policy);
+        newBunniManager.deposit(address(pool), address(ohm), 1e9, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_bunniHubNotSetReverts() public {
@@ -653,12 +682,23 @@ contract BunniManagerTest is Test {
     //  [X] insufficient share balance
     //  [X] withdraws and returns non-OHM tokens to TRSRY
     //  [X] withdraws, burns OHM and returns non-OHM tokens to TRSRY
+    //  [X] reverts when inactive
 
     function test_withdraw_unauthorizedReverts() public {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
         bunniManager.withdraw(address(pool), 1e18, SLIPPAGE_DEFAULT);
+    }
+
+    function test_withdraw_inactiveReverts() public {
+        // Create a new BunniManager policy, but don't install/activate it
+        BunniManager newBunniManager = new BunniManager(kernel);
+
+        _expectRevert_inactive();
+
+        vm.prank(policy);
+        newBunniManager.withdraw(address(pool), 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_withdraw_bunniHubNotSetReverts() public {
@@ -816,6 +856,7 @@ contract BunniManagerTest is Test {
     //  [X] bunniHub is not set
     //  [X] token is not deployed
     //  [X] returns token struct
+    //  [X] returns even if inactive
 
     function test_getToken_bunniHubNotSetReverts() public {
         // Create a new BunniManager policy, without the BunniHub set
@@ -846,10 +887,28 @@ contract BunniManagerTest is Test {
         assertEq(token.tickUpper(), TICK);
     }
 
+    function test_getToken_inactive() public {
+        // Deploy the token
+        vm.prank(policy);
+        bunniManager.deployToken(address(pool));
+
+        // Disable the policy
+        kernel.executeAction(Actions.DeactivatePolicy, address(bunniManager));
+
+        // Get the token
+        IBunniToken token = bunniManager.getToken(address(pool));
+
+        // Check return value
+        assertEq(address(token.pool()), address(pool));
+        assertEq(token.tickLower(), int24(-1 * TICK));
+        assertEq(token.tickUpper(), TICK);
+    }
+
     // [X] getTRSRYBalance
     //  [X] bunniHub is not set
     //  [X] token is not deployed
     //  [X] returns token balance
+    //  [X] returns even if inactive
 
     function test_getTRSRYBalance_bunniHubNotSetReverts() public {
         // Create a new BunniManager policy, without the BunniHub set
@@ -899,10 +958,35 @@ contract BunniManagerTest is Test {
         assertEq(balance, bunniTokenShares);
     }
 
+    function test_getTRSRYBalance_inactive() public {
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Deploy the token
+        vm.prank(policy);
+        bunniManager.deployToken(address(pool));
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(address(treasury), USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+
+        // Disable the policy
+        kernel.executeAction(Actions.DeactivatePolicy, address(bunniManager));
+
+        // Check that the value is consistent
+        uint256 balance = bunniManager.getTRSRYBalance(address(pool));
+        assertEq(balance, bunniTokenShares);
+    }
+
     // [X] setBunniHub
     //  [X] caller is unauthorized
     //  [X] zero address
     //  [X] sets bunniHub variable
+    //  [X] works if inactive
 
     function test_setBunniHub_unauthorizedReverts() public {
         // Create a new BunniHub
@@ -943,11 +1027,31 @@ contract BunniManagerTest is Test {
         assertEq(address(bunniManager.bunniHub()), address(newBunniHub));
     }
 
+    function test_setBunniHub_inactive() public {
+        // Create a new BunniHub
+        BunniHub newBunniHub = new BunniHub(
+            uniswapFactory,
+            address(bunniManager),
+            0 // No protocol fee
+        );
+
+        // Disable the policy
+        kernel.executeAction(Actions.DeactivatePolicy, address(bunniManager));
+
+        // Call
+        vm.prank(policy);
+        bunniManager.setBunniHub(address(newBunniHub));
+
+        // Check that the value has been updated
+        assertEq(address(bunniManager.bunniHub()), address(newBunniHub));
+    }
+
     // [X] setBunniOwner
     //  [X] caller is unauthorized
     //  [X] bunniHub is not set
     //  [X] zero address
     //  [X] sets owner of bunniHub
+    //  [ ] works if inactive
 
     function test_setBunniOwner_unauthorizedReverts() public {
         _expectRevert_unauthorized();
@@ -977,6 +1081,30 @@ contract BunniManagerTest is Test {
     }
 
     function test_setBunniOwner() public {
+        // Call
+        vm.prank(policy);
+        bunniManager.setBunniOwner(address(alice));
+
+        // Check that the value has been updated
+        assertEq(bunniManager.bunniHub().owner(), address(alice));
+
+        // Attempt to perform an action on the BunniHub as the old owner
+        vm.expectRevert(
+            bytes("UNAUTHORIZED")
+        ); // Reverts with "UNAUTHORIZED" from the BunniHub (not Bophades)
+        vm.prank(policy);
+        bunniHub.setProtocolFee(1);
+
+        // Attempt to perform an action on the BunniHub as the new owner
+        vm.prank(alice);
+        bunniHub.setProtocolFee(1);
+        assertEq(bunniHub.protocolFee(), 1);
+    }
+
+    function test_setBunniOwner_inactive() public {
+        // Disable the policy
+        kernel.executeAction(Actions.DeactivatePolicy, address(bunniManager));
+
         // Call
         vm.prank(policy);
         bunniManager.setBunniOwner(address(alice));

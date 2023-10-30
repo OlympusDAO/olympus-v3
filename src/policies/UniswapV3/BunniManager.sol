@@ -75,7 +75,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param token_           The address of the token
     /// @param requiredBalance_ The required balance
     /// @param actualBalance_   The actual balance
-    error BunniManager_InsufficientBalance(address token_, uint256 requiredBalance_, uint256 actualBalance_);
+    error BunniManager_InsufficientBalance(
+        address token_,
+        uint256 requiredBalance_,
+        uint256 actualBalance_
+    );
+
+    /// @notice         Emitted if the policy is inactive
+    error BunniManager_Inactive();
 
     //============================================================================================//
     //                                      STATE                                                 //
@@ -120,12 +127,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (
-            ROLES_MAJOR != 1 ||
-            TRSRY_MAJOR != 1 ||
-            PRICE_MAJOR != 2 ||
-            MINTR_MAJOR != 1
-        ) revert BunniManager_WrongModuleVersion([1, 1, 2, 1]);
+        if (ROLES_MAJOR != 1 || TRSRY_MAJOR != 1 || PRICE_MAJOR != 2 || MINTR_MAJOR != 1)
+            revert BunniManager_WrongModuleVersion([1, 1, 2, 1]);
     }
 
     /// @inheritdoc Policy
@@ -151,6 +154,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
+    ///             - The policy is inactive
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
     function deployToken(
@@ -159,6 +163,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         external
         override
         nonReentrant
+        onlyIfActive
         onlyRole("bunni_admin")
         bunniHubSet
         returns (IBunniToken token)
@@ -220,6 +225,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - Burns any remaining OHM
     ///
     ///             This function reverts if:
+    ///             - The policy is inactive
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
     ///             - An ERC20 token for `pool_` has not been deployed
@@ -231,7 +237,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         uint256 amountA_,
         uint256 amountB_,
         uint256 slippageBps_
-    ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet returns (uint256) {
+    ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet returns (uint256) {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
 
@@ -287,6 +293,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - Return any non-OHM token(s) to the TRSRY
     ///
     ///             This function reverts if:
+    ///             - The policy is inactive
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
     ///             - An ERC20 token for `pool_` has not been deployed
@@ -296,7 +303,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         address pool_,
         uint256 shares_,
         uint256 slippageBps_
-    ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet {
+    ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
 
@@ -429,9 +436,13 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice         Convenience method to calculate the minimum amount of tokens to receive
     /// @dev            This is calculated as `amount_ * (1 - slippageTolerance)`
     /// @param amount_  The amount of tokens to calculate the minimum for
-    function _calculateAmountMin(uint256 amount_, uint256 slippageBps_) internal pure returns (uint256) {
+    function _calculateAmountMin(
+        uint256 amount_,
+        uint256 slippageBps_
+    ) internal pure returns (uint256) {
         // Check bounds
-        if (slippageBps_ > SLIPPAGE_SCALE) revert BunniManager_Params_InvalidSlippage(slippageBps_, SLIPPAGE_SCALE);
+        if (slippageBps_ > SLIPPAGE_SCALE)
+            revert BunniManager_Params_InvalidSlippage(slippageBps_, SLIPPAGE_SCALE);
 
         return amount_.mulDiv(SLIPPAGE_SCALE - slippageBps_, SLIPPAGE_SCALE);
     }
@@ -469,8 +480,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         if (token_ == address(MINTR.ohm())) {
             MINTR.increaseMintApproval(address(this), amount_);
             MINTR.mintOhm(address(this), amount_);
-        }
-        else {
+        } else {
             _transferFromTRSRY(token_, amount_);
         }
     }
@@ -481,17 +491,26 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         if (token_ == address(MINTR.ohm())) {
             MINTR.burnOhm(address(this), amount_);
-        }
-        else {
+        } else {
             ERC20(token_).safeTransfer(address(TRSRY), amount_);
         }
     }
+
+    //============================================================================================//
+    //                                      MODIFIERS                                             //
+    //============================================================================================//
 
     /// @notice         Modifier to assert that the `bunniHub` state variable is set
     /// @dev            The `bunniHub` state variable is set after deployment, so this
     ///                 modifier is needed to check that the configuration is valid.
     modifier bunniHubSet() {
         if (address(bunniHub) == address(0)) revert BunniManager_HubNotSet();
+        _;
+    }
+
+    /// @notice         Modifier to assert that the policy is active
+    modifier onlyIfActive() {
+        if (!kernel.isPolicyActive(this)) revert BunniManager_Inactive();
         _;
     }
 }
