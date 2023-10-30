@@ -73,6 +73,10 @@ contract BunniManagerTest is Test {
     uint8 constant ROLES_VERSION = 1;
     uint8 constant MINTR_VERSION = 1;
 
+    uint256 constant HARVEST_REWARD = 10e9;
+    uint48 constant HARVEST_AUCTION_DURATION = uint48(5 * 60); // 5 minutes
+    uint48 constant HARVEST_FREQUENCY = uint48(24 hours);
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -100,7 +104,12 @@ contract BunniManagerTest is Test {
 
         {
             // Deploy BunniManager policy
-            bunniManager = new BunniManager(kernel);
+            bunniManager = new BunniManager(
+                kernel,
+                HARVEST_REWARD,
+                HARVEST_AUCTION_DURATION,
+                HARVEST_FREQUENCY
+            );
 
             // Deploy Uniswap V3 factory
             uniswapFactory = new UniswapV3Factory();
@@ -216,9 +225,14 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
+    function _createNewBunniManager() internal returns (BunniManager) {
+        // Create a new BunniManager policy
+        return new BunniManager(kernel, HARVEST_REWARD, HARVEST_AUCTION_DURATION, HARVEST_FREQUENCY);
+    }
+
     function _setUpNewBunniManager() internal returns (BunniManager) {
         // Create a new BunniManager policy, with the BunniHub set
-        BunniManager newBunniManager = new BunniManager(kernel);
+        BunniManager newBunniManager = _createNewBunniManager();
         kernel.executeAction(Actions.ActivatePolicy, address(newBunniManager));
 
         return newBunniManager;
@@ -373,7 +387,7 @@ contract BunniManagerTest is Test {
 
     function test_deployToken_inactiveReverts() public {
         // Create a new BunniManager policy, but don't install/activate it
-        BunniManager newBunniManager = new BunniManager(kernel);
+        BunniManager newBunniManager = _createNewBunniManager();
 
         _expectRevert_inactive();
 
@@ -450,7 +464,7 @@ contract BunniManagerTest is Test {
 
     function test_deposit_inactiveReverts() public {
         // Create a new BunniManager policy, but don't install/activate it
-        BunniManager newBunniManager = new BunniManager(kernel);
+        BunniManager newBunniManager = _createNewBunniManager();
 
         _expectRevert_inactive();
 
@@ -693,7 +707,7 @@ contract BunniManagerTest is Test {
 
     function test_withdraw_inactiveReverts() public {
         // Create a new BunniManager policy, but don't install/activate it
-        BunniManager newBunniManager = new BunniManager(kernel);
+        BunniManager newBunniManager = _createNewBunniManager();
 
         _expectRevert_inactive();
 
@@ -1051,7 +1065,7 @@ contract BunniManagerTest is Test {
     //  [X] bunniHub is not set
     //  [X] zero address
     //  [X] sets owner of bunniHub
-    //  [ ] works if inactive
+    //  [X] works if inactive
 
     function test_setBunniOwner_unauthorizedReverts() public {
         _expectRevert_unauthorized();
@@ -1124,4 +1138,57 @@ contract BunniManagerTest is Test {
         bunniHub.setProtocolFee(1);
         assertEq(bunniHub.protocolFee(), 1);
     }
+
+    // [ ] harvest
+    //  [X] reverts if bunniHub is not set
+    //  [X] reverts when inactive
+    //  [ ] reverts if sufficient time has not elapsed
+    //  [ ] does not issue a reward if the harvest is not profitable
+    //  [ ] harvest compounds fees to the pool
+    //  [ ] harvest compounds fees to the pool, multiple pools
+    //  [ ] harvest reward paid matched currentHarvestReward
+    //  [ ] harvest reward is capped
+
+    function test_harvest_bunniHubNotSetReverts() public {
+        // Create a new BunniManager policy, without the BunniHub set
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        _expectRevert_bunniHubNotSet();
+
+        // Call
+        vm.prank(alice);
+        newBunniManager.harvest();
+    }
+
+    function test_harvest_inactiveReverts() public {
+        // Create a new BunniManager policy, but don't install/activate it
+        BunniManager newBunniManager = _createNewBunniManager();
+
+        _expectRevert_inactive();
+
+        // Call
+        vm.prank(alice);
+        newBunniManager.harvest();
+    }
+
+    // [ ] currentHarvestReward
+    //  [ ] returns 0 if sufficient time has not elapsed
+    //  [ ] returns 0 if the harvest is not profitable
+    //  [ ] harvest reward increases over time
+    //  [ ] harvest reward is capped
+
+    // [ ] resetLastHarvest
+    //  [ ] reverts if caller is unauthorized
+    //  [ ] resets the lastHarvest so that harvest can be called
+    //  [ ] works if inactive
+
+    // [ ] setHarvestFrequency
+    //  [ ] reverts if caller is unauthorized
+    //  [ ] sets the harvestFrequency variable
+
+    // [ ] setHarvestAuctionParameters
+    //  [ ] reverts if caller is unauthorized
+    //  [ ] reverts if duration is greater than frequency
+    //  [ ] reverts if an auction is available
+    //  [ ] sets the harvestAuctionMaxReward and harvestAuctionDuration variable
 }

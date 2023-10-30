@@ -39,7 +39,6 @@ import "src/Kernel.sol";
 ///         - Migrating positions between BunniHub deployments. (This could be achieved by withdrawing and depositing into the new BunniHub instance.)
 ///         - Migrating positions between Uniswap V3 pools. (This could be achieved by withdrawing and depositing into the new Uniswap V3 pool.)
 ///         - Managing positions that were not deployed by this policy. (This could be achieved by deploying a new BunniToken and depositing into it.)
-///         - Harvesting pool fees. (There is a separate, public policy for this purpose.)
 ///         - Migrating LP tokens between addresses. (This could be achieved by transferring the ERC20 tokens to the new address.)
 ///         - Setting the protocol fee on the BunniHub instance (applied when compounding pool fees), as there is no use for having the protocol fees applied.
 contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
@@ -88,7 +87,20 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     //                                      STATE                                                 //
     //============================================================================================//
 
+    /// @notice     Address of the BunniHub instance that this policy interfaces with
     BunniHub public bunniHub;
+
+    /// @notice     Timestamp of the last harvest (UTC, in seconds)
+    uint48 public   lastHarvest;
+
+    /// @notice     Duration of the harvest reward auction (in seconds)
+    uint48 public   harvestAuctionDuration;
+
+    /// @notice     Minimum seconds between harvesting of pool fees
+    uint256 public  harvestFrequency;
+
+    /// @notice     Max reward for harvesting (in reward token decimals)
+    uint256 public  harvestAuctionMaxReward;
 
     // Modules
     TRSRYv1 internal TRSRY;
@@ -106,7 +118,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @dev    The BunniHub contract cannot be passed into the constructor, as it requires the owner to
     ///         be set to this contract. Therefore, the BunniHub must be set manually after deployment.
-    constructor(Kernel kernel_) Policy(kernel_) {}
+    constructor(Kernel kernel_, uint256 harvestAuctionMaxReward_, uint48 harvestAuctionDuration_, uint48 harvestFrequency_) Policy(kernel_) {
+        lastHarvest = uint48(block.timestamp);
+        harvestAuctionMaxReward = harvestAuctionMaxReward_;
+        harvestAuctionDuration = harvestAuctionDuration_;
+        harvestFrequency = harvestFrequency_;
+    }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -361,6 +378,23 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         IUniswapV3Pool pool = IUniswapV3Pool(pool_);
         _transferOrBurn(pool.token0(), withdrawnAmount0);
         _transferOrBurn(pool.token1(), withdrawnAmount1);
+    }
+
+    /// @inheritdoc     IBunniManager
+    /// @dev            This function does the following:
+    ///                 - Determines if enough time has passed since the previous harvest
+    ///                 - Determines the pools that are managed
+    ///                 - For each pool:
+    ///                     - Calls the `compound()` function on BunniHub
+    ///                 - Mints OHM as a reward and transfers it to the caller (provided there are pools to harvest from)
+    ///
+    ///                 Reverts if:
+    ///                 - The policy is inactive
+    ///                 - The `bunniHub` state variable is not set
+    ///                 - Not enough time has elapsed from the previous harvest
+    ///                 - The BunniHub instance reverts while calling `compound()`
+    function harvest() external onlyIfActive bunniHubSet {
+        // TODO implement
     }
 
     //============================================================================================//

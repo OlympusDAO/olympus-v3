@@ -67,6 +67,12 @@ interface IBunniManager {
     /// @param slippageBps_ Maximum percentage slippage allowed in basis points (100 = 1%)
     function withdraw(address pool_, uint256 shares_, uint256 slippageBps_) external;
 
+    /// @notice             Harvests fees from the deployed Uniswap V3 pools
+    ///
+    ///                     The fees will be added back into the pool, and the caller will
+    ///                     receive a reward in OHM.
+    function harvest() external;
+
     // =========  VIEW FUNCTIONS ========= //
 
     /// @notice         Get the ERC20-compatible BunniToken for the given Uniswap V3 pool address
