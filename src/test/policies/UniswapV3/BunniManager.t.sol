@@ -282,7 +282,7 @@ contract BunniManagerTest is Test {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
-        bunniManager.deposit(address(pool), address(ohm), 1e9, address(usdc), 1e18);
+        bunniManager.deposit(address(pool), address(ohm), 1e9, 1e18);
     }
 
     function test_deposit_bunniHubNotSetReverts() public {
@@ -292,14 +292,14 @@ contract BunniManagerTest is Test {
         _expectRevert_bunniHubNotSet();
 
         vm.prank(policy);
-        newBunniManager.deposit(address(pool), address(ohm), 1e9, address(usdc), 1e18);
+        newBunniManager.deposit(address(pool), address(ohm), 1e9, 1e18);
     }
 
     function test_deposit_tokenNotDeployedReverts() public {
         _expectRevert_poolNotFound(address(pool));
 
         vm.prank(policy);
-        bunniManager.deposit(address(pool), address(ohm), 1e9, address(usdc), 1e18);
+        bunniManager.deposit(address(pool), address(ohm), 1e9, 1e18);
     }
 
     function test_deposit_token0InsufficientBalanceReverts(uint256 token0Amount_) public {
@@ -328,7 +328,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        bunniManager.deposit(address(newPool), address(dai), 1e18, address(usdc), 1e6);
+        bunniManager.deposit(address(newPool), address(dai), 1e18, 1e6);
     }
 
     function test_deposit_token1InsufficientBalanceReverts(uint256 token1Amount_) public {
@@ -357,7 +357,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        bunniManager.deposit(address(newPool), address(dai), 1e18, address(usdc), 1e6);
+        bunniManager.deposit(address(newPool), address(dai), 1e18, 1e6);
     }
 
     function test_deposit_nonOhmTokens_fuzz(uint256 usdcAmount_) public {
@@ -380,7 +380,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), daiAmount, address(usdc), usdcAmount);
+        uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), daiAmount, usdcAmount);
 
         // The tokens should have been deposited into TRSRY
         assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
@@ -412,7 +412,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, address(usdc), USDC_DEPOSIT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT);
 
         // The tokens should have been deposited into TRSRY
         assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
@@ -480,7 +480,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, address(usdc), USDC_DEPOSIT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT);
 
         // Withdraw
         uint256 bunniTokenSharesToWithdraw = bunniTokenShares * 2;
@@ -510,7 +510,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), DAI_DEPOSIT, address(usdc), USDC_DEPOSIT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), DAI_DEPOSIT, USDC_DEPOSIT);
         uint256 bunniTokenSharesToWithdraw = bound(shareToWithdraw_, 1e9, bunniTokenShares);
 
         // Withdraw
@@ -552,7 +552,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, address(usdc), USDC_DEPOSIT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT);
         uint256 bunniTokenSharesToWithdraw = bound(shareToWithdraw_, 1e9, bunniTokenShares);
 
         // Withdraw
@@ -657,7 +657,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, address(usdc), USDC_DEPOSIT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT);
 
         // Check that the value is consistent
         uint256 balance = bunniManager.getTRSRYBalance(address(pool));
