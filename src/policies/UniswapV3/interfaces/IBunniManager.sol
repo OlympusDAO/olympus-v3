@@ -41,28 +41,31 @@ interface IBunniManager {
     ///                 The ordering of tokenA and tokenB is irrelevant. The `deposit` function
     ///                 will handle the ordering of the tokens.
     ///
-    /// @param pool_    The address of the Uniswap V3 pool
-    /// @param tokenA_  The address of a token (used to determine the orientation of pool tokens)
-    /// @param amountA_ The amount of tokenA to deposit
-    /// @param amountB_ The amount of tokenB to deposit
+    /// @param pool_        The address of the Uniswap V3 pool
+    /// @param tokenA_      The address of a token (used to determine the orientation of pool tokens)
+    /// @param amountA_     The amount of tokenA to deposit
+    /// @param amountB_     The amount of tokenB to deposit
+    /// @param slippageBps_ Maximum percentage slippage allowed in basis points (100 = 1%)
     /// @return shares  The amount of shares minted
     function deposit(
         address pool_,
         address tokenA_,
         uint256 amountA_,
-        uint256 amountB_
+        uint256 amountB_,
+        uint256 slippageBps_
     ) external returns (uint256 shares);
 
-    /// @notice         Withdraws liquidity from the given Uniswap V3 pool
+    /// @notice             Withdraws liquidity from the given Uniswap V3 pool
     ///
-    ///                 This can only be called after `deployToken` has been called
-    ///                 to deploy the ERC20 token for this pool.
+    ///                     This can only be called after `deployToken` has been called
+    ///                     to deploy the ERC20 token for this pool.
     ///
-    ///                 The LP tokens will be withdrawn from TRSRY and burned.
+    ///                     The LP tokens will be withdrawn from TRSRY and burned.
     ///
-    /// @param pool_    The address of the Uniswap V3 pool
-    /// @param shares_  The amount of shares to withdraw
-    function withdraw(address pool_, uint256 shares_) external;
+    /// @param pool_        The address of the Uniswap V3 pool
+    /// @param shares_      The amount of shares to withdraw
+    /// @param slippageBps_ Maximum percentage slippage allowed in basis points (100 = 1%)
+    function withdraw(address pool_, uint256 shares_, uint256 slippageBps_) external;
 
     // =========  VIEW FUNCTIONS ========= //
 

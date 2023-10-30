@@ -54,6 +54,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param address_         The invalid address
     error BunniManager_Params_InvalidAddress(address address_);
 
+    /// @notice                 Emitted if the given slippage is invalid
+    /// @param slippage_        The invalid slippage
+    /// @param maxSlippage_     The maximum value for slippage
+    error BunniManager_Params_InvalidSlippage(uint256 slippage_, uint256 maxSlippage_);
+
     /// @notice   Emitted if the BunniHub has not been set
     error BunniManager_HubNotSet();
 
@@ -84,8 +89,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     MINTRv1 internal MINTR;
 
     // Constants
-    uint256 constant SLIPPAGE_TOLERANCE = 100; // 1%
-    uint256 constant SLIPPAGE_SCALE = 10000; // 100%
+    uint256 public constant SLIPPAGE_DEFAULT = 100; // 1%
+    uint256 public constant SLIPPAGE_SCALE = 10000; // 100%
     int24 constant TICK_SPACING_DIVISOR = 50;
 
     //============================================================================================//
@@ -219,16 +224,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - The `bunniHub` state variable is not set
     ///             - An ERC20 token for `pool_` has not been deployed
     ///             - There is insufficient balance of tokens
+    ///             - The BunniHub instance reverts
     function deposit(
         address pool_,
         address tokenA_,
         uint256 amountA_,
-        uint256 amountB_
+        uint256 amountB_,
+        uint256 slippageBps_
     ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet returns (uint256) {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
-
-        // TODO take slippage as a parameter
 
         // Check that the token has been deployed
         IBunniToken existingToken = bunniHub.getBunniToken(key);
@@ -258,8 +263,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             key: key,
             amount0Desired: token0Amount,
             amount1Desired: token1Amount,
-            amount0Min: _calculateAmountMin(token0Amount),
-            amount1Min: _calculateAmountMin(token1Amount),
+            amount0Min: _calculateAmountMin(token0Amount, slippageBps_),
+            amount1Min: _calculateAmountMin(token1Amount, slippageBps_),
             deadline: block.timestamp, // Ensures that the action be executed in this block or reverted
             recipient: getModuleAddress(toKeycode("TRSRY")) // Transfers directly into TRSRY
         });
@@ -286,9 +291,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - The `bunniHub` state variable is not set
     ///             - An ERC20 token for `pool_` has not been deployed
     ///             - There is insufficient balance of the token
+    ///             - The BunniHub instance reverts
     function withdraw(
         address pool_,
-        uint256 shares_
+        uint256 shares_,
+        uint256 slippageBps_
     ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
@@ -297,8 +304,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         if (address(existingToken) == address(0)) {
             revert BunniManager_PoolNotFound(pool_);
         }
-
-        // TODO take slippage as a parameter
 
         // Determine the minimum amounts
         uint256 amount0Min;
@@ -325,8 +330,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             amount0 = amount0.mulDiv(shares_, totalSupply);
             amount1 = amount1.mulDiv(shares_, totalSupply);
 
-            amount0Min = _calculateAmountMin(amount0);
-            amount1Min = _calculateAmountMin(amount1);
+            amount0Min = _calculateAmountMin(amount0, slippageBps_);
+            amount1Min = _calculateAmountMin(amount1, slippageBps_);
         }
 
         // Move the tokens into the policy
@@ -424,8 +429,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice         Convenience method to calculate the minimum amount of tokens to receive
     /// @dev            This is calculated as `amount_ * (1 - slippageTolerance)`
     /// @param amount_  The amount of tokens to calculate the minimum for
-    function _calculateAmountMin(uint256 amount_) internal pure returns (uint256) {
-        return amount_.mulDiv(SLIPPAGE_SCALE - SLIPPAGE_TOLERANCE, SLIPPAGE_SCALE);
+    function _calculateAmountMin(uint256 amount_, uint256 slippageBps_) internal pure returns (uint256) {
+        // Check bounds
+        if (slippageBps_ > SLIPPAGE_SCALE) revert BunniManager_Params_InvalidSlippage(slippageBps_, SLIPPAGE_SCALE);
+
+        return amount_.mulDiv(SLIPPAGE_SCALE - slippageBps_, SLIPPAGE_SCALE);
     }
 
     /// @notice         Convenience method to create a BunniKey identifier representing a full-range position.
