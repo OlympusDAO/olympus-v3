@@ -83,6 +83,24 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice         Emitted if the policy is inactive
     error BunniManager_Inactive();
 
+    /// @notice         Emitted if harvest is being called too early
+    error BunniManager_HarvestTooEarly(uint48 nextHarvest_);
+
+    /// @notice                 Emitted if the given harvest frequency is invalid
+    /// @param minFrequency_    The minimum allowed frequency
+    /// @param newFrequency_    The invalid frequency
+    /// @param maxFrequency_    The maximum allowed frequency
+    error BunniManager_Params_InvalidHarvestFrequency(uint48 minFrequency_, uint48 newFrequency_, uint48 maxFrequency_);
+
+    /// @notice                 Emitted if the given harvest fee multiplier is invalid
+    ///
+    /// @param newMultiplier_   The invalid multiplier
+    /// @param maxMultipier_    The maximum allowed multiplier
+    error BunniManager_Params_InvalidHarvestFee(
+        uint16 newMultiplier_,
+        uint16 maxMultipier_
+    );
+
     //============================================================================================//
     //                                      STATE                                                 //
     //============================================================================================//
@@ -91,16 +109,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     BunniHub public bunniHub;
 
     /// @notice     Timestamp of the last harvest (UTC, in seconds)
-    uint48 public   lastHarvest;
-
-    /// @notice     Duration of the harvest reward auction (in seconds)
-    uint48 public   harvestAuctionDuration;
+    uint48 public lastHarvest;
 
     /// @notice     Minimum seconds between harvesting of pool fees
-    uint256 public  harvestFrequency;
+    uint256 public harvestFrequency;
 
     /// @notice     Max reward for harvesting (in reward token decimals)
-    uint256 public  harvestAuctionMaxReward;
+    uint256 public harvestRewardMax;
+
+    /// @notice     Percentage of the pool fees to reward (in basis points)
+    uint16 public harvestRewardFee;
 
     // Modules
     TRSRYv1 internal TRSRY;
@@ -108,6 +126,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     MINTRv1 internal MINTR;
 
     // Constants
+    uint16 constant BPS_MAX = 10_000; // 100%
     uint256 public constant SLIPPAGE_DEFAULT = 100; // 1%
     uint256 public constant SLIPPAGE_SCALE = 10000; // 100%
     int24 constant TICK_SPACING_DIVISOR = 50;
@@ -118,10 +137,15 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @dev    The BunniHub contract cannot be passed into the constructor, as it requires the owner to
     ///         be set to this contract. Therefore, the BunniHub must be set manually after deployment.
-    constructor(Kernel kernel_, uint256 harvestAuctionMaxReward_, uint48 harvestAuctionDuration_, uint48 harvestFrequency_) Policy(kernel_) {
+    constructor(
+        Kernel kernel_,
+        uint256 harvestRewardMax_,
+        uint16 harvestRewardFee_,
+        uint48 harvestFrequency_
+    ) Policy(kernel_) {
         lastHarvest = uint48(block.timestamp);
-        harvestAuctionMaxReward = harvestAuctionMaxReward_;
-        harvestAuctionDuration = harvestAuctionDuration_;
+        harvestRewardMax = harvestRewardMax_;
+        harvestRewardFee = harvestRewardFee_;
         harvestFrequency = harvestFrequency_;
     }
 
@@ -254,7 +278,15 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         uint256 amountA_,
         uint256 amountB_,
         uint256 slippageBps_
-    ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet returns (uint256) {
+    )
+        external
+        override
+        nonReentrant
+        onlyIfActive
+        onlyRole("bunni_admin")
+        bunniHubSet
+        returns (uint256)
+    {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
 
@@ -388,6 +420,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///                     - Calls the `compound()` function on BunniHub
     ///                 - Mints OHM as a reward and transfers it to the caller (provided there are pools to harvest from)
     ///
+    ///                 The reward for harvesting is determined by `getCurrentHarvestReward`.
+    ///
     ///                 Reverts if:
     ///                 - The policy is inactive
     ///                 - The `bunniHub` state variable is not set
@@ -430,6 +464,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         return token.balanceOf(address(TRSRY));
     }
 
+    /// @inheritdoc IBunniManager
+    /// @dev        The harvest reward is determined in the following manner:
+    ///             - For all managed pools, determine the total amount of fees that have been collected
+    ///             - Get the USD value of the fees
+    ///             - Determine the potential harvest reward as the fee multiplier * USD value of fees
+    ///             - Return the reward as the minimum of the potential reward and the max reward
+    function getCurrentHarvestReward() external view override returns (uint256 reward) {}
+
     //============================================================================================//
     //                                      ADMIN FUNCTIONS                                       //
     //============================================================================================//
@@ -461,6 +503,34 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         bunniHub.setOwner(newOwner_);
+    }
+
+    /// @inheritdoc IBunniManager
+    function resetLastHarvest() external override nonReentrant onlyRole("bunni_admin") {
+        // Avoid an underflow
+        lastHarvest = harvestFrequency > block.timestamp ? 0 : uint48(block.timestamp - harvestFrequency);
+    }
+
+    /// @inheritdoc IBunniManager
+    function setHarvestFrequency(uint48 newFrequency_) external override nonReentrant onlyRole("bunni_admin") {
+        if (newFrequency_ == 0) {
+            revert BunniManager_Params_InvalidHarvestFrequency(1, newFrequency_, type(uint48).max);
+        }
+
+        harvestFrequency = newFrequency_;
+    }
+
+    /// @inheritdoc IBunniManager
+    function setHarvestRewardParameters(
+        uint256 newRewardMax_,
+        uint16 newRewardFee_
+    ) external override nonReentrant onlyRole("bunni_admin") {
+        if (newRewardFee_ > BPS_MAX) {
+            revert BunniManager_Params_InvalidHarvestFee(newRewardFee_, BPS_MAX);
+        }
+
+        harvestRewardMax = newRewardMax_;
+        harvestRewardFee = newRewardFee_;
     }
 
     //============================================================================================//

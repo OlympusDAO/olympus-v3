@@ -89,6 +89,11 @@ interface IBunniManager {
     /// @return balance The balance of the ERC20 token, or 0
     function getTRSRYBalance(address pool_) external view returns (uint256 balance);
 
+    /// @notice         Returns the current reward amount that would be received from harvesting fees
+    ///
+    /// @return reward  The amount of OHM that would be rewarded from harvesting fees
+    function getCurrentHarvestReward() external view returns (uint256 reward);
+
     // =========  ADMIN FUNCTIONS ========= //
 
     /// @notice             Sets the BunniHub contract
@@ -101,4 +106,18 @@ interface IBunniManager {
     ///
     /// @param newOwner_    The address of the new owner
     function setBunniOwner(address newOwner_) external;
+
+    /// @notice             Resets the last harvest time so that `harvest` can be called immediately
+    function resetLastHarvest() external;
+
+    /// @notice                 Sets the minimum time between fee harvesting
+    ///
+    /// @param newFrequency_    The minimum time in seconds between fee harvests
+    function setHarvestFrequency(uint48 newFrequency_) external;
+
+    /// @notice                     Sets the parameters for the harvest auction
+    ///
+    /// @param newRewardMax_        The maximum reward amount for a harvest
+    /// @param newRewardFee_        The multiplier applied to the pool fees to determine the reward amount (in basis points)
+    function setHarvestRewardParameters(uint256 newRewardMax_, uint16 newRewardFee_) external;
 }
