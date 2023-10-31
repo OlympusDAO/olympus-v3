@@ -23,6 +23,8 @@ import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
 import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {SwapRouter} from "test/lib/UniswapV3/SwapRouter.sol";
+import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {BunniHub} from "src/external/bunni/BunniHub.sol";
@@ -65,6 +67,8 @@ contract BunniManagerTest is Test {
 
     uint8 constant BUNNI_TOKEN_DECIMALS = 18;
 
+    uint16 constant BPS_MAX = 10_000; // 100%
+
     uint256 constant SLIPPAGE_DEFAULT = 100; // 1%
     uint256 constant SLIPPAGE_MAX = 10000; // 100%
 
@@ -73,8 +77,11 @@ contract BunniManagerTest is Test {
     uint8 constant ROLES_VERSION = 1;
     uint8 constant MINTR_VERSION = 1;
 
+    uint256 constant USDC_PRICE = 1e18;
+    uint256 constant OHM_PRICE = OHM_USDC_PRICE;
+
     uint256 constant HARVEST_REWARD = 10e9;
-    uint48 constant HARVEST_AUCTION_DURATION = uint48(5 * 60); // 5 minutes
+    uint16 constant HARVEST_REWARD_FEE = 100; // 1%
     uint48 constant HARVEST_FREQUENCY = uint48(24 hours);
 
     function setUp() public {
@@ -107,7 +114,7 @@ contract BunniManagerTest is Test {
             bunniManager = new BunniManager(
                 kernel,
                 HARVEST_REWARD,
-                HARVEST_AUCTION_DURATION,
+                HARVEST_REWARD_FEE,
                 HARVEST_FREQUENCY
             );
 
@@ -151,6 +158,23 @@ contract BunniManagerTest is Test {
 
             // Initialize it
             pool.initialize(OHM_USDC_SQRTPRICEX96);
+        }
+
+        {
+            // Mock values, to avoid having to set up all of PRICEv2 and submodules
+            // Set up OHM price
+            vm.mockCall(
+                address(price),
+                abi.encodeWithSignature("getPrice(address asset_)", address(ohm)),
+                abi.encode(OHM_PRICE)
+            );
+
+            // Set up USDC price
+            vm.mockCall(
+                address(price),
+                abi.encodeWithSignature("getPrice(address asset_)", address(usdc)),
+                abi.encode(USDC_PRICE)
+            );
         }
 
         {
@@ -225,9 +249,15 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
+    function _expectRevert_harvestTooEarly(uint48 nextHarvest_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_HarvestTooEarly.selector, nextHarvest_);
+        vm.expectRevert(err);
+    }
+
     function _createNewBunniManager() internal returns (BunniManager) {
         // Create a new BunniManager policy
-        return new BunniManager(kernel, HARVEST_REWARD, HARVEST_AUCTION_DURATION, HARVEST_FREQUENCY);
+        return new BunniManager(kernel, HARVEST_REWARD, HARVEST_REWARD_FEE, HARVEST_FREQUENCY);
     }
 
     function _setUpNewBunniManager() internal returns (BunniManager) {
@@ -1142,12 +1172,10 @@ contract BunniManagerTest is Test {
     // [ ] harvest
     //  [X] reverts if bunniHub is not set
     //  [X] reverts when inactive
-    //  [ ] reverts if sufficient time has not elapsed
-    //  [ ] does not issue a reward if the harvest is not profitable
+    //  [X] reverts if sufficient time has not elapsed
     //  [ ] harvest compounds fees to the pool
     //  [ ] harvest compounds fees to the pool, multiple pools
-    //  [ ] harvest reward paid matched currentHarvestReward
-    //  [ ] harvest reward is capped
+    //  [ ] harvest reward paid matches currentHarvestReward
 
     function test_harvest_bunniHubNotSetReverts() public {
         // Create a new BunniManager policy, without the BunniHub set
@@ -1171,24 +1199,261 @@ contract BunniManagerTest is Test {
         newBunniManager.harvest();
     }
 
-    // [ ] currentHarvestReward
-    //  [ ] returns 0 if sufficient time has not elapsed
-    //  [ ] returns 0 if the harvest is not profitable
-    //  [ ] harvest reward increases over time
-    //  [ ] harvest reward is capped
+    function test_harvest_beforeFrequencyReverts() public {
+        _expectRevert_harvestTooEarly(uint48(block.timestamp + HARVEST_FREQUENCY));
 
-    // [ ] resetLastHarvest
-    //  [ ] reverts if caller is unauthorized
-    //  [ ] resets the lastHarvest so that harvest can be called
-    //  [ ] works if inactive
+        // Call
+        vm.prank(policy);
+        bunniManager.harvest();
+    }
 
-    // [ ] setHarvestFrequency
-    //  [ ] reverts if caller is unauthorized
-    //  [ ] sets the harvestFrequency variable
+    // [X] getCurrentHarvestReward
+    //  [X] returns 0 if sufficient time has not elapsed
+    //  [X] returns 0 if no fees
+    //  [X] returns fee multiplier * fees
+    //  [X] capped at maximum reward
 
-    // [ ] setHarvestAuctionParameters
-    //  [ ] reverts if caller is unauthorized
-    //  [ ] reverts if duration is greater than frequency
-    //  [ ] reverts if an auction is available
-    //  [ ] sets the harvestAuctionMaxReward and harvestAuctionDuration variable
+    function test_getCurrentHarvestReward_beforeFrequency(uint48 elapsed_) public {
+        uint48 elapsed = uint48(bound(elapsed_, 0, HARVEST_FREQUENCY - 1));
+        // Simulate time passing
+        vm.warp(block.timestamp + elapsed);
+
+        uint256 currentReward = bunniManager.getCurrentHarvestReward();
+
+        // Should remain 0
+        assertEq(currentReward, 0);
+    }
+
+    function test_getCurrentHarvestReward_noFees() public {
+        // Call
+        uint256 currentReward = bunniManager.getCurrentHarvestReward();
+
+        // As no swaps have been done, there are no fees
+        assertEq(currentReward, 0);
+    }
+
+    function test_getCurrentHarvestReward(uint256 swapAmount_) public {
+        uint256 swapAmount = bound(swapAmount_, 50e6, 500e6);
+        uint256 USDC_DEPOSIT = 1000e6 * OHM_USDC_PRICE / 1e18; // Ensures that the token amounts are in the correct ratio
+        uint256 OHM_DEPOSIT = 1000e9;
+
+        // Deploy the token
+        vm.prank(policy);
+        IBunniToken token = bunniManager.deployToken(address(pool));
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(address(treasury), USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+
+        // Mint USDC into another wallet
+        usdc.mint(address(alice), swapAmount);
+
+        // Prepare for swap
+        MockERC20 wEth = new MockERC20("WETH", "WETH", 18);
+        SwapRouter swapRouter = new SwapRouter(address(uniswapFactory), address(wEth));
+        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
+            tokenIn: address(usdc),
+            tokenOut: address(ohm),
+            fee: POOL_FEE,
+            recipient: address(alice),
+            deadline: block.timestamp,
+            amountIn: swapAmount,
+            amountOutMinimum: 0, // Ignore slippage
+            sqrtPriceLimitX96: 0 // TODO this is causing problems. Consider mocking a value for tokensOwed0/tokensOwed1 instead?
+        });
+        // Approve token transfer
+        vm.prank(alice);
+        usdc.approve(address(swapRouter), swapAmount);
+        // Perform a swap
+        vm.prank(alice);
+        swapRouter.exactInputSingle(swapParams);
+
+        // Record the fees generated
+        (, , , uint128 fees0, uint128 fees1) = pool.positions(
+            keccak256(abi.encodePacked(address(bunniHub), token.tickLower(), token.tickUpper()))
+        );
+        uint256 usdcFees = uint256(address(pool.token0()) == address(usdc) ? fees0 : fees1).mulDiv(USDC_PRICE, 1e18);
+        uint256 ohmFees = uint256(address(pool.token0()) == address(ohm) ? fees0 : fees1).mulDiv(OHM_PRICE, 1e18);
+        uint256 expectedReward = uint256(HARVEST_REWARD_FEE).mulDiv(usdcFees + ohmFees, uint256(BPS_MAX));
+
+        // Cap the reward
+        if (expectedReward > HARVEST_REWARD) {
+            expectedReward = HARVEST_REWARD;
+        }
+
+        // Call
+        uint256 currentReward = bunniManager.getCurrentHarvestReward();
+
+        // Check that the value is consistent
+        assertEq(currentReward, expectedReward);
+    }
+
+    // [X] harvestFrequency
+
+    function test_harvestFrequency() public {
+        // Check initial value
+        assertEq(bunniManager.harvestFrequency(), HARVEST_FREQUENCY);
+    }
+
+    // [X] harvestRewardFee
+
+    function test_harvestRewardFee() public {
+        // Check initial value
+        assertEq(bunniManager.harvestRewardFee(), HARVEST_REWARD_FEE);
+    }
+
+    // [X] harvestMaxReward
+
+    function test_harvestRewardMax() public {
+        // Check initial value
+        assertEq(bunniManager.harvestRewardMax(), HARVEST_REWARD);
+    }
+
+    // [X] resetLastHarvest
+    //  [X] reverts if caller is unauthorized
+    //  [X] resets the lastHarvest so that harvest can be called
+    //  [X] returns 0 if the frequency is higher than the current time
+    //  [X] works if inactive
+
+    function test_resetLastHarvest_unauthorizedReverts() public {
+        _expectRevert_unauthorized();
+
+        // Call as an unauthorized user
+        vm.prank(alice);
+        bunniManager.resetLastHarvest();
+    }
+
+    function test_resetLastHarvest_underflow() public {
+        // Set the frequency to be higher than the current block timestamp
+        vm.prank(policy);
+        bunniManager.setHarvestFrequency(uint48(block.timestamp + 1));
+
+        // Reset the last harvest
+        vm.prank(policy);
+        bunniManager.resetLastHarvest();
+
+        // lastHarvest is modified, but avoids an underflow
+        assertEq(bunniManager.lastHarvest(), 0);
+    }
+
+    function test_resetLastHarvest() public {
+        // Call harvest and verify that it fails
+        _expectRevert_harvestTooEarly(uint48(block.timestamp + HARVEST_FREQUENCY));
+        vm.prank(policy);
+        bunniManager.harvest();
+
+        // Call
+        vm.prank(policy);
+        bunniManager.resetLastHarvest();
+
+        // lastHarvest is modified
+        assertEq(bunniManager.lastHarvest(), uint48(block.timestamp - HARVEST_FREQUENCY));
+
+        // Harvest should now work
+        vm.prank(policy);
+        bunniManager.harvest();
+
+        // Check that the value has been updated
+        assertEq(bunniManager.lastHarvest(), block.timestamp);
+    }
+
+    function test_resetLastHarvest_inactive() public {
+        // Call harvest and verify that it fails
+        _expectRevert_harvestTooEarly(uint48(block.timestamp + HARVEST_FREQUENCY));
+        vm.prank(policy);
+        bunniManager.harvest();
+
+        // Deactivate the policy
+        kernel.executeAction(Actions.DeactivatePolicy, address(bunniManager));
+
+        // Call
+        vm.prank(policy);
+        bunniManager.resetLastHarvest();
+
+        // lastHarvest is modified
+        assertEq(bunniManager.lastHarvest(), uint48(block.timestamp - HARVEST_FREQUENCY));
+
+        // Can't call harvest as it'll likely revert
+    }
+
+    // [X] setHarvestFrequency
+    //  [X] reverts if caller is unauthorized
+    //  [X] reverts if the frequency is 0
+    //  [X] sets the harvestFrequency variable
+
+    function test_setHarvestFrequency_unauthorizedReverts() public {
+        _expectRevert_unauthorized();
+
+        // Call as an unauthorized user
+        vm.prank(alice);
+        bunniManager.setHarvestFrequency(HARVEST_FREQUENCY);
+    }
+
+    function test_setHarvestFrequency_zeroFrequencyReverts() public {
+        uint48 newFrequency = 0;
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_Params_InvalidHarvestFrequency.selector,
+            1,
+            newFrequency,
+            type(uint48).max
+        );
+        vm.expectRevert(err);
+
+        // Call with a zero frequency
+        vm.prank(policy);
+        bunniManager.setHarvestFrequency(newFrequency);
+    }
+
+    function test_setHarvestFrequency() public {
+        uint48 newFrequency = HARVEST_FREQUENCY + 2;
+
+        // Call
+        vm.prank(policy);
+        bunniManager.setHarvestFrequency(newFrequency);
+
+        // Check that the value has been updated
+        assertEq(bunniManager.harvestFrequency(), newFrequency);
+    }
+
+    // [X] setHarvestRewardParameters
+    //  [X] reverts if caller is unauthorized
+    //  [X] reverts if the fee is invalid
+    //  [X] sets the harvestRewardMax and harvestRewardFee variables
+
+    function test_setHarvestRewardParameters_unauthorizedReverts() public {
+        _expectRevert_unauthorized();
+
+        // Call as an unauthorized user
+        vm.prank(alice);
+        bunniManager.setHarvestRewardParameters(HARVEST_REWARD, HARVEST_REWARD_FEE);
+    }
+
+    function test_setHarvestRewardParameters_feeInvalidReverts() public {
+        uint16 newFee = BPS_MAX + 1;
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_Params_InvalidHarvestFee.selector,
+            newFee,
+            BPS_MAX
+        );
+        vm.expectRevert(err);
+
+        // Call with an invalid fee
+        vm.prank(policy);
+        bunniManager.setHarvestRewardParameters(HARVEST_REWARD, newFee);
+    }
+
+    function test_setHarvestRewardParameters() public {
+        // Call
+        vm.prank(policy);
+        uint16 newFee = 200; // 2%
+        uint256 newReward = HARVEST_REWARD + 2;
+        bunniManager.setHarvestRewardParameters(newReward, newFee);
+
+        // Check that the value has been updated
+        assertEq(bunniManager.harvestRewardMax(), newReward);
+        assertEq(bunniManager.harvestRewardFee(), newFee);
+    }
 }
