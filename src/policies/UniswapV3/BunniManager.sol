@@ -139,6 +139,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     uint256 public constant SLIPPAGE_DEFAULT = 100; // 1%
     uint256 public constant SLIPPAGE_SCALE = 10000; // 100%
     int24 constant TICK_SPACING_DIVISOR = 50;
+    uint8 constant POOL_DECIMALS = 18;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -533,7 +534,36 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - Get the USD value of the fees
     ///             - Determine the potential harvest reward as the fee multiplier * USD value of fees
     ///             - Return the reward as the minimum of the potential reward and the max reward
-    function getCurrentHarvestReward() public view override returns (uint256 reward) {}
+    function getCurrentHarvestReward() public view override returns (uint256 reward) {
+        // 0 if enough time has not elapsed
+        if (lastHarvest + harvestFrequency < block.timestamp) return 0;
+
+        uint256 feeUsdValue;
+        uint256 poolDecimals = 10 ** POOL_DECIMALS;
+        for (uint256 i = 0; i < poolCount; i++) {
+            address currentPool = pools[i];
+            BunniKey memory key = _getBunniKey(currentPool);
+
+            // Get the fees
+            (, , , uint128 fees0, uint128 fees1) = key.pool.positions(
+                keccak256(abi.encodePacked(address(bunniHub), key.tickLower, key.tickUpper))
+        )   ;
+
+            // Get the USD value of the fees
+            feeUsdValue += PRICE.getPrice(key.pool.token0()).mulDiv(fees0, poolDecimals);
+            feeUsdValue += PRICE.getPrice(key.pool.token1()).mulDiv(fees1, poolDecimals);
+        }
+
+        // Calculate the reward value
+        uint256 rewardUsdValue = feeUsdValue.mulDiv(harvestRewardFee, BPS_MAX);
+
+        // Convert in terms of OHM
+        uint256 ohmPrice = PRICE.getPrice(address(MINTR.ohm())); // This will revert if the asset is not defined or 0
+        uint256 ohmAmount = rewardUsdValue.mulDiv(1e9, ohmPrice); // Scale: OHM decimals
+
+        // Returns the minimum
+        return ohmAmount < harvestRewardMax ? ohmAmount : harvestRewardMax;
+    }
 
     //============================================================================================//
     //                                      ADMIN FUNCTIONS                                       //
