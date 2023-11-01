@@ -22,8 +22,17 @@ interface IBunniManager {
 
     // =========  CORE FUNCTIONS ========= //
 
+    /// @notice         Registers a Uniswap V3 pool with the policy
+    ///
+    ///                 This is useful when migrating to a new policy.
+    ///
+    /// @param pool_    The address of the Uniswap V3 pool
+    /// @return token   The address of the ERC20-compatible BunniToken
+    function registerPool(address pool_) external returns (IBunniToken token);
+
     /// @notice       Deploys a new ERC20 token for the given Uniswap V3 pool
-    /// @dev          The BunniToken contract is used to wrap the Uniswap V3 position,
+    ///
+    ///               The BunniToken contract is used to wrap the Uniswap V3 position,
     ///               as TRSRY cannot receive ERC721 Uniswap V3 positions.
     ///
     ///               As Olympus Protocol-Owned Liquidity is full-range, the token

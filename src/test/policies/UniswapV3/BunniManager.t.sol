@@ -162,19 +162,8 @@ contract BunniManagerTest is Test {
 
         {
             // Mock values, to avoid having to set up all of PRICEv2 and submodules
-            // Set up OHM price
-            vm.mockCall(
-                address(price),
-                abi.encodeWithSignature("getPrice(address asset_)", address(ohm)),
-                abi.encode(OHM_PRICE)
-            );
-
-            // Set up USDC price
-            vm.mockCall(
-                address(price),
-                abi.encodeWithSignature("getPrice(address asset_)", address(usdc)),
-                abi.encode(USDC_PRICE)
-            );
+            _mockGetPrice(address(ohm), OHM_PRICE);
+            _mockGetPrice(address(usdc), USDC_PRICE);
         }
 
         {
@@ -249,10 +238,52 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
+    function _expectRevert_tokenDeployed(address pool_, address token_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_TokenDeployed.selector,
+            pool_,
+            token_
+        );
+        vm.expectRevert(err);
+    }
+
+    function _expectRevert_tokenNotDeployed(address pool_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_TokenNotDeployed.selector,
+            pool_
+        );
+        vm.expectRevert(err);
+    }
+
+    function _expectRevert_priceZero(address asset_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_AssetNotApproved.selector, asset_);
+        vm.expectRevert(err);
+    }
+
     function _expectRevert_harvestTooEarly(uint48 nextHarvest_) internal {
         bytes memory err = abi.encodeWithSelector(
             BunniManager.BunniManager_HarvestTooEarly.selector, nextHarvest_);
         vm.expectRevert(err);
+    }
+
+    function _mockGetPrice(address asset_, uint256 price_) internal {
+        vm.mockCall(
+            address(price),
+            abi.encodeWithSignature("getPrice(address)", address(asset_)),
+            abi.encode(price_)
+        );
+    }
+
+    function _mockGetPriceReverts(address asset_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_AssetNotApproved.selector, asset_);
+
+        vm.mockCallRevert(
+            address(price),
+            abi.encodeWithSignature("getPrice(address asset_)", asset_),
+            err
+        );
     }
 
     function _createNewBunniManager() internal returns (BunniManager) {
@@ -400,6 +431,149 @@ contract BunniManagerTest is Test {
         }
     }
 
+    // [X] registerPool
+    //  [X] reverts if caller is unauthorized
+    //  [X] reverts if bunniHub not set
+    //  [X] reverts if token already managed by the policy
+    //  [X] reverts if not a Uniswap V3 pool
+    //  [X] reverts if no token deployed
+    //  [X] reverts if inactive
+    //  [X] deploys and returns token
+    //  [X] reverts if either asset price not defined
+
+    function test_registerPool_unauthorizedReverts() public {
+        _expectRevert_unauthorized();
+
+        vm.prank(alice);
+        bunniManager.registerPool(address(pool));
+    }
+
+    function test_registerPool_inactiveReverts() public {
+        // Create a new BunniManager policy, but don't install/activate it
+        BunniManager newBunniManager = _createNewBunniManager();
+
+        _expectRevert_inactive();
+
+        vm.prank(policy);
+        newBunniManager.registerPool(address(pool));
+    }
+
+    function test_registerPool_bunniHubNotSetReverts() public {
+        // Create a new BunniManager policy, without the BunniHub set
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        _expectRevert_bunniHubNotSet();
+
+        vm.prank(policy);
+        newBunniManager.registerPool(address(pool));
+    }
+
+    function test_registerPool_invalidPoolReverts() public {
+        _expectRevert_poolNotFound(address(ohm));
+
+        vm.prank(policy);
+        bunniManager.registerPool(address(ohm));
+    }
+
+    function test_registerPool_noDeployedTokenReverts() public {
+        // Expect an error, as no token has been deployed against the pool
+        _expectRevert_poolNotFound(address(pool));
+
+        // Register the pool with the new policy
+        vm.prank(policy);
+        bunniManager.registerPool(address(pool));
+    }
+
+    function test_registerPool_alreadyDeployedTokenReverts() public {
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        IBunniToken deployedToken = bunniManager.deployToken(address(pool));
+
+        _expectRevert_tokenDeployed(address(pool), address(deployedToken));
+
+        // Register the pool
+        vm.prank(policy);
+        bunniManager.registerPool(address(pool));
+    }
+
+    function test_registerPool_usdcPriceUnsetReverts() public {
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        bunniManager.deployToken(address(pool));
+
+        // Install a new policy
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        // Shift the BunniHub over to the new policy
+        vm.prank(policy);
+        bunniManager.setBunniOwner(address(newBunniManager));
+        vm.prank(policy);
+        newBunniManager.setBunniHub(address(bunniHub));
+
+        // Mock an error when getting the price
+        _mockGetPriceReverts(address(usdc));
+
+        _expectRevert_priceZero(address(usdc));
+
+        vm.prank(policy);
+        newBunniManager.registerPool(address(pool));
+    }
+
+    function test_registerPool_ohmPriceUnsetReverts() public {
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        bunniManager.deployToken(address(pool));
+
+        // Install a new policy
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        // Shift the BunniHub over to the new policy
+        vm.prank(policy);
+        bunniManager.setBunniOwner(address(newBunniManager));
+        vm.prank(policy);
+        newBunniManager.setBunniHub(address(bunniHub));
+
+        // Mock an error when getting the price
+        _mockGetPriceReverts(address(ohm));
+
+        _expectRevert_priceZero(address(ohm));
+
+        vm.prank(policy);
+        newBunniManager.registerPool(address(pool));
+    }
+
+    function test_registerPool() public {
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        IBunniToken deployedToken = bunniManager.deployToken(address(pool));
+
+        // Install a new policy
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        // Shift the BunniHub over to the new policy
+        vm.prank(policy);
+        bunniManager.setBunniOwner(address(newBunniManager));
+        vm.prank(policy);
+        newBunniManager.setBunniHub(address(bunniHub));
+
+        // Register the pool with the new policy
+        vm.prank(policy);
+        IBunniToken newDeployedToken = newBunniManager.registerPool(address(pool));
+
+        // Token should be the same as before
+        assertEq(address(newDeployedToken), address(deployedToken));
+
+        // Check that the pool is registered
+        uint256 poolCount = newBunniManager.poolCount();
+        assertEq(poolCount, 1);
+        address poolOne = newBunniManager.pools(0);
+        assertEq(poolOne, address(pool));
+
+        // Check that the token has been added to PRICEv2
+        PRICEv2.Asset memory priceAsset = price.getAssetData(address(newDeployedToken));
+        assertTrue(priceAsset.approved);
+    }
+
     // [X] deployToken
     //  [X] caller is unauthorized
     //  [X] bunniHub not set
@@ -407,6 +581,7 @@ contract BunniManagerTest is Test {
     //  [X] not a Uniswap V3 pool
     //  [X] deploys and returns token, registers with PRICEv2
     //  [X] reverts when inactive
+    //  [X] reverts if either asset price not defined
 
     function test_deployToken_unauthorizedReverts() public {
         _expectRevert_unauthorized();
@@ -442,6 +617,24 @@ contract BunniManagerTest is Test {
         bunniManager.deployToken(address(ohm));
     }
 
+    function test_deployToken_usdcPriceUnsetReverts() public {
+        _mockGetPriceReverts(address(usdc));
+
+        _expectRevert_priceZero(address(usdc));
+
+        vm.prank(policy);
+        bunniManager.deployToken(address(pool));
+    }
+
+    function test_deployToken_ohmPriceUnsetReverts() public {
+        _mockGetPriceReverts(address(ohm));
+
+        _expectRevert_priceZero(address(ohm));
+
+        vm.prank(policy);
+        bunniManager.deployToken(address(pool));
+    }
+
     function test_deployToken() public {
         vm.prank(policy);
         IBunniToken deployedToken = bunniManager.deployToken(address(pool));
@@ -450,6 +643,12 @@ contract BunniManagerTest is Test {
         assertEq(address(deployedToken.pool()), address(pool));
         assertEq(deployedToken.tickLower(), -1 * 887250);
         assertEq(deployedToken.tickUpper(), 887250);
+
+        // Check that the pool is registered
+        uint256 poolCount = bunniManager.poolCount();
+        assertEq(poolCount, 1);
+        address poolOne = bunniManager.pools(0);
+        assertEq(poolOne, address(pool));
 
         // Check that the token has been added to PRICEv2
         PRICEv2.Asset memory priceAsset = price.getAssetData(address(deployedToken));
@@ -461,14 +660,9 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         IBunniToken deployedToken = bunniManager.deployToken(address(pool));
 
-        // Deploy a second time
-        bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_TokenDeployed.selector,
-            address(pool),
-            address(deployedToken)
-        );
-        vm.expectRevert(err);
+        _expectRevert_tokenDeployed(address(pool), address(deployedToken));
 
+        // Deploy a second time
         vm.prank(policy);
         bunniManager.deployToken(address(pool));
     }
@@ -522,6 +716,7 @@ contract BunniManagerTest is Test {
     function test_deposit_token0InsufficientBalanceReverts(uint256 token0Amount_) public {
         // Create a pool with non-OHM tokens
         MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+        _mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
         newPool.initialize(DAI_USDC_SQRTPRICEX96);
 
@@ -551,6 +746,7 @@ contract BunniManagerTest is Test {
     function test_deposit_token1InsufficientBalanceReverts(uint256 token1Amount_) public {
         // Create a pool with non-OHM tokens
         MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+        _mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
         newPool.initialize(DAI_USDC_SQRTPRICEX96);
 
@@ -583,6 +779,7 @@ contract BunniManagerTest is Test {
 
         // Create a pool with non-OHM tokens
         MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+        _mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
         newPool.initialize(DAI_USDC_SQRTPRICEX96);
 
@@ -789,6 +986,7 @@ contract BunniManagerTest is Test {
     function test_withdraw_nonOhmTokens(uint256 shareToWithdraw_) public {
         // Create a pool with non-OHM tokens
         MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+        _mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
         newPool.initialize(DAI_USDC_SQRTPRICEX96);
 
@@ -1233,9 +1431,9 @@ contract BunniManagerTest is Test {
     }
 
     function test_getCurrentHarvestReward(uint256 swapAmount_) public {
-        uint256 swapAmount = bound(swapAmount_, 50e6, 500e6);
-        uint256 USDC_DEPOSIT = 1000e6 * OHM_USDC_PRICE / 1e18; // Ensures that the token amounts are in the correct ratio
-        uint256 OHM_DEPOSIT = 1000e9;
+        uint256 swapAmount = bound(swapAmount_, 100_000e6, 1_000_000e6);
+        uint256 USDC_DEPOSIT = 10_000_000e6 * OHM_USDC_PRICE / 1e18; // Ensures that the token amounts are in the correct ratio
+        uint256 OHM_DEPOSIT = 10_000_000e9;
 
         // Deploy the token
         vm.prank(policy);
@@ -1253,6 +1451,7 @@ contract BunniManagerTest is Test {
 
         // Prepare for swap
         MockERC20 wEth = new MockERC20("WETH", "WETH", 18);
+        SwapRouter swapRouter = new SwapRouter(address(uniswapFactory), address(wEth));
         (uint160 sqrtPriceX96,
             ,
             ,
@@ -1260,7 +1459,6 @@ contract BunniManagerTest is Test {
             ,
             ,
             ) = pool.slot0();
-        SwapRouter swapRouter = new SwapRouter(address(uniswapFactory), address(wEth));
         ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(usdc),
             tokenOut: address(ohm),
@@ -1269,7 +1467,7 @@ contract BunniManagerTest is Test {
             deadline: block.timestamp,
             amountIn: swapAmount,
             amountOutMinimum: 0, // Ignore slippage
-            sqrtPriceLimitX96: sqrtPriceX96 + 10e18
+            sqrtPriceLimitX96: sqrtPriceX96 + 1
         });
         // Approve token transfer
         vm.prank(alice);
@@ -1285,6 +1483,8 @@ contract BunniManagerTest is Test {
         uint256 usdcFees = uint256(address(pool.token0()) == address(usdc) ? fees0 : fees1).mulDiv(USDC_PRICE, 1e18);
         uint256 ohmFees = uint256(address(pool.token0()) == address(ohm) ? fees0 : fees1).mulDiv(OHM_PRICE, 1e18);
         uint256 expectedReward = uint256(HARVEST_REWARD_FEE).mulDiv(usdcFees + ohmFees, uint256(BPS_MAX));
+        console2.log("Expected reward:", expectedReward);
+        assertGt(expectedReward, 0);
 
         // Cap the reward
         if (expectedReward > HARVEST_REWARD) {

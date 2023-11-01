@@ -70,6 +70,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param token_   The address of the existing BunniToken
     error BunniManager_TokenDeployed(address pool_, address token_);
 
+    /// @notice         Emitted if the pool has not been deployed as a token
+    /// @param pool_    The address of the Uniswap V3 pool
+    error BunniManager_TokenNotDeployed(address pool_);
+
     /// @notice                 Emitted if the caller does not have sufficient balance to deposit
     /// @param token_           The address of the token
     /// @param requiredBalance_ The required balance
@@ -90,16 +94,17 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param minFrequency_    The minimum allowed frequency
     /// @param newFrequency_    The invalid frequency
     /// @param maxFrequency_    The maximum allowed frequency
-    error BunniManager_Params_InvalidHarvestFrequency(uint48 minFrequency_, uint48 newFrequency_, uint48 maxFrequency_);
+    error BunniManager_Params_InvalidHarvestFrequency(
+        uint48 minFrequency_,
+        uint48 newFrequency_,
+        uint48 maxFrequency_
+    );
 
     /// @notice                 Emitted if the given harvest fee multiplier is invalid
     ///
     /// @param newMultiplier_   The invalid multiplier
     /// @param maxMultipier_    The maximum allowed multiplier
-    error BunniManager_Params_InvalidHarvestFee(
-        uint16 newMultiplier_,
-        uint16 maxMultipier_
-    );
+    error BunniManager_Params_InvalidHarvestFee(uint16 newMultiplier_, uint16 maxMultipier_);
 
     //============================================================================================//
     //                                      STATE                                                 //
@@ -112,13 +117,17 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     uint48 public lastHarvest;
 
     /// @notice     Minimum seconds between harvesting of pool fees
-    uint256 public harvestFrequency;
+    uint48 public harvestFrequency;
 
     /// @notice     Max reward for harvesting (in reward token decimals)
     uint256 public harvestRewardMax;
 
     /// @notice     Percentage of the pool fees to reward (in basis points)
     uint16 public harvestRewardFee;
+
+    /// @notice     The pools that have been deployed by this policy
+    address[] public pools;
+    uint256 public poolCount;
 
     // Modules
     TRSRYv1 internal TRSRY;
@@ -198,6 +207,45 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - The policy is inactive
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
+    ///             - The pool is already registered with this policy
+    ///             - No BunniToken has been deployed for the pool
+    ///             - `pool_` is not a Uniswap V3 pool
+    ///             - A price cannot be accessed for either token in the pool
+    function registerPool(address pool_) external override nonReentrant
+        onlyIfActive
+        onlyRole("bunni_admin")
+        bunniHubSet returns (IBunniToken token) {
+        // Check that `pool_` is an actual Uniswap V3 pool
+        _assertIsValidPool(pool_);
+
+        // Get the BunniToken or revert
+        token = getToken(pool_);
+
+        // Check if the pool is already registered
+        for (uint256 i = 0; i < poolCount; i++) {
+            if (pools[i] == pool_) revert BunniManager_TokenDeployed(pool_, address(token));
+        }
+
+        // Check that both tokens from the pool have prices (else PRICE will revert)
+        IUniswapV3Pool pool = IUniswapV3Pool(pool_);
+        PRICE.getPrice(pool.token0());
+        PRICE.getPrice(pool.token1());
+
+        // Add the pool to the registry
+        pools.push(pool_);
+        poolCount++;
+
+        return token;
+    }
+
+    /// @inheritdoc IBunniManager
+    /// @dev        This function reverts if:
+    ///             - The policy is inactive
+    ///             - The caller is unauthorized
+    ///             - The `bunniHub` state variable is not set
+    ///             - `pool_` is not a Uniswap V3 pool
+    ///             - A BunniToken has already been deployed for the pool
+    ///             - A price cannot be accessed for either token in the pool
     function deployToken(
         address pool_
     )
@@ -213,20 +261,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         BunniKey memory key = _getBunniKey(pool_);
 
         // Check that `pool_` is an actual Uniswap V3 pool
-        try IUniswapV3Pool(pool_).slot0() returns (
-            uint160,
-            int24,
-            uint16,
-            uint16,
-            uint16,
-            uint8,
-            bool
-        ) {
-            // Do nothing
-        } catch (bytes memory) {
-            // If slot0 throws, then pool_ is not a Uniswap V3 pool
-            revert BunniManager_PoolNotFound(pool_);
-        }
+        _assertIsValidPool(pool_);
 
         // Check if a token for the pool has been deployed already
         IBunniToken existingToken = bunniHub.getBunniToken(key);
@@ -234,8 +269,17 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             revert BunniManager_TokenDeployed(pool_, address(existingToken));
         }
 
+        // Check that both tokens from the pool have prices (else PRICE will revert)
+        IUniswapV3Pool pool = IUniswapV3Pool(pool_);
+        PRICE.getPrice(pool.token0());
+        PRICE.getPrice(pool.token1());
+
         // Deploy
         IBunniToken deployedToken = bunniHub.deployBunniToken(key);
+
+        // Update the pools variable
+        pools.push(pool_);
+        poolCount++;
 
         // Register the token for lookups
         // PRICEv2.Component[] memory feeds = new PRICEv2.Component[](0);
@@ -428,7 +472,26 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///                 - Not enough time has elapsed from the previous harvest
     ///                 - The BunniHub instance reverts while calling `compound()`
     function harvest() external onlyIfActive bunniHubSet {
-        // TODO implement
+        uint48 minHarvest = lastHarvest + harvestFrequency;
+        if (minHarvest > block.timestamp) revert BunniManager_HarvestTooEarly(minHarvest);
+
+        uint256 currentHarvestReward = getCurrentHarvestReward();
+
+        for (uint256 i = 0; i < poolCount; i++) {
+            address pool = pools[i];
+            BunniKey memory key = _getBunniKey(pool);
+            
+            bunniHub.compound(key);
+        }
+
+        // Mint the OHM and transfer it to the caller
+        if (currentHarvestReward > 0) {
+            MINTR.increaseMintApproval(address(this), currentHarvestReward);
+            MINTR.mintOhm(msg.sender, currentHarvestReward);
+        }
+
+        // Update the lastHarvest
+        lastHarvest = uint48(block.timestamp);
     }
 
     //============================================================================================//
@@ -470,7 +533,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - Get the USD value of the fees
     ///             - Determine the potential harvest reward as the fee multiplier * USD value of fees
     ///             - Return the reward as the minimum of the potential reward and the max reward
-    function getCurrentHarvestReward() external view override returns (uint256 reward) {}
+    function getCurrentHarvestReward() public view override returns (uint256 reward) {}
 
     //============================================================================================//
     //                                      ADMIN FUNCTIONS                                       //
@@ -508,11 +571,15 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IBunniManager
     function resetLastHarvest() external override nonReentrant onlyRole("bunni_admin") {
         // Avoid an underflow
-        lastHarvest = harvestFrequency > block.timestamp ? 0 : uint48(block.timestamp - harvestFrequency);
+        lastHarvest = harvestFrequency > block.timestamp
+            ? 0
+            : uint48(block.timestamp - harvestFrequency);
     }
 
     /// @inheritdoc IBunniManager
-    function setHarvestFrequency(uint48 newFrequency_) external override nonReentrant onlyRole("bunni_admin") {
+    function setHarvestFrequency(
+        uint48 newFrequency_
+    ) external override nonReentrant onlyRole("bunni_admin") {
         if (newFrequency_ == 0) {
             revert BunniManager_Params_InvalidHarvestFrequency(1, newFrequency_, type(uint48).max);
         }
@@ -597,6 +664,23 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             MINTR.burnOhm(address(this), amount_);
         } else {
             ERC20(token_).safeTransfer(address(TRSRY), amount_);
+        }
+    }
+
+    function _assertIsValidPool(address pool_) internal view {
+        try IUniswapV3Pool(pool_).slot0() returns (
+            uint160,
+            int24,
+            uint16,
+            uint16,
+            uint16,
+            uint8,
+            bool
+        ) {
+            // Do nothing
+        } catch (bytes memory) {
+            // If slot0 throws, then pool_ is not a Uniswap V3 pool
+            revert BunniManager_PoolNotFound(pool_);
         }
     }
 
