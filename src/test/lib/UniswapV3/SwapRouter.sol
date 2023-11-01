@@ -15,8 +15,9 @@ import '@uniswap/v3-periphery/contracts/base/Multicall.sol';
 import '@uniswap/v3-periphery/contracts/base/SelfPermit.sol';
 import '@uniswap/v3-periphery/contracts/libraries/Path.sol';
 import '@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol';
-import '@uniswap/v3-periphery/contracts/libraries/CallbackValidation.sol';
 import '@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol';
+
+import "./CallbackValidation.sol";
 
 /// @title Uniswap V3 Swap Router
 /// @notice Router for stateless execution of swaps against Uniswap V3

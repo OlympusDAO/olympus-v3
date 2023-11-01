@@ -1253,6 +1253,13 @@ contract BunniManagerTest is Test {
 
         // Prepare for swap
         MockERC20 wEth = new MockERC20("WETH", "WETH", 18);
+        (uint160 sqrtPriceX96,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ) = pool.slot0();
         SwapRouter swapRouter = new SwapRouter(address(uniswapFactory), address(wEth));
         ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(usdc),
@@ -1262,7 +1269,7 @@ contract BunniManagerTest is Test {
             deadline: block.timestamp,
             amountIn: swapAmount,
             amountOutMinimum: 0, // Ignore slippage
-            sqrtPriceLimitX96: 0 // TODO this is causing problems. Consider mocking a value for tokensOwed0/tokensOwed1 instead?
+            sqrtPriceLimitX96: sqrtPriceX96 + 10e18
         });
         // Approve token transfer
         vm.prank(alice);
