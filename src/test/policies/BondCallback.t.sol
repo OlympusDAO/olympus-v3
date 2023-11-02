@@ -672,7 +672,8 @@ contract BondCallbackTest is Test {
         );
         assertEq(
             treasury.withdrawApproval(address(callback), wrappedReserve),
-            previousWrappedReserveWithdrawApproval + wrappedReserve.previewWithdraw(auctioneer.currentCapacity(wlThree))
+            previousWrappedReserveWithdrawApproval +
+                wrappedReserve.previewWithdraw(auctioneer.currentCapacity(wlThree))
         );
     }
 
