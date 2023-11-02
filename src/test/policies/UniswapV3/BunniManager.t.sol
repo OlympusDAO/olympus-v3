@@ -1475,6 +1475,9 @@ contract BunniManagerTest is Test {
         // Perform a swap
         vm.prank(alice);
         swapRouter.exactInputSingle(swapParams);
+        // Calling burn with 0 amount triggers an update of fees for the caller
+        vm.prank(address(bunniHub));
+        pool.burn(-TICK, TICK, uint128(0));
 
         // Record the fees generated
         (, , , uint128 fees0, uint128 fees1) = pool.positions(
