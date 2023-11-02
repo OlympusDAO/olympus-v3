@@ -118,6 +118,7 @@ contract AppraiserTest is Test {
 
         // Mint tokens
         {
+            ohm.mint(address(this), 1_000_000e9);
             reserve.mint(address(TRSRY), 1_000_000e18);
             weth.mint(address(TRSRY), 1_000e18);
         }
@@ -177,7 +178,7 @@ contract AppraiserTest is Test {
     ///     [X]  if latest value was captured at a too outdated timestamp, fetch and return the current value
 
     function testCorrectness_getAssetValueAddressAgeRecentTimestamp(uint48 maxAge_) public {
-        vm.assume(maxAge_ < 30 days); // test value to avoid overflow situations that just revert
+        vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
 
         // Cache current asset value and timestamp
         appraiser.storeAssetValue(address(reserve));
@@ -203,7 +204,7 @@ contract AppraiserTest is Test {
     }
 
     function testCorrectness_getAssetValueAddressAgeOutdatedTimestamp(uint48 maxAge_) public {
-        vm.assume(maxAge_ < 30 days); // test value to avoid overflow situations that just revert
+        vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
 
         // Cache current asset value and timestamp
         appraiser.storeAssetValue(address(reserve));
@@ -312,47 +313,689 @@ contract AppraiserTest is Test {
         assertEq(variantTimestamp, uint48(block.timestamp));
     }
 
-    /// []  getCategoryValue(Category category_)
-    ///     []  if latest value was captured at the current timestamp, return that value
-    ///     []  if latest value was captured at a previous timestamp, fetch and return the current value
+    /// [X]  getCategoryValue(Category category_)
+    ///     [X]  if latest value was captured at the current timestamp, return that value
+    ///     [X]  if latest value was captured at a previous timestamp, fetch and return the current value
 
-    /// []  getCategoryValue(Category category_, uint48 maxAge_)
-    ///     []  if latest value was captured more recently than the passed maxAge, return that value
-    ///     []  if latest value was captured at a too outdated timestamp, fetch and return the current value
+    function testCorrectness_getCategoryValueCategoryCurrentTimestamp() public {
+        // Cache current category value and timestamp
+        appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
 
-    /// []  getCategoryValue(Category category_, Variant variant_)
-    ///     []  reverts if variant is not LAST or CURRENT
-    ///     []  gets latest category value if variant is LAST
-    ///     []  gets current category value if variant is CURRENT
+        // Assert category values are in cache
+        (uint256 liquidCacheValue, uint48 liquidTimestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("liquid")
+        );
+        (uint256 stableCacheValue, uint48 stableTimestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("stable")
+        );
+        (uint256 reservesCacheValue, uint48 reservesTimestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("reserves")
+        );
+        assertEq(liquidCacheValue, 3_000_000e18);
+        assertEq(liquidTimestamp, uint48(block.timestamp));
+        assertEq(stableCacheValue, 1_000_000e18);
+        assertEq(stableTimestamp, uint48(block.timestamp));
+        assertEq(reservesCacheValue, 1_000_000e18);
+        assertEq(reservesTimestamp, uint48(block.timestamp));
+
+        // Get category values
+        uint256 liquidValue = appraiser.getCategoryValue(AssetCategory.wrap("liquid"));
+        uint256 stableValue = appraiser.getCategoryValue(AssetCategory.wrap("stable"));
+        uint256 reservesValue = appraiser.getCategoryValue(AssetCategory.wrap("reserves"));
+
+        // Assert category values are correct and timestamp is unchanged
+        (liquidCacheValue, liquidTimestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("liquid")
+        );
+        (stableCacheValue, stableTimestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("stable")
+        );
+        (reservesCacheValue, reservesTimestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("reserves")
+        );
+        assertEq(liquidValue, 3_000_000e18);
+        assertEq(stableValue, 1_000_000e18);
+        assertEq(reservesValue, 1_000_000e18);
+        assertEq(liquidCacheValue, 3_000_000e18);
+        assertEq(liquidTimestamp, uint48(block.timestamp));
+        assertEq(stableCacheValue, 1_000_000e18);
+        assertEq(stableTimestamp, uint48(block.timestamp));
+        assertEq(reservesCacheValue, 1_000_000e18);
+        assertEq(reservesTimestamp, uint48(block.timestamp));
+    }
+
+    function testCorrectness_getCategoryValueCategoryPreviousTimestamp() public {
+        // Cache current category value and timestamp
+        appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+
+        // Now update price and timestamp
+        vm.warp(block.timestamp + 100);
+        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(address(weth), 4000e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+
+        // Assert category values are in cache
+        (uint256 liquidCacheValue, uint48 liquidTimestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("liquid")
+        );
+        (uint256 stableCacheValue, uint48 stableTimestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("stable")
+        );
+        (uint256 reservesCacheValue, uint48 reservesTimestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("reserves")
+        );
+        assertEq(liquidCacheValue, 3_000_000e18);
+        assertEq(liquidTimestamp, uint48(block.timestamp - 100));
+        assertEq(stableCacheValue, 1_000_000e18);
+        assertEq(stableTimestamp, uint48(block.timestamp - 100));
+        assertEq(reservesCacheValue, 1_000_000e18);
+        assertEq(reservesTimestamp, uint48(block.timestamp - 100));
+
+        // Get category values
+        uint256 liquidValue = appraiser.getCategoryValue(AssetCategory.wrap("liquid"));
+        uint256 stableValue = appraiser.getCategoryValue(AssetCategory.wrap("stable"));
+        uint256 reservesValue = appraiser.getCategoryValue(AssetCategory.wrap("reserves"));
+
+        // Assert category values are correct and timestamp is unchanged
+        (liquidCacheValue, liquidTimestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("liquid")
+        );
+        (stableCacheValue, stableTimestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("stable")
+        );
+        (reservesCacheValue, reservesTimestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("reserves")
+        );
+        assertEq(liquidValue, 6_000_000e18);
+        assertEq(stableValue, 2_000_000e18);
+        assertEq(reservesValue, 2_000_000e18);
+        assertEq(liquidCacheValue, 3_000_000e18);
+        assertEq(liquidTimestamp, uint48(block.timestamp - 100));
+        assertEq(stableCacheValue, 1_000_000e18);
+        assertEq(stableTimestamp, uint48(block.timestamp - 100));
+        assertEq(reservesCacheValue, 1_000_000e18);
+        assertEq(reservesTimestamp, uint48(block.timestamp - 100));
+    }
+
+    /// [X]  getCategoryValue(Category category_, uint48 maxAge_)
+    ///     [X]  if latest value was captured more recently than the passed maxAge, return that value
+    ///     [X]  if latest value was captured at a too outdated timestamp, fetch and return the current value
+
+    function testCorrectness_getCategoryValueCategoryAgeRecentTimestamp(uint48 maxAge_) public {
+        vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
+
+        // Cache current category value and timestamp
+        appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+
+        // Now update price and timestamp
+        vm.warp(block.timestamp + maxAge_ - 1);
+        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(address(weth), 4000e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+
+        // Get category values
+        (bool liquidSuccess, bytes memory liquidData) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint48)",
+                AssetCategory.wrap("liquid"),
+                maxAge_
+            )
+        );
+        (bool stableSuccess, bytes memory stableData) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint48)",
+                AssetCategory.wrap("stable"),
+                maxAge_
+            )
+        );
+        (bool reservesSuccess, bytes memory reservesData) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint48)",
+                AssetCategory.wrap("reserves"),
+                maxAge_
+            )
+        );
+
+        // Assert calls succeeded
+        assertEq(liquidSuccess, true);
+        assertEq(stableSuccess, true);
+        assertEq(reservesSuccess, true);
+
+        // Decode return data to values
+        uint256 liquidValue = abi.decode(liquidData, (uint256));
+        uint256 stableValue = abi.decode(stableData, (uint256));
+        uint256 reservesValue = abi.decode(reservesData, (uint256));
+
+        // Assert category values are correct
+        assertEq(liquidValue, 3_000_000e18);
+        assertEq(stableValue, 1_000_000e18);
+        assertEq(reservesValue, 1_000_000e18);
+    }
+
+    function testCorrectness_getCategoryValueCategoryAgeOutdatedTimestamp(uint48 maxAge_) public {
+        vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
+
+        // Cache current category value and timestamp
+        appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+
+        // Now update price and timestamp
+        vm.warp(block.timestamp + maxAge_ + 1);
+        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(address(weth), 4000e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+
+        // Get category values
+        (bool liquidSuccess, bytes memory liquidData) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint48)",
+                AssetCategory.wrap("liquid"),
+                maxAge_
+            )
+        );
+        (bool stableSuccess, bytes memory stableData) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint48)",
+                AssetCategory.wrap("stable"),
+                maxAge_
+            )
+        );
+        (bool reservesSuccess, bytes memory reservesData) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint48)",
+                AssetCategory.wrap("reserves"),
+                maxAge_
+            )
+        );
+
+        // Assert calls succeeded
+        assertEq(liquidSuccess, true);
+        assertEq(stableSuccess, true);
+        assertEq(reservesSuccess, true);
+
+        // Decode return data to values
+        uint256 liquidValue = abi.decode(liquidData, (uint256));
+        uint256 stableValue = abi.decode(stableData, (uint256));
+        uint256 reservesValue = abi.decode(reservesData, (uint256));
+
+        // Assert category values are correct
+        assertEq(liquidValue, 6_000_000e18);
+        assertEq(stableValue, 2_000_000e18);
+        assertEq(reservesValue, 2_000_000e18);
+    }
+
+    /// [X]  getCategoryValue(Category category_, Variant variant_)
+    ///     [X]  reverts if variant is not LAST or CURRENT
+    ///     [X]  gets latest category value if variant is LAST
+    ///     [X]  gets current category value if variant is CURRENT
+
+    function testCorrectness_getCategoryValueCategoryVariantInvalid() public {
+        // Cache current category value and timestamp
+        appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+
+        // Directly call getCategoryValue with invalid variant
+        (bool liquidSuccess, ) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint8)",
+                AssetCategory.wrap("liquid"),
+                2
+            )
+        );
+        (bool stableSuccess, ) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint8)",
+                AssetCategory.wrap("stable"),
+                2
+            )
+        );
+        (bool reservesSuccess, ) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint8)",
+                AssetCategory.wrap("reserves"),
+                2
+            )
+        );
+
+        // Assert calls reverts
+        assertEq(liquidSuccess, false);
+        assertEq(stableSuccess, false);
+        assertEq(reservesSuccess, false);
+    }
+
+    function testCorrectness_getCategoryValueCategoryVariantLast() public {
+        // Cache current category value and timestamp
+        appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+
+        // Now update price and timestamp
+        vm.warp(block.timestamp + 100);
+        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(address(weth), 4000e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+
+        // Directly call getCategoryValue with valid variant
+        (bool liquidSuccess, bytes memory liquidData) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint8)",
+                AssetCategory.wrap("liquid"),
+                1
+            )
+        );
+        (bool stableSuccess, bytes memory stableData) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint8)",
+                AssetCategory.wrap("stable"),
+                1
+            )
+        );
+        (bool reservesSuccess, bytes memory reservesData) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint8)",
+                AssetCategory.wrap("reserves"),
+                1
+            )
+        );
+
+        // Assert calls succeeded
+        assertEq(liquidSuccess, true);
+        assertEq(stableSuccess, true);
+        assertEq(reservesSuccess, true);
+
+        // Decode return data to values and timestamps
+        (uint256 liquidValue, uint48 liquidTimestamp) = abi.decode(liquidData, (uint256, uint48));
+        (uint256 stableValue, uint48 stableTimestamp) = abi.decode(stableData, (uint256, uint48));
+        (uint256 reservesValue, uint48 reservesTimestamp) = abi.decode(
+            reservesData,
+            (uint256, uint48)
+        );
+
+        // Assert category values and timestamps are correct
+        assertEq(liquidValue, 3_000_000e18);
+        assertEq(liquidTimestamp, uint48(block.timestamp - 100));
+        assertEq(stableValue, 1_000_000e18);
+        assertEq(stableTimestamp, uint48(block.timestamp - 100));
+        assertEq(reservesValue, 1_000_000e18);
+        assertEq(reservesTimestamp, uint48(block.timestamp - 100));
+    }
+
+    function testCorrectness_getCategoryValueCategoryVariantCurrent() public {
+        // Cache current category value and timestamp
+        appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
+        appraiser.storeCategoryValue(AssetCategory.wrap("reserves"));
+
+        // Now update price and timestamp
+        vm.warp(block.timestamp + 100);
+        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(address(weth), 4000e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+
+        // Directly call getCategoryValue with valid variant
+        (bool liquidSuccess, bytes memory liquidData) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint8)",
+                AssetCategory.wrap("liquid"),
+                0
+            )
+        );
+        (bool stableSuccess, bytes memory stableData) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint8)",
+                AssetCategory.wrap("stable"),
+                0
+            )
+        );
+        (bool reservesSuccess, bytes memory reservesData) = address(appraiser).call(
+            abi.encodeWithSignature(
+                "getCategoryValue(bytes32,uint8)",
+                AssetCategory.wrap("reserves"),
+                0
+            )
+        );
+
+        // Assert calls succeeded
+        assertEq(liquidSuccess, true);
+        assertEq(stableSuccess, true);
+        assertEq(reservesSuccess, true);
+
+        // Decode return data to values and timestamps
+        (uint256 liquidValue, uint48 liquidTimestamp) = abi.decode(liquidData, (uint256, uint48));
+        (uint256 stableValue, uint48 stableTimestamp) = abi.decode(stableData, (uint256, uint48));
+        (uint256 reservesValue, uint48 reservesTimestamp) = abi.decode(
+            reservesData,
+            (uint256, uint48)
+        );
+
+        // Assert category values and timestamps are correct
+        assertEq(liquidValue, 6_000_000e18);
+        assertEq(liquidTimestamp, uint48(block.timestamp));
+        assertEq(stableValue, 2_000_000e18);
+        assertEq(stableTimestamp, uint48(block.timestamp));
+        assertEq(reservesValue, 2_000_000e18);
+        assertEq(reservesTimestamp, uint48(block.timestamp));
+    }
 
     //============================================================================================//
     //                                       VALUE METRICS                                        //
     //============================================================================================//
 
-    /// []  getMetric(Metric metric_)
-    ///     []  if latest value was captured at the current timestamp, return that value
-    ///     []  if latest value was captured at a previous timestamp, fetch and return the current value
+    /// [X]  getMetric(Metric metric_)
+    ///     [X]  if latest value was captured at the current timestamp, return that value
+    ///     [X]  if latest value was captured at a previous timestamp, fetch and return the current value
 
-    /// []  getMetric(Metric metric_, uint48 maxAge_)
-    ///     []  if latest value was captured more recently than the passed maxAge, return that value
-    ///     []  if latest value was captured at a too outdated timestamp, fetch and return the current value
+    function testCorrectness_getMetricMetricCurrentTimestamp() public {
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Get metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
+
+        // Assert that metric value is correct
+        assertEq(value, 3_000_000e18);
+    }
+
+    function testCorrectness_getMetricMetricPreviousTimestamp() public {
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Now update price and timestamp
+        vm.warp(block.timestamp + 100);
+        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(address(weth), 4000e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+
+        // Get metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
+
+        // Assert that metric value is correct
+        assertEq(value, 6_000_000e18);
+    }
+
+    /// [X]  getMetric(Metric metric_, uint48 maxAge_)
+    ///     [X]  if latest value was captured more recently than the passed maxAge, return that value
+    ///     [X]  if latest value was captured at a too outdated timestamp, fetch and return the current value
+
+    function testCorrectness_getMetricMetricAgeRecentTimestamp(uint48 maxAge_) public {
+        vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
+
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Now update price and timestamp
+        vm.warp(block.timestamp + maxAge_ - 1);
+        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(address(weth), 4000e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+
+        // Get metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING, maxAge_);
+
+        // Assert that metric value is correct
+        assertEq(value, 3_000_000e18);
+    }
+
+    function testCorrectness_getMetricMetricAgeOutdatedTimestamp(uint48 maxAge_) public {
+        vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
+
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Now update price and timestamp
+        vm.warp(block.timestamp + maxAge_ + 1);
+        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(address(weth), 4000e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+
+        // Get metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING, maxAge_);
+
+        // Assert that metric value is correct
+        assertEq(value, 6_000_000e18);
+    }
 
     /// []  getMetric(Metric metric_, Variant variant_)
-    ///     []  reverts if variant is not LAST or CURRENT
-    ///     []  reverts if metric is not a valid metric
-    ///     []  gets latest metric value if variant is LAST
-    ///     []  gets current metric value if variant is CURRENT
+    ///     [X]  reverts if variant is not LAST or CURRENT
+    ///     [X]  reverts if metric is not a valid metric
+    ///     [X]  gets latest metric value if variant is LAST
+    ///     [X]  gets current metric value if variant is CURRENT
+    ///     [X]  handles all valid metrics
+    ///     []  handles volatility metric
+
+    function testCorrectness_getMetricMetricVariantInvalid() public {
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Directly call getMetric with invalid variant
+        (bool success, ) = address(appraiser).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 0, 2)
+        );
+
+        // Assert call reverts
+        assertEq(success, false);
+    }
+
+    function testCorrectness_getMetricMetricVariantInvalidMetric() public {
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Directly call getMetric with invalid metric
+        (bool success, ) = address(appraiser).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 7, 0)
+        );
+
+        // Assert call reverts
+        assertEq(success, false);
+    }
+
+    function testCorrectness_getMetricMetricVariantLast() public {
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Now update price and timestamp
+        vm.warp(block.timestamp + 100);
+        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(address(weth), 4000e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+
+        // Directly call getMetric with variant LAST
+        (bool success, bytes memory data) = address(appraiser).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 0, 1)
+        );
+
+        // Assert call succeeded
+        assertEq(success, true);
+
+        // Decode return data to value and timestamp
+        (uint256 value, uint48 variantTimestamp) = abi.decode(data, (uint256, uint48));
+
+        // Assert value is from cache and cache is unchanged
+        assertEq(value, 3_000_000e18);
+        assertEq(variantTimestamp, uint48(block.timestamp - 100));
+    }
+
+    function testCorrectness_getMetricMetricVariantCurrent() public {
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Now update price and timestamp
+        vm.warp(block.timestamp + 100);
+        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(address(weth), 4000e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+
+        // Directly call getMetric with variant CURRENT
+        (bool success, bytes memory data) = address(appraiser).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 0, 0)
+        );
+
+        // Assert call succeeded
+        assertEq(success, true);
+
+        // Decode return data to value and timestamp
+        (uint256 value, uint48 variantTimestamp) = abi.decode(data, (uint256, uint48));
+
+        // Assert value is current but cache is unchanged
+        assertEq(value, 6_000_000e18);
+        assertEq(variantTimestamp, uint48(block.timestamp));
+    }
+
+    function testCorrectness_getMetricCurrentForAllMetrics() public {
+        // Categorize assets
+        bookkeeper.categorizeAsset(address(weth), AssetCategory.wrap("illiquid"));
+
+        // Directly call getMetric with variant CURRENT for all metrics
+        (bool backingSuccess, bytes memory backingData) = address(appraiser).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 0, 0)
+        );
+        (bool liquidSuccess, bytes memory liquidData) = address(appraiser).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 1, 0)
+        );
+        (bool liquidPerOhmSuccess, bytes memory liquidPerOhmData) = address(appraiser).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 2, 0)
+        );
+        (bool mvSuccess, bytes memory mvData) = address(appraiser).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 3, 0)
+        );
+        (bool mcSuccess, bytes memory mcData) = address(appraiser).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 4, 0)
+        );
+        (bool premiumSuccess, bytes memory premiumData) = address(appraiser).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 5, 0)
+        );
+        (bool volSuccess, bytes memory volData) = address(appraiser).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 6, 0)
+        );
+
+        // Assert calls succeeded
+        assertEq(backingSuccess, true);
+        assertEq(liquidSuccess, true);
+        assertEq(liquidPerOhmSuccess, true);
+        assertEq(mvSuccess, true);
+        assertEq(mcSuccess, true);
+        assertEq(premiumSuccess, true);
+        assertEq(volSuccess, true);
+
+        // Decode return data to values and timestamps
+        {
+            (uint256 value, uint48 variantTimestamp) = abi.decode(backingData, (uint256, uint48));
+            assertEq(value, 3_000_000e18);
+            assertEq(variantTimestamp, uint48(block.timestamp));
+        }
+        {
+            (uint256 value, uint48 variantTimestamp) = abi.decode(liquidData, (uint256, uint48));
+            assertEq(value, 1_000_000e18);
+            assertEq(variantTimestamp, uint48(block.timestamp));
+        }
+        {
+            (uint256 value, uint48 variantTimestamp) = abi.decode(
+                liquidPerOhmData,
+                (uint256, uint48)
+            );
+            assertEq(value, 1e18);
+            assertEq(variantTimestamp, uint48(block.timestamp));
+        }
+        {
+            (uint256 value, uint48 variantTimestamp) = abi.decode(mvData, (uint256, uint48));
+            assertEq(value, 3_000_000e18);
+            assertEq(variantTimestamp, uint48(block.timestamp));
+        }
+        {
+            (uint256 value, uint48 variantTimestamp) = abi.decode(mcData, (uint256, uint48));
+            assertEq(value, 10_000_000e18);
+            assertEq(variantTimestamp, uint48(block.timestamp));
+        }
+        {
+            (uint256 value, uint48 variantTimestamp) = abi.decode(premiumData, (uint256, uint48));
+            assertEq(value, 3333333333333333333);
+            assertEq(variantTimestamp, uint48(block.timestamp));
+        }
+        {
+            (uint256 value, uint48 variantTimestamp) = abi.decode(volData, (uint256, uint48));
+            assertEq(value, 0);
+            assertEq(variantTimestamp, uint48(block.timestamp));
+        }
+    }
+
+    // TODO: handles volatility metric
+    function testCorrectness_getMetricVolatility() public {}
 
     //============================================================================================//
     //                                       CACHING                                              //
     //============================================================================================//
 
-    /// []  storeAssetValue(address asset_)
-    ///     []  stores current asset value
+    /// [X]  storeAssetValue(address asset_)
+    ///     [X]  stores current asset value
 
-    /// []  storeCategoryValue(Category category_)
-    ///     []  stores current category value
+    function testCorrectness_storeAssetValue() public {
+        // Assert nothing is cached
+        (uint256 cacheValue, uint48 timestamp) = appraiser.assetValueCache(address(reserve));
+        assertEq(cacheValue, 0);
+        assertEq(timestamp, 0);
 
-    /// []  storeMetric(Metric metric_)
-    ///     []  stores current metric value
+        // Cache current asset value and timestamp
+        appraiser.storeAssetValue(address(reserve));
+
+        // Assert value is in cache
+        (cacheValue, timestamp) = appraiser.assetValueCache(address(reserve));
+        assertEq(cacheValue, 1_000_000e18);
+        assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    /// [X]  storeCategoryValue(Category category_)
+    ///     [X]  stores current category value
+
+    function testCorrectness_storeCategoryValue() public {
+        // Assert nothing is cached
+        (uint256 cacheValue, uint48 timestamp) = appraiser.categoryValueCache(
+            AssetCategory.wrap("liquid")
+        );
+        assertEq(cacheValue, 0);
+        assertEq(timestamp, 0);
+
+        // Cache current category value and timestamp
+        appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
+
+        // Assert value is in cache
+        (cacheValue, timestamp) = appraiser.categoryValueCache(AssetCategory.wrap("liquid"));
+        assertEq(cacheValue, 3_000_000e18);
+        assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    /// [X]  storeMetric(Metric metric_)
+    ///     [X]  stores current metric value
+
+    function testCorrectness_storeMetric() public {
+        // Assert nothing is cached
+        (uint256 cacheValue, uint48 timestamp) = appraiser.metricCache(IAppraiser.Metric.BACKING);
+        assertEq(cacheValue, 0);
+        assertEq(timestamp, 0);
+
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Assert value is in cache
+        (cacheValue, timestamp) = appraiser.metricCache(IAppraiser.Metric.BACKING);
+        assertEq(cacheValue, 3_000_000e18);
+        assertEq(timestamp, uint48(block.timestamp));
+    }
 }

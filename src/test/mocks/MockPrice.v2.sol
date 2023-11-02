@@ -106,7 +106,27 @@ contract MockPrice is PRICEv2 {
     // Required by interface, but not implemented
     function getAssets() external view override returns (address[] memory) {}
 
-    function getAssetData(address asset_) external view override returns (Asset memory) {}
+    function getAssetData(address asset_) external view override returns (Asset memory) {
+        uint256[] memory observations = new uint256[](90);
+        for (uint256 i = 0; i < 90; i++) {
+            observations[i] = prices[asset_];
+        }
+
+        return
+            Asset({
+                approved: true,
+                storeMovingAverage: true,
+                useMovingAverage: false,
+                movingAverageDuration: 30 days,
+                nextObsIndex: 0,
+                numObservations: 90,
+                lastObservationTime: uint48(block.timestamp),
+                cumulativeObs: 0,
+                obs: observations,
+                strategy: bytes(""),
+                feeds: bytes("")
+            });
+    }
 
     function storePrice(address asset_) external override {
         getPrice(asset_, Variant.CURRENT);
