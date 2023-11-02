@@ -771,13 +771,13 @@ contract AppraiserTest is Test {
         assertEq(value, 6_000_000e18);
     }
 
-    /// []  getMetric(Metric metric_, Variant variant_)
+    /// [X]  getMetric(Metric metric_, Variant variant_)
     ///     [X]  reverts if variant is not LAST or CURRENT
     ///     [X]  reverts if metric is not a valid metric
     ///     [X]  gets latest metric value if variant is LAST
     ///     [X]  gets current metric value if variant is CURRENT
     ///     [X]  handles all valid metrics
-    ///     []  handles volatility metric
+    ///     [X]  handles volatility metric
 
     function testCorrectness_getMetricMetricVariantInvalid() public {
         // Cache current metric value and timestamp
@@ -863,6 +863,13 @@ contract AppraiserTest is Test {
         // Categorize assets
         bookkeeper.categorizeAsset(address(weth), AssetCategory.wrap("illiquid"));
 
+        // Set OHM observations to be all 10
+        uint256[] memory ohmObservations = new uint256[](90);
+        for (uint256 i; i < 90; i++) {
+            ohmObservations[i] = 10e18;
+        }
+        PRICE.setObservations(address(ohm), ohmObservations);
+
         // Directly call getMetric with variant CURRENT for all metrics
         (bool backingSuccess, bytes memory backingData) = address(appraiser).call(
             abi.encodeWithSignature("getMetric(uint8,uint8)", 0, 0)
@@ -936,8 +943,42 @@ contract AppraiserTest is Test {
         }
     }
 
-    // TODO: handles volatility metric
-    function testCorrectness_getMetricVolatility() public {}
+    function testCorrectness_getMetricVolatility() public {
+        // Generate observations
+        uint256[] memory observations = new uint256[](90);
+        for (uint256 i; i < 90; i++) {
+            uint256 counter = i % 3;
+
+            if (counter == 0) {
+                observations[i] = 9e18;
+                continue;
+            } else if (counter == 1) {
+                observations[i] = 10e18;
+                continue;
+            } else {
+                observations[i] = 11e18;
+                continue;
+            }
+        }
+
+        // Set observations
+        PRICE.setObservations(address(ohm), observations);
+
+        // Directly call getMetric with variant CURRENT for volatility metric
+        (bool success, bytes memory data) = address(appraiser).call(
+            abi.encodeWithSignature("getMetric(uint8,uint8)", 6, 0)
+        );
+
+        // Assert call succeeded
+        assertEq(success, true);
+
+        // Decode return data to value and timestamp
+        (uint256 value, uint48 variantTimestamp) = abi.decode(data, (uint256, uint48));
+
+        // Assert value and timestamp are correct
+        assertApproxEqRel(value, 4.486e18, 1e16); // within 1%
+        assertEq(variantTimestamp, uint48(block.timestamp));
+    }
 
     //============================================================================================//
     //                                       CACHING                                              //

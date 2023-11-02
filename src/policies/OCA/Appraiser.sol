@@ -365,7 +365,11 @@ contract Appraiser is IAppraiser, Policy {
         // Calculate standard deviation of percent changes
         uint256 stdDev;
         for (uint256 i; i < len; i++) {
-            stdDev += ((changes[i] - meanChange) ** 2);
+            if (changes[i] >= meanChange) {
+                stdDev += ((changes[i] - meanChange) ** 2);
+            } else {
+                stdDev += ((meanChange - changes[i]) ** 2);
+            }
         }
         stdDev = FixedPointMathLib.sqrt(stdDev / len);
 
