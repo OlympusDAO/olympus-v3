@@ -1036,6 +1036,7 @@ contract OperatorTest is Test {
     /// [X] Wall regenerates when price on other side of MA for enough observations
     /// [X] Wrap around logic works for counting observations
     /// [X] Regen period enforces a minimum time to wait for regeneration
+    /// [X] Wall regenerates when price is below liquid backing per ohm backed and capacity is less than 20% of full capacity
 
     function testCorrectness_lowWallRegenA() public {
         /// Initialize operator
@@ -1236,6 +1237,50 @@ contract OperatorTest is Test {
         /// Check that the capacity hasn't regenerated
         uint256 endCapacity = RANGE.capacity(false);
         assertEq(endCapacity, startCapacity);
+    }
+
+    function testCorrectness_lowWallRegen_belowLiquidBacking() public {
+        /// Initialize operator
+        vm.prank(guardian);
+        operator.initialize();
+
+        /// Tests that wall regenerates when price is below liquid backing per ohm backed.
+
+        /// Move price below liquid backing per ohm backed
+        PRICE.setPrice(address(ohm), 5e18);
+        vm.prank(heart);
+        operator.operate();
+
+        uint256 lbbo = appraiser.getMetric(IAppraiserMetric.Metric.LIQUID_BACKING_PER_BACKED_OHM);
+        uint256 currentPrice = PRICE.getPriceIn(address(ohm), address(reserve));
+        assertLt(currentPrice, lbbo);
+
+        /// Confirm wall is up
+        assertTrue(RANGE.active(false));
+
+        /// Take down the wall
+        knockDownWall(false);
+
+        /// Check that the wall is down
+        assertTrue(!RANGE.active(false));
+
+        /// Move time forward past the regen period
+        vm.warp(block.timestamp + 1 hours);
+
+        /// Get capacity of the low wall and verify under threshold
+        uint256 startCapacity = RANGE.capacity(false);
+        uint256 fullCapacity = operator.fullCapacity(false);
+        assertLt(startCapacity, (fullCapacity.mulDiv(RANGE.thresholdFactor(), 1e4) * 20) / 100);
+
+        /// Below lbbo a single operate call should regenerate the capacity
+        vm.prank(heart);
+        operator.operate();
+
+        /// Check that the wall is up
+        assertTrue(RANGE.active(false));
+        /// Check that the capacity has regenerated
+        uint256 endCapacity = RANGE.capacity(false);
+        assertEq(endCapacity, fullCapacity, "fullCapacity");
     }
 
     function testCorrectness_lowWallRegenTime() public {
