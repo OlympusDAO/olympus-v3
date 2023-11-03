@@ -27,7 +27,6 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     // =========  ERRORS ========= //
 
     error Callback_MarketNotSupported(uint256 id);
-    error Callback_WrongModuleVersion(uint8[3] expectedMajors);
     error Callback_TokensNotReceived();
     error Callback_InvalidParams();
 
@@ -71,8 +70,13 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (TRSRY_MAJOR != 1 || MINTR_MAJOR != 1 || ROLES_MAJOR != 1)
-            revert Callback_WrongModuleVersion([1, 1, 1]);
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1, 1]);
+        if (
+            MINTR_MAJOR != 1 ||
+            ROLES_MAJOR != 1 ||
+            TRSRY_MAJOR != 1
+        ) revert Policy_WrongModuleVersion(expected);
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);

@@ -12,10 +12,6 @@ import "src/Kernel.sol";
 
 // Contract to allow emergency shutdown of minting and treasury withdrawals
 contract Emergency is Policy, RolesConsumer {
-    // =========  ERRORS ========= //
-
-    error Emergency_WrongModuleVersion(uint8[3] expectedMajors);
-
     // =========  EVENTS ========= //
 
     event Status(bool treasury_, bool minter_);
@@ -47,8 +43,13 @@ contract Emergency is Policy, RolesConsumer {
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (TRSRY_MAJOR != 1 || MINTR_MAJOR != 1 || ROLES_MAJOR != 1)
-            revert Emergency_WrongModuleVersion([1, 1, 1]);
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1, 1]);
+        if (
+            MINTR_MAJOR != 1 ||
+            ROLES_MAJOR != 1 ||
+            TRSRY_MAJOR != 1
+        ) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy

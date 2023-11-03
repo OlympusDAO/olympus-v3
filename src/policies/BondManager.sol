@@ -22,7 +22,6 @@ import {IEasyAuction} from "interfaces/IEasyAuction.sol";
 contract BondManager is Policy, RolesConsumer {
     // ========= ERRORS ========= //
 
-    error BondManager_WrongModuleVersion(uint8[3] expectedMajors);
     error BondManager_TermTooShort();
     error BondManager_InitialPriceTooLow();
     error BondManager_DebtBufferTooLow();
@@ -120,8 +119,13 @@ contract BondManager is Policy, RolesConsumer {
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (TRSRY_MAJOR != 1 || MINTR_MAJOR != 1 || ROLES_MAJOR != 1)
-            revert BondManager_WrongModuleVersion([1, 1, 1]);
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1, 1]);
+        if (
+            MINTR_MAJOR != 1 ||
+            ROLES_MAJOR != 1 ||
+            TRSRY_MAJOR != 1
+        ) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy

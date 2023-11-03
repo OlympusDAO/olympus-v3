@@ -15,7 +15,6 @@ import "src/Kernel.sol";
 contract Minter is Policy, RolesConsumer {
     // ========== ERRORS ========== //
 
-    error Minter_WrongModuleVersion(uint8[2] expectedMajors);
     error Minter_CategoryNotApproved();
     error Minter_CategoryApproved();
 
@@ -54,7 +53,12 @@ contract Minter is Policy, RolesConsumer {
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1) revert Minter_WrongModuleVersion([1, 1]);
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1, 1]);
+        if (
+            MINTR_MAJOR != 1 ||
+            ROLES_MAJOR != 1
+        ) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy

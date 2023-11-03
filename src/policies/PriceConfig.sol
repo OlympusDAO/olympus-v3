@@ -8,9 +8,6 @@ import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import "src/Kernel.sol";
 
 contract OlympusPriceConfig is Policy, RolesConsumer {
-    // ========= ERRORS ========== //
-
-    error PriceConfig_WrongModuleVersion(uint8[2] expectedMajors);
 
     // ========= STATE ========= //
 
@@ -34,7 +31,12 @@ contract OlympusPriceConfig is Policy, RolesConsumer {
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (PRICE_MAJOR != 1 || ROLES_MAJOR != 1) revert PriceConfig_WrongModuleVersion([1, 1]);
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1]);
+        if (
+            PRICE_MAJOR != 1 ||
+            ROLES_MAJOR != 1
+        ) revert Policy_WrongModuleVersion(expected);
     }
 
     function requestPermissions()

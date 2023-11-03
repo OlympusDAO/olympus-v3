@@ -18,7 +18,6 @@ contract TreasuryCustodian is Policy, RolesConsumer {
 
     // =========  ERRORS ========= //
 
-    error Custodian_WrongModuleVersion(uint8[2] expectedMajors);
     error Custodian_PolicyStillActive();
 
     // =========  STATE ========= //
@@ -44,7 +43,12 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (TRSRY_MAJOR != 1 || ROLES_MAJOR != 1) revert Custodian_WrongModuleVersion([1, 1]);
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1]);
+        if (
+            ROLES_MAJOR != 1 ||
+            TRSRY_MAJOR != 1
+        ) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy

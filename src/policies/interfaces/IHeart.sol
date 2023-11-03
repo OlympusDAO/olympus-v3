@@ -12,7 +12,6 @@ interface IHeart {
 
     // =========  ERRORS ========= //
 
-    error Heart_WrongModuleVersion(uint8[2] expectedMajors);
     error Heart_OutOfCycle();
     error Heart_BeatStopped();
     error Heart_InvalidParams();

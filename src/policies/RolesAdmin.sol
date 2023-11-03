@@ -15,7 +15,6 @@ contract RolesAdmin is Policy {
 
     error Roles_OnlyAdmin();
     error Roles_OnlyNewAdmin();
-    error Roles_WrongModuleVersion(uint8[1] expectedMajors);
 
     // =========  STATE ========= //
 
@@ -44,7 +43,9 @@ contract RolesAdmin is Policy {
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (ROLES_MAJOR != 1) revert Roles_WrongModuleVersion([1]);
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1]);
+        if (ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {

@@ -24,8 +24,6 @@ contract Parthenon is Policy {
 
     // =========  ERRORS ========= //
 
-    error WrongModuleVersion(uint8[2] expectedMajors);
-
     error NotAuthorized();
     error UnableToActivate();
     error ProposalAlreadyActivated();
@@ -119,7 +117,12 @@ contract Parthenon is Policy {
         (uint8 VOTES_MAJOR, ) = VOTES.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (INSTR_MAJOR != 1 || VOTES_MAJOR != 1) revert WrongModuleVersion([1, 1]);
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1]);
+        if (
+            INSTR_MAJOR != 1 ||
+            VOTES_MAJOR != 1
+        ) revert Policy_WrongModuleVersion(expected);
     }
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {
