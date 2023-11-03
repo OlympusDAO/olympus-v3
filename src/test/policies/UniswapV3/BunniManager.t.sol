@@ -1412,7 +1412,8 @@ contract BunniManagerTest is Test {
     //  [X] reverts if sufficient time has not elapsed
     //  [X] harvest compounds fees to the pool
     //  [ ] harvest compounds fees to the pool, multiple pools
-    //  [ ] harvest reward paid matches currentHarvestReward
+    //  [X] harvest reward paid matches currentHarvestReward
+    //  [ ] harvest forces recalculation of fees
 
     function test_harvest_bunniHubNotSetReverts() public {
         // Create a new BunniManager policy, without the BunniHub set
@@ -1442,6 +1443,92 @@ contract BunniManagerTest is Test {
         // Call
         vm.prank(policy);
         bunniManager.harvest();
+    }
+
+    function test_harvest() public {
+        IBunniToken token;
+        {
+            uint256 USDC_DEPOSIT = 10_000_000e6 * OHM_USDC_PRICE / 1e18; // Ensures that the token amounts are in the correct ratio
+            uint256 OHM_DEPOSIT = 10_000_000e9;
+
+            // Deploy the token
+            vm.prank(policy);
+            token = bunniManager.deployToken(address(pool));
+
+            // Mint the non-OHM token to the TRSRY
+            usdc.mint(address(treasury), USDC_DEPOSIT);
+
+            // Deposit
+            vm.prank(policy);
+            bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+        }
+
+        // Perform the swap
+        {
+            uint256 swapAmountUsdcIn = 100_000e6;
+
+            // Mint USDC into another wallet
+            usdc.mint(address(alice), swapAmountUsdcIn);
+
+            uint256 swapOneOhmMinimum = swapAmountUsdcIn.mulDiv(1e18, 1e6).mulDiv(1e18, OHM_USDC_PRICE).mulDiv(1e9, 1e18).mulDiv(95, 100);
+            _swap(address(usdc), address(ohm), address(alice), swapAmountUsdcIn, swapOneOhmMinimum);
+        }
+
+        // Get balances of policy, alice
+        uint256 usdcPolicyBalanceBefore = usdc.balanceOf(address(policy));
+        uint256 ohmPolicyBalanceBefore = ohm.balanceOf(address(policy));
+        uint256 usdcAliceBalanceBefore = usdc.balanceOf(address(alice));
+        uint256 ohmAliceBalanceBefore = ohm.balanceOf(address(alice));
+
+        // Determine the reward to be given
+        _recalculateFees(pool);
+        uint256 currentReward = bunniManager.getCurrentHarvestReward();
+
+        // Get current liquidity
+        uint128 liquidityBefore = pool.liquidity();
+
+        // Harvest
+        {
+            // Warp forward
+            vm.warp(block.timestamp + HARVEST_FREQUENCY);
+
+            vm.prank(alice);
+            bunniManager.harvest();
+        }
+
+        // Check that there are no owed fees
+        {
+            _recalculateFees(pool);
+            (, , , uint128 fees0, uint128 fees1) = pool.positions(
+                keccak256(abi.encodePacked(address(bunniHub), token.tickLower(), token.tickUpper()))
+            );
+
+            uint256 usdcFeeAmount = address(pool.token0()) == address(usdc) ? fees0 : fees1;
+            uint256 ohmFeeAmount = address(pool.token0()) == address(ohm) ? fees0 : fees1;
+
+            assertEq(usdcFeeAmount, 0);
+            assertEq(ohmFeeAmount, 0);
+        }
+
+        // Pool liquidity has increased
+        assertGt(pool.liquidity(), liquidityBefore);
+
+        // OHM, USDC not transferred to any of the wallets
+        assertEq(usdc.balanceOf(address(treasury)), 0);
+        assertEq(ohm.balanceOf(address(treasury)), 0);
+        assertEq(usdc.balanceOf(address(bunniHub)), 0);
+        assertEq(ohm.balanceOf(address(bunniHub)), 0);
+        assertEq(usdc.balanceOf(address(bunniManager)), 0);
+        assertEq(ohm.balanceOf(address(bunniManager)), 0);
+        assertEq(usdc.balanceOf(address(policy)), usdcPolicyBalanceBefore);
+        assertEq(ohm.balanceOf(address(policy)), ohmPolicyBalanceBefore);
+        assertEq(usdc.balanceOf(address(alice)), usdcAliceBalanceBefore);
+
+        // Caller received the OHM reward
+        assertEq(ohm.balanceOf(address(alice)), ohmAliceBalanceBefore + currentReward);
+
+        // lastHarvest updated
+        assertEq(bunniManager.lastHarvest(), block.timestamp);
     }
 
     // [X] getCurrentHarvestReward
