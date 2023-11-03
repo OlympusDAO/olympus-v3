@@ -20,6 +20,7 @@ import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
+import {SqrtPriceMath} from "@uniswap/v3-core/contracts/libraries/SqrtPriceMath.sol";
 
 import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
@@ -43,6 +44,7 @@ contract BunniManagerTest is Test {
 
     MockOhm internal ohm;
     MockERC20 internal usdc;
+    MockERC20 internal wETH;
 
     Kernel internal kernel;
     OlympusRoles internal roles;
@@ -51,6 +53,7 @@ contract BunniManagerTest is Test {
     OlympusPricev2 internal price;
 
     UniswapV3Factory internal uniswapFactory;
+    SwapRouter internal swapRouter;
 
     RolesAdmin internal rolesAdmin;
 
@@ -58,31 +61,31 @@ contract BunniManagerTest is Test {
     BunniHub internal bunniHub;
     IUniswapV3Pool internal pool;
 
-    uint24 constant POOL_FEE = 500;
-    uint256 constant OHM_USDC_PRICE = 115897 * 1e14; // 11.5897 USDC per OHM in 18 decimal places
-    uint160 constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
-    uint160 constant DAI_USDC_SQRTPRICEX96 = 79227120762198600072084; // From DAI-USDC, 1 DAI = 1 USDC
+    uint24 private constant POOL_FEE = 500;
+    uint256 private constant OHM_USDC_PRICE = 115897 * 1e14; // 11.5897 USDC per OHM in 18 decimal places
+    uint160 private constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
+    uint160 private constant DAI_USDC_SQRTPRICEX96 = 79227120762198600072084; // From DAI-USDC, 1 DAI = 1 USDC
 
-    int24 constant TICK = 887250; // (887272/50)*50
+    int24 private constant TICK = 887250; // (887272/50)*50
 
-    uint8 constant BUNNI_TOKEN_DECIMALS = 18;
+    uint8 private constant BUNNI_TOKEN_DECIMALS = 18;
 
-    uint16 constant BPS_MAX = 10_000; // 100%
+    uint16 private constant BPS_MAX = 10_000; // 100%
 
-    uint256 constant SLIPPAGE_DEFAULT = 100; // 1%
-    uint256 constant SLIPPAGE_MAX = 10000; // 100%
+    uint256 private constant SLIPPAGE_DEFAULT = 100; // 1%
+    uint256 private constant SLIPPAGE_MAX = 10000; // 100%
 
-    uint8 constant PRICE_VERSION = 2;
-    uint8 constant TRSRY_VERSION = 1;
-    uint8 constant ROLES_VERSION = 1;
-    uint8 constant MINTR_VERSION = 1;
+    uint8 private constant PRICE_VERSION = 2;
+    uint8 private constant TRSRY_VERSION = 1;
+    uint8 private constant ROLES_VERSION = 1;
+    uint8 private constant MINTR_VERSION = 1;
 
-    uint256 constant USDC_PRICE = 1e18;
-    uint256 constant OHM_PRICE = OHM_USDC_PRICE;
+    uint256 private constant USDC_PRICE = 1e18;
+    uint256 private constant OHM_PRICE = OHM_USDC_PRICE;
 
-    uint256 constant HARVEST_REWARD = 10e9;
-    uint16 constant HARVEST_REWARD_FEE = 100; // 1%
-    uint48 constant HARVEST_FREQUENCY = uint48(24 hours);
+    uint256 private constant HARVEST_REWARD = 10e9;
+    uint16 private constant HARVEST_REWARD_FEE = 100; // 1%
+    uint48 private constant HARVEST_FREQUENCY = uint48(24 hours);
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -96,6 +99,7 @@ contract BunniManagerTest is Test {
         {
             ohm = new MockOhm("Olympus", "OHM", 9);
             usdc = new MockERC20("USDC", "USDC", 6);
+            wETH = new MockERC20("Wrapped Ether", "wETH", 18);
         }
 
         {
@@ -106,7 +110,7 @@ contract BunniManagerTest is Test {
             roles = new OlympusRoles(kernel);
             treasury = new OlympusTreasury(kernel);
             mintr = new OlympusMinter(kernel, address(ohm));
-            price = new OlympusPricev2(kernel, uint8(8), uint32(8 hours));
+            price = new OlympusPricev2(kernel, uint8(18), uint32(8 hours));
         }
 
         {
@@ -120,6 +124,9 @@ contract BunniManagerTest is Test {
 
             // Deploy Uniswap V3 factory
             uniswapFactory = new UniswapV3Factory();
+
+            // Deploy Uniswap V3 SwapRouter
+            swapRouter = new SwapRouter(address(uniswapFactory), address(wETH));
 
             // Deploy BunniHub
             bunniHub = new BunniHub(
@@ -305,6 +312,33 @@ contract BunniManagerTest is Test {
             tickLower: token_.tickLower(),
             tickUpper: token_.tickUpper()
         });
+    }
+
+    function _swap(address tokenIn_, address tokenOut_, address recipient_, uint256 amountIn_, uint256 amountOutMinimum_) internal {
+        // Approve token transfer
+        vm.prank(recipient_);
+        IERC20(tokenIn_).approve(address(swapRouter), amountIn_);
+
+        // Perform the swap
+        vm.prank(recipient_);
+        swapRouter.exactInputSingle(
+            ISwapRouter.ExactInputSingleParams({
+                tokenIn: tokenIn_,
+                tokenOut: tokenOut_,
+                fee: POOL_FEE,
+                recipient: recipient_,
+                deadline: block.timestamp,
+                amountIn: amountIn_,
+                amountOutMinimum: amountOutMinimum_,
+                sqrtPriceLimitX96: TickMath.getSqrtRatioAtTick(TICK) // NOTE: The docs say that a value of 0 should work in testing, but it reverts due to a check. This value seems to work, after days of testing.
+            })
+        );
+    }
+
+    function _recalculateFees(IUniswapV3Pool pool_) internal {
+        // Calling burn with 0 amount triggers an update of fees for the caller
+        vm.prank(address(bunniHub));
+        pool_.burn(-TICK, TICK, uint128(0));
     }
 
     // [X] constructor (tested in setUp)
@@ -1432,6 +1466,7 @@ contract BunniManagerTest is Test {
 
     function test_getCurrentHarvestReward(uint256 swapAmount_) public {
         uint256 swapAmount = bound(swapAmount_, 100_000e6, 1_000_000e6);
+        uint256 swapOutput = swapAmount.mulDiv(OHM_USDC_PRICE, 1e6).mulDiv(1e9, 1e18);
         uint256 USDC_DEPOSIT = 10_000_000e6 * OHM_USDC_PRICE / 1e18; // Ensures that the token amounts are in the correct ratio
         uint256 OHM_DEPOSIT = 10_000_000e9;
 
@@ -1449,56 +1484,30 @@ contract BunniManagerTest is Test {
         // Mint USDC into another wallet
         usdc.mint(address(alice), swapAmount);
 
-        // Prepare for swap
-        MockERC20 wEth = new MockERC20("WETH", "WETH", 18);
-        SwapRouter swapRouter = new SwapRouter(address(uniswapFactory), address(wEth));
-        (uint160 sqrtPriceX96,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ) = pool.slot0();
-        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(usdc),
-            tokenOut: address(ohm),
-            fee: POOL_FEE,
-            recipient: address(alice),
-            deadline: block.timestamp,
-            amountIn: swapAmount,
-            amountOutMinimum: 0, // Ignore slippage
-            sqrtPriceLimitX96: sqrtPriceX96 + 1
-        });
-        // Approve token transfer
-        vm.prank(alice);
-        usdc.approve(address(swapRouter), swapAmount);
-        // Perform a swap
-        vm.prank(alice);
-        swapRouter.exactInputSingle(swapParams);
-        // Calling burn with 0 amount triggers an update of fees for the caller
-        vm.prank(address(bunniHub));
-        pool.burn(-TICK, TICK, uint128(0));
+        // Perform the swap
+        _swap(address(usdc), address(ohm), address(alice), swapAmount, swapOutput.mulDiv(95, 100));
+        _recalculateFees(pool);
 
         // Record the fees generated
         (, , , uint128 fees0, uint128 fees1) = pool.positions(
             keccak256(abi.encodePacked(address(bunniHub), token.tickLower(), token.tickUpper()))
         );
-        uint256 usdcFees = uint256(address(pool.token0()) == address(usdc) ? fees0 : fees1).mulDiv(USDC_PRICE, 1e18);
-        uint256 ohmFees = uint256(address(pool.token0()) == address(ohm) ? fees0 : fees1).mulDiv(OHM_PRICE, 1e18);
-        uint256 expectedReward = uint256(HARVEST_REWARD_FEE).mulDiv(usdcFees + ohmFees, uint256(BPS_MAX));
-        console2.log("Expected reward:", expectedReward);
-        assertGt(expectedReward, 0);
+        uint256 usdcFees = uint256(address(pool.token0()) == address(usdc) ? fees0 : fees1).mulDiv(1e18, 1e6).mulDiv(USDC_PRICE, 1e18); // Convert to 18 decimals and multiply by price
+        uint256 ohmFees = uint256(address(pool.token0()) == address(ohm) ? fees0 : fees1).mulDiv(1e18, 1e9).mulDiv(OHM_PRICE, 1e18); // Convert to 18 decimals and multiply by price
+        uint256 expectedRewardValue = uint256(HARVEST_REWARD_FEE).mulDiv(usdcFees + ohmFees, uint256(BPS_MAX));
+        assertGt(expectedRewardValue, 0);
+        uint256 expectedRewardOhm = expectedRewardValue.mulDiv(1e9, OHM_PRICE);
 
         // Cap the reward
-        if (expectedReward > HARVEST_REWARD) {
-            expectedReward = HARVEST_REWARD;
+        if (expectedRewardOhm > HARVEST_REWARD) {
+            expectedRewardOhm = HARVEST_REWARD;
         }
 
         // Call
         uint256 currentReward = bunniManager.getCurrentHarvestReward();
 
         // Check that the value is consistent
-        assertEq(currentReward, expectedReward);
+        assertEq(currentReward, expectedRewardOhm);
     }
 
     // [X] harvestFrequency

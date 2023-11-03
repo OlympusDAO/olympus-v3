@@ -540,8 +540,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // 0 if enough time has not elapsed
         if (lastHarvest + harvestFrequency < block.timestamp) return 0;
 
-        uint256 feeUsdValue;
-        uint256 poolDecimals = 10 ** POOL_DECIMALS;
+        uint256 feeUsdValue; // Scale: PRICE decimals
+        uint256 priceScale = 10 ** PRICE.decimals();
         for (uint256 i = 0; i < poolCount; i++) {
             address currentPool = pools[i];
             BunniKey memory key = _getBunniKey(currentPool);
@@ -549,11 +549,19 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             // Get the fees
             (, , , uint128 fees0, uint128 fees1) = key.pool.positions(
                 keccak256(abi.encodePacked(address(bunniHub), key.tickLower, key.tickUpper))
-        )   ;
+            );
+
+            // Convert fees from native into PRICE decimals
+            address token0Address = key.pool.token0();
+            address token1Address = key.pool.token1();
+            ERC20 token0 = ERC20(token0Address);
+            ERC20 token1 = ERC20(token1Address);
+            uint256 token0Fees = uint256(fees0).mulDiv(priceScale, 10 ** token0.decimals());
+            uint256 token1Fees = uint256(fees1).mulDiv(priceScale, 10 ** token1.decimals());
 
             // Get the USD value of the fees
-            feeUsdValue += PRICE.getPrice(key.pool.token0()).mulDiv(fees0, poolDecimals);
-            feeUsdValue += PRICE.getPrice(key.pool.token1()).mulDiv(fees1, poolDecimals);
+            feeUsdValue += PRICE.getPrice(token0Address).mulDiv(token0Fees, priceScale);
+            feeUsdValue += PRICE.getPrice(token1Address).mulDiv(token1Fees, priceScale);
         }
 
         // Calculate the reward value
