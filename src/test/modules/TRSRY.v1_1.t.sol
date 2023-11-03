@@ -11,7 +11,7 @@ import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 //import {MockPolicy} from "test/mocks/KernelTestMocks.sol";
 
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
-import {TRSRYv1_1, CategoryGroup, toCategoryGroup, fromCategoryGroup} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {TRSRYv1_1, CategoryGroup, toCategoryGroup, fromCategoryGroup, toCategory, fromCategory} from "src/modules/TRSRY/TRSRY.v1.sol";
 
 import "src/Kernel.sol";
 
@@ -83,19 +83,18 @@ import "src/Kernel.sol";
 // [X] addCategoryGroup - adds an asset category group to the treasury
 //      [X] reverts if category group is already configured
 //      [X] category group data stored correctly
-// [ ] addCategory - adds an asset category to the treasury
-//      [ ] reverts if category is already configured
-//      [ ] category data stored correctly
-//      [ ] zero categories in group prior
-//      [ ] one category in group prior
-//      [ ] many categories in group prior
-// [ ] categorize - categorize an asset into a category within a category group
-//      [ ] reverts if category is not configured
-//      [ ] reverts if asset is not configured
-//      [ ] category data stored correctly
-//      [ ] zero assets in category prior
-//      [ ] one asset in category prior
-//      [ ] many assets in category prior
+// [X] addCategory - adds an asset category to the treasury
+//      [X] reverts if category group is not configured
+//      [X] reverts if category is already configured
+//      [X] category data stored correctly with zero categories in group prior
+//      [X] category data stored correctly with one category in group prior
+//      [X] category data stored correctly with many categories in group prior
+// [X] categorize - categorize an asset into a category within a category group
+//      [X] reverts if asset is not configured
+//      [X] reverts if category is not configured
+//      [X] category data stored correctly with zero assets in category prior
+//      [X] category data stored correctly with one asset in category prior
+//      [X] category data stored correctly with many assets in category prior
 
 contract TRSRYv1_1Test is Test {
     using ModuleTestFixtureGenerator for OlympusTreasury;
@@ -126,6 +125,8 @@ contract TRSRYv1_1Test is Test {
         reserve.mint(address(TRSRY), 200_000_000e18);
     }
 
+    // ========= addCategoryGroup ========= //
+
     function testCorrectness_addCategoryGroupRevertsIfAlreadyConfigured() public {
         // Try to push 'liquidity-preference' category group which already exists
         bytes memory err = abi.encodeWithSignature(
@@ -139,11 +140,215 @@ contract TRSRYv1_1Test is Test {
     }
 
     function testCorrectness_addCategoryGroupAddsGroup(bytes32 groupName_) public {
+        vm.assume(
+            groupName_ != bytes32("liquidity-preference") &&
+                groupName_ != bytes32("value-baskets") &&
+                groupName_ != bytes32("market-sensitivity")
+        );
+
         vm.prank(godmode);
         TRSRY.addCategoryGroup(toCategoryGroup(groupName_));
 
         // Check that the category group was added
         CategoryGroup addedGroup = TRSRY.categoryGroups(3);
         assertEq(fromCategoryGroup(addedGroup), groupName_);
+    }
+
+    // ========= addCategory ========= //
+
+    function testCorrectness_addCategoryRevertsIfUnconfiguredGroup() public {
+        // Try to push to 'abcdef' category group which does not exist
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_CategoryGroupDoesNotExist(bytes32)",
+            toCategoryGroup("abcdef")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup("abcdef"));
+    }
+
+    function testCorrectness_addCategoryRevertsIfGroupExists() public {
+        // Try to push 'liquid' category to 'liquidity-preference' group which already exists
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_CategoryExists(bytes32)",
+            toCategory("liquid")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.addCategory(toCategory("liquid"), toCategoryGroup("liquidity-preference"));
+    }
+
+    function testCorrectness_addCategoryStoresCorrectlyZeroPrior(bytes32 category_) public {
+        // Create category group
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+
+        // Assert that there are no categories in the group by expecting a generic revert when reading an array
+        vm.expectRevert();
+        TRSRY.groupToCategories(toCategoryGroup("test-group"), 0);
+
+        // Add category to group
+        TRSRY.addCategory(toCategory(category_), toCategoryGroup("test-group"));
+
+        // Assert that the category was added to the group
+        assertEq(
+            fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 0)),
+            category_
+        );
+        vm.stopPrank();
+    }
+
+    function testCorrectness_addCategoryStoresCorrectlyOnePrior(bytes32 category_) public {
+        // Create category group
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+
+        // Add category to group
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+
+        // Assert that there is one category in the group
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 0)), "test");
+
+        // Add category to group
+        TRSRY.addCategory(toCategory(category_), toCategoryGroup("test-group"));
+
+        // Assert that the category was added to the group
+        assertEq(
+            fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 1)),
+            category_
+        );
+        vm.stopPrank();
+    }
+
+    function testCorrectness_addCategoryStoresCorrectlyManyPrior(bytes32 category_) public {
+        // Create category group
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+
+        // Add category to group
+        TRSRY.addCategory(toCategory("test1"), toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test2"), toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test3"), toCategoryGroup("test-group"));
+
+        // Assert that there are three categories in the group
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 0)), "test1");
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 1)), "test2");
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 2)), "test3");
+
+        // Add category to group
+        TRSRY.addCategory(toCategory(category_), toCategoryGroup("test-group"));
+
+        // Assert that the category was added to the group
+        assertEq(
+            fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 3)),
+            category_
+        );
+        vm.stopPrank();
+    }
+
+    // ========= categorize ========= //
+
+    function testCorrectness_categorizeRevertsIfInvalidAsset() public {
+        // Try to categorize zero address
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_InvalidParams(uint256,bytes)",
+            0,
+            abi.encode(address(0))
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.categorize(address(0), toCategory("liquid"));
+    }
+
+    function testCorrectness_categorizeRevertsIfInvalidCategory() public {
+        // Try to categorize zero address
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_CategoryDoesNotExist(bytes32)",
+            toCategory("abcdef")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.categorize(address(reserve), toCategory("abcdef"));
+    }
+
+    function testCorrectness_categorizeStoresCorrectlyZeroPrior() public {
+        // Create category group
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+
+        // Assert that categorization for the asset is null
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup("test-group"))),
+            ""
+        );
+
+        // Categorize asset
+        TRSRY.categorize(address(reserve), toCategory("test"));
+
+        // Assert that the asset was categorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup("test-group"))),
+            "test"
+        );
+    }
+
+    function testCorrectness_categorizeStoresCorrectlyOnePrior() public {
+        // Create category group
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+
+        // Categorize asset
+        TRSRY.categorize(address(1), toCategory("test"));
+
+        // Assert that the asset was categorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(1), toCategoryGroup("test-group"))),
+            "test"
+        );
+
+        // Categorize asset
+        TRSRY.categorize(address(reserve), toCategory("test"));
+
+        // Assert that the asset was categorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup("test-group"))),
+            "test"
+        );
+    }
+
+    function testCorrectness_categorizeStoresCorrectlyManyPrior() public {
+        // Create category group
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+
+        // Categorize assets
+        TRSRY.categorize(address(1), toCategory("test"));
+        TRSRY.categorize(address(2), toCategory("test"));
+
+        // Assert that the asset was categorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(1), toCategoryGroup("test-group"))),
+            "test"
+        );
+        assertEq(
+            fromCategory(TRSRY.categorization(address(2), toCategoryGroup("test-group"))),
+            "test"
+        );
+
+        // Categorize asset
+        TRSRY.categorize(address(reserve), toCategory("test"));
+
+        // Assert that the asset was categorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup("test-group"))),
+            "test"
+        );
     }
 }
