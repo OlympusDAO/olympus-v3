@@ -181,6 +181,16 @@ contract TRSRYv1_1Test is Test {
     }
 
     function testCorrectness_addCategoryStoresCorrectlyZeroPrior(bytes32 category_) public {
+        vm.assume(
+            category_ != bytes32("liquid") &&
+                category_ != bytes32("illiquid") &&
+                category_ != bytes32("reserves") &&
+                category_ != bytes32("strategic") &&
+                category_ != bytes32("protocol-owned-liquidity") &&
+                category_ != bytes32("stable") &&
+                category_ != bytes32("volatile")
+        );
+
         // Create category group
         vm.startPrank(godmode);
         TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
@@ -201,6 +211,17 @@ contract TRSRYv1_1Test is Test {
     }
 
     function testCorrectness_addCategoryStoresCorrectlyOnePrior(bytes32 category_) public {
+        vm.assume(
+            category_ != bytes32("test") &&
+                category_ != bytes32("liquid") &&
+                category_ != bytes32("illiquid") &&
+                category_ != bytes32("reserves") &&
+                category_ != bytes32("strategic") &&
+                category_ != bytes32("protocol-owned-liquidity") &&
+                category_ != bytes32("stable") &&
+                category_ != bytes32("volatile")
+        );
+
         // Create category group
         vm.startPrank(godmode);
         TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
@@ -223,6 +244,19 @@ contract TRSRYv1_1Test is Test {
     }
 
     function testCorrectness_addCategoryStoresCorrectlyManyPrior(bytes32 category_) public {
+        vm.assume(
+            category_ != bytes32("test1") &&
+                category_ != bytes32("test2") &&
+                category_ != bytes32("test3") &&
+                category_ != bytes32("liquid") &&
+                category_ != bytes32("illiquid") &&
+                category_ != bytes32("reserves") &&
+                category_ != bytes32("strategic") &&
+                category_ != bytes32("protocol-owned-liquidity") &&
+                category_ != bytes32("stable") &&
+                category_ != bytes32("volatile")
+        );
+
         // Create category group
         vm.startPrank(godmode);
         TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
