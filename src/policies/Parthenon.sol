@@ -119,10 +119,7 @@ contract Parthenon is Policy {
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 1]);
-        if (
-            INSTR_MAJOR != 1 ||
-            VOTES_MAJOR != 1
-        ) revert Policy_WrongModuleVersion(expected);
+        if (INSTR_MAJOR != 1 || VOTES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {

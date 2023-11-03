@@ -86,10 +86,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 1]);
-        if (
-            PRICE_MAJOR != 1 ||
-            ROLES_MAJOR != 1
-        ) revert Policy_WrongModuleVersion(expected);
+        if (PRICE_MAJOR != 1 || ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy

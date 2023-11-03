@@ -45,10 +45,7 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 1]);
-        if (
-            ROLES_MAJOR != 1 ||
-            TRSRY_MAJOR != 1
-        ) revert Policy_WrongModuleVersion(expected);
+        if (ROLES_MAJOR != 1 || TRSRY_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy

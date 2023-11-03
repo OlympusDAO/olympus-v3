@@ -8,7 +8,6 @@ import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 import "src/Kernel.sol";
 
 contract OlympusPriceConfig is Policy, RolesConsumer {
-
     // ========= STATE ========= //
 
     PRICEv1 internal PRICE;
@@ -33,10 +32,7 @@ contract OlympusPriceConfig is Policy, RolesConsumer {
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 1]);
-        if (
-            PRICE_MAJOR != 1 ||
-            ROLES_MAJOR != 1
-        ) revert Policy_WrongModuleVersion(expected);
+        if (PRICE_MAJOR != 1 || ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     function requestPermissions()

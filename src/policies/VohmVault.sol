@@ -37,7 +37,7 @@ contract VohmVault is Policy {
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1]);
-        if ( VOTES_MAJOR != 1 ) revert Policy_WrongModuleVersion(expected);
+        if (VOTES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
