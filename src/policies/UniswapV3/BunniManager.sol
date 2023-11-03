@@ -476,8 +476,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         uint48 minHarvest = lastHarvest + harvestFrequency;
         if (minHarvest > block.timestamp) revert BunniManager_HarvestTooEarly(minHarvest);
         
-        // TODO may need to call burn() to update fees beforehand
-
         uint256 currentHarvestReward = getCurrentHarvestReward();
 
         for (uint256 i = 0; i < poolCount; i++) {
