@@ -11,7 +11,7 @@ import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 //import {MockPolicy} from "test/mocks/KernelTestMocks.sol";
 
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
-import {TRSRYv1_1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {TRSRYv1_1, CategoryGroup, toCategoryGroup, fromCategoryGroup} from "src/modules/TRSRY/TRSRY.v1.sol";
 
 import "src/Kernel.sol";
 
@@ -80,9 +80,9 @@ import "src/Kernel.sol";
 //      [ ] zero locations after
 //      [ ] one location after
 //      [ ] many locations after
-// [ ] addCategoryGroup - adds an asset category group to the treasury
-//      [ ] reverts if category group is already configured
-//      [ ] category group data stored correctly
+// [X] addCategoryGroup - adds an asset category group to the treasury
+//      [X] reverts if category group is already configured
+//      [X] category group data stored correctly
 // [ ] addCategory - adds an asset category to the treasury
 //      [ ] reverts if category is already configured
 //      [ ] category data stored correctly
@@ -100,6 +100,50 @@ import "src/Kernel.sol";
 contract TRSRYv1_1Test is Test {
     using ModuleTestFixtureGenerator for OlympusTreasury;
 
+    address public godmode;
+
     Kernel internal kernel;
     OlympusTreasury public TRSRY;
+
+    MockERC20 public reserve;
+
+    function setUp() public {
+        // Kernel and Module creation
+        kernel = new Kernel();
+        TRSRY = new OlympusTreasury(kernel);
+
+        // Create token
+        reserve = new MockERC20("Reserve", "RSRV", 18);
+
+        // Create godmode
+        godmode = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
+
+        // Initialize module and godmode
+        kernel.executeAction(Actions.InstallModule, address(TRSRY));
+        kernel.executeAction(Actions.ActivatePolicy, godmode);
+
+        // Mint tokens to TRSRY
+        reserve.mint(address(TRSRY), 200_000_000e18);
+    }
+
+    function testCorrectness_addCategoryGroupRevertsIfAlreadyConfigured() public {
+        // Try to push 'liquidity-preference' category group which already exists
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_CategoryGroupExists(bytes32)",
+            toCategoryGroup("liquidity-preference")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("liquidity-preference"));
+    }
+
+    function testCorrectness_addCategoryGroupAddsGroup(bytes32 groupName_) public {
+        vm.prank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup(groupName_));
+
+        // Check that the category group was added
+        CategoryGroup addedGroup = TRSRY.categoryGroups(3);
+        assertEq(fromCategoryGroup(addedGroup), groupName_);
+    }
 }

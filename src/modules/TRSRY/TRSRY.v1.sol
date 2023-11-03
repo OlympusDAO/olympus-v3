@@ -201,6 +201,7 @@ abstract contract TRSRYv1_1 is TRSRYv1 {
     ) external view virtual returns (uint256, uint48);
 
     // ========== DATA MANAGEMENT ========== //
+
     function addAsset(address asset_, address[] calldata locations_) external virtual;
 
     function addAssetLocation(address asset_, address location_) external virtual;
