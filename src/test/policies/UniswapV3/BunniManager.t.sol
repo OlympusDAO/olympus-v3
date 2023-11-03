@@ -83,8 +83,9 @@ contract BunniManagerTest is Test {
     uint256 private constant USDC_PRICE = 1e18;
     uint256 private constant OHM_PRICE = OHM_USDC_PRICE;
 
-    uint256 private constant HARVEST_REWARD = 10e9;
-    uint16 private constant HARVEST_REWARD_FEE = 100; // 1%
+    // Keep the max reward low and fee high, so that the capped reward is low
+    uint256 private constant HARVEST_REWARD = 1e9;
+    uint16 private constant HARVEST_REWARD_FEE = 1000; // 10%
     uint48 private constant HARVEST_FREQUENCY = uint48(24 hours);
 
     function setUp() public {
@@ -314,14 +315,18 @@ contract BunniManagerTest is Test {
         });
     }
 
-    function _swap(address tokenIn_, address tokenOut_, address recipient_, uint256 amountIn_, uint256 amountOutMinimum_) internal {
+    function _swap(address tokenIn_, address tokenOut_, address recipient_, uint256 amountIn_, uint256 amountOutMinimum_) internal returns (uint256) {
         // Approve token transfer
         vm.prank(recipient_);
         IERC20(tokenIn_).approve(address(swapRouter), amountIn_);
 
+        bool zeroForOne = pool.token0() == tokenIn_ ? true : false;
+        // NOTE: The docs say that a value of 0 should work in testing, but it reverts due to a check. This value seems to work, after days of testing.
+        uint160 sqrtPriceLimitX96 = TickMath.getSqrtRatioAtTick(zeroForOne ? -TICK : TICK);
+
         // Perform the swap
         vm.prank(recipient_);
-        swapRouter.exactInputSingle(
+        return swapRouter.exactInputSingle(
             ISwapRouter.ExactInputSingleParams({
                 tokenIn: tokenIn_,
                 tokenOut: tokenOut_,
@@ -330,7 +335,7 @@ contract BunniManagerTest is Test {
                 deadline: block.timestamp,
                 amountIn: amountIn_,
                 amountOutMinimum: amountOutMinimum_,
-                sqrtPriceLimitX96: TickMath.getSqrtRatioAtTick(TICK) // NOTE: The docs say that a value of 0 should work in testing, but it reverts due to a check. This value seems to work, after days of testing.
+                sqrtPriceLimitX96: sqrtPriceLimitX96
             })
         );
     }
@@ -1405,7 +1410,7 @@ contract BunniManagerTest is Test {
     //  [X] reverts if bunniHub is not set
     //  [X] reverts when inactive
     //  [X] reverts if sufficient time has not elapsed
-    //  [ ] harvest compounds fees to the pool
+    //  [X] harvest compounds fees to the pool
     //  [ ] harvest compounds fees to the pool, multiple pools
     //  [ ] harvest reward paid matches currentHarvestReward
 
@@ -1465,38 +1470,57 @@ contract BunniManagerTest is Test {
     }
 
     function test_getCurrentHarvestReward(uint256 swapAmount_) public {
-        uint256 swapAmount = bound(swapAmount_, 100_000e6, 1_000_000e6);
-        uint256 swapOutput = swapAmount.mulDiv(OHM_USDC_PRICE, 1e6).mulDiv(1e9, 1e18);
-        uint256 USDC_DEPOSIT = 10_000_000e6 * OHM_USDC_PRICE / 1e18; // Ensures that the token amounts are in the correct ratio
-        uint256 OHM_DEPOSIT = 10_000_000e9;
+        uint256 swapAmountUsdcIn = bound(swapAmount_, 100_000e6, 5_000_000e6);
 
-        // Deploy the token
-        vm.prank(policy);
-        IBunniToken token = bunniManager.deployToken(address(pool));
+        IBunniToken token;
+        {
+            uint256 USDC_DEPOSIT = 10_000_000e6 * OHM_USDC_PRICE / 1e18; // Ensures that the token amounts are in the correct ratio
+            uint256 OHM_DEPOSIT = 10_000_000e9;
 
-        // Mint the non-OHM token to the TRSRY
-        usdc.mint(address(treasury), USDC_DEPOSIT);
+            // Deploy the token
+            vm.prank(policy);
+            token = bunniManager.deployToken(address(pool));
 
-        // Deposit
-        vm.prank(policy);
-        bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+            // Mint the non-OHM token to the TRSRY
+            usdc.mint(address(treasury), USDC_DEPOSIT);
 
-        // Mint USDC into another wallet
-        usdc.mint(address(alice), swapAmount);
+            // Deposit
+            vm.prank(policy);
+            bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+
+            // Mint USDC into another wallet
+            usdc.mint(address(alice), swapAmountUsdcIn);
+        }
 
         // Perform the swap
-        _swap(address(usdc), address(ohm), address(alice), swapAmount, swapOutput.mulDiv(95, 100));
+        uint256 swapOneOhmMinimum;
+        {
+            swapOneOhmMinimum = swapAmountUsdcIn.mulDiv(1e18, 1e6).mulDiv(1e18, OHM_USDC_PRICE).mulDiv(1e9, 1e18).mulDiv(95, 100);
+            _swap(address(usdc), address(ohm), address(alice), swapAmountUsdcIn, swapOneOhmMinimum);
+        }
+
+        // And reverse
+        {
+            uint256 swapTwoUsdcMinimum = swapOneOhmMinimum.mulDiv(1e18, 1e9).mulDiv(OHM_USDC_PRICE, 1e18).mulDiv(1e6, 1e18).mulDiv(95, 100);
+            console2.log("before");
+            _swap(address(ohm), address(usdc), address(alice), swapOneOhmMinimum, swapTwoUsdcMinimum);
+            console2.log("after");
+        }
+
         _recalculateFees(pool);
 
-        // Record the fees generated
-        (, , , uint128 fees0, uint128 fees1) = pool.positions(
-            keccak256(abi.encodePacked(address(bunniHub), token.tickLower(), token.tickUpper()))
-        );
-        uint256 usdcFees = uint256(address(pool.token0()) == address(usdc) ? fees0 : fees1).mulDiv(1e18, 1e6).mulDiv(USDC_PRICE, 1e18); // Convert to 18 decimals and multiply by price
-        uint256 ohmFees = uint256(address(pool.token0()) == address(ohm) ? fees0 : fees1).mulDiv(1e18, 1e9).mulDiv(OHM_PRICE, 1e18); // Convert to 18 decimals and multiply by price
-        uint256 expectedRewardValue = uint256(HARVEST_REWARD_FEE).mulDiv(usdcFees + ohmFees, uint256(BPS_MAX));
-        assertGt(expectedRewardValue, 0);
-        uint256 expectedRewardOhm = expectedRewardValue.mulDiv(1e9, OHM_PRICE);
+        uint256 expectedRewardOhm;
+        {
+            // Record the fees generated
+            (, , , uint128 fees0, uint128 fees1) = pool.positions(
+                keccak256(abi.encodePacked(address(bunniHub), token.tickLower(), token.tickUpper()))
+            );
+            uint256 usdcFees = uint256(address(pool.token0()) == address(usdc) ? fees0 : fees1).mulDiv(1e18, 1e6).mulDiv(USDC_PRICE, 1e18); // Convert to 18 decimals and multiply by price
+            uint256 ohmFees = uint256(address(pool.token0()) == address(ohm) ? fees0 : fees1).mulDiv(1e18, 1e9).mulDiv(OHM_PRICE, 1e18); // Convert to 18 decimals and multiply by price
+            uint256 expectedRewardValue = uint256(HARVEST_REWARD_FEE).mulDiv(usdcFees + ohmFees, uint256(BPS_MAX));
+            assertGt(expectedRewardValue, 0);
+            expectedRewardOhm = expectedRewardValue.mulDiv(1e9, OHM_PRICE);
+        }
 
         // Cap the reward
         if (expectedRewardOhm > HARVEST_REWARD) {
