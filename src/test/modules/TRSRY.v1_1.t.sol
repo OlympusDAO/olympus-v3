@@ -35,12 +35,12 @@ import "src/Kernel.sol";
 //      [X] non-zero balance in treasury and externally
 //      [X] current variant returns real-time data
 //      [X] last variant returns cached data
-// [ ] storeBalance - caches the balance of a given asset
-//      [ ] zero balance in treasury and externally
-//      [ ] zero balance in treasury and non-zero balance externally
-//      [ ] non-zero balance in treasury and zero balance externally
-//      [ ] non-zero balance in treasury and externally
-//      [ ] reverts if asset is not configured on treasury
+// [X] storeBalance - caches the balance of a given asset
+//      [X] reverts if asset is not configured on treasury
+//      [X] zero balance in treasury and externally
+//      [X] zero balance in treasury and non-zero balance externally
+//      [X] non-zero balance in treasury and zero balance externally
+//      [X] non-zero balance in treasury and externally
 // [ ] getCategoryBalance - returns the balance of a given category
 //      [ ] zero assets
 //      [ ] one asset
@@ -347,6 +347,98 @@ contract TRSRYv1_1Test is Test {
         );
         assertEq(balance, 2_000e18);
         assertEq(timestamp, block.timestamp - 100);
+    }
+
+    // ========= storeBalance ========= //
+
+    function testCorrectness_storeBalanceRevertsIfAssetDoesNotExist() public {
+        // Try to store balance of zero address
+        bytes memory err = abi.encodeWithSignature("TRSRY_AssetNotApproved(address)", address(0));
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.storeBalance(address(0));
+    }
+
+    function testCorrectness_storeBalanceZeroBalanceInTreasuryAndExternally() public {
+        // Add asset
+        vm.startPrank(godmode);
+        TRSRY.addAsset(address(weth), new address[](0));
+
+        // Store balance
+        TRSRY.storeBalance(address(weth));
+        vm.stopPrank();
+
+        // Get asset data
+        OlympusTreasury.Asset memory assetData_ = TRSRY.getAssetData(address(weth));
+
+        // Assert that the balance is zero and timestamp is current
+        assertEq(assetData_.lastBalance, 0);
+        assertEq(assetData_.updatedAt, block.timestamp);
+    }
+
+    function testCorrectness_storeBalanceZeroBalanceInTreasuryAndNonZeroBalanceExternally() public {
+        address[] memory addr = new address[](1);
+        addr[0] = address(this);
+
+        weth.mint(address(this), 1_000e18);
+
+        // Add asset
+        vm.startPrank(godmode);
+        TRSRY.addAsset(address(weth), addr);
+
+        // Store balance
+        TRSRY.storeBalance(address(weth));
+        vm.stopPrank();
+
+        // Get asset data
+        OlympusTreasury.Asset memory assetData_ = TRSRY.getAssetData(address(weth));
+
+        // Assert that the balance is correct and timestamp is current
+        assertEq(assetData_.lastBalance, 1_000e18);
+        assertEq(assetData_.updatedAt, block.timestamp);
+    }
+
+    function testCorrectness_storeBalanceNonZeroBalanceInTreasuryAndZeroBalanceExternally() public {
+        weth.mint(address(TRSRY), 1_000e18);
+
+        // Add asset
+        vm.startPrank(godmode);
+        TRSRY.addAsset(address(weth), new address[](0));
+
+        // Store balance
+        TRSRY.storeBalance(address(weth));
+        vm.stopPrank();
+
+        // Get asset data
+        OlympusTreasury.Asset memory assetData_ = TRSRY.getAssetData(address(weth));
+
+        // Assert that the balance is correct and timestamp is current
+        assertEq(assetData_.lastBalance, 1_000e18);
+        assertEq(assetData_.updatedAt, block.timestamp);
+    }
+
+    function testCorrectness_storeBalanceNonZeroBalanceInTreasuryAndExternally() public {
+        weth.mint(address(TRSRY), 1_000e18);
+        weth.mint(address(this), 1_000e18);
+
+        address[] memory addr = new address[](1);
+        addr[0] = address(this);
+
+        // Add asset
+        vm.startPrank(godmode);
+        TRSRY.addAsset(address(weth), addr);
+
+        // Store balance
+        TRSRY.storeBalance(address(weth));
+        vm.stopPrank();
+
+        // Get asset data
+        OlympusTreasury.Asset memory assetData_ = TRSRY.getAssetData(address(weth));
+
+        // Assert that the balance is correct and timestamp is current
+        assertEq(assetData_.lastBalance, 2_000e18);
+        assertEq(assetData_.updatedAt, block.timestamp);
     }
 
     // ========= addCategoryGroup ========= //
