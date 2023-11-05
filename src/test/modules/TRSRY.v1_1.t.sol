@@ -22,11 +22,11 @@ import "src/Kernel.sol";
 //      [X] zero assets
 //      [X] one asset
 //      [X] many assets
-// [ ] getAssetsByCategory - returns all assets in a given category
-//      [ ] zero assets
-//      [ ] one asset
-//      [ ] many assets
-//      [ ] reverts if category does not exist
+// [X] getAssetsByCategory - returns all assets in a given category
+//      [X] reverts if category does not exist
+//      [X] zero assets
+//      [X] one asset
+//      [X] many assets
 // [ ] getAssetBalance - returns the balance of a given asset
 //      [ ] zero balance in treasury and externally
 //      [ ] zero balance in treasury and non-zero balance externally
@@ -155,6 +155,67 @@ contract TRSRYv1_1Test is Test {
         assertEq(TRSRY.getAssets().length, 2);
         assertEq(TRSRY.getAssets()[0], address(reserve));
         assertEq(TRSRY.getAssets()[1], address(weth));
+    }
+
+    // ========= getAssetsByCategory ========= //
+
+    function testCorrectness_getAssetsByCategoryRevertsIfCategoryDoesNotExist() public {
+        // Try to get assets by category 'abcdef' which does not exist
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_InvalidParams(uint256,bytes)",
+            0,
+            abi.encode(toCategory("abcdef"))
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.getAssetsByCategory(toCategory("abcdef"));
+    }
+
+    function testCorrectness_getAssetsByCategoryReturnsZeroAssets() public {
+        // Add category
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+        vm.stopPrank();
+
+        // Assert that there are no assets in the category
+        assertEq(TRSRY.getAssetsByCategory(toCategory("test")).length, 0);
+    }
+
+    function testCorrectness_getAssetsByCategoryReturnsOneAsset() public {
+        // Add category
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+
+        // Add asset
+        TRSRY.addAsset(address(reserve), new address[](0));
+        TRSRY.categorize(address(reserve), toCategory("test"));
+        vm.stopPrank();
+
+        // Assert that there is one asset in the category
+        assertEq(TRSRY.getAssetsByCategory(toCategory("test")).length, 1);
+        assertEq(TRSRY.getAssetsByCategory(toCategory("test"))[0], address(reserve));
+    }
+
+    function testCorrectness_getAssetsByCategoryReturnsManyAssets() public {
+        // Add category
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+
+        // Add assets
+        TRSRY.addAsset(address(reserve), new address[](0));
+        TRSRY.addAsset(address(weth), new address[](0));
+        TRSRY.categorize(address(reserve), toCategory("test"));
+        TRSRY.categorize(address(weth), toCategory("test"));
+        vm.stopPrank();
+
+        // Assert that there are two assets in the category
+        assertEq(TRSRY.getAssetsByCategory(toCategory("test")).length, 2);
+        assertEq(TRSRY.getAssetsByCategory(toCategory("test"))[0], address(reserve));
+        assertEq(TRSRY.getAssetsByCategory(toCategory("test"))[1], address(weth));
     }
 
     // ========= addCategoryGroup ========= //
