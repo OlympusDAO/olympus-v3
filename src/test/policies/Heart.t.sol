@@ -56,8 +56,8 @@ contract HeartTest is Test {
     MockERC20 internal rewardToken;
 
     Kernel internal kernel;
-    MockPrice internal price;
-    OlympusRoles internal roles;
+    MockPrice internal PRICE;
+    OlympusRoles internal ROLES;
 
     MockOperator internal operator;
     OlympusHeart internal heart;
@@ -89,14 +89,14 @@ contract HeartTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy modules (some mocks)
-            price = new MockPrice(kernel, PRICE_FREQUENCY, 10 * 1e18);
-            roles = new OlympusRoles(kernel);
+            PRICE = new MockPrice(kernel, PRICE_FREQUENCY, 10 * 1e18);
+            ROLES = new OlympusRoles(kernel);
 
             // Configure mocks
-            price.setMovingAverage(100 * 1e18);
-            price.setLastPrice(100 * 1e18);
-            price.setCurrentPrice(100 * 1e18);
-            price.setDecimals(18);
+            PRICE.setMovingAverage(100 * 1e18);
+            PRICE.setLastPrice(100 * 1e18);
+            PRICE.setCurrentPrice(100 * 1e18);
+            PRICE.setDecimals(18);
         }
 
         {
@@ -119,8 +119,8 @@ contract HeartTest is Test {
             // Initialize system and kernel
 
             // Install modules
-            kernel.executeAction(Actions.InstallModule, address(price));
-            kernel.executeAction(Actions.InstallModule, address(roles));
+            kernel.executeAction(Actions.InstallModule, address(PRICE));
+            kernel.executeAction(Actions.InstallModule, address(ROLES));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
@@ -129,7 +129,7 @@ contract HeartTest is Test {
 
             // Configure access control
 
-            // Heart roles
+            // Heart ROLES
             rolesAdmin.grantRole("heart_admin", policy);
         }
 
@@ -139,7 +139,32 @@ contract HeartTest is Test {
         }
     }
 
-    // =========  HELPER FUNCTIONS ========= //
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](2);
+        expectedDeps[0] = toKeycode("PRICE");
+        expectedDeps[1] = toKeycode("ROLES");
+
+        Keycode[] memory deps = heart.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](1);
+
+        expectedPerms[0] = Permissions(PRICE.KEYCODE(), PRICE.updateMovingAverage.selector);
+        Permissions[] memory perms = heart.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
+        }
+    }
 
     // =========  KEEPER FUNCTIONS ========= //
     // DONE
@@ -147,7 +172,7 @@ contract HeartTest is Test {
     //     [X] active and frequency has passed
     //     [X] cannot beat if not active
     //     [X] cannot beat if not enough time has passed
-    //     [X] fails if price or operator revert
+    //     [X] fails if PRICE or operator revert
     //     [X] reward auction functions correctly based on time since beat available
 
     function testCorrectness_beat() public {
@@ -211,8 +236,8 @@ contract HeartTest is Test {
         uint48 frequency = heart.frequency();
         vm.warp(block.timestamp + frequency);
 
-        // Set the price mock to return false
-        price.setResult(false);
+        // Set the PRICE mock to return false
+        PRICE.setResult(false);
 
         // Try to beat the heart and expect revert
         heart.beat();
@@ -223,7 +248,7 @@ contract HeartTest is Test {
         uint48 frequency = heart.frequency();
         vm.warp(block.timestamp + frequency);
 
-        // Set the price mock to return false
+        // Set the PRICE mock to return false
         operator.setResult(false);
 
         // Try to beat the heart and expect revert

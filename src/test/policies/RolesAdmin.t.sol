@@ -43,6 +43,34 @@ contract RolesAdminTest is Test {
         admin = address(this);
     }
 
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](1);
+        expectedDeps[0] = toKeycode("ROLES");
+
+        Keycode[] memory deps = rolesAdmin.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](2);
+        Keycode ROLES_KEYCODE = toKeycode("ROLES");
+        expectedPerms[0] = Permissions(ROLES_KEYCODE, ROLES.saveRole.selector);
+        expectedPerms[1] = Permissions(ROLES_KEYCODE, ROLES.removeRole.selector);
+        Permissions[] memory perms = rolesAdmin.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
+        }
+    }
+
+    // ======== ROLES TESTS ======= //
+
     function testCorrectness_OnlyAdmin() public {
         bytes memory err = abi.encodeWithSelector(RolesAdmin.Roles_OnlyAdmin.selector);
         vm.expectRevert(err);
