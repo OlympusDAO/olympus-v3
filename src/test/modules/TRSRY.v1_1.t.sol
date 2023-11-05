@@ -18,10 +18,10 @@ import "src/Kernel.sol";
 // Tests for OlympusTreasury v1.1
 // TODO
 // Asset Information
-// [ ] getAssets - returns all assets configured in the treasury
-//      [ ] zero assets
-//      [ ] one asset
-//      [ ] many assets
+// [X] getAssets - returns all assets configured in the treasury
+//      [X] zero assets
+//      [X] one asset
+//      [X] many assets
 // [ ] getAssetsByCategory - returns all assets in a given category
 //      [ ] zero assets
 //      [ ] one asset
@@ -105,6 +105,7 @@ contract TRSRYv1_1Test is Test {
     OlympusTreasury public TRSRY;
 
     MockERC20 public reserve;
+    MockERC20 public weth;
 
     function setUp() public {
         // Kernel and Module creation
@@ -113,6 +114,7 @@ contract TRSRYv1_1Test is Test {
 
         // Create token
         reserve = new MockERC20("Reserve", "RSRV", 18);
+        weth = new MockERC20("WETH", "WETH", 18);
 
         // Create godmode
         godmode = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
@@ -123,6 +125,36 @@ contract TRSRYv1_1Test is Test {
 
         // Mint tokens to TRSRY
         reserve.mint(address(TRSRY), 200_000_000e18);
+    }
+
+    // ========= getAssets ========= //
+
+    function testCorrectness_getAssetsReturnsZeroAssets() public {
+        // Assert that there are no assets
+        assertEq(TRSRY.getAssets().length, 0);
+    }
+
+    function testCorrectness_getAssetsReturnsOneAsset() public {
+        // Add asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(reserve), new address[](0));
+
+        // Assert that there is one asset
+        assertEq(TRSRY.getAssets().length, 1);
+        assertEq(TRSRY.getAssets()[0], address(reserve));
+    }
+
+    function testCorrectness_getAssetsReturnsManyAssets() public {
+        // Add assets
+        vm.startPrank(godmode);
+        TRSRY.addAsset(address(reserve), new address[](0));
+        TRSRY.addAsset(address(weth), new address[](0));
+        vm.stopPrank();
+
+        // Assert that there are three assets
+        assertEq(TRSRY.getAssets().length, 2);
+        assertEq(TRSRY.getAssets()[0], address(reserve));
+        assertEq(TRSRY.getAssets()[1], address(weth));
     }
 
     // ========= addCategoryGroup ========= //
