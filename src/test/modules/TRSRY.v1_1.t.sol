@@ -27,14 +27,14 @@ import "src/Kernel.sol";
 //      [X] zero assets
 //      [X] one asset
 //      [X] many assets
-// [ ] getAssetBalance - returns the balance of a given asset
-//      [ ] zero balance in treasury and externally
-//      [ ] zero balance in treasury and non-zero balance externally
-//      [ ] non-zero balance in treasury and zero balance externally
-//      [ ] non-zero balance in treasury and externally
-//      [ ] current variant returns real-time data
-//      [ ] last variant returns cached data
-//      [ ] reverts if asset is not configured on treasury
+// [X] getAssetBalance - returns the balance of a given asset
+//      [X] reverts if asset is not configured on treasury
+//      [X] zero balance in treasury and externally
+//      [X] zero balance in treasury and non-zero balance externally
+//      [X] non-zero balance in treasury and zero balance externally
+//      [X] non-zero balance in treasury and externally
+//      [X] current variant returns real-time data
+//      [X] last variant returns cached data
 // [ ] storeBalance - caches the balance of a given asset
 //      [ ] zero balance in treasury and externally
 //      [ ] zero balance in treasury and non-zero balance externally
@@ -216,6 +216,137 @@ contract TRSRYv1_1Test is Test {
         assertEq(TRSRY.getAssetsByCategory(toCategory("test")).length, 2);
         assertEq(TRSRY.getAssetsByCategory(toCategory("test"))[0], address(reserve));
         assertEq(TRSRY.getAssetsByCategory(toCategory("test"))[1], address(weth));
+    }
+
+    // ========= getAssetBalance ========= //
+
+    function testCorrectness_getAssetBalanceRevertsIfAssetDoesNotExist() public {
+        // Try to get balance of zero address
+        bytes memory err = abi.encodeWithSignature("TRSRY_AssetNotApproved(address)", address(0));
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.getAssetBalance(address(0), TRSRYv1_1.Variant.CURRENT);
+    }
+
+    function testCorrectness_getAssetBalanceZeroBalanceInTreasuryAndExternally() public {
+        // Add asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(weth), new address[](0));
+
+        // Assert that the balance is zero
+        (uint256 balance, uint48 timestamp) = TRSRY.getAssetBalance(
+            address(weth),
+            TRSRYv1_1.Variant.CURRENT
+        );
+        assertEq(balance, 0);
+        assertEq(timestamp, block.timestamp);
+    }
+
+    function testCorrectness_getAssetBalanceZeroBalanceInTreasuryAndNonZeroBalanceExternally()
+        public
+    {
+        address[] memory addr = new address[](1);
+        addr[0] = address(this);
+
+        weth.mint(address(this), 1_000e18);
+
+        // Add asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(weth), addr);
+
+        // Assert that the balance is zero
+        (uint256 balance, uint48 timestamp) = TRSRY.getAssetBalance(
+            address(weth),
+            TRSRYv1_1.Variant.CURRENT
+        );
+        assertEq(balance, 1_000e18);
+        assertEq(timestamp, block.timestamp);
+    }
+
+    function testCorrectness_getAssetBalanceNonZeroBalanceInTreasuryAndZeroBalanceExternally()
+        public
+    {
+        weth.mint(address(TRSRY), 1_000e18);
+
+        // Add asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(weth), new address[](0));
+
+        // Assert that the balance is zero
+        (uint256 balance, uint48 timestamp) = TRSRY.getAssetBalance(
+            address(weth),
+            TRSRYv1_1.Variant.CURRENT
+        );
+        assertEq(balance, 1_000e18);
+        assertEq(timestamp, block.timestamp);
+    }
+
+    function testCorrectness_getAssetBalanceNonZeroBalanceInTreasuryAndExternally() public {
+        weth.mint(address(TRSRY), 1_000e18);
+        weth.mint(address(this), 1_000e18);
+
+        address[] memory addr = new address[](1);
+        addr[0] = address(this);
+
+        // Add asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(weth), addr);
+
+        // Assert that the balance is zero
+        (uint256 balance, uint48 timestamp) = TRSRY.getAssetBalance(
+            address(weth),
+            TRSRYv1_1.Variant.CURRENT
+        );
+        assertEq(balance, 2_000e18);
+        assertEq(timestamp, block.timestamp);
+    }
+
+    function testCorrectness_getAssetBalanceCurrentIsCurrent() public {
+        weth.mint(address(TRSRY), 1_000e18);
+        weth.mint(address(this), 1_000e18);
+
+        address[] memory addr = new address[](1);
+        addr[0] = address(this);
+
+        // Add asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(weth), addr);
+
+        // Mint more
+        weth.mint(address(TRSRY), 1_000e18);
+
+        // Assert that the balance is zero
+        (uint256 balance, uint48 timestamp) = TRSRY.getAssetBalance(
+            address(weth),
+            TRSRYv1_1.Variant.CURRENT
+        );
+        assertEq(balance, 3_000e18);
+        assertEq(timestamp, block.timestamp);
+    }
+
+    function testCorrectness_getAssetBalanceLastIsCached() public {
+        weth.mint(address(TRSRY), 1_000e18);
+        weth.mint(address(this), 1_000e18);
+
+        address[] memory addr = new address[](1);
+        addr[0] = address(this);
+
+        // Add asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(weth), addr);
+
+        // Mint more and warp
+        vm.warp(block.timestamp + 100);
+        weth.mint(address(TRSRY), 1_000e18);
+
+        // Assert that the balance is zero
+        (uint256 balance, uint48 timestamp) = TRSRY.getAssetBalance(
+            address(weth),
+            TRSRYv1_1.Variant.LAST
+        );
+        assertEq(balance, 2_000e18);
+        assertEq(timestamp, block.timestamp - 100);
     }
 
     // ========= addCategoryGroup ========= //
