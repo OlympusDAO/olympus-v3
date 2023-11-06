@@ -659,14 +659,18 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice         Convenience method to create a BunniKey identifier representing a full-range position.
     /// @param pool_    The address of the Uniswap V3 pool
     /// @return         The BunniKey identifier
-    function _getBunniKey(address pool_) internal pure returns (BunniKey memory) {
+    function _getBunniKey(address pool_) internal view returns (BunniKey memory) {
+        // Get the pool fee and use it to calculate the correct tick spacing
+        uint24 poolFee = IUniswapV3Pool(pool_).fee();
+        int24 tickSpacing = int24(poolFee) / TICK_SPACING_DIVISOR;
+
         return
             BunniKey({
                 pool: IUniswapV3Pool(pool_),
                 // The ticks need to be divisible by the tick spacing
                 // Source: https://github.com/Aboudoc/Uniswap-v3/blob/7aa9db0d0bf3d188a8a53a1dbe542adf7483b746/contracts/UniswapV3Liquidity.sol#L49C23-L49C23
-                tickLower: (TickMath.MIN_TICK / TICK_SPACING_DIVISOR) * TICK_SPACING_DIVISOR,
-                tickUpper: (TickMath.MAX_TICK / TICK_SPACING_DIVISOR) * TICK_SPACING_DIVISOR
+                tickLower: (TickMath.MIN_TICK / tickSpacing) * tickSpacing,
+                tickUpper: (TickMath.MAX_TICK / tickSpacing) * tickSpacing
             });
     }
 
