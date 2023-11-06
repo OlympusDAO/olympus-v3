@@ -460,8 +460,8 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     function categorize(address asset_, Category category_) external override permissioned {
-        // Check that address is not zero
-        if (asset_ == address(0)) revert TRSRY_InvalidParams(0, abi.encode(asset_));
+        // Check that asset is initialized
+        if (!assetData[asset_].approved) revert TRSRY_InvalidParams(0, abi.encode(asset_));
 
         // Check if the category exists by seeing if it has a non-zero category group
         CategoryGroup group = categoryToGroup[category_];

@@ -934,6 +934,10 @@ contract TRSRYv1_1Test is Test {
     }
 
     function testCorrectness_categorizeRevertsIfInvalidCategory() public {
+        // Add asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(reserve), new address[](0));
+
         // Try to categorize zero address
         bytes memory err = abi.encodeWithSignature(
             "TRSRY_CategoryDoesNotExist(bytes32)",
@@ -950,6 +954,9 @@ contract TRSRYv1_1Test is Test {
         vm.startPrank(godmode);
         TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
         TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+
+        // Add asset
+        TRSRY.addAsset(address(reserve), new address[](0));
 
         // Assert that categorization for the asset is null
         assertEq(
@@ -973,12 +980,16 @@ contract TRSRYv1_1Test is Test {
         TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
         TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
 
+        // Add assets
+        TRSRY.addAsset(address(weth), new address[](0));
+        TRSRY.addAsset(address(reserve), new address[](0));
+
         // Categorize asset
-        TRSRY.categorize(address(1), toCategory("test"));
+        TRSRY.categorize(address(weth), toCategory("test"));
 
         // Assert that the asset was categorized
         assertEq(
-            fromCategory(TRSRY.categorization(address(1), toCategoryGroup("test-group"))),
+            fromCategory(TRSRY.categorization(address(weth), toCategoryGroup("test-group"))),
             "test"
         );
 
@@ -998,17 +1009,22 @@ contract TRSRYv1_1Test is Test {
         TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
         TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
 
+        // Add assets
+        TRSRY.addAsset(address(weth), new address[](0));
+        TRSRY.addAsset(address(tkn), new address[](0));
+        TRSRY.addAsset(address(reserve), new address[](0));
+
         // Categorize assets
-        TRSRY.categorize(address(1), toCategory("test"));
-        TRSRY.categorize(address(2), toCategory("test"));
+        TRSRY.categorize(address(weth), toCategory("test"));
+        TRSRY.categorize(address(tkn), toCategory("test"));
 
         // Assert that the asset was categorized
         assertEq(
-            fromCategory(TRSRY.categorization(address(1), toCategoryGroup("test-group"))),
+            fromCategory(TRSRY.categorization(address(weth), toCategoryGroup("test-group"))),
             "test"
         );
         assertEq(
-            fromCategory(TRSRY.categorization(address(2), toCategoryGroup("test-group"))),
+            fromCategory(TRSRY.categorization(address(tkn), toCategoryGroup("test-group"))),
             "test"
         );
 
