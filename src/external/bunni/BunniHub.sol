@@ -159,6 +159,18 @@ contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagemen
     }
 
     /// @inheritdoc IBunniHub
+    function updateSwapFees(
+        BunniKey calldata key
+    ) external virtual override returns (uint256 swapFee0, uint256 swapFee1) {
+        key.pool.burn(key.tickLower, key.tickUpper, 0);
+        (, , , uint128 cachedFeesOwed0, uint128 cachedFeesOwed1) = key.pool.positions(
+            keccak256(abi.encodePacked(address(this), key.tickLower, key.tickUpper))
+        );
+
+        return (cachedFeesOwed0, cachedFeesOwed1);
+    }
+
+    /// @inheritdoc IBunniHub
     function compound(
         BunniKey calldata key
     ) external virtual override returns (uint128 addedLiquidity, uint256 amount0, uint256 amount1) {

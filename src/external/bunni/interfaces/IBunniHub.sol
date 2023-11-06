@@ -156,6 +156,21 @@ interface IBunniHub is IMulticall, ISelfPermit, ILiquidityManagement {
         WithdrawParams calldata params
     ) external returns (uint128 removedLiquidity, uint256 amount0, uint256 amount1);
 
+    /// @notice             Updates the swap fees for the given Uniswap V3 pool
+    /// @dev                Must be called after the corresponding BunniToken has been deployed via deployBunniToken()
+    ///
+    ///                     This function is not part of the original BunniHub codebase, and was added by the Olympus team.
+    ///
+    ///                     The function enables the BunniManager policy to update the fees, since
+    ///                     IUniswapV3Pool.burn() will update the fees for the caller only.
+    ///
+    /// @param key          The Bunni position's key
+    /// @return swapFee0    The new swap fee for token0
+    /// @return swapFee1    The new swap fee for token1
+    function updateSwapFees(
+        BunniKey calldata key
+    ) external returns (uint256 swapFee0, uint256 swapFee1);
+
     /// @notice Claims the trading fees earned and uses it to add liquidity.
     /// @dev Must be called after the corresponding BunniToken has been deployed via deployBunniToken()
     /// @param key The Bunni position's key
