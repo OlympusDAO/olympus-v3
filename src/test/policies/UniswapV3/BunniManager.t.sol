@@ -45,12 +45,15 @@ contract BunniManagerTest is Test {
     MockOhm internal ohm;
     MockERC20 internal usdc;
     MockERC20 internal wETH;
+    address internal usdcAddress;
+    address internal ohmAddress;
 
     Kernel internal kernel;
     OlympusRoles internal roles;
     OlympusTreasury internal treasury;
     OlympusMinter internal mintr;
     OlympusPricev2 internal price;
+    address internal treasuryAddress;
 
     UniswapV3Factory internal uniswapFactory;
     SwapRouter internal swapRouter;
@@ -60,6 +63,8 @@ contract BunniManagerTest is Test {
     BunniManager internal bunniManager;
     BunniHub internal bunniHub;
     IUniswapV3Pool internal pool;
+    address internal bunniHubAddress;
+    address internal bunniManagerAddress;
 
     uint24 private constant POOL_FEE = 500;
     uint256 private constant OHM_USDC_PRICE = 115897 * 1e14; // 11.5897 USDC per OHM in 18 decimal places
@@ -88,6 +93,8 @@ contract BunniManagerTest is Test {
     uint16 private constant HARVEST_REWARD_FEE = 1000; // 10%
     uint48 private constant HARVEST_FREQUENCY = uint48(24 hours);
 
+    mapping(address => mapping(address => uint256)) private tokenBalances;
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -101,6 +108,9 @@ contract BunniManagerTest is Test {
             ohm = new MockOhm("Olympus", "OHM", 9);
             usdc = new MockERC20("USDC", "USDC", 6);
             wETH = new MockERC20("Wrapped Ether", "wETH", 18);
+
+            ohmAddress = address(ohm);
+            usdcAddress = address(usdc);
         }
 
         {
@@ -110,8 +120,10 @@ contract BunniManagerTest is Test {
             // Deploy modules
             roles = new OlympusRoles(kernel);
             treasury = new OlympusTreasury(kernel);
-            mintr = new OlympusMinter(kernel, address(ohm));
+            mintr = new OlympusMinter(kernel, ohmAddress);
             price = new OlympusPricev2(kernel, uint8(18), uint32(8 hours));
+
+            treasuryAddress = address(treasury);
         }
 
         {
@@ -132,11 +144,14 @@ contract BunniManagerTest is Test {
             // Deploy BunniHub
             bunniHub = new BunniHub(
                 uniswapFactory,
-                address(bunniManager),
+                bunniManagerAddress,
                 0 // No protocol fee
             );
 
             rolesAdmin = new RolesAdmin(kernel);
+
+            bunniHubAddress = address(bunniHub);
+            bunniManagerAddress = address(bunniManager);
         }
 
         {
@@ -144,12 +159,12 @@ contract BunniManagerTest is Test {
 
             // Install modules
             kernel.executeAction(Actions.InstallModule, address(roles));
-            kernel.executeAction(Actions.InstallModule, address(treasury));
+            kernel.executeAction(Actions.InstallModule, treasuryAddress);
             kernel.executeAction(Actions.InstallModule, address(mintr));
             kernel.executeAction(Actions.InstallModule, address(price));
 
             // Approve policies
-            kernel.executeAction(Actions.ActivatePolicy, address(bunniManager));
+            kernel.executeAction(Actions.ActivatePolicy, bunniManagerAddress);
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
 
@@ -162,7 +177,7 @@ contract BunniManagerTest is Test {
 
         {
             // Create a Uniswap V3 pool
-            pool = IUniswapV3Pool(uniswapFactory.createPool(address(ohm), address(usdc), POOL_FEE));
+            pool = IUniswapV3Pool(uniswapFactory.createPool(ohmAddress, usdcAddress, POOL_FEE));
 
             // Initialize it
             pool.initialize(OHM_USDC_SQRTPRICEX96);
@@ -170,14 +185,14 @@ contract BunniManagerTest is Test {
 
         {
             // Mock values, to avoid having to set up all of PRICEv2 and submodules
-            _mockGetPrice(address(ohm), OHM_PRICE);
-            _mockGetPrice(address(usdc), USDC_PRICE);
+            _mockGetPrice(ohmAddress, OHM_PRICE);
+            _mockGetPrice(usdcAddress, USDC_PRICE);
         }
 
         {
             vm.prank(policy);
             // Set the BunniHub on the manager policy
-            bunniManager.setBunniHub(address(bunniHub));
+            bunniManager.setBunniHub(bunniHubAddress);
         }
     }
 
@@ -342,8 +357,16 @@ contract BunniManagerTest is Test {
 
     function _recalculateFees(IUniswapV3Pool pool_) internal {
         // Calling burn with 0 amount triggers an update of fees for the caller
-        vm.prank(address(bunniHub));
+        vm.prank(bunniHubAddress);
         pool_.burn(-TICK, TICK, uint128(0));
+    }
+
+    function _storeTokenBalance(address wallet_, address token_) internal {
+        tokenBalances[wallet_][token_] = IERC20(token_).balanceOf(wallet_);
+    }
+
+    function _getStoredTokenBalance(address wallet_, address token_) internal view returns (uint256) {
+        return tokenBalances[wallet_][token_];
     }
 
     // [X] constructor (tested in setUp)
@@ -396,7 +419,7 @@ contract BunniManagerTest is Test {
 
         // Mock an incompatibility with the module
         vm.mockCall(
-            address(treasury), 
+            treasuryAddress, 
             abi.encodeWithSelector(OlympusTreasury.VERSION.selector), 
             abi.encode(version_, 0)
         );
@@ -508,10 +531,10 @@ contract BunniManagerTest is Test {
     }
 
     function test_registerPool_invalidPoolReverts() public {
-        _expectRevert_poolNotFound(address(ohm));
+        _expectRevert_poolNotFound(ohmAddress);
 
         vm.prank(policy);
-        bunniManager.registerPool(address(ohm));
+        bunniManager.registerPool(ohmAddress);
     }
 
     function test_registerPool_noDeployedTokenReverts() public {
@@ -547,12 +570,12 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.setBunniOwner(address(newBunniManager));
         vm.prank(policy);
-        newBunniManager.setBunniHub(address(bunniHub));
+        newBunniManager.setBunniHub(bunniHubAddress);
 
         // Mock an error when getting the price
-        _mockGetPriceReverts(address(usdc));
+        _mockGetPriceReverts(usdcAddress);
 
-        _expectRevert_priceZero(address(usdc));
+        _expectRevert_priceZero(usdcAddress);
 
         vm.prank(policy);
         newBunniManager.registerPool(address(pool));
@@ -570,12 +593,12 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.setBunniOwner(address(newBunniManager));
         vm.prank(policy);
-        newBunniManager.setBunniHub(address(bunniHub));
+        newBunniManager.setBunniHub(bunniHubAddress);
 
         // Mock an error when getting the price
-        _mockGetPriceReverts(address(ohm));
+        _mockGetPriceReverts(ohmAddress);
 
-        _expectRevert_priceZero(address(ohm));
+        _expectRevert_priceZero(ohmAddress);
 
         vm.prank(policy);
         newBunniManager.registerPool(address(pool));
@@ -593,7 +616,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.setBunniOwner(address(newBunniManager));
         vm.prank(policy);
-        newBunniManager.setBunniHub(address(bunniHub));
+        newBunniManager.setBunniHub(bunniHubAddress);
 
         // Register the pool with the new policy
         vm.prank(policy);
@@ -650,25 +673,25 @@ contract BunniManagerTest is Test {
     }
 
     function test_deployToken_invalidPoolReverts() public {
-        _expectRevert_poolNotFound(address(ohm));
+        _expectRevert_poolNotFound(ohmAddress);
 
         vm.prank(policy);
-        bunniManager.deployToken(address(ohm));
+        bunniManager.deployToken(ohmAddress);
     }
 
     function test_deployToken_usdcPriceUnsetReverts() public {
-        _mockGetPriceReverts(address(usdc));
+        _mockGetPriceReverts(usdcAddress);
 
-        _expectRevert_priceZero(address(usdc));
+        _expectRevert_priceZero(usdcAddress);
 
         vm.prank(policy);
         bunniManager.deployToken(address(pool));
     }
 
     function test_deployToken_ohmPriceUnsetReverts() public {
-        _mockGetPriceReverts(address(ohm));
+        _mockGetPriceReverts(ohmAddress);
 
-        _expectRevert_priceZero(address(ohm));
+        _expectRevert_priceZero(ohmAddress);
 
         vm.prank(policy);
         bunniManager.deployToken(address(pool));
@@ -722,7 +745,7 @@ contract BunniManagerTest is Test {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
-        bunniManager.deposit(address(pool), address(ohm), 1e9, 1e18, SLIPPAGE_DEFAULT);
+        bunniManager.deposit(address(pool), ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_inactiveReverts() public {
@@ -732,7 +755,7 @@ contract BunniManagerTest is Test {
         _expectRevert_inactive();
 
         vm.prank(policy);
-        newBunniManager.deposit(address(pool), address(ohm), 1e9, 1e18, SLIPPAGE_DEFAULT);
+        newBunniManager.deposit(address(pool), ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_bunniHubNotSetReverts() public {
@@ -742,21 +765,21 @@ contract BunniManagerTest is Test {
         _expectRevert_bunniHubNotSet();
 
         vm.prank(policy);
-        newBunniManager.deposit(address(pool), address(ohm), 1e9, 1e18, SLIPPAGE_DEFAULT);
+        newBunniManager.deposit(address(pool), ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_tokenNotDeployedReverts() public {
         _expectRevert_poolNotFound(address(pool));
 
         vm.prank(policy);
-        bunniManager.deposit(address(pool), address(ohm), 1e9, 1e18, SLIPPAGE_DEFAULT);
+        bunniManager.deposit(address(pool), ohmAddress, 1e9, 1e18, SLIPPAGE_DEFAULT);
     }
 
     function test_deposit_token0InsufficientBalanceReverts(uint256 token0Amount_) public {
         // Create a pool with non-OHM tokens
         MockERC20 dai = new MockERC20("DAI", "DAI", 18);
         _mockGetPrice(address(dai), 1e18);
-        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
+        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE));
         newPool.initialize(DAI_USDC_SQRTPRICEX96);
 
         // Determine balances
@@ -771,8 +794,8 @@ contract BunniManagerTest is Test {
         bunniManager.deployToken(address(newPool));
 
         // Mint tokens to the TRSRY
-        dai.mint(address(treasury), daiBalance);
-        usdc.mint(address(treasury), usdcBalance);
+        dai.mint(treasuryAddress, daiBalance);
+        usdc.mint(treasuryAddress, usdcBalance);
 
         // Expect a revert
         _expectRevert_insufficientBalance(token0, TOKEN0_DEPOSIT, token0IsDai ? daiBalance : usdcBalance);
@@ -786,7 +809,7 @@ contract BunniManagerTest is Test {
         // Create a pool with non-OHM tokens
         MockERC20 dai = new MockERC20("DAI", "DAI", 18);
         _mockGetPrice(address(dai), 1e18);
-        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
+        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE));
         newPool.initialize(DAI_USDC_SQRTPRICEX96);
 
         // Determine balances
@@ -801,8 +824,8 @@ contract BunniManagerTest is Test {
         bunniManager.deployToken(address(newPool));
 
         // Mint tokens to the TRSRY
-        dai.mint(address(treasury), daiBalance);
-        usdc.mint(address(treasury), usdcBalance);
+        dai.mint(treasuryAddress, daiBalance);
+        usdc.mint(treasuryAddress, usdcBalance);
 
         // Expect a revert
         _expectRevert_insufficientBalance(newPool.token1(), TOKEN1_DEPOSIT, token0IsDai ? usdcBalance : daiBalance);
@@ -819,7 +842,7 @@ contract BunniManagerTest is Test {
         // Create a pool with non-OHM tokens
         MockERC20 dai = new MockERC20("DAI", "DAI", 18);
         _mockGetPrice(address(dai), 1e18);
-        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
+        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE));
         newPool.initialize(DAI_USDC_SQRTPRICEX96);
 
         // Deploy the token
@@ -827,8 +850,8 @@ contract BunniManagerTest is Test {
         IBunniToken bunniToken = bunniManager.deployToken(address(newPool));
 
         // Mint tokens to the TRSRY
-        dai.mint(address(treasury), daiAmount);
-        usdc.mint(address(treasury), usdcAmount);
+        dai.mint(treasuryAddress, daiAmount);
+        usdc.mint(treasuryAddress, usdcAmount);
         uint256 ohmSupplyBefore = ohm.totalSupply();
 
         // Deposit
@@ -836,15 +859,15 @@ contract BunniManagerTest is Test {
         uint256 bunniTokenShares = bunniManager.deposit(address(newPool), address(dai), daiAmount, usdcAmount, SLIPPAGE_DEFAULT);
 
         // The tokens should have been deposited into TRSRY
-        assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
+        assertEq(bunniToken.balanceOf(treasuryAddress), bunniTokenShares);
 
         // No remaining balance in the policy
-        assertEq(dai.balanceOf(address(bunniManager)), 0);
-        assertEq(usdc.balanceOf(address(bunniManager)), 0);
+        assertEq(dai.balanceOf(bunniManagerAddress), 0);
+        assertEq(usdc.balanceOf(bunniManagerAddress), 0);
 
         // No remaining balance in the bunniHub
-        assertEq(dai.balanceOf(address(bunniHub)), 0);
-        assertEq(usdc.balanceOf(address(bunniHub)), 0);
+        assertEq(dai.balanceOf(bunniHubAddress), 0);
+        assertEq(usdc.balanceOf(bunniHubAddress), 0);
 
         // No OHM was minted
         assertEq(ohm.totalSupply(), ohmSupplyBefore);
@@ -860,29 +883,29 @@ contract BunniManagerTest is Test {
         IBunniToken bunniToken = bunniManager.deployToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
-        usdc.mint(address(treasury), USDC_DEPOSIT);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
         uint256 ohmSupplyBefore = ohm.totalSupply();
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
 
         // The tokens should have been deposited into TRSRY
-        assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
+        assertEq(bunniToken.balanceOf(treasuryAddress), bunniTokenShares);
 
         // No remaining balance in the policy
-        assertEq(ohm.balanceOf(address(bunniManager)), 0);
-        assertEq(usdc.balanceOf(address(bunniManager)), 0);
+        assertEq(ohm.balanceOf(bunniManagerAddress), 0);
+        assertEq(usdc.balanceOf(bunniManagerAddress), 0);
 
         // No remaining balance in the bunniHub
-        assertEq(ohm.balanceOf(address(bunniHub)), 0);
-        assertEq(usdc.balanceOf(address(bunniHub)), 0);
+        assertEq(ohm.balanceOf(bunniHubAddress), 0);
+        assertEq(usdc.balanceOf(bunniHubAddress), 0);
 
         // OHM was minted
         // The exact amount of OHM is only known at run-time (due to slippage)
         BunniLens bunniLens = new BunniLens(bunniHub);
         (uint112 reserve0, uint112 reserve1) = bunniLens.getReserves(_getBunniKey(pool, bunniToken));
-        uint256 ohmReserve = pool.token0() == address(ohm) ? reserve0 : reserve1;
+        uint256 ohmReserve = pool.token0() == ohmAddress ? reserve0 : reserve1;
 
         // Tolerant of rounding
         assertApproxEqAbs(ohm.totalSupply(), ohmSupplyBefore + ohmReserve, 1);
@@ -905,30 +928,30 @@ contract BunniManagerTest is Test {
         IBunniToken bunniToken = bunniManager.deployToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
-        usdc.mint(address(treasury), USDC_DEPOSIT);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
         uint256 ohmSupplyBefore = ohm.totalSupply();
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, slippage);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, slippage);
 
         // The tokens should have been deposited into TRSRY
-        assertEq(bunniToken.balanceOf(address(treasury)), bunniTokenShares);
+        assertEq(bunniToken.balanceOf(treasuryAddress), bunniTokenShares);
 
         // No remaining balance in the policy
-        assertEq(ohm.balanceOf(address(bunniManager)), 0);
-        assertEq(usdc.balanceOf(address(bunniManager)), 0);
+        assertEq(ohm.balanceOf(bunniManagerAddress), 0);
+        assertEq(usdc.balanceOf(bunniManagerAddress), 0);
 
         // No remaining balance in the bunniHub
-        assertEq(ohm.balanceOf(address(bunniHub)), 0);
-        assertEq(usdc.balanceOf(address(bunniHub)), 0);
+        assertEq(ohm.balanceOf(bunniHubAddress), 0);
+        assertEq(usdc.balanceOf(bunniHubAddress), 0);
 
         // OHM was minted
         // The exact amount of OHM is only known at run-time (due to slippage)
         BunniLens bunniLens = new BunniLens(bunniHub);
         (uint112 reserve0, uint112 reserve1) = bunniLens.getReserves(_getBunniKey(pool, bunniToken));
-        uint256 ohmReserve = pool.token0() == address(ohm) ? reserve0 : reserve1;
-        uint256 usdcReserve = pool.token0() == address(usdc) ? reserve0 : reserve1;
+        uint256 ohmReserve = pool.token0() == ohmAddress ? reserve0 : reserve1;
+        uint256 usdcReserve = pool.token0() == usdcAddress ? reserve0 : reserve1;
 
         // Tolerant of rounding
         assertApproxEqAbs(ohm.totalSupply(), ohmSupplyBefore + ohmReserve, 1);
@@ -944,7 +967,7 @@ contract BunniManagerTest is Test {
         bunniManager.deployToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
-        usdc.mint(address(treasury), USDC_DEPOSIT);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
         
         // Set up the invalid slippage
         uint256 slippage = SLIPPAGE_MAX + 1;
@@ -952,7 +975,7 @@ contract BunniManagerTest is Test {
 
         // Deposit
         vm.prank(policy);
-        bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, slippage);
+        bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, slippage);
     }
 
     // [X] withdraw
@@ -1007,11 +1030,11 @@ contract BunniManagerTest is Test {
         IBunniToken token = bunniManager.deployToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
-        usdc.mint(address(treasury), USDC_DEPOSIT);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
 
         // Withdraw
         uint256 bunniTokenSharesToWithdraw = bunniTokenShares * 2;
@@ -1026,7 +1049,7 @@ contract BunniManagerTest is Test {
         // Create a pool with non-OHM tokens
         MockERC20 dai = new MockERC20("DAI", "DAI", 18);
         _mockGetPrice(address(dai), 1e18);
-        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(address(usdc), address(dai), POOL_FEE));
+        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE));
         newPool.initialize(DAI_USDC_SQRTPRICEX96);
 
         // Deploy the token
@@ -1034,8 +1057,8 @@ contract BunniManagerTest is Test {
         IBunniToken token = bunniManager.deployToken(address(newPool));
 
         // Mint tokens to the TRSRY
-        dai.mint(address(treasury), 1e18);
-        usdc.mint(address(treasury), 1e6);
+        dai.mint(treasuryAddress, 1e18);
+        usdc.mint(treasuryAddress, 1e6);
 
         uint256 DAI_DEPOSIT = 1e18;
         uint256 USDC_DEPOSIT = 1e6;
@@ -1046,8 +1069,8 @@ contract BunniManagerTest is Test {
         uint256 bunniTokenSharesToWithdraw = bound(shareToWithdraw_, 1e9, bunniTokenShares);
 
         // Withdraw
-        uint256 usdcBalanceBefore = usdc.balanceOf(address(treasury));
-        uint256 daiBalanceBefore = dai.balanceOf(address(treasury));
+        uint256 usdcBalanceBefore = usdc.balanceOf(treasuryAddress);
+        uint256 daiBalanceBefore = dai.balanceOf(treasuryAddress);
         uint256 ohmSupplyBefore = ohm.totalSupply();
 
         vm.prank(policy);
@@ -1057,18 +1080,18 @@ contract BunniManagerTest is Test {
         // withdrawn DAU has been returned to TRSRY
         // withdrawn USDC has been returned to TRSRY
         // OHM supply did not change
-        uint256 usdcBalanceAfter = usdc.balanceOf(address(treasury));
-        uint256 daiBalanceAfter = dai.balanceOf(address(treasury));
+        uint256 usdcBalanceAfter = usdc.balanceOf(treasuryAddress);
+        uint256 daiBalanceAfter = dai.balanceOf(treasuryAddress);
 
         assertApproxEqAbs(usdcBalanceAfter - usdcBalanceBefore, USDC_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares), 1e3);
         assertApproxEqAbs(daiBalanceAfter - daiBalanceBefore, DAI_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares), 1e6);
         assertEq(ohm.totalSupply(), ohmSupplyBefore);
 
         // Policy does not contain any balances
-        assertEq(usdc.balanceOf(address(bunniManager)), 0);
-        assertEq(dai.balanceOf(address(bunniManager)), 0);
-        assertEq(ohm.balanceOf(address(bunniManager)), 0);
-        assertEq(token.balanceOf(address(bunniManager)), 0);
+        assertEq(usdc.balanceOf(bunniManagerAddress), 0);
+        assertEq(dai.balanceOf(bunniManagerAddress), 0);
+        assertEq(ohm.balanceOf(bunniManagerAddress), 0);
+        assertEq(token.balanceOf(bunniManagerAddress), 0);
     }
 
     function test_withdraw_ohmToken(uint256 shareToWithdraw_) public {
@@ -1080,15 +1103,15 @@ contract BunniManagerTest is Test {
         IBunniToken token = bunniManager.deployToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
-        usdc.mint(address(treasury), USDC_DEPOSIT);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
         uint256 bunniTokenSharesToWithdraw = bound(shareToWithdraw_, 1e9, bunniTokenShares);
 
         // Withdraw
-        uint256 usdcBalanceBefore = usdc.balanceOf(address(treasury));
+        uint256 usdcBalanceBefore = usdc.balanceOf(treasuryAddress);
         uint256 ohmSupplyBefore = ohm.totalSupply();
 
         vm.prank(policy);
@@ -1097,16 +1120,16 @@ contract BunniManagerTest is Test {
         // Check that:
         // withdrawn USDC has been returned to TRSRY
         // withdrawn OHM has been burnt
-        uint256 usdcBalanceAfter = usdc.balanceOf(address(treasury));
+        uint256 usdcBalanceAfter = usdc.balanceOf(treasuryAddress);
         uint256 ohmSupplyAfter = ohm.totalSupply();
 
         assertApproxEqAbs(usdcBalanceAfter - usdcBalanceBefore, USDC_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares), 1e4);
         assertApproxEqAbs(ohmSupplyBefore - ohmSupplyAfter, OHM_DEPOSIT.mulDiv(bunniTokenSharesToWithdraw, bunniTokenShares), 1e3);
 
         // Policy does not contain any balances
-        assertEq(usdc.balanceOf(address(bunniManager)), 0);
-        assertEq(ohm.balanceOf(address(bunniManager)), 0);
-        assertEq(token.balanceOf(address(bunniManager)), 0);
+        assertEq(usdc.balanceOf(bunniManagerAddress), 0);
+        assertEq(ohm.balanceOf(bunniManagerAddress), 0);
+        assertEq(token.balanceOf(bunniManagerAddress), 0);
     }
 
     function test_withdraw_invalidSlippage() public {
@@ -1118,11 +1141,11 @@ contract BunniManagerTest is Test {
         bunniManager.deployToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
-        usdc.mint(address(treasury), USDC_DEPOSIT);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
         
         // Deposit
         vm.prank(policy);
-        uint256 shares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+        uint256 shares = bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
 
         // Set up the incorrect slippage
         uint256 slippage = SLIPPAGE_MAX + 1;
@@ -1174,7 +1197,7 @@ contract BunniManagerTest is Test {
         bunniManager.deployToken(address(pool));
 
         // Disable the policy
-        kernel.executeAction(Actions.DeactivatePolicy, address(bunniManager));
+        kernel.executeAction(Actions.DeactivatePolicy, bunniManagerAddress);
 
         // Get the token
         IBunniToken token = bunniManager.getToken(address(pool));
@@ -1228,11 +1251,11 @@ contract BunniManagerTest is Test {
         bunniManager.deployToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
-        usdc.mint(address(treasury), USDC_DEPOSIT);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
 
         // Check that the value is consistent
         uint256 balance = bunniManager.getTRSRYBalance(address(pool));
@@ -1249,14 +1272,14 @@ contract BunniManagerTest is Test {
         bunniManager.deployToken(address(pool));
 
         // Mint the non-OHM token to the TRSRY
-        usdc.mint(address(treasury), USDC_DEPOSIT);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
 
         // Deposit
         vm.prank(policy);
-        uint256 bunniTokenShares = bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+        uint256 bunniTokenShares = bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
 
         // Disable the policy
-        kernel.executeAction(Actions.DeactivatePolicy, address(bunniManager));
+        kernel.executeAction(Actions.DeactivatePolicy, bunniManagerAddress);
 
         // Check that the value is consistent
         uint256 balance = bunniManager.getTRSRYBalance(address(pool));
@@ -1273,7 +1296,7 @@ contract BunniManagerTest is Test {
         // Create a new BunniHub
         BunniHub newBunniHub = new BunniHub(
             uniswapFactory,
-            address(bunniManager),
+            bunniManagerAddress,
             0 // No protocol fee
         );
 
@@ -1296,7 +1319,7 @@ contract BunniManagerTest is Test {
         // Create a new BunniHub
         BunniHub newBunniHub = new BunniHub(
             uniswapFactory,
-            address(bunniManager),
+            bunniManagerAddress,
             0 // No protocol fee
         );
 
@@ -1312,12 +1335,12 @@ contract BunniManagerTest is Test {
         // Create a new BunniHub
         BunniHub newBunniHub = new BunniHub(
             uniswapFactory,
-            address(bunniManager),
+            bunniManagerAddress,
             0 // No protocol fee
         );
 
         // Disable the policy
-        kernel.executeAction(Actions.DeactivatePolicy, address(bunniManager));
+        kernel.executeAction(Actions.DeactivatePolicy, bunniManagerAddress);
 
         // Call
         vm.prank(policy);
@@ -1358,16 +1381,16 @@ contract BunniManagerTest is Test {
 
         // Call
         vm.prank(policy);
-        newBunniManager.setBunniOwner(address(alice));
+        newBunniManager.setBunniOwner(alice);
     }
 
     function test_setBunniOwner() public {
         // Call
         vm.prank(policy);
-        bunniManager.setBunniOwner(address(alice));
+        bunniManager.setBunniOwner(alice);
 
         // Check that the value has been updated
-        assertEq(bunniManager.bunniHub().owner(), address(alice));
+        assertEq(bunniManager.bunniHub().owner(), alice);
 
         // Attempt to perform an action on the BunniHub as the old owner
         vm.expectRevert(
@@ -1384,14 +1407,14 @@ contract BunniManagerTest is Test {
 
     function test_setBunniOwner_inactive() public {
         // Disable the policy
-        kernel.executeAction(Actions.DeactivatePolicy, address(bunniManager));
+        kernel.executeAction(Actions.DeactivatePolicy, bunniManagerAddress);
 
         // Call
         vm.prank(policy);
-        bunniManager.setBunniOwner(address(alice));
+        bunniManager.setBunniOwner(alice);
 
         // Check that the value has been updated
-        assertEq(bunniManager.bunniHub().owner(), address(alice));
+        assertEq(bunniManager.bunniHub().owner(), alice);
 
         // Attempt to perform an action on the BunniHub as the old owner
         vm.expectRevert(
@@ -1456,33 +1479,49 @@ contract BunniManagerTest is Test {
             token = bunniManager.deployToken(address(pool));
 
             // Mint the non-OHM token to the TRSRY
-            usdc.mint(address(treasury), USDC_DEPOSIT);
+            usdc.mint(treasuryAddress, USDC_DEPOSIT);
 
             // Deposit
             vm.prank(policy);
-            bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+            bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
         }
 
         // Perform the swap
         {
-            uint256 swapAmountUsdcIn = 100_000e6;
+            uint256 swapAmountUsdcIn = 1_000_000e6;
 
             // Mint USDC into another wallet
-            usdc.mint(address(alice), swapAmountUsdcIn);
+            usdc.mint(alice, swapAmountUsdcIn);
 
             uint256 swapOneOhmMinimum = swapAmountUsdcIn.mulDiv(1e18, 1e6).mulDiv(1e18, OHM_USDC_PRICE).mulDiv(1e9, 1e18).mulDiv(95, 100);
-            _swap(address(usdc), address(ohm), address(alice), swapAmountUsdcIn, swapOneOhmMinimum, POOL_FEE);
+            _swap(usdcAddress, ohmAddress, alice, swapAmountUsdcIn, swapOneOhmMinimum, POOL_FEE);
+
+            // And reverse
+            uint256 swapTwoUsdcMinimum = swapOneOhmMinimum.mulDiv(1e18, 1e9).mulDiv(OHM_USDC_PRICE, 1e18).mulDiv(1e6, 1e18).mulDiv(95, 100);
+            _swap(ohmAddress, usdcAddress, alice, swapOneOhmMinimum, swapTwoUsdcMinimum, POOL_FEE);
         }
 
-        // Get balances of policy, alice
-        uint256 usdcPolicyBalanceBefore = usdc.balanceOf(address(policy));
-        uint256 ohmPolicyBalanceBefore = ohm.balanceOf(address(policy));
-        uint256 usdcAliceBalanceBefore = usdc.balanceOf(address(alice));
-        uint256 ohmAliceBalanceBefore = ohm.balanceOf(address(alice));
+        // Store balances for comparison
+        _storeTokenBalance(treasuryAddress, usdcAddress);
+        _storeTokenBalance(treasuryAddress, ohmAddress);
+        _storeTokenBalance(policy, usdcAddress);
+        _storeTokenBalance(policy, ohmAddress);
+        _storeTokenBalance(alice, usdcAddress);
+        _storeTokenBalance(alice, ohmAddress);
 
         // Determine the reward to be given
-        _recalculateFees(pool);
-        uint256 currentReward = bunniManager.getCurrentHarvestReward();
+        uint256 currentReward;
+        uint256 usdcFeeAmountBefore;
+        uint256 ohmFeeAmountBefore;
+        {
+            _recalculateFees(pool);
+            currentReward = bunniManager.getCurrentHarvestReward();
+            (, , , uint128 fees0Before, uint128 fees1Before) = pool.positions(
+                keccak256(abi.encodePacked(bunniHubAddress, token.tickLower(), token.tickUpper()))
+            );
+            usdcFeeAmountBefore = address(pool.token0()) == usdcAddress ? fees0Before : fees1Before;
+            ohmFeeAmountBefore = address(pool.token0()) == ohmAddress ? fees0Before : fees1Before;
+        }
 
         // Get current liquidity
         uint128 liquidityBefore = pool.liquidity();
@@ -1500,35 +1539,35 @@ contract BunniManagerTest is Test {
         {
             _recalculateFees(pool);
             (, , , uint128 fees0, uint128 fees1) = pool.positions(
-                keccak256(abi.encodePacked(address(bunniHub), token.tickLower(), token.tickUpper()))
+                keccak256(abi.encodePacked(bunniHubAddress, token.tickLower(), token.tickUpper()))
             );
 
-            uint256 usdcFeeAmount = address(pool.token0()) == address(usdc) ? fees0 : fees1;
-            uint256 ohmFeeAmount = address(pool.token0()) == address(ohm) ? fees0 : fees1;
+            uint256 usdcFeeAmount = address(pool.token0()) == usdcAddress ? fees0 : fees1;
+            uint256 ohmFeeAmount = address(pool.token0()) == ohmAddress ? fees0 : fees1;
 
-            assertEq(usdcFeeAmount, 0);
-            assertEq(ohmFeeAmount, 0);
+            assertLt(usdcFeeAmount, usdcFeeAmountBefore, "post-harvest USDC fees should be less");
+            assertLt(ohmFeeAmount, ohmFeeAmountBefore, "post-harvest OHM fees should be less");
         }
 
         // Pool liquidity has increased
-        assertGt(pool.liquidity(), liquidityBefore);
+        assertGt(pool.liquidity(), liquidityBefore, "post-harvest liquidity did not increase");
 
         // OHM, USDC not transferred to any of the wallets
-        assertEq(usdc.balanceOf(address(treasury)), 0);
-        assertEq(ohm.balanceOf(address(treasury)), 0);
-        assertEq(usdc.balanceOf(address(bunniHub)), 0);
-        assertEq(ohm.balanceOf(address(bunniHub)), 0);
-        assertEq(usdc.balanceOf(address(bunniManager)), 0);
-        assertEq(ohm.balanceOf(address(bunniManager)), 0);
-        assertEq(usdc.balanceOf(address(policy)), usdcPolicyBalanceBefore);
-        assertEq(ohm.balanceOf(address(policy)), ohmPolicyBalanceBefore);
-        assertEq(usdc.balanceOf(address(alice)), usdcAliceBalanceBefore);
+        assertEq(usdc.balanceOf(treasuryAddress), _getStoredTokenBalance(treasuryAddress, usdcAddress), "TRSRY balance of USDC should be same");
+        assertEq(ohm.balanceOf(treasuryAddress), _getStoredTokenBalance(treasuryAddress, ohmAddress), "TRSRY balance of OHM should be same");
+        assertEq(usdc.balanceOf(bunniHubAddress), 0, "bunniHub balance of USDC should be 0");
+        assertEq(ohm.balanceOf(bunniHubAddress), 0, "bunniHub balance of OHM should be 0");
+        assertEq(usdc.balanceOf(bunniManagerAddress), 0, "bunniManager balance of USDC should be 0");
+        assertEq(ohm.balanceOf(bunniManagerAddress), 0, "bunniManager balance of OHM should be 0");
+        assertEq(usdc.balanceOf(policy), _getStoredTokenBalance(policy, usdcAddress), "policy wallet balance of USDC should be same");
+        assertEq(ohm.balanceOf(policy), _getStoredTokenBalance(policy, ohmAddress), "policy wallet balance of OHM should be same");
+        assertEq(usdc.balanceOf(alice), _getStoredTokenBalance(alice, usdcAddress), "alice wallet balance of USDC should be same");
 
         // Caller received the OHM reward
-        assertEq(ohm.balanceOf(address(alice)), ohmAliceBalanceBefore + currentReward);
+        assertEq(ohm.balanceOf(alice), _getStoredTokenBalance(alice, ohmAddress) + currentReward, "alice wallet balance of OHM should have increased due to reward");
 
         // lastHarvest updated
-        assertEq(bunniManager.lastHarvest(), block.timestamp);
+        assertEq(bunniManager.lastHarvest(), block.timestamp, "lastHarvest should be updated to the current timestamp");
     }
 
     function test_harvest_multiplePools() public {
@@ -1702,29 +1741,27 @@ contract BunniManagerTest is Test {
             token = bunniManager.deployToken(address(pool));
 
             // Mint the non-OHM token to the TRSRY
-            usdc.mint(address(treasury), USDC_DEPOSIT);
+            usdc.mint(treasuryAddress, USDC_DEPOSIT);
 
             // Deposit
             vm.prank(policy);
-            bunniManager.deposit(address(pool), address(ohm), OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
+            bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
 
             // Mint USDC into another wallet
-            usdc.mint(address(alice), swapAmountUsdcIn);
+            usdc.mint(alice, swapAmountUsdcIn);
         }
 
         // Perform the swap
         uint256 swapOneOhmMinimum;
         {
             swapOneOhmMinimum = swapAmountUsdcIn.mulDiv(1e18, 1e6).mulDiv(1e18, OHM_USDC_PRICE).mulDiv(1e9, 1e18).mulDiv(95, 100);
-            _swap(address(usdc), address(ohm), address(alice), swapAmountUsdcIn, swapOneOhmMinimum, POOL_FEE);
+            _swap(usdcAddress, ohmAddress, alice, swapAmountUsdcIn, swapOneOhmMinimum, POOL_FEE);
         }
 
         // And reverse
         {
             uint256 swapTwoUsdcMinimum = swapOneOhmMinimum.mulDiv(1e18, 1e9).mulDiv(OHM_USDC_PRICE, 1e18).mulDiv(1e6, 1e18).mulDiv(95, 100);
-            console2.log("before");
-            _swap(address(ohm), address(usdc), address(alice), swapOneOhmMinimum, swapTwoUsdcMinimum, POOL_FEE);
-            console2.log("after");
+            _swap(ohmAddress, usdcAddress, alice, swapOneOhmMinimum, swapTwoUsdcMinimum, POOL_FEE);
         }
 
         _recalculateFees(pool);
@@ -1733,10 +1770,10 @@ contract BunniManagerTest is Test {
         {
             // Record the fees generated
             (, , , uint128 fees0, uint128 fees1) = pool.positions(
-                keccak256(abi.encodePacked(address(bunniHub), token.tickLower(), token.tickUpper()))
+                keccak256(abi.encodePacked(bunniHubAddress, token.tickLower(), token.tickUpper()))
             );
-            uint256 usdcFees = uint256(address(pool.token0()) == address(usdc) ? fees0 : fees1).mulDiv(1e18, 1e6).mulDiv(USDC_PRICE, 1e18); // Convert to 18 decimals and multiply by price
-            uint256 ohmFees = uint256(address(pool.token0()) == address(ohm) ? fees0 : fees1).mulDiv(1e18, 1e9).mulDiv(OHM_PRICE, 1e18); // Convert to 18 decimals and multiply by price
+            uint256 usdcFees = uint256(address(pool.token0()) == usdcAddress ? fees0 : fees1).mulDiv(1e18, 1e6).mulDiv(USDC_PRICE, 1e18); // Convert to 18 decimals and multiply by price
+            uint256 ohmFees = uint256(address(pool.token0()) == ohmAddress ? fees0 : fees1).mulDiv(1e18, 1e9).mulDiv(OHM_PRICE, 1e18); // Convert to 18 decimals and multiply by price
             uint256 expectedRewardValue = uint256(HARVEST_REWARD_FEE).mulDiv(usdcFees + ohmFees, uint256(BPS_MAX));
             assertGt(expectedRewardValue, 0);
             expectedRewardOhm = expectedRewardValue.mulDiv(1e9, OHM_PRICE);
@@ -1830,7 +1867,7 @@ contract BunniManagerTest is Test {
         bunniManager.harvest();
 
         // Deactivate the policy
-        kernel.executeAction(Actions.DeactivatePolicy, address(bunniManager));
+        kernel.executeAction(Actions.DeactivatePolicy, bunniManagerAddress);
 
         // Call
         vm.prank(policy);
