@@ -130,6 +130,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     address[] public pools;
     uint256 public poolCount;
 
+    /// @notice     An array of unique tokens that have been used in the pools
+    IERC20[] public poolUnderlyingTokens;
+    uint256 public poolUnderlyingTokenCount;
+
     // Modules
     TRSRYv1 internal TRSRY;
     PRICEv2 internal PRICE;
@@ -229,8 +233,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         // Check that both tokens from the pool have prices (else PRICE will revert)
         IUniswapV3Pool pool = IUniswapV3Pool(pool_);
-        PRICE.getPrice(pool.token0());
-        PRICE.getPrice(pool.token1());
+        address poolToken0 = pool.token0();
+        address poolToken1 = pool.token1();
+        PRICE.getPrice(poolToken0);
+        PRICE.getPrice(poolToken1);
+
+        // Add the underlying tokens to the list
+        _addUnderlyingToken(poolToken0);
+        _addUnderlyingToken(poolToken1);
 
         // Add the pool to the registry
         pools.push(pool_);
@@ -272,8 +282,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         // Check that both tokens from the pool have prices (else PRICE will revert)
         IUniswapV3Pool pool = IUniswapV3Pool(pool_);
-        PRICE.getPrice(pool.token0());
-        PRICE.getPrice(pool.token1());
+        address poolToken0 = pool.token0();
+        address poolToken1 = pool.token1();
+        PRICE.getPrice(poolToken0);
+        PRICE.getPrice(poolToken1);
+
+        // Add the underlying tokens to the list
+        _addUnderlyingToken(poolToken0);
+        _addUnderlyingToken(poolToken1);
 
         // Deploy
         IBunniToken deployedToken = bunniHub.deployBunniToken(key);
@@ -498,10 +514,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Determine the award amount
         uint256 currentHarvestReward = getCurrentHarvestReward();
 
-        // Store tokens used in the pools, so extraneous balances can be swept later
-        // NOTE: This will likely have duplicates
-        IERC20[] memory tokens = new IERC20[](poolCount * 2);
-
         for (uint256 i = 0; i < poolCount; i++) {
             address poolAddress = pools[i];
 
@@ -510,20 +522,17 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
             BunniKey memory key = _getBunniKey(poolAddress);
             bunniHub.compound(key);
-
-            // Add the tokens to the list
-            IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
-
-            tokens[2 * i] = IERC20(pool.token0());
-            tokens[2 * i + 1] = IERC20(pool.token1());
         }
 
         // Sweep tokens from the BunniHub
-        bunniHub.sweepTokens(tokens, address(this));
+        // As `poolUnderlyingTokens` is a unique list, this will not sweep the same token twice.
+        // It also does not contain any zero addresses, which would cause a revert in `sweepTokens`.
+        bunniHub.sweepTokens(poolUnderlyingTokens, address(this));
         
         // Burn/transfer any swept tokens
-        for (uint256 i = 0; i < tokens.length; i++) {
-            _transferOrBurn(address(tokens[i]), tokens[i].balanceOf(address(this)));
+        for (uint256 i = 0; i < poolUnderlyingTokens.length; i++) {
+            IERC20 poolUnderlyingToken = poolUnderlyingTokens[i];
+            _transferOrBurn(address(poolUnderlyingToken), poolUnderlyingToken.balanceOf(address(this)));
         }
 
         // Mint the OHM reward and transfer it to the caller
@@ -768,6 +777,17 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             // If slot0 throws, then pool_ is not a Uniswap V3 pool
             revert BunniManager_PoolNotFound(pool_);
         }
+    }
+
+    function _addUnderlyingToken(address token_) internal {
+        // Check if the token has already been added
+        for (uint256 i = 0; i < poolUnderlyingTokenCount; i++) {
+            if (address(poolUnderlyingTokens[i]) == token_) return;
+        }
+
+        // Add the token
+        poolUnderlyingTokens.push(IERC20(token_));
+        poolUnderlyingTokenCount++;
     }
 
     //============================================================================================//
