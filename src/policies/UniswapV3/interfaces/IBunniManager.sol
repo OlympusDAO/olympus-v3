@@ -61,7 +61,7 @@ interface IBunniManager {
         address tokenA_,
         uint256 amountA_,
         uint256 amountB_,
-        uint256 slippageBps_
+        uint24 slippageBps_
     ) external returns (uint256 shares);
 
     /// @notice             Withdraws liquidity from the given Uniswap V3 pool
@@ -74,7 +74,7 @@ interface IBunniManager {
     /// @param pool_        The address of the Uniswap V3 pool
     /// @param shares_      The amount of shares to withdraw
     /// @param slippageBps_ Maximum percentage slippage allowed in basis points (100 = 1%)
-    function withdraw(address pool_, uint256 shares_, uint256 slippageBps_) external;
+    function withdraw(address pool_, uint256 shares_, uint24 slippageBps_) external;
 
     /// @notice             Updates the swap fees for the deployed Uniswap V3 pools
     function updateSwapFees() external;
