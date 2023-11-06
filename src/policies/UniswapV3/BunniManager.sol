@@ -12,6 +12,7 @@ import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
 import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
 import {BunniHub} from "src/external/bunni/BunniHub.sol";
+import {IERC20} from "src/external/bunni/interfaces/IERC20.sol";
 
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
@@ -258,11 +259,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         bunniHubSet
         returns (IBunniToken token)
     {
-        // Create a BunniKey
-        BunniKey memory key = _getBunniKey(pool_);
-
         // Check that `pool_` is an actual Uniswap V3 pool
         _assertIsValidPool(pool_);
+
+        // Create a BunniKey
+        BunniKey memory key = _getBunniKey(pool_);
 
         // Check if a token for the pool has been deployed already
         IBunniToken existingToken = bunniHub.getBunniToken(key);
@@ -457,12 +458,25 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         _transferOrBurn(pool.token1(), withdrawnAmount1);
     }
 
+    /// @inheritdoc IBunniManager
+    /// @dev        For each pool, this function does the following:
+    ///             - Calls the `burn()` function with a 0 amount, which triggers a fee update
+    function updateSwapFees() public onlyIfActive bunniHubSet {
+        for (uint256 i = 0; i < poolCount; i++) {
+            address poolAddress = pools[i];
+            BunniKey memory key = _getBunniKey(poolAddress);
+
+            bunniHub.updateSwapFees(key);
+        }
+    }
+
     /// @inheritdoc     IBunniManager
     /// @dev            This function does the following:
     ///                 - Determines if enough time has passed since the previous harvest
-    ///                 - Determines the pools that are managed
+    ///                 - Updates the fees for the pools
     ///                 - For each pool:
     ///                     - Calls the `compound()` function on BunniHub
+    ///                 - Returns any extraneous tokens in BunniHub to the TRSRY (or burns, if OHM)
     ///                 - Mints OHM as a reward and transfers it to the caller (provided there are pools to harvest from)
     ///
     ///                 The reward for harvesting is determined by `getCurrentHarvestReward`.
@@ -475,17 +489,39 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     function harvest() external onlyIfActive bunniHubSet {
         uint48 minHarvest = lastHarvest + harvestFrequency;
         if (minHarvest > block.timestamp) revert BunniManager_HarvestTooEarly(minHarvest);
-        
+
+        // Ensure fees are up to date
+        updateSwapFees();
+
+        // Determine the award amount
         uint256 currentHarvestReward = getCurrentHarvestReward();
 
+        // Store tokens used in the pools, so extraneous balances can be swept later
+        // NOTE: This will likely have duplicates
+        IERC20[] memory tokens = new IERC20[](poolCount * 2);
+
         for (uint256 i = 0; i < poolCount; i++) {
-            address pool = pools[i];
-            BunniKey memory key = _getBunniKey(pool);
+            address poolAddress = pools[i];
+            BunniKey memory key = _getBunniKey(poolAddress);
             
             bunniHub.compound(key);
+
+            // Add the tokens to the list
+            IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
+
+            tokens[2 * i] = IERC20(pool.token0());
+            tokens[2 * i + 1] = IERC20(pool.token1());
         }
 
-        // Mint the OHM and transfer it to the caller
+        // Sweep tokens from the BunniHub
+        bunniHub.sweepTokens(tokens, address(this));
+        
+        // Burn/transfer any swept tokens
+        for (uint256 i = 0; i < tokens.length; i++) {
+            _transferOrBurn(address(tokens[i]), tokens[i].balanceOf(address(this)));
+        }
+
+        // Mint the OHM reward and transfer it to the caller
         if (currentHarvestReward > 0) {
             MINTR.increaseMintApproval(address(this), currentHarvestReward);
             MINTR.mintOhm(msg.sender, currentHarvestReward);
@@ -534,6 +570,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - Get the USD value of the fees
     ///             - Determine the potential harvest reward as the fee multiplier * USD value of fees
     ///             - Return the reward as the minimum of the potential reward and the max reward
+    ///
+    ///             This function assumes that the pending fees for the pools are up-to-date. Calling
+    ///             functions should update the pending fees before calling this function using `updateSwapFees()`.
     function getCurrentHarvestReward() public view override returns (uint256 reward) {
         // 0 if enough time has not elapsed
         if (lastHarvest + harvestFrequency < block.timestamp) return 0;
