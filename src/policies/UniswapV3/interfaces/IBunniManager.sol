@@ -40,11 +40,11 @@ interface IBunniManager {
     ///
     /// @param pool_  The address of the Uniswap V3 pool
     /// @return token The ERC20-compatible BunniToken
-    function deployToken(address pool_) external returns (IBunniToken token);
+    function deployPoolToken(address pool_) external returns (IBunniToken token);
 
     /// @notice         Deposits liquidity into the given Uniswap V3 pool
     ///
-    ///                 This can only be called after `deployToken` has been called
+    ///                 This can only be called after `deployPoolToken` has been called
     ///                 to deploy the ERC20 token for this pool.
     ///
     ///                 The ordering of tokenA and tokenB is irrelevant. The `deposit` function
@@ -66,7 +66,7 @@ interface IBunniManager {
 
     /// @notice             Withdraws liquidity from the given Uniswap V3 pool
     ///
-    ///                     This can only be called after `deployToken` has been called
+    ///                     This can only be called after `deployPoolToken` has been called
     ///                     to deploy the ERC20 token for this pool.
     ///
     ///                     The LP tokens will be withdrawn from TRSRY and burned.
@@ -93,13 +93,13 @@ interface IBunniManager {
     ///
     /// @param pool_    The address of the Uniswap V3 pool
     /// @return token   The ERC20-compatible BunniToken
-    function getToken(address pool_) external view returns (IBunniToken token);
+    function getPoolToken(address pool_) external view returns (IBunniToken token);
 
     /// @notice         Gets the balance in TRSRY of the ERC20 token for the given Uniswap V3 pool address
     ///
     /// @param pool_    The address of the Uniswap V3 pool
     /// @return balance The balance of the ERC20 token, or 0
-    function getTRSRYBalance(address pool_) external view returns (uint256 balance);
+    function getPoolTokenBalance(address pool_) external view returns (uint256 balance);
 
     /// @notice         Returns the current reward amount that would be received from harvesting fees
     ///

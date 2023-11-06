@@ -136,11 +136,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     MINTRv1 internal MINTR;
 
     // Constants
-    uint16 constant BPS_MAX = 10_000; // 100%
+    uint16 private constant BPS_MAX = 10_000; // 100%
     uint256 public constant SLIPPAGE_DEFAULT = 100; // 1%
     uint256 public constant SLIPPAGE_SCALE = 10000; // 100%
-    int24 constant TICK_SPACING_DIVISOR = 50;
-    uint8 constant POOL_DECIMALS = 18;
+    int24 private constant TICK_SPACING_DIVISOR = 50;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -221,7 +220,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         _assertIsValidPool(pool_);
 
         // Get the BunniToken or revert
-        token = getToken(pool_);
+        token = getPoolToken(pool_);
 
         // Check if the pool is already registered
         for (uint256 i = 0; i < poolCount; i++) {
@@ -248,7 +247,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - `pool_` is not a Uniswap V3 pool
     ///             - A BunniToken has already been deployed for the pool
     ///             - A price cannot be accessed for either token in the pool
-    function deployToken(
+    function deployPoolToken(
         address pool_
     )
         external
@@ -464,8 +463,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     function updateSwapFees() public onlyIfActive bunniHubSet {
         for (uint256 i = 0; i < poolCount; i++) {
             address poolAddress = pools[i];
-            BunniKey memory key = _getBunniKey(poolAddress);
 
+            // Skip if no shares have been minted
+            if (getPoolTokenBalance(poolAddress) == 0) continue;
+
+            BunniKey memory key = _getBunniKey(poolAddress);
             bunniHub.updateSwapFees(key);
         }
     }
@@ -502,8 +504,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         for (uint256 i = 0; i < poolCount; i++) {
             address poolAddress = pools[i];
+
+            // Skip if no shares have been minted
+            if (getPoolTokenBalance(poolAddress) == 0) continue;
+
             BunniKey memory key = _getBunniKey(poolAddress);
-            
             bunniHub.compound(key);
 
             // Add the tokens to the list
@@ -538,7 +543,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
     ///             - The `bunniHub` state variable is not set
-    function getToken(address pool_) public view override bunniHubSet returns (IBunniToken) {
+    function getPoolToken(address pool_) public view override bunniHubSet returns (IBunniToken) {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
 
@@ -555,10 +560,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
     ///             - The `bunniHub` state variable is not set
-    function getTRSRYBalance(address pool_) external view override returns (uint256) {
+    function getPoolTokenBalance(address pool_) public view override returns (uint256) {
         // Get the token
-        // `getToken` will revert if the pool is not found
-        IBunniToken token = getToken(pool_);
+        // `getPoolToken` will revert if the pool is not found
+        IBunniToken token = getPoolToken(pool_);
 
         // Get the balance of the token in TRSRY
         return token.balanceOf(address(TRSRY));
