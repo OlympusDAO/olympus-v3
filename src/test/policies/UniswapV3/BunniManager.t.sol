@@ -78,8 +78,8 @@ contract BunniManagerTest is Test {
 
     uint16 private constant BPS_MAX = 10_000; // 100%
 
-    uint256 private constant SLIPPAGE_DEFAULT = 100; // 1%
-    uint256 private constant SLIPPAGE_MAX = 10000; // 100%
+    uint24 private constant SLIPPAGE_DEFAULT = 100; // 1%
+    uint24 private constant SLIPPAGE_MAX = 10_000; // 100%
 
     uint8 private constant PRICE_VERSION = 2;
     uint8 private constant TRSRY_VERSION = 1;
@@ -237,7 +237,7 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
-    function _expectRevert_invalidSlippage(uint256 slippage_) internal {
+    function _expectRevert_invalidSlippage(uint24 slippage_) internal {
         bytes memory err = abi.encodeWithSelector(
             BunniManager.BunniManager_Params_InvalidSlippage.selector,
             slippage_,
@@ -1037,7 +1037,7 @@ contract BunniManagerTest is Test {
     }
 
     function test_deposit_slippage_fuzz(uint256 amount_, uint256 slippage_) public {
-        uint256 slippage = bound(slippage_, 50, 500); // 0.5 - 5%
+        uint24 slippage = uint24(bound(slippage_, 50, 500)); // 0.5 - 5%
 
         /**
          * Get a random amount of OHM to deposit
@@ -1095,7 +1095,7 @@ contract BunniManagerTest is Test {
         usdc.mint(treasuryAddress, USDC_DEPOSIT);
         
         // Set up the invalid slippage
-        uint256 slippage = SLIPPAGE_MAX + 1;
+        uint24 slippage = SLIPPAGE_MAX + 1;
         _expectRevert_invalidSlippage(slippage);
 
         // Deposit
@@ -1273,7 +1273,7 @@ contract BunniManagerTest is Test {
         uint256 shares = bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
 
         // Set up the incorrect slippage
-        uint256 slippage = SLIPPAGE_MAX + 1;
+        uint24 slippage = SLIPPAGE_MAX + 1;
         _expectRevert_invalidSlippage(slippage);
 
         // Withdraw
