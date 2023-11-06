@@ -648,9 +648,60 @@ contract BunniManagerTest is Test {
         address poolOne = newBunniManager.pools(0);
         assertEq(poolOne, address(pool));
 
+        // Check that the tokens are registered
+        uint256 poolUnderlyingTokenCount = newBunniManager.poolUnderlyingTokenCount();
+        assertEq(poolUnderlyingTokenCount, 2);
+        address poolOneTokenOne = address(newBunniManager.poolUnderlyingTokens(0));
+        address poolOneTokenTwo = address(newBunniManager.poolUnderlyingTokens(1));
+        assertEq(poolOneTokenOne, ohmAddress);
+        assertEq(poolOneTokenTwo, usdcAddress);
+
         // Check that the token has been added to PRICEv2
         PRICEv2.Asset memory priceAsset = price.getAssetData(address(newDeployedToken));
         assertTrue(priceAsset.approved);
+    }
+
+    function test_registerPool_multiple() public {
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        bunniManager.deployPoolToken(address(pool));
+
+        // Create a new pool with an overlapping underlying token
+        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+        _mockGetPrice(address(dai), 1e18);
+        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE));
+        newPool.initialize(DAI_USDC_SQRTPRICEX96);
+
+        // Deploy the second token
+        vm.prank(policy);
+        bunniManager.deployPoolToken(address(newPool));
+
+        // Install a new policy
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        // Shift the BunniHub over to the new policy
+        vm.prank(policy);
+        bunniManager.setBunniOwner(address(newBunniManager));
+        vm.prank(policy);
+        newBunniManager.setBunniHub(bunniHubAddress);
+
+        // Register the pool with the new policy
+        vm.prank(policy);
+        newBunniManager.registerPool(address(pool));
+
+        // Register the new pool with the new policy
+        vm.prank(policy);
+        newBunniManager.registerPool(address(newPool));
+
+        // Check that the tokens are registered
+        uint256 poolUnderlyingTokenCount = newBunniManager.poolUnderlyingTokenCount();
+        assertEq(poolUnderlyingTokenCount, 3);
+        address poolOneTokenOne = address(newBunniManager.poolUnderlyingTokens(0));
+        address poolOneTokenTwo = address(newBunniManager.poolUnderlyingTokens(1));
+        address poolOneTokenThree = address(newBunniManager.poolUnderlyingTokens(2));
+        assertEq(poolOneTokenOne, ohmAddress);
+        assertEq(poolOneTokenTwo, usdcAddress);
+        assertEq(poolOneTokenThree, address(dai));
     }
 
     // [X] deployPoolToken
@@ -730,10 +781,43 @@ contract BunniManagerTest is Test {
         address poolOne = bunniManager.pools(0);
         assertEq(poolOne, address(pool));
 
+        // Check that the tokens are registered
+        uint256 poolUnderlyingTokenCount = bunniManager.poolUnderlyingTokenCount();
+        assertEq(poolUnderlyingTokenCount, 2);
+        address poolOneTokenOne = address(bunniManager.poolUnderlyingTokens(0));
+        address poolOneTokenTwo = address(bunniManager.poolUnderlyingTokens(1));
+        assertEq(poolOneTokenOne, ohmAddress);
+        assertEq(poolOneTokenTwo, usdcAddress);
+
         // Check that the token has been added to PRICEv2
         PRICEv2.Asset memory priceAsset = price.getAssetData(address(deployedToken));
         assertTrue(priceAsset.approved);
         // TODO check that the submodule is configured for use
+    }
+
+    function test_deployPoolToken_multiple() public {
+        vm.prank(policy);
+        bunniManager.deployPoolToken(address(pool));
+
+        // Create a new pool with an overlapping underlying token
+        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+        _mockGetPrice(address(dai), 1e18);
+        IUniswapV3Pool newPool = IUniswapV3Pool(uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE));
+        newPool.initialize(DAI_USDC_SQRTPRICEX96);
+
+        // Deploy the second token
+        vm.prank(policy);
+        bunniManager.deployPoolToken(address(newPool));
+
+        // Check that the tokens are registered
+        uint256 poolUnderlyingTokenCount = bunniManager.poolUnderlyingTokenCount();
+        assertEq(poolUnderlyingTokenCount, 3);
+        address poolOneTokenOne = address(bunniManager.poolUnderlyingTokens(0));
+        address poolOneTokenTwo = address(bunniManager.poolUnderlyingTokens(1));
+        address poolOneTokenThree = address(bunniManager.poolUnderlyingTokens(2));
+        assertEq(poolOneTokenOne, ohmAddress);
+        assertEq(poolOneTokenTwo, usdcAddress);
+        assertEq(poolOneTokenThree, address(dai));
     }
 
     function test_deployPoolToken_duplicateReverts() public {
