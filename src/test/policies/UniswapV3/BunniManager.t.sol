@@ -78,8 +78,8 @@ contract BunniManagerTest is Test {
 
     uint16 private constant BPS_MAX = 10_000; // 100%
 
-    uint24 private constant SLIPPAGE_DEFAULT = 100; // 1%
-    uint24 private constant SLIPPAGE_MAX = 10_000; // 100%
+    uint16 private constant SLIPPAGE_DEFAULT = 100; // 1%
+    uint16 private constant SLIPPAGE_MAX = 10_000; // 100%
 
     uint8 private constant PRICE_VERSION = 2;
     uint8 private constant TRSRY_VERSION = 1;
@@ -237,7 +237,7 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
-    function _expectRevert_invalidSlippage(uint24 slippage_) internal {
+    function _expectRevert_invalidSlippage(uint16 slippage_) internal {
         bytes memory err = abi.encodeWithSelector(
             BunniManager.BunniManager_Params_InvalidSlippage.selector,
             slippage_,
@@ -330,7 +330,7 @@ contract BunniManagerTest is Test {
         });
     }
 
-    function _getTick(uint24 poolFee, bool upper_) internal view returns (int24) {
+    function _getTick(uint24 poolFee, bool upper_) internal pure returns (int24) {
         int24 tickSpacing = int24(poolFee) / int24(TICK_SPACING_DIVISOR);
         return (upper_ == true ? int24(1) : int24(-1)) * (TickMath.MAX_TICK / tickSpacing) * tickSpacing;
     }
@@ -377,7 +377,7 @@ contract BunniManagerTest is Test {
         return tokenBalances[wallet_][token_];
     }
 
-    function _getPoolFees(IBunniToken token_, address tokenA_) internal returns (uint256 tokenAFees, uint256 tokenBFees) {
+    function _getPoolFees(IBunniToken token_, address tokenA_) internal view returns (uint256 tokenAFees, uint256 tokenBFees) {
         (, , , uint128 fees0Before, uint128 fees1Before) = token_.pool().positions(
             keccak256(abi.encodePacked(bunniHubAddress, token_.tickLower(), token_.tickUpper()))
         );
@@ -1037,7 +1037,7 @@ contract BunniManagerTest is Test {
     }
 
     function test_deposit_slippage_fuzz(uint256 amount_, uint256 slippage_) public {
-        uint24 slippage = uint24(bound(slippage_, 50, 500)); // 0.5 - 5%
+        uint16 slippage = uint16(bound(slippage_, 50, 500)); // 0.5 - 5%
 
         /**
          * Get a random amount of OHM to deposit
@@ -1095,7 +1095,7 @@ contract BunniManagerTest is Test {
         usdc.mint(treasuryAddress, USDC_DEPOSIT);
         
         // Set up the invalid slippage
-        uint24 slippage = SLIPPAGE_MAX + 1;
+        uint16 slippage = SLIPPAGE_MAX + 1;
         _expectRevert_invalidSlippage(slippage);
 
         // Deposit
@@ -1273,7 +1273,7 @@ contract BunniManagerTest is Test {
         uint256 shares = bunniManager.deposit(address(pool), ohmAddress, OHM_DEPOSIT, USDC_DEPOSIT, SLIPPAGE_DEFAULT);
 
         // Set up the incorrect slippage
-        uint24 slippage = SLIPPAGE_MAX + 1;
+        uint16 slippage = SLIPPAGE_MAX + 1;
         _expectRevert_invalidSlippage(slippage);
 
         // Withdraw

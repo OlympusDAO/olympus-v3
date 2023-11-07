@@ -57,7 +57,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice                 Emitted if the given slippage is invalid
     /// @param slippage_        The invalid slippage
     /// @param maxSlippage_     The maximum value for slippage
-    error BunniManager_Params_InvalidSlippage(uint24 slippage_, uint24 maxSlippage_);
+    error BunniManager_Params_InvalidSlippage(uint16 slippage_, uint16 maxSlippage_);
 
     /// @notice   Emitted if the BunniHub has not been set
     error BunniManager_HubNotSet();
@@ -141,8 +141,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     // Constants
     uint16 private constant BPS_MAX = 10_000; // 100%
-    uint24 public constant SLIPPAGE_DEFAULT = 100; // 1%
-    uint24 public constant SLIPPAGE_SCALE = 10_000; // 100%
+    uint16 public constant SLIPPAGE_DEFAULT = 100; // 1%
+    uint16 public constant SLIPPAGE_SCALE = 10_000; // 100%
     int24 private constant TICK_SPACING_DIVISOR = 50;
 
     //============================================================================================//
@@ -338,7 +338,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         address tokenA_,
         uint256 amountA_,
         uint256 amountB_,
-        uint24 slippageBps_
+        uint16 slippageBps_
     )
         external
         override
@@ -412,7 +412,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     function withdraw(
         address pool_,
         uint256 shares_,
-        uint24 slippageBps_
+        uint16 slippageBps_
     ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
@@ -700,7 +700,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param amount_  The amount of tokens to calculate the minimum for
     function _calculateAmountMin(
         uint256 amount_,
-        uint24 slippageBps_
+        uint16 slippageBps_
     ) internal pure returns (uint256) {
         // Check bounds
         if (slippageBps_ > SLIPPAGE_SCALE)
