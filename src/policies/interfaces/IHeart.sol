@@ -48,7 +48,7 @@ interface IHeart {
 
     /// @notice Updates the Distributor contract address that the Heart calls on a beat
     /// @notice Access restricted
-    /// @param  distributor_ The address of the new Operator contract
+    /// @param  distributor_ The address of the new Distributor contract
     function setDistributor(address distributor_) external;
 
     /// @notice Sets the max reward amount, and auction duration for the beat function
