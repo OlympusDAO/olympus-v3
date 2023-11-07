@@ -476,16 +476,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IBunniManager
     /// @dev        For each pool, this function does the following:
     ///             - Calls the `burn()` function with a 0 amount, which triggers a fee update
-    function updateSwapFees() public onlyIfActive bunniHubSet {
-        for (uint256 i = 0; i < poolCount; i++) {
-            address poolAddress = pools[i];
-
-            // Skip if no shares have been minted
-            if (getPoolTokenBalance(poolAddress) == 0) continue;
-
-            BunniKey memory key = _getBunniKey(poolAddress);
-            bunniHub.updateSwapFees(key);
-        }
+    function updateSwapFees() external nonReentrant onlyIfActive bunniHubSet {
+        _updateSwapFees();
     }
 
     /// @inheritdoc     IBunniManager
@@ -504,12 +496,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///                 - The `bunniHub` state variable is not set
     ///                 - Not enough time has elapsed from the previous harvest
     ///                 - The BunniHub instance reverts while calling `compound()`
-    function harvest() external onlyIfActive bunniHubSet {
+    function harvest() external nonReentrant onlyIfActive bunniHubSet {
         uint48 minHarvest = lastHarvest + harvestFrequency;
         if (minHarvest > block.timestamp) revert BunniManager_HarvestTooEarly(minHarvest);
 
         // Ensure fees are up to date
-        updateSwapFees();
+        _updateSwapFees();
 
         // Determine the award amount
         uint256 currentHarvestReward = getCurrentHarvestReward();
@@ -788,6 +780,22 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Add the token
         poolUnderlyingTokens.push(IERC20(token_));
         poolUnderlyingTokenCount++;
+    }
+
+    /// @notice     Updates the swap fees for all pools
+    /// @dev        This internal function is provided as external/public functions
+    ///             (such as `harvest()`) need to use this functionality, but would
+    ///             run into re-entrancy issues using the external/public function.
+    function _updateSwapFees() internal {
+        for (uint256 i = 0; i < poolCount; i++) {
+            address poolAddress = pools[i];
+
+            // Skip if no shares have been minted
+            if (getPoolTokenBalance(poolAddress) == 0) continue;
+
+            BunniKey memory key = _getBunniKey(poolAddress);
+            bunniHub.updateSwapFees(key);
+        }
     }
 
     //============================================================================================//
