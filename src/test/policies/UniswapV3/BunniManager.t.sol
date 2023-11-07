@@ -62,8 +62,10 @@ contract BunniManagerTest is Test {
 
     BunniManager internal bunniManager;
     BunniHub internal bunniHub;
+    BunniLens internal bunniLens;
     IUniswapV3Pool internal pool;
     address internal bunniHubAddress;
+    address internal bunniLensAddress;
     address internal bunniManagerAddress;
 
     uint24 private constant POOL_FEE = 500;
@@ -97,7 +99,7 @@ contract BunniManagerTest is Test {
     mapping(address => mapping(address => uint256)) private tokenBalances;
 
     // Reproduce events
-    event BunniHubSet(address newBunniHub_);
+    event BunniLensSet(address newBunniHub_, address newBunniLens_);
 
     event BunniHubOwnerSet(address bunniHub_, address newOwner_);
 
@@ -166,6 +168,12 @@ contract BunniManagerTest is Test {
             );
             bunniHubAddress = address(bunniHub);
 
+            // Deploy BunniLens
+            bunniLens = new BunniLens(
+                bunniHub
+            );
+            bunniLensAddress = address(bunniLens);
+
             rolesAdmin = new RolesAdmin(kernel);
         }
 
@@ -207,7 +215,7 @@ contract BunniManagerTest is Test {
         {
             vm.prank(policy);
             // Set the BunniHub on the manager policy
-            bunniManager.setBunniHub(bunniHubAddress);
+            bunniManager.setBunniLens(bunniLensAddress);
         }
     }
 
@@ -602,7 +610,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.setBunniOwner(address(newBunniManager));
         vm.prank(policy);
-        newBunniManager.setBunniHub(bunniHubAddress);
+        newBunniManager.setBunniLens(bunniLensAddress);
 
         // Mock an error when getting the price
         _mockGetPriceReverts(usdcAddress);
@@ -625,7 +633,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.setBunniOwner(address(newBunniManager));
         vm.prank(policy);
-        newBunniManager.setBunniHub(bunniHubAddress);
+        newBunniManager.setBunniLens(bunniLensAddress);
 
         // Mock an error when getting the price
         _mockGetPriceReverts(ohmAddress);
@@ -648,7 +656,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.setBunniOwner(address(newBunniManager));
         vm.prank(policy);
-        newBunniManager.setBunniHub(bunniHubAddress);
+        newBunniManager.setBunniLens(bunniLensAddress);
 
         // Recognise the emitted event
         vm.expectEmit(true, true, false, true);
@@ -678,6 +686,8 @@ contract BunniManagerTest is Test {
         // Check that the token has been added to PRICEv2
         PRICEv2.Asset memory priceAsset = price.getAssetData(address(newDeployedToken));
         assertTrue(priceAsset.approved);
+
+        // TODO check the SPPLY submodule has the token registered
     }
 
     function test_registerPool_multiple() public {
@@ -702,7 +712,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.setBunniOwner(address(newBunniManager));
         vm.prank(policy);
-        newBunniManager.setBunniHub(bunniHubAddress);
+        newBunniManager.setBunniLens(bunniLensAddress);
 
         // Recognise the emitted event
         vm.expectEmit(true, true, false, true);
@@ -819,7 +829,10 @@ contract BunniManagerTest is Test {
         // Check that the token has been added to PRICEv2
         PRICEv2.Asset memory priceAsset = price.getAssetData(address(deployedToken));
         assertTrue(priceAsset.approved);
+
         // TODO check that the submodule is configured for use
+
+        // TODO check the SPPLY submodule has the token registered
     }
 
     function test_deployPoolToken_multiple() public {
@@ -1055,7 +1068,6 @@ contract BunniManagerTest is Test {
 
         // OHM was minted
         // The exact amount of OHM is only known at run-time (due to slippage)
-        BunniLens bunniLens = new BunniLens(bunniHub);
         (uint112 reserve0, uint112 reserve1) = bunniLens.getReserves(_getBunniKey(pool, bunniToken));
         uint256 ohmReserve = pool.token0() == ohmAddress ? reserve0 : reserve1;
 
@@ -1100,7 +1112,6 @@ contract BunniManagerTest is Test {
 
         // OHM was minted
         // The exact amount of OHM is only known at run-time (due to slippage)
-        BunniLens bunniLens = new BunniLens(bunniHub);
         (uint112 reserve0, uint112 reserve1) = bunniLens.getReserves(_getBunniKey(pool, bunniToken));
         uint256 ohmReserve = pool.token0() == ohmAddress ? reserve0 : reserve1;
         uint256 usdcReserve = pool.token0() == usdcAddress ? reserve0 : reserve1;
@@ -1438,76 +1449,101 @@ contract BunniManagerTest is Test {
         assertEq(balance, bunniTokenShares);
     }
 
-    // [X] setBunniHub
+    // [X] setBunniLens
     //  [X] caller is unauthorized
+    //  [X] reverts if the hub address does not match
     //  [X] zero address
     //  [X] sets bunniHub variable
     //  [X] works if inactive
 
-    function test_setBunniHub_unauthorizedReverts() public {
+    function test_setBunniLens_unauthorizedReverts() public {
         // Create a new BunniHub
         BunniHub newBunniHub = new BunniHub(
             uniswapFactory,
             bunniManagerAddress,
             0 // No protocol fee
+        );
+        BunniLens newBunniLens = new BunniLens(
+            newBunniHub
         );
 
         _expectRevert_unauthorized();
 
         // Call as an unauthorized user
         vm.prank(alice);
-        bunniManager.setBunniHub(address(newBunniHub));
+        bunniManager.setBunniLens(address(newBunniLens));
     }
 
-    function test_setBunniHub_zeroAddressReverts() public {
+    function test_setBunniLens_zeroAddressReverts() public {
         _expectRevert_invalidAddress(address(0));
 
         // Call with a zero address
         vm.prank(policy);
-        bunniManager.setBunniHub(address(0));
+        bunniManager.setBunniLens(address(0));
     }
 
-    function test_setBunniHub() public {
+    function test_setBunniLens_bunniHubZeroReverts() public {
+        // Create a new BunniLens
+        BunniLens newBunniLens = new BunniLens(
+            BunniHub(address(0))
+        );
+
+        _expectRevert_invalidAddress(address(newBunniLens));
+
+        // Call
+        vm.prank(policy);
+        bunniManager.setBunniLens(address(newBunniLens));
+    }
+
+    function test_setBunniLens() public {
         // Create a new BunniHub
         BunniHub newBunniHub = new BunniHub(
             uniswapFactory,
             bunniManagerAddress,
             0 // No protocol fee
         );
+        BunniLens newBunniLens = new BunniLens(
+            newBunniHub
+        );
 
         // Recognise the emitted event
-        vm.expectEmit(true, false, false, true);
-        emit BunniHubSet(address(newBunniHub));
+        vm.expectEmit(true, true, false, true);
+        emit BunniLensSet(address(newBunniHub), address(newBunniLens));
 
         // Call
         vm.prank(policy);
-        bunniManager.setBunniHub(address(newBunniHub));
+        bunniManager.setBunniLens(address(newBunniLens));
 
-        // Check that the value has been updated
+        // Check that the values have been updated
         assertEq(address(bunniManager.bunniHub()), address(newBunniHub));
+        assertEq(address(bunniManager.bunniLens()), address(newBunniLens));
     }
 
-    function test_setBunniHub_inactive() public {
+    function test_setBunniLens_inactive() public {
         // Create a new BunniHub
         BunniHub newBunniHub = new BunniHub(
             uniswapFactory,
             bunniManagerAddress,
             0 // No protocol fee
+        );
+        BunniLens newBunniLens = new BunniLens(
+            newBunniHub
         );
 
         // Disable the policy
         kernel.executeAction(Actions.DeactivatePolicy, bunniManagerAddress);
 
         // Recognise the emitted event
-        vm.expectEmit(true, false, false, true);
-        emit BunniHubSet(address(newBunniHub));
+        vm.expectEmit(true, true, false, true);
+        emit BunniLensSet(address(newBunniHub), address(newBunniLens));
 
         // Call
         vm.prank(policy);
-        bunniManager.setBunniHub(address(newBunniHub));
+        bunniManager.setBunniLens(address(newBunniLens));
 
         // Check that the value has been updated
         assertEq(address(bunniManager.bunniHub()), address(newBunniHub));
+        assertEq(address(bunniManager.bunniLens()), address(newBunniLens));
     }
 
     // [X] setBunniOwner
@@ -2290,7 +2326,7 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.setBunniOwner(address(newBunniManager));
         vm.prank(policy);
-        newBunniManager.setBunniHub(bunniHubAddress);
+        newBunniManager.setBunniLens(bunniLensAddress);
 
         // Call
         vm.prank(policy);
