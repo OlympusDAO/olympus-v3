@@ -330,7 +330,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - The policy is inactive
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
-    ///             - An ERC20 token for `pool_` has not been deployed
+    ///             - An ERC20 token for `pool_` has not been deployed/registered
     ///             - There is insufficient balance of tokens
     ///             - The BunniHub instance reverts
     function deposit(
@@ -406,7 +406,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - The policy is inactive
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
-    ///             - An ERC20 token for `pool_` has not been deployed
+    ///             - An ERC20 token for `pool_` has not been deployed/registered
     ///             - There is insufficient balance of the token
     ///             - The BunniHub instance reverts
     function withdraw(
@@ -476,6 +476,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IBunniManager
     /// @dev        For each pool, this function does the following:
     ///             - Calls the `burn()` function with a 0 amount, which triggers a fee update
+    ///
+    ///             Reverts if:
+    ///             - The policy is inactive
+    ///             - The `bunniHub` state variable is not set
     function updateSwapFees() external nonReentrant onlyIfActive bunniHubSet {
         _updateSwapFees();
     }
@@ -544,6 +548,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
     ///             - The `bunniHub` state variable is not set
+    ///             - An ERC20 token for `pool_` has not been deployed/registered
     function getPoolToken(address pool_) public view override bunniHubSet returns (IBunniToken) {
         // Create a BunniKey
         BunniKey memory key = _getBunniKey(pool_);
@@ -561,6 +566,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
     ///             - The `bunniHub` state variable is not set
+    ///             - An ERC20 token for `pool_` has not been deployed/registered
     function getPoolTokenBalance(address pool_) public view override returns (uint256) {
         // Get the token
         // `getPoolToken` will revert if the pool is not found
@@ -719,6 +725,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             });
     }
 
+    /// @notice         Transfers the tokens from TRSRY
+    /// @param token_   The address of the token
+    /// @param amount_  The amount of tokens to transfer
     function _transferFromTRSRY(address token_, uint256 amount_) internal {
         // Check the balance
         ERC20 token = ERC20(token_);
@@ -734,6 +743,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         TRSRY.withdrawReserves(address(this), token, amount_);
     }
 
+    /// @notice         Transfers the tokens from TRSRY or mints them if the token is OHM
+    /// @param token_   The address of the token
+    /// @param amount_  The amount of tokens to transfer/mint
     function _transferOrMint(address token_, uint256 amount_) internal {
         if (token_ == address(MINTR.ohm())) {
             MINTR.increaseMintApproval(address(this), amount_);
@@ -743,6 +755,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
     }
 
+    /// @notice         Transfers the tokens to TRSRY or burns them if the token is OHM
+    /// @param token_   The address of the token
+    /// @param amount_  The amount of tokens to transfer/burn
     function _transferOrBurn(address token_, uint256 amount_) internal {
         // Nothing to burn
         if (amount_ == 0) return;
@@ -754,6 +769,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
     }
 
+    /// @notice     Asserts that the given address is a Uniswap V3 pool
+    /// @dev        This is determined by calling `slot0()`
     function _assertIsValidPool(address pool_) internal view {
         try IUniswapV3Pool(pool_).slot0() returns (
             uint160,
@@ -771,6 +788,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
     }
 
+    /// @notice     Adds the token to the list of underlying tokens
+    /// @dev        Duplicate tokens are skipped
     function _addUnderlyingToken(address token_) internal {
         // Check if the token has already been added
         for (uint256 i = 0; i < poolUnderlyingTokenCount; i++) {
