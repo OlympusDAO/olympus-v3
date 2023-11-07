@@ -96,6 +96,21 @@ contract BunniManagerTest is Test {
 
     mapping(address => mapping(address => uint256)) private tokenBalances;
 
+    // Reproduce events
+    event BunniHubSet(address newBunniHub_);
+
+    event BunniHubOwnerSet(address bunniHub_, address newOwner_);
+
+    event LastHarvestReset(uint48 newLastHarvest_);
+
+    event HarvestFrequencySet(uint48 newFrequency_);
+
+    event HarvestRewardParamsSet(uint256 newMaxReward_, uint16 newFee_);
+
+    event PoolRegistered(address pool_, address token_);
+
+    event PoolSwapFeesUpdated(address pool_);
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -635,6 +650,10 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         newBunniManager.setBunniHub(bunniHubAddress);
 
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit PoolRegistered(address(pool), address(deployedToken));
+
         // Register the pool with the new policy
         vm.prank(policy);
         IBunniToken newDeployedToken = newBunniManager.registerPool(address(pool));
@@ -664,7 +683,7 @@ contract BunniManagerTest is Test {
     function test_registerPool_multiple() public {
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(pool));
+        IBunniToken deployedToken = bunniManager.deployPoolToken(address(pool));
 
         // Create a new pool with an overlapping underlying token
         MockERC20 dai = new MockERC20("DAI", "DAI", 18);
@@ -674,7 +693,7 @@ contract BunniManagerTest is Test {
 
         // Deploy the second token
         vm.prank(policy);
-        bunniManager.deployPoolToken(address(newPool));
+        IBunniToken deployedTokenTwo = bunniManager.deployPoolToken(address(newPool));
 
         // Install a new policy
         BunniManager newBunniManager = _setUpNewBunniManager();
@@ -685,9 +704,17 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         newBunniManager.setBunniHub(bunniHubAddress);
 
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit PoolRegistered(address(pool), address(deployedToken));
+
         // Register the pool with the new policy
         vm.prank(policy);
         newBunniManager.registerPool(address(pool));
+
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit PoolRegistered(address(newPool), address(deployedTokenTwo));
 
         // Register the new pool with the new policy
         vm.prank(policy);
@@ -1448,6 +1475,10 @@ contract BunniManagerTest is Test {
             0 // No protocol fee
         );
 
+        // Recognise the emitted event
+        vm.expectEmit(true, false, false, true);
+        emit BunniHubSet(address(newBunniHub));
+
         // Call
         vm.prank(policy);
         bunniManager.setBunniHub(address(newBunniHub));
@@ -1466,6 +1497,10 @@ contract BunniManagerTest is Test {
 
         // Disable the policy
         kernel.executeAction(Actions.DeactivatePolicy, bunniManagerAddress);
+
+        // Recognise the emitted event
+        vm.expectEmit(true, false, false, true);
+        emit BunniHubSet(address(newBunniHub));
 
         // Call
         vm.prank(policy);
@@ -1510,6 +1545,10 @@ contract BunniManagerTest is Test {
     }
 
     function test_setBunniOwner() public {
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit BunniHubOwnerSet(address(bunniHub), alice);
+
         // Call
         vm.prank(policy);
         bunniManager.setBunniOwner(alice);
@@ -1533,6 +1572,10 @@ contract BunniManagerTest is Test {
     function test_setBunniOwner_inactive() public {
         // Disable the policy
         kernel.executeAction(Actions.DeactivatePolicy, bunniManagerAddress);
+
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit BunniHubOwnerSet(address(bunniHub), alice);
 
         // Call
         vm.prank(policy);
@@ -1563,7 +1606,7 @@ contract BunniManagerTest is Test {
     //  [X] harvest compounds fees to the pool, multiple pools
     //  [X] harvest reward paid matches currentHarvestReward
     //  [X] harvest forces recalculation of fees
-    //  [ ] ignores pools with no position
+    //  [X] ignores pools with no position
 
     function test_harvest_bunniHubNotSetReverts() public {
         // Create a new BunniManager policy, without the BunniHub set
@@ -2056,6 +2099,10 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.setHarvestFrequency(uint48(block.timestamp + 1));
 
+        // Recognise the emitted event
+        vm.expectEmit(true, false, false, true);
+        emit LastHarvestReset(0);
+
         // Reset the last harvest
         vm.prank(policy);
         bunniManager.resetLastHarvest();
@@ -2069,6 +2116,10 @@ contract BunniManagerTest is Test {
         _expectRevert_harvestTooEarly(uint48(block.timestamp + HARVEST_FREQUENCY));
         vm.prank(policy);
         bunniManager.harvest();
+
+        // Recognise the emitted event
+        vm.expectEmit(true, false, false, true);
+        emit LastHarvestReset(uint48(block.timestamp - HARVEST_FREQUENCY));
 
         // Call
         vm.prank(policy);
@@ -2093,6 +2144,10 @@ contract BunniManagerTest is Test {
 
         // Deactivate the policy
         kernel.executeAction(Actions.DeactivatePolicy, bunniManagerAddress);
+
+        // Recognise the emitted event
+        vm.expectEmit(true, false, false, true);
+        emit LastHarvestReset(uint48(block.timestamp - HARVEST_FREQUENCY));
 
         // Call
         vm.prank(policy);
@@ -2135,6 +2190,10 @@ contract BunniManagerTest is Test {
     function test_setHarvestFrequency() public {
         uint48 newFrequency = HARVEST_FREQUENCY + 2;
 
+        // Recognise the emitted event
+        vm.expectEmit(true, false, false, true);
+        emit HarvestFrequencySet(newFrequency);
+
         // Call
         vm.prank(policy);
         bunniManager.setHarvestFrequency(newFrequency);
@@ -2171,10 +2230,15 @@ contract BunniManagerTest is Test {
     }
 
     function test_setHarvestRewardParameters() public {
-        // Call
-        vm.prank(policy);
         uint16 newFee = 200; // 2%
         uint256 newReward = HARVEST_REWARD + 2;
+
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit HarvestRewardParamsSet(newReward, newFee);
+
+        // Call
+        vm.prank(policy);
         bunniManager.setHarvestRewardParameters(newReward, newFee);
 
         // Check that the value has been updated
@@ -2188,7 +2252,7 @@ contract BunniManagerTest is Test {
     //  [X] reverts if inactive
     //  [X] handles no pools
     //  [X] handles multiple pools
-    //  [ ] ignores pools with no position
+    //  [X] ignores pools with no position
 
     function test_updateSwapFees_bunniHubNotSetReverts() public {
         // Create a new BunniManager policy, without the BunniHub set
@@ -2330,6 +2394,12 @@ contract BunniManagerTest is Test {
             poolTwoUsdcFeeAmountBefore = poolTwoUsdcFeeAmount;
             poolTwoOhmFeeAmountBefore = poolTwoOhmFeeAmount;
         }
+
+        // Recognise the emitted event
+        vm.expectEmit(true, false, false, true);
+        emit PoolSwapFeesUpdated(address(pool));
+        vm.expectEmit(true, false, false, true);
+        emit PoolSwapFeesUpdated(address(poolTwo));
 
         // Call the function
         vm.prank(policy);

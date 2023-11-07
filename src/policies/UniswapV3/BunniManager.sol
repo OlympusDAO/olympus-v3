@@ -46,6 +46,44 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     using FullMath for uint256;
     using TransferHelper for ERC20;
 
+    //============================================================================================//
+    //                                      EVENTS                                                //
+    //============================================================================================//
+
+    /// @notice             Emitted when the BunniHub is set on the policy
+    /// @param newBunniHub_ The address of the new BunniHub
+    event BunniHubSet(address newBunniHub_);
+
+    /// @notice             Emitted when the owner of the BunniHub is set on the policy
+    /// @param bunniHub_    The address of the BunniHub
+    /// @param newOwner_    The address of the new owner
+    event BunniHubOwnerSet(address bunniHub_, address newOwner_);
+
+    /// @notice                 Emitted when the last harvest timestamp is reset
+    /// @param newLastHarvest_  The new last harvest timestamp
+    event LastHarvestReset(uint48 newLastHarvest_);
+
+    /// @notice                 Emitted when the harvest frequency is set
+    /// @param newFrequency_    The new harvest frequency
+    event HarvestFrequencySet(uint48 newFrequency_);
+
+    /// @notice                 Emitted when the harvest reward parameters are set
+    /// @param newMaxReward_    The new max reward
+    /// @param newFee_          The new fee
+    event HarvestRewardParamsSet(uint256 newMaxReward_, uint16 newFee_);
+
+    /// @notice                 Emitted when a pool with an already-deployed is registered
+    /// @param pool_            The address of the Uniswap V3 pool
+    event PoolRegistered(address pool_, address token_);
+
+    /// @notice                 Emitted when the swap fees of a pool are updated
+    /// @param pool_            The address of the Uniswap V3 pool
+    event PoolSwapFeesUpdated(address pool_);
+
+    //============================================================================================//
+    //                                      ERRORS                                                //
+    //============================================================================================//
+
     /// @notice                 Emitted if any of the module dependencies are the wrong version
     /// @param expectedMajors_  The expected major versions of the modules
     error BunniManager_WrongModuleVersion(uint8[4] expectedMajors_);
@@ -245,6 +283,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Add the pool to the registry
         pools.push(pool_);
         poolCount++;
+
+        emit PoolRegistered(pool_, address(token));
 
         return token;
     }
@@ -640,6 +680,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         bunniHub = BunniHub(newBunniHub_);
+
+        emit BunniHubSet(newBunniHub_);
     }
 
     /// @inheritdoc IBunniManager
@@ -655,6 +697,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         bunniHub.setOwner(newOwner_);
+
+        emit BunniHubOwnerSet(address(bunniHub), newOwner_);
     }
 
     /// @inheritdoc IBunniManager
@@ -663,6 +707,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         lastHarvest = harvestFrequency > block.timestamp
             ? 0
             : uint48(block.timestamp - harvestFrequency);
+
+        emit LastHarvestReset(lastHarvest);
     }
 
     /// @inheritdoc IBunniManager
@@ -674,6 +720,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         harvestFrequency = newFrequency_;
+
+        emit HarvestFrequencySet(newFrequency_);
     }
 
     /// @inheritdoc IBunniManager
@@ -687,6 +735,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         harvestRewardMax = newRewardMax_;
         harvestRewardFee = newRewardFee_;
+
+        emit HarvestRewardParamsSet(newRewardMax_, newRewardFee_);
     }
 
     //============================================================================================//
@@ -814,6 +864,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
             BunniKey memory key = _getBunniKey(poolAddress);
             bunniHub.updateSwapFees(key);
+
+            emit PoolSwapFeesUpdated(poolAddress);
         }
     }
 
