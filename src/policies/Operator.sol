@@ -111,6 +111,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         _reserveDecimals = reserve.decimals();
         wrappedReserve = ERC4626(tokens_[2]);
 
+        // Ensure wrappedReserve decimals match reserve decimals
+        if (wrappedReserve.decimals() != _reserveDecimals) revert Operator_InvalidParams();
+
         _config = Config({
             cushionFactor: configParams[0],
             cushionDuration: configParams[1],
@@ -574,14 +577,14 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         uint256 currentPrice = PRICE.getLastPrice();
 
         // Store observations and update counts for regeneration
-
+        uint32 regenObserve = _config.regenObserve;
         // Update low side regen status with a new observation
         // Observation is positive if the current price is greater than the MA
-        _updateRegenOnObservation(_status.low, currentPrice >= target, _config.regenObserve);
+        _updateRegenOnObservation(_status.low, currentPrice >= target, regenObserve);
 
         // Update high side regen status with a new observation
         // Observation is positive if the current price is less than the MA
-        _updateRegenOnObservation(_status.high, currentPrice <= target, _config.regenObserve);
+        _updateRegenOnObservation(_status.high, currentPrice <= target, regenObserve);
     }
 
     function _updateRegenOnObservation(
@@ -593,12 +596,12 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (positive_) {
             if (!regen_.observations[nextObservation]) {
                 regen_.observations[nextObservation] = true;
-                regen_.count++;
+                ++regen_.count;
             }
         } else {
             if (regen_.observations[nextObservation]) {
                 regen_.observations[nextObservation] = false;
-                regen_.count--;
+                --regen_.count;
             }
         }
         regen_.nextObservation = (nextObservation + 1) % observe_;
@@ -623,10 +626,12 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Get approval from MINTR to mint OHM up to the capacity
             // If current approval is higher than the capacity, reduce it
             uint256 currentApproval = MINTR.mintApproval(address(this));
-            if (currentApproval < capacity) {
-                MINTR.increaseMintApproval(address(this), capacity - currentApproval);
-            } else if (currentApproval > capacity) {
-                MINTR.decreaseMintApproval(address(this), currentApproval - capacity);
+            unchecked {
+                if (currentApproval < capacity) {
+                    MINTR.increaseMintApproval(address(this), capacity - currentApproval);
+                } else if (currentApproval > capacity) {
+                    MINTR.decreaseMintApproval(address(this), currentApproval - capacity);
+                }
             }
 
             // Regenerate the side with the capacity
@@ -646,18 +651,20 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             uint256 currentApproval = wrappedReserve.previewRedeem(
                 TRSRY.withdrawApproval(address(this), wrappedReserve)
             );
-            if (currentApproval < capacity) {
-                TRSRY.increaseWithdrawApproval(
-                    address(this),
-                    wrappedReserve,
-                    wrappedReserve.previewWithdraw(capacity - currentApproval)
-                );
-            } else if (currentApproval > capacity) {
-                TRSRY.decreaseWithdrawApproval(
-                    address(this),
-                    wrappedReserve,
-                    wrappedReserve.previewWithdraw(currentApproval - capacity)
-                );
+            unchecked {
+                if (currentApproval < capacity) {
+                    TRSRY.increaseWithdrawApproval(
+                        address(this),
+                        wrappedReserve,
+                        wrappedReserve.previewWithdraw(capacity - currentApproval)
+                    );
+                } else if (currentApproval > capacity) {
+                    TRSRY.decreaseWithdrawApproval(
+                        address(this),
+                        wrappedReserve,
+                        wrappedReserve.previewWithdraw(currentApproval - capacity)
+                    );
+                }
             }
 
             // Regenerate the side with the capacity

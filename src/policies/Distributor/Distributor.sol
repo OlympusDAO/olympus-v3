@@ -11,19 +11,10 @@ import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {IDistributor} from "policies/interfaces/IDistributor.sol";
+import {IStaking} from "src/interfaces/IStaking.sol";
 
-/// Import interfaces
-import "src/interfaces/Uniswap/IUniswapV2Pair.sol";
-
-/// Define Inline Interfaces
-interface IStaking {
-    function unstake(
-        address _to,
-        uint256 _amount,
-        bool _trigger,
-        bool _rebasing
-    ) external returns (uint256);
-}
+/// Import external interfaces
+import {IUniswapV2Pair} from "src/interfaces/Uniswap/IUniswapV2Pair.sol";
 
 contract Distributor is IDistributor, Policy, RolesConsumer {
     // ========= ERRORS ========= //
