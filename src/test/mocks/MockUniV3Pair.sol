@@ -9,6 +9,7 @@ contract MockUniV3Pair is IUniswapV3Pool {
     address internal _token1;
     int56[] internal _tickCumulatives;
     bool internal _observeReverts;
+    uint128 internal _liquidity;
 
     // Setters
 
@@ -26,6 +27,10 @@ contract MockUniV3Pair is IUniswapV3Pool {
 
     function setTickCumulatives(int56[] memory observations_) public {
         _tickCumulatives = observations_;
+    }
+
+    function setLiquidity(uint128 liquidity_) public {
+        _liquidity = liquidity_;
     }
 
     // Standard functions
@@ -189,7 +194,9 @@ contract MockUniV3Pair is IUniswapV3Pool {
             uint128 tokensOwed0_,
             uint128 tokensOwed1_
         )
-    {}
+    {
+        return (_liquidity, 0, 0, 0, 0);
+    }
 
     function observations(
         uint256 index_
