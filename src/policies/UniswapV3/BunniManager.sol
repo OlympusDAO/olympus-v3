@@ -36,6 +36,8 @@ import "src/Kernel.sol";
 /// @notice Bophades policy to manage UniswapV3 positions.
 /// @dev    This policy is paired with a BunniHub instance to manage the lifecycle of BunniTokens.
 ///
+///         Most of the functions are permissioned and require the "bunni_admin" role.
+///
 ///         What this policy does not cover:
 ///         - Migrating positions between BunniHub deployments. (This could be achieved by withdrawing and depositing into the new BunniHub instance.)
 ///         - Migrating positions between Uniswap V3 pools. (This could be achieved by withdrawing and depositing into the new Uniswap V3 pool.)

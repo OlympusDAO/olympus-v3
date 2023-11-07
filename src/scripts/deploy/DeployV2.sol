@@ -892,7 +892,10 @@ contract OlympusDeploy is Script {
         );
         console2.log("BunniHub deployed at:", address(bunniHub));
 
-        // BunniManager.setBunniHub will need to be called subsequently
+        // Post-deployment steps (requiring permissions):
+        // - Call BunniManager.setBunniHub
+        // - Create the "bunni_admin" role and assign it
+        // - Activate the BunniManager policy
     }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
