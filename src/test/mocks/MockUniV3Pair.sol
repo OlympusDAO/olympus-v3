@@ -52,7 +52,7 @@ contract MockUniV3Pair is IUniswapV3Pool {
     }
 
     function observe(
-        uint32[] calldata secondsAgos_
+        uint32[] calldata
     )
         external
         view
@@ -183,7 +183,7 @@ contract MockUniV3Pair is IUniswapV3Pool {
     function tickBitmap(int16 wordPosition_) external view returns (uint256) {}
 
     function positions(
-        bytes32 key_
+        bytes32
     )
         external
         view
