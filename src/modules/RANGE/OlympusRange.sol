@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {RANGEv1} from "src/modules/RANGE/RANGE.v1.sol";
+import {RANGEv2} from "src/modules/RANGE/RANGE.v2.sol";
 import "src/Kernel.sol";
 
 /// @notice Olympus Range data storage module
@@ -10,7 +10,7 @@ import "src/Kernel.sol";
 ///         It provides a standard interface for Range data, including range prices and capacities of each range side.
 ///         The data provided by this contract is used by the Olympus Range Operator to perform market operations.
 ///         The Olympus Range Data is updated each epoch by the Olympus Range Operator contract.
-contract OlympusRange is RANGEv1 {
+contract OlympusRange is RANGEv2 {
     uint256 public constant ONE_HUNDRED_PERCENT = 100e2;
     uint256 public constant ONE_PERCENT = 1e2;
 
@@ -28,13 +28,10 @@ contract OlympusRange is RANGEv1 {
     ) Module(kernel_) {
         // Validate parameters
         if (
-            lowSpreads_[0] >= ONE_HUNDRED_PERCENT ||
             lowSpreads_[0] < ONE_PERCENT ||
             lowSpreads_[1] >= ONE_HUNDRED_PERCENT ||
-            lowSpreads_[1] < ONE_PERCENT ||
             lowSpreads_[0] > lowSpreads_[1] ||
             highSpreads_[0] < ONE_PERCENT ||
-            highSpreads_[1] < ONE_PERCENT ||
             highSpreads_[0] > highSpreads_[1] ||
             thresholdFactor_ >= ONE_HUNDRED_PERCENT ||
             thresholdFactor_ < ONE_PERCENT
@@ -77,7 +74,7 @@ contract OlympusRange is RANGEv1 {
 
     /// @inheritdoc Module
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
-        major = 1;
+        major = 2;
         minor = 0;
     }
 
@@ -85,7 +82,7 @@ contract OlympusRange is RANGEv1 {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function updateCapacity(bool high_, uint256 capacity_) external override permissioned {
         if (high_) {
             // Update capacity
@@ -114,7 +111,7 @@ contract OlympusRange is RANGEv1 {
         }
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function updatePrices(uint256 target_) external override permissioned {
         // Calculate new wall and cushion values from target and spreads
         _range.low.wall.price =
@@ -138,7 +135,7 @@ contract OlympusRange is RANGEv1 {
         );
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function regenerate(bool high_, uint256 capacity_) external override permissioned {
         uint256 threshold = (capacity_ * thresholdFactor) / ONE_HUNDRED_PERCENT;
 
@@ -159,7 +156,7 @@ contract OlympusRange is RANGEv1 {
         emit WallUp(high_, block.timestamp, capacity_);
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function updateMarket(
         bool high_,
         uint256 market_,
@@ -182,33 +179,25 @@ contract OlympusRange is RANGEv1 {
         }
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function setSpreads(
         bool high_,
         uint256 cushionSpread_,
         uint256 wallSpread_
     ) external override permissioned {
+        // Confirm spreads are within allowed values
+        if (cushionSpread_ < ONE_PERCENT || cushionSpread_ > wallSpread_)
+            revert RANGE_InvalidParams();
+
         if (high_) {
-            // Confirm spreads are within allowed values
             // No upper limit on high side
-            if (
-                wallSpread_ < ONE_PERCENT ||
-                cushionSpread_ < ONE_PERCENT ||
-                cushionSpread_ > wallSpread_
-            ) revert RANGE_InvalidParams();
 
             // Set spreads
             _range.high.wall.spread = wallSpread_;
             _range.high.cushion.spread = cushionSpread_;
         } else {
             // Confirm spreads are within allowed values
-            if (
-                wallSpread_ >= ONE_HUNDRED_PERCENT ||
-                wallSpread_ < ONE_PERCENT ||
-                cushionSpread_ >= ONE_HUNDRED_PERCENT ||
-                cushionSpread_ < ONE_PERCENT ||
-                cushionSpread_ > wallSpread_
-            ) revert RANGE_InvalidParams();
+            if (wallSpread_ >= ONE_HUNDRED_PERCENT) revert RANGE_InvalidParams();
 
             // Set spreads
             _range.low.wall.spread = wallSpread_;
@@ -218,7 +207,7 @@ contract OlympusRange is RANGEv1 {
         emit SpreadsChanged(high_, cushionSpread_, wallSpread_);
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function setThresholdFactor(uint256 thresholdFactor_) external override permissioned {
         if (thresholdFactor_ >= ONE_HUNDRED_PERCENT || thresholdFactor_ < ONE_PERCENT)
             revert RANGE_InvalidParams();
@@ -231,12 +220,12 @@ contract OlympusRange is RANGEv1 {
     //                                      VIEW FUNCTIONS                                        //
     //============================================================================================//
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function range() external view override returns (Range memory) {
         return _range;
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function capacity(bool high_) external view override returns (uint256) {
         if (high_) {
             return _range.high.capacity;
@@ -245,7 +234,7 @@ contract OlympusRange is RANGEv1 {
         }
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function active(bool high_) external view override returns (bool) {
         if (high_) {
             return _range.high.active;
@@ -254,7 +243,7 @@ contract OlympusRange is RANGEv1 {
         }
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function price(bool high_, bool wall_) external view override returns (uint256) {
         if (high_) {
             if (wall_) {
@@ -271,7 +260,7 @@ contract OlympusRange is RANGEv1 {
         }
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function spread(bool high_, bool wall_) external view override returns (uint256) {
         if (high_) {
             if (wall_) {
@@ -288,7 +277,7 @@ contract OlympusRange is RANGEv1 {
         }
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function market(bool high_) external view override returns (uint256) {
         if (high_) {
             return _range.high.market;
@@ -297,7 +286,7 @@ contract OlympusRange is RANGEv1 {
         }
     }
 
-    /// @inheritdoc RANGEv1
+    /// @inheritdoc RANGEv2
     function lastActive(bool high_) external view override returns (uint256) {
         if (high_) {
             return _range.high.lastActive;
