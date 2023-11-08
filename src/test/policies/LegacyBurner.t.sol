@@ -57,12 +57,7 @@ contract LegacyBurnerTest is Test {
 
         // Initialize legacy authority and OHM
         {
-            legacyAuthority = new MockLegacyAuthorityV2(
-                guardian,
-                guardian,
-                policy,
-                address(mintr)
-            );
+            legacyAuthority = new MockLegacyAuthorityV2(guardian, guardian, policy, address(mintr));
             ohm = new OlympusERC20Token(address(legacyAuthority));
         }
 
@@ -81,13 +76,7 @@ contract LegacyBurnerTest is Test {
         {
             rolesAdmin = new RolesAdmin(kernel);
 
-            bondManager = new BondManager(
-                kernel,
-                address(0),
-                address(0),
-                address(0),
-                address(ohm)
-            );
+            bondManager = new BondManager(kernel, address(0), address(0), address(0), address(ohm));
 
             inverseBondDepo = new MockLegacyInverseBondDepo(address(legacyAuthority), address(ohm));
 

@@ -7,15 +7,12 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import "src/Kernel.sol";
 
-
 interface IInverseBondDepo {
     function burn() external;
 }
 
-
 /// @title Olympus Legacy Burner Policy
 contract LegacyBurner is Policy {
-
     // ========= ERRORS ========= //
 
     // ========= EVENTS ========= //
@@ -80,7 +77,7 @@ contract LegacyBurner is Policy {
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
-        
+
         requests = new Permissions[](3);
         requests[0] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
         requests[1] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
@@ -134,7 +131,7 @@ contract LegacyBurner is Policy {
         }
 
         // Calculate reward
-        reward = amount * rewardRate / DENOMINATOR;
+        reward = (amount * rewardRate) / DENOMINATOR;
     }
 
     /// @notice Burns OHM from the bond manager
