@@ -15,9 +15,6 @@ contract BunniSupply is SupplySubmodule {
 
     // ========== ERRORS ========== //
 
-    /// @notice     Invalid parameters were passed to a function
-    error BunniSupply_InvalidParams();
-
     /// @notice             The specified token is not a valid BunniToken
     /// @param token_       The address of the token
     error BunniSupply_Params_InvalidBunniToken(address token_);
@@ -131,34 +128,38 @@ contract BunniSupply is SupplySubmodule {
     /// @param token_           The address of the BunniToken contract
     /// @param bunniLens_       The address of the BunniLens contract
     function addBunniToken(address token_, address bunniLens_) external onlyParent {
-        if (bunniLens_ == address(0) || _inLensArray(bunniLens_))
-            revert BunniSupply_InvalidParams();
-
         if (token_ == address(0) || _inTokenArray(token_))
-            revert BunniSupply_InvalidParams();
+            revert BunniSupply_Params_InvalidBunniToken(token_);
+
+        if (bunniLens_ == address(0))
+            revert BunniSupply_Params_InvalidBunniLens(bunniLens_);
 
         // Validate the token
         BunniToken token = BunniToken(token_);
-        try token.hub() returns (IBunniHub) {
-            // Do nothing
+        address tokenHub;
+        try token.hub() returns (IBunniHub tokenHub_) {
+            tokenHub = address(tokenHub_);
         } catch (bytes memory) {
-            revert BunniSupply_InvalidParams();
+            revert BunniSupply_Params_InvalidBunniToken(token_);
         }
 
         // Validate the lens
         BunniLens lens = BunniLens(bunniLens_);
-        try lens.hub() returns (IBunniHub) {
-            // Do nothing
+        address lensHub;
+        try lens.hub() returns (IBunniHub lensHub_) {
+            lensHub = address(lensHub_);
         } catch (bytes memory) {
-            revert BunniSupply_InvalidParams();
+            revert BunniSupply_Params_InvalidBunniLens(bunniLens_);
         }
 
         // Check that the hub matches
-        if (token.hub() != lens.hub())
-            revert BunniSupply_InvalidParams();
+        if (tokenHub != lensHub)
+            revert BunniSupply_Params_HubMismatch(tokenHub, lensHub);
 
         bunniTokens.push(token);
         bunniLenses.push(lens);
+        bunniTokenCount++;
+        bunniLensCount++;
 
         emit BunniTokenAdded(token_, bunniLens_);
     }
@@ -172,7 +173,7 @@ contract BunniSupply is SupplySubmodule {
     /// @param token_           The address of the BunniToken contract
     function removeBunniToken(address token_) external onlyParent {
         if (token_ == address(0) || !_inTokenArray(token_))
-            revert BunniSupply_InvalidParams();
+            revert BunniSupply_Params_InvalidBunniToken(token_);
 
         uint256 len = bunniTokens.length;
         uint256 bunniTokenIndex = type(uint256).max;
@@ -193,6 +194,8 @@ contract BunniSupply is SupplySubmodule {
         // Remove the lens at the same index
         bunniLenses[bunniTokenIndex] = bunniLenses[len - 1];
         bunniLenses.pop();
+        bunniTokenCount--;
+        bunniLensCount--;
 
         emit BunniTokenRemoved(token_);
     }
@@ -220,19 +223,6 @@ contract BunniSupply is SupplySubmodule {
         uint256 len = bunniTokens.length;
         for (uint256 i; i < len; ) {
             if (token_ == address(bunniTokens[i])) {
-                return true;
-            }
-            unchecked {
-                ++i;
-            }
-        }
-        return false;
-    }
-
-    function _inLensArray(address lens_) internal view returns (bool) {
-        uint256 len = bunniLenses.length;
-        for (uint256 i; i < len; ) {
-            if (lens_ == address(bunniLenses[i])) {
                 return true;
             }
             unchecked {

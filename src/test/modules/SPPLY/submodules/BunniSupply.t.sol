@@ -166,6 +166,22 @@ contract BunniSupplyTest is Test {
         }
     }
 
+    function _expectRevert_invalidBunniToken(address token_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidBunniToken.selector,
+            token_
+        );
+        vm.expectRevert(err);
+    }
+
+    function _expectRevert_invalidBunniLens(address lens_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidBunniLens.selector,
+            lens_
+        );
+        vm.expectRevert(err);
+    }
+
     // =========  TESTS ========= //
 
     // =========  Module Information ========= //
@@ -316,16 +332,14 @@ contract BunniSupplyTest is Test {
     }
 
     function test_addBunniToken_tokenAddressZero_reverts() public {
-        bytes memory err = abi.encodeWithSignature("BunniSupply_InvalidParams()");
-        vm.expectRevert(err);
+        _expectRevert_invalidBunniToken(address(0));
 
         vm.prank(address(moduleSupply));
         submoduleBunniSupply.addBunniToken(address(0), bunniLensAddress);
     }
 
     function test_addBunniToken_lensAddressZero_reverts() public {
-        bytes memory err = abi.encodeWithSignature("BunniSupply_InvalidParams()");
-        vm.expectRevert(err);
+        _expectRevert_invalidBunniLens(address(0));
 
         vm.prank(address(moduleSupply));
         submoduleBunniSupply.addBunniToken(poolTokenAddress, address(0));
@@ -336,39 +350,24 @@ contract BunniSupplyTest is Test {
         vm.prank(address(moduleSupply));
         submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
 
-        bytes memory err = abi.encodeWithSignature("BunniSupply_InvalidParams()");
-        vm.expectRevert(err);
+        _expectRevert_invalidBunniToken(poolTokenAddress);
 
         vm.prank(address(moduleSupply));
         submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
     }
 
     function test_addBunniToken_invalidTokenReverts() public {
-        // Feed in a different address
-        address[] memory newLocations = userFactory.create(1);
-
-        bytes memory err = abi.encodeWithSelector(
-            BunniSupply.BunniSupply_Params_InvalidBunniToken.selector,
-            address(newLocations[0])
-        );
-        vm.expectRevert(err);
+        _expectRevert_invalidBunniToken(ohmAddress);
 
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(newLocations[0], bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(ohmAddress, bunniLensAddress);
     }
 
     function test_addBunniToken_invalidLensReverts() public {
-        // Feed in a different address
-        address[] memory newLocations = userFactory.create(1);
-
-        bytes memory err = abi.encodeWithSelector(
-            BunniSupply.BunniSupply_Params_InvalidBunniLens.selector,
-            address(newLocations[0])
-        );
-        vm.expectRevert(err);
+        _expectRevert_invalidBunniLens(ohmAddress);
 
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, newLocations[0]);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, ohmAddress);
     }
 
     function test_addBunniToken_hubMismatchReverts() public {
@@ -535,8 +534,6 @@ contract BunniSupplyTest is Test {
         submoduleBunniSupply.removeBunniToken(poolTokenAddress);
 
         // Check that the token was removed
-        assertEq(address(submoduleBunniSupply.bunniTokens(0)), address(0));
-        assertEq(address(submoduleBunniSupply.bunniLenses(0)), address(0));
         assertEq(submoduleBunniSupply.bunniTokenCount(), 0);
         assertEq(submoduleBunniSupply.bunniLensCount(), 0);
         assertEq(submoduleBunniSupply.getCollateralizedOhm(), 0);
