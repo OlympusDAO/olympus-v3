@@ -145,10 +145,12 @@ contract SiloArbSupplyTest is Test {
         // There's no error message, so just check that a revert happens when attempting to call the module
         vm.expectRevert();
 
-        new SiloArbSupply(Module(newLocations[0]),
-                COLLATERALIZED_OHM,
-                PROTOCOL_OWNED_BORROWABLE_OHM,
-                PROTOCOL_OWNED_LIQUIDITY_OHM);
+        new SiloArbSupply(
+            Module(newLocations[0]),
+            COLLATERALIZED_OHM,
+            PROTOCOL_OWNED_BORROWABLE_OHM,
+            PROTOCOL_OWNED_LIQUIDITY_OHM
+        );
     }
 
     function test_constructor_parent_notSpply_reverts() public {
@@ -158,10 +160,12 @@ contract SiloArbSupplyTest is Test {
         bytes memory err = abi.encodeWithSignature("Submodule_InvalidParent()");
         vm.expectRevert(err);
 
-        new SiloArbSupply(modulePrice,
-                COLLATERALIZED_OHM,
-                PROTOCOL_OWNED_BORROWABLE_OHM,
-                PROTOCOL_OWNED_LIQUIDITY_OHM);
+        new SiloArbSupply(
+            modulePrice,
+            COLLATERALIZED_OHM,
+            PROTOCOL_OWNED_BORROWABLE_OHM,
+            PROTOCOL_OWNED_LIQUIDITY_OHM
+        );
     }
 
     function test_constructor() public {
@@ -173,10 +177,12 @@ contract SiloArbSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new SiloArbSupply(moduleSupply,
-                COLLATERALIZED_OHM,
-                PROTOCOL_OWNED_BORROWABLE_OHM,
-                PROTOCOL_OWNED_LIQUIDITY_OHM);
+        new SiloArbSupply(
+            moduleSupply,
+            COLLATERALIZED_OHM,
+            PROTOCOL_OWNED_BORROWABLE_OHM,
+            PROTOCOL_OWNED_LIQUIDITY_OHM
+        );
         vm.stopPrank();
     }
 
@@ -189,13 +195,19 @@ contract SiloArbSupplyTest is Test {
     // =========  getProtocolOwnedBorrowableOhm ========= //
 
     function test_getProtocolOwnedBorrowableOhm() public {
-        assertEq(submoduleSiloArbSupply.getProtocolOwnedBorrowableOhm(), PROTOCOL_OWNED_BORROWABLE_OHM);
+        assertEq(
+            submoduleSiloArbSupply.getProtocolOwnedBorrowableOhm(),
+            PROTOCOL_OWNED_BORROWABLE_OHM
+        );
     }
 
     // =========  getProtocolOwnedLiquidityOhm ========= //
 
     function test_getProtocolOwnedLiquidityOhm() public {
-        assertEq(submoduleSiloArbSupply.getProtocolOwnedLiquidityOhm(), PROTOCOL_OWNED_LIQUIDITY_OHM);
+        assertEq(
+            submoduleSiloArbSupply.getProtocolOwnedLiquidityOhm(),
+            PROTOCOL_OWNED_LIQUIDITY_OHM
+        );
     }
 
     // =========  setCollateralizedOhm ========= //

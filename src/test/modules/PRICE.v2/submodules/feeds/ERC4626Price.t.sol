@@ -106,12 +106,12 @@ contract ERC4626Test is Test {
         mockAssetPrice(address(dai), 10 ** outputDecimals); // DAI = 1
 
         // Determine the share - asset conversion rate
-        uint256 sDaiRate = sDai.convertToAssets(10**SDAI_DECIMALS);
+        uint256 sDaiRate = sDai.convertToAssets(10 ** SDAI_DECIMALS);
 
         // Call the function
         uint256 assetPrice = submodule.getPriceFromUnderlying(address(sDai), outputDecimals, "");
 
-        uint256 expectedPrice = sDaiRate.mulDiv(10**outputDecimals, 10**PRICE_DECIMALS);
+        uint256 expectedPrice = sDaiRate.mulDiv(10 ** outputDecimals, 10 ** PRICE_DECIMALS);
 
         assertEq(assetPrice, expectedPrice);
     }
@@ -124,16 +124,32 @@ contract ERC4626Test is Test {
         mockAssetPrice(address(dai), 10 ** outputDecimals); // DAI = 1
 
         // Call the function
-        vm.expectRevert(abi.encodeWithSelector(ERC4626Price.ERC4626_OutputDecimalsOutOfBounds.selector, outputDecimals, MAX_DECIMALS));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC4626Price.ERC4626_OutputDecimalsOutOfBounds.selector,
+                outputDecimals,
+                MAX_DECIMALS
+            )
+        );
         submodule.getPriceFromUnderlying(address(sDai), outputDecimals, "");
     }
 
     function test_assetDecimalsDifferent_reverts() public {
         // Mock the asset having a different number of decimals to the underlying
-        vm.mockCall(address(sDai), abi.encodeWithSignature("decimals()"), abi.encode(DAI_DECIMALS + 1));
+        vm.mockCall(
+            address(sDai),
+            abi.encodeWithSignature("decimals()"),
+            abi.encode(DAI_DECIMALS + 1)
+        );
 
         // Call the function
-        vm.expectRevert(abi.encodeWithSelector(ERC4626Price.ERC4626_AssetDecimalsMismatch.selector, DAI_DECIMALS + 1, DAI_DECIMALS));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC4626Price.ERC4626_AssetDecimalsMismatch.selector,
+                DAI_DECIMALS + 1,
+                DAI_DECIMALS
+            )
+        );
         submodule.getPriceFromUnderlying(address(sDai), PRICE_DECIMALS, "");
     }
 
@@ -143,22 +159,26 @@ contract ERC4626Test is Test {
         // Create new set of tokens
         MockERC20 newUnderlying = new MockERC20("New Token", "NEW", assetDecimals);
         MockERC4626 newAsset = new MockERC4626(newUnderlying, "Savings New Token", "sNEW");
-        mockAssetPrice(address(newUnderlying), 10**assetDecimals); // NEW = 1
+        mockAssetPrice(address(newUnderlying), 10 ** assetDecimals); // NEW = 1
 
         // Issue shares
-        newUnderlying.mint(alice, 10**assetDecimals);
+        newUnderlying.mint(alice, 10 ** assetDecimals);
         vm.prank(alice);
-        newUnderlying.approve(address(newAsset), 10**assetDecimals);
+        newUnderlying.approve(address(newAsset), 10 ** assetDecimals);
         vm.prank(alice);
-        newAsset.mint(10**assetDecimals, alice);
+        newAsset.mint(10 ** assetDecimals, alice);
 
         // Determine the share - asset conversion rate
-        uint256 assetRate = newAsset.convertToAssets(10**assetDecimals);
+        uint256 assetRate = newAsset.convertToAssets(10 ** assetDecimals);
 
         // Call the function
-        uint256 assetPrice = submodule.getPriceFromUnderlying(address(newAsset), PRICE_DECIMALS, "");
+        uint256 assetPrice = submodule.getPriceFromUnderlying(
+            address(newAsset),
+            PRICE_DECIMALS,
+            ""
+        );
 
-        uint256 expectedPrice = assetRate.mulDiv(10**PRICE_DECIMALS, 10**PRICE_DECIMALS);
+        uint256 expectedPrice = assetRate.mulDiv(10 ** PRICE_DECIMALS, 10 ** PRICE_DECIMALS);
 
         assertEq(assetPrice, expectedPrice);
     }
@@ -169,17 +189,23 @@ contract ERC4626Test is Test {
         // Create new set of tokens
         MockERC20 newUnderlying = new MockERC20("New Token", "NEW", assetDecimals);
         MockERC4626 newAsset = new MockERC4626(newUnderlying, "Savings New Token", "sNEW");
-        mockAssetPrice(address(newUnderlying), 10**assetDecimals); // NEW = 1
+        mockAssetPrice(address(newUnderlying), 10 ** assetDecimals); // NEW = 1
 
         // Issue shares
-        newUnderlying.mint(alice, 10**assetDecimals);
+        newUnderlying.mint(alice, 10 ** assetDecimals);
         vm.prank(alice);
-        newUnderlying.approve(address(newAsset), 10**assetDecimals);
+        newUnderlying.approve(address(newAsset), 10 ** assetDecimals);
         vm.prank(alice);
-        newAsset.mint(10**assetDecimals, alice);
+        newAsset.mint(10 ** assetDecimals, alice);
 
         // Call the function
-        vm.expectRevert(abi.encodeWithSelector(ERC4626Price.ERC4626_AssetDecimalsOutOfBounds.selector, assetDecimals, MAX_DECIMALS));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC4626Price.ERC4626_AssetDecimalsOutOfBounds.selector,
+                assetDecimals,
+                MAX_DECIMALS
+            )
+        );
         submodule.getPriceFromUnderlying(address(newAsset), PRICE_DECIMALS, "");
     }
 
@@ -188,7 +214,9 @@ contract ERC4626Test is Test {
         vm.mockCall(address(sDai), abi.encodeWithSignature("asset()"), abi.encode(0x0));
 
         // Call the function
-        vm.expectRevert(abi.encodeWithSelector(ERC4626Price.ERC4626_UnderlyingNotSet.selector, address(sDai)));
+        vm.expectRevert(
+            abi.encodeWithSelector(ERC4626Price.ERC4626_UnderlyingNotSet.selector, address(sDai))
+        );
         submodule.getPriceFromUnderlying(address(sDai), PRICE_DECIMALS, "");
     }
 
@@ -212,12 +240,12 @@ contract ERC4626Test is Test {
         sDai.deposit(daiMintAmount, alice);
 
         // Determine the share - asset conversion rate
-        uint256 sDaiRate = sDai.convertToAssets(10**SDAI_DECIMALS);
+        uint256 sDaiRate = sDai.convertToAssets(10 ** SDAI_DECIMALS);
 
         // Call the function
         uint256 assetPrice = submodule.getPriceFromUnderlying(address(sDai), PRICE_DECIMALS, "");
 
-        uint256 expectedPrice = sDaiRate.mulDiv(10**PRICE_DECIMALS, 10**PRICE_DECIMALS);
+        uint256 expectedPrice = sDaiRate.mulDiv(10 ** PRICE_DECIMALS, 10 ** PRICE_DECIMALS);
 
         assertEq(assetPrice, expectedPrice);
     }

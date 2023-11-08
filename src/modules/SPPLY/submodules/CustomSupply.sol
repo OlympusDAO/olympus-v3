@@ -17,7 +17,6 @@ import "modules/SPPLY/SPPLY.v1.sol";
 ///             due to the value returned by the `SUBKEYCODE()` function needs to be unique for each submodule,
 ///             but as it is a pure function, it cannot read from the state of the contract.
 abstract contract CustomSupply is SupplySubmodule {
-
     // ========== EVENTS ========== //
 
     event CollateralizedValueUpdated(uint256 value);
@@ -37,7 +36,12 @@ abstract contract CustomSupply is SupplySubmodule {
 
     // ========== CONSTRUCTOR ========== //
 
-    constructor(Module parent_, uint256 collateralizedOhm_, uint256 protocolOwnedBorrowableOhm_, uint256 protocolOwnedLiquidityOhm_) Submodule(parent_) {
+    constructor(
+        Module parent_,
+        uint256 collateralizedOhm_,
+        uint256 protocolOwnedBorrowableOhm_,
+        uint256 protocolOwnedLiquidityOhm_
+    ) Submodule(parent_) {
         _collateralizedOhm = collateralizedOhm_;
         _protocolOwnedBorrowableOhm = protocolOwnedBorrowableOhm_;
         _protocolOwnedLiquidityOhm = protocolOwnedLiquidityOhm_;
