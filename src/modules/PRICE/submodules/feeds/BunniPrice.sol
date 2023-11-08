@@ -68,7 +68,11 @@ contract BunniPrice is PriceSubmodule {
     /// @param bunniToken_      The address of the BunniToken contract
     /// @param outputDecimals_  The number of decimals to use for the output price
     /// @param params_          The encoded parameters for the function call
-    function getBunniTokenPrice(address bunniToken_, uint8 outputDecimals_, bytes calldata params_) external view returns (uint256) {
+    function getBunniTokenPrice(
+        address bunniToken_,
+        uint8 outputDecimals_,
+        bytes calldata params_
+    ) external view returns (uint256) {
         // Decode the parameters
         address bunniLens;
         {
@@ -119,11 +123,12 @@ contract BunniPrice is PriceSubmodule {
     // ========== INTERNAL FUNCTIONS ========== //
 
     function _getBunniKey(BunniToken token_) internal view returns (BunniKey memory) {
-        return BunniKey({
-            pool: token_.pool(),
-            tickLower: token_.tickLower(),
-            tickUpper: token_.tickUpper()
-        });
+        return
+            BunniKey({
+                pool: token_.pool(),
+                tickLower: token_.tickLower(),
+                tickUpper: token_.tickUpper()
+            });
     }
 
     /// @notice                 Fetches the reserves of a Uniswap V3 position
@@ -135,7 +140,11 @@ contract BunniPrice is PriceSubmodule {
     /// @return reserve0        The amount of the first reserve token (in `outputDecimals_`)
     /// @return token1          The address of the second reserve token
     /// @return reserve1        The amount of the second reserve token (in `outputDecimals_`)
-    function _getBunniReserves(BunniToken token_, BunniLens lens_, uint8 outputDecimals_) internal view returns (address token0, uint256 reserve0, address token1, uint256 reserve1) {
+    function _getBunniReserves(
+        BunniToken token_,
+        BunniLens lens_,
+        uint8 outputDecimals_
+    ) internal view returns (address token0, uint256 reserve0, address token1, uint256 reserve1) {
         BunniKey memory key = _getBunniKey(token_);
         (uint112 reserve0_, uint112 reserve1_) = lens_.getReserves(key);
 
@@ -144,13 +153,21 @@ contract BunniPrice is PriceSubmodule {
         token1 = key.pool.token1();
         uint8 token0Decimals = ERC20(token0).decimals();
         uint8 token1Decimals = ERC20(token1).decimals();
-        reserve0 = uint256(reserve0_).mulDiv(10**outputDecimals_, 10**token0Decimals);
-        reserve1 = uint256(reserve1_).mulDiv(10**outputDecimals_, 10**token1Decimals);
+        reserve0 = uint256(reserve0_).mulDiv(10 ** outputDecimals_, 10 ** token0Decimals);
+        reserve1 = uint256(reserve1_).mulDiv(10 ** outputDecimals_, 10 ** token1Decimals);
     }
 
-    function _getTotalValue(BunniToken token_, BunniLens lens_, uint8 outputDecimals_) internal view returns (uint256) {
-        (address token0, uint256 reserve0, address token1, uint256 reserve1) = _getBunniReserves(token_, lens_, outputDecimals_);
-        uint256 outputScale = 10**outputDecimals_;
+    function _getTotalValue(
+        BunniToken token_,
+        BunniLens lens_,
+        uint8 outputDecimals_
+    ) internal view returns (uint256) {
+        (address token0, uint256 reserve0, address token1, uint256 reserve1) = _getBunniReserves(
+            token_,
+            lens_,
+            outputDecimals_
+        );
+        uint256 outputScale = 10 ** outputDecimals_;
 
         // Determine the value of each reserve token in USD
         uint256 totalValue;

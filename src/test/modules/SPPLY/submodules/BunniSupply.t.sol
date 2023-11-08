@@ -127,7 +127,11 @@ contract BunniSupplyTest is Test {
 
         // Deploy Uniswap V3 pool and tokens
         {
-            (MockUniV3Pair uniswapPool_, BunniKey memory poolTokenKey_, BunniToken poolToken_) = _setUpPool(ohmAddress, usdcAddress, POOL_LIQUIDITY, POOL_SQRTPRICEX96);
+            (
+                MockUniV3Pair uniswapPool_,
+                BunniKey memory poolTokenKey_,
+                BunniToken poolToken_
+            ) = _setUpPool(ohmAddress, usdcAddress, POOL_LIQUIDITY, POOL_SQRTPRICEX96);
 
             uniswapPool = uniswapPool_;
             poolTokenKey = poolTokenKey_;
@@ -136,7 +140,12 @@ contract BunniSupplyTest is Test {
         }
     }
 
-    function _setUpPool(address token0_, address token1_, uint128 liquidity_, uint160 sqrtPriceX96_) internal returns (MockUniV3Pair, BunniKey memory, BunniToken) {
+    function _setUpPool(
+        address token0_,
+        address token1_,
+        uint128 liquidity_,
+        uint160 sqrtPriceX96_
+    ) internal returns (MockUniV3Pair, BunniKey memory, BunniToken) {
         MockUniV3Pair pool = new MockUniV3Pair();
         pool.setToken0(token0_);
         pool.setToken1(token1_);
@@ -149,15 +158,15 @@ contract BunniSupplyTest is Test {
             tickUpper: 887272
         });
 
-        BunniToken token = new BunniToken(
-            bunniHub,
-            key
-        );
+        BunniToken token = new BunniToken(bunniHub, key);
 
         return (pool, key, token);
     }
 
-    function _getOhmReserves(BunniKey memory key_, BunniLens lens_) internal view returns (uint256) {
+    function _getOhmReserves(
+        BunniKey memory key_,
+        BunniLens lens_
+    ) internal view returns (uint256) {
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
         if (key_.pool.token0() == ohmAddress) {
             return reserve0;
@@ -288,7 +297,12 @@ contract BunniSupplyTest is Test {
         MockERC20 wETH = new MockERC20("wETH", "wETH", 18);
         uint128 liquidityTwo = 602219599341335870;
         uint160 sqrtPriceX96Two = 195181081174522229204497247535278;
-        (, BunniKey memory poolTokenKeyTwo, BunniToken poolTokenTwo) = _setUpPool(ohmAddress, address(wETH), liquidityTwo, sqrtPriceX96Two);
+        (, BunniKey memory poolTokenKeyTwo, BunniToken poolTokenTwo) = _setUpPool(
+            ohmAddress,
+            address(wETH),
+            liquidityTwo,
+            sqrtPriceX96Two
+        );
         vm.prank(address(moduleSupply));
         submoduleBunniSupply.addBunniToken(address(poolTokenTwo), bunniLensAddress);
 
@@ -422,7 +436,12 @@ contract BunniSupplyTest is Test {
         MockERC20 wETH = new MockERC20("wETH", "wETH", 18);
         uint128 liquidityTwo = 602219599341335870;
         uint160 sqrtPriceX96Two = 195181081174522229204497247535278;
-        (, , BunniToken poolTokenTwo) = _setUpPool(ohmAddress, address(wETH), liquidityTwo, sqrtPriceX96Two);
+        (, , BunniToken poolTokenTwo) = _setUpPool(
+            ohmAddress,
+            address(wETH),
+            liquidityTwo,
+            sqrtPriceX96Two
+        );
         address poolTokenTwoAddress = address(poolTokenTwo);
 
         // Expect an event
@@ -451,7 +470,12 @@ contract BunniSupplyTest is Test {
         MockERC20 wETH = new MockERC20("wETH", "wETH", 18);
         uint128 liquidityTwo = 602219599341335870;
         uint160 sqrtPriceX96Two = 195181081174522229204497247535278;
-        (, , BunniToken poolTokenTwo) = _setUpPool(ohmAddress, address(wETH), liquidityTwo, sqrtPriceX96Two);
+        (, , BunniToken poolTokenTwo) = _setUpPool(
+            ohmAddress,
+            address(wETH),
+            liquidityTwo,
+            sqrtPriceX96Two
+        );
         address poolTokenTwoAddress = address(poolTokenTwo);
 
         // Set up a new Lens
@@ -552,7 +576,12 @@ contract BunniSupplyTest is Test {
         MockERC20 wETH = new MockERC20("wETH", "wETH", 18);
         uint128 liquidityTwo = 602219599341335870;
         uint160 sqrtPriceX96Two = 195181081174522229204497247535278;
-        (, , BunniToken poolTokenTwo) = _setUpPool(ohmAddress, address(wETH), liquidityTwo, sqrtPriceX96Two);
+        (, , BunniToken poolTokenTwo) = _setUpPool(
+            ohmAddress,
+            address(wETH),
+            liquidityTwo,
+            sqrtPriceX96Two
+        );
         address poolTokenTwoAddress = address(poolTokenTwo);
 
         // Add bunni token to BunniSupply
@@ -583,7 +612,12 @@ contract BunniSupplyTest is Test {
         MockERC20 wETH = new MockERC20("wETH", "wETH", 18);
         uint128 liquidityTwo = 602219599341335870;
         uint160 sqrtPriceX96Two = 195181081174522229204497247535278;
-        (, , BunniToken poolTokenTwo) = _setUpPool(ohmAddress, address(wETH), liquidityTwo, sqrtPriceX96Two);
+        (, , BunniToken poolTokenTwo) = _setUpPool(
+            ohmAddress,
+            address(wETH),
+            liquidityTwo,
+            sqrtPriceX96Two
+        );
         address poolTokenTwoAddress = address(poolTokenTwo);
 
         // Set up a new Lens

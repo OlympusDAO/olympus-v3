@@ -12,7 +12,6 @@ import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
 /// @notice     A SPPLY submodule that provides data on OHM deployed into Uniswap V3 pools that
 ///             are managed by the BunniManager policy and its associated BunniHub.
 contract BunniSupply is SupplySubmodule {
-
     // ========== ERRORS ========== //
 
     /// @notice             The specified token is not a valid BunniToken
@@ -131,8 +130,7 @@ contract BunniSupply is SupplySubmodule {
         if (token_ == address(0) || _inTokenArray(token_))
             revert BunniSupply_Params_InvalidBunniToken(token_);
 
-        if (bunniLens_ == address(0))
-            revert BunniSupply_Params_InvalidBunniLens(bunniLens_);
+        if (bunniLens_ == address(0)) revert BunniSupply_Params_InvalidBunniLens(bunniLens_);
 
         // Validate the token
         BunniToken token = BunniToken(token_);
@@ -153,8 +151,7 @@ contract BunniSupply is SupplySubmodule {
         }
 
         // Check that the hub matches
-        if (tokenHub != lensHub)
-            revert BunniSupply_Params_HubMismatch(tokenHub, lensHub);
+        if (tokenHub != lensHub) revert BunniSupply_Params_HubMismatch(tokenHub, lensHub);
 
         bunniTokens.push(token);
         bunniLenses.push(lens);
@@ -203,14 +200,18 @@ contract BunniSupply is SupplySubmodule {
     // =========== INTERNAL FUNCTIONS =========== //
 
     function _getBunniKey(BunniToken token_) internal view returns (BunniKey memory) {
-        return BunniKey({
-            pool: token_.pool(),
-            tickLower: token_.tickLower(),
-            tickUpper: token_.tickUpper()
-        });
+        return
+            BunniKey({
+                pool: token_.pool(),
+                tickLower: token_.tickLower(),
+                tickUpper: token_.tickUpper()
+            });
     }
 
-    function _getOhmReserves(BunniKey memory key_, BunniLens lens_) internal view returns (uint256) {
+    function _getOhmReserves(
+        BunniKey memory key_,
+        BunniLens lens_
+    ) internal view returns (uint256) {
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
         if (key_.pool.token0() == ohm) {
             return reserve0;
