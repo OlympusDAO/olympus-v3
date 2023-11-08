@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 import {IBondCallback} from "interfaces/IBondCallback.sol";
@@ -34,6 +35,7 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     mapping(address => mapping(uint256 => bool)) public approvedMarkets;
     mapping(uint256 => uint256[2]) internal _amountsPerMarket;
     mapping(ERC20 => uint256) public priorBalances;
+    mapping(address => address) public wrapped;
 
     TRSRYv1 public TRSRY;
     MINTRv1 public MINTR;
@@ -138,12 +140,22 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
 
         uint256 toApprove = capacityInQuote ? capacity.mulDiv(scale, minPrice) : capacity;
 
-        // If payout token is in OHM, request mint approval for the capacity in OHM
+        // If payout token is OHM, request mint approval for the capacity in OHM
         // Otherwise, request withdrawal approval for the capacity from the TRSRY
         if (address(payoutToken) == address(ohm)) {
             MINTR.increaseMintApproval(address(this), toApprove);
         } else {
-            TRSRY.increaseWithdrawApproval(address(this), payoutToken, toApprove);
+            ERC4626 wrappedPayoutToken = ERC4626(wrapped[address(payoutToken)]);
+            if (address(wrappedPayoutToken) == address(0)) {
+                TRSRY.increaseWithdrawApproval(address(this), payoutToken, toApprove);
+            } else {
+                // Since TRSRY holds a wrapped version of the payoutToken, a conversion must take place.
+                TRSRY.increaseWithdrawApproval(
+                    address(this),
+                    wrappedPayoutToken,
+                    wrappedPayoutToken.previewWithdraw(toApprove)
+                );
+            }
         }
     }
 
@@ -187,8 +199,16 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
             MINTR.burnOhm(address(this), inputAmount_);
             MINTR.mintOhm(msg.sender, outputAmount_);
         } else if (quoteToken == ohm) {
+            ERC4626 wrappedPayoutToken = ERC4626(wrapped[address(payoutToken)]);
             // If inverse bond (buying ohm), transfer payout tokens to sender
-            TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
+            if (address(wrappedPayoutToken) == address(0)) {
+                TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
+            } else {
+                // Since TRSRY hold a wrapped version of the payoutToken, it must be unwrapped first.
+                uint256 wrappedOutputAmount = wrappedPayoutToken.previewWithdraw(outputAmount_);
+                TRSRY.withdrawReserves(address(this), wrappedPayoutToken, wrappedOutputAmount);
+                wrappedPayoutToken.withdraw(wrappedOutputAmount, msg.sender, address(this));
+            }
 
             // Burn OHM received from sender
             MINTR.burnOhm(address(this), inputAmount_);
@@ -239,6 +259,18 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
     function setOperator(Operator operator_) external onlyRole("callback_admin") {
         if (address(operator_) == address(0)) revert Callback_InvalidParams();
         operator = operator_;
+    }
+
+    /// @notice Inform the whether the TRSRY holds the payout token in a naked or a wrapped version
+    /// @dev    Must be called before whitelisting to ensure a proper TRSRY withdraw approval
+    /// @param  payoutToken_ Address of the payout token
+    /// @param  wrappedToken_ Address of the token wrapper held by the TRSRY. If the TRSRY moves
+    ///                       back to the naked token, input address(0) as the wrapped version
+    function useWrappedVersion(
+        address payoutToken_,
+        address wrappedToken_
+    ) external onlyRole("callback_admin") {
+        wrapped[payoutToken_] = wrappedToken_;
     }
 
     //============================================================================================//

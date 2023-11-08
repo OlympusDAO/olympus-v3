@@ -1,4 +1,3 @@
-
 pragma solidity 0.8.15;
 
 import "modules/SPPLY/SPPLY.v1.sol";
@@ -8,10 +7,21 @@ import {CustomSupply} from "modules/SPPLY/submodules/CustomSupply.sol";
 /// @author     0xJem
 /// @notice     SPPLY submodule representing OHM in Silo on Arbitrum
 contract SiloArbSupply is CustomSupply {
-
     // ========== CONSTRUCTOR ========== //
-    
-    constructor(Module parent_, uint256 collateralizedOhm_, uint256 protocolOwnedBorrowableOhm_, uint256 protocolOwnedLiquidityOhm_) CustomSupply(parent_, collateralizedOhm_, protocolOwnedBorrowableOhm_, protocolOwnedLiquidityOhm_) {}
+
+    constructor(
+        Module parent_,
+        uint256 collateralizedOhm_,
+        uint256 protocolOwnedBorrowableOhm_,
+        uint256 protocolOwnedLiquidityOhm_
+    )
+        CustomSupply(
+            parent_,
+            collateralizedOhm_,
+            protocolOwnedBorrowableOhm_,
+            protocolOwnedLiquidityOhm_
+        )
+    {}
 
     // ========== SUBMODULE SETUP ========== //
 

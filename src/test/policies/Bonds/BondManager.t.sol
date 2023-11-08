@@ -8,7 +8,7 @@ import {console2} from "forge-std/console2.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockLegacyAuthority} from "../modules/MINTR.t.sol";
+import {MockLegacyAuthority} from "test/modules/MINTR.t.sol";
 
 import "src/Kernel.sol";
 

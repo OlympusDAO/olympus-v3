@@ -322,11 +322,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Burn OHM
             MINTR.burnOhm(address(this), amountIn_);
 
-            // Calculate amount of wrappedReserve to withdraw from the TRSRY
-            uint256 amountWrapped = _wrappedReserve.convertToShares(amountOut);
-
-            // Withdraw wrapped reserves from TRSRY
-            TRSRY.withdrawReserves(msg.sender, ERC20(address(_wrappedReserve)), amountWrapped);
+            // Calculate amount of wrappedReserve equivalent to amountOut
+            // and withdraw wrapped reserves from TRSRY
+            TRSRY.withdrawReserves(
+                address(this),
+                _wrappedReserve,
+                _wrappedReserve.previewWithdraw(amountOut)
+            );
 
             // Unwrap reserves and transfer to sender
             _wrappedReserve.withdraw(amountOut, msg.sender, address(this));
@@ -357,6 +359,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             _reserve.safeTransferFrom(msg.sender, address(this), amountIn_);
 
             // Wrap reserves and transfer to TRSRY
+            _reserve.approve(address(_wrappedReserve), amountIn_);
             _wrappedReserve.deposit(amountIn_, address(TRSRY));
 
             // Mint OHM to sender
@@ -496,18 +499,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
             // Update the market information on the range module
             RANGE.updateMarket(false, market, marketCapacity);
-
-            // Reserves stored in the TRSRY are wrapped to generate yield
-            // We must withdraw some of those reserves, unwrap them,
-            // and send them back to the TRSRY so that the BondCallback
-            // has access to the right amount of reserves.
-            // The amount withdrawn is equal to the market capacity.
-            uint256 amountToConvert = _wrappedReserve.convertToShares(marketCapacity);
-            /// TODO: increasing withdraw approval here because we are withdrawing capacity that may not all be used
-            /// Tried to see if we could increment approval back up as needed on deactivate, but it's not precise because the conversion changes
-            TRSRY.increaseWithdrawApproval(address(this), _wrappedReserve, amountToConvert);
-            TRSRY.withdrawReserves(address(this), ERC20(address(_wrappedReserve)), amountToConvert);
-            _wrappedReserve.withdraw(marketCapacity, address(TRSRY), address(this));
         }
     }
 
@@ -518,17 +509,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (auctioneer.isLive(market)) {
             auctioneer.closeMarket(market);
             RANGE.updateMarket(high_, type(uint256).max, 0);
-        }
-
-        // If a lower cushion is being deactivated, withdraw excess reserve from TRSRY
-        // wrap it to generate yield, and re-deposit it into the TRSRY
-        if (!high_) {
-            uint256 excessReserve = _reserve.balanceOf(address(TRSRY));
-            if (excessReserve > 0) {
-                TRSRY.increaseWithdrawApproval(address(this), _reserve, excessReserve);
-                TRSRY.withdrawReserves(address(this), _reserve, excessReserve);
-                _wrappedReserve.deposit(excessReserve, address(TRSRY));
-            }
         }
     }
 

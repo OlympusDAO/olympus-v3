@@ -145,10 +145,12 @@ contract SentimentArbSupplyTest is Test {
         // There's no error message, so just check that a revert happens when attempting to call the module
         vm.expectRevert();
 
-        new SentimentArbSupply(Module(newLocations[0]),
-                COLLATERALIZED_OHM,
-                PROTOCOL_OWNED_BORROWABLE_OHM,
-                PROTOCOL_OWNED_LIQUIDITY_OHM);
+        new SentimentArbSupply(
+            Module(newLocations[0]),
+            COLLATERALIZED_OHM,
+            PROTOCOL_OWNED_BORROWABLE_OHM,
+            PROTOCOL_OWNED_LIQUIDITY_OHM
+        );
     }
 
     function test_constructor_parent_notSpply_reverts() public {
@@ -158,10 +160,12 @@ contract SentimentArbSupplyTest is Test {
         bytes memory err = abi.encodeWithSignature("Submodule_InvalidParent()");
         vm.expectRevert(err);
 
-        new SentimentArbSupply(modulePrice,
-                COLLATERALIZED_OHM,
-                PROTOCOL_OWNED_BORROWABLE_OHM,
-                PROTOCOL_OWNED_LIQUIDITY_OHM);
+        new SentimentArbSupply(
+            modulePrice,
+            COLLATERALIZED_OHM,
+            PROTOCOL_OWNED_BORROWABLE_OHM,
+            PROTOCOL_OWNED_LIQUIDITY_OHM
+        );
     }
 
     function test_constructor() public {
@@ -173,10 +177,12 @@ contract SentimentArbSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new SentimentArbSupply(moduleSupply,
-                COLLATERALIZED_OHM,
-                PROTOCOL_OWNED_BORROWABLE_OHM,
-                PROTOCOL_OWNED_LIQUIDITY_OHM);
+        new SentimentArbSupply(
+            moduleSupply,
+            COLLATERALIZED_OHM,
+            PROTOCOL_OWNED_BORROWABLE_OHM,
+            PROTOCOL_OWNED_LIQUIDITY_OHM
+        );
         vm.stopPrank();
     }
 
@@ -189,13 +195,19 @@ contract SentimentArbSupplyTest is Test {
     // =========  getProtocolOwnedBorrowableOhm ========= //
 
     function test_getProtocolOwnedBorrowableOhm() public {
-        assertEq(submoduleSentimentArbSupply.getProtocolOwnedBorrowableOhm(), PROTOCOL_OWNED_BORROWABLE_OHM);
+        assertEq(
+            submoduleSentimentArbSupply.getProtocolOwnedBorrowableOhm(),
+            PROTOCOL_OWNED_BORROWABLE_OHM
+        );
     }
 
     // =========  getProtocolOwnedLiquidityOhm ========= //
 
     function test_getProtocolOwnedLiquidityOhm() public {
-        assertEq(submoduleSentimentArbSupply.getProtocolOwnedLiquidityOhm(), PROTOCOL_OWNED_LIQUIDITY_OHM);
+        assertEq(
+            submoduleSentimentArbSupply.getProtocolOwnedLiquidityOhm(),
+            PROTOCOL_OWNED_LIQUIDITY_OHM
+        );
     }
 
     // =========  setCollateralizedOhm ========= //

@@ -19,6 +19,31 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
 
     constructor(Kernel kernel_) Module(kernel_) {
         active = true;
+
+        // Configure Asset Categories and Groups
+
+        // Liquidity Preference: Liquid, Illiquid
+        categoryGroups.push(toCategoryGroup("liquidity-preference"));
+        categoryToGroup[toCategory("liquid")] = toCategoryGroup("liquidity-preference");
+        groupToCategories[toCategoryGroup("liquidity-preference")].push(toCategory("liquid"));
+        categoryToGroup[toCategory("illiquid")] = toCategoryGroup("liquidity-preference");
+        groupToCategories[toCategoryGroup("liquidity-preference")].push(toCategory("illiquid"));
+        // Value Baskets: Reserves, Strategic, Protocol-Owned Liquidity
+        categoryGroups.push(toCategoryGroup("value-baskets"));
+        categoryToGroup[toCategory("reserves")] = toCategoryGroup("value-baskets");
+        groupToCategories[toCategoryGroup("value-baskets")].push(toCategory("reserves"));
+        categoryToGroup[toCategory("strategic")] = toCategoryGroup("value-baskets");
+        groupToCategories[toCategoryGroup("value-baskets")].push(toCategory("strategic"));
+        categoryToGroup[toCategory("protocol-owned-liquidity")] = toCategoryGroup("value-baskets");
+        groupToCategories[toCategoryGroup("value-baskets")].push(
+            toCategory("protocol-owned-liquidity")
+        );
+        // Market Sensitivity: Stable, Volatile
+        categoryGroups.push(toCategoryGroup("market-sensitivity"));
+        categoryToGroup[toCategory("stable")] = toCategoryGroup("market-sensitivity");
+        groupToCategories[toCategoryGroup("market-sensitivity")].push(toCategory("stable"));
+        categoryToGroup[toCategory("volatile")] = toCategoryGroup("market-sensitivity");
+        groupToCategories[toCategoryGroup("market-sensitivity")].push(toCategory("volatile"));
     }
 
     /// @inheritdoc Module
@@ -186,6 +211,10 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
 
     function getAssets() external view override returns (address[] memory) {
         return assets;
+    }
+
+    function getAssetData(address asset_) external view override returns (Asset memory) {
+        return assetData[asset_];
     }
 
     function getAssetsByCategory(

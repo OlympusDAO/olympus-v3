@@ -17,9 +17,9 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 /// Import Mocks for non-Bophades contracts
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockGohm, MockStaking} from "../mocks/OlympusMocks.sol";
-import {MockUniV2Pair} from "../mocks/MockUniV2Pair.sol";
-import {MockLegacyAuthority} from "../modules/MINTR.t.sol";
+import {MockGohm, MockStaking} from "test/mocks/OlympusMocks.sol";
+import {MockUniV2Pair} from "test/mocks/MockUniV2Pair.sol";
+import {MockLegacyAuthority} from "test/modules/MINTR.t.sol";
 
 contract DistributorTest is Test {
     /// Bophades Systems
