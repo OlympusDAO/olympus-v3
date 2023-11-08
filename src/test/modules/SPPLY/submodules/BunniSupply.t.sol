@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
-import {console2 as console} from "forge-std/console2.sol";
+import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -146,7 +146,7 @@ contract BunniSupplyTest is Test {
         BunniKey memory key = BunniKey({
             pool: IUniswapV3Pool(address(pool)),
             tickLower: -887272,
-            tickUpper: -887272
+            tickUpper: 887272
         });
 
         BunniToken token = new BunniToken(
@@ -296,7 +296,11 @@ contract BunniSupplyTest is Test {
         uint256 ohmReserves = _getOhmReserves(poolTokenKey, bunniLens);
         uint256 ohmReservesTwo = _getOhmReserves(poolTokenKeyTwo, bunniLens);
 
-        assertEq(submoduleBunniSupply.getProtocolOwnedLiquidityOhm(), ohmReserves + ohmReservesTwo);
+        // Call
+        uint256 polo = submoduleBunniSupply.getProtocolOwnedLiquidityOhm();
+
+        assertTrue(polo > 0, "should be non-zero");
+        assertEq(polo, ohmReserves + ohmReservesTwo);
     }
 
     // =========  addBunniToken ========= //
