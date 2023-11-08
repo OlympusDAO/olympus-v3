@@ -2,20 +2,20 @@
 pragma solidity =0.8.15;
 pragma abicoder v2;
 
-import '@uniswap/v3-core/contracts/libraries/SafeCast.sol';
-import '@uniswap/v3-core/contracts/libraries/TickMath.sol';
-import '@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol';
-import '@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol';
+import "@uniswap/v3-core/contracts/libraries/SafeCast.sol";
+import "@uniswap/v3-core/contracts/libraries/TickMath.sol";
+import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import "@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol";
 
-import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
-import '@uniswap/v3-periphery/contracts/base/PeripheryImmutableState.sol';
-import '@uniswap/v3-periphery/contracts/base/PeripheryValidation.sol';
-import '@uniswap/v3-periphery/contracts/base/PeripheryPaymentsWithFee.sol';
-import '@uniswap/v3-periphery/contracts/base/Multicall.sol';
-import '@uniswap/v3-periphery/contracts/base/SelfPermit.sol';
-import '@uniswap/v3-periphery/contracts/libraries/Path.sol';
-import '@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol';
-import '@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol';
+import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import "@uniswap/v3-periphery/contracts/base/PeripheryImmutableState.sol";
+import "@uniswap/v3-periphery/contracts/base/PeripheryValidation.sol";
+import "@uniswap/v3-periphery/contracts/base/PeripheryPaymentsWithFee.sol";
+import "@uniswap/v3-periphery/contracts/base/Multicall.sol";
+import "@uniswap/v3-periphery/contracts/base/SelfPermit.sol";
+import "@uniswap/v3-periphery/contracts/libraries/Path.sol";
+import "@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol";
+import "@uniswap/v3-periphery/contracts/interfaces/external/IWETH9.sol";
 
 import "./CallbackValidation.sol";
 
@@ -47,7 +47,10 @@ contract SwapRouter is
         address tokenB,
         uint24 fee
     ) private view returns (IUniswapV3Pool) {
-        return IUniswapV3Pool(PoolAddress.computeAddress(factory, PoolAddress.getPoolKey(tokenA, tokenB, fee)));
+        return
+            IUniswapV3Pool(
+                PoolAddress.computeAddress(factory, PoolAddress.getPoolKey(tokenA, tokenB, fee))
+            );
     }
 
     struct SwapCallbackData {
@@ -84,8 +87,21 @@ contract SwapRouter is
         }
     }
 
-    function _swap(IUniswapV3Pool pool_, address recipient_, bool zeroForOne_, int256 amountSpecified_, uint160 sqrtPriceLimitX96_, bytes memory data_) private returns (uint256 amountCalculated_) {
-        (int256 amount0, int256 amount1) = pool_.swap(recipient_, zeroForOne_, amountSpecified_, sqrtPriceLimitX96_, data_);
+    function _swap(
+        IUniswapV3Pool pool_,
+        address recipient_,
+        bool zeroForOne_,
+        int256 amountSpecified_,
+        uint160 sqrtPriceLimitX96_,
+        bytes memory data_
+    ) private returns (uint256 amountCalculated_) {
+        (int256 amount0, int256 amount1) = pool_.swap(
+            recipient_,
+            zeroForOne_,
+            amountSpecified_,
+            sqrtPriceLimitX96_,
+            data_
+        );
         return uint256(-(zeroForOne_ ? amount0 : amount1));
     }
 
@@ -105,36 +121,41 @@ contract SwapRouter is
 
         // Use getPool on the factory, as the addresses will not be the same
         // Source: https://github.com/Uniswap/v3-periphery/issues/51
-        IUniswapV3Pool pool = IUniswapV3Pool(IUniswapV3Factory(factory).getPool(tokenIn, tokenOut, fee));
+        IUniswapV3Pool pool = IUniswapV3Pool(
+            IUniswapV3Factory(factory).getPool(tokenIn, tokenOut, fee)
+        );
 
-        return _swap(pool, recipient, zeroForOne, amountIn.toInt256(), sqrtPriceLimitX96, abi.encode(data));
+        return
+            _swap(
+                pool,
+                recipient,
+                zeroForOne,
+                amountIn.toInt256(),
+                sqrtPriceLimitX96,
+                abi.encode(data)
+            );
     }
 
     /// @inheritdoc ISwapRouter
-    function exactInputSingle(ExactInputSingleParams calldata params)
-        external
-        payable
-        override
-        checkDeadline(params.deadline)
-        returns (uint256 amountOut)
-    {
+    function exactInputSingle(
+        ExactInputSingleParams calldata params
+    ) external payable override checkDeadline(params.deadline) returns (uint256 amountOut) {
         amountOut = exactInputInternal(
             params.amountIn,
             params.recipient,
             params.sqrtPriceLimitX96,
-            SwapCallbackData({path: abi.encodePacked(params.tokenIn, params.fee, params.tokenOut), payer: msg.sender})
+            SwapCallbackData({
+                path: abi.encodePacked(params.tokenIn, params.fee, params.tokenOut),
+                payer: msg.sender
+            })
         );
-        require(amountOut >= params.amountOutMinimum, 'Too little received');
+        require(amountOut >= params.amountOutMinimum, "Too little received");
     }
 
     /// @inheritdoc ISwapRouter
-    function exactInput(ExactInputParams memory params)
-        external
-        payable
-        override
-        checkDeadline(params.deadline)
-        returns (uint256 amountOut)
-    {
+    function exactInput(
+        ExactInputParams memory params
+    ) external payable override checkDeadline(params.deadline) returns (uint256 amountOut) {
         address payer = msg.sender; // msg.sender pays for the first hop
 
         while (true) {
@@ -161,7 +182,7 @@ contract SwapRouter is
             }
         }
 
-        require(amountOut >= params.amountOutMinimum, 'Too little received');
+        require(amountOut >= params.amountOutMinimum, "Too little received");
     }
 
     /// @dev Performs a single exact output swap
@@ -198,34 +219,29 @@ contract SwapRouter is
     }
 
     /// @inheritdoc ISwapRouter
-    function exactOutputSingle(ExactOutputSingleParams calldata params)
-        external
-        payable
-        override
-        checkDeadline(params.deadline)
-        returns (uint256 amountIn)
-    {
+    function exactOutputSingle(
+        ExactOutputSingleParams calldata params
+    ) external payable override checkDeadline(params.deadline) returns (uint256 amountIn) {
         // avoid an SLOAD by using the swap return data
         amountIn = exactOutputInternal(
             params.amountOut,
             params.recipient,
             params.sqrtPriceLimitX96,
-            SwapCallbackData({path: abi.encodePacked(params.tokenOut, params.fee, params.tokenIn), payer: msg.sender})
+            SwapCallbackData({
+                path: abi.encodePacked(params.tokenOut, params.fee, params.tokenIn),
+                payer: msg.sender
+            })
         );
 
-        require(amountIn <= params.amountInMaximum, 'Too much requested');
+        require(amountIn <= params.amountInMaximum, "Too much requested");
         // has to be reset even though we don't use it in the single hop case
         amountInCached = DEFAULT_AMOUNT_IN_CACHED;
     }
 
     /// @inheritdoc ISwapRouter
-    function exactOutput(ExactOutputParams calldata params)
-        external
-        payable
-        override
-        checkDeadline(params.deadline)
-        returns (uint256 amountIn)
-    {
+    function exactOutput(
+        ExactOutputParams calldata params
+    ) external payable override checkDeadline(params.deadline) returns (uint256 amountIn) {
         // it's okay that the payer is fixed to msg.sender here, as they're only paying for the "final" exact output
         // swap, which happens first, and subsequent swaps are paid for within nested callback frames
         exactOutputInternal(
@@ -236,7 +252,7 @@ contract SwapRouter is
         );
 
         amountIn = amountInCached;
-        require(amountIn <= params.amountInMaximum, 'Too much requested');
+        require(amountIn <= params.amountInMaximum, "Too much requested");
         amountInCached = DEFAULT_AMOUNT_IN_CACHED;
     }
 }
