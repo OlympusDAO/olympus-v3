@@ -51,6 +51,11 @@ interface IHeart {
     /// @param  appraiser_ The address of the new Appraiser contract
     function setAppraiser(address appraiser_) external;
 
+    /// @notice Updates the Distributor contract address that the Heart calls on a beat
+    /// @notice Access restricted
+    /// @param  distributor_ The address of the new Distributor contract
+    function setDistributor(address distributor_) external;
+
     /// @notice Sets the max reward amount, and auction duration for the beat function
     /// @notice Access restricted
     /// @param  maxReward_ - New max reward amount, in units of the reward token

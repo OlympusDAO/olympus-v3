@@ -75,6 +75,13 @@ contract OperatorTest is Test {
     uint256 internal constant GOHM_INDEX = 300000000000;
     uint8 internal constant DECIMALS = 18;
 
+    event Swap(
+        ERC20 indexed tokenIn_,
+        ERC20 indexed tokenOut_,
+        uint256 amountIn_,
+        uint256 amountOut_
+    );
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -302,6 +309,9 @@ contract OperatorTest is Test {
         uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * highWallPrice);
         uint256 wrappedReserveBalanceBefore = wrappedReserve.balanceOf(address(TRSRY));
 
+        vm.expectEmit(false, false, false, true);
+        emit Swap(reserve, ohm, amountIn, expAmountOut);
+
         /// Swap at the high wall
         vm.prank(alice);
         uint256 amountOut = operator.swap(reserve, amountIn, expAmountOut);
@@ -331,6 +341,9 @@ contract OperatorTest is Test {
         uint256 lowWallPrice = RANGE.price(false, true);
         uint256 expAmountOut = amountIn.mulDiv(1e18 * lowWallPrice, 1e9 * 1e18);
         uint256 wrappedReserveBalanceBefore = wrappedReserve.balanceOf(address(TRSRY));
+
+        vm.expectEmit(false, false, false, true);
+        emit Swap(ohm, reserve, amountIn, expAmountOut);
 
         /// Swap at the high wall
         vm.prank(alice);
@@ -439,7 +452,7 @@ contract OperatorTest is Test {
 
         /// Try to swap, expect to fail
         uint256 amountIn = 100 * 1e9;
-        uint256 expAmountOut = amountIn.mulDiv(1e18 * RANGE.price(true, false), 1e9 * 1e18);
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * RANGE.price(false, true), 1e9 * 1e18);
 
         bytes memory err = abi.encodeWithSignature("Operator_WallDown()");
         vm.expectRevert(err);
@@ -481,7 +494,7 @@ contract OperatorTest is Test {
 
         /// Try to swap, expect to fail
         uint256 amountIn = 100 * 1e9;
-        uint256 expAmountOut = amountIn.mulDiv(1e18 * RANGE.price(true, false), 1e9 * 1e18);
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * RANGE.price(false, true), 1e9 * 1e18);
 
         bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
         vm.expectRevert(err);
@@ -518,7 +531,7 @@ contract OperatorTest is Test {
         expAmountOut = amountIn.mulDiv(1e18 * RANGE.price(false, true), 1e9 * 1e18);
         minAmountOut = expAmountOut + 1;
 
-        /// Try to swap at low wall, expect to fail
+        /// Try to swap at high wall, expect to fail
         err = abi.encodeWithSignature(
             "Operator_AmountLessThanMinimum(uint256,uint256)",
             expAmountOut,
@@ -1772,6 +1785,12 @@ contract OperatorTest is Test {
         assertEq(newRange.high.cushion.price, startRange.high.cushion.price);
         assertEq(newRange.high.wall.price, startRange.high.wall.price);
 
+        /// Spreads not updated
+        assertEq(newRange.high.cushion.spread, 1000);
+        assertEq(newRange.high.wall.spread, 2000);
+        assertEq(newRange.high.cushion.price, startRange.high.cushion.price);
+        assertEq(newRange.high.wall.price, startRange.high.wall.price);
+
         /// Check that the spreads have been set and prices are updated
         assertEq(newRange.low.cushion.spread, 1500);
         assertEq(newRange.low.wall.spread, 3000);
@@ -1784,6 +1803,12 @@ contract OperatorTest is Test {
 
         /// Get new bands
         newRange = RANGE.range();
+
+        /// Spreads not updated
+        assertEq(newRange.high.cushion.spread, 1000);
+        assertEq(newRange.high.wall.spread, 2000);
+        assertEq(newRange.high.cushion.price, startRange.high.cushion.price);
+        assertEq(newRange.high.wall.price, startRange.high.wall.price);
 
         /// Spreads not updated
         assertEq(newRange.high.cushion.spread, 1000);
@@ -2096,6 +2121,7 @@ contract OperatorTest is Test {
         assertTrue(!operator.active());
         assertTrue(!RANGE.active(true));
         assertTrue(!RANGE.active(false));
+        assertEq(TRSRY.withdrawApproval(address(operator), reserve), 0);
         assertEq(TRSRY.withdrawApproval(address(operator), wrappedReserve), 0);
         assertEq(RANGE.price(false, false), 0);
         assertEq(RANGE.price(false, true), 0);
@@ -2113,6 +2139,7 @@ contract OperatorTest is Test {
         assertTrue(operator.active());
         assertTrue(RANGE.active(true));
         assertTrue(RANGE.active(false));
+        assertEq(TRSRY.withdrawApproval(address(operator), reserve), 0);
         assertEq(TRSRY.withdrawApproval(address(operator), wrappedReserve), RANGE.capacity(false));
         assertGt(RANGE.price(false, false), 0);
         assertGt(RANGE.price(false, true), 0);

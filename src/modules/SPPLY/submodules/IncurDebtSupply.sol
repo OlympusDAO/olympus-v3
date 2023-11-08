@@ -106,7 +106,7 @@ contract IncurDebtSupply is SupplySubmodule {
     function setIncurDebt(address incurDebt_) external onlyParent {
         // Check for zero address
         if (incurDebt_ == address(0)) revert IncurDebtSupply_InvalidParams();
-        
+
         _incurDebt = IIncurDebt(incurDebt_);
 
         emit IncurDebtUpdated(incurDebt_);

@@ -97,7 +97,10 @@ contract ERC4626Price is PriceSubmodule {
 
         // Get the number of underlying tokens per share
         // Scale: output decimals
-        uint256 underlyingPerShare = asset.convertToAssets(assetScale).mulDiv(outputScale, assetScale);
+        uint256 underlyingPerShare = asset.convertToAssets(assetScale).mulDiv(
+            outputScale,
+            assetScale
+        );
 
         // Get the price of the underlying asset
         // We assume that getPrice() returns in outputDecimals

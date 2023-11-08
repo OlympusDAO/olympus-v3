@@ -18,7 +18,7 @@ import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
-import {RANGEv1} from "modules/RANGE/RANGE.v1.sol";
+import {RANGEv2} from "modules/RANGE/RANGE.v2.sol";
 
 import "src/Kernel.sol";
 
@@ -49,7 +49,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     // Modules
     PRICEv2 internal PRICE;
-    RANGEv1 internal RANGE;
+    RANGEv2 internal RANGE;
     TRSRYv1 internal TRSRY;
     MINTRv1 internal MINTR;
 
@@ -63,12 +63,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     IBondCallback public callback;
 
     // Tokens
-    ERC20 internal immutable _ohm;
-    uint8 internal immutable ohmDecimals;
-    ERC20 internal immutable _reserve;
-    uint8 internal immutable reserveDecimals;
-    ERC4626 internal immutable _wrappedReserve;
-    uint8 internal oracleDecimals;
+    /// @notice OHM token contract
+    ERC20 public immutable _ohm;
+    uint8 internal immutable _ohmDecimals;
+    /// @notice Reserve token contract
+    ERC20 public immutable _reserve;
+    uint8 internal immutable _reserveDecimals;
+    uint8 internal _oracleDecimals;
+    /// @dev _wrappedReserveDecimals == _reserveDecimals
+    ERC4626 public immutable _wrappedReserve;
 
     // Constants
     uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
@@ -90,24 +93,16 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (
             address(auctioneer_) == address(0) ||
             address(callback_) == address(0) ||
-            address(appraiser_) == address(0)
-        ) revert Operator_InvalidParams();
-
-        if (configParams[1] > uint256(7 days) || configParams[1] < uint256(1 days))
-            revert Operator_InvalidParams();
-
-        if (configParams[2] < uint32(10e3)) revert Operator_InvalidParams();
-
-        if (configParams[3] < uint32(1 hours) || configParams[3] > configParams[1])
-            revert Operator_InvalidParams();
-
-        if (configParams[0] > ONE_HUNDRED_PERCENT || configParams[0] < ONE_PERCENT)
-            revert Operator_InvalidParams();
-
-        if (configParams[4] > ONE_HUNDRED_PERCENT || configParams[4] < ONE_PERCENT)
-            revert Operator_InvalidParams();
-
-        if (
+            address(appraiser_) == address(0) ||
+            configParams[1] > uint256(7 days) ||
+            configParams[1] < uint256(1 days) ||
+            configParams[2] < uint32(10e3) ||
+            configParams[3] < uint32(1 hours) ||
+            configParams[3] > configParams[1] ||
+            configParams[0] > ONE_HUNDRED_PERCENT ||
+            configParams[0] < ONE_PERCENT ||
+            configParams[4] > ONE_HUNDRED_PERCENT ||
+            configParams[4] < ONE_PERCENT ||
             configParams[5] < 1 hours ||
             configParams[6] == uint32(0) ||
             configParams[6] > configParams[7]
@@ -117,17 +112,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         auctioneer = auctioneer_;
         callback = callback_;
         _ohm = ERC20(tokens_[0]);
-        ohmDecimals = _ohm.decimals();
+        _ohmDecimals = _ohm.decimals();
         _reserve = ERC20(tokens_[1]);
-        reserveDecimals = _reserve.decimals();
+        _reserveDecimals = _reserve.decimals();
         _wrappedReserve = ERC4626(tokens_[2]);
 
-        Regen memory regen = Regen({
-            count: uint32(0),
-            lastRegen: uint48(block.timestamp),
-            nextObservation: uint32(0),
-            observations: new bool[](configParams[7])
-        });
+        // Ensure wrappedReserve decimals match reserve decimals
+        if (_wrappedReserve.decimals() != _reserveDecimals) revert Operator_InvalidParams();
 
         _config = Config({
             cushionFactor: configParams[0],
@@ -140,7 +131,20 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             regenObserve: configParams[7]
         });
 
-        _status = Status({low: regen, high: regen});
+        _status = Status({
+            low: Regen({
+                count: uint32(0),
+                lastRegen: uint48(block.timestamp),
+                nextObservation: uint32(0),
+                observations: new bool[](configParams[7])
+            }),
+            high: Regen({
+                count: uint32(0),
+                lastRegen: uint48(block.timestamp),
+                nextObservation: uint32(0),
+                observations: new bool[](configParams[7])
+            })
+        });
 
         emit CushionFactorChanged(configParams[0]);
         emit CushionParamsChanged(configParams[1], configParams[2], configParams[3]);
@@ -158,16 +162,31 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         dependencies[4] = toKeycode("ROLES");
 
         PRICE = PRICEv2(getModuleAddress(dependencies[0]));
-        RANGE = RANGEv1(getModuleAddress(dependencies[1]));
+        RANGE = RANGEv2(getModuleAddress(dependencies[1]));
         TRSRY = TRSRYv1(getModuleAddress(dependencies[2]));
         MINTR = MINTRv1(getModuleAddress(dependencies[3]));
         ROLES = ROLESv1(getModuleAddress(dependencies[4]));
+
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 RANGE_MAJOR, ) = RANGE.VERSION();
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        if (
+            PRICE_MAJOR != 2 ||
+            RANGE_MAJOR != 2 ||
+            TRSRY_MAJOR != 1 ||
+            MINTR_MAJOR != 1 ||
+            ROLES_MAJOR != 1
+        ) revert Operator_WrongModuleVersion([2, 2, 1, 1, 1]);
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         _ohm.safeApprove(address(MINTR), type(uint256).max);
 
         // Store the price decimals for use in calculations (cached here to avoid extra external calls)
-        oracleDecimals = PRICE.decimals();
+        _oracleDecimals = PRICE.decimals();
     }
 
     /// @inheritdoc Policy
@@ -241,7 +260,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         // Cache range data after potential regeneration
-        RANGEv1.Range memory range = RANGE.range();
+        RANGEv2.Range memory range = RANGE.range();
 
         // Check if the cushion bond markets are active
         // if so, determine if it should stay open or close
@@ -394,7 +413,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice      Activate a cushion by deploying a bond market
     /// @param high_ Whether the cushion is for the high or low side of the range (true = high, false = low)
     function _activate(bool high_, uint256 currentPrice_) internal {
-        RANGEv1.Range memory range = RANGE.range();
+        // Cache range data to avoid multiple contract calls
+        RANGEv2.Range memory range = RANGE.range();
+        // Cache config struct to avoid multiple SLOADs
+        Config memory config_ = _config;
 
         if (high_) {
             // Calculate scaleAdjustment for bond market
@@ -402,19 +424,22 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(range.high.cushion.price);
-            int8 scaleAdjustment = int8(ohmDecimals) - int8(reserveDecimals) + (priceDecimals / 2);
+            int8 scaleAdjustment = int8(_ohmDecimals) -
+                int8(_reserveDecimals) +
+                (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            uint256 oracleScale = 10 ** uint8(int8(oracleDecimals) - priceDecimals);
+            uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
-                    36 + scaleAdjustment + int8(reserveDecimals) - int8(ohmDecimals) - priceDecimals
+                    36 +
+                        scaleAdjustment +
+                        int8(_reserveDecimals) -
+                        int8(_ohmDecimals) -
+                        priceDecimals
                 );
             uint256 initialPrice = currentPrice_.mulDiv(bondScale, oracleScale);
             uint256 minimumPrice = range.high.cushion.price.mulDiv(bondScale, oracleScale);
-
-            // Cache config struct to avoid multiple SLOADs
-            Config memory config_ = _config;
 
             // Calculate market capacity from the cushion factor
             uint256 marketCapacity = range.high.capacity.mulDiv(
@@ -423,22 +448,24 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             );
 
             // Create new bond market to buy the reserve with OHM
-            IBondSDA.MarketParams memory params = IBondSDA.MarketParams({
-                payoutToken: _ohm,
-                quoteToken: _reserve,
-                callbackAddr: address(callback),
-                capacityInQuote: false,
-                capacity: marketCapacity,
-                formattedInitialPrice: initialPrice,
-                formattedMinimumPrice: minimumPrice,
-                debtBuffer: config_.cushionDebtBuffer,
-                vesting: uint48(0), // Instant swaps
-                conclusion: uint48(block.timestamp + config_.cushionDuration),
-                depositInterval: config_.cushionDepositInterval,
-                scaleAdjustment: scaleAdjustment
-            });
-
-            uint256 market = auctioneer.createMarket(abi.encode(params));
+            uint256 market = auctioneer.createMarket(
+                abi.encode(
+                    IBondSDA.MarketParams({
+                        payoutToken: _ohm,
+                        quoteToken: _reserve,
+                        callbackAddr: address(callback),
+                        capacityInQuote: false,
+                        capacity: marketCapacity,
+                        formattedInitialPrice: initialPrice,
+                        formattedMinimumPrice: minimumPrice,
+                        debtBuffer: config_.cushionDebtBuffer,
+                        vesting: uint48(0), // Instant swaps
+                        conclusion: uint48(block.timestamp + config_.cushionDuration),
+                        depositInterval: config_.cushionDepositInterval,
+                        scaleAdjustment: scaleAdjustment
+                    })
+                )
+            );
 
             // Whitelist the bond market on the callback
             callback.whitelist(address(auctioneer.getTeller()), market);
@@ -447,28 +474,31 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             RANGE.updateMarket(true, market, marketCapacity);
         } else {
             // Calculate inverse prices from the oracle feed for the low side
-            uint256 invCushionPrice = 10 ** (oracleDecimals * 2) / range.low.cushion.price;
-            uint256 invCurrentPrice = 10 ** (oracleDecimals * 2) / currentPrice_;
+            uint256 invCushionPrice = 10 ** (_oracleDecimals * 2) / range.low.cushion.price;
+            uint256 invCurrentPrice = 10 ** (_oracleDecimals * 2) / currentPrice_;
 
             // Calculate scaleAdjustment for bond market
             // Price decimals are returned from the perspective of the quote token
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
             int8 priceDecimals = _getPriceDecimals(invCushionPrice);
-            int8 scaleAdjustment = int8(reserveDecimals) - int8(ohmDecimals) + (priceDecimals / 2);
+            int8 scaleAdjustment = int8(_reserveDecimals) -
+                int8(_ohmDecimals) +
+                (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            uint256 oracleScale = 10 ** uint8(int8(oracleDecimals) - priceDecimals);
+            uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
             uint256 bondScale = 10 **
                 uint8(
-                    36 + scaleAdjustment + int8(ohmDecimals) - int8(reserveDecimals) - priceDecimals
+                    36 +
+                        scaleAdjustment +
+                        int8(_ohmDecimals) -
+                        int8(_reserveDecimals) -
+                        priceDecimals
                 );
 
             uint256 initialPrice = invCurrentPrice.mulDiv(bondScale, oracleScale);
             uint256 minimumPrice = invCushionPrice.mulDiv(bondScale, oracleScale);
-
-            // Cache config struct to avoid multiple SLOADs
-            Config memory config_ = _config;
 
             // Calculate market capacity from the cushion factor
             uint256 marketCapacity = range.low.capacity.mulDiv(
@@ -477,22 +507,24 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             );
 
             // Create new bond market to buy OHM with the reserve
-            IBondSDA.MarketParams memory params = IBondSDA.MarketParams({
-                payoutToken: _reserve,
-                quoteToken: _ohm,
-                callbackAddr: address(callback),
-                capacityInQuote: false,
-                capacity: marketCapacity,
-                formattedInitialPrice: initialPrice,
-                formattedMinimumPrice: minimumPrice,
-                debtBuffer: config_.cushionDebtBuffer,
-                vesting: uint48(0), // Instant swaps
-                conclusion: uint48(block.timestamp + config_.cushionDuration),
-                depositInterval: config_.cushionDepositInterval,
-                scaleAdjustment: scaleAdjustment
-            });
-
-            uint256 market = auctioneer.createMarket(abi.encode(params));
+            uint256 market = auctioneer.createMarket(
+                abi.encode(
+                    IBondSDA.MarketParams({
+                        payoutToken: _reserve,
+                        quoteToken: _ohm,
+                        callbackAddr: address(callback),
+                        capacityInQuote: false,
+                        capacity: marketCapacity,
+                        formattedInitialPrice: initialPrice,
+                        formattedMinimumPrice: minimumPrice,
+                        debtBuffer: config_.cushionDebtBuffer,
+                        vesting: uint48(0), // Instant swaps
+                        conclusion: uint48(block.timestamp + config_.cushionDuration),
+                        depositInterval: config_.cushionDepositInterval,
+                        scaleAdjustment: scaleAdjustment
+                    })
+                )
+            );
 
             // Whitelist the bond market on the callback
             callback.whitelist(address(auctioneer.getTeller()), market);
@@ -524,7 +556,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         // Subtract the stated decimals from the calculated decimals to get the relative price decimals.
         // Required to do it this way vs. normalizing at the beginning since price decimals can be negative.
-        return decimals - int8(oracleDecimals);
+        return decimals - int8(_oracleDecimals);
     }
 
     // =========  INTERNAL FUNCTIONS ========= //
@@ -533,11 +565,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @param high_     Whether to update the high side or low side capacity (true = high, false = low).
     /// @param reduceBy_ The amount to reduce the capacity by (OHM tokens for high side, Reserve tokens for low side).
     function _updateCapacity(bool high_, uint256 reduceBy_) internal {
-        // Initialize update variables, decrement capacity if a reduceBy amount is provided
-        uint256 capacity = RANGE.capacity(high_) - reduceBy_;
-
-        // Update capacities on the range module for the wall and market
-        RANGE.updateCapacity(high_, capacity);
+        // Decrement capacity if a reduceBy amount is provided
+        RANGE.updateCapacity(high_, RANGE.capacity(high_) - reduceBy_);
     }
 
     /// @notice Update the prices on the RANGE module
@@ -554,39 +583,34 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         uint256 target = targetPrice();
 
         // Store observations and update counts for regeneration
-
+        uint32 regenObserve = _config.regenObserve;
         // Update low side regen status with a new observation
         // Observation is positive if the current price is greater than the MA
-        uint32 observe = _config.regenObserve;
-        Regen memory regen = _status.low;
-        if (currentPrice_ >= target) {
-            if (!regen.observations[regen.nextObservation]) {
-                _status.low.observations[regen.nextObservation] = true;
-                _status.low.count++;
-            }
-        } else {
-            if (regen.observations[regen.nextObservation]) {
-                _status.low.observations[regen.nextObservation] = false;
-                _status.low.count--;
-            }
-        }
-        _status.low.nextObservation = (regen.nextObservation + 1) % observe;
+        _updateRegenOnObservation(_status.low, currentPrice_ >= target, regenObserve);
 
         // Update high side regen status with a new observation
         // Observation is positive if the current price is less than the MA
-        regen = _status.high;
-        if (currentPrice_ <= target) {
-            if (!regen.observations[regen.nextObservation]) {
-                _status.high.observations[regen.nextObservation] = true;
-                _status.high.count++;
+        _updateRegenOnObservation(_status.high, currentPrice_ <= target, regenObserve);
+    }
+
+    function _updateRegenOnObservation(
+        Regen storage regen_,
+        bool positive_,
+        uint32 observe_
+    ) internal {
+        uint32 nextObservation = regen_.nextObservation;
+        if (positive_) {
+            if (!regen_.observations[nextObservation]) {
+                regen_.observations[nextObservation] = true;
+                ++regen_.count;
             }
         } else {
-            if (regen.observations[regen.nextObservation]) {
-                _status.high.observations[regen.nextObservation] = false;
-                _status.high.count--;
+            if (regen_.observations[nextObservation]) {
+                regen_.observations[nextObservation] = false;
+                --regen_.count;
             }
         }
-        _status.high.nextObservation = (regen.nextObservation + 1) % observe;
+        regen_.nextObservation = (nextObservation + 1) % observe_;
     }
 
     /// @notice      Regenerate the wall for a side
@@ -608,10 +632,12 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Get approval from MINTR to mint OHM up to the capacity
             // If current approval is higher than the capacity, reduce it
             uint256 currentApproval = MINTR.mintApproval(address(this));
-            if (currentApproval < capacity) {
-                MINTR.increaseMintApproval(address(this), capacity - currentApproval);
-            } else if (currentApproval > capacity) {
-                MINTR.decreaseMintApproval(address(this), currentApproval - capacity);
+            unchecked {
+                if (currentApproval < capacity) {
+                    MINTR.increaseMintApproval(address(this), capacity - currentApproval);
+                } else if (currentApproval > capacity) {
+                    MINTR.decreaseMintApproval(address(this), currentApproval - capacity);
+                }
             }
 
             // Regenerate the side with the capacity
@@ -623,26 +649,28 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             _status.low.nextObservation = uint32(0);
             _status.low.lastRegen = uint48(block.timestamp);
 
-            // Calculate capacity
+            // Calculate capacity in reserve terms
             uint256 capacity = fullCapacity(false);
 
             // Get approval from the TRSRY to withdraw up to the capacity in reserves
             // If current approval is higher than the capacity, reduce it
-            // Reserves are stored in the TRSRY as wrapped reserves to generate yield.
-            uint256 currentApproval = TRSRY.withdrawApproval(address(this), _wrappedReserve);
-            uint256 wrappedCapacity = _wrappedReserve.convertToShares(capacity);
-            if (currentApproval < wrappedCapacity) {
-                TRSRY.increaseWithdrawApproval(
-                    address(this),
-                    _wrappedReserve,
-                    wrappedCapacity - currentApproval
-                );
-            } else if (currentApproval > wrappedCapacity) {
-                TRSRY.decreaseWithdrawApproval(
-                    address(this),
-                    _wrappedReserve,
-                    currentApproval - wrappedCapacity
-                );
+            uint256 currentApproval = _wrappedReserve.previewRedeem(
+                TRSRY.withdrawApproval(address(this), _wrappedReserve)
+            );
+            unchecked {
+                if (currentApproval < capacity) {
+                    TRSRY.increaseWithdrawApproval(
+                        address(this),
+                        _wrappedReserve,
+                        _wrappedReserve.previewWithdraw(capacity - currentApproval)
+                    );
+                } else if (currentApproval > capacity) {
+                    TRSRY.decreaseWithdrawApproval(
+                        address(this),
+                        _wrappedReserve,
+                        _wrappedReserve.previewWithdraw(currentApproval - capacity)
+                    );
+                }
             }
 
             // Regenerate the side with the capacity
@@ -707,8 +735,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IOperator
     function setCushionFactor(uint32 cushionFactor_) external onlyRole("operator_policy") {
         // Confirm factor is within allowed values
-        if (cushionFactor_ > ONE_HUNDRED_PERCENT || cushionFactor_ < ONE_PERCENT)
-            revert Operator_InvalidParams();
+        _checkFactor(cushionFactor_);
 
         // Set factor
         _config.cushionFactor = cushionFactor_;
@@ -723,11 +750,13 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         uint32 depositInterval_
     ) external onlyRole("operator_policy") {
         // Confirm values are valid
-        if (duration_ > uint256(7 days) || duration_ < uint256(1 days))
-            revert Operator_InvalidParams();
-        if (debtBuffer_ < uint32(10_000)) revert Operator_InvalidParams();
-        if (depositInterval_ < uint32(1 hours) || depositInterval_ > duration_)
-            revert Operator_InvalidParams();
+        if (
+            duration_ > uint256(7 days) ||
+            duration_ < uint256(1 days) ||
+            depositInterval_ < uint32(1 hours) ||
+            depositInterval_ > duration_ ||
+            debtBuffer_ < uint32(10_000)
+        ) revert Operator_InvalidParams();
 
         // Update values
         _config.cushionDuration = duration_;
@@ -740,8 +769,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IOperator
     function setReserveFactor(uint32 reserveFactor_) external onlyRole("operator_policy") {
         // Confirm factor is within allowed values
-        if (reserveFactor_ > ONE_HUNDRED_PERCENT || reserveFactor_ < ONE_PERCENT)
-            revert Operator_InvalidParams();
+        _checkFactor(reserveFactor_);
 
         // Set factor
         _config.reserveFactor = reserveFactor_;
@@ -841,6 +869,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         _deactivate(high_);
     }
 
+    function _checkFactor(uint32 factor_) internal pure {
+        if (factor_ > ONE_HUNDRED_PERCENT || factor_ < ONE_PERCENT) revert Operator_InvalidParams();
+    }
+
     //============================================================================================//
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
@@ -868,8 +900,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (tokenIn_ == _ohm) {
             // Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
-                10 ** reserveDecimals * RANGE.price(false, true),
-                10 ** ohmDecimals * 10 ** oracleDecimals
+                10 ** _reserveDecimals * RANGE.price(false, true),
+                10 ** _ohmDecimals * 10 ** _oracleDecimals
             );
 
             // Revert if amount out exceeds capacity
@@ -879,8 +911,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         } else if (tokenIn_ == _reserve) {
             // Calculate amount out
             uint256 amountOut = amountIn_.mulDiv(
-                10 ** ohmDecimals * 10 ** oracleDecimals,
-                10 ** reserveDecimals * RANGE.price(true, true)
+                10 ** _ohmDecimals * 10 ** _oracleDecimals,
+                10 ** _reserveDecimals * RANGE.price(true, true)
             );
 
             // Revert if amount out exceeds capacity
@@ -894,14 +926,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IOperator
     function fullCapacity(bool high_) public view override returns (uint256) {
-        uint256 wrappedReservesInTreasury = TRSRY.getReserveBalance(_wrappedReserve);
-        uint256 reservesInTreasury = _wrappedReserve.convertToAssets(wrappedReservesInTreasury);
+        uint256 reservesInTreasury = _wrappedReserve.previewRedeem(
+            TRSRY.getReserveBalance(_wrappedReserve)
+        ) + TRSRY.getReserveBalance(_reserve);
         uint256 capacity = (reservesInTreasury * _config.reserveFactor) / ONE_HUNDRED_PERCENT;
         if (high_) {
             capacity =
                 (capacity.mulDiv(
-                    10 ** ohmDecimals * 10 ** oracleDecimals,
-                    10 ** reserveDecimals * RANGE.price(true, true)
+                    10 ** _ohmDecimals * 10 ** _oracleDecimals,
+                    10 ** _reserveDecimals * RANGE.price(true, true)
                 ) * (ONE_HUNDRED_PERCENT + RANGE.spread(true, true) + RANGE.spread(false, true))) /
                 ONE_HUNDRED_PERCENT;
         }
