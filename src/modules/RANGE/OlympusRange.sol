@@ -28,13 +28,10 @@ contract OlympusRange is RANGEv2 {
     ) Module(kernel_) {
         // Validate parameters
         if (
-            lowSpreads_[0] >= ONE_HUNDRED_PERCENT ||
             lowSpreads_[0] < ONE_PERCENT ||
             lowSpreads_[1] >= ONE_HUNDRED_PERCENT ||
-            lowSpreads_[1] < ONE_PERCENT ||
             lowSpreads_[0] > lowSpreads_[1] ||
             highSpreads_[0] < ONE_PERCENT ||
-            highSpreads_[1] < ONE_PERCENT ||
             highSpreads_[0] > highSpreads_[1] ||
             thresholdFactor_ >= ONE_HUNDRED_PERCENT ||
             thresholdFactor_ < ONE_PERCENT
@@ -189,11 +186,8 @@ contract OlympusRange is RANGEv2 {
         uint256 wallSpread_
     ) external override permissioned {
         // Confirm spreads are within allowed values
-        if (
-            wallSpread_ < ONE_PERCENT ||
-            cushionSpread_ < ONE_PERCENT ||
-            cushionSpread_ > wallSpread_
-        ) revert RANGE_InvalidParams();
+        if (cushionSpread_ < ONE_PERCENT || cushionSpread_ > wallSpread_)
+            revert RANGE_InvalidParams();
 
         if (high_) {
             // No upper limit on high side
@@ -203,8 +197,7 @@ contract OlympusRange is RANGEv2 {
             _range.high.cushion.spread = cushionSpread_;
         } else {
             // Confirm spreads are within allowed values
-            if (wallSpread_ >= ONE_HUNDRED_PERCENT || cushionSpread_ >= ONE_HUNDRED_PERCENT)
-                revert RANGE_InvalidParams();
+            if (wallSpread_ >= ONE_HUNDRED_PERCENT) revert RANGE_InvalidParams();
 
             // Set spreads
             _range.low.wall.spread = wallSpread_;

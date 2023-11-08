@@ -177,6 +177,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         operator = IOperator(operator_);
     }
 
+    /// @inheritdoc IHeart
+    function setDistributor(address distributor_) external onlyRole("heart_admin") {
+        distributor = IDistributor(distributor_);
+    }
+
     modifier notWhileBeatAvailable() {
         // Prevent calling if a beat is available to avoid front-running a keeper
         if (uint48(block.timestamp) >= lastBeat + frequency()) revert Heart_BeatAvailable();
@@ -217,7 +222,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
             return 0;
         } else {
             return
-                currentTime - nextBeat > duration
+                currentTime - nextBeat >= duration
                     ? maxReward
                     : (uint256(currentTime - nextBeat) * maxReward) / duration;
         }

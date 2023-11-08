@@ -10,7 +10,7 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
-import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
+import {OlympusRange, RANGEv2} from "modules/RANGE/OlympusRange.sol";
 import "src/Kernel.sol";
 
 contract RangeTest is Test {
@@ -332,6 +332,33 @@ contract RangeTest is Test {
         assertGt(range.price(false, true), startRange.low.wall.price);
         assertLt(range.price(true, false), startRange.high.cushion.price);
         assertLt(range.price(true, true), startRange.high.wall.price);
+    }
+
+    function testRevert_setSpreads_invalidParams() public {
+        /// Update the low spreads with invalid parameters from an approved address
+        vm.expectRevert(RANGEv2.RANGE_InvalidParams.selector);
+        vm.prank(writer);
+        range.setSpreads(false, 99, 1000); // low, cushion < 1%, wall
+
+        /// Update the low spreads with invalid parameters from an approved address
+        vm.expectRevert(RANGEv2.RANGE_InvalidParams.selector);
+        vm.prank(writer);
+        range.setSpreads(true, 99, 1000); // high, cushion < 1%, wall
+
+        /// Update the low spreads with invalid parameters from an approved address
+        vm.expectRevert(RANGEv2.RANGE_InvalidParams.selector);
+        vm.prank(writer);
+        range.setSpreads(false, 500, 99); // low, cushion, wall < cushion
+
+        /// Update the low spreads with invalid parameters from an approved address
+        vm.expectRevert(RANGEv2.RANGE_InvalidParams.selector);
+        vm.prank(writer);
+        range.setSpreads(true, 500, 99); // high, cushion, wall < cushion
+
+        /// Update the low spreads with invalid parameters from an approved address
+        vm.expectRevert(RANGEv2.RANGE_InvalidParams.selector);
+        vm.prank(writer);
+        range.setSpreads(false, 500, 10001); // low, cushion, wall > 1000%
     }
 
     function testCorrectness_setThresholdFactor() public {

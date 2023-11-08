@@ -1,20 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import "src/policies/interfaces/IDistributor.sol";
-
-/// Define Inline Interfaces
-interface IStaking {
-    function unstake(
-        address _to,
-        uint256 _amount,
-        bool _trigger,
-        bool _rebasing
-    ) external returns (uint256);
-}
+import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
+import {IStaking} from "src/interfaces/IStaking.sol";
 
 contract ZeroDistributor is IDistributor {
-    IStaking public staking;
+    IStaking public immutable staking;
     bool private unlockRebase;
 
     constructor(address staking_) {
