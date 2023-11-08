@@ -216,15 +216,15 @@ contract BunniPriceTest is Test {
         new BunniPrice(MINTR);
     }
 
-    // [ ] getBunniTokenPrice
+    // [X] getBunniTokenPrice
     //  [X] Reverts if params.bunniLens is zero
     //  [X] Reverts if params.bunniLens is not a valid BunniLens
     //  [X] Reverts if bunniToken is zero
     //  [X] Reverts if bunniToken is not a valid BunniToken
     //  [X] Reverts if bunniToken and bunniLens do not have the same BunniHub
     //  [X] Reverts if any of the reserve assets are not defined as assets in PRICE
-    //  [ ] Correctly calculates balances for different decimal scale
-    //  [ ] Correctly handles different output decimals
+    //  [X] Correctly calculates balances for different decimal scale
+    //  [X] Correctly handles different output decimals
 
     function test_getBunniTokenPrice_zeroBunniLensReverts() public {
         bytes memory params = abi.encode(BunniPrice.BunniParams({
@@ -324,6 +324,33 @@ contract BunniPriceTest is Test {
             bunniLens: bunniLensAddress
         }));
         uint256 price = submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
+
+        // Check values
+        assertTrue(price > 0, "should be non-zero");
+        assertEq(price, expectedPrice);
+    }
+
+    function test_getBunniTokenPrice_outputDecimalsFuzz(uint256 outputDecimals_) public {
+        uint8 outputDecimals = uint8(bound(outputDecimals_, 6, 30));
+
+        uint256 ohmPrice = 11 * 10 ** outputDecimals;
+        uint256 usdcPrice = 1 * 10 ** outputDecimals;
+
+        // Mock the PRICE decimals
+        mockPrice.setPriceDecimals(outputDecimals);
+        mockAssetPrice(OHM, ohmPrice);
+        mockAssetPrice(USDC, usdcPrice);
+
+        // Calculate the expected price
+        uint256 ohmReserve = OHM_RESERVES.mulDiv(10 ** outputDecimals, 10 ** OHM_DECIMALS);
+        uint256 usdcReserve = USDC_RESERVES.mulDiv(10 ** outputDecimals, 10 ** USDC_DECIMALS);
+        uint256 expectedPrice = ohmReserve.mulDiv(ohmPrice, 10 ** outputDecimals) + usdcReserve.mulDiv(usdcPrice, 10 ** outputDecimals);
+
+        // Call
+        bytes memory params = abi.encode(BunniPrice.BunniParams({
+            bunniLens: bunniLensAddress
+        }));
+        uint256 price = submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, outputDecimals, params);
 
         // Check values
         assertTrue(price > 0, "should be non-zero");
