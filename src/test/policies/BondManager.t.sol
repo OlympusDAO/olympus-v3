@@ -45,9 +45,9 @@ contract BondManagerTest is Test {
     MockERC4626 internal wrappedReserve;
 
     Kernel internal kernel;
-    OlympusMinter internal mintr;
-    OlympusTreasury internal trsry;
-    OlympusRoles internal roles;
+    OlympusMinter internal MINTR;
+    OlympusTreasury internal TRSRY;
+    OlympusRoles internal ROLES;
 
     RolesAdmin internal rolesAdmin;
     BondCallback internal bondCallback;
@@ -104,9 +104,9 @@ contract BondManagerTest is Test {
         {
             kernel = new Kernel();
 
-            mintr = new OlympusMinter(kernel, address(ohm));
-            trsry = new OlympusTreasury(kernel);
-            roles = new OlympusRoles(kernel);
+            MINTR = new OlympusMinter(kernel, address(ohm));
+            TRSRY = new OlympusTreasury(kernel);
+            ROLES = new OlympusRoles(kernel);
         }
 
         // Deploy policies
@@ -129,9 +129,9 @@ contract BondManagerTest is Test {
         // Initialize modules and policies
         {
             // Install modules
-            kernel.executeAction(Actions.InstallModule, address(mintr));
-            kernel.executeAction(Actions.InstallModule, address(trsry));
-            kernel.executeAction(Actions.InstallModule, address(roles));
+            kernel.executeAction(Actions.InstallModule, address(MINTR));
+            kernel.executeAction(Actions.InstallModule, address(TRSRY));
+            kernel.executeAction(Actions.InstallModule, address(ROLES));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
@@ -141,23 +141,56 @@ contract BondManagerTest is Test {
 
         // Configuration
         {
-            // Bond Manager roles
+            // Bond Manager ROLES
             rolesAdmin.grantRole("bondmanager_admin", policy);
 
-            // Bond Callback roles
+            // Bond Callback ROLES
             rolesAdmin.grantRole("callback_whitelist", policy);
             rolesAdmin.grantRole("callback_whitelist", address(bondManager));
             rolesAdmin.grantRole("callback_admin", guardian);
 
             // OHM Authority Vault
-            legacyAuth.vault.larp(address(mintr));
+            legacyAuth.vault.larp(address(MINTR));
 
             // Mint OHM to this contract
-            vm.prank(address(mintr));
+            vm.prank(address(MINTR));
             ohm.mint(address(this), 100_000_000_000_000);
 
             // Approve teller to spend OHM
             ohm.increaseAllowance(address(fixedExpiryTeller), 100_000_000_000_000);
+        }
+    }
+
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](3);
+        expectedDeps[0] = toKeycode("MINTR");
+        expectedDeps[1] = toKeycode("TRSRY");
+        expectedDeps[2] = toKeycode("ROLES");
+
+        Keycode[] memory deps = bondManager.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+        assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](4);
+        Keycode MINTR_KEYCODE = toKeycode("MINTR");
+        expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        expectedPerms[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        expectedPerms[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        expectedPerms[3] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
+
+        Permissions[] memory perms = bondManager.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
         }
     }
 
@@ -657,12 +690,12 @@ contract BondManagerTest is Test {
         vm.assume(amount_ <= type(uint256).max - 100_000_000_000_000);
 
         // Setup
-        vm.prank(address(mintr));
+        vm.prank(address(MINTR));
         ohm.mint(address(bondManager), amount_);
 
         // Verify initial state
         assertEq(ohm.balanceOf(address(bondManager)), amount_);
-        assertEq(ohm.balanceOf(address(trsry)), 0);
+        assertEq(ohm.balanceOf(address(TRSRY)), 0);
 
         // Emergency withdrawal
         vm.prank(policy);
@@ -670,7 +703,7 @@ contract BondManagerTest is Test {
 
         // Verify end state
         assertEq(ohm.balanceOf(address(bondManager)), 0);
-        assertEq(ohm.balanceOf(address(trsry)), amount_);
+        assertEq(ohm.balanceOf(address(TRSRY)), amount_);
     }
 
     // ========= USER PATH TESTS ========= //

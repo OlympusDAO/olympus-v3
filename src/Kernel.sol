@@ -134,6 +134,7 @@ abstract contract Module is KernelAdapter {
 /// @dev    Module dependencies and function permissions must be defined in appropriate functions.
 abstract contract Policy is KernelAdapter {
     error Policy_ModuleDoesNotExist(Keycode keycode_);
+    error Policy_WrongModuleVersion(bytes expected_);
 
     constructor(Kernel kernel_) KernelAdapter(kernel_) {}
 
