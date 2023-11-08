@@ -155,6 +155,7 @@ contract OlympusDeploy is Script {
         selectorMap["RolesAdmin"] = this._deployRolesAdmin.selector;
         selectorMap["TreasuryCustodian"] = this._deployTreasuryCustodian.selector;
         selectorMap["Distributor"] = this._deployDistributor.selector;
+        selectorMap["ZeroDistributor"] = this._deployZeroDistributor.selector;
         selectorMap["Emergency"] = this._deployEmergency.selector;
         selectorMap["BondManager"] = this._deployBondManager.selector;
         selectorMap["Burner"] = this._deployBurner.selector;
@@ -540,6 +541,15 @@ contract OlympusDeploy is Script {
         vm.broadcast();
         distributor = new Distributor(kernel, address(ohm), staking, initialRate);
         console2.log("Distributor deployed at:", address(distributor));
+
+        return address(distributor);
+    }
+
+    function _deployZeroDistributor(bytes memory args) public returns (address) {
+        // Deploy ZeroDistributor policy
+        vm.broadcast();
+        zeroDistributor = new ZeroDistributor(staking);
+        console2.log("ZeroDistributor deployed at:", address(distributor));
 
         return address(distributor);
     }
