@@ -119,6 +119,39 @@ contract UpgradedMockModuleNewMajor is Module {
     }
 }
 
+contract MockPolicyUpgradedModule is Policy {
+    MockModule public MOCKY;
+
+    constructor(Kernel kernel_) Policy(kernel_) {}
+
+    function configureDependencies() external override returns (Keycode[] memory dependencies) {
+        dependencies = new Keycode[](1);
+        dependencies[0] = toKeycode("MOCKY");
+
+        MOCKY = MockModule(getModuleAddress(dependencies[0]));
+
+        (uint8 MOCKY_MAJOR, ) = MOCKY.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([2]);
+        if (MOCKY_MAJOR != 2) revert Policy_WrongModuleVersion(expected);
+    }
+
+    function requestPermissions() external view override returns (Permissions[] memory requests) {
+        requests = new Permissions[](1);
+        requests[0] = Permissions(MOCKY.KEYCODE(), MOCKY.permissionedCall.selector);
+    }
+
+    function callPublicFunction() external {
+        MOCKY.publicCall();
+    }
+
+    function callPermissionedFunction() external {
+        MOCKY.permissionedCall();
+    }
+}
+
 contract InvalidMockModule is Module {
     constructor(Kernel kernel_) Module(kernel_) {}
 

@@ -225,7 +225,7 @@ contract KernelTest is Test {
 
         assertEq(MOCKY.permissionedState(), 1);
 
-        // Upgrade MOCKY
+        // Upgrade will work the policy is only configured to work with MOCKYv1
         vm.prank(deployer);
         kernel.executeAction(Actions.UpgradeModule, address(upgradedModule));
 
@@ -243,16 +243,7 @@ contract KernelTest is Test {
 
         vm.startPrank(deployer);
 
-        err = abi.encodeWithSignature("Kernel_InvalidModuleUpgrade(bytes5)", Keycode.wrap("MOCKY"));
-        vm.expectRevert(err);
-        kernel.executeAction(Actions.UpgradeModule, address(upgradedModule));
-
         kernel.executeAction(Actions.InstallModule, address(MOCKY));
-
-        err = abi.encodeWithSignature("Kernel_InvalidModuleUpgrade(bytes5)", Keycode.wrap("MOCKY"));
-        vm.expectRevert(err);
-        kernel.executeAction(Actions.UpgradeModule, address(MOCKY));
-
         kernel.executeAction(Actions.ActivatePolicy, address(policy));
 
         vm.stopPrank();
@@ -269,6 +260,36 @@ contract KernelTest is Test {
         vm.prank(deployer);
         vm.expectRevert(err);
         kernel.executeAction(Actions.UpgradeModule, address(upgradedModule));
+    }
+
+    function testCorrectness_UpgradeModule_newMajor() public {
+        UpgradedMockModuleNewMajor upgradedModule = new UpgradedMockModuleNewMajor(kernel, MOCKY);
+        MockPolicyUpgradedModule policyUpgradedModule = new MockPolicyUpgradedModule(kernel);
+
+        vm.startPrank(deployer);
+
+        kernel.executeAction(Actions.InstallModule, address(MOCKY));
+        kernel.executeAction(Actions.ActivatePolicy, address(policy));
+        kernel.executeAction(Actions.DeactivatePolicy, address(policy));
+
+        vm.stopPrank();
+
+        // Upgrade will work there is no policy dependency with MOCKYv1
+        vm.prank(deployer);
+        kernel.executeAction(Actions.UpgradeModule, address(upgradedModule));
+
+        // Check state is reset
+        assertEq(upgradedModule.permissionedState(), 0);
+
+        // Policy for upgraded module can be activated because it works with MOCKYv2
+        vm.prank(deployer);
+        kernel.executeAction(Actions.ActivatePolicy, address(policyUpgradedModule));
+
+        vm.prank(multisig);
+        policyUpgradedModule.callPermissionedFunction();
+
+        // Check policy was able to perform a permissioned call
+        assertEq(upgradedModule.permissionedState(), 1);
     }
 
     function testCorrectness_ChangeExecutor() public {
