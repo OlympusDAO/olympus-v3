@@ -31,6 +31,13 @@ contract VohmVault is Policy {
         VOTES = VOTESv1(getModuleAddress(dependencies[0]));
         gOHM = VOTES.gOHM();
         gOHM.approve(address(VOTES), type(uint256).max);
+
+        (uint8 VOTES_MAJOR, ) = VOTES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1]);
+        if (VOTES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy

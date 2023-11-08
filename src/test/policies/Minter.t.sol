@@ -103,7 +103,33 @@ contract MinterTest is Test {
         vm.stopPrank();
     }
 
-    // ========== HELPER FUNCTIONS ========== //
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](2);
+        expectedDeps[0] = toKeycode("MINTR");
+        expectedDeps[1] = toKeycode("ROLES");
+
+        Keycode[] memory deps = minter.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](2);
+        Keycode MINTR_KEYCODE = toKeycode("MINTR");
+        expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        expectedPerms[1] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        Permissions[] memory perms = minter.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
+        }
+    }
 
     // ========== EVENTS FOR TESTING ========== //
 

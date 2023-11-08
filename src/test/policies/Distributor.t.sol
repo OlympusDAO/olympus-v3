@@ -26,9 +26,9 @@ import {MockLegacyAuthority} from "../modules/MINTR.t.sol";
 contract DistributorTest is Test {
     /// Bophades Systems
     Kernel internal kernel;
-    OlympusMinter internal mintr;
-    OlympusTreasury internal trsry;
-    OlympusRoles internal roles;
+    OlympusMinter internal MINTR;
+    OlympusTreasury internal TRSRY;
+    OlympusRoles internal ROLES;
 
     Distributor internal distributor;
     RolesAdmin internal rolesAdmin;
@@ -66,16 +66,16 @@ contract DistributorTest is Test {
 
         {
             /// Deploy Bophades Modules
-            mintr = new OlympusMinter(kernel, address(ohm));
-            trsry = new OlympusTreasury(kernel);
-            roles = new OlympusRoles(kernel);
+            MINTR = new OlympusMinter(kernel, address(ohm));
+            TRSRY = new OlympusTreasury(kernel);
+            ROLES = new OlympusRoles(kernel);
         }
 
         {
             /// Initialize Modules
-            kernel.executeAction(Actions.InstallModule, address(mintr));
-            kernel.executeAction(Actions.InstallModule, address(trsry));
-            kernel.executeAction(Actions.InstallModule, address(roles));
+            kernel.executeAction(Actions.InstallModule, address(MINTR));
+            kernel.executeAction(Actions.InstallModule, address(TRSRY));
+            kernel.executeAction(Actions.InstallModule, address(ROLES));
         }
 
         {
@@ -98,19 +98,19 @@ contract DistributorTest is Test {
         {
             /// Mint Tokens
             vm.startPrank(address(distributor));
-            mintr.increaseMintApproval(address(distributor), type(uint256).max);
+            MINTR.increaseMintApproval(address(distributor), type(uint256).max);
 
             /// Mint OHM to deployer and staking contract
-            mintr.mintOhm(address(staking), 100000 gwei);
-            mintr.mintOhm(address(this), 100000 gwei);
+            MINTR.mintOhm(address(staking), 100000 gwei);
+            MINTR.mintOhm(address(this), 100000 gwei);
 
             /// Mint DAI and OHM to OHM-DAI pool
-            mintr.mintOhm(address(ohmDai), 100000 gwei);
+            MINTR.mintOhm(address(ohmDai), 100000 gwei);
             dai.mint(address(ohmDai), 100000 * 10 ** 18);
             ohmDai.sync();
 
             /// Mint WETH and OHM to OHM-WETH pool
-            mintr.mintOhm(address(ohmWeth), 100000 gwei);
+            MINTR.mintOhm(address(ohmWeth), 100000 gwei);
             weth.mint(address(ohmWeth), 100000 * 10 ** 18);
             ohmWeth.sync();
             vm.stopPrank();
@@ -127,12 +127,43 @@ contract DistributorTest is Test {
     }
 
     /// Basic post-setup functionality tests
-
     function test_defaultState() public {
         assertEq(distributor.rewardRate(), 1000000);
         assertEq(distributor.bounty(), 0);
 
         assertEq(ohm.balanceOf(address(staking)), 100100 gwei);
+    }
+
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](3);
+        expectedDeps[0] = toKeycode("MINTR");
+        expectedDeps[1] = toKeycode("TRSRY");
+        expectedDeps[2] = toKeycode("ROLES");
+
+        Keycode[] memory deps = distributor.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+        assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](3);
+        Keycode MINTR_KEYCODE = toKeycode("MINTR");
+        expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        expectedPerms[1] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        expectedPerms[2] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
+
+        Permissions[] memory perms = distributor.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
+        }
     }
 
     /* ========== BASIC TESTS ========== */
@@ -317,11 +348,11 @@ contract DistributorTest is Test {
     function testCorrectness_addPoolEmptySlot() public {
         /// Set up
         address[] memory newPools = new address[](2);
-        newPools[0] = address(mintr);
-        newPools[1] = address(trsry);
+        newPools[0] = address(MINTR);
+        newPools[1] = address(TRSRY);
         distributor.setPools(newPools);
-        distributor.removePool(0, address(mintr));
-        distributor.removePool(1, address(trsry));
+        distributor.removePool(0, address(MINTR));
+        distributor.removePool(1, address(TRSRY));
 
         distributor.addPool(0, address(staking));
         assertEq(distributor.pools(0), address(staking));
@@ -330,11 +361,11 @@ contract DistributorTest is Test {
     function testCorrectness_addPoolOccupiedSlot() public {
         /// Set up
         address[] memory newPools = new address[](2);
-        newPools[0] = address(mintr);
-        newPools[1] = address(trsry);
+        newPools[0] = address(MINTR);
+        newPools[1] = address(TRSRY);
         distributor.setPools(newPools);
-        distributor.removePool(0, address(mintr));
-        distributor.removePool(1, address(trsry));
+        distributor.removePool(0, address(MINTR));
+        distributor.removePool(1, address(TRSRY));
         distributor.addPool(0, address(staking));
 
         distributor.addPool(0, address(gohm));
