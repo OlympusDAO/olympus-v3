@@ -103,6 +103,7 @@ contract HeartTest is Test {
             // Deploy modules (some mocks)
             PRICE = new MockPrice(kernel, PRICE_FREQUENCY, 10 * 1e18);
             ROLES = new OlympusRoles(kernel);
+            MINTR = new OlympusMinter(kernel, address(ohm));
 
             // Configure mocks
             PRICE.setMovingAverage(100 * 1e18);
@@ -138,6 +139,7 @@ contract HeartTest is Test {
             // Install modules
             kernel.executeAction(Actions.InstallModule, address(PRICE));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
+            kernel.executeAction(Actions.InstallModule, address(MINTR));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
