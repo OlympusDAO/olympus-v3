@@ -36,6 +36,17 @@ contract KernelTest is Test {
         vm.stopPrank();
     }
 
+    // ==========  HELPER FUNCTIONS  ========== //
+
+    function _initModuleAndPolicy() internal {
+        vm.startPrank(deployer);
+        kernel.executeAction(Actions.InstallModule, address(MOCKY));
+        kernel.executeAction(Actions.ActivatePolicy, address(policy));
+        vm.stopPrank();
+    }
+
+    // ==========  KERNEL FUNCTIONS  ========== //
+
     function testCorrectness_InitializeKernel() public {
         Keycode keycode = Keycode.wrap(0);
 
@@ -190,7 +201,7 @@ contract KernelTest is Test {
         assertEq(address(kernel.activePolicies(0)), address(0));
     }
 
-    function testCorrectness_UpgradeModule() public {
+    function testCorrectness_UpgradeModule_sameMajor() public {
         UpgradedMockModule upgradedModule = new UpgradedMockModule(kernel, MOCKY);
 
         vm.startPrank(deployer);
@@ -225,6 +236,39 @@ contract KernelTest is Test {
         policy.callPermissionedFunction();
 
         assertEq(upgradedModule.permissionedState(), 2);
+    }
+
+    function testRevert_UpgradeModule_newMajor_withoutUpgradingDependentPolicies() public {
+        UpgradedMockModuleNewMajor upgradedModule = new UpgradedMockModuleNewMajor(kernel, MOCKY);
+
+        vm.startPrank(deployer);
+
+        err = abi.encodeWithSignature("Kernel_InvalidModuleUpgrade(bytes5)", Keycode.wrap("MOCKY"));
+        vm.expectRevert(err);
+        kernel.executeAction(Actions.UpgradeModule, address(upgradedModule));
+
+        kernel.executeAction(Actions.InstallModule, address(MOCKY));
+
+        err = abi.encodeWithSignature("Kernel_InvalidModuleUpgrade(bytes5)", Keycode.wrap("MOCKY"));
+        vm.expectRevert(err);
+        kernel.executeAction(Actions.UpgradeModule, address(MOCKY));
+
+        kernel.executeAction(Actions.ActivatePolicy, address(policy));
+
+        vm.stopPrank();
+
+        vm.prank(multisig);
+        policy.callPermissionedFunction();
+
+        assertEq(MOCKY.permissionedState(), 1);
+
+        bytes memory expected = abi.encode([1]);
+        err = abi.encodeWithSignature("Policy_WrongModuleVersion(bytes)", expected);
+
+        // Upgrade will fail because the policy is only configured to work with MOCKYv1
+        vm.prank(deployer);
+        vm.expectRevert(err);
+        kernel.executeAction(Actions.UpgradeModule, address(upgradedModule));
     }
 
     function testCorrectness_ChangeExecutor() public {
@@ -266,12 +310,5 @@ contract KernelTest is Test {
 
         assertEq(address(newKernel.getModuleForKeycode(newKernel.allKeycodes(0))), address(MOCKY));
         assertEq(address(newKernel.activePolicies(0)), address(policy));
-    }
-
-    function _initModuleAndPolicy() internal {
-        vm.startPrank(deployer);
-        kernel.executeAction(Actions.InstallModule, address(MOCKY));
-        kernel.executeAction(Actions.ActivatePolicy, address(policy));
-        vm.stopPrank();
     }
 }

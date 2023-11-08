@@ -13,6 +13,13 @@ contract MockPolicy is Policy {
         dependencies[0] = toKeycode("MOCKY");
 
         MOCKY = MockModule(getModuleAddress(dependencies[0]));
+
+        (uint8 MOCKY_MAJOR, ) = MOCKY.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1]);
+        if (MOCKY_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {
@@ -35,6 +42,10 @@ contract MockModule is Module {
     uint256 public publicState;
     uint256 public permissionedState;
 
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+        return (1, 0);
+    }
+
     function KEYCODE() public pure override returns (Keycode) {
         return Keycode.wrap("MOCKY");
     }
@@ -55,6 +66,40 @@ contract UpgradedMockModule is Module {
 
     constructor(Kernel kernel_, MockModule oldModule_) Module(kernel_) {
         _oldModule = oldModule_;
+    }
+
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+        return (1, 1);
+    }
+
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("MOCKY");
+    }
+
+    function INIT() public override onlyKernel {
+        permissionedState = _oldModule.permissionedState();
+    }
+
+    function publicCall() public {
+        publicState++;
+    }
+
+    function permissionedCall() public permissioned {
+        permissionedState++;
+    }
+}
+
+contract UpgradedMockModuleNewMajor is Module {
+    MockModule internal _oldModule;
+    uint256 public publicState;
+    uint256 public permissionedState;
+
+    constructor(Kernel kernel_, MockModule oldModule_) Module(kernel_) {
+        _oldModule = oldModule_;
+    }
+
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+        return (2, 0);
     }
 
     function KEYCODE() public pure override returns (Keycode) {
