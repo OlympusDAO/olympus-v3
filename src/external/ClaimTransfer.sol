@@ -96,9 +96,12 @@ contract ClaimTransfer {
     /// @param to_ Address of the recipient
     /// @param amount_ Amount of your fractionalized claim to transfer
     /// @return bool
-    /// @dev    Transfering a portion of your claim should not result in the recipient getting a small amount of max claimable
-    ///         OHM due to what you've already claimed. This function will adjust the max claimable amount to account for this.
-    ///         That is, if you transfer 50% of your claim, the recipient will be able to claim 50% of the original max claimable OHM 
+    /// @dev    Transferring a portion of your claim transfers both based on the percentage and claimable amount of OHM.
+    ///         The recipient will receive a claimable amount of OHM commensurate to the percentage of the sender's max claim
+    ///         ignoring what the sender has already claimed. Say the sender has a percent of 10_000 and a max claim of 100 OHM.
+    ///         They claim 10 OHM, leaving 90 OHM claimable. If they transfer 50% of their claim (5_000), the recipient gets a
+    ///         max value of 55 and the commensurate gClaimed so they have a true claimable amount of 50 OHM. The sender's
+    ///         fractionalized claim is updated to reflect the transfer.
     function transfer(address to_, uint256 amount_) external returns (bool) {
         // Transfer
         _transfer(msg.sender, to_, amount_);
@@ -111,9 +114,12 @@ contract ClaimTransfer {
     /// @param to_ Address of the recipient
     /// @param amount_ Amount of the sender's fractionalized claim to transfer
     /// @return bool
-    /// @dev    Transfering a portion of your claim should not result in the recipient getting a small amount of max claimable
-    ///         OHM due to what you've already claimed. This function will adjust the max claimable amount to account for this.
-    ///         That is, if you transfer 50% of your claim, the recipient will be able to claim 50% of the original max claimable OHM
+    /// @dev    Transferring a portion of your claim transfers both based on the percentage and claimable amount of OHM.
+    ///         The recipient will receive a claimable amount of OHM commensurate to the percentage of the sender's max claim
+    ///         ignoring what the sender has already claimed. Say the sender has a percent of 10_000 and a max claim of 100 OHM.
+    ///         They claim 10 OHM, leaving 90 OHM claimable. If they transfer 50% of their claim (5_000), the recipient gets a
+    ///         max value of 55 and the commensurate gClaimed so they have a true claimable amount of 50 OHM. The sender's
+    ///         fractionalized claim is updated to reflect the transfer.
     function transferFrom(
         address from_,
         address to_,

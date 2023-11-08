@@ -320,7 +320,9 @@ contract ClaimTransferTest is Test {
         // CASE: User claims 10000 OHM (100 gOHM). They can only then transfer up to 90000 OHM (900 gOHM).
         // Their max is reduced by taking into consideration their gClaimed. Transfer 50% of their claim,
         // and their max is reduced by 50000 OHM + 50% of their gClaimed converted to OHM (5000 OHM).
-        // Their max is now 45000 OHM.
+        // Their max is now 45000 OHM with 50 gOHM claimed, leaving a claimable amount of 40000 OHM. The
+        // recipient gets a max value of 55000 OHM and the commensurate gClaimed (50) so they have a true claimable
+        // amount of 50000 OHM. The sender's fractionalized claim is updated to reflect the transfer.
 
         vm.startPrank(alice);
         pohm.pushWalletChange(address(claimTransfer));
