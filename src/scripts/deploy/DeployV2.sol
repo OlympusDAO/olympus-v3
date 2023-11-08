@@ -29,6 +29,7 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
+import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
@@ -72,6 +73,7 @@ contract OlympusDeploy is Script {
     OlympusInstructions public INSTR;
     OlympusRoles public ROLES;
     OlympusBoostedLiquidityRegistry public BLREG;
+    OlympusClearinghouseRegistry public CHREG;
 
     /// Policies
     Operator public operator;
@@ -143,7 +145,7 @@ contract OlympusDeploy is Script {
     string[] public deployments;
     mapping(string => address) public deployedTo;
 
-    function _setUp(string calldata chain_, string calldata deployFilePath) internal {
+    function _setUp(string calldata chain_) internal {
         chain = chain_;
 
         // Setup contract -> selector mappings
@@ -155,6 +157,7 @@ contract OlympusDeploy is Script {
         selectorMap["OlympusBoostedLiquidityRegistry"] = this
             ._deployBoostedLiquidityRegistry
             .selector;
+        selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["Operator"] = this._deployOperator.selector;
         selectorMap["OlympusHeart"] = this._deployHeart.selector;
         selectorMap["BondCallback"] = this._deployBondCallback.selector;
@@ -240,11 +243,12 @@ contract OlympusDeploy is Script {
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
 
         // Load deployment data
-        string memory data = vm.readFile(deployFilePath);
+        string memory data = vm.readFile("./src/scripts/deploy/deploy.json");
 
         // Parse deployment sequence and names
         bytes[] memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes[]));
         uint256 len = sequence.length;
+        console2.log("Contracts to be deployed:", len);
 
         if (len == 0) {
             return;
@@ -285,9 +289,9 @@ contract OlympusDeploy is Script {
         return env.readAddress(string.concat(".current.", chain, ".", key_));
     }
 
-    function deploy(string calldata chain_, string calldata deployFilePath) external {
+    function deploy(string calldata chain_) external {
         // Setup
-        _setUp(chain_, deployFilePath);
+        _setUp(chain_);
 
         // Check that deployments is not empty
         uint256 len = deployments.length;
@@ -767,6 +771,18 @@ contract OlympusDeploy is Script {
         console2.log("Clearinghouse deployed at:", address(clearinghouse));
 
         return address(clearinghouse);
+    }
+
+    function _deployClearinghouseRegistry(bytes calldata args) public returns (address) {
+        // Necessary to truncate the first word (32 bytes) of args due to a potential bug in the JSON parser.
+        address[] memory inactive = abi.decode(args[32:], (address[]));
+
+        // Deploy Clearinghouse Registry module
+        vm.broadcast();
+        CHREG = new OlympusClearinghouseRegistry(kernel, address(clearinghouse), inactive);
+        console2.log("CHREG deployed at:", address(CHREG));
+
+        return address(CHREG);
     }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
