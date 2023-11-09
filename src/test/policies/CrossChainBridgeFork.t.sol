@@ -10,10 +10,12 @@ import {FullMath} from "libraries/FullMath.sol";
 
 //import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
+import {MockGohm} from "test/mocks/OlympusMocks.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
 
 import {CrossChainBridge, ILayerZeroEndpoint} from "policies/CrossChainBridge.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -32,6 +34,7 @@ contract CrossChainBridgeForkTest is Test {
     address internal guardian2;
     MockOhm internal ohm1;
     MockOhm internal ohm2;
+    MockGohm internal gOhm;
 
     LayerZeroHelper lzHelper;
     uint256 L1_FORK_ID;
@@ -45,6 +48,7 @@ contract CrossChainBridgeForkTest is Test {
     uint16 internal constant L2_CHAIN_ID = 137;
 
     uint256 internal constant INITIAL_AMOUNT = 100000e9;
+    uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
 
     string RPC_ETH_MAINNET = vm.envString("ETH_MAINNET_RPC_URL");
     string RPC_POLYGON_MAINNET = vm.envString("POLYGON_MAINNET_RPC_URL");
@@ -53,6 +57,7 @@ contract CrossChainBridgeForkTest is Test {
     Kernel internal kernel;
     OlympusMinter internal MINTR;
     OlympusRoles internal ROLES;
+    OlympusSupply internal SPPLY;
     RolesAdmin internal rolesAdmin;
     CrossChainBridge internal bridge;
 
@@ -78,10 +83,15 @@ contract CrossChainBridgeForkTest is Test {
             ohm1 = new MockOhm("OHM", "OHM", 9);
             ohm1.mint(user1, INITIAL_AMOUNT);
 
+            gOhm = new MockGohm(GOHM_INDEX);
+
+            address[2] memory tokens = [address(ohm1), address(gOhm)];
+
             kernel = new Kernel(); // this contract will be the executor
 
             MINTR = new OlympusMinter(kernel, address(ohm1));
             ROLES = new OlympusRoles(kernel);
+            SPPLY = new OlympusSupply(kernel, tokens, 0);
 
             // Enable counter
             bridge = new CrossChainBridge(kernel, L1_lzEndpoint);
@@ -89,6 +99,7 @@ contract CrossChainBridgeForkTest is Test {
 
             kernel.executeAction(Actions.InstallModule, address(MINTR));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
+            kernel.executeAction(Actions.InstallModule, address(SPPLY));
 
             kernel.executeAction(Actions.ActivatePolicy, address(bridge));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));

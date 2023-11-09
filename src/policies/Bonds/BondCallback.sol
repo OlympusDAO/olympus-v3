@@ -65,6 +65,16 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         MINTR = MINTRv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
 
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1, 1]);
+        if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
+
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.safeApprove(address(MINTR), type(uint256).max);
     }
@@ -205,9 +215,14 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
                 TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
             } else {
                 // Since TRSRY hold a wrapped version of the payoutToken, it must be unwrapped first.
-                uint256 wrappedOutputAmount = wrappedPayoutToken.previewWithdraw(outputAmount_);
-                TRSRY.withdrawReserves(address(this), wrappedPayoutToken, wrappedOutputAmount);
-                wrappedPayoutToken.withdraw(wrappedOutputAmount, msg.sender, address(this));
+                TRSRY.withdrawReserves(
+                    address(this),
+                    wrappedPayoutToken,
+                    wrappedPayoutToken.previewWithdraw(outputAmount_)
+                );
+
+                // Unwrap reserves and transfer to sender
+                wrappedPayoutToken.withdraw(outputAmount_, msg.sender, address(this));
             }
 
             // Burn OHM received from sender
@@ -261,11 +276,11 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
         operator = operator_;
     }
 
-    /// @notice Inform the whether the TRSRY holds the payout token in a naked or a wrapped version
+    /// @notice Inform whether the TRSRY holds the payout token in a naked or a wrapped version
     /// @dev    Must be called before whitelisting to ensure a proper TRSRY withdraw approval
     /// @param  payoutToken_ Address of the payout token
     /// @param  wrappedToken_ Address of the token wrapper held by the TRSRY. If the TRSRY moves
-    ///                       back to the naked token, input address(0) as the wrapped version
+    ///                       back to the naked token, input address(0) as the wrapped version.
     function useWrappedVersion(
         address payoutToken_,
         address wrappedToken_

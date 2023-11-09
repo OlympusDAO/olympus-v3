@@ -53,6 +53,40 @@ contract TreasuryCustodianTest is Test {
         rolesAdmin.grantRole("custodian", guardian);
     }
 
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](2);
+        expectedDeps[0] = toKeycode("TRSRY");
+        expectedDeps[1] = toKeycode("ROLES");
+
+        Keycode[] memory deps = custodian.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](6);
+        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+        expectedPerms[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        expectedPerms[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        expectedPerms[2] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
+        expectedPerms[3] = Permissions(TRSRY_KEYCODE, TRSRY.increaseDebtorApproval.selector);
+        expectedPerms[4] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseDebtorApproval.selector);
+        expectedPerms[5] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
+        Permissions[] memory perms = custodian.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
+        }
+    }
+
+    // ======== TRSRY CUSTODIAN TESTS ======= //
+
     function test_UnauthorizedChangeDebt(uint256 amount_) public {
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,

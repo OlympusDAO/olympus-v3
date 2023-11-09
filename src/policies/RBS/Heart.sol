@@ -6,12 +6,13 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
+import {IDistributor} from "policies/RBS/interfaces/IDistributor.sol";
 import {IOperator} from "policies/RBS/interfaces/IOperator.sol";
 import {IHeart} from "policies/RBS/interfaces/IHeart.sol";
 import {IAppraiser} from "policies/OCA/interfaces/IAppraiser.sol";
 
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
@@ -26,6 +27,10 @@ import "src/Kernel.sol";
 ///         Rewards are issued in OHM.
 contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
+
+    // =========  ERRORS ========= //
+
+    error Heart_WrongModuleVersion(uint8[3] expectedMajors);
 
     // =========  STATE ========= //
 
@@ -48,6 +53,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     // Policies
     IOperator public operator;
     IAppraiser public appraiser;
+    IDistributor public distributor;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -59,11 +65,13 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         Kernel kernel_,
         IOperator operator_,
         IAppraiser appraiser_,
+        IDistributor distributor_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
         operator = operator_;
         appraiser = appraiser_;
+        distributor = distributor_;
 
         active = true;
         lastBeat = uint48(block.timestamp);
@@ -83,6 +91,16 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         PRICE = PRICEv2(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
         MINTR = MINTRv1(getModuleAddress(dependencies[2]));
+
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 2, 1]);
+        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 2 || ROLES_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
@@ -120,7 +138,10 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         // Trigger price range update and market operations
         operator.operate();
 
-        // Calculate the reward
+        // Trigger distributor rebase
+        distributor.triggerRebase();
+
+        // Calculate the reward (0 <= reward <= maxReward) for the keeper
         uint256 reward = currentReward();
 
         // Update the last beat timestamp
@@ -171,6 +192,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         appraiser = IAppraiser(appraiser_);
     }
 
+    /// @inheritdoc IHeart
+    function setDistributor(address distributor_) external onlyRole("heart_admin") {
+        distributor = IDistributor(distributor_);
+    }
+
     modifier notWhileBeatAvailable() {
         // Prevent calling if a beat is available to avoid front-running a keeper
         if (uint48(block.timestamp) >= lastBeat + frequency()) revert Heart_BeatAvailable();
@@ -203,15 +229,15 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     function currentReward() public view returns (uint256) {
         // If beat not available, return 0
         // Otherwise, calculate reward from linearly increasing auction bounded by maxReward and heart balance
-        uint48 _frequency = frequency();
-        uint48 nextBeat = lastBeat + _frequency;
+        uint48 beatFrequency = frequency();
+        uint48 nextBeat = lastBeat + beatFrequency;
         uint48 currentTime = uint48(block.timestamp);
-        uint48 duration = auctionDuration > _frequency ? _frequency : auctionDuration;
+        uint48 duration = auctionDuration > beatFrequency ? beatFrequency : auctionDuration;
         if (currentTime <= nextBeat) {
             return 0;
         } else {
             return
-                currentTime - nextBeat > duration
+                currentTime - nextBeat >= duration
                     ? maxReward
                     : (uint256(currentTime - nextBeat) * maxReward) / duration;
         }
