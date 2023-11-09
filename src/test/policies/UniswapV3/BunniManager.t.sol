@@ -270,10 +270,10 @@ contract BunniManagerTest is Test {
     }
 
     function _expectRevert_wrongModuleVersion() internal {
-        uint8[4] memory expectedVersions = [1, 1, 2, 1];
+        bytes memory expectedVersions = abi.encode([1, 2, 1, 1]);
 
         bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_WrongModuleVersion.selector,
+            Policy.Policy_WrongModuleVersion.selector,
             expectedVersions
         );
         vm.expectRevert(err);
