@@ -40,6 +40,11 @@ contract AppraiserTest is Test {
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
     uint8 internal constant DECIMALS = 18;
 
+    uint256 internal constant RESERVE_VALUE_AT_1 = 1_000_000e18;
+    uint256 internal constant RESERVE_VALUE_AT_2 = 2_000_000e18;
+    uint256 internal constant WETH_VALUE_AT_2000 = 2_000_000e18;
+    uint256 internal constant WETH_VALUE_AT_4000 = 4_000_000e18;
+
     enum Variant {
         CURRENT,
         LAST,
@@ -145,11 +150,13 @@ contract AppraiserTest is Test {
 
         // Assert value is correct and timestamp is unchanged
         (, timestamp) = appraiser.assetValueCache(address(reserve));
-        assertEq(value, 1_000_000e18);
+        assertEq(value, RESERVE_VALUE_AT_1);
         assertEq(timestamp, uint48(block.timestamp));
     }
 
     function testCorrectness_getAssetValueAddressPreviousTimestamp() public {
+        uint48 timestampBefore = uint48(block.timestamp);
+
         // Cache current asset value and timestamp
         appraiser.storeAssetValue(address(reserve));
 
@@ -160,17 +167,17 @@ contract AppraiserTest is Test {
 
         // Assert value is in cache
         (uint256 cacheValue, uint48 timestamp) = appraiser.assetValueCache(address(reserve));
-        assertEq(cacheValue, 1_000_000e18);
-        assertEq(timestamp, uint48(block.timestamp - 100));
+        assertEq(cacheValue, RESERVE_VALUE_AT_1);
+        assertEq(timestamp, timestampBefore);
 
         // Get asset value
         uint256 value = appraiser.getAssetValue(address(reserve));
 
         // Assert value is correct and cache is unchanged
         (cacheValue, timestamp) = appraiser.assetValueCache(address(reserve));
-        assertEq(value, 2_000_000e18);
-        assertEq(cacheValue, 1_000_000e18);
-        assertEq(timestamp, uint48(block.timestamp - 100));
+        assertEq(value, RESERVE_VALUE_AT_2);
+        assertEq(cacheValue, RESERVE_VALUE_AT_1);
+        assertEq(timestamp, timestampBefore);
     }
 
     /// [X]  getAssetValue(address asset_, uint48 maxAge_)
@@ -179,6 +186,8 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getAssetValueAddressAgeRecentTimestamp(uint48 maxAge_) public {
         vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
+
+        uint48 timestampBefore = uint48(block.timestamp);
 
         // Cache current asset value and timestamp
         appraiser.storeAssetValue(address(reserve));
@@ -190,21 +199,23 @@ contract AppraiserTest is Test {
 
         // Assert value is in cache
         (uint256 cacheValue, uint48 timestamp) = appraiser.assetValueCache(address(reserve));
-        assertEq(cacheValue, 1_000_000e18);
-        assertEq(timestamp, uint48(block.timestamp - maxAge_ + 1));
+        assertEq(cacheValue, RESERVE_VALUE_AT_1);
+        assertEq(timestamp, timestampBefore);
 
         // Get asset value
         uint256 value = appraiser.getAssetValue(address(reserve), maxAge_);
 
         // Assert value is correct and cache is unchanged
         (cacheValue, timestamp) = appraiser.assetValueCache(address(reserve));
-        assertEq(value, 1_000_000e18);
-        assertEq(cacheValue, 1_000_000e18);
-        assertEq(timestamp, uint48(block.timestamp - maxAge_ + 1));
+        assertEq(value, RESERVE_VALUE_AT_1);
+        assertEq(cacheValue, RESERVE_VALUE_AT_1);
+        assertEq(timestamp, timestampBefore);
     }
 
     function testCorrectness_getAssetValueAddressAgeOutdatedTimestamp(uint48 maxAge_) public {
         vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
+
+        uint48 timestampBefore = uint48(block.timestamp);
 
         // Cache current asset value and timestamp
         appraiser.storeAssetValue(address(reserve));
@@ -216,17 +227,17 @@ contract AppraiserTest is Test {
 
         // Assert value is in cache
         (uint256 cacheValue, uint48 timestamp) = appraiser.assetValueCache(address(reserve));
-        assertEq(cacheValue, 1_000_000e18);
-        assertEq(timestamp, uint48(block.timestamp - maxAge_ - 1));
+        assertEq(cacheValue, RESERVE_VALUE_AT_1);
+        assertEq(timestamp, timestampBefore);
 
         // Get asset value
         uint256 value = appraiser.getAssetValue(address(reserve), maxAge_);
 
         // Assert value is correct and cache is unchanged
         (cacheValue, timestamp) = appraiser.assetValueCache(address(reserve));
-        assertEq(value, 2_000_000e18);
-        assertEq(cacheValue, 1_000_000e18);
-        assertEq(timestamp, uint48(block.timestamp - maxAge_ - 1));
+        assertEq(value, RESERVE_VALUE_AT_2);
+        assertEq(cacheValue, RESERVE_VALUE_AT_1);
+        assertEq(timestamp, timestampBefore);
     }
 
     /// [X]  getAssetValue(address asset_, Variant variant_)
@@ -248,6 +259,8 @@ contract AppraiserTest is Test {
     }
 
     function testCorrectness_getAssetValueAddressVariantLast() public {
+        uint48 timestampBefore = uint48(block.timestamp);
+
         // Cache current asset value and timestamp
         appraiser.storeAssetValue(address(reserve));
 
@@ -258,8 +271,8 @@ contract AppraiserTest is Test {
 
         // Assert value is in cache
         (uint256 cacheValue, uint48 timestamp) = appraiser.assetValueCache(address(reserve));
-        assertEq(cacheValue, 1_000_000e18);
-        assertEq(timestamp, uint48(block.timestamp - 100));
+        assertEq(cacheValue, RESERVE_VALUE_AT_1);
+        assertEq(timestamp, timestampBefore);
 
         // Directly call getAssetValue with variant LAST
         (bool success, bytes memory data) = address(appraiser).call(
@@ -274,13 +287,15 @@ contract AppraiserTest is Test {
 
         // Assert value is from cache and cache is unchanged
         (cacheValue, timestamp) = appraiser.assetValueCache(address(reserve));
-        assertEq(cacheValue, 1_000_000e18);
-        assertEq(timestamp, uint48(block.timestamp - 100));
-        assertEq(value, 1_000_000e18);
-        assertEq(variantTimestamp, uint48(block.timestamp - 100));
+        assertEq(cacheValue, RESERVE_VALUE_AT_1);
+        assertEq(timestamp, timestampBefore);
+        assertEq(value, RESERVE_VALUE_AT_1);
+        assertEq(variantTimestamp, timestampBefore);
     }
 
     function testCorrectness_getAssetValueAddressVariantCurrent() public {
+        uint48 timestampBefore = uint48(block.timestamp);
+
         // Cache current asset value and timestamp
         appraiser.storeAssetValue(address(reserve));
 
@@ -291,8 +306,8 @@ contract AppraiserTest is Test {
 
         // Assert value is in cache
         (uint256 cacheValue, uint48 timestamp) = appraiser.assetValueCache(address(reserve));
-        assertEq(cacheValue, 1_000_000e18);
-        assertEq(timestamp, uint48(block.timestamp - 100));
+        assertEq(cacheValue, RESERVE_VALUE_AT_1);
+        assertEq(timestamp, timestampBefore);
 
         // Directly call getAssetValue with variant CURRENT
         (bool success, bytes memory data) = address(appraiser).call(
@@ -307,9 +322,9 @@ contract AppraiserTest is Test {
 
         // Assert value is current but cache is unchanged
         (cacheValue, timestamp) = appraiser.assetValueCache(address(reserve));
-        assertEq(cacheValue, 1_000_000e18);
-        assertEq(timestamp, uint48(block.timestamp - 100));
-        assertEq(value, 2_000_000e18);
+        assertEq(cacheValue, RESERVE_VALUE_AT_1);
+        assertEq(timestamp, timestampBefore);
+        assertEq(value, RESERVE_VALUE_AT_2);
         assertEq(variantTimestamp, uint48(block.timestamp));
     }
 
@@ -355,18 +370,20 @@ contract AppraiserTest is Test {
         (reservesCacheValue, reservesTimestamp) = appraiser.categoryValueCache(
             AssetCategory.wrap("reserves")
         );
-        assertEq(liquidValue, 3_000_000e18);
-        assertEq(stableValue, 1_000_000e18);
-        assertEq(reservesValue, 1_000_000e18);
-        assertEq(liquidCacheValue, 3_000_000e18);
+        assertEq(liquidValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
+        assertEq(stableValue, RESERVE_VALUE_AT_1);
+        assertEq(reservesValue, RESERVE_VALUE_AT_1);
+        assertEq(liquidCacheValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
         assertEq(liquidTimestamp, uint48(block.timestamp));
-        assertEq(stableCacheValue, 1_000_000e18);
+        assertEq(stableCacheValue, RESERVE_VALUE_AT_1);
         assertEq(stableTimestamp, uint48(block.timestamp));
-        assertEq(reservesCacheValue, 1_000_000e18);
+        assertEq(reservesCacheValue, RESERVE_VALUE_AT_1);
         assertEq(reservesTimestamp, uint48(block.timestamp));
     }
 
     function testCorrectness_getCategoryValueCategoryPreviousTimestamp() public {
+        uint48 timestampBefore = uint48(block.timestamp);
+
         // Cache current category value and timestamp
         appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
         appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
@@ -389,12 +406,12 @@ contract AppraiserTest is Test {
         (uint256 reservesCacheValue, uint48 reservesTimestamp) = appraiser.categoryValueCache(
             AssetCategory.wrap("reserves")
         );
-        assertEq(liquidCacheValue, 3_000_000e18);
-        assertEq(liquidTimestamp, uint48(block.timestamp - 100));
-        assertEq(stableCacheValue, 1_000_000e18);
-        assertEq(stableTimestamp, uint48(block.timestamp - 100));
-        assertEq(reservesCacheValue, 1_000_000e18);
-        assertEq(reservesTimestamp, uint48(block.timestamp - 100));
+        assertEq(liquidCacheValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
+        assertEq(liquidTimestamp, timestampBefore);
+        assertEq(stableCacheValue, RESERVE_VALUE_AT_1);
+        assertEq(stableTimestamp, timestampBefore);
+        assertEq(reservesCacheValue, RESERVE_VALUE_AT_1);
+        assertEq(reservesTimestamp, timestampBefore);
 
         // Get category values
         uint256 liquidValue = appraiser.getCategoryValue(AssetCategory.wrap("liquid"));
@@ -411,15 +428,15 @@ contract AppraiserTest is Test {
         (reservesCacheValue, reservesTimestamp) = appraiser.categoryValueCache(
             AssetCategory.wrap("reserves")
         );
-        assertEq(liquidValue, 6_000_000e18);
-        assertEq(stableValue, 2_000_000e18);
-        assertEq(reservesValue, 2_000_000e18);
-        assertEq(liquidCacheValue, 3_000_000e18);
-        assertEq(liquidTimestamp, uint48(block.timestamp - 100));
-        assertEq(stableCacheValue, 1_000_000e18);
-        assertEq(stableTimestamp, uint48(block.timestamp - 100));
-        assertEq(reservesCacheValue, 1_000_000e18);
-        assertEq(reservesTimestamp, uint48(block.timestamp - 100));
+        assertEq(liquidValue, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000);
+        assertEq(stableValue, RESERVE_VALUE_AT_2);
+        assertEq(reservesValue, RESERVE_VALUE_AT_2);
+        assertEq(liquidCacheValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
+        assertEq(liquidTimestamp, timestampBefore);
+        assertEq(stableCacheValue, RESERVE_VALUE_AT_1);
+        assertEq(stableTimestamp, timestampBefore);
+        assertEq(reservesCacheValue, RESERVE_VALUE_AT_1);
+        assertEq(reservesTimestamp, timestampBefore);
     }
 
     /// [X]  getCategoryValue(Category category_, uint48 maxAge_)
@@ -475,9 +492,9 @@ contract AppraiserTest is Test {
         uint256 reservesValue = abi.decode(reservesData, (uint256));
 
         // Assert category values are correct
-        assertEq(liquidValue, 3_000_000e18);
-        assertEq(stableValue, 1_000_000e18);
-        assertEq(reservesValue, 1_000_000e18);
+        assertEq(liquidValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
+        assertEq(stableValue, RESERVE_VALUE_AT_1);
+        assertEq(reservesValue, RESERVE_VALUE_AT_1);
     }
 
     function testCorrectness_getCategoryValueCategoryAgeOutdatedTimestamp(uint48 maxAge_) public {
@@ -529,9 +546,9 @@ contract AppraiserTest is Test {
         uint256 reservesValue = abi.decode(reservesData, (uint256));
 
         // Assert category values are correct
-        assertEq(liquidValue, 6_000_000e18);
-        assertEq(stableValue, 2_000_000e18);
-        assertEq(reservesValue, 2_000_000e18);
+        assertEq(liquidValue, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000);
+        assertEq(stableValue, RESERVE_VALUE_AT_2);
+        assertEq(reservesValue, RESERVE_VALUE_AT_2);
     }
 
     /// [X]  getCategoryValue(Category category_, Variant variant_)
@@ -575,6 +592,8 @@ contract AppraiserTest is Test {
     }
 
     function testCorrectness_getCategoryValueCategoryVariantLast() public {
+        uint48 timestampBefore = uint48(block.timestamp);
+
         // Cache current category value and timestamp
         appraiser.storeCategoryValue(AssetCategory.wrap("liquid"));
         appraiser.storeCategoryValue(AssetCategory.wrap("stable"));
@@ -624,12 +643,12 @@ contract AppraiserTest is Test {
         );
 
         // Assert category values and timestamps are correct
-        assertEq(liquidValue, 3_000_000e18);
-        assertEq(liquidTimestamp, uint48(block.timestamp - 100));
-        assertEq(stableValue, 1_000_000e18);
-        assertEq(stableTimestamp, uint48(block.timestamp - 100));
-        assertEq(reservesValue, 1_000_000e18);
-        assertEq(reservesTimestamp, uint48(block.timestamp - 100));
+        assertEq(liquidValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
+        assertEq(liquidTimestamp, timestampBefore);
+        assertEq(stableValue, RESERVE_VALUE_AT_1);
+        assertEq(stableTimestamp, timestampBefore);
+        assertEq(reservesValue, RESERVE_VALUE_AT_1);
+        assertEq(reservesTimestamp, timestampBefore);
     }
 
     function testCorrectness_getCategoryValueCategoryVariantCurrent() public {
@@ -682,11 +701,11 @@ contract AppraiserTest is Test {
         );
 
         // Assert category values and timestamps are correct
-        assertEq(liquidValue, 6_000_000e18);
+        assertEq(liquidValue, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000);
         assertEq(liquidTimestamp, uint48(block.timestamp));
-        assertEq(stableValue, 2_000_000e18);
+        assertEq(stableValue, RESERVE_VALUE_AT_2);
         assertEq(stableTimestamp, uint48(block.timestamp));
-        assertEq(reservesValue, 2_000_000e18);
+        assertEq(reservesValue, RESERVE_VALUE_AT_2);
         assertEq(reservesTimestamp, uint48(block.timestamp));
     }
 
@@ -698,7 +717,7 @@ contract AppraiserTest is Test {
     ///     [X]  if latest value was captured at the current timestamp, return that value
     ///     [X]  if latest value was captured at a previous timestamp, fetch and return the current value
 
-    function testCorrectness_getMetricMetricCurrentTimestamp() public {
+    function testCorrectness_getMetricCurrentTimestamp() public {
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
@@ -706,10 +725,10 @@ contract AppraiserTest is Test {
         uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
 
         // Assert that metric value is correct
-        assertEq(value, 3_000_000e18);
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
     }
 
-    function testCorrectness_getMetricMetricPreviousTimestamp() public {
+    function testCorrectness_getMetricPreviousTimestamp() public {
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
@@ -724,14 +743,14 @@ contract AppraiserTest is Test {
         uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
 
         // Assert that metric value is correct
-        assertEq(value, 6_000_000e18);
+        assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000);
     }
 
     /// [X]  getMetric(Metric metric_, uint48 maxAge_)
     ///     [X]  if latest value was captured more recently than the passed maxAge, return that value
     ///     [X]  if latest value was captured at a too outdated timestamp, fetch and return the current value
 
-    function testCorrectness_getMetricMetricAgeRecentTimestamp(uint48 maxAge_) public {
+    function testCorrectness_getMetricAgeRecentTimestamp(uint48 maxAge_) public {
         vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
 
         // Cache current metric value and timestamp
@@ -748,10 +767,10 @@ contract AppraiserTest is Test {
         uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING, maxAge_);
 
         // Assert that metric value is correct
-        assertEq(value, 3_000_000e18);
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
     }
 
-    function testCorrectness_getMetricMetricAgeOutdatedTimestamp(uint48 maxAge_) public {
+    function testCorrectness_getMetricAgeOutdatedTimestamp(uint48 maxAge_) public {
         vm.assume(maxAge_ > 0 && maxAge_ < 30 days); // test value to avoid overflow situations that just revert
 
         // Cache current metric value and timestamp
@@ -768,7 +787,7 @@ contract AppraiserTest is Test {
         uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING, maxAge_);
 
         // Assert that metric value is correct
-        assertEq(value, 6_000_000e18);
+        assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000);
     }
 
     /// [X]  getMetric(Metric metric_, Variant variant_)
@@ -779,7 +798,7 @@ contract AppraiserTest is Test {
     ///     [X]  handles all valid metrics
     ///     [X]  handles volatility metric
 
-    function testCorrectness_getMetricMetricVariantInvalid() public {
+    function testCorrectness_getMetricVariantInvalid() public {
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
@@ -792,7 +811,7 @@ contract AppraiserTest is Test {
         assertEq(success, false);
     }
 
-    function testCorrectness_getMetricMetricVariantInvalidMetric() public {
+    function testCorrectness_getMetricVariantInvalidMetric() public {
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
@@ -805,7 +824,9 @@ contract AppraiserTest is Test {
         assertEq(success, false);
     }
 
-    function testCorrectness_getMetricMetricVariantLast() public {
+    function testCorrectness_getMetricVariantLast() public {
+        uint48 timestampBefore = uint48(block.timestamp);
+
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
@@ -828,11 +849,11 @@ contract AppraiserTest is Test {
         (uint256 value, uint48 variantTimestamp) = abi.decode(data, (uint256, uint48));
 
         // Assert value is from cache and cache is unchanged
-        assertEq(value, 3_000_000e18);
-        assertEq(variantTimestamp, uint48(block.timestamp - 100));
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
+        assertEq(variantTimestamp, timestampBefore);
     }
 
-    function testCorrectness_getMetricMetricVariantCurrent() public {
+    function testCorrectness_getMetricVariantCurrent() public {
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 
@@ -855,7 +876,7 @@ contract AppraiserTest is Test {
         (uint256 value, uint48 variantTimestamp) = abi.decode(data, (uint256, uint48));
 
         // Assert value is current but cache is unchanged
-        assertEq(value, 6_000_000e18);
+        assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000);
         assertEq(variantTimestamp, uint48(block.timestamp));
     }
 
@@ -905,12 +926,12 @@ contract AppraiserTest is Test {
         // Decode return data to values and timestamps
         {
             (uint256 value, uint48 variantTimestamp) = abi.decode(backingData, (uint256, uint48));
-            assertEq(value, 3_000_000e18);
+            assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
             assertEq(variantTimestamp, uint48(block.timestamp));
         }
         {
             (uint256 value, uint48 variantTimestamp) = abi.decode(liquidData, (uint256, uint48));
-            assertEq(value, 1_000_000e18);
+            assertEq(value, RESERVE_VALUE_AT_1);
             assertEq(variantTimestamp, uint48(block.timestamp));
         }
         {
@@ -923,7 +944,7 @@ contract AppraiserTest is Test {
         }
         {
             (uint256 value, uint48 variantTimestamp) = abi.decode(mvData, (uint256, uint48));
-            assertEq(value, 3_000_000e18);
+            assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
             assertEq(variantTimestamp, uint48(block.timestamp));
         }
         {
@@ -998,7 +1019,7 @@ contract AppraiserTest is Test {
 
         // Assert value is in cache
         (cacheValue, timestamp) = appraiser.assetValueCache(address(reserve));
-        assertEq(cacheValue, 1_000_000e18);
+        assertEq(cacheValue, RESERVE_VALUE_AT_1);
         assertEq(timestamp, uint48(block.timestamp));
     }
 
@@ -1018,7 +1039,7 @@ contract AppraiserTest is Test {
 
         // Assert value is in cache
         (cacheValue, timestamp) = appraiser.categoryValueCache(AssetCategory.wrap("liquid"));
-        assertEq(cacheValue, 3_000_000e18);
+        assertEq(cacheValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
         assertEq(timestamp, uint48(block.timestamp));
     }
 
@@ -1036,7 +1057,7 @@ contract AppraiserTest is Test {
 
         // Assert value is in cache
         (cacheValue, timestamp) = appraiser.metricCache(IAppraiser.Metric.BACKING);
-        assertEq(cacheValue, 3_000_000e18);
+        assertEq(cacheValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
         assertEq(timestamp, uint48(block.timestamp));
     }
 }
