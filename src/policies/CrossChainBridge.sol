@@ -123,9 +123,9 @@ contract CrossChainBridge is
             (uint8 SPPLY_MAJOR, ) = SPPLY.VERSION();
 
             bytes memory expected = abi.encode([1, 1, 1]);
-            if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1 || SPPLY_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
-        }
-        else {
+            if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1 || SPPLY_MAJOR != 1)
+                revert Policy_WrongModuleVersion(expected);
+        } else {
             bytes memory expected = abi.encode([1, 1]);
             if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
         }
