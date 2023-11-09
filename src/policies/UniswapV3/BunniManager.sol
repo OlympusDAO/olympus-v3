@@ -259,10 +259,17 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - No BunniToken has been deployed for the pool
     ///             - `pool_` is not a Uniswap V3 pool
     ///             - A price cannot be accessed for either token in the pool
-    function registerPool(address pool_) external override nonReentrant
+    function registerPool(
+        address pool_
+    )
+        external
+        override
+        nonReentrant
         onlyIfActive
         onlyRole("bunni_admin")
-        bunniHubSet returns (IBunniToken token) {
+        bunniHubSet
+        returns (IBunniToken token)
+    {
         // Check that `pool_` is an actual Uniswap V3 pool
         _assertIsValidPool(pool_);
 
@@ -569,11 +576,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // As `poolUnderlyingTokens` is a unique list, this will not sweep the same token twice.
         // It also does not contain any zero addresses, which would cause a revert in `sweepTokens`.
         bunniHub.sweepTokens(poolUnderlyingTokens, address(this));
-        
+
         // Burn/transfer any swept tokens
         for (uint256 i = 0; i < poolUnderlyingTokens.length; i++) {
             IERC20 poolUnderlyingToken = poolUnderlyingTokens[i];
-            _transferOrBurn(address(poolUnderlyingToken), poolUnderlyingToken.balanceOf(address(this)));
+            _transferOrBurn(
+                address(poolUnderlyingToken),
+                poolUnderlyingToken.balanceOf(address(this))
+            );
         }
 
         // Mint the OHM reward and transfer it to the caller
