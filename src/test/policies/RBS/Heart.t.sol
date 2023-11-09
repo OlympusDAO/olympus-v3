@@ -94,7 +94,7 @@ contract HeartTest is Test {
     Kernel internal kernel;
     MockPrice internal PRICE;
     OlympusRoles internal ROLES;
-    OlympusMinter internal mintr;
+    OlympusMinter internal MINTR;
 
     MockOperator internal operator;
     MockAppraiser internal appraiser;
@@ -135,7 +135,7 @@ contract HeartTest is Test {
             // Deploy modules (some mocks)
             PRICE = new MockPrice(kernel, uint8(18), uint32(8 hours));
             ROLES = new OlympusRoles(kernel);
-            mintr = new OlympusMinter(kernel, address(ohm));
+            MINTR = new OlympusMinter(kernel, address(ohm));
 
             // Configure prices on mock price module
             PRICE.setPrice(address(ohm), 100e18);
@@ -173,7 +173,7 @@ contract HeartTest is Test {
             // Install modules
             kernel.executeAction(Actions.InstallModule, address(PRICE));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
-            kernel.executeAction(Actions.InstallModule, address(mintr));
+            kernel.executeAction(Actions.InstallModule, address(MINTR));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
@@ -342,7 +342,7 @@ contract HeartTest is Test {
         // Balance of this contract has increased by the reward amount.
         assertEq(ohm.balanceOf(address(this)), startBalance + expectedReward);
         // Mint capabilities are limited to the reward amount when the beat happens.
-        assertEq(mintr.mintApproval(address(heart)), 0);
+        assertEq(MINTR.mintApproval(address(heart)), 0);
     }
 
     // =========  VIEW FUNCTIONS ========= //

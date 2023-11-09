@@ -77,7 +77,7 @@ contract BondCallbackTest is Test {
     OlympusRange internal RANGE;
     OlympusTreasury internal TRSRY;
     OlympusMinter internal MINTR;
-    OlympusSupply internal supply;
+    OlympusSupply internal SPPLY;
     OlympusRoles internal ROLES;
 
     Operator internal operator;
@@ -146,7 +146,7 @@ contract BondCallbackTest is Test {
             );
             TRSRY = new OlympusTreasury(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
-            supply = new OlympusSupply(kernel, [address(ohm), address(gohm)], 0);
+            SPPLY = new OlympusSupply(kernel, [address(ohm), address(gohm)], 0);
             ROLES = new OlympusRoles(kernel);
 
             /// Configure mocks
@@ -199,7 +199,7 @@ contract BondCallbackTest is Test {
             kernel.executeAction(Actions.InstallModule, address(RANGE));
             kernel.executeAction(Actions.InstallModule, address(TRSRY));
             kernel.executeAction(Actions.InstallModule, address(MINTR));
-            kernel.executeAction(Actions.InstallModule, address(supply));
+            kernel.executeAction(Actions.InstallModule, address(SPPLY));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
 
             /// Approve policies
