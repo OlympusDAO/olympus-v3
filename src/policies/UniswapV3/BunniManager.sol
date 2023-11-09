@@ -88,10 +88,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     //                                      ERRORS                                                //
     //============================================================================================//
 
-    /// @notice                 Emitted if any of the module dependencies are the wrong version
-    /// @param expectedMajors_  The expected major versions of the modules
-    error BunniManager_WrongModuleVersion(uint8[4] expectedMajors_);
-
     /// @notice                 Emitted if the given address is invalid
     /// @param address_         The invalid address
     error BunniManager_Params_InvalidAddress(address address_);
@@ -227,8 +223,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (ROLES_MAJOR != 1 || TRSRY_MAJOR != 1 || PRICE_MAJOR != 2 || MINTR_MAJOR != 1)
-            revert BunniManager_WrongModuleVersion([1, 1, 2, 1]);
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 2, 1, 1]);
+        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 2 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
