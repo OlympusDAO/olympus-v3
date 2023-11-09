@@ -105,12 +105,21 @@ contract TRSRYv1_1Test is Test {
     MockERC20 public reserve;
     address public godmode;
 
+    UserFactory public userCreator;
+    address internal alice;
+
     uint256 internal constant INITIAL_TOKEN_AMOUNT = 100e18;
 
     function setUp() public {
         kernel = new Kernel();
         TRSRY = new OlympusTreasury(kernel);
         reserve = new MockERC20("Reserve", "RSRV", 18);
+
+        {
+            userCreator = new UserFactory();
+            address[] memory users = userCreator.create(1);
+            alice = users[0];
+        }
 
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
 
@@ -202,12 +211,12 @@ contract TRSRYv1_1Test is Test {
         TRSRY.addAsset(address(reserve), new address[](0));
     }
 
-    function testRevert_addAsset_AssetNotContract(address notAsset_) public {
+    function testRevert_addAsset_AssetNotContract() public {
         /// Try to add an address which is not a contract
-        bytes memory err = abi.encodeWithSignature("TRSRY_AssetNotContract(address)", notAsset_);
+        bytes memory err = abi.encodeWithSignature("TRSRY_AssetNotContract(address)", alice);
         vm.expectRevert(err);
         vm.prank(godmode);
-        TRSRY.addAsset(notAsset_, new address[](0));
+        TRSRY.addAsset(alice, new address[](0));
     }
 
     // -- Test: addAssetLocation -------------------------------
