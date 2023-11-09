@@ -14,7 +14,7 @@ import {IBondCallback} from "interfaces/IBondCallback.sol";
 import {IBondSDA} from "interfaces/IBondSDA.sol";
 
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
@@ -174,13 +174,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 2, 2, 1, 1]);
         if (
+            MINTR_MAJOR != 1 ||
             PRICE_MAJOR != 2 ||
             RANGE_MAJOR != 2 ||
-            TRSRY_MAJOR != 1 ||
-            MINTR_MAJOR != 1 ||
-            ROLES_MAJOR != 1
-        ) revert Operator_WrongModuleVersion([2, 2, 1, 1, 1]);
+            ROLES_MAJOR != 1 ||
+            TRSRY_MAJOR != 1
+        ) revert Policy_WrongModuleVersion(expected);
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         _ohm.safeApprove(address(MINTR), type(uint256).max);

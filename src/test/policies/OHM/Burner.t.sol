@@ -26,9 +26,9 @@ contract BurnerTest is Test {
     MockOhm internal ohm;
 
     Kernel internal kernel;
-    OlympusTreasury internal treasury;
-    OlympusMinter internal minter;
-    OlympusRoles internal roles;
+    OlympusTreasury internal TRSRY;
+    OlympusMinter internal MINTR;
+    OlympusRoles internal ROLES;
 
     RolesAdmin internal rolesAdmin;
     Burner internal burner;
@@ -61,14 +61,14 @@ contract BurnerTest is Test {
             vm.label(address(kernel), "Kernel");
 
             // Deploy modules
-            treasury = new OlympusTreasury(kernel);
-            minter = new OlympusMinter(kernel, address(ohm));
-            roles = new OlympusRoles(kernel);
+            TRSRY = new OlympusTreasury(kernel);
+            MINTR = new OlympusMinter(kernel, address(ohm));
+            ROLES = new OlympusRoles(kernel);
 
             // Label modules
-            vm.label(address(treasury), "TRSRY");
-            vm.label(address(minter), "MINTR");
-            vm.label(address(roles), "ROLES");
+            vm.label(address(TRSRY), "TRSRY");
+            vm.label(address(MINTR), "MINTR");
+            vm.label(address(ROLES), "ROLES");
         }
 
         {
@@ -85,9 +85,9 @@ contract BurnerTest is Test {
             // Initialize system and kernel
 
             // Install modules
-            kernel.executeAction(Actions.InstallModule, address(treasury));
-            kernel.executeAction(Actions.InstallModule, address(minter));
-            kernel.executeAction(Actions.InstallModule, address(roles));
+            kernel.executeAction(Actions.InstallModule, address(TRSRY));
+            kernel.executeAction(Actions.InstallModule, address(MINTR));
+            kernel.executeAction(Actions.InstallModule, address(ROLES));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(burner));
@@ -96,15 +96,15 @@ contract BurnerTest is Test {
         {
             // Configure access control
 
-            // Burner roles
+            // Burner ROLES
             rolesAdmin.grantRole("burner_admin", guardian);
         }
 
-        // Mint tokens to users, treasury, and burner for testing
+        // Mint tokens to users, TRSRY, and burner for testing
         uint256 testOhm = 1_000_000 * 1e9;
 
         ohm.mint(alice, testOhm);
-        ohm.mint(address(treasury), testOhm);
+        ohm.mint(address(TRSRY), testOhm);
         ohm.mint(address(burner), testOhm);
 
         // Approve burner to burn ohm from alice
@@ -117,6 +117,39 @@ contract BurnerTest is Test {
         burner.addCategory("TEST_CATEGORY_2");
         burner.addCategory("TEST_CATEGORY_3");
         vm.stopPrank();
+    }
+
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](3);
+        expectedDeps[0] = toKeycode("TRSRY");
+        expectedDeps[1] = toKeycode("MINTR");
+        expectedDeps[2] = toKeycode("ROLES");
+
+        Keycode[] memory deps = burner.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+        assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](3);
+        Keycode MINTR_KEYCODE = toKeycode("MINTR");
+        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+        expectedPerms[0] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        expectedPerms[1] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        expectedPerms[2] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+
+        Permissions[] memory perms = burner.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
+        }
     }
 
     // ========== HELPER FUNCTIONS ========== //
@@ -151,23 +184,23 @@ contract BurnerTest is Test {
 
     function testFuzz_burnFromTreasury(uint256 amount_) public {
         // Check balances before burn
-        uint256 treasuryBalance = ohm.balanceOf(address(treasury));
+        uint256 treasuryBalance = ohm.balanceOf(address(TRSRY));
         vm.assume(amount_ <= treasuryBalance && amount_ != 0);
         uint256 burnerBalance = ohm.balanceOf(address(burner));
 
-        // Burn from treasury (expect event with category)
+        // Burn from TRSRY (expect event with category)
         vm.expectEmit(true, true, false, true);
-        emit Burn(address(treasury), "TEST_CATEGORY_1", amount_);
+        emit Burn(address(TRSRY), "TEST_CATEGORY_1", amount_);
         vm.prank(guardian);
         burner.burnFromTreasury(amount_, "TEST_CATEGORY_1");
 
         // Check balances after burn
-        assertEq(ohm.balanceOf(address(treasury)), treasuryBalance - amount_);
+        assertEq(ohm.balanceOf(address(TRSRY)), treasuryBalance - amount_);
         assertEq(ohm.balanceOf(address(burner)), burnerBalance);
     }
 
     function testRevert_burnFromTreasury_zeroAmount() public {
-        // Attempt to burn zero tokens from treasury and expect revert
+        // Attempt to burn zero tokens from TRSRY and expect revert
         bytes memory err = abi.encodeWithSignature("MINTR_ZeroAmount()");
         vm.expectRevert(err);
         vm.prank(guardian);
@@ -175,9 +208,9 @@ contract BurnerTest is Test {
     }
 
     function testRevert_burnFromTreasury_exceedsBalance() public {
-        uint256 balance = ohm.balanceOf(address(treasury));
+        uint256 balance = ohm.balanceOf(address(TRSRY));
 
-        // Attempt to burn more than treasury balance and expect revert
+        // Attempt to burn more than TRSRY balance and expect revert
         bytes memory err = abi.encodePacked("TRANSFER_FAILED");
         vm.expectRevert(err);
         vm.prank(guardian);
