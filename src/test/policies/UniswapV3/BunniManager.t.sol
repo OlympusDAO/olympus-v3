@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
+import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
@@ -11,12 +12,16 @@ import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
+import {TRSRYv1_1, toCategory as toTreasuryCategory} from "modules/TRSRY/TRSRY.v1.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
+import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
+import {SPPLYv1, Category as SupplyCategory, fromCategory as fromSupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
+import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
@@ -37,10 +42,12 @@ import "src/Kernel.sol";
 
 contract BunniManagerTest is Test {
     using FullMath for uint256;
+    using ModuleTestFixtureGenerator for OlympusPricev2;
 
     UserFactory public userCreator;
     address internal alice;
     address internal policy;
+    address internal writer;
 
     MockOhm internal ohm;
     MockERC20 internal usdc;
@@ -49,11 +56,17 @@ contract BunniManagerTest is Test {
     address internal ohmAddress;
 
     Kernel internal kernel;
-    OlympusRoles internal roles;
-    OlympusTreasury internal treasury;
-    OlympusMinter internal mintr;
-    OlympusPricev2 internal price;
+
+    // Modules
+    OlympusRoles internal ROLES;
+    OlympusTreasury internal TRSRY;
+    OlympusMinter internal MINTR;
+    OlympusPricev2 internal PRICE;
+    OlympusSupply internal SPPLY;
     address internal treasuryAddress;
+
+    // PRICE submodules
+    BunniPrice internal priceSubmoduleBunni;
 
     UniswapV3Factory internal uniswapFactory;
     SwapRouter internal swapRouter;
@@ -131,17 +144,24 @@ contract BunniManagerTest is Test {
             usdcAddress = address(usdc);
         }
 
+        // Deploy Bophades modules
         {
+            address[2] memory tokens = [ohmAddress, usdcAddress];
+
             // Deploy kernel
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy modules
-            roles = new OlympusRoles(kernel);
-            treasury = new OlympusTreasury(kernel);
-            mintr = new OlympusMinter(kernel, ohmAddress);
-            price = new OlympusPricev2(kernel, uint8(18), uint32(8 hours));
+            ROLES = new OlympusRoles(kernel);
+            TRSRY = new OlympusTreasury(kernel);
+            MINTR = new OlympusMinter(kernel, ohmAddress);
+            PRICE = new OlympusPricev2(kernel, uint8(18), uint32(8 hours));
+            // SPPLY = new OlympusSupply(kernel, tokens, 0);
 
-            treasuryAddress = address(treasury);
+            // Deploy mock module writer
+            writer = PRICE.generateGodmodeFixture(type(OlympusPricev2).name);
+
+            treasuryAddress = address(TRSRY);
         }
 
         {
@@ -179,14 +199,25 @@ contract BunniManagerTest is Test {
             // Initialize system and kernel
 
             // Install modules
-            kernel.executeAction(Actions.InstallModule, address(roles));
+            kernel.executeAction(Actions.InstallModule, address(ROLES));
             kernel.executeAction(Actions.InstallModule, treasuryAddress);
-            kernel.executeAction(Actions.InstallModule, address(mintr));
-            kernel.executeAction(Actions.InstallModule, address(price));
+            kernel.executeAction(Actions.InstallModule, address(MINTR));
+            kernel.executeAction(Actions.InstallModule, address(PRICE));
+            // kernel.executeAction(Actions.InstallModule, address(SPPLY));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, bunniManagerAddress);
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+            kernel.executeAction(Actions.ActivatePolicy, address(writer));
+        }
+
+        // PRICE Submodule
+        {
+            priceSubmoduleBunni = new BunniPrice(PRICE);
+
+            vm.startPrank(writer);
+            PRICE.installSubmodule(priceSubmoduleBunni);
+            vm.stopPrank();
         }
 
         {
@@ -316,7 +347,7 @@ contract BunniManagerTest is Test {
 
     function _mockGetPrice(address asset_, uint256 price_) internal {
         vm.mockCall(
-            address(price),
+            address(PRICE),
             abi.encodeWithSignature("getPrice(address)", address(asset_)),
             abi.encode(price_)
         );
@@ -326,7 +357,7 @@ contract BunniManagerTest is Test {
         bytes memory err = abi.encodeWithSelector(PRICEv2.PRICE_AssetNotApproved.selector, asset_);
 
         vm.mockCallRevert(
-            address(price),
+            address(PRICE),
             abi.encodeWithSignature("getPrice(address)", asset_),
             err
         );
@@ -456,7 +487,7 @@ contract BunniManagerTest is Test {
 
         // Mock an incompatibility with the module
         vm.mockCall(
-            address(price),
+            address(PRICE),
             abi.encodeWithSelector(OlympusPricev2.VERSION.selector),
             abi.encode(version_, 0)
         );
@@ -496,7 +527,7 @@ contract BunniManagerTest is Test {
 
         // Mock an incompatibility with the module
         vm.mockCall(
-            address(roles),
+            address(ROLES),
             abi.encodeWithSelector(OlympusRoles.VERSION.selector),
             abi.encode(version_, 0)
         );
@@ -516,7 +547,7 @@ contract BunniManagerTest is Test {
 
         // Mock an incompatibility with the module
         vm.mockCall(
-            address(mintr),
+            address(MINTR),
             abi.encodeWithSelector(OlympusMinter.VERSION.selector),
             abi.encode(version_, 0)
         );
@@ -533,20 +564,20 @@ contract BunniManagerTest is Test {
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
 
         Permissions[] memory expectedPermissions = new Permissions[](8);
-        expectedPermissions[0] = Permissions(TRSRY_KEYCODE, treasury.withdrawReserves.selector);
+        expectedPermissions[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         expectedPermissions[1] = Permissions(
             TRSRY_KEYCODE,
-            treasury.increaseWithdrawApproval.selector
+            TRSRY.increaseWithdrawApproval.selector
         );
         expectedPermissions[2] = Permissions(
             TRSRY_KEYCODE,
-            treasury.decreaseWithdrawApproval.selector
+            TRSRY.decreaseWithdrawApproval.selector
         );
-        expectedPermissions[3] = Permissions(PRICE_KEYCODE, price.addAsset.selector);
-        expectedPermissions[4] = Permissions(MINTR_KEYCODE, mintr.mintOhm.selector);
-        expectedPermissions[5] = Permissions(MINTR_KEYCODE, mintr.burnOhm.selector);
-        expectedPermissions[6] = Permissions(MINTR_KEYCODE, mintr.increaseMintApproval.selector);
-        expectedPermissions[7] = Permissions(MINTR_KEYCODE, mintr.decreaseMintApproval.selector);
+        expectedPermissions[3] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
+        expectedPermissions[4] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        expectedPermissions[5] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        expectedPermissions[6] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        expectedPermissions[7] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
 
         Permissions[] memory perms = bunniManager.requestPermissions();
         assertEq(perms.length, expectedPermissions.length);
@@ -707,10 +738,24 @@ contract BunniManagerTest is Test {
         assertEq(poolOneTokenTwo, usdcAddress);
 
         // Check that the token has been added to PRICEv2
-        PRICEv2.Asset memory priceAsset = price.getAssetData(address(newDeployedToken));
+        PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(newDeployedToken));
         assertTrue(priceAsset.approved);
 
-        // TODO check the SPPLY submodule has the token registered
+        // Check that the token has been added to TRSRY
+        OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(newDeployedToken));
+        assertTrue(trsryAsset.approved);
+        assertEq(trsryAsset.locations.length, 1);
+        assertEq(trsryAsset.locations[0], treasuryAddress);
+        // Check that the token is categorized in TRSRY
+        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
+        assertEq(trsryPolAssets.length, 1);
+        assertEq(trsryPolAssets[0], address(newDeployedToken));
+
+        // TODO Check that the token is included in SPPLY metrics
+        // SupplyCategory categoryAsset = SPPLY.getCategoryByLocation(
+        //     address(newDeployedToken)
+        // );
+        // assertEq(fromSupplyCategory(categoryAsset), "protocol-owned-liquidity");
     }
 
     function test_registerPool_multiple() public {
@@ -852,10 +897,8 @@ contract BunniManagerTest is Test {
         assertEq(poolOneTokenTwo, usdcAddress);
 
         // Check that the token has been added to PRICEv2
-        PRICEv2.Asset memory priceAsset = price.getAssetData(address(deployedToken));
+        PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(deployedToken));
         assertTrue(priceAsset.approved);
-
-        // TODO check that the submodule is configured for use
 
         // TODO check the SPPLY submodule has the token registered
     }
@@ -1130,6 +1173,8 @@ contract BunniManagerTest is Test {
 
         // Tolerant of rounding
         assertApproxEqAbs(ohm.totalSupply(), ohmSupplyBefore + ohmReserve, 1);
+
+        // TODO assert that price is non-zero
     }
 
     function test_deposit_slippage_fuzz(uint256 amount_, uint256 slippage_) public {

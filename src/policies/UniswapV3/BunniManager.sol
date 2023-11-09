@@ -28,6 +28,8 @@ import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
+import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
+
 import "modules/PRICE/OlympusPrice.v2.sol";
 
 import "src/Kernel.sol";
@@ -268,13 +270,13 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         onlyIfActive
         onlyRole("bunni_admin")
         bunniHubSet
-        returns (IBunniToken token)
+        returns (IBunniToken)
     {
         // Check that `pool_` is an actual Uniswap V3 pool
         _assertIsValidPool(pool_);
 
         // Get the BunniToken or revert
-        token = getPoolToken(pool_);
+        IBunniToken token = getPoolToken(pool_);
 
         // Check if the pool is already registered
         for (uint256 i = 0; i < poolCount; i++) {
@@ -295,6 +297,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Add the pool to the registry
         pools.push(pool_);
         poolCount++;
+
+        // Register the pool token with PRICE and SPPLY
+        // TODO move to activateToken function. Check liquidity.
+        _addPoolTokenToPRICE(address(token));
 
         emit PoolRegistered(pool_, address(token));
 
@@ -318,7 +324,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         onlyIfActive
         onlyRole("bunni_admin")
         bunniHubSet
-        returns (IBunniToken token)
+        returns (IBunniToken)
     {
         // Check that `pool_` is an actual Uniswap V3 pool
         _assertIsValidPool(pool_);
@@ -350,20 +356,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         pools.push(pool_);
         poolCount++;
 
-        // Register the token for lookups
-        // PRICEv2.Component[] memory feeds = new PRICEv2.Component[](0);
-        // // TODO configure PRICE submodule
-
-        // PRICE.addAsset(
-        //     address(deployedToken), // asset_
-        //     false, // storeMovingAverage_
-        //     false, // useMovingAverage_
-        //     uint32(0), // movingAverageDuration_
-        //     uint48(0), // uint48 lastObservationTime_
-        //     new uint256[](0), // uint256[] memory observations_
-        //     PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
-        //     feeds //
-        // );
+        // Register the pool token with PRICE and SPPLY
+        _addPoolTokenToPRICE(address(deployedToken));
 
         return deployedToken;
     }
@@ -886,6 +880,46 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             bunniHub.updateSwapFees(key);
 
             emit PoolSwapFeesUpdated(poolAddress);
+        }
+    }
+
+    /// @notice             Registers `poolToken_` as an asset in the PRICE module
+    /// @dev                This function performs the following:
+    ///                     - Checks if the asset is already registered, and exits if so
+    ///                     - Calls `PRICE.addAsset`
+    ///
+    /// @param poolToken_   The pool token to register
+    function _addPoolTokenToPRICE(address poolToken_) internal {
+        PRICEv2.Asset memory assetData = PRICE.getAssetData(poolToken_);
+        // Skip if already configured
+        if (assetData.approved == true) {
+            return;
+        }
+
+        // Prepare price feeds
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        {
+            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(address(bunniLens));
+
+            feeds[0] = PRICEv2.Component(
+                toSubKeycode("PRICE.BNI"), // Subkeycode
+                BunniPrice.getBunniTokenPrice.selector, // Selector
+                abi.encode(params) // Params
+            );
+        }
+
+        // Add asset
+        {
+            PRICE.addAsset(
+                poolToken_, // address asset_
+                false, // bool storeMovingAverage_
+                false, // bool useMovingAverage_
+                uint32(0), // uint32 movingAverageDuration_
+                uint48(0), // uint48 lastObservationTime_
+                new uint256[](0), // uint256[] memory observations_
+                PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+                feeds // Component[] memory feeds_
+            );
         }
     }
 
