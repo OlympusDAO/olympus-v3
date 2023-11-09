@@ -167,11 +167,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         MINTR = MINTRv1(getModuleAddress(dependencies[3]));
         ROLES = ROLESv1(getModuleAddress(dependencies[4]));
 
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
         (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
         (uint8 RANGE_MAJOR, ) = RANGE.VERSION();
-        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
-        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
