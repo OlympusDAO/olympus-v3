@@ -190,21 +190,25 @@ contract HeartTest is Test {
     // ======== SETUP DEPENDENCIES ======= //
 
     function test_configureDependencies() public {
-        Keycode[] memory expectedDeps = new Keycode[](2);
+        Keycode[] memory expectedDeps = new Keycode[](3);
         expectedDeps[0] = toKeycode("PRICE");
         expectedDeps[1] = toKeycode("ROLES");
+        expectedDeps[2] = toKeycode("MINTR");
 
         Keycode[] memory deps = heart.configureDependencies();
         // Check: configured dependencies storage
         assertEq(deps.length, expectedDeps.length);
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+        assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](1);
-
+        Permissions[] memory expectedPerms = new Permissions[](3);
         expectedPerms[0] = Permissions(PRICE.KEYCODE(), PRICE.storePrice.selector);
+        expectedPerms[1] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
+        expectedPerms[2] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
+
         Permissions[] memory perms = heart.requestPermissions();
         // Check: permission storage
         assertEq(perms.length, expectedPerms.length);

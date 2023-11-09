@@ -25,13 +25,14 @@ import {FullMath} from "libraries/FullMath.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter, OHM} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
+import {OlympusSupply, Category as SupplyCategory} from "modules/SPPLY/OlympusSupply.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Operator} from "policies/RBS/Operator.sol";
 import {BondCallback} from "policies/Bonds/BondCallback.sol";
 import {Appraiser, IAppraiser as IAppraiserMetric} from "policies/OCA/Appraiser.sol";
+import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
 
 import "src/Kernel.sol";
 
@@ -60,6 +61,7 @@ contract BondCallbackTest is Test {
     address internal bob;
     address internal guardian;
     address internal policy;
+    address internal dao;
 
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
@@ -84,6 +86,7 @@ contract BondCallbackTest is Test {
     BondCallback internal callback;
     RolesAdmin internal rolesAdmin;
     Appraiser internal appraiser;
+    Bookkeeper internal bookkeeper;
 
     // Bond market ids to reference
     uint256 internal regBond;
@@ -103,11 +106,13 @@ contract BondCallbackTest is Test {
         userCreator = new UserFactory();
         {
             /// Deploy bond system to test against
-            address[] memory users = userCreator.create(4);
+            address[] memory users = userCreator.create(5);
             alice = users[0];
             bob = users[1];
             guardian = users[2];
             policy = users[3];
+            dao = users[4];
+
             auth = new RolesAuthority(guardian, SolmateAuthority(address(0)));
 
             /// Deploy the bond system
@@ -161,6 +166,8 @@ contract BondCallbackTest is Test {
             rolesAdmin = new RolesAdmin(kernel);
             /// Deploy bond callback
             callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
+            // Deploy new bookkeeper
+            bookkeeper = new Bookkeeper(kernel);
             // Deploy new appraiser
             appraiser = new Appraiser(kernel);
             /// Deploy operator
@@ -207,9 +214,15 @@ contract BondCallbackTest is Test {
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
             kernel.executeAction(Actions.ActivatePolicy, address(appraiser));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+            kernel.executeAction(Actions.ActivatePolicy, address(bookkeeper));
         }
+
         {
             /// Configure access control
+
+            /// Bookkeeper roles
+            rolesAdmin.grantRole("bookkeeper_policy", policy);
+            rolesAdmin.grantRole("bookkeeper_admin", guardian);
 
             /// Operator ROLES
             rolesAdmin.grantRole("operator_operate", guardian);
@@ -222,6 +235,12 @@ contract BondCallbackTest is Test {
             rolesAdmin.grantRole("callback_whitelist", policy);
             rolesAdmin.grantRole("callback_admin", guardian);
         }
+
+        // Configure SPPLY, so that when the Operator calls Appraiser, it does not fail
+        vm.prank(policy);
+        bookkeeper.categorize(dao, SupplyCategory.wrap("dao"));
+        // Mint OHM into a non-protocol wallet, so that there is circulating supply
+        ohm.mint(alice, 1e9);
 
         /// Set operator on the callback
         vm.prank(guardian);
