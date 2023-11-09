@@ -7,10 +7,13 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
+import {MockGohm} from "test/mocks/OlympusMocks.sol";
 
 import "src/Submodules.sol";
 import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
 import {OlympusPricev2, PRICEv2, PriceSubmodule} from "modules/PRICE/OlympusPrice.v2.sol";
+import {OlympusSupply, SPPLYv1, Category as SupplyCategory} from "modules/SPPLY/OlympusSupply.sol";
+import {OlympusTreasury, TRSRYv1_1, CategoryGroup as AssetCategoryGroup, Category as AssetCategory} from "modules/TRSRY/OlympusTreasury.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
@@ -46,6 +49,40 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 // [X] upgradeSubmodule
 //     [X] only "bookkeeper_admin" role can call
 //     [X] inputs to PRICEv2.upgradeSubmodule are correct
+//
+// SPPLYv1 Configuration
+// [X] addAsset
+//     [X] only "bookkeeper_policy" role can call
+//     [X] inputs to TRSRY.addAsset are correct
+// [X] addAssetLocation
+//     [X] only "bookkeeper_policy" role can call
+//     [X] inputs to TRSRY.addAssetLocation are correct
+// [X] removeAssetLocation
+//     [X] only "bookkeeper_policy" role can call
+//     [X] inputs to TRSRY.removeAssetLocation are correct
+// [X] addAssetCategoryGroup
+//     [X] only "bookkeeper_policy" role can call
+//     [X] inputs to TRSRY.addAssetCategoryGroup are correct
+// [X] addAssetCategory
+//     [X] only "bookkeeper_policy" role can call
+//     [X] inputs to TRSRY.addAssetCategory are correct
+// [X] categorize
+//     [X] only "bookkeeper_policy" role can call
+//     [X] inputs to TRSRY.categorize are correct
+//
+// TRSRYv1.1 Configuration
+// [X] addCategory
+//     [X] only "bookkeeper_policy" role can call
+//     [X] inputs to SPPLY.addCategory are correct
+// [X] removeCategory
+//     [X] only "bookkeeper_policy" role can call
+//     [X] inputs to SPPLY.removeCategory are correct
+// [X] categorize
+//     [X] only "bookkeeper_policy" role can call
+//     [X] inputs to SPPLY.categorize are correct
+
+type Category is bytes32;
+type CategoryGroup is bytes32;
 
 contract MockStrategy is PriceSubmodule {
     constructor(Module parent_) Submodule(parent_) {}
@@ -85,12 +122,15 @@ contract BookkeeperTest is Test {
     MockPriceFeed internal ethUsdPriceFeed;
 
     MockERC20 internal ohm;
+    MockGohm internal gohm;
     MockERC20 internal reserve;
     MockERC20 internal weth;
 
     Kernel internal kernel;
     Bookkeeper internal bookkeeper;
     OlympusPricev2 internal PRICE;
+    OlympusSupply internal SPPLY;
+    OlympusTreasury internal TRSRY;
     RolesAdmin internal rolesAdmin;
     OlympusRoles internal ROLES;
     ChainlinkPriceFeeds internal chainlinkPrice;
@@ -101,6 +141,7 @@ contract BookkeeperTest is Test {
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
+    uint256 internal constant GOHM_INDEX = 300000000000;
     uint8 internal constant DECIMALS = 18;
 
     function setUp() public {
@@ -112,10 +153,12 @@ contract BookkeeperTest is Test {
         admin = users[0];
         policy = users[1];
 
-        // Deploy mocks
-
         // Tokens
+        gohm = new MockGohm(GOHM_INDEX);
         ohm = new MockERC20("Olympus", "OHM", 9);
+        reserve = new MockERC20("Reserve", "RSV", 18);
+        weth = new MockERC20("Wrapped ETH", "WETH", 18);
+        address[2] memory olympusTokens = [address(ohm), address(gohm)];
 
         // Price Feeds
         ethUsdPriceFeed = new MockPriceFeed();
@@ -143,6 +186,8 @@ contract BookkeeperTest is Test {
         kernel = new Kernel();
         PRICE = new OlympusPricev2(kernel, DECIMALS, OBSERVATION_FREQUENCY);
         ROLES = new OlympusRoles(kernel);
+        SPPLY = new OlympusSupply(kernel, olympusTokens, 0);
+        TRSRY = new OlympusTreasury(kernel);
         bookkeeper = new Bookkeeper(kernel);
         rolesAdmin = new RolesAdmin(kernel);
 
@@ -153,6 +198,8 @@ contract BookkeeperTest is Test {
         // Install contracts on kernel
         kernel.executeAction(Actions.InstallModule, address(ROLES));
         kernel.executeAction(Actions.InstallModule, address(PRICE));
+        kernel.executeAction(Actions.InstallModule, address(SPPLY));
+        kernel.executeAction(Actions.InstallModule, address(TRSRY));
         kernel.executeAction(Actions.ActivatePolicy, address(bookkeeper));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
@@ -162,8 +209,8 @@ contract BookkeeperTest is Test {
 
         // Install base submodules on PRICE
         vm.startPrank(admin);
-        bookkeeper.installSubmodule(chainlinkPrice);
-        bookkeeper.installSubmodule(strategy);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), chainlinkPrice);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), strategy);
         vm.stopPrank();
     }
 
@@ -244,19 +291,26 @@ contract BookkeeperTest is Test {
 
     /* ========== Bookkeeper Setup and Permissions ========== */
     function test_configureDependencies() public {
-        Keycode[] memory expectedDeps = new Keycode[](2);
+        Keycode[] memory expectedDeps = new Keycode[](4);
         expectedDeps[0] = toKeycode("ROLES");
         expectedDeps[1] = toKeycode("PRICE");
+        expectedDeps[2] = toKeycode("SPPLY");
+        expectedDeps[3] = toKeycode("TRSRY");
 
         Keycode[] memory deps = bookkeeper.configureDependencies();
         assertEq(deps.length, expectedDeps.length);
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+        assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+        assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](7);
+        Permissions[] memory expectedPerms = new Permissions[](16);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
+        Keycode SPPLY_KEYCODE = toKeycode("SPPLY");
+        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+        // PRICE Permissions
         expectedPerms[0] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
         expectedPerms[1] = Permissions(PRICE_KEYCODE, PRICE.removeAsset.selector);
         expectedPerms[2] = Permissions(PRICE_KEYCODE, PRICE.updateAssetPriceFeeds.selector);
@@ -264,6 +318,17 @@ contract BookkeeperTest is Test {
         expectedPerms[4] = Permissions(PRICE_KEYCODE, PRICE.updateAssetMovingAverage.selector);
         expectedPerms[5] = Permissions(PRICE_KEYCODE, PRICE.installSubmodule.selector);
         expectedPerms[6] = Permissions(PRICE_KEYCODE, PRICE.upgradeSubmodule.selector);
+        // SPPLY Permissions
+        expectedPerms[7] = Permissions(SPPLY_KEYCODE, SPPLY.addCategory.selector);
+        expectedPerms[8] = Permissions(SPPLY_KEYCODE, SPPLY.removeCategory.selector);
+        expectedPerms[9] = Permissions(SPPLY_KEYCODE, SPPLY.categorize.selector);
+        // TRSRY Permissions
+        expectedPerms[10] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
+        expectedPerms[11] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
+        expectedPerms[12] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
+        expectedPerms[13] = Permissions(TRSRY_KEYCODE, TRSRY.addCategoryGroup.selector);
+        expectedPerms[14] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
+        expectedPerms[15] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
 
         Permissions[] memory perms = bookkeeper.requestPermissions();
         assertEq(perms.length, expectedPerms.length);
@@ -274,7 +339,7 @@ contract BookkeeperTest is Test {
     }
 
     /* ========== PRICEv2 Configuration ========== */
-    function testRevert_addAsset_onlyPolicy(address user_) public {
+    function testRevert_addAssetPrice_onlyPolicy(address user_) public {
         vm.assume(user_ != policy);
 
         // Setup data to add asset
@@ -563,7 +628,7 @@ contract BookkeeperTest is Test {
             abi.encode(1)
         );
         vm.prank(admin);
-        bookkeeper.installSubmodule(newStrategy);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
 
         // Try to update strategy for asset on PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
@@ -615,7 +680,7 @@ contract BookkeeperTest is Test {
             abi.encode(1)
         );
         vm.prank(admin);
-        bookkeeper.installSubmodule(newStrategy);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
 
         // Update strategy for asset on PRICEv2 with policy account
         vm.prank(policy);
@@ -770,7 +835,7 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.installSubmodule(newStrategy);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
 
         // Confirm submodule was not installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -778,7 +843,7 @@ contract BookkeeperTest is Test {
 
         // Try to install submodule with admin account, expect success
         vm.prank(admin);
-        bookkeeper.installSubmodule(newStrategy);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
 
         // Confirm submodule was installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -795,7 +860,7 @@ contract BookkeeperTest is Test {
 
         // Install new submodule with admin account
         vm.prank(admin);
-        bookkeeper.installSubmodule(newStrategy);
+        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
 
         // Confirm submodule was installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -822,7 +887,7 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.upgradeSubmodule(newChainlink);
+        bookkeeper.upgradeSubmodule(toKeycode("PRICE"), newChainlink);
 
         // Confirm chainlink submodule was not upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -833,7 +898,7 @@ contract BookkeeperTest is Test {
 
         // Try to upgrade chainlink submodule with admin account, expect success
         vm.prank(admin);
-        bookkeeper.upgradeSubmodule(newChainlink);
+        bookkeeper.upgradeSubmodule(toKeycode("PRICE"), newChainlink);
 
         // Confirm chainlink submodule was upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -856,7 +921,7 @@ contract BookkeeperTest is Test {
 
         // Upgrade chainlink submodule with admin account, expect success
         vm.prank(admin);
-        bookkeeper.upgradeSubmodule(newChainlink);
+        bookkeeper.upgradeSubmodule(toKeycode("PRICE"), newChainlink);
 
         // Confirm chainlink submodule was upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -864,5 +929,282 @@ contract BookkeeperTest is Test {
         (major, minor) = Submodule(chainlink).VERSION();
         assertEq(major, 2);
         assertEq(minor, 0);
+    }
+
+    /* ========== SPPLYv1 Configuration ========== */
+
+    function testRevert_addCategory_onlyPolicy(address user_) public {
+        vm.assume(user_ != policy);
+
+        // Try to add category to SPPLYv1 with non-policy account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("bookkeeper_policy")
+        );
+        vm.expectRevert(err);
+        vm.prank(user_);
+        bookkeeper.addCategory(SupplyCategory.wrap("test_supply_category"), false, 0x00000000);
+    }
+
+    function test_addCategory() public {
+        SupplyCategory[] memory initCategories = SPPLY.getCategories();
+
+        vm.prank(policy);
+        bookkeeper.addCategory(SupplyCategory.wrap("test_supply_category"), false, "");
+
+        // Check SPPLY categories
+        SupplyCategory[] memory postCategories = SPPLY.getCategories();
+        assertEq(initCategories.length + 1, postCategories.length);
+        assertEq(
+            SupplyCategory.unwrap(postCategories[postCategories.length - 1]),
+            bytes32("test_supply_category")
+        );
+    }
+
+    function testRevert_removeCategory_onlyPolicy(address user_) public {
+        vm.assume(user_ != policy);
+
+        // Try to remove category from SPPLYv1 with non-policy account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("bookkeeper_policy")
+        );
+        vm.expectRevert(err);
+        vm.prank(user_);
+        bookkeeper.removeCategory(SupplyCategory.wrap("test_supply_category"));
+    }
+
+    function test_removeCategory(address user_) public {
+        SupplyCategory[] memory initCategories = SPPLY.getCategories();
+
+        vm.startPrank(policy);
+        bookkeeper.addCategory(SupplyCategory.wrap("test_supply_category"), false, "");
+        bookkeeper.removeCategory(SupplyCategory.wrap("test_supply_category"));
+
+        // Check SPPLY categories
+        SupplyCategory[] memory postCategories = SPPLY.getCategories();
+        assertEq(initCategories.length, postCategories.length);
+    }
+
+    function testRevert_categorize_onlyPolicy(address user_) public {
+        vm.assume(user_ != policy);
+
+        // Try to remove category from SPPLYv1 with non-policy account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("bookkeeper_policy")
+        );
+        vm.expectRevert(err);
+        vm.prank(user_);
+        bookkeeper.categorize(address(0), SupplyCategory.wrap("test_supply_category"));
+    }
+
+    function test_categorize(address user_) public {
+        vm.startPrank(policy);
+        bookkeeper.addCategory(SupplyCategory.wrap("test_supply_category"), false, "");
+        bookkeeper.categorize(address(1), SupplyCategory.wrap("test_supply_category"));
+
+        // Check SPPLY category locations
+        address[] memory locations = SPPLY.getLocationsByCategory(
+            SupplyCategory.wrap("test_supply_category")
+        );
+        assertEq(locations.length, 1);
+        assertEq(locations[0], address(1));
+    }
+
+    /* ========== TRSRYv1.1 Configuration ========== */
+
+    function testRevert_addAsset_onlyPolicy(address user_) public {
+        vm.assume(user_ != policy);
+        address[] memory locations = new address[](2);
+        locations[0] = address(1);
+        locations[1] = address(2);
+
+        // Try to add category to SPPLYv1 with non-policy account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("bookkeeper_policy")
+        );
+        vm.expectRevert(err);
+        vm.prank(user_);
+        bookkeeper.addAsset(address(reserve), locations);
+    }
+
+    function test_addAsset() public {
+        address[] memory locations = new address[](2);
+        locations[0] = address(1);
+        locations[1] = address(2);
+
+        vm.prank(policy);
+        bookkeeper.addAsset(address(reserve), locations);
+
+        // Check TRSRY assets
+        address[] memory assets = TRSRY.getAssets();
+        assertEq(assets.length, 1);
+        assertEq(assets[0], address(reserve));
+
+        // Check TRSRY asset locations
+        TRSRYv1_1.Asset memory assetData = TRSRY.getAssetData(address(reserve));
+        assertEq(assetData.locations.length, 2);
+        assertEq(assetData.locations[0], address(1));
+        assertEq(assetData.locations[1], address(2));
+        assertEq(assetData.approved, true);
+        assertEq(assetData.updatedAt, uint48(block.timestamp));
+    }
+
+    function testRevert_addAssetLocation_onlyPolicy(address user_) public {
+        vm.assume(user_ != policy);
+
+        // Try to remove category from SPPLYv1 with non-policy account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("bookkeeper_policy")
+        );
+        vm.expectRevert(err);
+        vm.prank(user_);
+        bookkeeper.addAssetLocation(address(reserve), address(2));
+    }
+
+    function test_addAssetLocation() public {
+        address[] memory locations = new address[](1);
+        locations[0] = address(1);
+
+        vm.prank(policy);
+        bookkeeper.addAsset(address(reserve), locations);
+
+        // Cache TRSRY asset locations
+        TRSRYv1_1.Asset memory initAssetData = TRSRY.getAssetData(address(reserve));
+
+        vm.prank(policy);
+        bookkeeper.addAssetLocation(address(reserve), address(2));
+
+        // Check TRSRY asset locations
+        TRSRYv1_1.Asset memory postAssetData = TRSRY.getAssetData(address(reserve));
+        assertEq(initAssetData.locations.length + 1, postAssetData.locations.length);
+        assertEq(postAssetData.locations[1], address(2));
+    }
+
+    function testRevert_removeAssetLocation_onlyPolicy(address user_) public {
+        vm.assume(user_ != policy);
+
+        // Try to remove category from SPPLYv1 with non-policy account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("bookkeeper_policy")
+        );
+        vm.expectRevert(err);
+        vm.prank(user_);
+        bookkeeper.removeAssetLocation(address(reserve), address(0));
+    }
+
+    function test_removeAssetLocation() public {
+        address[] memory locations = new address[](2);
+        locations[0] = address(1);
+        locations[1] = address(2);
+
+        vm.prank(policy);
+        bookkeeper.addAsset(address(reserve), locations);
+
+        // Cache TRSRY asset locations
+        TRSRYv1_1.Asset memory initAssetData = TRSRY.getAssetData(address(reserve));
+
+        vm.prank(policy);
+        bookkeeper.removeAssetLocation(address(reserve), address(2));
+
+        // Check TRSRY asset locations
+        TRSRYv1_1.Asset memory postAssetData = TRSRY.getAssetData(address(reserve));
+        assertEq(initAssetData.locations.length - 1, postAssetData.locations.length);
+    }
+
+    function testRevert_addAssetCategoryGroup_onlyPolicy(address user_) public {
+        vm.assume(user_ != policy);
+
+        // Try to remove category from SPPLYv1 with non-policy account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("bookkeeper_policy")
+        );
+        vm.expectRevert(err);
+        vm.prank(user_);
+        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
+    }
+
+    function test_addAssetCategoryGroup(address user_) public {
+        vm.prank(policy);
+        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
+
+        // Check TRSRY asset category groups
+        AssetCategoryGroup group0 = TRSRY.categoryGroups(0);
+        assertEq(AssetCategoryGroup.unwrap(group0), bytes32("liquidity-preference"));
+        AssetCategoryGroup group1 = TRSRY.categoryGroups(1);
+        assertEq(AssetCategoryGroup.unwrap(group1), bytes32("value-baskets"));
+        AssetCategoryGroup group2 = TRSRY.categoryGroups(2);
+        assertEq(AssetCategoryGroup.unwrap(group2), bytes32("market-sensitivity"));
+        AssetCategoryGroup group3 = TRSRY.categoryGroups(3);
+        assertEq(AssetCategoryGroup.unwrap(group3), bytes32("test-asset-category-group"));
+    }
+
+    function testRevert_addAssetCategory_onlyPolicy(address user_) public {
+        vm.assume(user_ != policy);
+
+        // Try to remove category from SPPLYv1 with non-policy account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("bookkeeper_policy")
+        );
+        vm.expectRevert(err);
+        vm.prank(user_);
+        bookkeeper.addAssetCategory(
+            AssetCategory.wrap("test-asset-category"),
+            AssetCategoryGroup.wrap("test-asset-category-group")
+        );
+    }
+
+    function test_addAssetCategory(address user_) public {
+        vm.startPrank(policy);
+        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
+        bookkeeper.addAssetCategory(
+            AssetCategory.wrap("test-asset-category"),
+            AssetCategoryGroup.wrap("test-asset-category-group")
+        );
+
+        // Check TRSRY asset category for a given category group
+        AssetCategoryGroup group = TRSRY.categoryToGroup(AssetCategory.wrap("test-asset-category"));
+        assertEq(AssetCategoryGroup.unwrap(group), bytes32("test-asset-category-group"));
+    }
+
+    function testRevert_categorizeAsset_onlyPolicy(address user_) public {
+        vm.assume(user_ != policy);
+
+        // Try to remove category from SPPLYv1 with non-policy account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("bookkeeper_policy")
+        );
+        vm.expectRevert(err);
+        vm.prank(user_);
+        bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("test-asset-category"));
+    }
+
+    function test_categorizeAsset() public {
+        address[] memory locations = new address[](2);
+        locations[0] = address(1);
+        locations[1] = address(2);
+
+        vm.startPrank(policy);
+        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
+        bookkeeper.addAssetCategory(
+            AssetCategory.wrap("test-asset-category"),
+            AssetCategoryGroup.wrap("test-asset-category-group")
+        );
+        bookkeeper.addAsset(address(reserve), locations);
+        bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("test-asset-category"));
+
+        // Check TRSRY asset by category
+        address[] memory assets = TRSRY.getAssetsByCategory(
+            AssetCategory.wrap("test-asset-category")
+        );
+        assertEq(assets.length, 1);
+        assertEq(assets[0], address(reserve));
     }
 }

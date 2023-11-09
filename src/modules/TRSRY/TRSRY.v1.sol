@@ -113,3 +113,103 @@ abstract contract TRSRYv1 is Module {
     /// @notice Re-activate withdrawals after shutdown.
     function activate() external virtual;
 }
+
+type Category is bytes32;
+
+// solhint-disable-next-line func-visibility
+function toCategory(bytes32 category_) pure returns (Category) {
+    return Category.wrap(category_);
+}
+
+// solhint-disable-next-line func-visibility
+function fromCategory(Category category_) pure returns (bytes32) {
+    return Category.unwrap(category_);
+}
+
+type CategoryGroup is bytes32;
+
+// solhint-disable-next-line func-visibility
+function toCategoryGroup(bytes32 categoryGroup_) pure returns (CategoryGroup) {
+    return CategoryGroup.wrap(categoryGroup_);
+}
+
+// solhint-disable-next-line func-visibility
+function fromCategoryGroup(CategoryGroup categoryGroup_) pure returns (bytes32) {
+    return CategoryGroup.unwrap(categoryGroup_);
+}
+
+abstract contract TRSRYv1_1 is TRSRYv1 {
+    // ========== EVENTS ========== //
+    event BalanceStored(address asset_, uint256 balance_, uint48 timestamp_);
+
+    // ========== ERRORS ========== //
+    error TRSRY_AssetNotApproved(address asset_);
+    error TRSRY_AssetNotContract(address asset_);
+    error TRSRY_AssetAlreadyApproved(address asset_);
+    error TRSRY_BalanceCallFailed(address asset_);
+    error TRSRY_InvalidParams(uint256 index, bytes params);
+    error TRSRY_CategoryGroupDoesNotExist(CategoryGroup categoryGroup_);
+    error TRSRY_CategoryGroupExists(CategoryGroup categoryGroup_);
+    error TRSRY_CategoryExists(Category category_);
+    error TRSRY_CategoryDoesNotExist(Category category_);
+    error TRSRY_InvalidCalculation(address asset_, Variant variant_);
+
+    // ========== STATE ========== //
+    enum Variant {
+        CURRENT,
+        LAST
+    }
+
+    struct Asset {
+        bool approved;
+        uint48 updatedAt;
+        uint256 lastBalance;
+        address[] locations;
+    }
+
+    address[] public assets;
+    CategoryGroup[] public categoryGroups;
+    mapping(Category => CategoryGroup) public categoryToGroup;
+    mapping(CategoryGroup => Category[]) public groupToCategories;
+    mapping(address => mapping(CategoryGroup => Category)) public categorization;
+    mapping(address => Asset) public assetData;
+
+    ////////////////////////////////////////////////////////////////
+    //                      DATA FUNCTIONS                        //
+    ////////////////////////////////////////////////////////////////
+
+    // ========== ASSET INFORMATION ========== //
+
+    function getAssets() external view virtual returns (address[] memory);
+
+    function getAssetData(address asset_) external view virtual returns (Asset memory);
+
+    function getAssetsByCategory(Category category_) public view virtual returns (address[] memory);
+
+    /// @notice Returns the requested variant of the protocol balance of the asset and the timestamp at which it was calculated
+    function getAssetBalance(
+        address asset_,
+        Variant variant_
+    ) public view virtual returns (uint256, uint48);
+
+    /// @notice Calculates and stores the current balance of an asset
+    function storeBalance(address asset_) external virtual returns (uint256);
+
+    function getCategoryBalance(
+        Category category_,
+        Variant variant_
+    ) external view virtual returns (uint256, uint48);
+
+    // ========== DATA MANAGEMENT ========== //
+    function addAsset(address asset_, address[] calldata locations_) external virtual;
+
+    function addAssetLocation(address asset_, address location_) external virtual;
+
+    function removeAssetLocation(address asset_, address location_) external virtual;
+
+    function addCategoryGroup(CategoryGroup categoryGroup_) external virtual;
+
+    function addCategory(Category category_, CategoryGroup categoryGroup_) external virtual;
+
+    function categorize(address asset_, Category category_) external virtual;
+}
