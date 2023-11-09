@@ -108,9 +108,9 @@ interface IBunniManager {
 
     // =========  ADMIN FUNCTIONS ========= //
 
-    /// @notice             Sets the BunniHub contract
-    /// @param newBunniHub_ The new address to use
-    function setBunniHub(address newBunniHub_) external;
+    /// @notice             Sets the BunniLens and BunniHub contracts
+    /// @param newBunniLens_ The new address to use
+    function setBunniLens(address newBunniLens_) external;
 
     /// @notice             Sets the owner of the BunniHub contract
     /// @dev                This can be used when a new policy is deployed that needs to manage the

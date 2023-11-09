@@ -12,6 +12,7 @@ import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
 import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
 import {BunniHub} from "src/external/bunni/BunniHub.sol";
+import {BunniLens} from "src/external/bunni/BunniLens.sol";
 import {IERC20} from "src/external/bunni/interfaces/IERC20.sol";
 
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
@@ -52,9 +53,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     //                                      EVENTS                                                //
     //============================================================================================//
 
-    /// @notice             Emitted when the BunniHub is set on the policy
+    /// @notice             Emitted when the BunniLens and BunniHub is set on the policy
     /// @param newBunniHub_ The address of the new BunniHub
-    event BunniHubSet(address newBunniHub_);
+    /// @param newBunniLens_ The address of the new BunniLens
+    event BunniLensSet(address newBunniHub_, address newBunniLens_);
 
     /// @notice             Emitted when the owner of the BunniHub is set on the policy
     /// @param bunniHub_    The address of the BunniHub
@@ -154,6 +156,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice     Address of the BunniHub instance that this policy interfaces with
     BunniHub public bunniHub;
 
+    /// @notice     Address of the BunniLens instance that this policy interfaces with
+    BunniLens public bunniLens;
+
     /// @notice     Timestamp of the last harvest (UTC, in seconds)
     uint48 public lastHarvest;
 
@@ -189,8 +194,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     //                                      POLICY SETUP                                          //
     //============================================================================================//
 
-    /// @dev    The BunniHub contract cannot be passed into the constructor, as it requires the owner to
-    ///         be set to this contract. Therefore, the BunniHub must be set manually after deployment.
+    /// @dev    The BunniLens and BunniHub contracts cannot be passed into the constructor, as it requires the owner to
+    ///         be set to this contract. Therefore, the BunniLens must be set manually after deployment using `setBunniLens`.
     constructor(
         Kernel kernel_,
         uint256 harvestRewardMax_,
@@ -256,17 +261,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - No BunniToken has been deployed for the pool
     ///             - `pool_` is not a Uniswap V3 pool
     ///             - A price cannot be accessed for either token in the pool
-    function registerPool(
-        address pool_
-    )
-        external
-        override
-        nonReentrant
+    function registerPool(address pool_) external override nonReentrant
         onlyIfActive
         onlyRole("bunni_admin")
-        bunniHubSet
-        returns (IBunniToken token)
-    {
+        bunniHubSet returns (IBunniToken token) {
         // Check that `pool_` is an actual Uniswap V3 pool
         _assertIsValidPool(pool_);
 
@@ -573,14 +571,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // As `poolUnderlyingTokens` is a unique list, this will not sweep the same token twice.
         // It also does not contain any zero addresses, which would cause a revert in `sweepTokens`.
         bunniHub.sweepTokens(poolUnderlyingTokens, address(this));
-
+        
         // Burn/transfer any swept tokens
         for (uint256 i = 0; i < poolUnderlyingTokens.length; i++) {
             IERC20 poolUnderlyingToken = poolUnderlyingTokens[i];
-            _transferOrBurn(
-                address(poolUnderlyingToken),
-                poolUnderlyingToken.balanceOf(address(this))
-            );
+            _transferOrBurn(address(poolUnderlyingToken), poolUnderlyingToken.balanceOf(address(this)));
         }
 
         // Mint the OHM reward and transfer it to the caller
@@ -683,17 +678,22 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
     ///             - The caller is unauthorized
-    ///             - `newBunniHub_` is the zero address
-    function setBunniHub(
-        address newBunniHub_
+    ///             - `newBunniLens_` is the zero address
+    ///             - The `hub` state variable on `newBunniLens_` is not set
+    function setBunniLens(
+        address newBunniLens_
     ) external override nonReentrant onlyRole("bunni_admin") {
-        if (address(newBunniHub_) == address(0)) {
-            revert BunniManager_Params_InvalidAddress(newBunniHub_);
+        if (address(newBunniLens_) == address(0)) {
+            revert BunniManager_Params_InvalidAddress(newBunniLens_);
         }
 
-        bunniHub = BunniHub(newBunniHub_);
+        bunniLens = BunniLens(newBunniLens_);
+        bunniHub = BunniHub(address(bunniLens.hub()));
+        if (address(bunniHub) == address(0)) {
+            revert BunniManager_Params_InvalidAddress(newBunniLens_);
+        }
 
-        emit BunniHubSet(newBunniHub_);
+        emit BunniLensSet(address(bunniHub), newBunniLens_);
     }
 
     /// @inheritdoc IBunniManager
