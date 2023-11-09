@@ -209,14 +209,17 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
 
     // ========== ASSET INFORMATION ========== //
 
+    /// @inheritdoc TRSRYv1_1
     function getAssets() external view override returns (address[] memory) {
         return assets;
     }
 
+    /// @inheritdoc TRSRYv1_1
     function getAssetData(address asset_) external view override returns (Asset memory) {
         return assetData[asset_];
     }
 
+    /// @inheritdoc TRSRYv1_1
     function getAssetsByCategory(
         Category category_
     ) public view override returns (address[] memory) {
@@ -251,6 +254,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         return categoryAssets;
     }
 
+    /// @inheritdoc TRSRYv1_1
     function getAssetBalance(
         address asset_,
         Variant variant_
@@ -292,6 +296,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         return (assetData[asset_].lastBalance, assetData[asset_].updatedAt);
     }
 
+    /// @inheritdoc TRSRYv1_1
     function storeBalance(address asset_) external override permissioned returns (uint256) {
         Asset storage asset = assetData[asset_];
 
@@ -311,6 +316,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         return balance;
     }
 
+    /// @inheritdoc TRSRYv1_1
     function getCategoryBalance(
         Category category_,
         Variant variant_
@@ -345,6 +351,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
 
     // ========== DATA MANAGEMENT ========== //
 
+    /// @inheritdoc TRSRYv1_1
     function addAsset(
         address asset_,
         address[] calldata locations_
@@ -378,6 +385,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
 
     // TODO remove asset?
 
+    /// @inheritdoc TRSRYv1_1
     function addAssetLocation(address asset_, address location_) external override permissioned {
         Asset storage asset = assetData[asset_];
 
@@ -401,6 +409,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         asset.locations.push(location_);
     }
 
+    /// @inheritdoc TRSRYv1_1
     function removeAssetLocation(address asset_, address location_) external override permissioned {
         Asset storage asset = assetData[asset_];
 
@@ -422,6 +431,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         }
     }
 
+    /// @inheritdoc TRSRYv1_1
     function addCategoryGroup(CategoryGroup group_) external override permissioned {
         // Check if the category group exists
         if (_categoryGroupExists(group_)) revert TRSRY_CategoryGroupExists(group_);
@@ -430,6 +440,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         categoryGroups.push(group_);
     }
 
+    /// @inheritdoc TRSRYv1_1
     function addCategory(Category category_, CategoryGroup group_) external override permissioned {
         // Check if the category group exists
         if (!_categoryGroupExists(group_)) revert TRSRY_CategoryGroupDoesNotExist(group_);
@@ -459,6 +470,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         return false;
     }
 
+    /// @inheritdoc TRSRYv1_1
     function categorize(address asset_, Category category_) external override permissioned {
         // Check that asset is initialized
         if (!assetData[asset_].approved) revert TRSRY_InvalidParams(0, abi.encode(asset_));
