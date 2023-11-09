@@ -13,8 +13,8 @@ contract RolesAdmin is Policy {
 
     // =========  ERRORS ========= //
 
-    error OnlyAdmin();
-    error OnlyNewAdmin();
+    error Roles_OnlyAdmin();
+    error Roles_OnlyNewAdmin();
 
     // =========  STATE ========= //
 
@@ -39,6 +39,13 @@ contract RolesAdmin is Policy {
         dependencies[0] = toKeycode("ROLES");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
+
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1]);
+        if (ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     function requestPermissions() external view override returns (Permissions[] memory requests) {
@@ -54,7 +61,7 @@ contract RolesAdmin is Policy {
     //============================================================================================//
 
     modifier onlyAdmin() {
-        if (msg.sender != admin) revert OnlyAdmin();
+        if (msg.sender != admin) revert Roles_OnlyAdmin();
         _;
     }
 
@@ -76,7 +83,7 @@ contract RolesAdmin is Policy {
     }
 
     function pullNewAdmin() external {
-        if (msg.sender != newAdmin) revert OnlyNewAdmin();
+        if (msg.sender != newAdmin) revert Roles_OnlyNewAdmin();
         admin = newAdmin;
         newAdmin = address(0);
         emit NewAdminPulled(admin);

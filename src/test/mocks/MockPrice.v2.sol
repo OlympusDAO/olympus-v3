@@ -14,6 +14,21 @@ contract MockPrice is PRICEv2 {
         decimals = decimals_;
     }
 
+    // ========== KERNEL FUNCTIONS ========== //
+
+    /// @inheritdoc Module
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("PRICE");
+    }
+
+    /// @inheritdoc Module
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+        major = 2;
+        minor = 0;
+    }
+
+    // ========== FUNCTIONS ========== //
+
     function setTimestamp(uint48 timestamp_) public {
         timestamp = timestamp_;
     }
@@ -93,10 +108,6 @@ contract MockPrice is PRICEv2 {
 
         // Return asset price / base price
         return ((assetPrice * 10 ** decimals) / basePrice, timestamp);
-    }
-
-    function KEYCODE() public pure override returns (Keycode) {
-        return toKeycode("PRICE");
     }
 
     function setPriceDecimals(uint8 decimals_) public {

@@ -107,6 +107,9 @@ contract TRSRYv1_1Test is Test {
     MockERC20 public weth;
     MockERC20 public tkn;
 
+    UserFactory public userCreator;
+    address internal alice;
+
     uint256 internal constant INITIAL_TOKEN_AMOUNT = 200_000_000e18;
 
     function setUp() public {
@@ -119,7 +122,13 @@ contract TRSRYv1_1Test is Test {
         weth = new MockERC20("WETH", "WETH", 18);
         tkn = new MockERC20("TKN", "TKN", 18);
 
-        // Create godmode
+        {
+            userCreator = new UserFactory();
+            address[] memory users = userCreator.create(1);
+            alice = users[0];
+        }
+
+        // Generate test fixture policy addresses with different authorizations
         godmode = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
 
         // Initialize module and godmode
@@ -843,12 +852,12 @@ contract TRSRYv1_1Test is Test {
         TRSRY.addAsset(address(reserve), new address[](0));
     }
 
-    function testRevert_addAsset_AssetNotContract(address notAsset_) public {
+    function testRevert_addAsset_AssetNotContract() public {
         /// Try to add an address which is not a contract
-        bytes memory err = abi.encodeWithSignature("TRSRY_AssetNotContract(address)", notAsset_);
+        bytes memory err = abi.encodeWithSignature("TRSRY_AssetNotContract(address)", alice);
         vm.expectRevert(err);
         vm.prank(godmode);
-        TRSRY.addAsset(notAsset_, new address[](0));
+        TRSRY.addAsset(alice, new address[](0));
     }
 
     // -- Test: addAssetLocation -------------------------------

@@ -92,9 +92,9 @@ contract HeartTest is Test {
     MockERC20 internal reserve;
 
     Kernel internal kernel;
-    MockPrice internal price;
-    OlympusRoles internal roles;
-    OlympusMinter internal mintr;
+    MockPrice internal PRICE;
+    OlympusRoles internal ROLES;
+    OlympusMinter internal MINTR;
 
     MockOperator internal operator;
     MockAppraiser internal appraiser;
@@ -133,15 +133,15 @@ contract HeartTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy modules (some mocks)
-            price = new MockPrice(kernel, uint8(18), uint32(8 hours));
-            roles = new OlympusRoles(kernel);
-            mintr = new OlympusMinter(kernel, address(ohm));
+            PRICE = new MockPrice(kernel, uint8(18), uint32(8 hours));
+            ROLES = new OlympusRoles(kernel);
+            MINTR = new OlympusMinter(kernel, address(ohm));
 
             // Configure prices on mock price module
-            price.setPrice(address(ohm), 100e18);
-            price.setPrice(address(reserve), 1e18);
-            price.setMovingAverage(address(ohm), 100e18);
-            price.setMovingAverage(address(reserve), 1e18);
+            PRICE.setPrice(address(ohm), 100e18);
+            PRICE.setPrice(address(reserve), 1e18);
+            PRICE.setMovingAverage(address(ohm), 100e18);
+            PRICE.setMovingAverage(address(reserve), 1e18);
         }
 
         {
@@ -171,9 +171,9 @@ contract HeartTest is Test {
             // Initialize system and kernel
 
             // Install modules
-            kernel.executeAction(Actions.InstallModule, address(price));
-            kernel.executeAction(Actions.InstallModule, address(roles));
-            kernel.executeAction(Actions.InstallModule, address(mintr));
+            kernel.executeAction(Actions.InstallModule, address(PRICE));
+            kernel.executeAction(Actions.InstallModule, address(ROLES));
+            kernel.executeAction(Actions.InstallModule, address(MINTR));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
@@ -182,8 +182,39 @@ contract HeartTest is Test {
 
             // Configure access control
 
-            // Heart roles
+            // Heart ROLES
             rolesAdmin.grantRole("heart_admin", policy);
+        }
+    }
+
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](3);
+        expectedDeps[0] = toKeycode("PRICE");
+        expectedDeps[1] = toKeycode("ROLES");
+        expectedDeps[2] = toKeycode("MINTR");
+
+        Keycode[] memory deps = heart.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+        assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](3);
+        expectedPerms[0] = Permissions(PRICE.KEYCODE(), PRICE.storePrice.selector);
+        expectedPerms[1] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
+        expectedPerms[2] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
+
+        Permissions[] memory perms = heart.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
         }
     }
 
@@ -194,7 +225,7 @@ contract HeartTest is Test {
     //     [X] distributor is called and the rebase is triggered
     //     [X] cannot beat if not active
     //     [X] cannot beat if not enough time has passed
-    //     [X] fails if price or operator revert
+    //     [X] fails if PRICE or operator revert
     //     [X] reward auction functions correctly based on time since beat available
     // [X] Mints rewardToken correctly
 
@@ -265,7 +296,7 @@ contract HeartTest is Test {
         vm.warp(block.timestamp + frequency);
 
         // Set the price mock to revert with price zero
-        price.setPrice(address(ohm), 0);
+        PRICE.setPrice(address(ohm), 0);
 
         // Try to beat the heart and expect revert
         heart.beat();
@@ -315,7 +346,7 @@ contract HeartTest is Test {
         // Balance of this contract has increased by the reward amount.
         assertEq(ohm.balanceOf(address(this)), startBalance + expectedReward);
         // Mint capabilities are limited to the reward amount when the beat happens.
-        assertEq(mintr.mintApproval(address(heart)), 0);
+        assertEq(MINTR.mintApproval(address(heart)), 0);
     }
 
     // =========  VIEW FUNCTIONS ========= //

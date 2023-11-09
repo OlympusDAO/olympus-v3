@@ -92,13 +92,15 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
         MINTR = MINTRv1(getModuleAddress(dependencies[2]));
 
-        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
         (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
-        if (PRICE_MAJOR != 2 || MINTR_MAJOR != 1 || ROLES_MAJOR != 1)
-            revert Heart_WrongModuleVersion([1, 1, 1]);
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 2, 1]);
+        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 2 || ROLES_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
