@@ -708,7 +708,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             revert BunniManager_Params_InvalidAddress(newOwner_);
         }
 
-        bunniHub.setOwner(newOwner_);
+        bunniHub.transferOwnership(newOwner_);
 
         emit BunniHubOwnerSet(address(bunniHub), newOwner_);
     }
