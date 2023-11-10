@@ -212,5 +212,10 @@ abstract contract TRSRYv1_1 is TRSRYv1 {
 
     function addCategory(Category category_, CategoryGroup categoryGroup_) external virtual;
 
+    /// @notice Mark an asset as a member of specific categories
+    /// @dev    This categorization is done within a category group. So for example if an asset is categorized
+    ///         as 'liquid' which is part of the 'liquidity-preference' group, but then is changed to 'illiquid'
+    ///         which falls under the same 'liquidity-preference' group, the asset will lose its 'liquid' categorization
+    ///         and gain the 'illiquid' categorization (all under the 'liquidity-preference' group).
     function categorize(address asset_, Category category_) external virtual;
 }
