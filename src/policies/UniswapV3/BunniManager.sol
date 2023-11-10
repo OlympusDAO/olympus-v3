@@ -895,9 +895,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param pool_    The address of the Uniswap V3 pool
     /// @return         The BunniKey identifier
     function _getBunniKey(address pool_) internal view returns (BunniKey memory) {
-        // Get the pool fee and use it to calculate the correct tick spacing
-        uint24 poolFee = IUniswapV3Pool(pool_).fee();
-        int24 tickSpacing = int24(poolFee) / TICK_SPACING_DIVISOR;
+        int24 tickSpacing = IUniswapV3Pool(pool_).tickSpacing();
 
         return
             BunniKey({

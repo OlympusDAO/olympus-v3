@@ -1033,7 +1033,7 @@ contract BunniManagerTest is Test {
         bunniManager.deployPoolToken(address(pool));
     }
 
-    function test_deployPoolToken_differentPoolFee() public {
+    function test_deployPoolToken_poolFee3000() public {
         // Create a pool with a different fee
         uint24 poolFee = 3000;
         IUniswapV3Pool poolTwo = IUniswapV3Pool(
@@ -1056,6 +1056,80 @@ contract BunniManagerTest is Test {
         assertEq(poolCount, 1);
         address poolOne = bunniManager.pools(0);
         assertEq(poolOne, address(poolTwo));
+
+        // === Deposit === //
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        // Will revert if there is a problem
+        vm.prank(policy);
+        bunniManager.deposit(
+            address(poolTwo),
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+    }
+
+    function test_deployPoolToken_poolFee100() public {
+        uint24 poolFee = 100;
+
+        // 0.01% / 100 pool fee isn't enabled in UniswapV3Factory, so add it
+        // Values from: https://support.uniswap.org/hc/en-us/articles/21069524840589-What-is-a-tick-when-providing-liquidity-
+        uniswapFactory.enableFeeAmount(poolFee, 1);
+
+        // Create a pool with a different fee
+        IUniswapV3Pool poolTwo = IUniswapV3Pool(
+            uniswapFactory.createPool(ohmAddress, usdcAddress, poolFee)
+        );
+        poolTwo.initialize(OHM_USDC_SQRTPRICEX96);
+
+        vm.prank(policy);
+        IBunniToken deployedToken = bunniManager.deployPoolToken(address(poolTwo));
+
+        int24 tick = _getTick(poolFee, true);
+        console2.log("tick", tick);
+
+        // Check details of token
+        assertEq(address(deployedToken.pool()), address(poolTwo));
+        assertEq(deployedToken.tickLower(), -1 * tick);
+        assertEq(deployedToken.tickUpper(), tick);
+
+        // Check that the pool is registered
+        uint256 poolCount = bunniManager.poolCount();
+        assertEq(poolCount, 1);
+        address poolOne = bunniManager.pools(0);
+        assertEq(poolOne, address(poolTwo));
+
+        // === Deposit === //
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Mint the non-OHM token to the TRSRY
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        // Will revert if there is a problem
+        vm.prank(policy);
+        bunniManager.deposit(
+            address(poolTwo),
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+
+        console2.log("pool spacing", poolTwo.tickSpacing());
+        console2.log("pool fee", poolTwo.fee());
+        console2.log("token tick lower", deployedToken.tickLower());
+        console2.log("token tick upper", deployedToken.tickUpper());
     }
 
     // [X] activatePoolToken
@@ -1460,7 +1534,7 @@ contract BunniManagerTest is Test {
 
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
-        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployPoolToken(address(pool));
 
         // Mint tokens to the TRSRY
         vm.prank(policy);
