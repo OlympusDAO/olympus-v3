@@ -250,12 +250,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 2, 1, 1, 1]);
-        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 2 || ROLES_MAJOR != 1 || SPPLY_MAJOR != 1 || TRSRY_MAJOR != 1)
-            revert Policy_WrongModuleVersion(expected);
+        if (
+            MINTR_MAJOR != 1 ||
+            PRICE_MAJOR != 2 ||
+            ROLES_MAJOR != 1 ||
+            SPPLY_MAJOR != 1 ||
+            TRSRY_MAJOR != 1
+        ) revert Policy_WrongModuleVersion(expected);
 
         // Check TRSRY minor version
-        if (TRSRY_MINOR < 1)
-            revert Policy_WrongModuleVersion(expected);
+        if (TRSRY_MINOR < 1) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
@@ -1066,26 +1070,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             if (locationExists) {
                 revert BunniManager_TokenActivated(pool_, toKeycode("TRSRY"));
             }
-        }
-        else {
+        } else {
             // Add the asset to TRSRY
-            TRSRY.addAsset(
-                poolToken_,
-                new address[](0)
-            );
+            TRSRY.addAsset(poolToken_, new address[](0));
         }
 
         // Add TRSRY as a location
-        TRSRY.addAssetLocation(
-            poolToken_,
-            address(TRSRY)
-        );
+        TRSRY.addAssetLocation(poolToken_, address(TRSRY));
 
         // Categorize the asset
-        TRSRY.categorize(
-            poolToken_,
-            toTreasuryCategory("protocol-owned-liquidity")
-        );
+        TRSRY.categorize(poolToken_, toTreasuryCategory("protocol-owned-liquidity"));
     }
 
     /// @notice             Registers `poolToken_` as an asset in the SPPLY module
@@ -1098,10 +1092,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     function _addPoolTokenToSPPLY(address pool_, address poolToken_) internal {
         bytes memory hasBunniTokenResult = SPPLY.execOnSubmodule(
             toSubKeycode("SPPLY.BNI"),
-            abi.encodeWithSelector(
-                BunniSupply.hasBunniToken.selector,
-                poolToken_
-            )
+            abi.encodeWithSelector(BunniSupply.hasBunniToken.selector, poolToken_)
         );
         bool hasBunniToken = abi.decode(hasBunniTokenResult, (bool));
         // Revert if already activated
@@ -1166,10 +1157,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     function _removePoolTokenFromSPPLY(address poolToken_) internal {
         bytes memory hasBunniTokenResult = SPPLY.execOnSubmodule(
             toSubKeycode("SPPLY.BNI"),
-            abi.encodeWithSelector(
-                BunniSupply.hasBunniToken.selector,
-                poolToken_
-            )
+            abi.encodeWithSelector(BunniSupply.hasBunniToken.selector, poolToken_)
         );
         bool hasBunniToken = abi.decode(hasBunniTokenResult, (bool));
         // Exit if not activated
@@ -1180,10 +1168,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Remove the asset
         SPPLY.execOnSubmodule(
             toSubKeycode("SPPLY.BNI"),
-            abi.encodeWithSelector(
-                BunniSupply.removeBunniToken.selector,
-                poolToken_
-            )
+            abi.encodeWithSelector(BunniSupply.removeBunniToken.selector, poolToken_)
         );
     }
 

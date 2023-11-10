@@ -120,8 +120,7 @@ contract BunniSupply is SupplySubmodule {
     /// @param token_   The address of the token
     /// @return         True if the token has been registered, otherwise false
     function hasBunniToken(address token_) external view returns (bool) {
-        if (token_ == address(0) || !_inTokenArray(token_))
-            return false;
+        if (token_ == address(0) || !_inTokenArray(token_)) return false;
 
         return true;
     }
