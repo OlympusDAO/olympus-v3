@@ -1094,7 +1094,6 @@ contract BunniManagerTest is Test {
         IBunniToken deployedToken = bunniManager.deployPoolToken(address(poolTwo));
 
         int24 tick = _getTick(poolFee, true);
-        console2.log("tick", tick);
 
         // Check details of token
         assertEq(address(deployedToken.pool()), address(poolTwo));
@@ -1125,11 +1124,6 @@ contract BunniManagerTest is Test {
             USDC_DEPOSIT,
             SLIPPAGE_DEFAULT
         );
-
-        console2.log("pool spacing", poolTwo.tickSpacing());
-        console2.log("pool fee", poolTwo.fee());
-        console2.log("token tick lower", deployedToken.tickLower());
-        console2.log("token tick upper", deployedToken.tickUpper());
     }
 
     // [X] activatePoolToken
