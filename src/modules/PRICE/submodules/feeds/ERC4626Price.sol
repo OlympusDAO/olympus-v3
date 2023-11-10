@@ -12,7 +12,6 @@ contract ERC4626Price is PriceSubmodule {
     /// @notice     Any token or pool with a decimal scale greater than this would result in an overflow
     uint8 internal constant BASE_10_MAX_EXPONENT = 38;
 
-    // TODO
     // [X] handle different decimals between ERC4626 and underlying
     // [X] assert underlying decimals within bounds
     // [X] assert underlying is set
@@ -60,7 +59,7 @@ contract ERC4626Price is PriceSubmodule {
     function getPriceFromUnderlying(
         address asset_,
         uint8 outputDecimals_,
-        bytes calldata params_
+        bytes calldata
     ) external view returns (uint256) {
         // Check output decimals
         if (outputDecimals_ > BASE_10_MAX_EXPONENT) {

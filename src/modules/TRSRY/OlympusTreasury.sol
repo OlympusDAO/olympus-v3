@@ -383,8 +383,6 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         (asset.lastBalance, asset.updatedAt) = _getCurrentBalance(asset_);
     }
 
-    // TODO remove asset?
-
     /// @inheritdoc TRSRYv1_1
     function addAssetLocation(address asset_, address location_) external override permissioned {
         Asset storage asset = assetData[asset_];
@@ -453,8 +451,6 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         categoryToGroup[category_] = group_;
         groupToCategories[group_].push(category_);
     }
-
-    // TODO remove category?
 
     function _categoryGroupExists(CategoryGroup categoryGroup_) internal view returns (bool) {
         // It's expected that the number of category groups will be fairly small
