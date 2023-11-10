@@ -151,6 +151,8 @@ contract BunniManagerTest is Test {
 
     event PoolTokenActivated(address indexed pool_, address indexed token_);
 
+    event PoolTokenDeactivated(address indexed pool_, address indexed token_);
+
     event PoolSwapFeesUpdated(address indexed pool_);
 
     function setUp() public {
@@ -643,18 +645,21 @@ contract BunniManagerTest is Test {
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
         Keycode SPPLY_KEYCODE = toKeycode("SPPLY");
 
-        Permissions[] memory expectedPermissions = new Permissions[](11);
+        Permissions[] memory expectedPermissions = new Permissions[](14);
         expectedPermissions[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         expectedPermissions[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         expectedPermissions[2] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
         expectedPermissions[3] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
-        expectedPermissions[4] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
-        expectedPermissions[5] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
-        expectedPermissions[6] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        expectedPermissions[7] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        expectedPermissions[8] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
-        expectedPermissions[9] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
-        expectedPermissions[10] = Permissions(SPPLY_KEYCODE, SPPLY.execOnSubmodule.selector);
+        expectedPermissions[4] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
+        expectedPermissions[5] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
+        expectedPermissions[6] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+        expectedPermissions[7] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
+        expectedPermissions[8] = Permissions(PRICE_KEYCODE, PRICE.removeAsset.selector);
+        expectedPermissions[9] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        expectedPermissions[10] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        expectedPermissions[11] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        expectedPermissions[12] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
+        expectedPermissions[13] = Permissions(SPPLY_KEYCODE, SPPLY.execOnSubmodule.selector);
 
         Permissions[] memory perms = bunniManager.requestPermissions();
         assertEq(perms.length, expectedPermissions.length);
@@ -1113,7 +1118,7 @@ contract BunniManagerTest is Test {
         bunniManager.activatePoolToken(address(pool));
     }
 
-    function test_activatePoolToken_registeredWithTrsryReverts() public {
+    function test_activatePoolToken_registeredWithTrsryLocationsReverts() public {
         uint256 amount = 100e6;
         uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
         uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
@@ -1238,6 +1243,63 @@ contract BunniManagerTest is Test {
         bunniManager.activatePoolToken(address(pool));
     }
 
+    function test_activatePoolToken_registeredTreasuryAsset() public {
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+
+        // Mint tokens to the TRSRY
+        vm.prank(policy);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(
+            address(pool),
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+
+        // Register the pool token in the TRSRY
+        // This mimics the case where the token has been registered with the TRSRY (since it cannot be removed)
+        address[] memory trsryLocations = new address[](0);
+        vm.prank(writeTRSRY);
+        TRSRY.addAsset(address(poolToken), trsryLocations);
+
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit PoolTokenActivated(address(pool), address(poolToken));
+
+        vm.prank(policy);
+        bunniManager.activatePoolToken(address(pool));
+
+        // Check that the token has been added to TRSRY
+        OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
+        assertTrue(trsryAsset.approved);
+        assertEq(trsryAsset.locations.length, 1);
+        assertEq(trsryAsset.locations[0], treasuryAddress);
+        // Check that the token is categorized in TRSRY
+        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
+        assertEq(trsryPolAssets.length, 1);
+        assertEq(trsryPolAssets[0], address(poolToken));
+
+        // Check that the token has been added to PRICEv2
+        PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
+        assertTrue(priceAsset.approved);
+        // Check that the price is non-zero
+        assertTrue(PRICE.getPrice(address(poolToken)) > 0);
+
+        // Check that the token is included in SPPLY metrics
+        uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
+        assertTrue(polo > 0);
+    }
+
     function test_activatePoolToken() public {
         uint256 amount = 100e6;
         uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
@@ -1289,16 +1351,174 @@ contract BunniManagerTest is Test {
         assertTrue(polo > 0);
     }
 
-    // [ ] deactivatePoolToken
-    //  [ ] reverts if caller is unauthorized
-    //  [ ] reverts if inactive
-    //  [ ] reverts if bunniHub not set
-    //  [ ] reverts if token not deployed
-    //  [ ] reverts if has liquidity
-    //  [ ] success - unregisters with TRSRY, PRICE, SPPLY
-    //  [ ] success if not registered with TRSRY
-    //  [ ] success if not registered with PRICE
-    //  [ ] success if not registered with SPPLY
+    // [X] deactivatePoolToken
+    //  [X] reverts if caller is unauthorized
+    //  [X] reverts if inactive
+    //  [X] reverts if bunniHub not set
+    //  [X] reverts if token not deployed
+    //  [X] reverts if has liquidity
+    //  [X] success - unregisters with TRSRY, PRICE, SPPLY
+    //  [X] success if not registered with TRSRY, PRICE, SPPLY
+
+    function test_deactivatePoolToken_unauthorizedReverts() public {
+        _expectRevert_unauthorized();
+
+        vm.prank(alice);
+        bunniManager.deactivatePoolToken(address(pool));
+    }
+
+    function test_deactivatePoolToken_inactiveReverts() public {
+        // Create a new BunniManager policy, but don't install/activate it
+        BunniManager newBunniManager = _createNewBunniManager();
+
+        _expectRevert_inactive();
+
+        vm.prank(policy);
+        newBunniManager.deactivatePoolToken(address(pool));
+    }
+
+    function test_deactivatePoolToken_bunniHubNotSetReverts() public {
+        // Create a new BunniManager policy, without the BunniHub set
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        _expectRevert_bunniHubNotSet();
+
+        vm.prank(policy);
+        newBunniManager.deactivatePoolToken(address(pool));
+    }
+
+    function test_deactivatePoolToken_tokenNotDeployedReverts() public {
+        _expectRevert_poolNotFound(address(pool));
+
+        vm.prank(policy);
+        bunniManager.deactivatePoolToken(address(pool));
+    }
+
+    function test_deactivatePoolToken_hasLiquidityReverts() public {
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+
+        // Mint tokens to the TRSRY
+        vm.prank(policy);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(
+            address(pool),
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_PoolHasLiquidity.selector,
+            address(pool)
+        );
+        vm.expectRevert(err);
+
+        vm.prank(policy);
+        bunniManager.deactivatePoolToken(address(pool));
+    }
+
+    function test_deactivatePoolToken() public {
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+
+        // Mint tokens to the TRSRY
+        vm.prank(policy);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        uint256 bunniTokenShares = bunniManager.deposit(
+            address(pool),
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+
+        // Activate the token
+        vm.prank(policy);
+        bunniManager.activatePoolToken(address(pool));
+
+        // Withdraw
+        vm.prank(policy);
+        bunniManager.withdraw(
+            address(pool),
+            bunniTokenShares,
+            SLIPPAGE_DEFAULT
+        );
+
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, false);
+        emit PoolTokenDeactivated(address(pool), address(poolToken));
+
+        // Deactivate
+        vm.prank(policy);
+        bunniManager.deactivatePoolToken(address(pool));
+
+        // Check that the token has NOT been removed from TRSRY (since we can't actually do that)
+        OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
+        assertTrue(trsryAsset.approved);
+        // Locations are removed
+        assertEq(trsryAsset.locations.length, 0);
+        // Check that the token is NOT categorized in TRSRY
+        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
+        assertEq(trsryPolAssets.length, 0);
+
+        // Check that the token has been removed from PRICEv2
+        PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
+        assertFalse(priceAsset.approved);
+
+        // Check that the token is NOT included in SPPLY metrics
+        uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
+        assertEq(polo, 0);
+    }
+
+    function test_deactivatePoolToken_ignoresUnregistered() public {
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+
+        // Do NOT deposit or activate, so that TRSRY/PRICE/SPPLY are not registered
+
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, false);
+        emit PoolTokenDeactivated(address(pool), address(poolToken));
+
+        // Deactivate
+        vm.prank(policy);
+        bunniManager.deactivatePoolToken(address(pool));
+
+        // Check that the token has NOT been added to TRSRY
+        OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
+        assertFalse(trsryAsset.approved);
+        assertEq(trsryAsset.locations.length, 0);
+        // Check that the token is NOT categorized in TRSRY
+        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
+        assertEq(trsryPolAssets.length, 0);
+
+        // Check that the token has NOT been added to PRICEv2
+        PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
+        assertFalse(priceAsset.approved);
+
+        // Check that the token is NOT included in SPPLY metrics
+        uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
+        assertEq(polo, 0);
+    }
 
     // [X] deposit
     //  [X] caller is unauthorized

@@ -90,6 +90,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param token_           The address of the BunniToken
     event PoolTokenActivated(address indexed pool_, address indexed token_);
 
+    /// @notice                 Emitted when a BunniToken (ERC20-compatible) token is deactivated for `pool_`
+    /// @param pool_            The address of the Uniswap V3 pool
+    /// @param token_           The address of the BunniToken
+    event PoolTokenDeactivated(address indexed pool_, address indexed token_);
+
     /// @notice                 Emitted when the swap fees of a pool are updated
     /// @param pool_            The address of the Uniswap V3 pool
     event PoolSwapFeesUpdated(address indexed pool_);
@@ -260,18 +265,21 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
         Keycode SPPLY_KEYCODE = SPPLY.KEYCODE();
 
-        requests = new Permissions[](11);
+        requests = new Permissions[](14);
         requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
         requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
-        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
-        requests[5] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
-        requests[6] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        requests[7] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        requests[8] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
-        requests[9] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
-        requests[10] = Permissions(SPPLY_KEYCODE, SPPLY.execOnSubmodule.selector);
+        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
+        requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
+        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+        requests[7] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
+        requests[8] = Permissions(PRICE_KEYCODE, PRICE.removeAsset.selector);
+        requests[9] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        requests[10] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[11] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        requests[12] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
+        requests[13] = Permissions(SPPLY_KEYCODE, SPPLY.execOnSubmodule.selector);
     }
 
     //============================================================================================//
@@ -422,9 +430,44 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         emit PoolTokenActivated(pool_, poolTokenAddress);
     }
 
+    /// @inheritdoc IBunniManager
+    /// @dev        This function will deactivate the pool token by de-registering it in TRSRY, PRICE and SPPLY.
+    ///             If the asset is not registered in any of those modules, it will not raise an error as the outcome is the same.
+    ///
+    ///             This function reverts if:
+    ///             - The policy is inactive
+    ///             - The caller is unauthorized
+    ///             - The `bunniHub` state variable is not set
+    ///             - An ERC20 token for `pool_` has not been deployed/registered
+    ///             - The position representing `pool_` has liquidity
     function deactivatePoolToken(
         address pool_
-    ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {}
+    ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
+        // Create a BunniKey
+        BunniKey memory key = _getBunniKey(pool_);
+
+        // Check that the token has been deployed
+        IBunniToken poolToken = bunniHub.getBunniToken(key);
+        address poolTokenAddress = address(poolToken);
+        if (poolTokenAddress == address(0)) {
+            revert BunniManager_PoolNotFound(pool_);
+        }
+
+        // Check that the position has NO liquidity
+        (uint128 liquidity, , , , ) = key.pool.positions(
+            keccak256(abi.encodePacked(address(bunniHub), key.tickLower, key.tickUpper))
+        );
+        if (liquidity != 0) {
+            revert BunniManager_PoolHasLiquidity(pool_);
+        }
+
+        // De-register the pool token
+        _removePoolTokenFromPRICE(poolTokenAddress);
+        _removePoolTokenFromTRSRY(poolTokenAddress);
+        _removePoolTokenFromSPPLY(poolTokenAddress);
+
+        emit PoolTokenDeactivated(pool_, poolTokenAddress);
+    }
 
     // =========  LIQUIDITY ========= //
 
@@ -995,23 +1038,40 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice             Registers `poolToken_` as an asset in the TRSRY module
     /// @dev                This function performs the following:
     ///                     - Checks if the asset is already registered, and reverts if so
-    ///                     - Calls `TRSRY.addAsset`
+    ///                     - Adds the asset to TRSRY (if needed)
+    ///                     - Adds the TRSRY location to the asset
+    ///                     - Categorizes the asset
     ///
     /// @param pool_        The pool to register
     /// @param poolToken_   The pool token to register
     function _addPoolTokenToTRSRY(address pool_, address poolToken_) internal {
         TRSRYv1_1.Asset memory assetData = TRSRY.getAssetData(poolToken_);
-        // Revert if already activated
+        // Revert if the asset exists and the location is already registered (which would indicate an inconsistent activation state)
         if (assetData.approved == true) {
-            revert BunniManager_TokenActivated(pool_, toKeycode("TRSRY"));
+            bool locationExists = false;
+            for (uint256 i = 0; i < assetData.locations.length; i++) {
+                if (assetData.locations[i] == address(TRSRY)) {
+                    locationExists = true;
+                    break;
+                }
+            }
+
+            if (locationExists) {
+                revert BunniManager_TokenActivated(pool_, toKeycode("TRSRY"));
+            }
+        }
+        else {
+            // Add the asset to TRSRY
+            TRSRY.addAsset(
+                poolToken_,
+                new address[](0)
+            );
         }
 
-        // Register the asset with TRSRY, located in TRSRY
-        address[] memory locations = new address[](1);
-        locations[0] = address(TRSRY);
-        TRSRY.addAsset(
+        // Add TRSRY as a location
+        TRSRY.addAssetLocation(
             poolToken_,
-            locations
+            address(TRSRY)
         );
 
         // Categorize the asset
@@ -1049,6 +1109,77 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 BunniSupply.addBunniToken.selector,
                 poolToken_,
                 address(bunniLens)
+            )
+        );
+    }
+
+    /// @notice             Deregisters `poolToken_` as an asset in the PRICE module
+    /// @dev                This function performs the following:
+    ///                     - Checks if the asset is registered, or exits if not
+    ///                     - Calls `PRICE.removeAsset`
+    ///
+    /// @param poolToken_   The pool token to deregister
+    function _removePoolTokenFromPRICE(address poolToken_) internal {
+        PRICEv2.Asset memory assetData = PRICE.getAssetData(poolToken_);
+        // Exit if not activated
+        if (assetData.approved == false) {
+            return;
+        }
+
+        // Remove the asset
+        PRICE.removeAsset(poolToken_);
+    }
+
+    /// @notice             Deregisters `poolToken_` as an asset in the TRSRY module
+    /// @dev                This function performs the following:
+    ///                     - Checks if the asset is registered, or exits if not
+    ///                     - Removes the TRSRY location from the asset
+    ///                     - Removes the categorization of the asset
+    ///
+    /// @param poolToken_   The pool token to deregister
+    function _removePoolTokenFromTRSRY(address poolToken_) internal {
+        TRSRYv1_1.Asset memory assetData = TRSRY.getAssetData(poolToken_);
+        // Exit if not activated
+        if (assetData.approved == false) {
+            return;
+        }
+
+        // Remove the TRSRY location from the asset
+        TRSRY.removeAssetLocation(poolToken_, address(TRSRY));
+
+        // Remove the categorization of the asset
+        TRSRY.categorize(
+            poolToken_,
+            toTreasuryCategory(0)
+        );
+    }
+
+    /// @notice             Deregisters `poolToken_` as an asset in the SPPLY module
+    /// @dev                This function performs the following:
+    ///                     - Checks if the asset is registered, or exits if not
+    ///                     - Calls `BunniSupply.removeBunniToken`
+    ///
+    /// @param poolToken_   The pool token to deregister
+    function _removePoolTokenFromSPPLY(address poolToken_) internal {
+        bytes memory hasBunniTokenResult = SPPLY.execOnSubmodule(
+            toSubKeycode("SPPLY.BNI"),
+            abi.encodeWithSelector(
+                BunniSupply.hasBunniToken.selector,
+                poolToken_
+            )
+        );
+        bool hasBunniToken = abi.decode(hasBunniTokenResult, (bool));
+        // Exit if not activated
+        if (!hasBunniToken) {
+            return;
+        }
+
+        // Remove the asset
+        SPPLY.execOnSubmodule(
+            toSubKeycode("SPPLY.BNI"),
+            abi.encodeWithSelector(
+                BunniSupply.removeBunniToken.selector,
+                poolToken_
             )
         );
     }
