@@ -22,14 +22,18 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
 
         // Configure Asset Categories and Groups
 
-        // Liquidity Preference: Liquid, Illiquid
+        // Create category groups
         categoryGroups.push(toCategoryGroup("liquidity-preference"));
+        categoryGroups.push(toCategoryGroup("value-baskets"));
+        categoryGroups.push(toCategoryGroup("market-sensitivity"));
+
+        // Liquidity Preference: Liquid, Illiquid
         categoryToGroup[toCategory("liquid")] = toCategoryGroup("liquidity-preference");
         groupToCategories[toCategoryGroup("liquidity-preference")].push(toCategory("liquid"));
         categoryToGroup[toCategory("illiquid")] = toCategoryGroup("liquidity-preference");
         groupToCategories[toCategoryGroup("liquidity-preference")].push(toCategory("illiquid"));
+        
         // Value Baskets: Reserves, Strategic, Protocol-Owned Liquidity
-        categoryGroups.push(toCategoryGroup("value-baskets"));
         categoryToGroup[toCategory("reserves")] = toCategoryGroup("value-baskets");
         groupToCategories[toCategoryGroup("value-baskets")].push(toCategory("reserves"));
         categoryToGroup[toCategory("strategic")] = toCategoryGroup("value-baskets");
@@ -38,8 +42,8 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         groupToCategories[toCategoryGroup("value-baskets")].push(
             toCategory("protocol-owned-liquidity")
         );
+
         // Market Sensitivity: Stable, Volatile
-        categoryGroups.push(toCategoryGroup("market-sensitivity"));
         categoryToGroup[toCategory("stable")] = toCategoryGroup("market-sensitivity");
         groupToCategories[toCategoryGroup("market-sensitivity")].push(toCategory("stable"));
         categoryToGroup[toCategory("volatile")] = toCategoryGroup("market-sensitivity");
@@ -273,6 +277,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     function _getCurrentBalance(address asset_) internal view returns (uint256, uint48) {
+        // Cast asset to ERC20
         Asset memory asset = assetData[asset_];
         ERC20 token = ERC20(asset_);
 
@@ -329,18 +334,21 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         // Get category assets
         address[] memory categoryAssets = getAssetsByCategory(category_);
 
-        // Get balance for each asset and add to total
+        // Get balance for each asset in the category and add to total
         uint256 len = categoryAssets.length;
         uint256 balance;
         uint48 time;
         for (uint256 i; i < len; ) {
             (uint256 assetBalance, uint48 assetTime) = getAssetBalance(categoryAssets[i], variant_);
             balance += assetBalance;
+
+            // Get the most outdated time
             if (i == 0) {
                 time = assetTime;
             } else if (assetTime < time) {
                 time = assetTime;
             }
+            
             unchecked {
                 ++i;
             }
