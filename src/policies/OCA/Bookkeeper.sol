@@ -260,6 +260,10 @@ contract Bookkeeper is Policy, RolesConsumer {
     /// @notice Categorize a location in a category
     /// @param asset_ The address of the asset to categorize
     /// @param category_ The category to add the asset to
+    /// @dev This categorization is done within a category group. So for example if an asset is categorized
+    ///      as 'liquid' which is part of the 'liquidity-preference' group, but then is changed to 'illiquid'
+    ///      which falls under the same 'liquidity-preference' group, the asset will lose its 'liquid' categorization
+    ///      and gain the 'illiquid' categorization (all under the 'liquidity-preference' group).
     function categorizeAsset(
         address asset_,
         AssetCategory category_

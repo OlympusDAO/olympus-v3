@@ -6,6 +6,7 @@ import "src/modules/PRICE/PRICE.v2.sol";
 contract MockPrice is PRICEv2 {
     mapping(address => uint256) internal prices;
     mapping(address => uint256) internal movingAverages;
+    mapping(address => uint256[]) internal observations;
     uint48 internal timestamp;
 
     constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) Module(kernel_) {
@@ -39,6 +40,10 @@ contract MockPrice is PRICEv2 {
 
     function setMovingAverage(address asset, uint256 movingAverage) public {
         movingAverages[asset] = movingAverage;
+    }
+
+    function setObservations(address asset, uint256[] memory observations_) public {
+        observations[asset] = observations_;
     }
 
     function getPrice(address asset_) external view override returns (uint256) {
@@ -117,7 +122,22 @@ contract MockPrice is PRICEv2 {
     // Required by interface, but not implemented
     function getAssets() external view override returns (address[] memory) {}
 
-    function getAssetData(address asset_) external view override returns (Asset memory) {}
+    function getAssetData(address asset_) external view override returns (Asset memory) {
+        return
+            Asset({
+                approved: true,
+                storeMovingAverage: true,
+                useMovingAverage: false,
+                movingAverageDuration: 30 days,
+                nextObsIndex: 0,
+                numObservations: 90,
+                lastObservationTime: uint48(block.timestamp),
+                cumulativeObs: 0,
+                obs: observations[asset_],
+                strategy: bytes(""),
+                feeds: bytes("")
+            });
+    }
 
     function storePrice(address asset_) external override {
         getPrice(asset_, Variant.CURRENT);
