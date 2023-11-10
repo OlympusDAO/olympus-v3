@@ -361,7 +361,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Check that `pool_` is an actual Uniswap V3 pool
         _assertIsValidPool(pool_);
 
-        // Create a BunniKey
+        // Get the appropriate BunniKey representing the position
         BunniKey memory key = _getBunniKey(pool_);
 
         // Check if a token for the pool has been deployed already
@@ -404,7 +404,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     function activatePoolToken(
         address pool_
     ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
-        // Create a BunniKey
+        // Get the appropriate BunniKey representing the position
         BunniKey memory key = _getBunniKey(pool_);
 
         // Check that the token has been deployed
@@ -443,7 +443,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     function deactivatePoolToken(
         address pool_
     ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
-        // Create a BunniKey
+        // Get the appropriate BunniKey representing the position
         BunniKey memory key = _getBunniKey(pool_);
 
         // Check that the token has been deployed
@@ -503,7 +503,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         bunniHubSet
         returns (uint256)
     {
-        // Create a BunniKey
+        // Get the appropriate BunniKey representing the position
         BunniKey memory key = _getBunniKey(pool_);
 
         // Check that the token has been deployed
@@ -517,9 +517,18 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         ERC20 token0 = ERC20(pool.token0());
         ERC20 token1 = ERC20(pool.token1());
 
-        bool token0IsTokenA = address(token0) == tokenA_;
-        uint256 token0Amount = token0IsTokenA ? amountA_ : amountB_;
-        uint256 token1Amount = token0IsTokenA ? amountB_ : amountA_;
+        // Determine token amounts
+        uint256 token0Amount;
+        uint256 token1Amount;
+        {
+            if (address(token0) == tokenA_) {
+                token0Amount = amountA_;
+                token1Amount = amountB_;
+            } else {
+                token0Amount = amountB_;
+                token1Amount = amountA_;
+            }
+        }
 
         // Move tokens into the policy
         _transferOrMint(address(token0), token0Amount);
@@ -569,7 +578,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         uint256 shares_,
         uint16 slippageBps_
     ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
-        // Create a BunniKey
+        // Get the appropriate BunniKey representing the position
         BunniKey memory key = _getBunniKey(pool_);
 
         IBunniToken existingToken = bunniHub.getBunniToken(key);
@@ -710,7 +719,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - The `bunniHub` state variable is not set
     ///             - An ERC20 token for `pool_` has not been deployed/registered
     function getPoolToken(address pool_) public view override bunniHubSet returns (IBunniToken) {
-        // Create a BunniKey
+        // Get the appropriate BunniKey representing the position
         BunniKey memory key = _getBunniKey(pool_);
 
         IBunniToken token = bunniHub.getBunniToken(key);
