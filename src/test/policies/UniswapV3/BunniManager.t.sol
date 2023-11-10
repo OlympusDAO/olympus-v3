@@ -121,10 +121,14 @@ contract BunniManagerTest is Test {
     uint16 private constant HARVEST_REWARD_FEE = 1000; // 10%
     uint48 private constant HARVEST_FREQUENCY = uint48(24 hours);
 
-    bytes32 private constant OHM_SALT = 0x0000000000000000000000000000000000000000000000000000000000000001;
-    bytes32 private constant USDC_SALT = 0x0000000000000000000000000000000000000000000000000000000000000000;
-    bytes32 private constant WETH_SALT = 0x0000000000000000000000000000000000000000000000000000000000000002;
-    bytes32 private constant DAI_SALT = 0x0000000000000000000000000000000000000000000000000000000000000010;
+    bytes32 private constant OHM_SALT =
+        0x0000000000000000000000000000000000000000000000000000000000000001;
+    bytes32 private constant USDC_SALT =
+        0x0000000000000000000000000000000000000000000000000000000000000000;
+    bytes32 private constant WETH_SALT =
+        0x0000000000000000000000000000000000000000000000000000000000000002;
+    bytes32 private constant DAI_SALT =
+        0x0000000000000000000000000000000000000000000000000000000000000010;
 
     mapping(address => mapping(address => uint256)) private tokenBalances;
 
@@ -647,8 +651,14 @@ contract BunniManagerTest is Test {
 
         Permissions[] memory expectedPermissions = new Permissions[](14);
         expectedPermissions[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        expectedPermissions[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
-        expectedPermissions[2] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
+        expectedPermissions[1] = Permissions(
+            TRSRY_KEYCODE,
+            TRSRY.increaseWithdrawApproval.selector
+        );
+        expectedPermissions[2] = Permissions(
+            TRSRY_KEYCODE,
+            TRSRY.decreaseWithdrawApproval.selector
+        );
         expectedPermissions[3] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
         expectedPermissions[4] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
         expectedPermissions[5] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
@@ -1353,7 +1363,9 @@ contract BunniManagerTest is Test {
         assertEq(trsryAsset.locations.length, 1);
         assertEq(trsryAsset.locations[0], treasuryAddress);
         // Check that the token is categorized in TRSRY
-        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
+        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(
+            toTreasuryCategory("protocol-owned-liquidity")
+        );
         assertEq(trsryPolAssets.length, 1);
         assertEq(trsryPolAssets[0], address(poolToken));
 
@@ -1412,7 +1424,9 @@ contract BunniManagerTest is Test {
         assertEq(trsryAsset.locations.length, 1);
         assertEq(trsryAsset.locations[0], treasuryAddress);
         // Check that the token is categorized in TRSRY
-        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
+        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(
+            toTreasuryCategory("protocol-owned-liquidity")
+        );
         assertEq(trsryPolAssets.length, 1);
         assertEq(trsryPolAssets[0], address(poolToken));
 
@@ -1463,7 +1477,9 @@ contract BunniManagerTest is Test {
         assertEq(trsryAsset.locations.length, 1);
         assertEq(trsryAsset.locations[0], treasuryAddress);
         // Check that the token is categorized in TRSRY
-        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
+        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(
+            toTreasuryCategory("protocol-owned-liquidity")
+        );
         assertEq(trsryPolAssets.length, 1);
         assertEq(trsryPolAssets[0], address(poolToken));
 
@@ -1583,11 +1599,7 @@ contract BunniManagerTest is Test {
 
         // Withdraw
         vm.prank(policy);
-        bunniManager.withdraw(
-            address(pool),
-            bunniTokenShares,
-            SLIPPAGE_DEFAULT
-        );
+        bunniManager.withdraw(address(pool), bunniTokenShares, SLIPPAGE_DEFAULT);
 
         // Recognise the emitted event
         vm.expectEmit(true, true, false, false);
@@ -1603,7 +1615,9 @@ contract BunniManagerTest is Test {
         // Locations are removed
         assertEq(trsryAsset.locations.length, 0);
         // Cannot remove the category for the asset
-        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
+        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(
+            toTreasuryCategory("protocol-owned-liquidity")
+        );
         assertEq(trsryPolAssets.length, 1);
         assertEq(trsryPolAssets[0], address(poolToken));
 
@@ -1636,7 +1650,9 @@ contract BunniManagerTest is Test {
         assertFalse(trsryAsset.approved);
         assertEq(trsryAsset.locations.length, 0);
         // Check that the token is NOT categorized in TRSRY
-        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
+        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(
+            toTreasuryCategory("protocol-owned-liquidity")
+        );
         assertEq(trsryPolAssets.length, 0);
 
         // Check that the token has NOT been added to PRICEv2
