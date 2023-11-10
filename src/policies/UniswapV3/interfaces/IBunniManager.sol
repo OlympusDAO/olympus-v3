@@ -42,6 +42,23 @@ interface IBunniManager {
     /// @return token The ERC20-compatible BunniToken
     function deployPoolToken(address pool_) external returns (IBunniToken token);
 
+    /// @notice         Activates the ERC20 token for the given Uniswap V3 pool
+    ///
+    ///                 This can only be called after `deployPoolToken` or `registerPool` has been called
+    ///                 to deploy the ERC20 token for this pool.
+    ///
+    ///                 This function will register the pool token with TRSRY, PRICE and SPPLY.
+    ///
+    /// @param pool_    The address of the Uniswap V3 pool
+    function activatePoolToken(address pool_) external;
+
+    /// @notice         Deactivates the ERC20 token for the given Uniswap V3 pool
+    ///
+    ///                 This function will de-register the pool token with TRSRY, PRICE and SPPLY.
+    ///
+    /// @param pool_    The address of the Uniswap V3 pool
+    function deactivatePoolToken(address pool_) external;
+
     /// @notice         Deposits liquidity into the given Uniswap V3 pool
     ///
     ///                 This can only be called after `deployPoolToken` has been called

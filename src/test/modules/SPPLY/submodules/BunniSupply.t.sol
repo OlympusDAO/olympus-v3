@@ -642,4 +642,45 @@ contract BunniSupplyTest is Test {
         assertEq(submoduleBunniSupply.bunniTokenCount(), 1);
         assertEq(submoduleBunniSupply.bunniLensCount(), 1);
     }
+
+    // =========  hasBunniToken ========= //
+
+    // [X] hasBunniToken
+    //  [X] false if address(0)
+    //  [X] false if not added
+    //  [X] true if added
+
+    function test_hasBunniToken_addressZero() public {
+        // Add bunni token to BunniSupply
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+
+        // Call
+        bool hasToken = submoduleBunniSupply.hasBunniToken(address(0));
+
+        // Check
+        assertFalse(hasToken);
+    }
+
+    function test_hasBunniToken_differentAddress() public {
+        // Do NOT add Bunni Token to BunniSupply
+
+        // Call
+        bool hasToken = submoduleBunniSupply.hasBunniToken(poolTokenAddress);
+
+        // Check
+        assertFalse(hasToken);
+    }
+
+    function test_hasBunniToken() public {
+        // Add bunni token to BunniSupply
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+
+        // Call
+        bool hasToken = submoduleBunniSupply.hasBunniToken(poolTokenAddress);
+
+        // Check
+        assertTrue(hasToken);
+    }
 }

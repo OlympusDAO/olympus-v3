@@ -20,8 +20,9 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
-import {SPPLYv1, Category as SupplyCategory, fromCategory as fromSupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
+import {SPPLYv1, Category as SupplyCategory, fromCategory as fromSupplyCategory, toCategory as toSupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
 import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
+import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
@@ -38,22 +39,30 @@ import {BunniLens} from "src/external/bunni/BunniLens.sol";
 import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
 
+import {toSubKeycode} from "src/Submodules.sol";
+
 import "src/Kernel.sol";
 
 contract BunniManagerTest is Test {
     using FullMath for uint256;
     using ModuleTestFixtureGenerator for OlympusPricev2;
+    using ModuleTestFixtureGenerator for OlympusSupply;
+    using ModuleTestFixtureGenerator for OlympusTreasury;
 
     UserFactory public userCreator;
     address internal alice;
     address internal policy;
-    address internal writer;
+    address internal writePRICE;
+    address internal writeSPPLY;
+    address internal writeTRSRY;
 
     MockOhm internal ohm;
     MockERC20 internal usdc;
     MockERC20 internal wETH;
     address internal usdcAddress;
     address internal ohmAddress;
+    address internal token0Address;
+    address internal token1Address;
 
     Kernel internal kernel;
 
@@ -67,6 +76,9 @@ contract BunniManagerTest is Test {
 
     // PRICE submodules
     BunniPrice internal priceSubmoduleBunni;
+
+    // SPPLY submodules
+    BunniSupply internal supplySubmoduleBunni;
 
     UniswapV3Factory internal uniswapFactory;
     SwapRouter internal swapRouter;
@@ -109,12 +121,17 @@ contract BunniManagerTest is Test {
     uint16 private constant HARVEST_REWARD_FEE = 1000; // 10%
     uint48 private constant HARVEST_FREQUENCY = uint48(24 hours);
 
+    bytes32 private constant OHM_SALT = 0x0000000000000000000000000000000000000000000000000000000000000001;
+    bytes32 private constant USDC_SALT = 0x0000000000000000000000000000000000000000000000000000000000000000;
+    bytes32 private constant WETH_SALT = 0x0000000000000000000000000000000000000000000000000000000000000002;
+    bytes32 private constant DAI_SALT = 0x0000000000000000000000000000000000000000000000000000000000000010;
+
     mapping(address => mapping(address => uint256)) private tokenBalances;
 
     // Reproduce events
-    event BunniLensSet(address newBunniHub_, address newBunniLens_);
+    event BunniLensSet(address indexed newBunniHub_, address indexed newBunniLens_);
 
-    event BunniHubOwnerSet(address bunniHub_, address newOwner_);
+    event BunniHubOwnerSet(address indexed bunniHub_, address indexed newOwner_);
 
     event LastHarvestReset(uint48 newLastHarvest_);
 
@@ -122,9 +139,19 @@ contract BunniManagerTest is Test {
 
     event HarvestRewardParamsSet(uint256 newMaxReward_, uint16 newFee_);
 
-    event PoolRegistered(address pool_, address token_);
+    event PoolTokenRegistered(address indexed pool_, address indexed token_);
 
-    event PoolSwapFeesUpdated(address pool_);
+    event NewBunni(
+        IBunniToken indexed token,
+        bytes32 indexed bunniKeyHash,
+        IUniswapV3Pool indexed pool,
+        int24 tickLower,
+        int24 tickUpper
+    );
+
+    event PoolTokenActivated(address indexed pool_, address indexed token_);
+
+    event PoolSwapFeesUpdated(address indexed pool_);
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -136,12 +163,16 @@ contract BunniManagerTest is Test {
         }
 
         {
-            ohm = new MockOhm("Olympus", "OHM", 9);
-            usdc = new MockERC20("USDC", "USDC", 6);
-            wETH = new MockERC20("Wrapped Ether", "wETH", 18);
+            // Use salt to ensure that the addresses are deterministic, otherwise changing variables above will change the addresses and mess with the UniV3 pool
+            // Source: https://docs.soliditylang.org/en/v0.8.19/control-structures.html#salted-contract-creations-create2
+            ohm = new MockOhm{salt: OHM_SALT}("Olympus", "OHM", 9);
+            usdc = new MockERC20{salt: USDC_SALT}("USDC", "USDC", 6);
+            wETH = new MockERC20{salt: WETH_SALT}("Wrapped Ether", "wETH", 18);
 
             ohmAddress = address(ohm);
             usdcAddress = address(usdc);
+            token0Address = address(ohm) > address(usdc) ? address(usdc) : address(ohm);
+            token1Address = address(ohm) > address(usdc) ? address(ohm) : address(usdc);
         }
 
         // Deploy Bophades modules
@@ -156,10 +187,12 @@ contract BunniManagerTest is Test {
             TRSRY = new OlympusTreasury(kernel);
             MINTR = new OlympusMinter(kernel, ohmAddress);
             PRICE = new OlympusPricev2(kernel, uint8(18), uint32(8 hours));
-            // SPPLY = new OlympusSupply(kernel, tokens, 0);
+            SPPLY = new OlympusSupply(kernel, tokens, 0);
 
             // Deploy mock module writer
-            writer = PRICE.generateGodmodeFixture(type(OlympusPricev2).name);
+            writePRICE = PRICE.generateGodmodeFixture(type(OlympusPricev2).name);
+            writeSPPLY = SPPLY.generateGodmodeFixture(type(OlympusSupply).name);
+            writeTRSRY = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
 
             treasuryAddress = address(TRSRY);
         }
@@ -203,20 +236,31 @@ contract BunniManagerTest is Test {
             kernel.executeAction(Actions.InstallModule, treasuryAddress);
             kernel.executeAction(Actions.InstallModule, address(MINTR));
             kernel.executeAction(Actions.InstallModule, address(PRICE));
-            // kernel.executeAction(Actions.InstallModule, address(SPPLY));
+            kernel.executeAction(Actions.InstallModule, address(SPPLY));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, bunniManagerAddress);
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-            kernel.executeAction(Actions.ActivatePolicy, address(writer));
+            kernel.executeAction(Actions.ActivatePolicy, address(writePRICE));
+            kernel.executeAction(Actions.ActivatePolicy, address(writeSPPLY));
+            kernel.executeAction(Actions.ActivatePolicy, address(writeTRSRY));
         }
 
         // PRICE Submodule
         {
             priceSubmoduleBunni = new BunniPrice(PRICE);
 
-            vm.startPrank(writer);
+            vm.startPrank(writePRICE);
             PRICE.installSubmodule(priceSubmoduleBunni);
+            vm.stopPrank();
+        }
+
+        // SPPLY Submodule
+        {
+            supplySubmoduleBunni = new BunniSupply(SPPLY);
+
+            vm.startPrank(writeSPPLY);
+            SPPLY.installSubmodule(supplySubmoduleBunni);
             vm.stopPrank();
         }
 
@@ -301,7 +345,7 @@ contract BunniManagerTest is Test {
     }
 
     function _expectRevert_wrongModuleVersion() internal {
-        bytes memory expectedVersions = abi.encode([1, 2, 1, 1]);
+        bytes memory expectedVersions = abi.encode([1, 2, 1, 1, 1]);
 
         bytes memory err = abi.encodeWithSelector(
             Policy.Policy_WrongModuleVersion.selector,
@@ -341,6 +385,15 @@ contract BunniManagerTest is Test {
         bytes memory err = abi.encodeWithSelector(
             BunniManager.BunniManager_HarvestTooEarly.selector,
             nextHarvest_
+        );
+        vm.expectRevert(err);
+    }
+
+    function _expectRevert_tokenActivated(address pool_, Keycode module_) internal {
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_TokenActivated.selector,
+            pool_,
+            module_
         );
         vm.expectRevert(err);
     }
@@ -463,11 +516,12 @@ contract BunniManagerTest is Test {
     //  [X] configures correctly
 
     function test_configureDependencies() public {
-        Keycode[] memory expectedDependencies = new Keycode[](4);
+        Keycode[] memory expectedDependencies = new Keycode[](5);
         expectedDependencies[0] = toKeycode("ROLES");
         expectedDependencies[1] = toKeycode("TRSRY");
         expectedDependencies[2] = toKeycode("PRICE");
         expectedDependencies[3] = toKeycode("MINTR");
+        expectedDependencies[4] = toKeycode("SPPLY");
 
         Keycode[] memory deps = bunniManager.configureDependencies();
         assertEq(deps.length, expectedDependencies.length);
@@ -479,11 +533,12 @@ contract BunniManagerTest is Test {
     function test_configureDependencies_priceVersionReverts(uint8 version_) public {
         vm.assume(version_ != PRICE_VERSION);
 
-        Keycode[] memory expectedDependencies = new Keycode[](4);
+        Keycode[] memory expectedDependencies = new Keycode[](5);
         expectedDependencies[0] = toKeycode("ROLES");
         expectedDependencies[1] = toKeycode("TRSRY");
         expectedDependencies[2] = toKeycode("PRICE");
         expectedDependencies[3] = toKeycode("MINTR");
+        expectedDependencies[4] = toKeycode("SPPLY");
 
         // Mock an incompatibility with the module
         vm.mockCall(
@@ -499,17 +554,18 @@ contract BunniManagerTest is Test {
     function test_configureDependencies_treasuryVersionReverts(uint8 version_) public {
         vm.assume(version_ != TRSRY_VERSION);
 
-        Keycode[] memory expectedDependencies = new Keycode[](4);
+        Keycode[] memory expectedDependencies = new Keycode[](5);
         expectedDependencies[0] = toKeycode("ROLES");
         expectedDependencies[1] = toKeycode("TRSRY");
         expectedDependencies[2] = toKeycode("PRICE");
         expectedDependencies[3] = toKeycode("MINTR");
+        expectedDependencies[4] = toKeycode("SPPLY");
 
         // Mock an incompatibility with the module
         vm.mockCall(
             treasuryAddress,
             abi.encodeWithSelector(OlympusTreasury.VERSION.selector),
-            abi.encode(version_, 0)
+            abi.encode(version_, 1)
         );
         _expectRevert_wrongModuleVersion();
 
@@ -519,11 +575,12 @@ contract BunniManagerTest is Test {
     function test_configureDependencies_rolesVersionReverts(uint8 version_) public {
         vm.assume(version_ != ROLES_VERSION);
 
-        Keycode[] memory expectedDependencies = new Keycode[](4);
+        Keycode[] memory expectedDependencies = new Keycode[](5);
         expectedDependencies[0] = toKeycode("ROLES");
         expectedDependencies[1] = toKeycode("TRSRY");
         expectedDependencies[2] = toKeycode("PRICE");
         expectedDependencies[3] = toKeycode("MINTR");
+        expectedDependencies[4] = toKeycode("SPPLY");
 
         // Mock an incompatibility with the module
         vm.mockCall(
@@ -539,16 +596,38 @@ contract BunniManagerTest is Test {
     function test_configureDependencies_mintrVersionReverts(uint8 version_) public {
         vm.assume(version_ != MINTR_VERSION);
 
-        Keycode[] memory expectedDependencies = new Keycode[](4);
+        Keycode[] memory expectedDependencies = new Keycode[](5);
         expectedDependencies[0] = toKeycode("ROLES");
         expectedDependencies[1] = toKeycode("TRSRY");
         expectedDependencies[2] = toKeycode("PRICE");
         expectedDependencies[3] = toKeycode("MINTR");
+        expectedDependencies[4] = toKeycode("SPPLY");
 
         // Mock an incompatibility with the module
         vm.mockCall(
             address(MINTR),
             abi.encodeWithSelector(OlympusMinter.VERSION.selector),
+            abi.encode(version_, 0)
+        );
+        _expectRevert_wrongModuleVersion();
+
+        bunniManager.configureDependencies();
+    }
+
+    function test_configureDependencies_spplyVersionReverts(uint8 version_) public {
+        vm.assume(version_ != MINTR_VERSION);
+
+        Keycode[] memory expectedDependencies = new Keycode[](5);
+        expectedDependencies[0] = toKeycode("ROLES");
+        expectedDependencies[1] = toKeycode("TRSRY");
+        expectedDependencies[2] = toKeycode("PRICE");
+        expectedDependencies[3] = toKeycode("MINTR");
+        expectedDependencies[4] = toKeycode("SPPLY");
+
+        // Mock an incompatibility with the module
+        vm.mockCall(
+            address(SPPLY),
+            abi.encodeWithSelector(OlympusSupply.VERSION.selector),
             abi.encode(version_, 0)
         );
         _expectRevert_wrongModuleVersion();
@@ -562,22 +641,20 @@ contract BunniManagerTest is Test {
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
+        Keycode SPPLY_KEYCODE = toKeycode("SPPLY");
 
-        Permissions[] memory expectedPermissions = new Permissions[](8);
+        Permissions[] memory expectedPermissions = new Permissions[](11);
         expectedPermissions[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        expectedPermissions[1] = Permissions(
-            TRSRY_KEYCODE,
-            TRSRY.increaseWithdrawApproval.selector
-        );
-        expectedPermissions[2] = Permissions(
-            TRSRY_KEYCODE,
-            TRSRY.decreaseWithdrawApproval.selector
-        );
-        expectedPermissions[3] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
-        expectedPermissions[4] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        expectedPermissions[5] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        expectedPermissions[6] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
-        expectedPermissions[7] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
+        expectedPermissions[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        expectedPermissions[2] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
+        expectedPermissions[3] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
+        expectedPermissions[4] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+        expectedPermissions[5] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
+        expectedPermissions[6] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        expectedPermissions[7] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        expectedPermissions[8] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        expectedPermissions[9] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
+        expectedPermissions[10] = Permissions(SPPLY_KEYCODE, SPPLY.execOnSubmodule.selector);
 
         Permissions[] memory perms = bunniManager.requestPermissions();
         assertEq(perms.length, expectedPermissions.length);
@@ -714,7 +791,7 @@ contract BunniManagerTest is Test {
 
         // Recognise the emitted event
         vm.expectEmit(true, true, false, true);
-        emit PoolRegistered(address(pool), address(deployedToken));
+        emit PoolTokenRegistered(address(pool), address(deployedToken));
 
         // Register the pool with the new policy
         vm.prank(policy);
@@ -737,25 +814,21 @@ contract BunniManagerTest is Test {
         assertEq(poolOneTokenOne, ohmAddress);
         assertEq(poolOneTokenTwo, usdcAddress);
 
-        // Check that the token has been added to PRICEv2
+        // Check that the token has NOT been added to PRICEv2
         PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(newDeployedToken));
-        assertTrue(priceAsset.approved);
+        assertFalse(priceAsset.approved);
 
-        // Check that the token has been added to TRSRY
-        OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(newDeployedToken));
-        assertTrue(trsryAsset.approved);
-        assertEq(trsryAsset.locations.length, 1);
-        assertEq(trsryAsset.locations[0], treasuryAddress);
-        // Check that the token is categorized in TRSRY
-        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
-        assertEq(trsryPolAssets.length, 1);
-        assertEq(trsryPolAssets[0], address(newDeployedToken));
+        // Check that the token has NOT been added to TRSRY
+        TRSRYv1_1.Asset memory trsryAsset = TRSRY.getAssetData(address(newDeployedToken));
+        assertFalse(trsryAsset.approved);
 
-        // TODO Check that the token is included in SPPLY metrics
-        // SupplyCategory categoryAsset = SPPLY.getCategoryByLocation(
-        //     address(newDeployedToken)
-        // );
-        // assertEq(fromSupplyCategory(categoryAsset), "protocol-owned-liquidity");
+        // Check that the token has NOT been added to the BunniSupply submodule
+        uint256 supplySubmoduleBunniTokenCount = supplySubmoduleBunni.bunniTokenCount();
+        assertEq(supplySubmoduleBunniTokenCount, 0);
+
+        // Check that the token is NOT included in SPPLY metrics
+        uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
+        assertEq(polo, 0);
     }
 
     function test_registerPool_multiple() public {
@@ -786,7 +859,7 @@ contract BunniManagerTest is Test {
 
         // Recognise the emitted event
         vm.expectEmit(true, true, false, true);
-        emit PoolRegistered(address(pool), address(deployedToken));
+        emit PoolTokenRegistered(address(pool), address(deployedToken));
 
         // Register the pool with the new policy
         vm.prank(policy);
@@ -794,7 +867,7 @@ contract BunniManagerTest is Test {
 
         // Recognise the emitted event
         vm.expectEmit(true, true, false, true);
-        emit PoolRegistered(address(newPool), address(deployedTokenTwo));
+        emit PoolTokenRegistered(address(newPool), address(deployedTokenTwo));
 
         // Register the new pool with the new policy
         vm.prank(policy);
@@ -816,7 +889,7 @@ contract BunniManagerTest is Test {
     //  [X] bunniHub not set
     //  [X] token already deployed
     //  [X] not a Uniswap V3 pool
-    //  [X] deploys and returns token, registers with PRICEv2
+    //  [X] deploys and returns token
     //  [X] reverts when inactive
     //  [X] reverts if either asset price not defined
     //  [X] handles different pool fees
@@ -874,6 +947,10 @@ contract BunniManagerTest is Test {
     }
 
     function test_deployPoolToken() public {
+        // Recognise the emitted event
+        vm.expectEmit(false, false, true, false);
+        emit NewBunni(IBunniToken(address(0)), bytes32(0), pool, 0, 0);
+
         vm.prank(policy);
         IBunniToken deployedToken = bunniManager.deployPoolToken(address(pool));
 
@@ -893,14 +970,24 @@ contract BunniManagerTest is Test {
         assertEq(poolUnderlyingTokenCount, 2);
         address poolOneTokenOne = address(bunniManager.poolUnderlyingTokens(0));
         address poolOneTokenTwo = address(bunniManager.poolUnderlyingTokens(1));
-        assertEq(poolOneTokenOne, ohmAddress);
-        assertEq(poolOneTokenTwo, usdcAddress);
+        assertEq(poolOneTokenOne, token0Address);
+        assertEq(poolOneTokenTwo, token1Address);
 
-        // Check that the token has been added to PRICEv2
+        // Check that the token has NOT been added to PRICEv2
         PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(deployedToken));
-        assertTrue(priceAsset.approved);
+        assertFalse(priceAsset.approved);
 
-        // TODO check the SPPLY submodule has the token registered
+        // Check that the token has NOT been added to TRSRY
+        TRSRYv1_1.Asset memory trsryAsset = TRSRY.getAssetData(address(deployedToken));
+        assertFalse(trsryAsset.approved);
+
+        // Check that the token has NOT been added to the BunniSupply submodule
+        uint256 supplySubmoduleBunniTokenCount = supplySubmoduleBunni.bunniTokenCount();
+        assertEq(supplySubmoduleBunniTokenCount, 0);
+
+        // Check that the token is NOT included in SPPLY metrics
+        uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
+        assertEq(polo, 0);
     }
 
     function test_deployPoolToken_multiple() public {
@@ -925,8 +1012,8 @@ contract BunniManagerTest is Test {
         address poolOneTokenOne = address(bunniManager.poolUnderlyingTokens(0));
         address poolOneTokenTwo = address(bunniManager.poolUnderlyingTokens(1));
         address poolOneTokenThree = address(bunniManager.poolUnderlyingTokens(2));
-        assertEq(poolOneTokenOne, ohmAddress);
-        assertEq(poolOneTokenTwo, usdcAddress);
+        assertEq(poolOneTokenOne, token0Address);
+        assertEq(poolOneTokenTwo, token1Address);
         assertEq(poolOneTokenThree, address(dai));
     }
 
@@ -965,6 +1052,253 @@ contract BunniManagerTest is Test {
         address poolOne = bunniManager.pools(0);
         assertEq(poolOne, address(poolTwo));
     }
+
+    // [X] activatePoolToken
+    //  [X] reverts if caller is unauthorized
+    //  [X] reverts if inactive
+    //  [X] reverts if bunniHub not set
+    //  [X] reverts if token not deployed
+    //  [X] reverts if no liquidity
+    //  [X] reverts if already registered with TRSRY
+    //  [X] reverts if already registered with PRICE
+    //  [X] reverts if already registered with SPPLY
+    //  [X] success - registers with TRSRY, PRICE, SPPLY
+
+    function test_activatePoolToken_unauthorizedReverts() public {
+        _expectRevert_unauthorized();
+
+        vm.prank(alice);
+        bunniManager.activatePoolToken(address(pool));
+    }
+
+    function test_activatePoolToken_inactiveReverts() public {
+        // Create a new BunniManager policy, but don't install/activate it
+        BunniManager newBunniManager = _createNewBunniManager();
+
+        _expectRevert_inactive();
+
+        vm.prank(policy);
+        newBunniManager.activatePoolToken(address(pool));
+    }
+
+    function test_activatePoolToken_bunniHubNotSetReverts() public {
+        // Create a new BunniManager policy, without the BunniHub set
+        BunniManager newBunniManager = _setUpNewBunniManager();
+
+        _expectRevert_bunniHubNotSet();
+
+        vm.prank(policy);
+        newBunniManager.activatePoolToken(address(pool));
+    }
+
+    function test_activatePoolToken_tokenNotDeployedReverts() public {
+        _expectRevert_poolNotFound(address(pool));
+
+        vm.prank(policy);
+        bunniManager.activatePoolToken(address(pool));
+    }
+
+    function test_activatePoolToken_noLiquidityReverts() public {
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        bunniManager.deployPoolToken(address(pool));
+
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_PoolHasNoLiquidity.selector,
+            address(pool)
+        );
+        vm.expectRevert(err);
+
+        vm.prank(policy);
+        bunniManager.activatePoolToken(address(pool));
+    }
+
+    function test_activatePoolToken_registeredWithTrsryReverts() public {
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+
+        // Mint tokens to the TRSRY
+        vm.prank(policy);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(
+            address(pool),
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+
+        // Register the asset with TRSRY
+        address[] memory trsryLocations = new address[](1);
+        trsryLocations[0] = treasuryAddress;
+        vm.prank(writeTRSRY);
+        TRSRY.addAsset(address(poolToken), trsryLocations);
+
+        // Expect a revert
+        _expectRevert_tokenActivated(address(pool), toKeycode("TRSRY"));
+
+        vm.prank(policy);
+        bunniManager.activatePoolToken(address(pool));
+    }
+
+    function test_activatePoolToken_registeredWithPriceReverts() public {
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+
+        // Mint tokens to the TRSRY
+        vm.prank(policy);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(
+            address(pool),
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+
+        // Prepare parameters for PRICE
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        {
+            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(address(bunniLens));
+
+            feeds[0] = PRICEv2.Component(
+                toSubKeycode("PRICE.BNI"), // Subkeycode
+                BunniPrice.getBunniTokenPrice.selector, // Selector
+                abi.encode(params) // Params
+            );
+        }
+
+        // Register the asset with PRICE
+        vm.prank(writePRICE);
+        PRICE.addAsset(
+            address(poolToken), // address asset_
+            false, // bool storeMovingAverage_
+            false, // bool useMovingAverage_
+            uint32(0), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            new uint256[](0), // uint256[] memory observations_
+            PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+            feeds // Component[] memory feeds_
+        );
+
+        // Expect a revert
+        _expectRevert_tokenActivated(address(pool), toKeycode("PRICE"));
+
+        vm.prank(policy);
+        bunniManager.activatePoolToken(address(pool));
+    }
+
+    function test_activatePoolToken_registeredWithSupplyReverts() public {
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+
+        // Mint tokens to the TRSRY
+        vm.prank(policy);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(
+            address(pool),
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+
+        // Register the asset with SPPLY
+        vm.prank(address(SPPLY));
+        supplySubmoduleBunni.addBunniToken(address(poolToken), address(bunniLens));
+
+        // Expect a revert
+        _expectRevert_tokenActivated(address(pool), toKeycode("SPPLY"));
+
+        vm.prank(policy);
+        bunniManager.activatePoolToken(address(pool));
+    }
+
+    function test_activatePoolToken() public {
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+
+        // Mint tokens to the TRSRY
+        vm.prank(policy);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(
+            address(pool),
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit PoolTokenActivated(address(pool), address(poolToken));
+
+        vm.prank(policy);
+        bunniManager.activatePoolToken(address(pool));
+
+        // Check that the token has been added to TRSRY
+        OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
+        assertTrue(trsryAsset.approved);
+        assertEq(trsryAsset.locations.length, 1);
+        assertEq(trsryAsset.locations[0], treasuryAddress);
+        // Check that the token is categorized in TRSRY
+        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
+        assertEq(trsryPolAssets.length, 1);
+        assertEq(trsryPolAssets[0], address(poolToken));
+
+        // Check that the token has been added to PRICEv2
+        PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
+        assertTrue(priceAsset.approved);
+        // Check that the price is non-zero
+        assertTrue(PRICE.getPrice(address(poolToken)) > 0);
+
+        // Check that the token is included in SPPLY metrics
+        uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
+        assertTrue(polo > 0);
+    }
+
+    // [ ] deactivatePoolToken
+    //  [ ] reverts if caller is unauthorized
+    //  [ ] reverts if inactive
+    //  [ ] reverts if bunniHub not set
+    //  [ ] reverts if token not deployed
+    //  [ ] reverts if has liquidity
+    //  [ ] success - unregisters with TRSRY, PRICE, SPPLY
+    //  [ ] success if not registered with TRSRY
+    //  [ ] success if not registered with PRICE
+    //  [ ] success if not registered with SPPLY
 
     // [X] deposit
     //  [X] caller is unauthorized
@@ -1089,7 +1423,7 @@ contract BunniManagerTest is Test {
         uint256 daiAmount = usdcAmount.mulDiv(1e18, 1e6); // Same price, different decimal scale
 
         // Create a pool with non-OHM tokens
-        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+        MockERC20 dai = new MockERC20{salt: DAI_SALT}("DAI", "DAI", 18);
         _mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
@@ -1173,8 +1507,6 @@ contract BunniManagerTest is Test {
 
         // Tolerant of rounding
         assertApproxEqAbs(ohm.totalSupply(), ohmSupplyBefore + ohmReserve, 1);
-
-        // TODO assert that price is non-zero
     }
 
     function test_deposit_slippage_fuzz(uint256 amount_, uint256 slippage_) public {
@@ -1333,7 +1665,7 @@ contract BunniManagerTest is Test {
 
     function test_withdraw_nonOhmTokens(uint256 shareToWithdraw_) public {
         // Create a pool with non-OHM tokens
-        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
+        MockERC20 dai = new MockERC20{salt: DAI_SALT}("DAI", "DAI", 18);
         _mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)

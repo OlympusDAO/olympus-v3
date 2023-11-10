@@ -113,6 +113,19 @@ contract BunniSupply is SupplySubmodule {
         return total;
     }
 
+    // =========== HELPER FUNCTIONS =========== //
+
+    /// @notice         Determines whether `token_` has been registered
+    ///
+    /// @param token_   The address of the token
+    /// @return         True if the token has been registered, otherwise false
+    function hasBunniToken(address token_) external view returns (bool) {
+        if (token_ == address(0) || !_inTokenArray(token_))
+            return false;
+
+        return true;
+    }
+
     // =========== ADMIN FUNCTIONS =========== //
 
     /// @notice                 Adds a deployed BunniToken address to the list of monitored tokens
