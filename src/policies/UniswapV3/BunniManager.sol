@@ -1147,11 +1147,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Remove the TRSRY location from the asset
         TRSRY.removeAssetLocation(poolToken_, address(TRSRY));
 
-        // Remove the categorization of the asset
-        TRSRY.categorize(
-            poolToken_,
-            toTreasuryCategory(0)
-        );
+        // Cannot remove the categorization of the asset
     }
 
     /// @notice             Deregisters `poolToken_` as an asset in the SPPLY module

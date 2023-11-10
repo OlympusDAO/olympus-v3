@@ -1300,6 +1300,65 @@ contract BunniManagerTest is Test {
         assertTrue(polo > 0);
     }
 
+    function test_activatePoolToken_categorizedTreasuryAsset() public {
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+
+        // Mint tokens to the TRSRY
+        vm.prank(policy);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(
+            address(pool),
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+
+        // Register the pool token in the TRSRY
+        // This mimics the case where the token has been registered and categorized with the TRSRY (since it cannot be removed)
+        address[] memory trsryLocations = new address[](0);
+        vm.prank(writeTRSRY);
+        TRSRY.addAsset(address(poolToken), trsryLocations);
+        vm.prank(writeTRSRY);
+        TRSRY.categorize(address(poolToken), toTreasuryCategory("protocol-owned-liquidity"));
+
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit PoolTokenActivated(address(pool), address(poolToken));
+
+        vm.prank(policy);
+        bunniManager.activatePoolToken(address(pool));
+
+        // Check that the token has been added to TRSRY
+        OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
+        assertTrue(trsryAsset.approved);
+        assertEq(trsryAsset.locations.length, 1);
+        assertEq(trsryAsset.locations[0], treasuryAddress);
+        // Check that the token is categorized in TRSRY
+        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
+        assertEq(trsryPolAssets.length, 1);
+        assertEq(trsryPolAssets[0], address(poolToken));
+
+        // Check that the token has been added to PRICEv2
+        PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
+        assertTrue(priceAsset.approved);
+        // Check that the price is non-zero
+        assertTrue(PRICE.getPrice(address(poolToken)) > 0);
+
+        // Check that the token is included in SPPLY metrics
+        uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
+        assertTrue(polo > 0);
+    }
+
     function test_activatePoolToken() public {
         uint256 amount = 100e6;
         uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
@@ -1475,9 +1534,10 @@ contract BunniManagerTest is Test {
         assertTrue(trsryAsset.approved);
         // Locations are removed
         assertEq(trsryAsset.locations.length, 0);
-        // Check that the token is NOT categorized in TRSRY
+        // Cannot remove the category for the asset
         address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(toTreasuryCategory("protocol-owned-liquidity"));
-        assertEq(trsryPolAssets.length, 0);
+        assertEq(trsryPolAssets.length, 1);
+        assertEq(trsryPolAssets[0], address(poolToken));
 
         // Check that the token has been removed from PRICEv2
         PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
