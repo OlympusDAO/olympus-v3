@@ -66,6 +66,9 @@ import "src/Kernel.sol";
 //      [X] zero locations prior
 //      [X] one location prior
 //      [X] many locations prior
+// [X] removeAsset - removes an asset configuration from the treasury
+//      [X] reverts if asset is not configured
+//      [X] asset data removed correctly
 // [X] addAssetLocation - adds a location to an asset configuration
 //      [X] reverts if asset is not configured
 //      [X] reverts if location is already configured
@@ -82,18 +85,28 @@ import "src/Kernel.sol";
 // [X] addCategoryGroup - adds an asset category group to the treasury
 //      [X] reverts if category group is already configured
 //      [X] category group data stored correctly
+// [] removeCategoryGroup - removes an asset category group from the treasury
+//      [] reverts if category group is not configured
+//      [] category group data removed correctly
 // [X] addCategory - adds an asset category to the treasury
 //      [X] reverts if category group is not configured
 //      [X] reverts if category is already configured
 //      [X] category data stored correctly with zero categories in group prior
 //      [X] category data stored correctly with one category in group prior
 //      [X] category data stored correctly with many categories in group prior
+// [] removeCategory - removes an asset category from the treasury
+//      [] reverts if category is not configured
+//      [] category data removed correctly
 // [X] categorize - categorize an asset into a category within a category group
 //      [X] reverts if asset is not configured
 //      [X] reverts if category is not configured
 //      [X] category data stored correctly with zero assets in category prior
 //      [X] category data stored correctly with one asset in category prior
 //      [X] category data stored correctly with many assets in category prior
+// [] uncategorize - uncategorize an asset from a category within a category group
+//      [] reverts if asset is not configured
+//      [] reverts if category is not configured
+//      [] category data removed correctly with zero assets in category after
 
 contract TRSRYv1_1Test is Test {
     using ModuleTestFixtureGenerator for OlympusTreasury;
@@ -858,6 +871,40 @@ contract TRSRYv1_1Test is Test {
         vm.expectRevert(err);
         vm.prank(godmode);
         TRSRY.addAsset(alice, new address[](0));
+    }
+
+    // -- Test: removeAsset
+
+    function testCorrectness_removeAsset_AssetNotConfigured() public {
+        // Try to remove an asset which is not configured
+        bytes memory err = abi.encodeWithSignature("TRSRY_AssetNotApproved(address)", reserve);
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.removeAsset(address(reserve));
+    }
+
+    function testCorrectness_removeAsset_AssetConfigured() public {
+        address[] memory locations = new address[](1);
+        locations[0] = address(1);
+
+        // Add an asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(reserve), locations);
+
+        // Remove the asset
+        vm.prank(godmode);
+        TRSRY.removeAsset(address(reserve));
+
+        // Verify asset data
+        TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, false);
+        assertEq(asset.lastBalance, 0);
+        assertEq(asset.locations.length, 0);
+
+        // Verify asset list
+        address[] memory assets = TRSRY.getAssets();
+        assertEq(assets.length, 0);
     }
 
     // -- Test: addAssetLocation -------------------------------
