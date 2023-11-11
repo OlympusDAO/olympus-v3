@@ -391,7 +391,48 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         (asset.lastBalance, asset.updatedAt) = _getCurrentBalance(asset_);
     }
 
-    // TODO remove asset?
+    /// @inheritdoc TRSRYv1_1
+    function removeAsset(address asset_) external override permissioned {
+        Asset storage asset = assetData[asset_];
+
+        // Check that asset is approved
+        if (!asset.approved) revert TRSRY_AssetNotApproved(asset_);
+
+        // Remove asset
+        uint256 len = assets.length;
+        for (uint256 i; i < len; ) {
+            if (assets[i] == asset_) {
+                assets[i] = assets[len - 1];
+                assets.pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Remove locations
+        len = asset.locations.length;
+        for (uint256 i; i < len; ) {
+            asset.locations[i] = asset.locations[len - 1];
+            asset.locations.pop();
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Remove categorization
+        len = categoryGroups.length;
+        for (uint256 i; i < len; ) {
+            categorization[asset_][categoryGroups[i]] = toCategory(bytes32(0));
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Remove asset data
+        delete assetData[asset_];
+    }
 
     /// @inheritdoc TRSRYv1_1
     function addAssetLocation(address asset_, address location_) external override permissioned {
@@ -449,6 +490,25 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1_1
+    function removeCategoryGroup(CategoryGroup group_) external override permissioned {
+        // Check if the category group exists
+        if (!_categoryGroupExists(group_)) revert TRSRY_CategoryGroupDoesNotExist(group_);
+
+        // Remove category group
+        uint256 len = categoryGroups.length;
+        for (uint256 i; i < len; ) {
+            if (fromCategoryGroup(categoryGroups[i]) == fromCategoryGroup(group_)) {
+                categoryGroups[i] = categoryGroups[len - 1];
+                categoryGroups.pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @inheritdoc TRSRYv1_1
     function addCategory(Category category_, CategoryGroup group_) external override permissioned {
         // Check if the category group exists
         if (!_categoryGroupExists(group_)) revert TRSRY_CategoryGroupDoesNotExist(group_);
@@ -462,7 +522,28 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         groupToCategories[group_].push(category_);
     }
 
-    // TODO remove category?
+    /// @inheritdoc TRSRYv1_1
+    function removeCategory(Category category_) external override permissioned {
+        // Check if the category exists by seeing if it has a non-zero category group
+        CategoryGroup group = categoryToGroup[category_];
+        if (fromCategoryGroup(group) == bytes32(0)) revert TRSRY_CategoryDoesNotExist(category_);
+
+        // Remove category data
+        categoryToGroup[category_] = toCategoryGroup(bytes32(0));
+
+        // Remove category from group
+        uint256 len = groupToCategories[group].length;
+        for (uint256 i; i < len; ) {
+            if (fromCategory(groupToCategories[group][i]) == fromCategory(category_)) {
+                groupToCategories[group][i] = groupToCategories[group][len - 1];
+                groupToCategories[group].pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
 
     function _categoryGroupExists(CategoryGroup categoryGroup_) internal view returns (bool) {
         // It's expected that the number of category groups will be fairly small
@@ -489,5 +570,18 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
 
         // Store category data for address
         categorization[asset_][group] = category_;
+    }
+
+    /// @inheritdoc TRSRYv1_1
+    function uncategorize(address asset_, Category category_) external override permissioned {
+        // Check that asset is initialized
+        if (!assetData[asset_].approved) revert TRSRY_InvalidParams(0, abi.encode(asset_));
+
+        // Check if the category exists by seeing if it has a non-zero category group
+        CategoryGroup group = categoryToGroup[category_];
+        if (fromCategoryGroup(group) == bytes32(0)) revert TRSRY_CategoryDoesNotExist(category_);
+
+        // Remove category data for address
+        categorization[asset_][group] = toCategory(bytes32(0));
     }
 }

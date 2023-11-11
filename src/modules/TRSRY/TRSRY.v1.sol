@@ -228,6 +228,11 @@ abstract contract TRSRYv1_1 is TRSRYv1 {
     ///                     be considered part of the treasury balance
     function addAsset(address asset_, address[] calldata locations_) external virtual;
 
+    /// @notice             Removes an asset from tracking by the treasury
+    /// @dev                Asset must be approved
+    /// @param  asset_      Address of the asset to remove
+    function removeAsset(address asset_) external virtual;
+
     /// @notice             Adds an additional external address that holds an asset and should be considered part of
     ///                     the treasury balance
     /// @dev                Asset must already be approved and the location cannot be the zero address
@@ -247,16 +252,34 @@ abstract contract TRSRYv1_1 is TRSRYv1 {
     /// @param  categoryGroup_  Category group to add
     function addCategoryGroup(CategoryGroup categoryGroup_) external virtual;
 
+    /// @notice                 Removes a category group
+    /// @dev                    Category group must exist
+    /// @param  categoryGroup_  Category group to remove
+    function removeCategoryGroup(CategoryGroup categoryGroup_) external virtual;
+
     /// @notice                 Adds an additional category
     /// @dev                    The cateogory group must exist and the category must not already exist
     /// @param  category_       Category to add
     /// @param  categoryGroup_  Category group to add the category to
     function addCategory(Category category_, CategoryGroup categoryGroup_) external virtual;
 
-    /// @notice Mark an asset as a member of specific categories
-    /// @dev    This categorization is done within a category group. So for example if an asset is categorized
-    ///         as 'liquid' which is part of the 'liquidity-preference' group, but then is changed to 'illiquid'
-    ///         which falls under the same 'liquidity-preference' group, the asset will lose its 'liquid' categorization
-    ///         and gain the 'illiquid' categorization (all under the 'liquidity-preference' group).
+    /// @notice                 Removes a category
+    /// @dev                    The category must exist
+    /// @param  category_       Category to remove
+    function removeCategory(Category category_) external virtual;
+
+    /// @notice             Mark an asset as a member of specific categories
+    /// @dev                This categorization is done within a category group. So for example if an asset is categorized
+    ///                     as 'liquid' which is part of the 'liquidity-preference' group, but then is changed to 'illiquid'
+    ///                     which falls under the same 'liquidity-preference' group, the asset will lose its 'liquid' categorization
+    ///                     and gain the 'illiquid' categorization (all under the 'liquidity-preference' group).
+    /// @param  asset_      Address of the asset to categorize
+    /// @param  category_   Category to add the asset to
     function categorize(address asset_, Category category_) external virtual;
+
+    /// @notice             Removes an asset from a category
+    /// @dev                Asset must be approved, category must exist, and asset must be a member of the category
+    /// @param  asset_      Address of the asset to remove from the category
+    /// @param  category_   Category to remove the asset from
+    function uncategorize(address asset_, Category category_) external virtual;
 }
