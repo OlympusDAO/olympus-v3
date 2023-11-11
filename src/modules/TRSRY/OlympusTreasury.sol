@@ -577,9 +577,10 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         // Check that asset is initialized
         if (!assetData[asset_].approved) revert TRSRY_InvalidParams(0, abi.encode(asset_));
 
-        // Check if the category exists by seeing if it has a non-zero category group
+        // Check that the asset is in the category
         CategoryGroup group = categoryToGroup[category_];
-        if (fromCategoryGroup(group) == bytes32(0)) revert TRSRY_CategoryDoesNotExist(category_);
+        if (fromCategory(categorization[asset_][group]) != fromCategory(category_))
+            revert TRSRY_AssetNotInCategory(asset_, category_);
 
         // Remove category data for address
         categorization[asset_][group] = toCategory(bytes32(0));

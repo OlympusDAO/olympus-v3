@@ -153,6 +153,7 @@ abstract contract TRSRYv1_1 is TRSRYv1 {
     error TRSRY_CategoryExists(Category category_);
     error TRSRY_CategoryDoesNotExist(Category category_);
     error TRSRY_InvalidCalculation(address asset_, Variant variant_);
+    error TRSRY_AssetNotInCategory(address asset_, Category category_);
 
     // ========== STATE ========== //
     enum Variant {

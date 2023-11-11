@@ -103,10 +103,10 @@ import "src/Kernel.sol";
 //      [X] category data stored correctly with zero assets in category prior
 //      [X] category data stored correctly with one asset in category prior
 //      [X] category data stored correctly with many assets in category prior
-// [] uncategorize - uncategorize an asset from a category within a category group
-//      [] reverts if asset is not configured
-//      [] reverts if category is not configured
-//      [] category data removed correctly with zero assets in category after
+// [X] uncategorize - uncategorize an asset from a category within a category group
+//      [X] reverts if asset is not configured
+//      [X] reverts if asset is not in category
+//      [X] category data removed correctly with zero assets in category after
 
 contract TRSRYv1_1Test is Test {
     using ModuleTestFixtureGenerator for OlympusTreasury;
@@ -1411,6 +1411,75 @@ contract TRSRYv1_1Test is Test {
         assertEq(
             fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup("test-group"))),
             "test"
+        );
+    }
+
+    // ========= uncategorize ========= //
+
+    function testCorrectness_uncategorizeRevertsIfInvalidAsset() public {
+        // Try to uncategorize zero address
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_InvalidParams(uint256,bytes)",
+            0,
+            abi.encode(address(0))
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.uncategorize(address(0), toCategory("liquid"));
+    }
+
+    function testCorrectness_uncategorizeRevertsIfAssetNotInCategory() public {
+        // Create category groups and categories
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group2"));
+        TRSRY.addCategory(toCategory("test2"), toCategoryGroup("test-group2"));
+
+        // Add asset
+        TRSRY.addAsset(address(reserve), new address[](0));
+
+        // Categorize asset
+        TRSRY.categorize(address(reserve), toCategory("test"));
+
+        // Try to uncategorize from test2
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_AssetNotInCategory(address,bytes32)",
+            address(reserve),
+            toCategory("test2")
+        );
+        vm.expectRevert(err);
+
+        TRSRY.uncategorize(address(reserve), toCategory("test2"));
+        vm.stopPrank();
+    }
+
+    function testCorrectness_uncategorizeRemovesCategorization() public {
+        // Create category groups and categories
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+
+        // Add asset
+        TRSRY.addAsset(address(reserve), new address[](0));
+
+        // Categorize asset
+        TRSRY.categorize(address(reserve), toCategory("test"));
+
+        // Assert that the asset was categorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup("test-group"))),
+            "test"
+        );
+
+        // Uncategorize asset
+        TRSRY.uncategorize(address(reserve), toCategory("test"));
+
+        // Assert that the asset was uncategorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup("test-group"))),
+            bytes32(0)
         );
     }
 }
