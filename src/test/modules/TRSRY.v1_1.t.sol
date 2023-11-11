@@ -85,18 +85,18 @@ import "src/Kernel.sol";
 // [X] addCategoryGroup - adds an asset category group to the treasury
 //      [X] reverts if category group is already configured
 //      [X] category group data stored correctly
-// [] removeCategoryGroup - removes an asset category group from the treasury
-//      [] reverts if category group is not configured
-//      [] category group data removed correctly
+// [X] removeCategoryGroup - removes an asset category group from the treasury
+//      [X] reverts if category group is not configured
+//      [X] category group data removed correctly
 // [X] addCategory - adds an asset category to the treasury
 //      [X] reverts if category group is not configured
 //      [X] reverts if category is already configured
 //      [X] category data stored correctly with zero categories in group prior
 //      [X] category data stored correctly with one category in group prior
 //      [X] category data stored correctly with many categories in group prior
-// [] removeCategory - removes an asset category from the treasury
-//      [] reverts if category is not configured
-//      [] category data removed correctly
+// [X] removeCategory - removes an asset category from the treasury
+//      [X] reverts if category is not configured
+//      [X] category data removed correctly
 // [X] categorize - categorize an asset into a category within a category group
 //      [X] reverts if asset is not configured
 //      [X] reverts if category is not configured
@@ -1100,6 +1100,40 @@ contract TRSRYv1_1Test is Test {
         assertEq(fromCategoryGroup(addedGroup), groupName_);
     }
 
+    // ========= removeCategoryGroup ========= //
+
+    function testCorrectness_removeCategoryGroupRevertsIfNotConfigured() public {
+        // Try to remove 'abcdef' category group which does not exist
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_CategoryGroupDoesNotExist(bytes32)",
+            toCategoryGroup("abcdef")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.removeCategoryGroup(toCategoryGroup("abcdef"));
+    }
+
+    function testCorrectness_removeCategoryGroupRemovesGroup(bytes32 groupName_) public {
+        vm.assume(
+            groupName_ != bytes32("liquidity-preference") &&
+                groupName_ != bytes32("value-baskets") &&
+                groupName_ != bytes32("market-sensitivity")
+        );
+
+        // Add category group
+        vm.prank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup(groupName_));
+
+        // Remove category group
+        vm.prank(godmode);
+        TRSRY.removeCategoryGroup(toCategoryGroup(groupName_));
+
+        // Check that the category group was removed
+        vm.expectRevert();
+        CategoryGroup removedGroup = TRSRY.categoryGroups(3);
+    }
+
     // ========= addCategory ========= //
 
     function testCorrectness_addCategoryRevertsIfUnconfiguredGroup() public {
@@ -1226,6 +1260,38 @@ contract TRSRYv1_1Test is Test {
             category_
         );
         vm.stopPrank();
+    }
+
+    // ========= removeCategory ========= //
+
+    function testCorrectness_removeCategoryRevertsIfUnconfiguredGroup() public {
+        // Try to remove 'test' category which does not exist
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_CategoryDoesNotExist(bytes32)",
+            toCategory("test")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.removeCategory(toCategory("test"));
+    }
+
+    function testCorrectness_removeCategoryRemovesCategoryInfo() public {
+        // Add category group and category
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+
+        // Remove category
+        TRSRY.removeCategory(toCategory("test"));
+
+        // Assert that the category was removed
+        // categoryToGroup should be bytes32(0)
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test"))), bytes32(0));
+
+        // groupToCategories should be empty
+        vm.expectRevert();
+        TRSRY.groupToCategories(toCategoryGroup("test-group"), 0);
     }
 
     // ========= categorize ========= //
