@@ -120,7 +120,7 @@ contract BunniSupply is SupplySubmodule {
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Returns the total of OHM and non-OHM reserves in the submodule
-    function getReserves() external view returns (SPPLYv1.Reserves[] memory) {
+    function getReserves() external view override returns (SPPLYv1.Reserves[] memory) {
         // Iterate through tokens and total up the reserves of each pool
         uint256 len = bunniTokens.length;
         SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
