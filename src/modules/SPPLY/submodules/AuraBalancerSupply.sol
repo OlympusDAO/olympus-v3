@@ -251,6 +251,7 @@ contract AuraBalancerSupply is SupplySubmodule {
         }
 
         SPPLYv1.Reserves memory reserves;
+        reserves.source = address(pool.balancerPool);
         reserves.tokens = _vaultTokens;
         reserves.balances = balances;
         return reserves;
