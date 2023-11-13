@@ -29,4 +29,12 @@ interface IBunniLens {
     function getReserves(
         BunniKey calldata key
     ) external view returns (uint112 reserve0, uint112 reserve1);
+
+    /// @notice Returns the uncollected fees for the position.
+    /// @param key The Bunni position's key
+    /// @return fee0 The amount of token0 in uncollected fees
+    /// @return fee1 The amount of token1 in uncollected fees
+    function getUncollectedFees(
+        BunniKey calldata key
+    ) external view returns (uint256 fee0, uint256 fee1);
 }
