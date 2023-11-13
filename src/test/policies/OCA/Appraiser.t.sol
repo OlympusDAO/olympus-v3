@@ -716,6 +716,7 @@ contract AppraiserTest is Test {
     /// [X]  getMetric(Metric metric_)
     ///     [X]  if latest value was captured at the current timestamp, return that value
     ///     [X]  if latest value was captured at a previous timestamp, fetch and return the current value
+    ///     [ ]  correctly calculates backing with non-OHM in POL 
 
     function testCorrectness_getMetricCurrentTimestamp() public {
         // Cache current metric value and timestamp
