@@ -943,14 +943,14 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.addCategory(SupplyCategory.wrap("test_supply_category"), false, 0x00000000);
+        bookkeeper.addCategory(SupplyCategory.wrap("test_supply_category"), false, bytes4(0), bytes4(0));
     }
 
     function test_addCategory() public {
         SupplyCategory[] memory initCategories = SPPLY.getCategories();
 
         vm.prank(policy);
-        bookkeeper.addCategory(SupplyCategory.wrap("test_supply_category"), false, "");
+        bookkeeper.addCategory(SupplyCategory.wrap("test_supply_category"), false, bytes4(0), bytes4(0));
 
         // Check SPPLY categories
         SupplyCategory[] memory postCategories = SPPLY.getCategories();
@@ -978,7 +978,7 @@ contract BookkeeperTest is Test {
         SupplyCategory[] memory initCategories = SPPLY.getCategories();
 
         vm.startPrank(policy);
-        bookkeeper.addCategory(SupplyCategory.wrap("test_supply_category"), false, "");
+        bookkeeper.addCategory(SupplyCategory.wrap("test_supply_category"), false, bytes4(0), bytes4(0));
         bookkeeper.removeCategory(SupplyCategory.wrap("test_supply_category"));
 
         // Check SPPLY categories
@@ -1001,7 +1001,7 @@ contract BookkeeperTest is Test {
 
     function test_categorize(address user_) public {
         vm.startPrank(policy);
-        bookkeeper.addCategory(SupplyCategory.wrap("test_supply_category"), false, "");
+        bookkeeper.addCategory(SupplyCategory.wrap("test_supply_category"), false, bytes4(0), bytes4(0));
         bookkeeper.categorize(address(1), SupplyCategory.wrap("test_supply_category"));
 
         // Check SPPLY category locations

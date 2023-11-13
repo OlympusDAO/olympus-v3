@@ -34,11 +34,10 @@ contract OlympusSupply is SPPLYv1 {
         totalCrossChainSupply = initialCrossChainSupply_;
 
         // Add categories that are required for the metrics functions
-        _addCategory(toCategory("protocol-owned-treasury"), false, 0x00000000);
-        _addCategory(toCategory("dao"), false, 0x00000000);
-        _addCategory(toCategory("protocol-owned-liquidity"), true, 0x8ebf7278); // getProtocolOwnedLiquidityOhm()
-        _addCategory(toCategory("protocol-owned-borrowable"), true, 0x117fb54a); // getProtocolOwnedBorrowableOhm()
-        _addCategoryReserves(toCategory("protocol-owned-liquidity"), 0x55bdad01); // getProtocolOwnedLiquidityReserves()
+        _addCategory(toCategory("protocol-owned-treasury"), false, 0x00000000, 0x00000000);
+        _addCategory(toCategory("dao"), false, 0x00000000, 0x00000000);
+        _addCategory(toCategory("protocol-owned-liquidity"), true, 0x8ebf7278, 0x55bdad01); // getProtocolOwnedLiquidityOhm(), getProtocolOwnedLiquidityReserves()
+        _addCategory(toCategory("protocol-owned-borrowable"), true, 0x117fb54a, 0x00000000); // getProtocolOwnedBorrowableOhm()
     }
 
     /// @inheritdoc Module
@@ -78,15 +77,17 @@ contract OlympusSupply is SPPLYv1 {
     function addCategory(
         Category category_,
         bool useSubmodules_,
-        bytes4 submoduleSelector_
+        bytes4 submoduleSelector_,
+        bytes4 submoduleReservesSelector_
     ) external override permissioned {
-        _addCategory(category_, useSubmodules_, submoduleSelector_);
+        _addCategory(category_, useSubmodules_, submoduleSelector_, submoduleReservesSelector_);
     }
 
     function _addCategory(
         Category category_,
         bool useSubmodules_,
-        bytes4 submoduleSelector_
+        bytes4 submoduleSelector_,
+        bytes4 submoduleReservesSelector_
     ) internal {
         // Check if category is 0, if so revert
         if (fromCategory(category_) == bytes32(uint256(0))) revert SPPLY_InvalidParams();
@@ -103,6 +104,7 @@ contract OlympusSupply is SPPLYv1 {
         // If submodules are enabled, check that the selector is valid
         if (useSubmodules_) {
             bool valid;
+            bool validReserves;
             uint256 len = SUPPLY_SUBMODULE_SELECTORS.length;
             for (uint256 i; i < len; ) {
                 if (SUPPLY_SUBMODULE_SELECTORS[i] == submoduleSelector_) {
@@ -114,6 +116,27 @@ contract OlympusSupply is SPPLYv1 {
                 }
             }
             if (!valid) revert SPPLY_InvalidParams();
+
+            if (submoduleReservesSelector_ != bytes4(0)) {
+                len = SUPPLY_SUBMODULE_RESERVES_SELECTORS.length;
+                for (uint256 i; i < len; ) {
+                    if (SUPPLY_SUBMODULE_RESERVES_SELECTORS[i] == submoduleReservesSelector_) {
+                        validReserves = true;
+                        break;
+                    }
+                    unchecked {
+                        ++i;
+                    }
+                }
+                if (!validReserves) revert SPPLY_InvalidParams();
+                // Add category to list of approved categories and store category data
+                categoryReservesData[category_] = CategoryData({
+                    approved: true,
+                    useSubmodules: true,
+                    submoduleSelector: submoduleReservesSelector_,
+                    total: Cache({value: 0, timestamp: 0})
+                });
+            }
         }
 
         // Add category to list of approved categories and store category data
@@ -122,7 +145,6 @@ contract OlympusSupply is SPPLYv1 {
         data.approved = true;
         data.useSubmodules = useSubmodules_;
         data.submoduleSelector = submoduleSelector_;
-
         emit CategoryAdded(category_);
     }
 
@@ -137,6 +159,7 @@ contract OlympusSupply is SPPLYv1 {
 
         // Remove category from list of approved categories
         delete categoryData[category_];
+        delete categoryReservesData[category_];
         uint256 len = categories.length;
         for (uint256 i; i < len; ) {
             if (fromCategory(categories[i]) == fromCategory(category_)) {
@@ -149,63 +172,6 @@ contract OlympusSupply is SPPLYv1 {
             }
         }
         emit CategoryRemoved(category_);
-    }
-
-    /// @inheritdoc SPPLYv1
-    function addCategoryReserves(
-        Category category_,
-        bytes4 submoduleSelector_
-    ) external override permissioned {
-        _addCategoryReserves(category_, submoduleSelector_);
-    }
-
-    function _addCategoryReserves(Category category_, bytes4 submoduleSelector_) internal {
-        // Check if category reserves are already approved, if so, revert
-        if (categoryDataReserves[category_].approved) revert SPPLY_InvalidParams();
-
-        // Check if category is already approved, if not, revert
-        if (!categoryData[category_].approved) revert SPPLY_InvalidParams();
-
-        // If submodules are enabled and the selector is empty, revert
-        if (submoduleSelector_ == bytes4(0)) revert SPPLY_InvalidParams();
-
-        // If submodules are enabled, check that the selector is valid
-        bool valid;
-        uint256 len = SUPPLY_SUBMODULE_RESERVES_SELECTORS.length;
-        for (uint256 i; i < len; ) {
-            if (SUPPLY_SUBMODULE_RESERVES_SELECTORS[i] == submoduleSelector_) {
-                valid = true;
-                break;
-            }
-            unchecked {
-                ++i;
-            }
-        }
-        if (!valid) revert SPPLY_InvalidParams();
-
-        // Add category to list of approved categories and store category data
-        categoryDataReserves[category_] = CategoryData({
-            approved: true,
-            useSubmodules: true,
-            submoduleSelector: submoduleSelector_,
-            total: Cache({value: 0, timestamp: 0})
-        });
-
-        emit CategoryReservesAdded(category_);
-    }
-
-    /// @inheritdoc SPPLYv1
-    function removeCategoryReserves(Category category_) external override permissioned {
-        // Check if category is approved, if not revert
-        if (!categoryDataReserves[category_].approved) revert SPPLY_CategoryNotApproved(category_);
-
-        // Check if any locations still have this category, if so revert
-        address[] memory locations_ = getLocationsByCategory(category_);
-        if (locations_.length > 0) revert SPPLY_CategoryInUse(category_);
-
-        // Remove category reserves data
-        delete categoryDataReserves[category_];
-        emit CategoryReservesRemoved(category_);
     }
 
     function _uncategorize(address location_) internal {
@@ -452,7 +418,7 @@ contract OlympusSupply is SPPLYv1 {
             }
         }
 
-        CategoryData memory data = categoryDataReserves[category_];
+        CategoryData memory data = categoryReservesData[category_];
         uint256 categorySubmodSources;
         // If category requires data from submodules, count all submodules and their sources.
         len = (data.useSubmodules) ? submodules.length : 0;

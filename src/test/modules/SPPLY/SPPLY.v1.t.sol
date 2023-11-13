@@ -413,7 +413,7 @@ contract SupplyTest is Test {
         );
         vm.expectRevert(err);
 
-        moduleSupply.addCategory(toCategory("test"), false, "");
+        moduleSupply.addCategory(toCategory("test"), false, bytes4(0), bytes4(0));
     }
 
     function test_addCategory_alreadyApproved_reverts() public {
@@ -424,7 +424,7 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("protocol-owned-treasury"), false, "");
+        moduleSupply.addCategory(toCategory("protocol-owned-treasury"), false, bytes4(0), bytes4(0));
         vm.stopPrank();
     }
 
@@ -433,7 +433,7 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory(""), false, "");
+        moduleSupply.addCategory(toCategory(""), false, bytes4(0), bytes4(0));
         vm.stopPrank();
     }
 
@@ -442,7 +442,7 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory(0), false, "");
+        moduleSupply.addCategory(toCategory(0), false, bytes4(0), bytes4(0));
         vm.stopPrank();
     }
 
@@ -451,7 +451,7 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), true, "");
+        moduleSupply.addCategory(toCategory("test"), true, bytes4(0), bytes4(0));
         vm.stopPrank();
     }
 
@@ -460,7 +460,7 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), true, bytes4(0));
+        moduleSupply.addCategory(toCategory("test"), true, bytes4(0), bytes4(0));
         vm.stopPrank();
     }
 
@@ -469,7 +469,7 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), true, bytes4("junk"));
+        moduleSupply.addCategory(toCategory("test"), true, bytes4("junk"), bytes4(0));
         vm.stopPrank();
     }
 
@@ -481,8 +481,7 @@ contract SupplyTest is Test {
         moduleSupply.addCategory(
             toCategory("test"),
             false,
-            SupplySubmodule.getCollateralizedOhm.selector
-        );
+            SupplySubmodule.getCollateralizedOhm.selector, bytes4(0));
         vm.startPrank(writer);
     }
 
@@ -493,7 +492,7 @@ contract SupplyTest is Test {
 
         // Add category
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), false, "");
+        moduleSupply.addCategory(toCategory("test"), false, bytes4(0), bytes4(0));
         vm.stopPrank();
 
         // Get categories
@@ -526,8 +525,7 @@ contract SupplyTest is Test {
         moduleSupply.addCategory(
             toCategory("test"),
             true,
-            SupplySubmodule.getCollateralizedOhm.selector
-        );
+            SupplySubmodule.getCollateralizedOhm.selector, bytes4(0));
         vm.stopPrank();
 
         // Get categories
@@ -554,7 +552,7 @@ contract SupplyTest is Test {
 
     function _addCategory(bytes32 name_) internal {
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory(name_), false, "");
+        moduleSupply.addCategory(toCategory(name_), false, bytes4(0), bytes4(0));
         vm.stopPrank();
     }
 
@@ -897,7 +895,7 @@ contract SupplyTest is Test {
         // Create categories
         for (uint256 i = 0; i < locationCount; i++) {
             vm.startPrank(writer);
-            moduleSupply.addCategory(toCategory(bytes32(bytes(categoryNames[i]))), false, "");
+            moduleSupply.addCategory(toCategory(bytes32(bytes(categoryNames[i]))), false, bytes4(0), bytes4(0));
             vm.stopPrank();
         }
 
@@ -1159,8 +1157,7 @@ contract SupplyTest is Test {
         moduleSupply.addCategory(
             toCategory("collateralized-ohm"),
             true,
-            SupplySubmodule.getCollateralizedOhm.selector
-        );
+            SupplySubmodule.getCollateralizedOhm.selector, bytes4(0));
         vm.stopPrank();
 
         uint256 expected = BLV_POOL_SHARE + LENS_BORROW_AMOUNT;
@@ -1179,7 +1176,7 @@ contract SupplyTest is Test {
 
         // Define a new category with submodules disabled
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), false, "");
+        moduleSupply.addCategory(toCategory("test"), false, bytes4(0), bytes4(0));
         vm.stopPrank();
 
         uint256 expected = 0;
@@ -1214,8 +1211,7 @@ contract SupplyTest is Test {
         moduleSupply.addCategory(
             toCategory("collateralized-ohm"),
             true,
-            SupplySubmodule.getCollateralizedOhm.selector
-        );
+            SupplySubmodule.getCollateralizedOhm.selector, bytes4(0));
         vm.stopPrank();
 
         // Expect revert

@@ -184,9 +184,10 @@ contract Bookkeeper is Policy, RolesConsumer {
     function addCategory(
         SupplyCategory category_,
         bool useSubmodules_,
-        bytes4 submoduleSelector_
+        bytes4 submoduleSelector_,
+        bytes4 submoduleReservesSelector_
     ) external onlyRole("bookkeeper_policy") {
-        SPPLY.addCategory(category_, useSubmodules_, submoduleSelector_);
+        SPPLY.addCategory(category_, useSubmodules_, submoduleSelector_, submoduleReservesSelector_);
     }
 
     /// @notice Remove a category from the supply tracking system
