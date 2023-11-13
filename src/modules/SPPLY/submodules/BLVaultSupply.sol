@@ -49,9 +49,14 @@ contract BLVaultSupply is SupplySubmodule {
         uint256 len = vaultManagers_.length;
 
         for (uint256 i = 0; i < len; i++) {
-            vaultManagers.push(IBLVaultManager(vaultManagers_[i]));
+            address vaultManager = vaultManagers_[i];
 
-            emit VaultManagerAdded(vaultManagers_[i]);
+            if (vaultManager == address(0) || _inArray(vaultManager))
+                revert BLVaultSupply_InvalidParams();
+
+            vaultManagers.push(IBLVaultManager(vaultManager));
+
+            emit VaultManagerAdded(vaultManager);
         }
     }
 

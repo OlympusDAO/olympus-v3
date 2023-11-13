@@ -395,7 +395,7 @@ contract BunniSupplyTest is Test {
         assertEq(reserves[0].balances[0], ohmReserves_);
         assertEq(reserves[0].balances[1], usdcReserves_);
 
-        assertEq(reserves[1].source, poolTokenAddress);
+        assertEq(reserves[1].source, address(poolTokenTwo));
         assertEq(reserves[1].tokens.length, 2);
         assertEq(reserves[1].tokens[0], ohmAddress);
         assertEq(reserves[1].tokens[1], address(wETH));

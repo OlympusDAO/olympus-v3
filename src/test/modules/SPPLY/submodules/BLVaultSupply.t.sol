@@ -183,6 +183,18 @@ contract BLVaultSupplyTest is Test {
         new BLVaultSupply(modulePrice, vaultManagerAddresses);
     }
 
+    function test_submodule_addressZeroVaultManager() public {
+        vaultManagerAddresses = new address[](1);
+        vaultManagerAddresses[0] = address(0);
+
+        // Expect an error to be emitted
+        bytes memory err = abi.encodeWithSignature("BLVaultSupply_InvalidParams()");
+        vm.expectRevert(err);
+
+        // Create a new BLVaultSupply with duplicate vault managers
+        new BLVaultSupply(moduleSupply, vaultManagerAddresses);
+    }
+
     function test_submodule_duplicateVaultManagers() public {
         vaultManagerAddresses = new address[](2);
         vaultManagerAddresses[0] = address(vaultManagers[0]);

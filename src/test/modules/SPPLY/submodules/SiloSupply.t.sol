@@ -242,7 +242,7 @@ contract SiloSupplyTest is Test {
 
         // No POL
         assertEq(reserves.length, 1);
-        assertEq(reserves[0].source, siloAmo);
+        assertEq(reserves[0].source, address(siloBase));
         assertEq(reserves[0].tokens.length, 0);
         assertEq(reserves[0].balances.length, 0);
     }

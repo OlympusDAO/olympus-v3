@@ -111,6 +111,8 @@ contract OlympusSupply is SPPLYv1 {
             if (!valid) revert SPPLY_InvalidParams();
         }
 
+        // TODO add selector for reserves
+
         // Add category to list of approved categories and store category data
         categories.push(category_);
         CategoryData storage data = categoryData[category_];

@@ -133,10 +133,10 @@ contract BunniSupply is SupplySubmodule {
                 lens
             );
 
-            address[] memory underlyingTokens;
+            address[] memory underlyingTokens = new address[](2);
             underlyingTokens[0] = token0;
             underlyingTokens[1] = token1;
-            uint256[] memory underlyingReserves;
+            uint256[] memory underlyingReserves = new uint256[](2);
             underlyingReserves[0] = reserve0;
             underlyingReserves[1] = reserve1;
 
