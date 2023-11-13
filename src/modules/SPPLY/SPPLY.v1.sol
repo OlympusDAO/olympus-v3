@@ -335,4 +335,10 @@ abstract contract SupplySubmodule is Submodule {
     ///
     /// @return     A reserves struct
     function getReserves() external view virtual returns (SPPLYv1.Reserves[] memory);
+
+    /// @notice     Number of supply sources monitored by the submodule
+    /// @dev        Useful for know the number of sources for `getReserves()` in advance.
+    ///
+    /// @return     Number of supply sources monitored by the submodule
+    function getSources() external view virtual returns (uint256);
 }

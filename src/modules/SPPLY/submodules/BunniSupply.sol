@@ -82,6 +82,11 @@ contract BunniSupply is SupplySubmodule {
     // ========== DATA FUNCTIONS ========== //
 
     /// @inheritdoc SupplySubmodule
+    function getSources() external view override returns (uint256) {
+        return bunniTokens.length;
+    }
+
+    /// @inheritdoc SupplySubmodule
     /// @dev        Not applicable for Uniswap V3 pools managed by BunniHub
     function getCollateralizedOhm() external pure override returns (uint256) {
         return 0;
@@ -113,6 +118,8 @@ contract BunniSupply is SupplySubmodule {
         return total;
     }
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        Returns the total of OHM and non-OHM reserves in the submodule
     function getReserves() external view returns (SPPLYv1.Reserves[] memory) {
         // Iterate through tokens and total up the reserves of each pool
         uint256 len = bunniTokens.length;
