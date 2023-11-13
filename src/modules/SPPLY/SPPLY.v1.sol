@@ -160,10 +160,7 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     ///
     /// @param category_            The category to add reserves to
     /// @param submoduleSelector_   The selector from `SupplySubmodule` to use to get the reserves for this category
-    function addCategoryReserves(
-        Category category_,
-        bytes4 submoduleSelector_
-    ) external virtual;
+    function addCategoryReserves(Category category_, bytes4 submoduleSelector_) external virtual;
 
     /// @notice                     Removes a the data of the reserves of a category
     /// @dev                        This function will revert if:

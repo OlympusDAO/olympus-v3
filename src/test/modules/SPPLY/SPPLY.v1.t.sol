@@ -2243,7 +2243,9 @@ contract SupplyTest is Test {
         );
 
         // Check reserves
-        SPPLYv1.Reserves[] memory reserves = moduleSupply.getReservesByCategory(toCategory("protocol-owned-liquidity"));
+        SPPLYv1.Reserves[] memory reserves = moduleSupply.getReservesByCategory(
+            toCategory("protocol-owned-liquidity")
+        );
         assertEq(reserves.length, 3);
         // Check reserves: Aura - Balancer
         assertEq(reserves[0].tokens.length, 2);

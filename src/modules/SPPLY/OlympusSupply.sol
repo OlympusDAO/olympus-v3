@@ -159,11 +159,7 @@ contract OlympusSupply is SPPLYv1 {
         _addCategoryReserves(category_, submoduleSelector_);
     }
 
-
-    function _addCategoryReserves(
-        Category category_,
-        bytes4 submoduleSelector_
-    ) internal {
+    function _addCategoryReserves(Category category_, bytes4 submoduleSelector_) internal {
         // Check if category reserves are already approved, if so, revert
         if (categoryDataReserves[category_].approved) revert SPPLY_InvalidParams();
 
@@ -192,7 +188,7 @@ contract OlympusSupply is SPPLYv1 {
             approved: true,
             useSubmodules: true,
             submoduleSelector: submoduleSelector_,
-            total: Cache({ value: 0, timestamp: 0 })
+            total: Cache({value: 0, timestamp: 0})
         });
 
         emit CategoryReservesAdded(category_);
@@ -467,7 +463,11 @@ contract OlympusSupply is SPPLYv1 {
             );
 
             // Ensure call was successful
-            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), SupplySubmodule.getSourceCount.selector);
+            if (!success)
+                revert SPPLY_SubmoduleFailed(
+                    address(submodule),
+                    SupplySubmodule.getSourceCount.selector
+                );
 
             // Decode number of sources returned by the submodule
             unchecked {
@@ -489,11 +489,7 @@ contract OlympusSupply is SPPLYv1 {
             );
 
             // Ensure call was successful
-            if (!success)
-                revert SPPLY_SubmoduleFailed(
-                    address(submodule),
-                    data.submoduleSelector
-                );
+            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleSelector);
 
             // Decode supply returned by the submodule
             Reserves[] memory currentReserves = abi.decode(returnData, (Reserves[]));
