@@ -103,6 +103,41 @@ contract BLVaultSupply is SupplySubmodule {
         return 0;
     }
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        The pair token in a BLVault is not owned by the protocol, so is not relevant to this.
+    function getReserves() external view override returns (SPPLYv1.Reserves[] memory) {
+        address ohm = address(SPPLYv1(address(parent)).ohm());
+
+        // Iterate through BLVaultManagers and total up the pool OHM share as the collateralized supply
+        uint256 len = vaultManagers.length;
+        SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
+        for (uint256 i; i < len; ) {
+            uint256 ohmBalance = vaultManagers[i].getPoolOhmShare();
+            address[] memory tokens = new address[](1);
+            tokens[0] = ohm;
+
+            uint256[] memory balances = new uint256[](1);
+            balances[0] = ohmBalance;
+
+            reserves[i] = SPPLYv1.Reserves({
+                source: address(vaultManagers[i]),
+                tokens: tokens,
+                balances: balances
+            });
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return reserves;
+    }
+
+    /// @inheritdoc SupplySubmodule
+    function getSourceCount() external view override returns (uint256) {
+        return vaultManagers.length;
+    }
+
     // =========== ADMIN FUNCTIONS =========== //
 
     /// @notice                 Add a BLVaultManager to the list of managers
