@@ -373,7 +373,9 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
-    function getReservesByCategory(Category category_) external view override returns (Reserves[] memory) {
+    function getReservesByCategory(
+        Category category_
+    ) external view override returns (Reserves[] memory) {
         uint256 categoryLocations;
         uint256 len = locations.length;
         // Count all locations for given category.
@@ -399,8 +401,7 @@ contract OlympusSupply is SPPLYv1 {
             );
 
             // Ensure call was successful
-            if (!success)
-                revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleSelector);
+            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleSelector);
 
             // Decode number of sources returned by the submodule
             unchecked {
@@ -422,8 +423,7 @@ contract OlympusSupply is SPPLYv1 {
             );
 
             // Ensure call was successful
-            if (!success)
-                revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleSelector);
+            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleSelector);
 
             // Decode supply returned by the submodule
             Reserves[] memory currentReserves = abi.decode(returnData, (Reserves[]));
@@ -460,7 +460,6 @@ contract OlympusSupply is SPPLYv1 {
 
         return reserves;
     }
-
 
     /// @inheritdoc SPPLYv1
     function storeCategorySupply(Category category_) external override permissioned {

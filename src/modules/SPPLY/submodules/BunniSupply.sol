@@ -128,7 +128,10 @@ contract BunniSupply is SupplySubmodule {
             BunniToken token = bunniTokens[i];
             BunniLens lens = bunniLenses[i];
             BunniKey memory key = _getBunniKey(token);
-            (address token0, address token1, uint256 reserve0, uint256 reserve1) = _getReserves(key, lens);
+            (address token0, address token1, uint256 reserve0, uint256 reserve1) = _getReservesWithFees(
+                key,
+                lens
+            );
 
             address[] memory underlyingTokens;
             underlyingTokens[0] = token0;
@@ -140,9 +143,9 @@ contract BunniSupply is SupplySubmodule {
             reserves[i] = SPPLYv1.Reserves({
                 source: address(token),
                 tokens: underlyingTokens,
-                reserves: underlyingReserves
+                balances: underlyingReserves
             });
-            
+
             unchecked {
                 ++i;
             }
@@ -270,13 +273,14 @@ contract BunniSupply is SupplySubmodule {
         }
     }
 
-    function _getReserves(
+    function _getReservesWithFees(
         BunniKey memory key_,
         BunniLens lens_
     ) internal view returns (address, address, uint256, uint256) {
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
+        (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
 
-        return (key_.pool.token0(), key_.pool.token1(), reserve0, reserve1);
+        return (key_.pool.token0(), key_.pool.token1(), reserve0 + fee0, reserve1 + fee1);
     }
 
     function _inTokenArray(address token_) internal view returns (bool) {
