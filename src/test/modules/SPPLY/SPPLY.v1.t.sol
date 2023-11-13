@@ -424,7 +424,12 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("protocol-owned-treasury"), false, bytes4(0), bytes4(0));
+        moduleSupply.addCategory(
+            toCategory("protocol-owned-treasury"),
+            false,
+            bytes4(0),
+            bytes4(0)
+        );
         vm.stopPrank();
     }
 
@@ -481,7 +486,9 @@ contract SupplyTest is Test {
         moduleSupply.addCategory(
             toCategory("test"),
             false,
-            SupplySubmodule.getCollateralizedOhm.selector, bytes4(0));
+            SupplySubmodule.getCollateralizedOhm.selector,
+            bytes4(0)
+        );
         vm.startPrank(writer);
     }
 
@@ -525,7 +532,9 @@ contract SupplyTest is Test {
         moduleSupply.addCategory(
             toCategory("test"),
             true,
-            SupplySubmodule.getCollateralizedOhm.selector, bytes4(0));
+            SupplySubmodule.getCollateralizedOhm.selector,
+            bytes4(0)
+        );
         vm.stopPrank();
 
         // Get categories
@@ -895,7 +904,12 @@ contract SupplyTest is Test {
         // Create categories
         for (uint256 i = 0; i < locationCount; i++) {
             vm.startPrank(writer);
-            moduleSupply.addCategory(toCategory(bytes32(bytes(categoryNames[i]))), false, bytes4(0), bytes4(0));
+            moduleSupply.addCategory(
+                toCategory(bytes32(bytes(categoryNames[i]))),
+                false,
+                bytes4(0),
+                bytes4(0)
+            );
             vm.stopPrank();
         }
 
@@ -1157,7 +1171,9 @@ contract SupplyTest is Test {
         moduleSupply.addCategory(
             toCategory("collateralized-ohm"),
             true,
-            SupplySubmodule.getCollateralizedOhm.selector, bytes4(0));
+            SupplySubmodule.getCollateralizedOhm.selector,
+            bytes4(0)
+        );
         vm.stopPrank();
 
         uint256 expected = BLV_POOL_SHARE + LENS_BORROW_AMOUNT;
@@ -1211,7 +1227,9 @@ contract SupplyTest is Test {
         moduleSupply.addCategory(
             toCategory("collateralized-ohm"),
             true,
-            SupplySubmodule.getCollateralizedOhm.selector, bytes4(0));
+            SupplySubmodule.getCollateralizedOhm.selector,
+            bytes4(0)
+        );
         vm.stopPrank();
 
         // Expect revert
