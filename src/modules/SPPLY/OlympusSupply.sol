@@ -419,11 +419,12 @@ contract OlympusSupply is SPPLYv1 {
         for (uint256 i; i < len; ) {
             address submodule = address(_getSubmoduleIfInstalled(submodules[i]));
             (bool success, bytes memory returnData) = submodule.staticcall(
-                abi.encodeWithSelector(SupplySubmodule.getReserves.selector)
+                // TODO change to use dynamic selector
+                abi.encodeWithSelector(SupplySubmodule.getProtocolOwnedLiquidityReserves.selector)
             );
 
             // Ensure call was successful
-            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleSelector);
+            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), SupplySubmodule.getProtocolOwnedLiquidityReserves.selector);
 
             // Decode supply returned by the submodule
             Reserves[] memory currentReserves = abi.decode(returnData, (Reserves[]));

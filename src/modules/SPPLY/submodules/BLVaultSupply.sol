@@ -104,27 +104,19 @@ contract BLVaultSupply is SupplySubmodule {
     }
 
     /// @inheritdoc SupplySubmodule
-    /// @dev        The pair token in a BLVault is not owned by the protocol, so is not relevant to this.
-    function getReserves() external view override returns (SPPLYv1.Reserves[] memory) {
-        address ohm = address(SPPLYv1(address(parent)).ohm());
-
-        // Iterate through BLVaultManagers and total up the pool OHM share as the collateralized supply
+    /// @dev        Protocol-owned liquidity OHM is always zero for BLVaults.
+    ///
+    ///             This function returns an array with the same length as `getSourceCount()`, but with empty values.
+    function getProtocolOwnedLiquidityReserves() external view override returns (SPPLYv1.Reserves[] memory) {
         uint256 len = vaultManagers.length;
         SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
         for (uint256 i; i < len; ) {
-            uint256 ohmBalance = vaultManagers[i].getPoolOhmShare();
-            address[] memory tokens = new address[](1);
-            tokens[0] = ohm;
-
-            uint256[] memory balances = new uint256[](1);
-            balances[0] = ohmBalance;
-
             reserves[i] = SPPLYv1.Reserves({
                 source: address(vaultManagers[i]),
-                tokens: tokens,
-                balances: balances
+                tokens: new address[](0),
+                balances: new uint256[](0)
             });
-
+            
             unchecked {
                 ++i;
             }

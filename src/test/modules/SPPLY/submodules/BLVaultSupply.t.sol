@@ -268,30 +268,28 @@ contract BLVaultSupplyTest is Test {
         assertEq(submoduleBLVaultSupply.getProtocolOwnedLiquidityOhm(), 0);
     }
 
-    // =========  getReserves ========= //
+    // =========  getProtocolOwnedLiquidityReserves ========= //
 
-    function test_getReserves_noVaultManagers() public {
+    function test_getProtocolOwnedLiquidityReserves_noVaultManagers() public {
         // Create a new BLVaultSupply with no vault managers
         BLVaultSupply newSubmoduleBLVaultSupply = new BLVaultSupply(moduleSupply, new address[](0));
 
-        SPPLYv1.Reserves[] memory reserves = newSubmoduleBLVaultSupply.getReserves();
+        SPPLYv1.Reserves[] memory reserves = newSubmoduleBLVaultSupply.getProtocolOwnedLiquidityReserves();
         assertEq(reserves.length, 0);
     }
 
-    function test_getReserves_oneVaultManager_fuzz(uint256 poolOhmShare_) public {
+    function test_getProtocolOwnedLiquidityReserves_oneVaultManager_fuzz(uint256 poolOhmShare_) public {
         uint256 poolOhmShare = bound(poolOhmShare_, 0, 1000e9);
         vaultManagers[0].setPoolOhmShare(poolOhmShare);
 
-        SPPLYv1.Reserves[] memory reserves = submoduleBLVaultSupply.getReserves();
+        SPPLYv1.Reserves[] memory reserves = submoduleBLVaultSupply.getProtocolOwnedLiquidityReserves();
         assertEq(reserves.length, 1);
         assertEq(reserves[0].source, address(vaultManagers[0]));
-        assertEq(reserves[0].tokens.length, 1);
-        assertEq(reserves[0].tokens[0], address(ohm));
-        assertEq(reserves[0].balances.length, 1);
-        assertEq(reserves[0].balances[0], poolOhmShare);
+        assertEq(reserves[0].tokens.length, 0);
+        assertEq(reserves[0].balances.length, 0);
     }
 
-    function test_getReserves_multipleVaultManagers(
+    function test_getProtocolOwnedLiquidityReserves_multipleVaultManagers(
         uint256 poolOhmShareOne_,
         uint256 poolOhmShareTwo_
     ) public {
@@ -312,20 +310,16 @@ contract BLVaultSupplyTest is Test {
             vaultManagerAddresses
         );
 
-        SPPLYv1.Reserves[] memory reserves = newSubmoduleBLVaultSupply.getReserves();
+        SPPLYv1.Reserves[] memory reserves = newSubmoduleBLVaultSupply.getProtocolOwnedLiquidityReserves();
         assertEq(reserves.length, 2);
 
         assertEq(reserves[0].source, address(vaultManagers[0]));
-        assertEq(reserves[0].tokens.length, 1);
-        assertEq(reserves[0].tokens[0], address(ohm));
-        assertEq(reserves[0].balances.length, 1);
-        assertEq(reserves[0].balances[0], poolOhmShareOne);
+        assertEq(reserves[0].tokens.length, 0);
+        assertEq(reserves[0].balances.length, 0);
 
         assertEq(reserves[1].source, address(vaultManagers[1]));
-        assertEq(reserves[1].tokens.length, 1);
-        assertEq(reserves[1].tokens[0], address(ohm));
-        assertEq(reserves[1].balances.length, 1);
-        assertEq(reserves[1].balances[0], poolOhmShareTwo);
+        assertEq(reserves[1].tokens.length, 0);
+        assertEq(reserves[1].balances.length, 0);
     }
 
     // =========  addVaultManager ========= //

@@ -201,7 +201,7 @@ contract AuraBalancerSupply is SupplySubmodule {
     }
 
     /// @inheritdoc SupplySubmodule
-    function getReserves() external view override returns (SPPLYv1.Reserves[] memory) {
+    function getProtocolOwnedLiquidityReserves() external view override returns (SPPLYv1.Reserves[] memory) {
         // Iterate through tokens and add the reserves of each pool
         uint256 len = pools.length;
         SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
