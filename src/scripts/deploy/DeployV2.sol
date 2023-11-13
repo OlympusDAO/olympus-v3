@@ -790,7 +790,15 @@ contract OlympusDeploy is Script {
 
         // Deploy pOHM policy
         vm.broadcast();
-        pohm = new Pohm(kernel, previousPohm, address(ohm), address(gohm), address(reserve), dao, maximumAllocated);
+        pohm = new Pohm(
+            kernel,
+            previousPohm,
+            address(ohm),
+            address(gohm),
+            address(reserve),
+            dao,
+            maximumAllocated
+        );
         console2.log("pOHM deployed at:", address(pohm));
 
         return address(pohm);
@@ -876,7 +884,11 @@ contract OlympusDeploy is Script {
     }
 
     /// @dev Should be called by the deployer address after deployment
-    function verifyAndPushAuth(address guardian_, address policy_, address emergency_) external {
+    function verifyAndPushAuth(
+        address guardian_,
+        address policy_,
+        address emergency_
+    ) external {
         ROLES = OlympusRoles(vm.envAddress("ROLES"));
         heart = OlympusHeart(vm.envAddress("HEART"));
         callback = BondCallback(vm.envAddress("CALLBACK"));
@@ -921,7 +933,11 @@ contract OlympusDeploy is Script {
     }
 
     /// @dev Should be called by the deployer address after deployment
-    function verifyAuth(address guardian_, address policy_, address emergency_) external {
+    function verifyAuth(
+        address guardian_,
+        address policy_,
+        address emergency_
+    ) external {
         ROLES = OlympusRoles(vm.envAddress("ROLES"));
         heart = OlympusHeart(vm.envAddress("HEART"));
         callback = BondCallback(vm.envAddress("CALLBACK"));

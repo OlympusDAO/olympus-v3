@@ -28,7 +28,14 @@ interface IPohm {
 
     // ========= STATE VARIABLES ========= //
 
-    function terms(address account_) external view returns (uint256, uint256, uint256);
+    function terms(address account_)
+        external
+        view
+        returns (
+            uint256,
+            uint256,
+            uint256
+        );
 
     //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
@@ -83,7 +90,10 @@ interface IPohm {
     /// @param  amount_ The amount of DAI to exchange for OHM
     /// @param  accountTerms_ The terms to check the claim against
     /// @return uint256 The amount of OHM to send to the user
-    function validateClaim(uint256 amount_, Term memory accountTerms_) external view returns (uint256);
+    function validateClaim(uint256 amount_, Term memory accountTerms_)
+        external
+        view
+        returns (uint256);
 
     //============================================================================================//
     //                                       ADMIN FUNCTIONS                                      //
@@ -100,7 +110,12 @@ interface IPohm {
     /// @param  percent_ The percent of the circulating supply the account is entitled to
     /// @param  gClaimed_ The amount of gOHM the account has claimed
     /// @param  max_ The maximum amount of OHM the account can claim
-    function setTerms(address account_, uint256 percent_, uint256 gClaimed_, uint256 max_) external;
+    function setTerms(
+        address account_,
+        uint256 percent_,
+        uint256 gClaimed_,
+        uint256 max_
+    ) external;
 }
 
 interface IPreviousPohm {

@@ -163,7 +163,10 @@ contract PohmTest is Test {
 
         dai.approve(address(pohm), 2_500_000e18); // 2.5%
 
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 100000000000000);
+        bytes memory err = abi.encodeWithSignature(
+            "POHM_ClaimMoreThanVested(uint256)",
+            100000000000000
+        );
         vm.expectRevert(err);
 
         pohm.claim(alice, 2_500_000e18);
@@ -176,7 +179,10 @@ contract PohmTest is Test {
         dai.approve(address(pohm), 150_000e18);
 
         // TODO revise, this is actually caught by redeemableFor and the ensuing POHM_ClaimMoreThanVested error
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 100000000000000);
+        bytes memory err = abi.encodeWithSignature(
+            "POHM_ClaimMoreThanVested(uint256)",
+            100000000000000
+        );
         vm.expectRevert(err);
 
         pohm.claim(alice, 150_000e18);

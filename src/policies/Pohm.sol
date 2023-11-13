@@ -17,7 +17,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 // Import libraries
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
-
 contract Pohm is IPohm, Policy, RolesConsumer {
     using TransferHelper for ERC20;
 
@@ -128,7 +127,7 @@ contract Pohm is IPohm, Policy, RolesConsumer {
         if (walletChange[oldAddress_] != msg.sender) revert POHM_NoWalletChange();
 
         walletChange[oldAddress_] = address(0);
-        
+
         terms[msg.sender].percent += terms[oldAddress_].percent;
         terms[msg.sender].gClaimed += terms[oldAddress_].gClaimed;
         terms[msg.sender].max += terms[oldAddress_].max;
@@ -192,7 +191,11 @@ contract Pohm is IPohm, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IPohm
-    function validateClaim(uint256 amount_, Term memory accountTerms_) public view returns (uint256) {
+    function validateClaim(uint256 amount_, Term memory accountTerms_)
+        public
+        view
+        returns (uint256)
+    {
         // Value OHM at 1 DAI. So convert 18 decimal DAI value to 9 decimal OHM value
         uint256 toSend = (amount_ * OHM_PRECISION) / DAI_PRECISION;
 

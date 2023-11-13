@@ -194,7 +194,7 @@ contract ClaimTransferTest is Test {
         pohm.pushWalletChange(address(claimTransfer));
 
         claimTransfer.fractionalizeClaim();
-        
+
         dai.approve(address(claimTransfer), 250_000e18);
 
         bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 100_000e9);
@@ -209,7 +209,7 @@ contract ClaimTransferTest is Test {
         pohm.pushWalletChange(address(claimTransfer));
 
         claimTransfer.fractionalizeClaim();
-        
+
         dai.approve(address(claimTransfer), 100_001e18);
 
         // Set circulating supply to be massive
@@ -227,7 +227,7 @@ contract ClaimTransferTest is Test {
         pohm.pushWalletChange(address(claimTransfer));
 
         claimTransfer.fractionalizeClaim();
-        
+
         dai.approve(address(claimTransfer), 1_000e18);
 
         claimTransfer.claim(1_000e18);
@@ -246,7 +246,7 @@ contract ClaimTransferTest is Test {
         pohm.pushWalletChange(address(claimTransfer));
 
         claimTransfer.fractionalizeClaim();
-        
+
         dai.approve(address(claimTransfer), 1_000e18);
 
         claimTransfer.claim(1_000e18);
@@ -262,7 +262,7 @@ contract ClaimTransferTest is Test {
         pohm.pushWalletChange(address(claimTransfer));
 
         claimTransfer.fractionalizeClaim();
-        
+
         dai.approve(address(claimTransfer), 1_000e18);
 
         claimTransfer.claim(1_000e18);
@@ -281,7 +281,11 @@ contract ClaimTransferTest is Test {
         claimTransfer.approve(address(this), 100);
     }
 
-    function testCorrectness_approveSetsAllowance(address owner_, address spender_, uint256 amount_) public {
+    function testCorrectness_approveSetsAllowance(
+        address owner_,
+        address spender_,
+        uint256 amount_
+    ) public {
         vm.prank(owner_);
         claimTransfer.approve(spender_, amount_);
         assertEq(claimTransfer.allowance(owner_, spender_), amount_);
@@ -328,7 +332,7 @@ contract ClaimTransferTest is Test {
         pohm.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
 
-        dai.approve(address(claimTransfer), 10_000e18);   
+        dai.approve(address(claimTransfer), 10_000e18);
         claimTransfer.claim(10_000e18);
 
         // Make assertions
@@ -346,7 +350,8 @@ contract ClaimTransferTest is Test {
         assertEq(gClaimed, 50e18);
         assertEq(max, 45_000e9);
 
-        (uint256 bobPercent, uint256 bobGClaimed, uint256 bobMax) = claimTransfer.fractionalizedTerms(bob);
+        (uint256 bobPercent, uint256 bobGClaimed, uint256 bobMax) = claimTransfer
+            .fractionalizedTerms(bob);
         assertEq(bobPercent, 5_000);
         assertEq(bobGClaimed, 50e18);
         assertEq(bobMax, 55_000e9);
@@ -378,7 +383,7 @@ contract ClaimTransferTest is Test {
 
         dai.approve(address(claimTransfer), 50_000e18);
         claimTransfer.claim(50_000e18);
-        
+
         // Alice tries to transfer rest of claim to bob to try to claim more
         claimTransfer.transfer(bob, 5_000);
         vm.stopPrank();
@@ -464,7 +469,7 @@ contract ClaimTransferTest is Test {
         pohm.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
 
-        dai.approve(address(claimTransfer), 10_000e18);   
+        dai.approve(address(claimTransfer), 10_000e18);
         claimTransfer.claim(10_000e18);
 
         // Make assertions
@@ -485,7 +490,8 @@ contract ClaimTransferTest is Test {
         assertEq(gClaimed, 50e18);
         assertEq(max, 45_000e9);
 
-        (uint256 bobPercent, uint256 bobGClaimed, uint256 bobMax) = claimTransfer.fractionalizedTerms(bob);
+        (uint256 bobPercent, uint256 bobGClaimed, uint256 bobMax) = claimTransfer
+            .fractionalizedTerms(bob);
         assertEq(bobPercent, 5_000);
         assertEq(bobGClaimed, 50e18);
         assertEq(bobMax, 55_000e9);
@@ -516,7 +522,7 @@ contract ClaimTransferTest is Test {
 
         dai.approve(address(claimTransfer), 50_000e18);
         claimTransfer.claim(50_000e18);
-        
+
         claimTransfer.approve(address(this), 5_000);
         vm.stopPrank();
 

@@ -61,8 +61,8 @@ contract ClaimTransfer {
     function fractionalizeClaim() external {
         (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(msg.sender);
         fractionalizedTerms[msg.sender] = Term(percent, gClaimed, max);
-        
-        pohm.pullWalletChange(msg.sender); 
+
+        pohm.pullWalletChange(msg.sender);
     }
 
     /// @notice Claim OHM from the pOHM contract via your fractionalized claim
@@ -72,7 +72,10 @@ contract ClaimTransfer {
 
         // Get fractionalized terms and validate claim
         Term memory terms = fractionalizedTerms[msg.sender];
-        pohm.validateClaim(amount_, IPohm.Term({percent: terms.percent, gClaimed: terms.gClaimed, max: terms.max}));
+        pohm.validateClaim(
+            amount_,
+            IPohm.Term({percent: terms.percent, gClaimed: terms.gClaimed, max: terms.max})
+        );
 
         // Update fractionalized terms
         fractionalizedTerms[msg.sender].gClaimed += gOHM.balanceTo(toSend);
@@ -136,7 +139,11 @@ contract ClaimTransfer {
 
     // ========= INTERNAL FUNCTIONS ========= //
 
-    function _transfer(address from_, address to_, uint256 amount_) internal {
+    function _transfer(
+        address from_,
+        address to_,
+        uint256 amount_
+    ) internal {
         // Get fractionalized terms
         Term memory terms = fractionalizedTerms[from_];
 
