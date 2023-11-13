@@ -11,10 +11,11 @@ import "modules/SPPLY/SPPLY.v1.sol";
 // [X] Allow caching supply metrics
 
 contract OlympusSupply is SPPLYv1 {
-    bytes4[3] internal SUPPLY_SUBMODULE_SELECTORS = [
+    bytes4[4] internal SUPPLY_SUBMODULE_SELECTORS = [
         SupplySubmodule.getCollateralizedOhm.selector,
         SupplySubmodule.getProtocolOwnedBorrowableOhm.selector,
-        SupplySubmodule.getProtocolOwnedLiquidityOhm.selector
+        SupplySubmodule.getProtocolOwnedLiquidityOhm.selector,
+        SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
     ];
 
     //============================================================================================//
@@ -34,6 +35,7 @@ contract OlympusSupply is SPPLYv1 {
         _addCategory(toCategory("dao"), false, 0x00000000);
         _addCategory(toCategory("protocol-owned-liquidity"), true, 0x8ebf7278); // getProtocolOwnedLiquidityOhm()
         _addCategory(toCategory("protocol-owned-borrowable"), true, 0x117fb54a); // getProtocolOwnedBorrowableOhm()
+        _addCategory(toCategory("reserves"), true, 0x55bdad01); // getProtocolOwnedLiquidityReserves()
     }
 
     /// @inheritdoc Module
@@ -110,8 +112,6 @@ contract OlympusSupply is SPPLYv1 {
             }
             if (!valid) revert SPPLY_InvalidParams();
         }
-
-        // TODO add selector for reserves
 
         // Add category to list of approved categories and store category data
         categories.push(category_);
@@ -403,7 +403,7 @@ contract OlympusSupply is SPPLYv1 {
             );
 
             // Ensure call was successful
-            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleSelector);
+            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), SupplySubmodule.getSourceCount.selector);
 
             // Decode number of sources returned by the submodule
             unchecked {
@@ -421,15 +421,14 @@ contract OlympusSupply is SPPLYv1 {
         for (uint256 i; i < len; ) {
             address submodule = address(_getSubmoduleIfInstalled(submodules[i]));
             (bool success, bytes memory returnData) = submodule.staticcall(
-                // TODO change to use dynamic selector
-                abi.encodeWithSelector(SupplySubmodule.getProtocolOwnedLiquidityReserves.selector)
+                abi.encodeWithSelector(data.submoduleSelector)
             );
 
             // Ensure call was successful
             if (!success)
                 revert SPPLY_SubmoduleFailed(
                     address(submodule),
-                    SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+                    data.submoduleSelector
                 );
 
             // Decode supply returned by the submodule
