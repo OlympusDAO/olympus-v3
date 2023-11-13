@@ -95,6 +95,17 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
 
     mapping(Metric => Cache) public metricCache;
 
+    /// @notice     Struct to hold token and balance information
+    struct Reserves {
+        /// @notice     Source of the reserves
+        address source;
+        /// @notice     Ordered list of tokens
+        address[] tokens;
+        /// @notice     Ordered list of balances
+        /// @dev        This list should be in the same order as the `tokens`, and in native decimals
+        uint256[] balances;
+    }
+
     //============================================================================================//
     //                                       CROSS-CHAIN SUPPLY                                   //
     //============================================================================================//
@@ -233,6 +244,9 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     /// @param category_    The category to query
     function storeCategorySupply(Category category_) external virtual;
 
+    /// @notice             Returns the underlying reserves for a category
+    function getReservesByCategory(Category category_) external virtual returns (Reserves[] memory);
+
     //============================================================================================//
     //                                       SUPPLY METRICS                                       //
     //============================================================================================//
@@ -314,4 +328,11 @@ abstract contract SupplySubmodule is Submodule {
     ///
     /// @return     Quantity in the configured decimals
     function getProtocolOwnedLiquidityOhm() external view virtual returns (uint256);
+
+    /// @notice     Reserves in the assets monitored by the submodule
+    /// @dev        This provides the details of OHM and non-OHM reserves in the submodule,
+    ///             and can be used to determine the market and backing value of a category.
+    ///
+    /// @return     A reserves struct
+    function getReserves() external view virtual returns (SPPLYv1.Reserves[] memory);
 }

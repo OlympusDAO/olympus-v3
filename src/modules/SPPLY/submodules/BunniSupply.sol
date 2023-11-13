@@ -113,6 +113,37 @@ contract BunniSupply is SupplySubmodule {
         return total;
     }
 
+    function getReserves() external view returns (SPPLYv1.Reserves[] memory) {
+        // Iterate through tokens and total up the reserves of each pool
+        uint256 len = bunniTokens.length;
+        SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
+        for (uint256 i; i < len; ) {
+            BunniToken token = bunniTokens[i];
+            BunniLens lens = bunniLenses[i];
+            BunniKey memory key = _getBunniKey(token);
+            (address token0, address token1, uint256 reserve0, uint256 reserve1) = _getReserves(key, lens);
+
+            address[] memory underlyingTokens;
+            underlyingTokens[0] = token0;
+            underlyingTokens[1] = token1;
+            uint256[] memory underlyingReserves;
+            underlyingReserves[0] = reserve0;
+            underlyingReserves[1] = reserve1;
+
+            reserves[i] = SPPLYv1.Reserves({
+                source: address(token),
+                tokens: underlyingTokens,
+                reserves: underlyingReserves
+            });
+            
+            unchecked {
+                ++i;
+            }
+        }
+
+        return reserves;
+    }
+
     // =========== HELPER FUNCTIONS =========== //
 
     /// @notice         Determines whether `token_` has been registered
@@ -230,6 +261,15 @@ contract BunniSupply is SupplySubmodule {
         } else {
             return reserve1;
         }
+    }
+
+    function _getReserves(
+        BunniKey memory key_,
+        BunniLens lens_
+    ) internal view returns (address, address, uint256, uint256) {
+        (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
+
+        return (key_.pool.token0(), key_.pool.token1(), reserve0, reserve1);
     }
 
     function _inTokenArray(address token_) internal view returns (bool) {

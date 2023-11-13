@@ -383,6 +383,66 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    function getReservesByCategory(Category category_) external override returns (Reserves[] memory) {
+        Reserves[] memory reserves;
+
+        // Get reserves from all locations in the category
+        uint256 len = locations.length;
+        for (uint256 i; i < len; ) {
+            if (fromCategory(categorization[locations[i]]) == fromCategory(category_)) {
+                // TODO add to reserves
+                // supply += ohm.balanceOf(locations[i]);
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Total up the supply of gOHM of all locations in the category
+        for (uint256 i; i < len; ) {
+            if (fromCategory(categorization[locations[i]]) == fromCategory(category_)) {
+                // TODO add to reserves
+                // supply += _getOhmForGOhmBalance(locations[i]);
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Add cross-chain category supply
+        CategoryData memory data = categoryData[category_];
+
+        // If category requires data from submodules, it must be calculated and added
+        if (data.useSubmodules) {
+            // Iterate through submodules and add their value to the total
+            // Should not include any supply that is retrievable via a simple balance lookup, which is handled by locations above
+            len = submodules.length;
+            for (uint256 i; i < len; ) {
+                address submodule = address(_getSubmoduleIfInstalled(submodules[i]));
+                (bool success, bytes memory returnData) = submodule.staticcall(
+                    abi.encodeWithSelector(SupplySubmodule.getReserves.selector)
+                );
+
+                // Ensure call was successful
+                if (!success)
+                    revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleSelector);
+
+                // Decode supply returned by the submodule
+                Reserves[] memory currentReserves = abi.decode(returnData, (Reserves[] memory));
+
+                // TODO add to reserves
+
+                unchecked {
+                    ++i;
+                }
+            }
+        }
+
+        return reserves;
+    }
+
+
+    /// @inheritdoc SPPLYv1
     function storeCategorySupply(Category category_) external override permissioned {
         (uint256 supply, uint48 timestamp) = getSupplyByCategory(category_, Variant.CURRENT);
         categoryData[category_].total = Cache(supply, timestamp);
