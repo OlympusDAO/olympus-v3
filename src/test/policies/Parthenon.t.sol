@@ -117,6 +117,37 @@ contract ParthenonTest is Test {
         vm.warp(block.timestamp + governance.WARMUP_PERIOD() + 1);
     }
 
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](2);
+        expectedDeps[0] = toKeycode("INSTR");
+        expectedDeps[1] = toKeycode("VOTES");
+
+        Keycode[] memory deps = governance.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](4);
+        expectedPerms[0] = Permissions(toKeycode("INSTR"), INSTR.store.selector);
+        expectedPerms[1] = Permissions(toKeycode("VOTES"), VOTES.resetActionTimestamp.selector);
+        expectedPerms[2] = Permissions(toKeycode("VOTES"), VOTES.transfer.selector);
+        expectedPerms[3] = Permissions(toKeycode("VOTES"), VOTES.transferFrom.selector);
+        Permissions[] memory perms = governance.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
+        }
+    }
+
+    // ======== GOVERNANCE TESTS ======== //
+
     function testCorrectness_submitProposal() public {
         uint256 submissionTimestamp = block.timestamp;
 

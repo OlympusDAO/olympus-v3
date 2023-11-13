@@ -38,9 +38,9 @@ contract EmergencyTest is Test {
 
     Kernel internal kernel;
     IOlympusAuthority internal authority;
-    OlympusTreasury internal treasury;
-    OlympusMinter internal minter;
-    OlympusRoles internal roles;
+    OlympusTreasury internal TRSRY;
+    OlympusMinter internal MINTR;
+    OlympusRoles internal ROLES;
 
     Emergency internal emergency;
     RolesAdmin internal rolesAdmin;
@@ -73,30 +73,30 @@ contract EmergencyTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy modules (some mocks)
-            treasury = new OlympusTreasury(kernel);
-            minter = new OlympusMinter(kernel, address(ohm));
-            roles = new OlympusRoles(kernel);
+            TRSRY = new OlympusTreasury(kernel);
+            MINTR = new OlympusMinter(kernel, address(ohm));
+            ROLES = new OlympusRoles(kernel);
         }
 
         {
             // Deploy emergency policy
             emergency = new Emergency(kernel);
 
-            // Deploy roles administrator
+            // Deploy ROLES administrator
             rolesAdmin = new RolesAdmin(kernel);
 
-            // Deploy authorized policy to call minter and treasury functions
-            treasuryAdmin = treasury.generateGodmodeFixture(type(OlympusTreasury).name);
-            minterAdmin = minter.generateGodmodeFixture(type(OlympusMinter).name);
+            // Deploy authorized policy to call MINTR and TRSRY functions
+            treasuryAdmin = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
+            minterAdmin = MINTR.generateGodmodeFixture(type(OlympusMinter).name);
         }
 
         {
             // Initialize system and kernel
 
             // Install modules
-            kernel.executeAction(Actions.InstallModule, address(treasury));
-            kernel.executeAction(Actions.InstallModule, address(minter));
-            kernel.executeAction(Actions.InstallModule, address(roles));
+            kernel.executeAction(Actions.InstallModule, address(TRSRY));
+            kernel.executeAction(Actions.InstallModule, address(MINTR));
+            kernel.executeAction(Actions.InstallModule, address(ROLES));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(emergency));
@@ -107,27 +107,62 @@ contract EmergencyTest is Test {
         {
             // Configure access control
 
-            // Emergency roles
+            // Emergency ROLES
             rolesAdmin.grantRole("emergency_shutdown", emergencyMS);
             rolesAdmin.grantRole("emergency_restart", guardian);
         }
 
         // Larp MINTR as legacy vault
-        authority.vault.larp(address(minter));
+        authority.vault.larp(address(MINTR));
 
-        // Mint tokens to treasury for testing
-        reserve.mint(address(treasury), 1_000_000 * 1e18);
+        // Mint tokens to TRSRY for testing
+        reserve.mint(address(TRSRY), 1_000_000 * 1e18);
 
         // Approve minterAdmin for unlimited minting
         vm.prank(minterAdmin);
-        minter.increaseMintApproval(address(minterAdmin), type(uint256).max);
+        MINTR.increaseMintApproval(address(minterAdmin), type(uint256).max);
 
         // Approve treasuryAdmin for unlimited withdrawals and debt of reserve token
         vm.prank(treasuryAdmin);
-        treasury.increaseWithdrawApproval(address(treasuryAdmin), reserve, type(uint256).max);
+        TRSRY.increaseWithdrawApproval(address(treasuryAdmin), reserve, type(uint256).max);
 
         vm.prank(treasuryAdmin);
-        treasury.increaseDebtorApproval(address(treasuryAdmin), reserve, type(uint256).max);
+        TRSRY.increaseDebtorApproval(address(treasuryAdmin), reserve, type(uint256).max);
+    }
+
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](3);
+        expectedDeps[0] = toKeycode("TRSRY");
+        expectedDeps[1] = toKeycode("MINTR");
+        expectedDeps[2] = toKeycode("ROLES");
+
+        Keycode[] memory deps = emergency.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+        assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](4);
+        Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
+        Keycode MINTR_KEYCODE = MINTR.KEYCODE();
+
+        expectedPerms[0] = Permissions(TRSRY_KEYCODE, TRSRY.deactivate.selector);
+        expectedPerms[1] = Permissions(TRSRY_KEYCODE, TRSRY.activate.selector);
+        expectedPerms[2] = Permissions(MINTR_KEYCODE, MINTR.deactivate.selector);
+        expectedPerms[3] = Permissions(MINTR_KEYCODE, MINTR.activate.selector);
+
+        Permissions[] memory perms = emergency.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
+        }
     }
 
     // ========= TESTS ========= //
@@ -145,18 +180,18 @@ contract EmergencyTest is Test {
 
     function testCorrectness_ShutdownMINTR() public {
         // Check that MINTR is active initially
-        assertTrue(minter.active());
+        assertTrue(MINTR.active());
 
         // Try minting OHM and expect to pass
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 2e9);
+        MINTR.mintOhm(alice, 2e9);
         assertEq(ohm.balanceOf(alice), 2e9);
 
         // Try burning OHM and expect to pass
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        ohm.approve(address(MINTR), 1e9);
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        MINTR.burnOhm(alice, 1e9);
         assertEq(ohm.balanceOf(alice), 1e9);
 
         // Shutdown MINTR
@@ -164,24 +199,24 @@ contract EmergencyTest is Test {
         emergency.shutdownMinting();
 
         // Check that MINTR is inactive
-        assertTrue(!minter.active());
+        assertTrue(!MINTR.active());
 
         // Try minting OHM and expect to fail
         bytes memory err = abi.encodeWithSignature("MINTR_NotActive()");
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        MINTR.mintOhm(alice, 1e9);
 
         // Check that no OHM was minted
         assertEq(ohm.balanceOf(alice), 1e9);
 
         // Try burning OHM and expect to fail
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        ohm.approve(address(MINTR), 1e9);
 
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        MINTR.burnOhm(alice, 1e9);
 
         // Check that no OHM was burned
         assertEq(ohm.balanceOf(alice), 1e9);
@@ -189,35 +224,35 @@ contract EmergencyTest is Test {
 
     function testCorrectness_ShutdownTRSRY() public {
         // Check that TRSRY is active initially
-        assertTrue(treasury.active());
+        assertTrue(TRSRY.active());
 
         // Try withdrawing reserve and expect to pass
         vm.prank(treasuryAdmin);
-        treasury.withdrawReserves(alice, reserve, 1e18);
+        TRSRY.withdrawReserves(alice, reserve, 1e18);
 
         // Check that reserve was withdrawn
         assertEq(reserve.balanceOf(alice), 1e18);
 
         // Try incurring debt and expect to pass
         vm.prank(treasuryAdmin);
-        treasury.incurDebt(reserve, 1e18);
+        TRSRY.incurDebt(reserve, 1e18);
 
         // Check that reserves are borrowed
         assertEq(reserve.balanceOf(treasuryAdmin), 1e18);
-        assertEq(treasury.reserveDebt(reserve, treasuryAdmin), 1e18);
+        assertEq(TRSRY.reserveDebt(reserve, treasuryAdmin), 1e18);
 
         // Shutdown TRSRY
         vm.prank(emergencyMS);
         emergency.shutdownWithdrawals();
 
         // Check that TRSRY is inactive
-        assertTrue(!treasury.active());
+        assertTrue(!TRSRY.active());
 
         // Try withdrawing reserve and expect to fail
         bytes memory err = abi.encodeWithSignature("TRSRY_NotActive()");
         vm.expectRevert(err);
         vm.prank(treasuryAdmin);
-        treasury.withdrawReserves(alice, reserve, 1e18);
+        TRSRY.withdrawReserves(alice, reserve, 1e18);
 
         // Check that no reserve was withdrawn
         assertEq(reserve.balanceOf(alice), 1e18);
@@ -225,68 +260,68 @@ contract EmergencyTest is Test {
         // Try to incur debt and expect to fail
         vm.prank(treasuryAdmin);
         vm.expectRevert(err);
-        treasury.incurDebt(reserve, 1e18);
+        TRSRY.incurDebt(reserve, 1e18);
 
         // Check that no debt was incurred
         assertEq(reserve.balanceOf(treasuryAdmin), 1e18);
-        assertEq(treasury.reserveDebt(reserve, treasuryAdmin), 1e18);
+        assertEq(TRSRY.reserveDebt(reserve, treasuryAdmin), 1e18);
     }
 
     function testCorrectness_Shutdown() public {
         // Check that MINTR and TRSRY are active initially
-        assertTrue(minter.active());
-        assertTrue(treasury.active());
+        assertTrue(MINTR.active());
+        assertTrue(TRSRY.active());
 
         // Try minting OHM expect to pass
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 2e9);
+        MINTR.mintOhm(alice, 2e9);
         assertEq(ohm.balanceOf(alice), 2e9);
 
         // Try burning OHM and expect to pass
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        ohm.approve(address(MINTR), 1e9);
 
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        MINTR.burnOhm(alice, 1e9);
         assertEq(ohm.balanceOf(alice), 1e9);
 
         // Try withdrawing reserve and expect to pass
         vm.prank(treasuryAdmin);
-        treasury.withdrawReserves(alice, reserve, 1e18);
+        TRSRY.withdrawReserves(alice, reserve, 1e18);
         assertEq(reserve.balanceOf(alice), 1e18);
 
         // Try incurring debt and expect to pass
         vm.prank(treasuryAdmin);
-        treasury.incurDebt(reserve, 1e18);
+        TRSRY.incurDebt(reserve, 1e18);
 
         // Check that reserves are borrowed
         assertEq(reserve.balanceOf(treasuryAdmin), 1e18);
-        assertEq(treasury.reserveDebt(reserve, treasuryAdmin), 1e18);
+        assertEq(TRSRY.reserveDebt(reserve, treasuryAdmin), 1e18);
 
         // Shutdown both
         vm.prank(emergencyMS);
         emergency.shutdown();
 
         // Check that MINTR and TRSRY are inactive
-        assertTrue(!minter.active());
-        assertTrue(!treasury.active());
+        assertTrue(!MINTR.active());
+        assertTrue(!TRSRY.active());
 
         // Try minting OHM and expect to fail
         bytes memory err = abi.encodeWithSignature("MINTR_NotActive()");
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        MINTR.mintOhm(alice, 1e9);
 
         // Check that no OHM was minted
         assertEq(ohm.balanceOf(alice), 1e9);
 
         // Try burning OHM and expect to fail
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        ohm.approve(address(MINTR), 1e9);
 
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        MINTR.burnOhm(alice, 1e9);
 
         // Check that no OHM was burned
         assertEq(ohm.balanceOf(alice), 1e9);
@@ -295,7 +330,7 @@ contract EmergencyTest is Test {
         err = abi.encodeWithSignature("TRSRY_NotActive()");
         vm.expectRevert(err);
         vm.prank(treasuryAdmin);
-        treasury.withdrawReserves(alice, reserve, 1e18);
+        TRSRY.withdrawReserves(alice, reserve, 1e18);
 
         // Check that no reserve was withdrawn
         assertEq(reserve.balanceOf(alice), 1e18);
@@ -303,17 +338,17 @@ contract EmergencyTest is Test {
         // Try to incur debt and expect to fail
         vm.prank(treasuryAdmin);
         vm.expectRevert(err);
-        treasury.incurDebt(reserve, 1e18);
+        TRSRY.incurDebt(reserve, 1e18);
 
         // Check that no debt was incurred
         assertEq(reserve.balanceOf(treasuryAdmin), 1e18);
-        assertEq(treasury.reserveDebt(reserve, treasuryAdmin), 1e18);
+        assertEq(TRSRY.reserveDebt(reserve, treasuryAdmin), 1e18);
     }
 
     function testCorrectness_OnlyPermissionedAddressCanShutdown() public {
         // Check that MINTR and TRSRY are active initially
-        assertTrue(minter.active());
-        assertTrue(treasury.active());
+        assertTrue(MINTR.active());
+        assertTrue(TRSRY.active());
 
         // Try to shutdown with non-permissioned address and expect to fail
         bytes memory err = abi.encodeWithSelector(
@@ -325,21 +360,21 @@ contract EmergencyTest is Test {
         emergency.shutdown();
 
         // Check that MINTR and TRSRY are still active
-        assertTrue(minter.active());
-        assertTrue(treasury.active());
+        assertTrue(MINTR.active());
+        assertTrue(TRSRY.active());
 
         // Shutdown with permissioned address
         vm.prank(emergencyMS);
         emergency.shutdown();
 
         // Check that MINTR and TRSRY are inactive
-        assertTrue(!minter.active());
-        assertTrue(!treasury.active());
+        assertTrue(!MINTR.active());
+        assertTrue(!TRSRY.active());
     }
 
     function testCorrectness_OnlyPermissionedAddressCanShutdownMinting() public {
         // Check that MINTR is active initially
-        assertTrue(minter.active());
+        assertTrue(MINTR.active());
 
         // Try to shutdown with non-permissioned address and expect to fail
         bytes memory err = abi.encodeWithSelector(
@@ -351,19 +386,19 @@ contract EmergencyTest is Test {
         emergency.shutdownMinting();
 
         // Check that MINTR is still active
-        assertTrue(minter.active());
+        assertTrue(MINTR.active());
 
         // Shutdown with permissioned address
         vm.prank(emergencyMS);
         emergency.shutdownMinting();
 
         // Check that MINTR is inactive
-        assertTrue(!minter.active());
+        assertTrue(!MINTR.active());
     }
 
     function testCorrectness_OnlyPermissionedAddressCanShutdownWithdrawals() public {
         // Check that TRSRY is active initially
-        assertTrue(treasury.active());
+        assertTrue(TRSRY.active());
 
         // Try to shutdown with non-permissioned address and expect to fail
         bytes memory err = abi.encodeWithSelector(
@@ -375,44 +410,44 @@ contract EmergencyTest is Test {
         emergency.shutdownWithdrawals();
 
         // Check that TRSRY is still active
-        assertTrue(treasury.active());
+        assertTrue(TRSRY.active());
 
         // Shutdown with permissioned address
         vm.prank(emergencyMS);
         emergency.shutdownWithdrawals();
 
         // Check that TRSRY is inactive
-        assertTrue(!treasury.active());
+        assertTrue(!TRSRY.active());
     }
 
     function testCorrectness_RestartMINTR() public {
         // Mint some OHM initially so balance isn't zero
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        MINTR.mintOhm(alice, 1e9);
 
         // Shutdown Minting
         vm.prank(emergencyMS);
         emergency.shutdownMinting();
 
         // Check that MINTR is inactive
-        assertTrue(!minter.active());
+        assertTrue(!MINTR.active());
 
         // Try minting OHM and expect to fail
         bytes memory err = abi.encodeWithSignature("MINTR_NotActive()");
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        MINTR.mintOhm(alice, 1e9);
 
         // Check that no OHM was minted
         assertEq(ohm.balanceOf(alice), 1e9);
 
         // Try burning OHM and expect to fail
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        ohm.approve(address(MINTR), 1e9);
 
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        MINTR.burnOhm(alice, 1e9);
 
         // Check that no OHM was burned
         assertEq(ohm.balanceOf(alice), 1e9);
@@ -422,21 +457,21 @@ contract EmergencyTest is Test {
         emergency.restartMinting();
 
         // Check that MINTR is active
-        assertTrue(minter.active());
+        assertTrue(MINTR.active());
 
         // Try minting OHM and expect to succeed
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        MINTR.mintOhm(alice, 1e9);
 
         // Check that OHM was minted
         assertEq(ohm.balanceOf(alice), 2e9);
 
         // Try burning OHM and expect to succeed
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        ohm.approve(address(MINTR), 1e9);
 
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        MINTR.burnOhm(alice, 1e9);
 
         // Check that OHM was burned
         assertEq(ohm.balanceOf(alice), 1e9);
@@ -448,13 +483,13 @@ contract EmergencyTest is Test {
         emergency.shutdownWithdrawals();
 
         // Check that TRSRY is inactive
-        assertTrue(!treasury.active());
+        assertTrue(!TRSRY.active());
 
         // Try withdrawing reserve and expect to fail
         bytes memory err = abi.encodeWithSignature("TRSRY_NotActive()");
         vm.expectRevert(err);
         vm.prank(treasuryAdmin);
-        treasury.withdrawReserves(alice, reserve, 1e18);
+        TRSRY.withdrawReserves(alice, reserve, 1e18);
 
         // Check that no reserve was withdrawn
         assertEq(reserve.balanceOf(alice), 0);
@@ -462,64 +497,64 @@ contract EmergencyTest is Test {
         // Try incuring debt and expect to fail
         vm.prank(treasuryAdmin);
         vm.expectRevert(err);
-        treasury.incurDebt(reserve, 1e18);
+        TRSRY.incurDebt(reserve, 1e18);
 
         // Check that no debt was incurred
         assertEq(reserve.balanceOf(treasuryAdmin), 0);
-        assertEq(treasury.reserveDebt(reserve, treasuryAdmin), 0);
+        assertEq(TRSRY.reserveDebt(reserve, treasuryAdmin), 0);
 
         // Restart TRSRY
         vm.prank(guardian);
         emergency.restartWithdrawals();
 
         // Check that TRSRY is active
-        assertTrue(treasury.active());
+        assertTrue(TRSRY.active());
 
         // Try withdrawing reserve and expect to succeed
         vm.prank(treasuryAdmin);
-        treasury.withdrawReserves(alice, reserve, 1e18);
+        TRSRY.withdrawReserves(alice, reserve, 1e18);
 
         // Check that reserve was withdrawn
         assertEq(reserve.balanceOf(alice), 1e18);
 
         // Try incuring debt and expect to succeed
         vm.prank(treasuryAdmin);
-        treasury.incurDebt(reserve, 1e18);
+        TRSRY.incurDebt(reserve, 1e18);
 
         // Check that debt was incurred
         assertEq(reserve.balanceOf(treasuryAdmin), 1e18);
-        assertEq(treasury.reserveDebt(reserve, treasuryAdmin), 1e18);
+        assertEq(TRSRY.reserveDebt(reserve, treasuryAdmin), 1e18);
     }
 
     function testCorrectness_Restart() public {
         // Mint some OHM initially so balance isn't zero
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        MINTR.mintOhm(alice, 1e9);
 
         // Shutdown Minting and Withdrawals
         vm.prank(emergencyMS);
         emergency.shutdown();
 
         // Check that MINTR and TRSRY are inactive
-        assertTrue(!minter.active());
-        assertTrue(!treasury.active());
+        assertTrue(!MINTR.active());
+        assertTrue(!TRSRY.active());
 
         // Try minting OHM and expect to fail
         bytes memory err = abi.encodeWithSignature("MINTR_NotActive()");
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        MINTR.mintOhm(alice, 1e9);
 
         // Check that no OHM was minted
         assertEq(ohm.balanceOf(alice), 1e9);
 
         // Try burning OHM and expect to fail
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        ohm.approve(address(MINTR), 1e9);
 
         vm.expectRevert(err);
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        MINTR.burnOhm(alice, 1e9);
 
         // Check that no OHM was burned
         assertEq(ohm.balanceOf(alice), 1e9);
@@ -528,7 +563,7 @@ contract EmergencyTest is Test {
         err = abi.encodeWithSignature("TRSRY_NotActive()");
         vm.expectRevert(err);
         vm.prank(treasuryAdmin);
-        treasury.withdrawReserves(alice, reserve, 1e18);
+        TRSRY.withdrawReserves(alice, reserve, 1e18);
 
         // Check that no reserve was withdrawn
         assertEq(reserve.balanceOf(alice), 0);
@@ -536,51 +571,51 @@ contract EmergencyTest is Test {
         // Try incuring debt and expect to fail
         vm.prank(treasuryAdmin);
         vm.expectRevert(err);
-        treasury.incurDebt(reserve, 1e18);
+        TRSRY.incurDebt(reserve, 1e18);
 
         // Check that no debt was incurred
         assertEq(reserve.balanceOf(treasuryAdmin), 0);
-        assertEq(treasury.reserveDebt(reserve, treasuryAdmin), 0);
+        assertEq(TRSRY.reserveDebt(reserve, treasuryAdmin), 0);
 
         // Restart Minting and Withdrawals
         vm.prank(guardian);
         emergency.restart();
 
         // Check that MINTR and TRSRY are active
-        assertTrue(minter.active());
-        assertTrue(treasury.active());
+        assertTrue(MINTR.active());
+        assertTrue(TRSRY.active());
 
         // Try minting OHM and expect to succeed
         vm.prank(minterAdmin);
-        minter.mintOhm(alice, 1e9);
+        MINTR.mintOhm(alice, 1e9);
 
         // Check that OHM was minted
         assertEq(ohm.balanceOf(alice), 2e9);
 
         // Try burning OHM and expect to succeed
         vm.prank(alice);
-        ohm.approve(address(minter), 1e9);
+        ohm.approve(address(MINTR), 1e9);
 
         vm.prank(minterAdmin);
-        minter.burnOhm(alice, 1e9);
+        MINTR.burnOhm(alice, 1e9);
 
         // Check that OHM was burned
         assertEq(ohm.balanceOf(alice), 1e9);
 
         // Try withdrawing reserve and expect to succeed
         vm.prank(treasuryAdmin);
-        treasury.withdrawReserves(alice, reserve, 1e18);
+        TRSRY.withdrawReserves(alice, reserve, 1e18);
 
         // Check that reserve was withdrawn
         assertEq(reserve.balanceOf(alice), 1e18);
 
         // Try incuring debt and expect to succeed
         vm.prank(treasuryAdmin);
-        treasury.incurDebt(reserve, 1e18);
+        TRSRY.incurDebt(reserve, 1e18);
 
         // Check that debt was incurred
         assertEq(reserve.balanceOf(treasuryAdmin), 1e18);
-        assertEq(treasury.reserveDebt(reserve, treasuryAdmin), 1e18);
+        assertEq(TRSRY.reserveDebt(reserve, treasuryAdmin), 1e18);
     }
 
     function testCorrectness_OnlyPermissionedAddressCanRestart() public {
@@ -589,8 +624,8 @@ contract EmergencyTest is Test {
         emergency.shutdown();
 
         // Check that MINTR and TRSRY are inactive
-        assertTrue(!minter.active());
-        assertTrue(!treasury.active());
+        assertTrue(!MINTR.active());
+        assertTrue(!TRSRY.active());
 
         // Try restarting with non-permissioned address and expect to fail
         bytes memory err = abi.encodeWithSelector(
@@ -602,16 +637,16 @@ contract EmergencyTest is Test {
         emergency.restart();
 
         // Check that MINTR and TRSRY are still inactive
-        assertTrue(!minter.active());
-        assertTrue(!treasury.active());
+        assertTrue(!MINTR.active());
+        assertTrue(!TRSRY.active());
 
         // Try restarting with permissioned address and expect to succeed
         vm.prank(guardian);
         emergency.restart();
 
         // Check that MINTR and TRSRY are active
-        assertTrue(minter.active());
-        assertTrue(treasury.active());
+        assertTrue(MINTR.active());
+        assertTrue(TRSRY.active());
     }
 
     function testCorrectness_OnlyPermissionedAddressCanRestartMinting() public {
@@ -620,7 +655,7 @@ contract EmergencyTest is Test {
         emergency.shutdownMinting();
 
         // Check that MINTR is inactive
-        assertTrue(!minter.active());
+        assertTrue(!MINTR.active());
 
         // Try restarting with non-permissioned address and expect to fail
         bytes memory err = abi.encodeWithSelector(
@@ -632,14 +667,14 @@ contract EmergencyTest is Test {
         emergency.restartMinting();
 
         // Check that MINTR is still inactive
-        assertTrue(!minter.active());
+        assertTrue(!MINTR.active());
 
         // Try restarting with permissioned address and expect to succeed
         vm.prank(guardian);
         emergency.restartMinting();
 
         // Check that MINTR is active
-        assertTrue(minter.active());
+        assertTrue(MINTR.active());
     }
 
     function testCorrectness_OnlyPermissionedAddressCanRestartWithdrawals() public {
@@ -648,7 +683,7 @@ contract EmergencyTest is Test {
         emergency.shutdownWithdrawals();
 
         // Check that TRSRY is inactive
-        assertTrue(!treasury.active());
+        assertTrue(!TRSRY.active());
 
         // Try restarting with non-permissioned address and expect to fail
         bytes memory err = abi.encodeWithSelector(
@@ -660,13 +695,13 @@ contract EmergencyTest is Test {
         emergency.restartWithdrawals();
 
         // Check that TRSRY is still inactive
-        assertTrue(!treasury.active());
+        assertTrue(!TRSRY.active());
 
         // Try restarting with permissioned address and expect to succeed
         vm.prank(guardian);
         emergency.restartWithdrawals();
 
         // Check that TRSRY is active
-        assertTrue(treasury.active());
+        assertTrue(TRSRY.active());
     }
 }

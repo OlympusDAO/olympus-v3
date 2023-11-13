@@ -79,6 +79,14 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
         PRICE = PRICEv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
+
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1]);
+        if (PRICE_MAJOR != 1 || ROLES_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
@@ -192,10 +200,10 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     function currentReward() public view returns (uint256) {
         // If beat not available, return 0
         // Otherwise, calculate reward from linearly increasing auction bounded by maxReward and heart balance
-        uint48 frequency = frequency();
-        uint48 nextBeat = lastBeat + frequency;
+        uint48 beatFrequency = frequency();
+        uint48 nextBeat = lastBeat + beatFrequency;
         uint48 currentTime = uint48(block.timestamp);
-        uint48 duration = auctionDuration > frequency ? frequency : auctionDuration;
+        uint48 duration = auctionDuration > beatFrequency ? beatFrequency : auctionDuration;
         if (currentTime <= nextBeat) {
             return 0;
         } else {
