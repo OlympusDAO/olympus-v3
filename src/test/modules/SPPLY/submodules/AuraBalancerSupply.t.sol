@@ -43,7 +43,7 @@ contract MockBalancerPool is IBalancerPool {
         _balance = balance_;
     }
 
-    function balanceOf(address account_) external view override returns (uint256) {
+    function balanceOf(address) external view override returns (uint256) {
         return _balance;
     }
 }
