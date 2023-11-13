@@ -22,7 +22,7 @@ contract MockBalancerVault is IVault, BalancerReentrancyGuard {
     }
 
     function getPoolTokens(
-        bytes32 poolId
+        bytes32
     ) external view override returns (address[] memory, uint256[] memory, uint256) {
         return (tokens, balances, lastChangeBlock);
     }

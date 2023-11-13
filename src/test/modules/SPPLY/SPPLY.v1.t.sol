@@ -43,7 +43,9 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //  [X] reverts if category already approved
 //  [X] reverts if category is empty
 //  [X] reverts if an incorrect submodules selector is provided
+//  [ ] reverts if an incorrect submodules reserves selector is provided when disabled
 //  [X] reverts if a submodules selector is provided when disabled
+//  [ ] reverts if a submodules reserves selector is provided when disabled
 //  [X] stores category in categories array, emits event
 //  [X] stores category with submodules enabled in categories array, emits event
 // [X] removeCategory - removes a category from supply tracking
@@ -510,6 +512,7 @@ contract SupplyTest is Test {
         assertEq(categoryData.approved, true);
         assertEq(categoryData.useSubmodules, false);
         assertEq(categoryData.submoduleSelector, bytes4(0));
+        // TODO submodule reserve selector
     }
 
     function test_addCategory_withSubmodules() public {
@@ -543,6 +546,7 @@ contract SupplyTest is Test {
         assertEq(categoryData.approved, true);
         assertEq(categoryData.useSubmodules, true);
         assertEq(categoryData.submoduleSelector, SupplySubmodule.getCollateralizedOhm.selector);
+        // TODO submodule reserve selector
     }
 
     // =========  removeCategory ========= //
@@ -2207,4 +2211,18 @@ contract SupplyTest is Test {
         );
         assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
     }
+
+    // =========  getReservesByCategory ========= //
+
+    // [ ] getReservesByCategory
+    //  [ ] categoryNotApproved
+    //  [ ] supply calculations
+    //    [ ] no locations in category
+    //    [ ] zero supply
+    //    [ ] OHM supply
+    //    [ ] gOHM supply
+    //    [ ] uses submodules if enabled
+    //    [ ] ignores submodules if disabled
+    //    [ ] reverts upon submodule failure
+
 }

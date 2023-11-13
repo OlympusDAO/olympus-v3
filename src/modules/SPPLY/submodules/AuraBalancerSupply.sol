@@ -178,41 +178,17 @@ contract AuraBalancerSupply is SupplySubmodule {
         uint256 supply;
         uint256 len = pools.length;
         for (uint256 i; i < len; ) {
-            // Get the balancer pool token balance of the manager
-            uint256 balBalance = pools[i].balancerPool.balanceOf(polManager);
-            // If an aura pool is defined, get the underlying balance and add to the balancer pool balance before adding to the total POL supply
-            // We don't have to do a ERC4626 shares to assets conversion because aura pools are all 1:1 with balancer pool balances
-            if (address(pools[i].auraPool) != address(0))
-                balBalance += pools[i].auraPool.balanceOf(polManager);
+            SPPLYv1.Reserves memory reserve = _getReserves(pools[i]);
 
-            // Get the total supply of the balancer pool
-            uint256 balTotalSupply = pools[i].balancerPool.totalSupply();
-
-            // Continue only if total supply is not 0
-            if (balTotalSupply != 0) {
-                // Get the pool tokens and balances of the pool
-                (address[] memory tokens, uint256[] memory balances, ) = balVault.getPoolTokens(
-                    pools[i].balancerPool.getPoolId()
-                );
-
-                // Calculate the amount of OHM in the pool owned by the polManager
-                // We have to iterate through the tokens array to find the index of OHM
-                uint256 tokenLen = tokens.length;
-                for (uint256 j; j < tokenLen; ) {
-                    if (tokens[j] == ohm) {
-                        // Get the amount of OHM in the pool
-                        uint256 ohmBalance = balances[j];
-                        // Calculate the amount of OHM owned by the polManager
-                        uint256 polBalance = (ohmBalance * balBalance) / balTotalSupply;
-                        // Add the amount of OHM owned by the polManager to the total POL supply
-                        supply += polBalance;
-                        // Break out of the loop
-                        break;
-                    }
-
-                    unchecked {
-                        ++j;
-                    }
+            // Iterate over the tokens and add the OHM balance to the total POL supply
+            uint256 tokenLen = reserve.tokens.length;
+            for (uint256 j; j < tokenLen; ) {
+                if (reserve.tokens[j] == ohm) {
+                    supply += reserve.balances[j];
+                    break;
+                }
+                unchecked {
+                    ++j;
                 }
             }
 
@@ -222,6 +198,68 @@ contract AuraBalancerSupply is SupplySubmodule {
         }
 
         return supply;
+    }
+
+    /// @inheritdoc SupplySubmodule
+    function getProtocolOwnedLiquidityReserves() external view override returns (SPPLYv1.Reserves[] memory) {
+        // Iterate through tokens and add the reserves of each pool
+        uint256 len = pools.length;
+        SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
+        for (uint256 i; i < len; ) {
+            SPPLYv1.Reserves memory reserve = _getReserves(pools[i]);
+            reserves[i] = reserve;
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return reserves;
+    }
+
+    function _getReserves(Pool storage pool) internal view returns (SPPLYv1.Reserves memory) {
+        // Get the balancer pool token balance of the manager
+        uint256 balBalance = pool.balancerPool.balanceOf(polManager);
+        // If an aura pool is defined, get the underlying balance and add to the balancer pool balance before adding to the total POL supply
+        // We don't have to do a ERC4626 shares to assets conversion because aura pools are all 1:1 with balancer pool balances
+        if (address(pool.auraPool) != address(0))
+            balBalance += pool.auraPool.balanceOf(polManager);
+
+        // Get the pool tokens and total balances of the pool
+        (address[] memory _vaultTokens, uint256[] memory _vaultBalances, ) = balVault.getPoolTokens(
+            pool.balancerPool.getPoolId()
+        );
+
+        // Get the total supply of the balancer pool
+        uint256 balTotalSupply = pool.balancerPool.totalSupply();
+        uint256[] memory balances = new uint256[](_vaultTokens.length);
+        // Calculate the proportion of the pool balances owned by the polManager
+        if (balTotalSupply != 0) {
+            // Calculate the amount of OHM in the pool owned by the polManager
+            // We have to iterate through the tokens array to find the index of OHM
+            uint256 tokenLen = _vaultTokens.length;
+            for (uint256 i; i < tokenLen; ) {
+                uint256 balance = _vaultBalances[i];
+                uint256 polBalance = balance * balBalance / balTotalSupply;
+
+                balances[i] = polBalance;
+
+                unchecked {
+                    ++i;
+                }
+            }
+        }
+
+        SPPLYv1.Reserves memory reserves;
+        reserves.source = address(pool.balancerPool);
+        reserves.tokens = _vaultTokens;
+        reserves.balances = balances;
+        return reserves;
+    }
+
+    /// @inheritdoc SupplySubmodule
+    function getSourceCount() external view override returns (uint256) {
+        return pools.length;
     }
 
     // =========== ADMIN FUNCTIONS =========== //

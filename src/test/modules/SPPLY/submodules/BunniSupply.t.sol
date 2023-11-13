@@ -175,6 +175,14 @@ contract BunniSupplyTest is Test {
         }
     }
 
+    function _getReserves(
+        BunniKey memory key_,
+        BunniLens lens_
+    ) internal view returns (uint256, uint256) {
+        (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
+        return (reserve0, reserve1);
+    }
+
     function _expectRevert_invalidBunniToken(address token_) internal {
         bytes memory err = abi.encodeWithSelector(
             BunniSupply.BunniSupply_Params_InvalidBunniToken.selector,
@@ -315,6 +323,85 @@ contract BunniSupplyTest is Test {
 
         assertTrue(polo > 0, "should be non-zero");
         assertEq(polo, ohmReserves + ohmReservesTwo);
+    }
+
+    // =========  getProtocolOwnedLiquidityReserves ========= //
+
+    // [X] getProtocolOwnedLiquidityReserves
+    //  [X] no tokens
+    //  [X] single token
+    //  [X] multiple tokens
+
+    function test_getProtocolOwnedLiquidityReserves_noTokens() public {
+        // Don't add the token
+
+        SPPLYv1.Reserves[] memory reserves = submoduleBunniSupply.getProtocolOwnedLiquidityReserves();
+        
+        assertEq(reserves.length, 0);
+    }
+
+    function test_getProtocolOwnedLiquidityReserves_singleToken() public {
+        // Register one token
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+
+        // Determine the amount of reserves in the pool, which should be consistent with the lens value
+        (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleBunniSupply.getProtocolOwnedLiquidityReserves();
+        
+        assertEq(reserves.length, 1);
+
+        assertEq(reserves[0].source, poolTokenAddress);
+        assertEq(reserves[0].tokens.length, 2);
+        assertEq(reserves[0].tokens[0], ohmAddress);
+        assertEq(reserves[0].tokens[1], usdcAddress);
+        assertEq(reserves[0].balances.length, 2);
+        assertEq(reserves[0].balances[0], ohmReserves_);
+        assertEq(reserves[0].balances[1], usdcReserves_);
+    }
+
+    function test_getProtocolOwnedLiquidityReserves_multipleToken() public {
+        // Register one token
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+
+        // Set up a second pool and token
+        MockERC20 wETH = new MockERC20("wETH", "wETH", 18);
+        uint128 liquidityTwo = 602219599341335870;
+        uint160 sqrtPriceX96Two = 195181081174522229204497247535278;
+        (, BunniKey memory poolTokenKeyTwo, BunniToken poolTokenTwo) = _setUpPool(
+            ohmAddress,
+            address(wETH),
+            liquidityTwo,
+            sqrtPriceX96Two
+        );
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(address(poolTokenTwo), bunniLensAddress);
+
+        // Determine the amount of reserves in the pool, which should be consistent with the lens value
+        (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
+        (uint256 ohmReservesTwo_, uint256 wethReservesTwo_) = _getReserves(poolTokenKeyTwo, bunniLens);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleBunniSupply.getProtocolOwnedLiquidityReserves();
+        
+        assertEq(reserves.length, 2);
+
+        assertEq(reserves[0].source, poolTokenAddress);
+        assertEq(reserves[0].tokens.length, 2);
+        assertEq(reserves[0].tokens[0], ohmAddress);
+        assertEq(reserves[0].tokens[1], usdcAddress);
+        assertEq(reserves[0].balances.length, 2);
+        assertEq(reserves[0].balances[0], ohmReserves_);
+        assertEq(reserves[0].balances[1], usdcReserves_);
+
+        assertEq(reserves[1].source, address(poolTokenTwo));
+        assertEq(reserves[1].tokens.length, 2);
+        assertEq(reserves[1].tokens[0], ohmAddress);
+        assertEq(reserves[1].tokens[1], address(wETH));
+        assertEq(reserves[1].balances.length, 2);
+        assertEq(reserves[1].balances[0], ohmReservesTwo_);
+        assertEq(reserves[1].balances[1], wethReservesTwo_);
     }
 
     // =========  addBunniToken ========= //

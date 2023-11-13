@@ -111,6 +111,8 @@ contract OlympusSupply is SPPLYv1 {
             if (!valid) revert SPPLY_InvalidParams();
         }
 
+        // TODO add selector for reserves
+
         // Add category to list of approved categories and store category data
         categories.push(category_);
         CategoryData storage data = categoryData[category_];
@@ -330,22 +332,12 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     function _getSupplyByCategory(Category category_) internal view returns (uint256) {
-        // Total up the supply of OHM of all locations in the category
+        // Total up the supply of OHM of all locations in the category. Also accounts for gOHM.
         uint256 len = locations.length;
         uint256 supply;
         for (uint256 i; i < len; ) {
             if (fromCategory(categorization[locations[i]]) == fromCategory(category_)) {
-                supply += ohm.balanceOf(locations[i]);
-            }
-            unchecked {
-                ++i;
-            }
-        }
-
-        // Total up the supply of gOHM of all locations in the category
-        for (uint256 i; i < len; ) {
-            if (fromCategory(categorization[locations[i]]) == fromCategory(category_)) {
-                supply += _getOhmForGOhmBalance(locations[i]);
+                supply += ohm.balanceOf(locations[i]) + _getOhmForGOhmBalance(locations[i]);
             }
             unchecked {
                 ++i;
@@ -383,64 +375,94 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
-    function getReservesByCategory(Category category_) external override returns (Reserves[] memory) {
-        Reserves[] memory reserves;
-
-        // Get reserves from all locations in the category
+    function getReservesByCategory(
+        Category category_
+    ) external view override returns (Reserves[] memory) {
+        uint256 categoryLocations;
         uint256 len = locations.length;
+        // Count all locations for given category.
         for (uint256 i; i < len; ) {
             if (fromCategory(categorization[locations[i]]) == fromCategory(category_)) {
-                // TODO add to reserves
-                // supply += ohm.balanceOf(locations[i]);
-            }
-            unchecked {
-                ++i;
-            }
-        }
-
-        // Total up the supply of gOHM of all locations in the category
-        for (uint256 i; i < len; ) {
-            if (fromCategory(categorization[locations[i]]) == fromCategory(category_)) {
-                // TODO add to reserves
-                // supply += _getOhmForGOhmBalance(locations[i]);
-            }
-            unchecked {
-                ++i;
-            }
-        }
-
-        // Add cross-chain category supply
-        CategoryData memory data = categoryData[category_];
-
-        // If category requires data from submodules, it must be calculated and added
-        if (data.useSubmodules) {
-            // Iterate through submodules and add their value to the total
-            // Should not include any supply that is retrievable via a simple balance lookup, which is handled by locations above
-            len = submodules.length;
-            for (uint256 i; i < len; ) {
-                address submodule = address(_getSubmoduleIfInstalled(submodules[i]));
-                (bool success, bytes memory returnData) = submodule.staticcall(
-                    abi.encodeWithSelector(SupplySubmodule.getReserves.selector)
-                );
-
-                // Ensure call was successful
-                if (!success)
-                    revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleSelector);
-
-                // Decode supply returned by the submodule
-                Reserves[] memory currentReserves = abi.decode(returnData, (Reserves[] memory));
-
-                // TODO add to reserves
-
                 unchecked {
-                    ++i;
+                    ++categoryLocations;
                 }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        CategoryData memory data = categoryData[category_];
+        uint256 categorySubmodSources;
+        // If category requires data from submodules, count all submodules and their sources.
+        len = (data.useSubmodules) ? submodules.length : 0;
+        for (uint256 i; i < len; ) {
+            address submodule = address(_getSubmoduleIfInstalled(submodules[i]));
+            (bool success, bytes memory returnData) = submodule.staticcall(
+                abi.encodeWithSelector(SupplySubmodule.getSourceCount.selector)
+            );
+
+            // Ensure call was successful
+            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleSelector);
+
+            // Decode number of sources returned by the submodule
+            unchecked {
+                categorySubmodSources = categorySubmodSources + abi.decode(returnData, (uint256));
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        Reserves[] memory reserves = new Reserves[](categoryLocations + categorySubmodSources);
+        // Iterate through submodules and add their reserves to the return array
+        // Should not include any supply that is retrievable via a simple balance lookup, which is handled by locations below
+        uint256 j;
+        for (uint256 i; i < len; ) {
+            address submodule = address(_getSubmoduleIfInstalled(submodules[i]));
+            (bool success, bytes memory returnData) = submodule.staticcall(
+                // TODO change to use dynamic selector
+                abi.encodeWithSelector(SupplySubmodule.getProtocolOwnedLiquidityReserves.selector)
+            );
+
+            // Ensure call was successful
+            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), SupplySubmodule.getProtocolOwnedLiquidityReserves.selector);
+
+            // Decode supply returned by the submodule
+            Reserves[] memory currentReserves = abi.decode(returnData, (Reserves[]));
+            uint256 current = currentReserves.length;
+            for (uint256 k; k < current; ) {
+                reserves[j] = currentReserves[k];
+                unchecked {
+                    ++j;
+                    ++k;
+                }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        address[] memory ohmTokens = new address[](1);
+        ohmTokens[0] = address(ohm);
+        j = categorySubmodSources;
+        // Get supply from all locations in the category. Also accounts for gOHM.
+        for (uint256 i; i < len; ) {
+            if (fromCategory(categorization[locations[i]]) == fromCategory(category_)) {
+                uint256[] memory ohmBalances = new uint256[](1);
+                ohmBalances[0] = ohm.balanceOf(locations[i]) + _getOhmForGOhmBalance(locations[i]);
+                reserves[j] = Reserves(locations[i], ohmTokens, ohmBalances);
+                unchecked {
+                    ++j;
+                }
+            }
+            unchecked {
+                ++i;
             }
         }
 
         return reserves;
     }
-
 
     /// @inheritdoc SPPLYv1
     function storeCategorySupply(Category category_) external override permissioned {

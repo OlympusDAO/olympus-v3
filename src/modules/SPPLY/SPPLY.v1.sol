@@ -329,10 +329,16 @@ abstract contract SupplySubmodule is Submodule {
     /// @return     Quantity in the configured decimals
     function getProtocolOwnedLiquidityOhm() external view virtual returns (uint256);
 
-    /// @notice     Reserves in the assets monitored by the submodule
+    /// @notice     Protocol-Owned Liquidity Reserves in the assets monitored by the submodule
     /// @dev        This provides the details of OHM and non-OHM reserves in the submodule,
     ///             and can be used to determine the market and backing value of a category.
     ///
     /// @return     A reserves struct
-    function getReserves() external view virtual returns (SPPLYv1.Reserves[] memory);
+    function getProtocolOwnedLiquidityReserves() external view virtual returns (SPPLYv1.Reserves[] memory);
+
+    /// @notice     Number of supply sources monitored by the submodule
+    /// @dev        Useful for know the number of sources for `getProtocolOwnedLiquidityReserves()` in advance.
+    ///
+    /// @return     Number of supply sources monitored by the submodule
+    function getSourceCount() external view virtual returns (uint256);
 }

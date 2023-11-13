@@ -11,8 +11,8 @@ contract MockSiloLens is ISiloLens {
     bool internal _balanceOfUnderlyingReverts;
 
     function totalBorrowAmountWithInterest(
-        IBaseSilo silo_,
-        address asset_
+        IBaseSilo,
+        address
     ) external view override returns (uint256 totalBorrowAmount_) {
         return _totalBorrowAmountWithInterest;
     }
@@ -22,8 +22,8 @@ contract MockSiloLens is ISiloLens {
     }
 
     function totalDepositsWithInterest(
-        IBaseSilo silo_,
-        address asset_
+        IBaseSilo,
+        address
     ) external view override returns (uint256 totalDeposits_) {
         return _totalDepositsWithInterest;
     }
@@ -33,9 +33,9 @@ contract MockSiloLens is ISiloLens {
     }
 
     function balanceOfUnderlying(
-        uint256 assetTotalDeposits_,
-        address shareToken_,
-        address user_
+        uint256,
+        address,
+        address
     ) external view override returns (uint256 balance_) {
         if (_balanceOfUnderlyingReverts) revert();
 
@@ -52,7 +52,7 @@ contract MockSiloLens is ISiloLens {
 }
 
 contract MockBaseSilo is IBaseSilo {
-    AssetStorage _storage;
+    AssetStorage internal _storage;
 
     // Constructor
     constructor() {
@@ -70,7 +70,7 @@ contract MockBaseSilo is IBaseSilo {
         _storage.collateralToken = collateralToken_;
     }
 
-    function assetStorage(address _asset) external view override returns (AssetStorage memory) {
+    function assetStorage(address) external view override returns (AssetStorage memory) {
         return _storage;
     }
 }

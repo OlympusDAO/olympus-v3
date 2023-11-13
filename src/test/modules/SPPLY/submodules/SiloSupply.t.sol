@@ -179,8 +179,10 @@ contract SiloSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new SiloSupply(moduleSupply, siloAmo, address(siloLens), address(siloBase));
+        submoduleSiloSupply = new SiloSupply(moduleSupply, siloAmo, address(siloLens), address(siloBase));
         vm.stopPrank();
+
+        assertEq(submoduleSiloSupply.getSourceCount(), 1);
     }
 
     // =========  getCollateralizedOhm ========= //
@@ -230,6 +232,21 @@ contract SiloSupplyTest is Test {
         assertEq(submoduleSiloSupply.getProtocolOwnedLiquidityOhm(), 0);
     }
 
+    // =========  getProtocolOwnedLiquidityReserves ========= //
+
+    function test_getProtocolOwnedLiquidityReserves_fuzz(uint256 borrowed_) public {
+        uint256 borrowed = bound(borrowed_, 0, LENS_TOTAL_DEPOSITED_AMOUNT);
+        siloLens.setTotalBorrowAmountWithInterest(borrowed);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleSiloSupply.getProtocolOwnedLiquidityReserves();
+
+        // No POL
+        assertEq(reserves.length, 1);
+        assertEq(reserves[0].source, address(siloBase));
+        assertEq(reserves[0].tokens.length, 0);
+        assertEq(reserves[0].balances.length, 0);
+    }
+
     // =========  setSources ========= //
 
     function test_setSources_notParent_reverts() public {
@@ -266,6 +283,8 @@ contract SiloSupplyTest is Test {
         assertEq(submoduleSiloSupply.amo(), newAmo);
         assertEq(address(submoduleSiloSupply.lens()), address(siloLens));
         assertEq(address(submoduleSiloSupply.silo()), address(siloBase));
+
+        assertEq(submoduleSiloSupply.getSourceCount(), 1);
     }
 
     function test_setSources_lens() public {
@@ -283,6 +302,8 @@ contract SiloSupplyTest is Test {
         assertEq(submoduleSiloSupply.amo(), siloAmo);
         assertEq(address(submoduleSiloSupply.lens()), newLens);
         assertEq(address(submoduleSiloSupply.silo()), address(siloBase));
+
+        assertEq(submoduleSiloSupply.getSourceCount(), 1);
     }
 
     function test_setSources_silo() public {
@@ -300,6 +321,8 @@ contract SiloSupplyTest is Test {
         assertEq(submoduleSiloSupply.amo(), siloAmo);
         assertEq(address(submoduleSiloSupply.lens()), address(siloLens));
         assertEq(address(submoduleSiloSupply.silo()), newSilo);
+
+        assertEq(submoduleSiloSupply.getSourceCount(), 1);
     }
 
     function test_setSources_multiple() public {
@@ -319,5 +342,7 @@ contract SiloSupplyTest is Test {
         assertEq(submoduleSiloSupply.amo(), newAmo);
         assertEq(address(submoduleSiloSupply.lens()), newLens);
         assertEq(address(submoduleSiloSupply.silo()), newSilo);
+
+        assertEq(submoduleSiloSupply.getSourceCount(), 1);
     }
 }

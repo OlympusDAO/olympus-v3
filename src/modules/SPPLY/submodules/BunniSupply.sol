@@ -82,6 +82,11 @@ contract BunniSupply is SupplySubmodule {
     // ========== DATA FUNCTIONS ========== //
 
     /// @inheritdoc SupplySubmodule
+    function getSourceCount() external view override returns (uint256) {
+        return bunniTokens.length;
+    }
+
+    /// @inheritdoc SupplySubmodule
     /// @dev        Not applicable for Uniswap V3 pools managed by BunniHub
     function getCollateralizedOhm() external pure override returns (uint256) {
         return 0;
@@ -113,7 +118,9 @@ contract BunniSupply is SupplySubmodule {
         return total;
     }
 
-    function getReserves() external view returns (SPPLYv1.Reserves[] memory) {
+    /// @inheritdoc SupplySubmodule
+    /// @dev        Returns the total of OHM and non-OHM reserves in the submodule
+    function getProtocolOwnedLiquidityReserves() external view override returns (SPPLYv1.Reserves[] memory) {
         // Iterate through tokens and total up the reserves of each pool
         uint256 len = bunniTokens.length;
         SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
@@ -121,21 +128,24 @@ contract BunniSupply is SupplySubmodule {
             BunniToken token = bunniTokens[i];
             BunniLens lens = bunniLenses[i];
             BunniKey memory key = _getBunniKey(token);
-            (address token0, address token1, uint256 reserve0, uint256 reserve1) = _getReserves(key, lens);
+            (address token0, address token1, uint256 reserve0, uint256 reserve1) = _getReservesWithFees(
+                key,
+                lens
+            );
 
-            address[] memory underlyingTokens;
+            address[] memory underlyingTokens = new address[](2);
             underlyingTokens[0] = token0;
             underlyingTokens[1] = token1;
-            uint256[] memory underlyingReserves;
+            uint256[] memory underlyingReserves = new uint256[](2);
             underlyingReserves[0] = reserve0;
             underlyingReserves[1] = reserve1;
 
             reserves[i] = SPPLYv1.Reserves({
                 source: address(token),
                 tokens: underlyingTokens,
-                reserves: underlyingReserves
+                balances: underlyingReserves
             });
-            
+
             unchecked {
                 ++i;
             }
@@ -263,13 +273,14 @@ contract BunniSupply is SupplySubmodule {
         }
     }
 
-    function _getReserves(
+    function _getReservesWithFees(
         BunniKey memory key_,
         BunniLens lens_
     ) internal view returns (address, address, uint256, uint256) {
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
+        (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
 
-        return (key_.pool.token0(), key_.pool.token1(), reserve0, reserve1);
+        return (key_.pool.token0(), key_.pool.token1(), reserve0 + fee0, reserve1 + fee1);
     }
 
     function _inTokenArray(address token_) internal view returns (bool) {

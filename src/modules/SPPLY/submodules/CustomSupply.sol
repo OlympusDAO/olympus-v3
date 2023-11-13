@@ -22,6 +22,7 @@ abstract contract CustomSupply is SupplySubmodule {
     event CollateralizedValueUpdated(uint256 value);
     event ProtocolOwnedBorrowableValueUpdated(uint256 value);
     event ProtocolOwnedLiquidityValueUpdated(uint256 value);
+    event SourceValueUpdated(address value);
 
     // ========== STATE VARIABLES ========== //
 
@@ -34,35 +35,66 @@ abstract contract CustomSupply is SupplySubmodule {
     /// @notice     The custom value for protocol-owned liquidity OHM
     uint256 private _protocolOwnedLiquidityOhm;
 
+    /// @notice     The custom value for the source
+    address private _source;
+
     // ========== CONSTRUCTOR ========== //
 
     constructor(
         Module parent_,
         uint256 collateralizedOhm_,
         uint256 protocolOwnedBorrowableOhm_,
-        uint256 protocolOwnedLiquidityOhm_
+        uint256 protocolOwnedLiquidityOhm_,
+        address source_
     ) Submodule(parent_) {
         _collateralizedOhm = collateralizedOhm_;
         _protocolOwnedBorrowableOhm = protocolOwnedBorrowableOhm_;
         _protocolOwnedLiquidityOhm = protocolOwnedLiquidityOhm_;
+        _source = source_;
 
         emit CollateralizedValueUpdated(collateralizedOhm_);
         emit ProtocolOwnedBorrowableValueUpdated(protocolOwnedBorrowableOhm_);
         emit ProtocolOwnedLiquidityValueUpdated(protocolOwnedLiquidityOhm_);
+        emit SourceValueUpdated(source_);
     }
 
     // ========== DATA FUNCTIONS ========== //
 
-    function getCollateralizedOhm() external view virtual override returns (uint256) {
+    /// @inheritdoc SupplySubmodule
+    function getCollateralizedOhm() external view override returns (uint256) {
         return _collateralizedOhm;
     }
 
-    function getProtocolOwnedBorrowableOhm() external view virtual override returns (uint256) {
+    /// @inheritdoc SupplySubmodule
+    function getProtocolOwnedBorrowableOhm() external view override returns (uint256) {
         return _protocolOwnedBorrowableOhm;
     }
 
-    function getProtocolOwnedLiquidityOhm() external view virtual override returns (uint256) {
+    /// @inheritdoc SupplySubmodule
+    function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
         return _protocolOwnedLiquidityOhm;
+    }
+
+    /// @inheritdoc SupplySubmodule
+    function getProtocolOwnedLiquidityReserves() external view override returns (SPPLYv1.Reserves[] memory) {
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(SPPLYv1(address(parent)).ohm());
+        uint256[] memory balances = new uint256[](1);
+        balances[0] = _protocolOwnedLiquidityOhm;
+
+        SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](1);
+        reserves[0] = SPPLYv1.Reserves({
+            source: _source, 
+            tokens: tokens,
+            balances: balances
+        });
+
+        return reserves;
+    }
+
+    /// @inheritdoc SupplySubmodule
+    function getSourceCount() external pure virtual override returns (uint256) {
+        return 1;
     }
 
     // =========== ADMIN FUNCTIONS =========== //
@@ -83,5 +115,11 @@ abstract contract CustomSupply is SupplySubmodule {
         _protocolOwnedLiquidityOhm = value_;
 
         emit ProtocolOwnedLiquidityValueUpdated(value_);
+    }
+
+    function setSource(address source_) external onlyParent {
+        _source = source_;
+
+        emit SourceValueUpdated(source_);
     }
 }

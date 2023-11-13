@@ -49,9 +49,14 @@ contract BLVaultSupply is SupplySubmodule {
         uint256 len = vaultManagers_.length;
 
         for (uint256 i = 0; i < len; i++) {
-            vaultManagers.push(IBLVaultManager(vaultManagers_[i]));
+            address vaultManager = vaultManagers_[i];
 
-            emit VaultManagerAdded(vaultManagers_[i]);
+            if (vaultManager == address(0) || _inArray(vaultManager))
+                revert BLVaultSupply_InvalidParams();
+
+            vaultManagers.push(IBLVaultManager(vaultManager));
+
+            emit VaultManagerAdded(vaultManager);
         }
     }
 
@@ -101,6 +106,33 @@ contract BLVaultSupply is SupplySubmodule {
     function getProtocolOwnedLiquidityOhm() external pure override returns (uint256) {
         // POLO is always zero for BLVaults
         return 0;
+    }
+
+    /// @inheritdoc SupplySubmodule
+    /// @dev        Protocol-owned liquidity OHM is always zero for BLVaults.
+    ///
+    ///             This function returns an array with the same length as `getSourceCount()`, but with empty values.
+    function getProtocolOwnedLiquidityReserves() external view override returns (SPPLYv1.Reserves[] memory) {
+        uint256 len = vaultManagers.length;
+        SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
+        for (uint256 i; i < len; ) {
+            reserves[i] = SPPLYv1.Reserves({
+                source: address(vaultManagers[i]),
+                tokens: new address[](0),
+                balances: new uint256[](0)
+            });
+            
+            unchecked {
+                ++i;
+            }
+        }
+
+        return reserves;
+    }
+
+    /// @inheritdoc SupplySubmodule
+    function getSourceCount() external view override returns (uint256) {
+        return vaultManagers.length;
     }
 
     // =========== ADMIN FUNCTIONS =========== //

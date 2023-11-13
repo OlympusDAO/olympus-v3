@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
-
+import {FullMath} from "@uniswap/v3-core/contracts/libraries/FullMath.sol";
 import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
 
 import "./base/Structs.sol";
@@ -51,6 +51,43 @@ contract BunniLens is IBunniLens {
         return _getReserves(key, existingLiquidity);
     }
 
+    /// @inheritdoc IBunniLens
+    function getUncollectedFees(
+        BunniKey calldata key
+    ) external view override returns (uint256 fee0, uint256 fee1) {
+        // TODO write tests
+        (, int24 tick, , , , , ) = key.pool.slot0();
+        (, , uint256 feeGrowthOutside0Lower, uint256 feeGrowthOutside1Lower, , , , ) = key
+            .pool
+            .ticks(key.tickLower);
+        (, , uint256 feeGrowthOutside0Upper, uint256 feeGrowthOutside1Upper, , , , ) = key
+            .pool
+            .ticks(key.tickUpper);
+        (uint128 liquidity, uint256 feeGrowthInside0Last, uint256 feeGrowthInside1Last, , ) = key
+            .pool
+            .positions(keccak256(abi.encodePacked(address(hub), key.tickLower, key.tickUpper)));
+        uint256 feeGrowthGlobal = key.pool.feeGrowthGlobal0X128();
+
+        fee0 = _computeFeesEarned(
+            key,
+            tick,
+            liquidity,
+            feeGrowthInside0Last,
+            feeGrowthOutside0Lower,
+            feeGrowthOutside0Upper,
+            feeGrowthGlobal
+        );
+        fee1 = _computeFeesEarned(
+            key,
+            tick,
+            liquidity,
+            feeGrowthInside1Last,
+            feeGrowthOutside1Lower,
+            feeGrowthOutside1Upper,
+            feeGrowthGlobal
+        );
+    }
+
     /// @notice Cast a uint256 to a uint112, revert on overflow
     /// @param y The uint256 to be downcasted
     /// @return z The downcasted integer, now type uint112
@@ -75,5 +112,40 @@ contract BunniLens is IBunniLens {
 
         reserve0 = _toUint112(amount0);
         reserve1 = _toUint112(amount1);
+    }
+
+    function _computeFeesEarned(
+        BunniKey memory key,
+        int24 tick,
+        uint128 existingLiquidity,
+        uint256 feeGrowthInsideLast,
+        uint256 feeGrowthOutsideLower,
+        uint256 feeGrowthOutsideUpper,
+        uint256 feeGrowthGlobal
+    ) internal pure returns (uint256 fee) {
+        unchecked {
+            // Calculate fee growth below
+            uint256 feeGrowthBelow;
+            if (tick >= key.tickLower) {
+                feeGrowthBelow = feeGrowthOutsideLower;
+            } else {
+                feeGrowthBelow = feeGrowthGlobal - feeGrowthOutsideLower;
+            }
+
+            // Calculate fee growth above
+            uint256 feeGrowthAbove;
+            if (tick < key.tickUpper) {
+                feeGrowthAbove = feeGrowthOutsideUpper;
+            } else {
+                feeGrowthAbove = feeGrowthGlobal - feeGrowthOutsideUpper;
+            }
+
+            uint256 feeGrowthInside = feeGrowthGlobal - feeGrowthBelow - feeGrowthAbove;
+            fee = FullMath.mulDiv(
+                existingLiquidity,
+                feeGrowthInside - feeGrowthInsideLast,
+                0x100000000000000000000000000000000
+            );
+        }
     }
 }
