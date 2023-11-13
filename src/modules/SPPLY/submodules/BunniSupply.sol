@@ -140,7 +140,7 @@ contract BunniSupply is SupplySubmodule {
             reserves[i] = SPPLYv1.Reserves({
                 source: address(token),
                 tokens: underlyingTokens,
-                reserves: underlyingReserves
+                balances: underlyingReserves
             });
             
             unchecked {
