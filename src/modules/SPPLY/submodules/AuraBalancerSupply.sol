@@ -208,6 +208,10 @@ contract AuraBalancerSupply is SupplySubmodule {
         for (uint256 i; i < len; ) {
             SPPLYv1.Reserves memory reserve = _getReserves(pools[i]);
             reserves[i] = reserve;
+
+            unchecked {
+                ++i;
+            }
         }
 
         return reserves;
