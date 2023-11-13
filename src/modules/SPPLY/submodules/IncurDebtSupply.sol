@@ -77,20 +77,41 @@ contract IncurDebtSupply is SupplySubmodule {
     /// @inheritdoc SupplySubmodule
     /// @dev        The value of IncurDebt.totalOutstandingGlobalDebt() is returned, as
     ///             the OHM minted against gOHM collateral is fully-collateralized.
-    function getCollateralizedOhm() external view virtual override returns (uint256) {
+    function getCollateralizedOhm() external view override returns (uint256) {
         return _incurDebt.totalOutstandingGlobalDebt();
     }
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Not applicable to IncurDebt
-    function getProtocolOwnedBorrowableOhm() external view virtual override returns (uint256) {
+    function getProtocolOwnedBorrowableOhm() external pure override returns (uint256) {
         return 0;
     }
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Not applicable to IncurDebt
-    function getProtocolOwnedLiquidityOhm() external view virtual override returns (uint256) {
+    function getProtocolOwnedLiquidityOhm() external pure override returns (uint256) {
         return 0;
+    }
+
+    /// @inheritdoc     SupplySubmodule
+    /// @dev            Protocol-owned liquidity OHM is always zero for lending facilities.
+    ///
+    ///                 This function returns an array with the same length as `getSourceCount()`, but with empty values.
+    function getProtocolOwnedLiquidityReserves() external view override returns (SPPLYv1.Reserves[] memory) {
+        SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](1);
+        reserves[0] = SPPLYv1.Reserves({
+            source: address(_incurDebt),
+            tokens: new address[](0),
+            balances: new uint256[](0)
+        });
+
+        return reserves;
+    }
+
+    /// @inheritdoc     SupplySubmodule
+    /// @dev            This always returns a value of one, as there is a 1:1 mapping between an IncurDebt contract and the Submodule
+    function getSourceCount() external pure override returns (uint256) {
+        return 1;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
