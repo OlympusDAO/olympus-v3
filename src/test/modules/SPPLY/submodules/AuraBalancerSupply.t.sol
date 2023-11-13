@@ -405,7 +405,12 @@ contract AuraBalancerSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        submoduleAuraBalancerSupply = new AuraBalancerSupply(moduleSupply, polManager, address(balancerVault), pools);
+        submoduleAuraBalancerSupply = new AuraBalancerSupply(
+            moduleSupply,
+            polManager,
+            address(balancerVault),
+            pools
+        );
         vm.stopPrank();
 
         assertEq(submoduleAuraBalancerSupply.getSourceCount(), 2);
@@ -805,7 +810,8 @@ contract AuraBalancerSupplyTest is Test {
             bptTotalSupply
         );
 
-        SPPLYv1.Reserves[] memory reserves = submoduleAuraBalancerSupply.getProtocolOwnedLiquidityReserves();
+        SPPLYv1.Reserves[] memory reserves = submoduleAuraBalancerSupply
+            .getProtocolOwnedLiquidityReserves();
         assertEq(reserves.length, 1);
         assertEq(reserves[0].source, address(balancerPool));
         assertEq(reserves[0].tokens.length, 2);
@@ -849,7 +855,8 @@ contract AuraBalancerSupplyTest is Test {
             bptTotalSupply
         );
 
-        SPPLYv1.Reserves[] memory reserves = submoduleAuraBalancerSupply.getProtocolOwnedLiquidityReserves();
+        SPPLYv1.Reserves[] memory reserves = submoduleAuraBalancerSupply
+            .getProtocolOwnedLiquidityReserves();
         assertEq(reserves.length, 1);
         assertEq(reserves[0].source, address(balancerPool));
         assertEq(reserves[0].tokens.length, 2);
@@ -876,7 +883,8 @@ contract AuraBalancerSupplyTest is Test {
         balancerPoolBalances[1] = poolOhmBalance;
         balancerVault.setBalances(BALANCER_POOL_ID, balancerPoolBalances);
 
-        SPPLYv1.Reserves[] memory reserves = submoduleAuraBalancerSupply.getProtocolOwnedLiquidityReserves();
+        SPPLYv1.Reserves[] memory reserves = submoduleAuraBalancerSupply
+            .getProtocolOwnedLiquidityReserves();
         assertEq(reserves.length, 1);
 
         assertEq(reserves[0].source, address(balancerPool));
@@ -924,7 +932,8 @@ contract AuraBalancerSupplyTest is Test {
             bptTotalSupply
         );
 
-        SPPLYv1.Reserves[] memory reserves = submoduleAuraBalancerSupply.getProtocolOwnedLiquidityReserves();
+        SPPLYv1.Reserves[] memory reserves = submoduleAuraBalancerSupply
+            .getProtocolOwnedLiquidityReserves();
         assertEq(reserves.length, 1);
 
         assertEq(reserves[0].source, address(balancerPool));
@@ -957,8 +966,14 @@ contract AuraBalancerSupplyTest is Test {
             balancerPoolBalancesOne[1] = poolOhmBalance;
             balancerVault.setBalances(BALANCER_POOL_ID, balancerPoolBalancesOne);
 
-            expectedPoolOneDaiBalance = poolDaiBalance.mulDiv(polManagerBptBalanceOne + polManagerAuraBptBalanceOne, bptTotalSupplyOne);
-            expectedPoolOneOhmBalance = poolOhmBalance.mulDiv(polManagerBptBalanceOne + polManagerAuraBptBalanceOne, bptTotalSupplyOne);
+            expectedPoolOneDaiBalance = poolDaiBalance.mulDiv(
+                polManagerBptBalanceOne + polManagerAuraBptBalanceOne,
+                bptTotalSupplyOne
+            );
+            expectedPoolOneOhmBalance = poolOhmBalance.mulDiv(
+                polManagerBptBalanceOne + polManagerAuraBptBalanceOne,
+                bptTotalSupplyOne
+            );
         }
 
         // Pool two
@@ -996,11 +1011,18 @@ contract AuraBalancerSupplyTest is Test {
 
             poolTwo = address(balancerPoolTwo);
 
-            expectedPoolTwoDaiBalance = poolDaiBalance.mulDiv(polManagerBptBalanceTwo + polManagerAuraBptBalanceTwo, bptTotalSupplyTwo);
-            expectedPoolTwoOhmBalance = poolOhmBalance.mulDiv(polManagerBptBalanceTwo + polManagerAuraBptBalanceTwo, bptTotalSupplyTwo);
+            expectedPoolTwoDaiBalance = poolDaiBalance.mulDiv(
+                polManagerBptBalanceTwo + polManagerAuraBptBalanceTwo,
+                bptTotalSupplyTwo
+            );
+            expectedPoolTwoOhmBalance = poolOhmBalance.mulDiv(
+                polManagerBptBalanceTwo + polManagerAuraBptBalanceTwo,
+                bptTotalSupplyTwo
+            );
         }
 
-        SPPLYv1.Reserves[] memory reserves = submoduleAuraBalancerSupply.getProtocolOwnedLiquidityReserves();
+        SPPLYv1.Reserves[] memory reserves = submoduleAuraBalancerSupply
+            .getProtocolOwnedLiquidityReserves();
         assertEq(reserves.length, 2);
         assertEq(reserves[0].source, address(balancerPool));
         assertEq(reserves[0].tokens.length, 2);

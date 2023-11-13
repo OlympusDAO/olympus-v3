@@ -201,7 +201,12 @@ contract AuraBalancerSupply is SupplySubmodule {
     }
 
     /// @inheritdoc SupplySubmodule
-    function getProtocolOwnedLiquidityReserves() external view override returns (SPPLYv1.Reserves[] memory) {
+    function getProtocolOwnedLiquidityReserves()
+        external
+        view
+        override
+        returns (SPPLYv1.Reserves[] memory)
+    {
         // Iterate through tokens and add the reserves of each pool
         uint256 len = pools.length;
         SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
@@ -222,8 +227,7 @@ contract AuraBalancerSupply is SupplySubmodule {
         uint256 balBalance = pool.balancerPool.balanceOf(polManager);
         // If an aura pool is defined, get the underlying balance and add to the balancer pool balance before adding to the total POL supply
         // We don't have to do a ERC4626 shares to assets conversion because aura pools are all 1:1 with balancer pool balances
-        if (address(pool.auraPool) != address(0))
-            balBalance += pool.auraPool.balanceOf(polManager);
+        if (address(pool.auraPool) != address(0)) balBalance += pool.auraPool.balanceOf(polManager);
 
         // Get the pool tokens and total balances of the pool
         (address[] memory _vaultTokens, uint256[] memory _vaultBalances, ) = balVault.getPoolTokens(
@@ -240,7 +244,7 @@ contract AuraBalancerSupply is SupplySubmodule {
             uint256 tokenLen = _vaultTokens.length;
             for (uint256 i; i < tokenLen; ) {
                 uint256 balance = _vaultBalances[i];
-                uint256 polBalance = balance * balBalance / balTotalSupply;
+                uint256 polBalance = (balance * balBalance) / balTotalSupply;
 
                 balances[i] = polBalance;
 

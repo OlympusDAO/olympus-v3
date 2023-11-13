@@ -134,7 +134,12 @@ contract SiloSupply is SupplySubmodule {
     /// @dev            Protocol-owned liquidity OHM is always zero for lending facilities.
     ///
     ///                 This function returns an array with the same length as `getSourceCount()`, but with empty values.
-    function getProtocolOwnedLiquidityReserves() external view override returns (SPPLYv1.Reserves[] memory) {
+    function getProtocolOwnedLiquidityReserves()
+        external
+        view
+        override
+        returns (SPPLYv1.Reserves[] memory)
+    {
         SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](1);
         reserves[0] = SPPLYv1.Reserves({
             source: address(silo),

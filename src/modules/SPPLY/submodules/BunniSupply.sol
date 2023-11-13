@@ -120,7 +120,12 @@ contract BunniSupply is SupplySubmodule {
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Returns the total of OHM and non-OHM reserves in the submodule
-    function getProtocolOwnedLiquidityReserves() external view override returns (SPPLYv1.Reserves[] memory) {
+    function getProtocolOwnedLiquidityReserves()
+        external
+        view
+        override
+        returns (SPPLYv1.Reserves[] memory)
+    {
         // Iterate through tokens and total up the reserves of each pool
         uint256 len = bunniTokens.length;
         SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
@@ -128,10 +133,12 @@ contract BunniSupply is SupplySubmodule {
             BunniToken token = bunniTokens[i];
             BunniLens lens = bunniLenses[i];
             BunniKey memory key = _getBunniKey(token);
-            (address token0, address token1, uint256 reserve0, uint256 reserve1) = _getReservesWithFees(
-                key,
-                lens
-            );
+            (
+                address token0,
+                address token1,
+                uint256 reserve0,
+                uint256 reserve1
+            ) = _getReservesWithFees(key, lens);
 
             address[] memory underlyingTokens = new address[](2);
             underlyingTokens[0] = token0;

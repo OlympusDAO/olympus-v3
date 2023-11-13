@@ -179,7 +179,12 @@ contract SiloSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        submoduleSiloSupply = new SiloSupply(moduleSupply, siloAmo, address(siloLens), address(siloBase));
+        submoduleSiloSupply = new SiloSupply(
+            moduleSupply,
+            siloAmo,
+            address(siloLens),
+            address(siloBase)
+        );
         vm.stopPrank();
 
         assertEq(submoduleSiloSupply.getSourceCount(), 1);
@@ -238,7 +243,8 @@ contract SiloSupplyTest is Test {
         uint256 borrowed = bound(borrowed_, 0, LENS_TOTAL_DEPOSITED_AMOUNT);
         siloLens.setTotalBorrowAmountWithInterest(borrowed);
 
-        SPPLYv1.Reserves[] memory reserves = submoduleSiloSupply.getProtocolOwnedLiquidityReserves();
+        SPPLYv1.Reserves[] memory reserves = submoduleSiloSupply
+            .getProtocolOwnedLiquidityReserves();
 
         // No POL
         assertEq(reserves.length, 1);

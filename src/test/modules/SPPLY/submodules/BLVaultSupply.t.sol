@@ -286,15 +286,19 @@ contract BLVaultSupplyTest is Test {
         // Create a new BLVaultSupply with no vault managers
         BLVaultSupply newSubmoduleBLVaultSupply = new BLVaultSupply(moduleSupply, new address[](0));
 
-        SPPLYv1.Reserves[] memory reserves = newSubmoduleBLVaultSupply.getProtocolOwnedLiquidityReserves();
+        SPPLYv1.Reserves[] memory reserves = newSubmoduleBLVaultSupply
+            .getProtocolOwnedLiquidityReserves();
         assertEq(reserves.length, 0);
     }
 
-    function test_getProtocolOwnedLiquidityReserves_oneVaultManager_fuzz(uint256 poolOhmShare_) public {
+    function test_getProtocolOwnedLiquidityReserves_oneVaultManager_fuzz(
+        uint256 poolOhmShare_
+    ) public {
         uint256 poolOhmShare = bound(poolOhmShare_, 0, 1000e9);
         vaultManagers[0].setPoolOhmShare(poolOhmShare);
 
-        SPPLYv1.Reserves[] memory reserves = submoduleBLVaultSupply.getProtocolOwnedLiquidityReserves();
+        SPPLYv1.Reserves[] memory reserves = submoduleBLVaultSupply
+            .getProtocolOwnedLiquidityReserves();
         assertEq(reserves.length, 1);
         assertEq(reserves[0].source, address(vaultManagers[0]));
         assertEq(reserves[0].tokens.length, 0);
@@ -322,7 +326,8 @@ contract BLVaultSupplyTest is Test {
             vaultManagerAddresses
         );
 
-        SPPLYv1.Reserves[] memory reserves = newSubmoduleBLVaultSupply.getProtocolOwnedLiquidityReserves();
+        SPPLYv1.Reserves[] memory reserves = newSubmoduleBLVaultSupply
+            .getProtocolOwnedLiquidityReserves();
         assertEq(reserves.length, 2);
 
         assertEq(reserves[0].source, address(vaultManagers[0]));

@@ -216,7 +216,8 @@ contract SiloArbSupplyTest is Test {
     // =========  getProtocolOwnedLiquidityReserves ========= //
 
     function test_getProtocolOwnedLiquidityReserves() public {
-        SPPLYv1.Reserves[] memory reserves = submoduleSiloArbSupply.getProtocolOwnedLiquidityReserves();
+        SPPLYv1.Reserves[] memory reserves = submoduleSiloArbSupply
+            .getProtocolOwnedLiquidityReserves();
 
         assertEq(reserves.length, 1);
         assertEq(reserves[0].source, address(0));
@@ -363,7 +364,8 @@ contract SiloArbSupplyTest is Test {
         vm.stopPrank();
 
         // Check the value
-        SPPLYv1.Reserves[] memory reserves = submoduleSiloArbSupply.getProtocolOwnedLiquidityReserves();
+        SPPLYv1.Reserves[] memory reserves = submoduleSiloArbSupply
+            .getProtocolOwnedLiquidityReserves();
         assertEq(reserves[0].source, address(0xe));
     }
 }

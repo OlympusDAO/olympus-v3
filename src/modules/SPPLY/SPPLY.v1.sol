@@ -334,7 +334,11 @@ abstract contract SupplySubmodule is Submodule {
     ///             and can be used to determine the market and backing value of a category.
     ///
     /// @return     A reserves struct
-    function getProtocolOwnedLiquidityReserves() external view virtual returns (SPPLYv1.Reserves[] memory);
+    function getProtocolOwnedLiquidityReserves()
+        external
+        view
+        virtual
+        returns (SPPLYv1.Reserves[] memory);
 
     /// @notice     Number of supply sources monitored by the submodule
     /// @dev        Useful for know the number of sources for `getProtocolOwnedLiquidityReserves()` in advance.

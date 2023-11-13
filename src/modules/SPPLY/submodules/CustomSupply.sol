@@ -76,18 +76,19 @@ abstract contract CustomSupply is SupplySubmodule {
     }
 
     /// @inheritdoc SupplySubmodule
-    function getProtocolOwnedLiquidityReserves() external view override returns (SPPLYv1.Reserves[] memory) {
+    function getProtocolOwnedLiquidityReserves()
+        external
+        view
+        override
+        returns (SPPLYv1.Reserves[] memory)
+    {
         address[] memory tokens = new address[](1);
         tokens[0] = address(SPPLYv1(address(parent)).ohm());
         uint256[] memory balances = new uint256[](1);
         balances[0] = _protocolOwnedLiquidityOhm;
 
         SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](1);
-        reserves[0] = SPPLYv1.Reserves({
-            source: _source, 
-            tokens: tokens,
-            balances: balances
-        });
+        reserves[0] = SPPLYv1.Reserves({source: _source, tokens: tokens, balances: balances});
 
         return reserves;
     }

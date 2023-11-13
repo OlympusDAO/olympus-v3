@@ -426,7 +426,11 @@ contract OlympusSupply is SPPLYv1 {
             );
 
             // Ensure call was successful
-            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), SupplySubmodule.getProtocolOwnedLiquidityReserves.selector);
+            if (!success)
+                revert SPPLY_SubmoduleFailed(
+                    address(submodule),
+                    SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+                );
 
             // Decode supply returned by the submodule
             Reserves[] memory currentReserves = abi.decode(returnData, (Reserves[]));

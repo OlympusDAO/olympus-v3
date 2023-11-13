@@ -216,7 +216,8 @@ contract IncurDebtSupplyTest is Test {
         uint256 totalDebt = bound(totalDebt_, 0, 1000e9);
         incurDebt.setTotalDebt(totalDebt);
 
-        SPPLYv1.Reserves[] memory reserves = submoduleIncurDebtSupply.getProtocolOwnedLiquidityReserves();
+        SPPLYv1.Reserves[] memory reserves = submoduleIncurDebtSupply
+            .getProtocolOwnedLiquidityReserves();
 
         // No POL
         assertEq(reserves.length, 1);

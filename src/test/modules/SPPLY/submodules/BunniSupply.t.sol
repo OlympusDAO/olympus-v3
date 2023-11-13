@@ -335,8 +335,9 @@ contract BunniSupplyTest is Test {
     function test_getProtocolOwnedLiquidityReserves_noTokens() public {
         // Don't add the token
 
-        SPPLYv1.Reserves[] memory reserves = submoduleBunniSupply.getProtocolOwnedLiquidityReserves();
-        
+        SPPLYv1.Reserves[] memory reserves = submoduleBunniSupply
+            .getProtocolOwnedLiquidityReserves();
+
         assertEq(reserves.length, 0);
     }
 
@@ -348,8 +349,9 @@ contract BunniSupplyTest is Test {
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
 
-        SPPLYv1.Reserves[] memory reserves = submoduleBunniSupply.getProtocolOwnedLiquidityReserves();
-        
+        SPPLYv1.Reserves[] memory reserves = submoduleBunniSupply
+            .getProtocolOwnedLiquidityReserves();
+
         assertEq(reserves.length, 1);
 
         assertEq(reserves[0].source, poolTokenAddress);
@@ -381,10 +383,14 @@ contract BunniSupplyTest is Test {
 
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
-        (uint256 ohmReservesTwo_, uint256 wethReservesTwo_) = _getReserves(poolTokenKeyTwo, bunniLens);
+        (uint256 ohmReservesTwo_, uint256 wethReservesTwo_) = _getReserves(
+            poolTokenKeyTwo,
+            bunniLens
+        );
 
-        SPPLYv1.Reserves[] memory reserves = submoduleBunniSupply.getProtocolOwnedLiquidityReserves();
-        
+        SPPLYv1.Reserves[] memory reserves = submoduleBunniSupply
+            .getProtocolOwnedLiquidityReserves();
+
         assertEq(reserves.length, 2);
 
         assertEq(reserves[0].source, poolTokenAddress);
