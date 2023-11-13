@@ -11,10 +11,13 @@ import "modules/SPPLY/SPPLY.v1.sol";
 // [X] Allow caching supply metrics
 
 contract OlympusSupply is SPPLYv1 {
-    bytes4[4] internal SUPPLY_SUBMODULE_SELECTORS = [
+    bytes4[3] internal SUPPLY_SUBMODULE_SELECTORS = [
         SupplySubmodule.getCollateralizedOhm.selector,
         SupplySubmodule.getProtocolOwnedBorrowableOhm.selector,
-        SupplySubmodule.getProtocolOwnedLiquidityOhm.selector,
+        SupplySubmodule.getProtocolOwnedLiquidityOhm.selector
+    ];
+
+    bytes4[1] internal SUPPLY_SUBMODULE_RESERVES_SELECTORS = [
         SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
     ];
 
@@ -35,7 +38,7 @@ contract OlympusSupply is SPPLYv1 {
         _addCategory(toCategory("dao"), false, 0x00000000);
         _addCategory(toCategory("protocol-owned-liquidity"), true, 0x8ebf7278); // getProtocolOwnedLiquidityOhm()
         _addCategory(toCategory("protocol-owned-borrowable"), true, 0x117fb54a); // getProtocolOwnedBorrowableOhm()
-        _addCategory(toCategory("reserves"), true, 0x55bdad01); // getProtocolOwnedLiquidityReserves()
+        _addCategoryReserves(toCategory("protocol-owned-liquidity"), 0x55bdad01); // getProtocolOwnedLiquidityReserves()
     }
 
     /// @inheritdoc Module
@@ -94,7 +97,7 @@ contract OlympusSupply is SPPLYv1 {
         // If submodules are enabled and the selector is empty, revert
         if (useSubmodules_ && submoduleSelector_ == bytes4(0)) revert SPPLY_InvalidParams();
 
-        // If submodules are enabled and the selector is specified, revert
+        // If submodules are not enabled and the selector is specified, revert
         if (!useSubmodules_ && submoduleSelector_ != bytes4(0)) revert SPPLY_InvalidParams();
 
         // If submodules are enabled, check that the selector is valid
@@ -146,6 +149,67 @@ contract OlympusSupply is SPPLYv1 {
             }
         }
         emit CategoryRemoved(category_);
+    }
+
+    /// @inheritdoc SPPLYv1
+    function addCategoryReserves(
+        Category category_,
+        bytes4 submoduleSelector_
+    ) external override permissioned {
+        _addCategoryReserves(category_, submoduleSelector_);
+    }
+
+
+    function _addCategoryReserves(
+        Category category_,
+        bytes4 submoduleSelector_
+    ) internal {
+        // Check if category reserves are already approved, if so, revert
+        if (categoryDataReserves[category_].approved) revert SPPLY_InvalidParams();
+
+        // Check if category is already approved, if not, revert
+        if (!categoryData[category_].approved) revert SPPLY_InvalidParams();
+
+        // If submodules are enabled and the selector is empty, revert
+        if (submoduleSelector_ == bytes4(0)) revert SPPLY_InvalidParams();
+
+        // If submodules are enabled, check that the selector is valid
+        bool valid;
+        uint256 len = SUPPLY_SUBMODULE_RESERVES_SELECTORS.length;
+        for (uint256 i; i < len; ) {
+            if (SUPPLY_SUBMODULE_RESERVES_SELECTORS[i] == submoduleSelector_) {
+                valid = true;
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        if (!valid) revert SPPLY_InvalidParams();
+
+        // Add category to list of approved categories and store category data
+        categoryDataReserves[category_] = CategoryData({
+            approved: true,
+            useSubmodules: true,
+            submoduleSelector: submoduleSelector_,
+            total: Cache({ value: 0, timestamp: 0 })
+        });
+
+        emit CategoryReservesAdded(category_);
+    }
+
+    /// @inheritdoc SPPLYv1
+    function removeCategoryReserves(Category category_) external override permissioned {
+        // Check if category is approved, if not revert
+        if (!categoryDataReserves[category_].approved) revert SPPLY_CategoryNotApproved(category_);
+
+        // Check if any locations still have this category, if so revert
+        address[] memory locations_ = getLocationsByCategory(category_);
+        if (locations_.length > 0) revert SPPLY_CategoryInUse(category_);
+
+        // Remove category reserves data
+        delete categoryDataReserves[category_];
+        emit CategoryReservesRemoved(category_);
     }
 
     function _uncategorize(address location_) internal {
@@ -392,7 +456,7 @@ contract OlympusSupply is SPPLYv1 {
             }
         }
 
-        CategoryData memory data = categoryData[category_];
+        CategoryData memory data = categoryDataReserves[category_];
         uint256 categorySubmodSources;
         // If category requires data from submodules, count all submodules and their sources.
         len = (data.useSubmodules) ? submodules.length : 0;
@@ -448,7 +512,7 @@ contract OlympusSupply is SPPLYv1 {
 
         address[] memory ohmTokens = new address[](1);
         ohmTokens[0] = address(ohm);
-        j = categorySubmodSources;
+        len = locations.length;
         // Get supply from all locations in the category. Also accounts for gOHM.
         for (uint256 i; i < len; ) {
             if (fromCategory(categorization[locations[i]]) == fromCategory(category_)) {

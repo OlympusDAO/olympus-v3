@@ -174,6 +174,7 @@ contract SupplyTest is Test {
     uint256 internal constant INITIAL_CROSS_CHAIN_SUPPLY = 100e9; // 100 OHM
 
     uint256 internal constant CATEGORIES_DEFAULT_COUNT = 4;
+    uint256 internal constant CATEGORIES_RESERVES_DEFAULT_COUNT = 1;
 
     // Events
     event CrossChainSupplyUpdated(uint256 supply_);
@@ -2221,7 +2222,38 @@ contract SupplyTest is Test {
     //    [ ] zero supply
     //    [ ] OHM supply
     //    [ ] gOHM supply
-    //    [ ] uses submodules if enabled
-    //    [ ] ignores submodules if disabled
     //    [ ] reverts upon submodule failure
+
+    function test_getSupplyByCategory_submodules_polr() public {
+        _setUpSubmodules();
+
+        // Add OHM/gOHM in the treasury
+        ohm.mint(address(treasuryAddress), 100e9);
+        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+
+        // Categories already defined
+
+        uint256 expectedReserves = BPT_BALANCE.mulDiv(
+            BALANCER_POOL_DAI_BALANCE,
+            BALANCER_POOL_TOTAL_SUPPLY
+        );
+        uint256 expectedSupply = BPT_BALANCE.mulDiv(
+            BALANCER_POOL_OHM_BALANCE,
+            BALANCER_POOL_TOTAL_SUPPLY
+        );
+
+        // Check reserves
+        SPPLYv1.Reserves[] memory reserves = moduleSupply.getReservesByCategory(toCategory("protocol-owned-liquidity"));
+        assertEq(reserves.length, 3);
+        // Check reserves: Aura - Balancer
+        assertEq(reserves[0].tokens.length, 2);
+        assertEq(reserves[0].balances[0], expectedReserves);
+        assertEq(reserves[0].balances[1], expectedSupply);
+        // Check reserves: BLVault
+        assertEq(reserves[1].tokens.length, 0);
+        assertEq(reserves[1].balances.length, 0);
+        // Check reserves: Silo
+        assertEq(reserves[2].tokens.length, 0);
+        assertEq(reserves[2].balances.length, 0);
+    }
 }

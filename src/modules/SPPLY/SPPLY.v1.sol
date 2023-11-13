@@ -35,6 +35,8 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     event CrossChainSupplyUpdated(uint256 supply_);
     event CategoryAdded(Category category_);
     event CategoryRemoved(Category category_);
+    event CategoryReservesAdded(Category category_);
+    event CategoryReservesRemoved(Category category_);
     event LocationCategorized(address location_, Category category_);
 
     //============================================================================================//
@@ -69,6 +71,7 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
         Cache total;
     }
     mapping(Category => CategoryData) public categoryData;
+    mapping(Category => CategoryData) public categoryDataReserves;
 
     /// @notice Categorization of locations
     /// @dev if a location is categorized, then it is in the locations array
@@ -145,6 +148,33 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     ///
     /// @param category_            The category to remove
     function removeCategory(Category category_) external virtual;
+
+    /// @notice                     Adds category reserves to the data of an approved category
+    /// @dev                        This function will revert if:
+    ///                             - The caller is not permissioned
+    ///                             - The category reserves are already approved
+    ///                             - The category is not approved yet
+    ///                             - The category name is empty
+    ///
+    ///                             This function will emit the `CategoryReservesAdded` event if successful
+    ///
+    /// @param category_            The category to add reserves to
+    /// @param submoduleSelector_   The selector from `SupplySubmodule` to use to get the reserves for this category
+    function addCategoryReserves(
+        Category category_,
+        bytes4 submoduleSelector_
+    ) external virtual;
+
+    /// @notice                     Removes a the data of the reserves of a category
+    /// @dev                        This function will revert if:
+    ///                             - The caller is not permissioned
+    ///                             - The category reserves are not approved
+    ///                             - The category has locations assigned to it
+    ///
+    ///                             This function will emit the `CategoryReservesRemoved` event if successful
+    ///
+    /// @param category_            The category to remove
+    function removeCategoryReserves(Category category_) external virtual;
 
     /// @notice                     Adds or removes a location to a category
     /// @dev                        To add a location to a category, pass in the address and category
