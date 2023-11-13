@@ -340,5 +340,5 @@ abstract contract SupplySubmodule is Submodule {
     /// @dev        Useful for know the number of sources for `getReserves()` in advance.
     ///
     /// @return     Number of supply sources monitored by the submodule
-    function getSources() external view virtual returns (uint256);
+    function getSourceCount() external view virtual returns (uint256);
 }

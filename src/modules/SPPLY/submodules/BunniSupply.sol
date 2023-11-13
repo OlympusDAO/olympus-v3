@@ -82,7 +82,7 @@ contract BunniSupply is SupplySubmodule {
     // ========== DATA FUNCTIONS ========== //
 
     /// @inheritdoc SupplySubmodule
-    function getSources() external view override returns (uint256) {
+    function getSourceCount() external view override returns (uint256) {
         return bunniTokens.length;
     }
 

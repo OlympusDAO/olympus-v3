@@ -395,7 +395,7 @@ contract OlympusSupply is SPPLYv1 {
         for (uint256 i; i < len; ) {
             address submodule = address(_getSubmoduleIfInstalled(submodules[i]));
             (bool success, bytes memory returnData) = submodule.staticcall(
-                abi.encodeWithSelector(SupplySubmodule.getSources.selector)
+                abi.encodeWithSelector(SupplySubmodule.getSourceCount.selector)
             );
 
             // Ensure call was successful
@@ -413,7 +413,7 @@ contract OlympusSupply is SPPLYv1 {
 
         Reserves[] memory reserves = new Reserves[](categoryLocations + categorySubmodSources);
         // Iterate through submodules and add their reserves to the return array
-        // Should not include any supply that is retrievable via a simple balance lookup, which is handled by locations above
+        // Should not include any supply that is retrievable via a simple balance lookup, which is handled by locations below
         uint256 j;
         for (uint256 i; i < len; ) {
             address submodule = address(_getSubmoduleIfInstalled(submodules[i]));
