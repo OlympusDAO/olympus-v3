@@ -410,6 +410,9 @@ contract OlympusSupply is SPPLYv1 {
     function getReservesByCategory(
         Category category_
     ) external view override returns (Reserves[] memory) {
+        // Check if category is approved
+        if (!categoryData[category_].approved) revert SPPLY_CategoryNotApproved(category_);
+
         uint256 categoryLocations;
         uint256 len = locations.length;
         // Count all locations for given category.

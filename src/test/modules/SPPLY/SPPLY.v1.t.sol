@@ -43,9 +43,9 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //  [X] reverts if category already approved
 //  [X] reverts if category is empty
 //  [X] reverts if an incorrect submodules selector is provided
-//  [ ] reverts if an incorrect submodules reserves selector is provided when disabled
+//  [X] reverts if an incorrect submodules reserves selector is provided
 //  [X] reverts if a submodules selector is provided when disabled
-//  [ ] reverts if a submodules reserves selector is provided when disabled
+//  [X] reverts if a submodules reserves selector is provided when disabled
 //  [X] stores category in categories array, emits event
 //  [X] stores category with submodules enabled in categories array, emits event
 // [X] removeCategory - removes a category from supply tracking
@@ -2320,30 +2320,99 @@ contract SupplyTest is Test {
 
     // =========  getReservesByCategory ========= //
 
-    // [ ] getReservesByCategory
-    //  [ ] categoryNotApproved
-    //  [ ] supply calculations
-    //    [ ] no locations in category
-    //    [ ] no submodule selector defined
-    //    [ ] zero supply
-    //    [ ] OHM supply
-    //    [ ] gOHM supply
-    //    [ ] reverts upon submodule failure
+    // [X] getReservesByCategory
+    //  [X] categoryNotApproved
+    //  [X] supply calculations
+    //    [X] no locations in category
+    //    [X] no submodule selector defined
+    //    [X] zero supply
+    //    [X] OHM supply
+    //    [X] gOHM supply
+    //    [X] uses submodule reserves
+    //    [X] reverts upon submodule failure
 
-    function test_getSupplyByCategory_submodules_pol() public {
+    function test_getReservesByCategory_categoryNotApproved_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("junk")
+        );
+        vm.expectRevert(err);
+
+        // Get supply
+        moduleSupply.getReservesByCategory(toCategory("junk"));
+    }
+
+    function test_getReservesByCategory_noLocations() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Remove the existing location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasuryAddress), toCategory(0));
+        vm.stopPrank();
+
+        // Check supply
+        SPPLYv1.Reserves[] memory reserves = moduleSupply.getReservesByCategory(
+            toCategory("protocol-owned-treasury")
+        );
+
+        assertEq(reserves.length, 0);
+    }
+
+    function test_getReservesByCategory_noSubmoduleReservesSelector() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Check supply
+        SPPLYv1.Reserves[] memory reserves = moduleSupply.getReservesByCategory(
+            toCategory("protocol-owned-treasury")
+        );
+
+        assertEq(reserves.length, 1);
+        assertEq(reserves[0].tokens.length, 1);
+        assertEq(reserves[0].tokens[0], address(ohm));
+        assertEq(reserves[0].balances.length, 1);
+        assertEq(reserves[0].balances[0], 100e9);
+    }
+
+    function test_getReservesByCategory_submoduleFailureReverts() public {
         _setUpSubmodules();
 
-        // Add OHM/gOHM in the treasury
+        // Set up submodule failure
+        {
+            vm.mockCallRevert(
+                address(submoduleBLVaultSupply),
+                abi.encodeWithSelector(SupplySubmodule.getProtocolOwnedLiquidityReserves.selector),
+                abi.encode("revert")
+            );
+        }
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_SubmoduleFailed(address,bytes4)",
+            address(submoduleBLVaultSupply),
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+        );
+        vm.expectRevert(err);
+
+        // Check reserves
+        moduleSupply.getReservesByCategory(toCategory("protocol-owned-liquidity"));
+    }
+
+    function test_getReservesByCategory_includesSubmodules() public {
+        _setUpSubmodules();
+
+        // Add OHM/gOHM in the treasury (which will not be included)
         ohm.mint(address(treasuryAddress), 100e9);
         gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         // Categories already defined
 
-        uint256 expectedReserves = BPT_BALANCE.mulDiv(
+        uint256 expectedBptDai = BPT_BALANCE.mulDiv(
             BALANCER_POOL_DAI_BALANCE,
             BALANCER_POOL_TOTAL_SUPPLY
         );
-        uint256 expectedSupply = BPT_BALANCE.mulDiv(
+        uint256 expectedBptOhm = BPT_BALANCE.mulDiv(
             BALANCER_POOL_OHM_BALANCE,
             BALANCER_POOL_TOTAL_SUPPLY
         );
@@ -2355,13 +2424,60 @@ contract SupplyTest is Test {
         assertEq(reserves.length, 3);
         // Check reserves: Aura - Balancer
         assertEq(reserves[0].tokens.length, 2);
-        assertEq(reserves[0].balances[0], expectedReserves);
-        assertEq(reserves[0].balances[1], expectedSupply);
+        assertEq(reserves[0].balances[0], expectedBptDai);
+        assertEq(reserves[0].balances[1], expectedBptOhm);
         // Check reserves: BLVault
         assertEq(reserves[1].tokens.length, 0);
         assertEq(reserves[1].balances.length, 0);
         // Check reserves: Silo
         assertEq(reserves[2].tokens.length, 0);
         assertEq(reserves[2].balances.length, 0);
+        // Treasury OHM/gOHM not included in the category
+    }
+
+    function test_getReservesByCategory_includesSubmodulesAndOhm() public {
+        _setUpSubmodules();
+
+        // Add OHM/gOHM in the polAddress
+        ohm.mint(address(polAddress), 100e9);
+        gOhm.mint(address(polAddress), 1e18); // 1 gOHM
+
+        // Add polAddress to the POL category
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(polAddress), toCategory("protocol-owned-liquidity"));
+        vm.stopPrank();
+
+        uint256 expectedBptDai = BPT_BALANCE.mulDiv(
+            BALANCER_POOL_DAI_BALANCE,
+            BALANCER_POOL_TOTAL_SUPPLY
+        );
+        uint256 expectedBptOhm = BPT_BALANCE.mulDiv(
+            BALANCER_POOL_OHM_BALANCE,
+            BALANCER_POOL_TOTAL_SUPPLY
+        );
+        uint256 expectedOhm = 100e9 + gOhm.balanceFrom(1e18);
+
+        // Check reserves
+        SPPLYv1.Reserves[] memory reserves = moduleSupply.getReservesByCategory(
+            toCategory("protocol-owned-liquidity")
+        );
+
+        assertEq(reserves.length, 4);
+        // Check reserves: Aura - Balancer
+        assertEq(reserves[0].tokens.length, 2);
+        assertEq(reserves[0].balances[0], expectedBptDai);
+        assertEq(reserves[0].balances[1], expectedBptOhm);
+        // Check reserves: BLVault
+        assertEq(reserves[1].tokens.length, 0);
+        assertEq(reserves[1].balances.length, 0);
+        // Check reserves: Silo
+        assertEq(reserves[2].tokens.length, 0);
+        assertEq(reserves[2].balances.length, 0);
+        // Check reserves: Treasury
+        assertEq(reserves[3].source, polAddress);
+        assertEq(reserves[3].tokens.length, 1);
+        assertEq(reserves[3].tokens[0], address(ohm));
+        assertEq(reserves[3].balances.length, 1);
+        assertEq(reserves[3].balances[0], expectedOhm);
     }
 }
