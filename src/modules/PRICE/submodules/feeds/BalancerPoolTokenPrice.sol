@@ -14,6 +14,7 @@ import {LogExpMath} from "src/libraries/Balancer/math/LogExpMath.sol";
 import {FixedPoint} from "src/libraries/Balancer/math/FixedPoint.sol";
 
 /// @title      BalancerPoolTokenPrice
+/// @author     0xJem
 /// @notice     Provides prices related to Balancer pools
 contract BalancerPoolTokenPrice is PriceSubmodule {
     using FullMath for uint256;

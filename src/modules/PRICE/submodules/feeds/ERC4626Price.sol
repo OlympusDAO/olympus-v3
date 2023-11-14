@@ -6,6 +6,9 @@ import {FullMath} from "src/libraries/FullMath.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
+/// @title      ERC4626Price
+/// @author     0xJem
+/// @notice     A PRICE submodule that provides the price for ERC4626 assets
 contract ERC4626Price is PriceSubmodule {
     using FullMath for uint256;
 
@@ -19,21 +22,25 @@ contract ERC4626Price is PriceSubmodule {
     // ========== ERRORS ========== //
 
     /// @notice                     The value for output decimals is more than the maximum decimals allowed
+    ///
     /// @param outputDecimals_      The output decimals provided as a parameter
     /// @param maxDecimals_         The maximum decimals allowed
     error ERC4626_OutputDecimalsOutOfBounds(uint8 outputDecimals_, uint8 maxDecimals_);
 
     /// @notice                     The value for the ERC4626 decimals is more than the maximum decimals allowed
+    ///
     /// @param assetDecimals_       The asset decimals
     /// @param maxDecimals_         The maximum decimals allowed
     error ERC4626_AssetDecimalsOutOfBounds(uint8 assetDecimals_, uint8 maxDecimals_);
 
     /// @notice                     There is a mismatch between the decimals of the ERC4626 asset and underlying
+    ///
     /// @param assetDecimals_       The asset decimals
     /// @param underlyingAssetDecimals_  The underlying asset decimals
     error ERC4626_AssetDecimalsMismatch(uint8 assetDecimals_, uint8 underlyingAssetDecimals_);
 
     /// @notice                     The underlying asset is not set
+    ///
     /// @param asset_               The address of the ERC4626 asset
     error ERC4626_UnderlyingNotSet(address asset_);
 
@@ -45,10 +52,12 @@ contract ERC4626Price is PriceSubmodule {
 
     // ========== SUBMODULE FUNCTIONS =========== //
 
+    /// @inheritdoc      Submodule
     function SUBKEYCODE() public pure override returns (SubKeycode) {
         return toSubKeycode("PRICE.ERC4626");
     }
 
+    /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
         major = 1;
         minor = 0;
@@ -56,6 +65,23 @@ contract ERC4626Price is PriceSubmodule {
 
     // ========== PRICE FUNCTIONS ========== //
 
+    /// @notice                 Determines the price of `asset_` in USD
+    /// @dev                    This function performs the following:
+    /// @dev                    - Performs basic checks
+    /// @dev                    - Determines the underlying assets per share of `asset_`
+    /// @dev                    - Determines the price of the underlying asset
+    /// @dev                    - Returns the product
+    ///
+    /// @dev                    This function will revert if:
+    /// @dev                    - The output decimals are more than the maximum decimals allowed
+    /// @dev                    - The asset decimals are more than the maximum decimals allowed
+    /// @dev                    - The asset and underlying decimals do not match
+    /// @dev                    - The underlying asset is not set
+    /// @dev                    - The price of the underlying asset cannot be determined using PRICE
+    ///
+    /// @param asset_           The address of the ERC4626 asset
+    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @return                 The price of `asset_` in USD (in the scale of `outputDecimals_`)
     function getPriceFromUnderlying(
         address asset_,
         uint8 outputDecimals_,

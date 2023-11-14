@@ -10,7 +10,7 @@ import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
 /// @title      BunniSupply
 /// @author     0xJem
 /// @notice     A SPPLY submodule that provides data on OHM deployed into Uniswap V3 pools that
-///             are managed by the BunniManager policy and its associated BunniHub.
+/// @notice     are managed by the BunniManager policy and its associated BunniHub.
 contract BunniSupply is SupplySubmodule {
     // ========== ERRORS ========== //
 
