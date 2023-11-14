@@ -31,12 +31,15 @@ contract BLVaultSupply is SupplySubmodule {
 
     // ========== EVENTS ========== //
 
+    /// @notice     Emitted when a BLVaultManager is added to the list of managers
     event VaultManagerAdded(address vaultManager_);
 
+    /// @notice     Emitted when a BLVaultManager is removed from the list of managers
     event VaultManagerRemoved(address vaultManager_);
 
     // ========== STATE VARIABLES ========== //
 
+    /// @notice     The addresses of the BLVaultManager contracts
     IBLVaultManager[] public vaultManagers;
 
     // ========== CONSTRUCTOR ========== //
@@ -144,9 +147,9 @@ contract BLVaultSupply is SupplySubmodule {
 
     /// @notice                 Add a BLVaultManager to the list of managers
     /// @dev                    Reverts if:
-    ///                         - The address is the zero address
-    ///                         - The address is already in the list
-    ///                         - The caller is not the parent module
+    /// @dev                    - The address is the zero address
+    /// @dev                    - The address is already in the list
+    /// @dev                    - The caller is not the parent module
     ///
     /// @param vaultManager_    The address of the BLVaultManager contract
     function addVaultManager(address vaultManager_) external onlyParent {
@@ -159,9 +162,9 @@ contract BLVaultSupply is SupplySubmodule {
 
     /// @notice                 Remove a BLVaultManager from the list of managers
     /// @dev                    Reverts if:
-    ///                         - The address is the zero address
-    ///                         - The address is not in the list
-    ///                         - The caller is not the parent module
+    /// @dev                    - The address is the zero address
+    /// @dev                    - The address is not in the list
+    /// @dev                    - The caller is not the parent module
     ///
     /// @param vaultManager_    The address of the BLVaultManager contract
     function removeVaultManager(address vaultManager_) external onlyParent {
@@ -182,6 +185,12 @@ contract BLVaultSupply is SupplySubmodule {
         }
     }
 
+    // =========== HELPER FUNCTIONS =========== //
+
+    /// @notice     Determines if `vaultManager_` is contained in the `vaultManagers` array
+    ///
+    /// @param      vaultManager_  The address of a vault manager
+    /// @return     True if the address is in the array, false otherwise
     function _inArray(address vaultManager_) internal view returns (bool) {
         uint256 len = vaultManagers.length;
         for (uint256 i; i < len; ) {

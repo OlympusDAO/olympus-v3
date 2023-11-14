@@ -19,7 +19,9 @@ import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import "src/modules/SPPLY/OlympusSupply.sol";
-import {AuraBalancerSupply, IBalancerPool, IAuraPool} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {AuraBalancerSupply} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {IBalancerPool} from "src/external/balancer/interfaces/IBalancerPool.sol";
+import {IAuraRewardPool} from "src/external/aura/interfaces/IAuraRewardPool.sol";
 import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 
@@ -268,7 +270,10 @@ contract SupplyTest is Test {
             balancerPool.setBalance(BPT_BALANCE); // balance for polAddress
 
             AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](1);
-            pools[0] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraPool(address(0)));
+            pools[0] = AuraBalancerSupply.Pool(
+                IBalancerPool(balancerPool),
+                IAuraRewardPool(address(0))
+            );
 
             submoduleAuraBalancerSupply = new AuraBalancerSupply(
                 moduleSupply,
