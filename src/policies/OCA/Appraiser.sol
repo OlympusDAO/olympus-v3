@@ -299,7 +299,7 @@ contract Appraiser is IAppraiser, Policy {
         }
         return value;
     }
-    
+
     // TODO decide on decimal scale
 
     /// @notice         Calculates the value of liquid backing
