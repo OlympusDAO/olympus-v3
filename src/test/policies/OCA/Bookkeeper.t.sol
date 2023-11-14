@@ -71,13 +71,13 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //     [X] inputs to TRSRY.categorize are correct
 //
 // TRSRYv1.1 Configuration
-// [X] addCategory
+// [X] addSupplyCategory
 //     [X] only "bookkeeper_policy" role can call
 //     [X] inputs to SPPLY.addCategory are correct
-// [X] removeCategory
+// [X] removeSupplyCategory
 //     [X] only "bookkeeper_policy" role can call
 //     [X] inputs to SPPLY.removeCategory are correct
-// [X] categorize
+// [X] categorizeSupply
 //     [X] only "bookkeeper_policy" role can call
 //     [X] inputs to SPPLY.categorize are correct
 
@@ -933,7 +933,7 @@ contract BookkeeperTest is Test {
 
     /* ========== SPPLYv1 Configuration ========== */
 
-    function testRevert_addCategory_onlyPolicy(address user_) public {
+    function testRevert_addSupplyCategory_onlyPolicy(address user_) public {
         vm.assume(user_ != policy);
 
         // Try to add category to SPPLYv1 with non-policy account, expect revert
@@ -943,7 +943,7 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.addCategory(
+        bookkeeper.addSupplyCategory(
             SupplyCategory.wrap("test_supply_category"),
             false,
             bytes4(0),
@@ -951,11 +951,11 @@ contract BookkeeperTest is Test {
         );
     }
 
-    function test_addCategory() public {
+    function test_addSupplyCategory() public {
         SupplyCategory[] memory initCategories = SPPLY.getCategories();
 
         vm.prank(policy);
-        bookkeeper.addCategory(
+        bookkeeper.addSupplyCategory(
             SupplyCategory.wrap("test_supply_category"),
             false,
             bytes4(0),
@@ -971,7 +971,7 @@ contract BookkeeperTest is Test {
         );
     }
 
-    function testRevert_removeCategory_onlyPolicy(address user_) public {
+    function testRevert_removeSupplyCategory_onlyPolicy(address user_) public {
         vm.assume(user_ != policy);
 
         // Try to remove category from SPPLYv1 with non-policy account, expect revert
@@ -981,27 +981,27 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.removeCategory(SupplyCategory.wrap("test_supply_category"));
+        bookkeeper.removeSupplyCategory(SupplyCategory.wrap("test_supply_category"));
     }
 
-    function test_removeCategory(address user_) public {
+    function test_removeSupplyCategory(address user_) public {
         SupplyCategory[] memory initCategories = SPPLY.getCategories();
 
         vm.startPrank(policy);
-        bookkeeper.addCategory(
+        bookkeeper.addSupplyCategory(
             SupplyCategory.wrap("test_supply_category"),
             false,
             bytes4(0),
             bytes4(0)
         );
-        bookkeeper.removeCategory(SupplyCategory.wrap("test_supply_category"));
+        bookkeeper.removeSupplyCategory(SupplyCategory.wrap("test_supply_category"));
 
         // Check SPPLY categories
         SupplyCategory[] memory postCategories = SPPLY.getCategories();
         assertEq(initCategories.length, postCategories.length);
     }
 
-    function testRevert_categorize_onlyPolicy(address user_) public {
+    function testRevert_categorizeSupply_onlyPolicy(address user_) public {
         vm.assume(user_ != policy);
 
         // Try to remove category from SPPLYv1 with non-policy account, expect revert
@@ -1011,18 +1011,18 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.categorize(address(0), SupplyCategory.wrap("test_supply_category"));
+        bookkeeper.categorizeSupply(address(0), SupplyCategory.wrap("test_supply_category"));
     }
 
-    function test_categorize(address user_) public {
+    function test_categorizeSupply(address user_) public {
         vm.startPrank(policy);
-        bookkeeper.addCategory(
+        bookkeeper.addSupplyCategory(
             SupplyCategory.wrap("test_supply_category"),
             false,
             bytes4(0),
             bytes4(0)
         );
-        bookkeeper.categorize(address(1), SupplyCategory.wrap("test_supply_category"));
+        bookkeeper.categorizeSupply(address(1), SupplyCategory.wrap("test_supply_category"));
 
         // Check SPPLY category locations
         address[] memory locations = SPPLY.getLocationsByCategory(

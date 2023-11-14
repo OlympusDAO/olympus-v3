@@ -238,7 +238,7 @@ contract BondCallbackTest is Test {
 
         // Configure SPPLY, so that when the Operator calls Appraiser, it does not fail
         vm.prank(policy);
-        bookkeeper.categorize(dao, SupplyCategory.wrap("dao"));
+        bookkeeper.categorizeSupply(dao, SupplyCategory.wrap("dao"));
         // Mint OHM into a non-protocol wallet, so that there is circulating supply
         ohm.mint(alice, 1e9);
 

@@ -181,7 +181,7 @@ contract Bookkeeper is Policy, RolesConsumer {
 
     /// @notice Add a new category to the supply tracking system
     /// @param category_ The category to add
-    function addCategory(
+    function addSupplyCategory(
         SupplyCategory category_,
         bool useSubmodules_,
         bytes4 submoduleSelector_,
@@ -197,14 +197,14 @@ contract Bookkeeper is Policy, RolesConsumer {
 
     /// @notice Remove a category from the supply tracking system
     /// @param category_ The category to remove
-    function removeCategory(SupplyCategory category_) external onlyRole("bookkeeper_policy") {
+    function removeSupplyCategory(SupplyCategory category_) external onlyRole("bookkeeper_policy") {
         SPPLY.removeCategory(category_);
     }
 
     /// @notice Categorize an address in a supply category
     /// @param location_ The address to categorize
     /// @param category_ The category to add the address to
-    function categorize(
+    function categorizeSupply(
         address location_,
         SupplyCategory category_
     ) external onlyRole("bookkeeper_policy") {
