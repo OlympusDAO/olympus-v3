@@ -238,6 +238,13 @@ contract Appraiser is IAppraiser, Policy {
         }
     }
 
+    /// @notice         Calculates the value of backing
+    /// @notice         Backing is defined as:
+    /// @notice         - The market value of all assets owned by the protocol
+    /// @notice         - Excluding: OHM held by the protocol
+    /// @notice         - Excluding: OHM in protocol-owned liquidity
+    ///
+    /// @return         The value of the protocol backing
     function _backing() internal view returns (uint256) {
         // Get list of assets owned by the protocol
         address[] memory assets = TRSRY.getAssets();
@@ -292,7 +299,15 @@ contract Appraiser is IAppraiser, Policy {
         }
         return value;
     }
+    
+    // TODO decide on decimal scale
 
+    /// @notice         Calculates the value of liquid backing
+    /// @notice         Liquid backing is defined as:
+    /// @notice         - Backing
+    /// @notice         - Excluding: illiquid assets
+    ///
+    /// @return         The value of liquid backing
     function _liquidBacking() internal view returns (uint256) {
         // Get total backing
         uint256 backing = _backing();
@@ -304,6 +319,12 @@ contract Appraiser is IAppraiser, Policy {
         return backing - illiquidValue;
     }
 
+    /// @notice         Calculates the value of liquid backing per backed OHM (LBBO)
+    /// @notice         LBBO is defined as:
+    /// @notice         - Liquid backing
+    /// @notice         - Divided by: OHM backed supply
+    ///
+    /// @return         The value of LBBO
     function _liquidBackingPerBackedOhm() internal view returns (uint256) {
         // Get liquid backing
         uint256 liquidBacking = _liquidBacking();
@@ -318,6 +339,13 @@ contract Appraiser is IAppraiser, Policy {
         return (liquidBacking * OHM_SCALE) / backedSupply;
     }
 
+    /// @notice         Calculates the market value of the treasury
+    /// @notice         Market value is defined as:
+    /// @notice         - The market value of all assets owned by the protocol
+    /// @notice         - Excluding: OHM held by the protocol
+    /// @notice         - Including: OHM in protocol-owned liquidity
+    ///
+    /// @return         The market value
     function _marketValue() internal view returns (uint256) {
         // Get list of assets owned by the protocol
         address[] memory assets = TRSRY.getAssets();
@@ -336,8 +364,15 @@ contract Appraiser is IAppraiser, Policy {
         return value;
     }
 
+    /// @notice         Calculates the market cap of OHM
+    /// @notice         Market cap is defined as:
+    /// @notice         - The circulating supply of OHM
+    /// @notice         - Multiplied by: The price of OHM
+    ///
+    /// @return         The market cap
     function _marketCap() internal view returns (uint256) {
         // Get supply of ohm
+        // TODO change this to circulating supply
         (uint256 supply, ) = SPPLY.getMetric(SPPLYv1.Metric.TOTAL_SUPPLY, SPPLYv1.Variant.CURRENT);
 
         // Get price of ohm
@@ -347,7 +382,12 @@ contract Appraiser is IAppraiser, Policy {
         return (supply * price) / OHM_SCALE;
     }
 
-    // returns value in PRICE.decimals() units
+    /// @notice         Calculates the premium of OHM
+    /// @notice         Premium is defined as:
+    /// @notice         - The market cap of OHM
+    /// @notice         - Divided by: The market value of the treasury
+    ///
+    /// @return         The premium (in PRICE decimals)
     function _premium() internal view returns (uint256) {
         // Get market cap of OHM
         uint256 marketCap = _marketCap();
@@ -359,6 +399,11 @@ contract Appraiser is IAppraiser, Policy {
         return (marketCap * priceScale) / marketValue;
     }
 
+    /// @notice         Calculates the 30 day volatility of OHM
+    /// @notice         Volatility is defined as:
+    /// @notice         - The standard deviation of the percent change in price over the last 30 days
+    ///
+    /// @return         The 30 day volatility (in PRICE decimals)
     function _thirtyDayOhmVolatility() internal view returns (uint256) {
         // Get OHM price data from price module
         PRICEv2.Asset memory data = PRICE.getAssetData(ohm);
@@ -406,16 +451,19 @@ contract Appraiser is IAppraiser, Policy {
     //                                       CACHING                                              //
     //============================================================================================//
 
+    /// @inheritdoc IAppraiser
     function storeAssetValue(address asset_) external override {
         (uint256 value, uint48 timestamp) = getAssetValue(asset_, Variant.CURRENT);
         assetValueCache[asset_] = Cache(value, timestamp);
     }
 
+    /// @inheritdoc IAppraiser
     function storeCategoryValue(Category category_) external override {
         (uint256 value, uint48 timestamp) = getCategoryValue(category_, Variant.CURRENT);
         categoryValueCache[category_] = Cache(value, timestamp);
     }
 
+    /// @inheritdoc IAppraiser
     function storeMetric(Metric metric_) external override {
         (uint256 result, uint48 timestamp) = getMetric(metric_, Variant.CURRENT);
         metricCache[metric_] = Cache(result, timestamp);

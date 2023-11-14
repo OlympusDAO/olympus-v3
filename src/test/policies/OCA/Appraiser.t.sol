@@ -1044,7 +1044,7 @@ contract AppraiserTest is Test {
         }
         {
             (uint256 value, uint48 variantTimestamp) = abi.decode(liquidData, (uint256, uint48));
-            assertEq(value, RESERVE_VALUE_AT_1 + POL_BACKING_AT_1, "LIQUID");
+            assertEq(value, RESERVE_VALUE_AT_1 + POL_BACKING_AT_1, "LIQUID"); // wEth is illiquid, so excluded
             assertEq(variantTimestamp, uint48(block.timestamp));
         }
         {
@@ -1054,7 +1054,7 @@ contract AppraiserTest is Test {
             );
             assertEq(
                 value,
-                (RESERVE_VALUE_AT_1 + POL_BACKING_AT_1).mulDiv(1e9, OHM_MINT_BALANCE),
+                (RESERVE_VALUE_AT_1 + POL_BACKING_AT_1).mulDiv(1e9, OHM_MINT_BALANCE), // wEth is illiquid, so excluded
                 "LIQUID_PER_OHM"
             );
             assertEq(variantTimestamp, uint48(block.timestamp));
