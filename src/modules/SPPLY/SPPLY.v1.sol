@@ -251,7 +251,9 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     function storeCategorySupply(Category category_) external virtual;
 
     /// @notice             Returns the underlying reserves for a category
-    function getReservesByCategory(Category category_) external view virtual returns (Reserves[] memory);
+    function getReservesByCategory(
+        Category category_
+    ) external view virtual returns (Reserves[] memory);
 
     //============================================================================================//
     //                                       SUPPLY METRICS                                       //
