@@ -152,7 +152,7 @@ contract SupplyTest is Test {
     using ModuleTestFixtureGenerator for OlympusSupply;
 
     MockERC20 internal ohm;
-    MockGohm internal gOhm;
+    MockGohm internal gohm;
 
     Kernel internal kernel;
 
@@ -188,7 +188,7 @@ contract SupplyTest is Test {
         // Tokens
         {
             ohm = new MockERC20("OHM", "OHM", 9);
-            gOhm = new MockGohm(GOHM_INDEX);
+            gohm = new MockGohm(GOHM_INDEX);
         }
 
         // Locations
@@ -207,7 +207,7 @@ contract SupplyTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy SPPLY module
-            address[2] memory tokens = [address(ohm), address(gOhm)];
+            address[2] memory tokens = [address(ohm), address(gohm)];
             moduleSupply = new OlympusSupply(kernel, tokens, INITIAL_CROSS_CHAIN_SUPPLY);
 
             // Deploy mock module writer
@@ -1205,7 +1205,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_gOhmSupply() public {
         // Add gOHM in the treasury
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         uint256 expectedOhmSupply = uint256(1e18).mulDiv(GOHM_INDEX, 1e18); // 9 decimals
 
@@ -1220,7 +1220,7 @@ contract SupplyTest is Test {
 
         // Add OHM/gOHM in the treasury
         ohm.mint(address(treasuryAddress), 100e9);
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         // Categories already defined
 
@@ -1236,7 +1236,7 @@ contract SupplyTest is Test {
 
         // Add OHM/gOHM in the treasury
         ohm.mint(address(treasuryAddress), 100e9);
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         // Categories already defined
 
@@ -1255,7 +1255,7 @@ contract SupplyTest is Test {
 
         // Add OHM/gOHM in the treasury
         ohm.mint(address(treasuryAddress), 100e9);
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         // Define category for collateralized OHM
         vm.startPrank(writer);
@@ -1279,7 +1279,7 @@ contract SupplyTest is Test {
 
         // Add OHM/gOHM in the treasury
         ohm.mint(address(treasuryAddress), 100e9);
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         // Define a new category with submodules disabled
         vm.startPrank(writer);
@@ -1311,7 +1311,7 @@ contract SupplyTest is Test {
 
         // Add OHM/gOHM in the treasury
         ohm.mint(address(treasuryAddress), 100e9);
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         // Define category for collateralized OHM
         vm.startPrank(writer);
@@ -2404,7 +2404,7 @@ contract SupplyTest is Test {
 
         // Add OHM/gOHM in the treasury (which will not be included)
         ohm.mint(address(treasuryAddress), 100e9);
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         // Categories already defined
 
@@ -2440,7 +2440,7 @@ contract SupplyTest is Test {
 
         // Add OHM/gOHM in the polAddress
         ohm.mint(address(polAddress), 100e9);
-        gOhm.mint(address(polAddress), 1e18); // 1 gOHM
+        gohm.mint(address(polAddress), 1e18); // 1 gOHM
 
         // Add polAddress to the POL category
         vm.startPrank(writer);
@@ -2455,7 +2455,7 @@ contract SupplyTest is Test {
             BALANCER_POOL_OHM_BALANCE,
             BALANCER_POOL_TOTAL_SUPPLY
         );
-        uint256 expectedOhm = 100e9 + gOhm.balanceFrom(1e18);
+        uint256 expectedOhm = 100e9 + gohm.balanceFrom(1e18);
 
         // Check reserves
         SPPLYv1.Reserves[] memory reserves = moduleSupply.getReservesByCategory(

@@ -64,7 +64,7 @@ contract Bookkeeper is Policy, RolesConsumer {
         Keycode SPPLY_KEYCODE = toKeycode("SPPLY");
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
 
-        requests = new Permissions[](16);
+        requests = new Permissions[](18);
         // PRICE Permissions
         requests[0] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
         requests[1] = Permissions(PRICE_KEYCODE, PRICE.removeAsset.selector);
@@ -77,13 +77,15 @@ contract Bookkeeper is Policy, RolesConsumer {
         requests[7] = Permissions(SPPLY_KEYCODE, SPPLY.addCategory.selector);
         requests[8] = Permissions(SPPLY_KEYCODE, SPPLY.removeCategory.selector);
         requests[9] = Permissions(SPPLY_KEYCODE, SPPLY.categorize.selector);
+        requests[10] = Permissions(SPPLY_KEYCODE, SPPLY.installSubmodule.selector);
+        requests[11] = Permissions(SPPLY_KEYCODE, SPPLY.upgradeSubmodule.selector);
         // TRSRY Permissions
-        requests[10] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
-        requests[11] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
-        requests[12] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
-        requests[13] = Permissions(TRSRY_KEYCODE, TRSRY.addCategoryGroup.selector);
-        requests[14] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
-        requests[15] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+        requests[12] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
+        requests[13] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
+        requests[14] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
+        requests[15] = Permissions(TRSRY_KEYCODE, TRSRY.addCategoryGroup.selector);
+        requests[16] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
+        requests[17] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
     }
 
     //==================================================================================================//

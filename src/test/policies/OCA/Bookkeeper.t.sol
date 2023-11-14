@@ -306,7 +306,7 @@ contract BookkeeperTest is Test {
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](16);
+        Permissions[] memory expectedPerms = new Permissions[](18);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
         Keycode SPPLY_KEYCODE = toKeycode("SPPLY");
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
@@ -322,13 +322,15 @@ contract BookkeeperTest is Test {
         expectedPerms[7] = Permissions(SPPLY_KEYCODE, SPPLY.addCategory.selector);
         expectedPerms[8] = Permissions(SPPLY_KEYCODE, SPPLY.removeCategory.selector);
         expectedPerms[9] = Permissions(SPPLY_KEYCODE, SPPLY.categorize.selector);
+        expectedPerms[10] = Permissions(SPPLY_KEYCODE, SPPLY.installSubmodule.selector);
+        expectedPerms[11] = Permissions(SPPLY_KEYCODE, SPPLY.upgradeSubmodule.selector);
         // TRSRY Permissions
-        expectedPerms[10] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
-        expectedPerms[11] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
-        expectedPerms[12] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
-        expectedPerms[13] = Permissions(TRSRY_KEYCODE, TRSRY.addCategoryGroup.selector);
-        expectedPerms[14] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
-        expectedPerms[15] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+        expectedPerms[12] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
+        expectedPerms[13] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
+        expectedPerms[14] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
+        expectedPerms[15] = Permissions(TRSRY_KEYCODE, TRSRY.addCategoryGroup.selector);
+        expectedPerms[16] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
+        expectedPerms[17] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
 
         Permissions[] memory perms = bookkeeper.requestPermissions();
         assertEq(perms.length, expectedPerms.length);

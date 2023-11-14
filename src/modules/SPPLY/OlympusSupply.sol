@@ -30,7 +30,7 @@ contract OlympusSupply is SPPLYv1 {
         uint256 initialCrossChainSupply_
     ) Module(kernel_) {
         ohm = OHM(tokens_[0]);
-        gOhm = IgOHM(tokens_[1]);
+        gohm = IgOHM(tokens_[1]);
         totalCrossChainSupply = initialCrossChainSupply_;
 
         // Add categories that are required for the metrics functions
@@ -355,12 +355,10 @@ contract OlympusSupply is SPPLYv1 {
     /// @return             The balance of gOHM (in terms of OHM) for the provided location
     function _getOhmForGOhmBalance(address location_) internal view returns (uint256) {
         // Get the gOHM balance of the location
-        uint256 gOhmBalance = gOhm.balanceOf(location_);
+        uint256 gohmBalance = gohm.balanceOf(location_);
 
         // Convert gOHM balance to OHM balance
-        uint256 ohmBalance = gOhm.balanceFrom(gOhmBalance);
-
-        return ohmBalance;
+        return gohmBalance != 0 ? gohm.balanceFrom(gohmBalance) : 0;
     }
 
     function _getSupplyByCategory(Category category_) internal view returns (uint256) {
