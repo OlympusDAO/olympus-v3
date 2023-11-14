@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import "src/modules/PRICE/PRICE.v2.sol";
 
 /// @title      OlympusPriceV2
+/// @author     Oighty
 /// @notice     Provides current and historical prices for assets
 contract OlympusPricev2 is PRICEv2 {
     // DONE
