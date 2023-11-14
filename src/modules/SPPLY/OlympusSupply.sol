@@ -11,7 +11,6 @@ import "modules/SPPLY/SPPLY.v1.sol";
 // [X] Allow caching supply metrics
 
 contract OlympusSupply is SPPLYv1 {
-    bytes4[3] internal SUPPLY_SUBMODULE_SELECTORS = [
     bytes4[3] internal SUPPLY_SUBMODULE_METRIC_SELECTORS = [
         SupplySubmodule.getCollateralizedOhm.selector,
         SupplySubmodule.getProtocolOwnedBorrowableOhm.selector,
