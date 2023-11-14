@@ -11,7 +11,7 @@ import "modules/SPPLY/SPPLY.v1.sol";
 // [X] Allow caching supply metrics
 
 contract OlympusSupply is SPPLYv1 {
-    bytes4[3] internal SUPPLY_SUBMODULE_SELECTORS = [
+    bytes4[3] internal SUPPLY_SUBMODULE_METRIC_SELECTORS = [
         SupplySubmodule.getCollateralizedOhm.selector,
         SupplySubmodule.getProtocolOwnedBorrowableOhm.selector,
         SupplySubmodule.getProtocolOwnedLiquidityOhm.selector
@@ -115,9 +115,9 @@ contract OlympusSupply is SPPLYv1 {
             // Check if the metric selector is valid
             {
                 bool validMetricSelector;
-                uint256 len = SUPPLY_SUBMODULE_SELECTORS.length;
+                uint256 len = SUPPLY_SUBMODULE_METRIC_SELECTORS.length;
                 for (uint256 i; i < len; ) {
-                    if (SUPPLY_SUBMODULE_SELECTORS[i] == submoduleMetricSelector_) {
+                    if (SUPPLY_SUBMODULE_METRIC_SELECTORS[i] == submoduleMetricSelector_) {
                         validMetricSelector = true;
                         break;
                     }
