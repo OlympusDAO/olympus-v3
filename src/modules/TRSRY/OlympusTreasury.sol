@@ -32,7 +32,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         groupToCategories[toCategoryGroup("liquidity-preference")].push(toCategory("liquid"));
         categoryToGroup[toCategory("illiquid")] = toCategoryGroup("liquidity-preference");
         groupToCategories[toCategoryGroup("liquidity-preference")].push(toCategory("illiquid"));
-        
+
         // Value Baskets: Reserves, Strategic, Protocol-Owned Liquidity
         categoryToGroup[toCategory("reserves")] = toCategoryGroup("value-baskets");
         groupToCategories[toCategoryGroup("value-baskets")].push(toCategory("reserves"));
@@ -348,7 +348,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
             } else if (assetTime < time) {
                 time = assetTime;
             }
-            
+
             unchecked {
                 ++i;
             }
