@@ -82,6 +82,7 @@ contract OlympusDeploy is Script {
     OlympusInstructions public INSTR;
     OlympusRoles public ROLES;
     OlympusBoostedLiquidityRegistry public BLREG;
+    OlympusSupply public SPPLY;
 
     // PRICEv2 Submodules
     SimplePriceFeedStrategy public simplePriceFeedStrategy;
@@ -89,6 +90,11 @@ contract OlympusDeploy is Script {
     ChainlinkPriceFeeds public chainlinkPriceFeeds;
     UniswapV2PoolTokenPrice public uniswapV2PoolTokenPrice;
     UniswapV3Price public uniswapV3Price;
+
+    // SPPLY Submodules
+    AuraBalancerSupply public auraBalancerSupply;
+    BLVaultSupply public blVaultSupply;
+    IncurDebtSupply public incurDebtSupply;
 
     // Policies
     Operator public operator;
