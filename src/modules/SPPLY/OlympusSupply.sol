@@ -570,10 +570,19 @@ contract OlympusSupply is SPPLYv1 {
         metricCache[metric_] = Cache(result, timestamp);
     }
 
+    /// @notice         Calculates the total supply of OHM
+    /// @notice         Accounts for CrossChain supply
+    ///
+    /// @return         The value of the total OHM supply
     function _totalSupply() internal view returns (uint256) {
         return ohm.totalSupply() + totalCrossChainSupply;
     }
 
+    /// @notice         Calculates the circulating supply of OHM
+    /// @notice         Circulating is defined as:
+    /// @notice         > Total supply - OHM in Treasury - DAO OHM
+    ///
+    /// @return         The value of the circulating OHM supply
     function _circulatingSupply() internal view returns (uint256) {
         uint256 treasuryOhm = _getSupplyByCategory(toCategory("protocol-owned-treasury"));
         uint256 daoOhm = _getSupplyByCategory(toCategory("dao"));
@@ -582,6 +591,11 @@ contract OlympusSupply is SPPLYv1 {
         return totalOhm - treasuryOhm - daoOhm;
     }
 
+    /// @notice         Calculates the floating supply of OHM
+    /// @notice         Floating is defined as:
+    /// @notice         > Circulating supply - Protocol Owned Liquidity OHM - Borrowable OHM
+    ///
+    /// @return         The value of the floating OHM supply
     function _floatingSupply() internal view returns (uint256) {
         uint256 polOhm = _getSupplyByCategory(toCategory("protocol-owned-liquidity"));
         uint256 borrowableOhm = _getSupplyByCategory(toCategory("protocol-owned-borrowable"));
@@ -590,6 +604,7 @@ contract OlympusSupply is SPPLYv1 {
         return circulatingSupply - polOhm - borrowableOhm;
     }
 
+    /// @notice         Calculates the collateralized (non-backed) supply of OHM
     function _collateralizedSupply() internal view returns (uint256) {
         // There isn't any collateralized supply from simple balance lookups, so we forgo the supply by category call
         // Iterate through the submodules and get the collateralized supply from each lending facility
@@ -616,6 +631,11 @@ contract OlympusSupply is SPPLYv1 {
         return total;
     }
 
+    /// @notice         Calculates the backed supply of OHM
+    /// @notice         Backed supply is defined as:
+    /// @notice         > Floating supply - Collateralized (non-backed) OHM
+    ///
+    /// @return         The value of the backed OHM supply
     function _backedSupply() internal view returns (uint256) {
         uint256 floatingSupply = _floatingSupply();
         uint256 collateralizedSupply = _collateralizedSupply();

@@ -1048,9 +1048,10 @@ contract AppraiserTest is Test {
                 liquidPerOhmData,
                 (uint256, uint48)
             );
+            // Backed OHM = Floating OHM = All minted OHM - OHM in Protocol Owned Liq
             uint256 expectedBackedSupply = OHM_MINT_BALANCE +
                 BALANCER_POOL_OHM_BALANCE -
-                BALANCER_POOL_OHM_BALANCE.mulDiv(BPT_BALANCE, BALANCER_POOL_TOTAL_SUPPLY); // POL OHM is excluded
+                BALANCER_POOL_OHM_BALANCE.mulDiv(BPT_BALANCE, BALANCER_POOL_TOTAL_SUPPLY);
             assertEq(
                 value,
                 (RESERVE_VALUE_AT_1 + POL_BACKING_AT_1).mulDiv(1e9, expectedBackedSupply), // wEth is illiquid, so excluded
