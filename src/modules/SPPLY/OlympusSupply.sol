@@ -77,16 +77,21 @@ contract OlympusSupply is SPPLYv1 {
     function addCategory(
         Category category_,
         bool useSubmodules_,
-        bytes4 submoduleSelector_,
+        bytes4 submoduleMetricSelector_,
         bytes4 submoduleReservesSelector_
     ) external override permissioned {
-        _addCategory(category_, useSubmodules_, submoduleSelector_, submoduleReservesSelector_);
+        _addCategory(
+            category_,
+            useSubmodules_,
+            submoduleMetricSelector_,
+            submoduleReservesSelector_
+        );
     }
 
     function _addCategory(
         Category category_,
         bool useSubmodules_,
-        bytes4 submoduleSelector_,
+        bytes4 submoduleMetricSelector_,
         bytes4 submoduleReservesSelector_
     ) internal {
         // Check if category is 0, if so revert
@@ -95,47 +100,48 @@ contract OlympusSupply is SPPLYv1 {
         // Check if category is already approved, if so revert
         if (categoryData[category_].approved) revert SPPLY_CategoryAlreadyApproved(category_);
 
-        // If submodules are enabled and the selector is empty, revert
-        if (useSubmodules_ && submoduleSelector_ == bytes4(0)) revert SPPLY_InvalidParams();
+        // If submodules are enabled and the metric selector is empty, revert
+        if (useSubmodules_ && submoduleMetricSelector_ == bytes4(0)) revert SPPLY_InvalidParams();
 
-        // If submodules are not enabled and the selector is specified, revert
-        if (!useSubmodules_ && submoduleSelector_ != bytes4(0)) revert SPPLY_InvalidParams();
+        // If submodules are not enabled and the metric selector is specified, revert
+        if (!useSubmodules_ && submoduleMetricSelector_ != bytes4(0)) revert SPPLY_InvalidParams();
+
+        // If submodules are not enabled and the reserves selector is specified, revert
+        if (!useSubmodules_ && submoduleReservesSelector_ != bytes4(0))
+            revert SPPLY_InvalidParams();
 
         // If submodules are enabled, check that the selector is valid
         if (useSubmodules_) {
-            bool valid;
-            bool validReserves;
-            uint256 len = SUPPLY_SUBMODULE_SELECTORS.length;
-            for (uint256 i; i < len; ) {
-                if (SUPPLY_SUBMODULE_SELECTORS[i] == submoduleSelector_) {
-                    valid = true;
-                    break;
-                }
-                unchecked {
-                    ++i;
-                }
-            }
-            if (!valid) revert SPPLY_InvalidParams();
-
-            if (submoduleReservesSelector_ != bytes4(0)) {
-                len = SUPPLY_SUBMODULE_RESERVES_SELECTORS.length;
+            // Check if the metric selector is valid
+            {
+                bool validMetricSelector;
+                uint256 len = SUPPLY_SUBMODULE_SELECTORS.length;
                 for (uint256 i; i < len; ) {
-                    if (SUPPLY_SUBMODULE_RESERVES_SELECTORS[i] == submoduleReservesSelector_) {
-                        validReserves = true;
+                    if (SUPPLY_SUBMODULE_SELECTORS[i] == submoduleMetricSelector_) {
+                        validMetricSelector = true;
                         break;
                     }
                     unchecked {
                         ++i;
                     }
                 }
-                if (!validReserves) revert SPPLY_InvalidParams();
-                // Add category to list of approved categories and store category data
-                categoryReservesData[category_] = CategoryData({
-                    approved: true,
-                    useSubmodules: true,
-                    submoduleSelector: submoduleReservesSelector_,
-                    total: Cache({value: 0, timestamp: 0})
-                });
+                if (!validMetricSelector) revert SPPLY_InvalidParams();
+            }
+
+            // If specified (since it is optional), check if the reserves selector is valid
+            if (submoduleReservesSelector_ != bytes4(0)) {
+                bool validReservesSelector;
+                uint256 len = SUPPLY_SUBMODULE_RESERVES_SELECTORS.length;
+                for (uint256 i; i < len; ) {
+                    if (SUPPLY_SUBMODULE_RESERVES_SELECTORS[i] == submoduleReservesSelector_) {
+                        validReservesSelector = true;
+                        break;
+                    }
+                    unchecked {
+                        ++i;
+                    }
+                }
+                if (!validReservesSelector) revert SPPLY_InvalidParams();
             }
         }
 
@@ -144,7 +150,8 @@ contract OlympusSupply is SPPLYv1 {
         CategoryData storage data = categoryData[category_];
         data.approved = true;
         data.useSubmodules = useSubmodules_;
-        data.submoduleSelector = submoduleSelector_;
+        data.submoduleMetricSelector = submoduleMetricSelector_;
+        data.submoduleReservesSelector = submoduleReservesSelector_;
         emit CategoryAdded(category_);
     }
 
@@ -159,7 +166,6 @@ contract OlympusSupply is SPPLYv1 {
 
         // Remove category from list of approved categories
         delete categoryData[category_];
-        delete categoryReservesData[category_];
         uint256 len = categories.length;
         for (uint256 i; i < len; ) {
             if (fromCategory(categories[i]) == fromCategory(category_)) {
@@ -381,12 +387,12 @@ contract OlympusSupply is SPPLYv1 {
             for (uint256 i; i < len; ) {
                 address submodule = address(_getSubmoduleIfInstalled(submodules[i]));
                 (bool success, bytes memory returnData) = submodule.staticcall(
-                    abi.encodeWithSelector(data.submoduleSelector)
+                    abi.encodeWithSelector(data.submoduleMetricSelector)
                 );
 
                 // Ensure call was successful
                 if (!success)
-                    revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleSelector);
+                    revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleMetricSelector);
 
                 // Decode supply returned by the submodule
                 supply += abi.decode(returnData, (uint256));
@@ -418,7 +424,7 @@ contract OlympusSupply is SPPLYv1 {
             }
         }
 
-        CategoryData memory data = categoryReservesData[category_];
+        CategoryData memory data = categoryData[category_];
         uint256 categorySubmodSources;
         // If category requires data from submodules, count all submodules and their sources.
         len = (data.useSubmodules) ? submodules.length : 0;
@@ -451,11 +457,12 @@ contract OlympusSupply is SPPLYv1 {
         for (uint256 i; i < len; ) {
             address submodule = address(_getSubmoduleIfInstalled(submodules[i]));
             (bool success, bytes memory returnData) = submodule.staticcall(
-                abi.encodeWithSelector(data.submoduleSelector)
+                abi.encodeWithSelector(data.submoduleReservesSelector)
             );
 
             // Ensure call was successful
-            if (!success) revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleSelector);
+            if (!success)
+                revert SPPLY_SubmoduleFailed(address(submodule), data.submoduleReservesSelector);
 
             // Decode supply returned by the submodule
             Reserves[] memory currentReserves = abi.decode(returnData, (Reserves[]));

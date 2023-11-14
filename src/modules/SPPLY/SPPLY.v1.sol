@@ -65,11 +65,14 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     struct CategoryData {
         bool approved;
         bool useSubmodules;
-        bytes4 submoduleSelector; // The selector from `SupplySubmodule` to use for this category
+        /// @notice The selector from `SupplySubmodule` to use for metrics in this category
+        bytes4 submoduleMetricSelector;
+        /// @notice The selector from `SupplySubmodule` to use for reserves in this category
+        /// @dev    Optional
+        bytes4 submoduleReservesSelector;
         Cache total;
     }
     mapping(Category => CategoryData) public categoryData;
-    mapping(Category => CategoryData) public categoryReservesData;
 
     /// @notice Categorization of locations
     /// @dev if a location is categorized, then it is in the locations array
@@ -129,12 +132,12 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     ///
     /// @param category_                    The category to add
     /// @param useSubmodules_               Whether or not to use submodules for this category
-    /// @param submoduleSelector_           The selector from `SupplySubmodule` to use for this category
+    /// @param submoduleMetricSelector_           The selector from `SupplySubmodule` to use for the metrics of this category
     /// @param submoduleReservesSelector_   The selector from `SupplySubmodule` to use for the reserves of this category
     function addCategory(
         Category category_,
         bool useSubmodules_,
-        bytes4 submoduleSelector_,
+        bytes4 submoduleMetricSelector_,
         bytes4 submoduleReservesSelector_
     ) external virtual;
 
@@ -332,11 +335,11 @@ abstract contract SupplySubmodule is Submodule {
     /// @return     Quantity in the configured decimals
     function getProtocolOwnedLiquidityOhm() external view virtual returns (uint256);
 
-    /// @notice     Protocol-Owned Liquidity Reserves in the assets monitored by the submodule
+    /// @notice     Details of Protocol-Owned Liquidity Reserves in the assets monitored by the submodule
     /// @dev        This provides the details of OHM and non-OHM reserves in the submodule,
     ///             and can be used to determine the market and backing value of a category.
     ///
-    /// @return     A reserves struct
+    /// @return     A Reserves struct
     function getProtocolOwnedLiquidityReserves()
         external
         view

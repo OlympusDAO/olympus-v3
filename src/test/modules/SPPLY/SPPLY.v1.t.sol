@@ -451,34 +451,105 @@ contract SupplyTest is Test {
         vm.stopPrank();
     }
 
-    function test_addCategory_emptyStringSubmoduleSelector_reverts() public {
+    function test_addCategory_emptyStringSubmoduleMetricSelector_reverts() public {
         bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), true, bytes4(0), bytes4(0));
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            bytes4(""),
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+        );
         vm.stopPrank();
     }
 
-    function test_addCategory_emptySubmoduleSelector_reverts() public {
+    function test_addCategory_emptySubmoduleMetricSelector_reverts() public {
         bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), true, bytes4(0), bytes4(0));
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            bytes4(0),
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+        );
         vm.stopPrank();
     }
 
-    function test_addCategory_invalidSubmoduleSelector_reverts() public {
+    function test_addCategory_invalidSubmoduleMetricSelector_reverts() public {
         bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), true, bytes4("junk"), bytes4(0));
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector,
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+        );
         vm.stopPrank();
     }
 
-    function test_addCategory_submodulesDisabled_withSelector_reverts() public {
+    function test_addCategory_emptyStringSubmoduleReservesSelector() public {
+        vm.startPrank(writer);
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            SupplySubmodule.getCollateralizedOhm.selector,
+            bytes4("")
+        );
+        vm.stopPrank();
+
+        // Check that the category is contained in the categoryData mapping
+        SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
+        assertEq(categoryData.approved, true);
+        assertEq(categoryData.useSubmodules, true);
+        assertEq(
+            categoryData.submoduleMetricSelector,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
+        assertEq(categoryData.submoduleReservesSelector, bytes4(0)); // submoduleReservesSelector is optional
+    }
+
+    function test_addCategory_emptySubmoduleReservesSelector() public {
+        vm.startPrank(writer);
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            SupplySubmodule.getCollateralizedOhm.selector,
+            bytes4(0)
+        );
+        vm.stopPrank();
+
+        // Check that the category is contained in the categoryData mapping
+        SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
+        assertEq(categoryData.approved, true);
+        assertEq(categoryData.useSubmodules, true);
+        assertEq(
+            categoryData.submoduleMetricSelector,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
+        assertEq(categoryData.submoduleReservesSelector, bytes4(0)); // submoduleReservesSelector is optional
+    }
+
+    function test_addCategory_invalidSubmoduleReservesSelector_reverts() public {
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
+        vm.expectRevert(err);
+
+        vm.startPrank(writer);
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            SupplySubmodule.getCollateralizedOhm.selector,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
+        vm.stopPrank();
+    }
+
+    function test_addCategory_submodulesDisabled_withSubmoduleMetricSelector_reverts() public {
         bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
@@ -488,6 +559,20 @@ contract SupplyTest is Test {
             false,
             SupplySubmodule.getCollateralizedOhm.selector,
             bytes4(0)
+        );
+        vm.startPrank(writer);
+    }
+
+    function test_addCategory_submodulesDisabled_withSubmoduleReservesSelector_reverts() public {
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
+        vm.expectRevert(err);
+
+        vm.startPrank(writer);
+        moduleSupply.addCategory(
+            toCategory("test"),
+            false,
+            bytes4(0),
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
         );
         vm.startPrank(writer);
     }
@@ -518,8 +603,8 @@ contract SupplyTest is Test {
         SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
         assertEq(categoryData.approved, true);
         assertEq(categoryData.useSubmodules, false);
-        assertEq(categoryData.submoduleSelector, bytes4(0));
-        // TODO submodule reserve selector
+        assertEq(categoryData.submoduleMetricSelector, bytes4(0));
+        assertEq(categoryData.submoduleReservesSelector, bytes4(0));
     }
 
     function test_addCategory_withSubmodules() public {
@@ -533,7 +618,7 @@ contract SupplyTest is Test {
             toCategory("test"),
             true,
             SupplySubmodule.getCollateralizedOhm.selector,
-            bytes4(0)
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
         );
         vm.stopPrank();
 
@@ -553,8 +638,14 @@ contract SupplyTest is Test {
         SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
         assertEq(categoryData.approved, true);
         assertEq(categoryData.useSubmodules, true);
-        assertEq(categoryData.submoduleSelector, SupplySubmodule.getCollateralizedOhm.selector);
-        // TODO submodule reserve selector
+        assertEq(
+            categoryData.submoduleMetricSelector,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
+        assertEq(
+            categoryData.submoduleReservesSelector,
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+        );
     }
 
     // =========  removeCategory ========= //
@@ -1008,7 +1099,7 @@ contract SupplyTest is Test {
 
         assertEq(categoryData.approved, true);
         assertEq(categoryData.useSubmodules, false);
-        assertEq(categoryData.submoduleSelector, bytes4(0));
+        assertEq(categoryData.submoduleMetricSelector, bytes4(0));
     }
 
     function test_getCategoryData_categoryNotApproved_reverts() public {
@@ -2233,12 +2324,13 @@ contract SupplyTest is Test {
     //  [ ] categoryNotApproved
     //  [ ] supply calculations
     //    [ ] no locations in category
+    //    [ ] no submodule selector defined
     //    [ ] zero supply
     //    [ ] OHM supply
     //    [ ] gOHM supply
     //    [ ] reverts upon submodule failure
 
-    function test_getSupplyByCategory_submodules_polr() public {
+    function test_getSupplyByCategory_submodules_pol() public {
         _setUpSubmodules();
 
         // Add OHM/gOHM in the treasury
