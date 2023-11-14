@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {IBalancerPool} from "src/external/balancer/interfaces/IBalancerPool.sol";
-import {IBalancerVault} from "src/external/balancer/interfaces/IBalancerVault.sol";
+import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 import {IAuraRewardPool} from "src/external/aura/interfaces/IAuraRewardPool.sol";
 
 import "modules/SPPLY/SPPLY.v1.sol";
@@ -69,7 +69,7 @@ contract AuraBalancerSupply is SupplySubmodule {
     address internal immutable ohm;
 
     /// @notice     Address of the Balancer Vault. Cached at contract creation.
-    IBalancerVault public immutable balVault;
+    IVault public immutable balVault;
 
     /// @notice     Array of Balancer/Aura pool pairs.
     /// @dev        The pools can be added and removed using the `addPool()` and `removePool()` functions.
@@ -99,7 +99,7 @@ contract AuraBalancerSupply is SupplySubmodule {
             revert AuraBalSupply_InvalidParams();
 
         polManager = polManager_;
-        balVault = IBalancerVault(balVault_);
+        balVault = IVault(balVault_);
         ohm = address(SPPLYv1(address(parent_)).ohm());
 
         // Iterate through the pools and add them to the array
