@@ -8,7 +8,7 @@ import "src/Kernel.sol";
 import {IAppraiser} from "src/policies/OCA/interfaces/IAppraiser.sol";
 import {TRSRYv1_1, Category, toCategory} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
-import {SPPLYv1} from "src/modules/SPPLY/SPPLY.v1.sol";
+import {SPPLYv1, toCategory as toSupplyCategory} from "src/modules/SPPLY/SPPLY.v1.sol";
 
 contract Appraiser is IAppraiser, Policy {
     // ========== EVENTS ========== //
@@ -239,32 +239,30 @@ contract Appraiser is IAppraiser, Policy {
     }
 
     function _backing() internal view returns (uint256) {
-        // Get list of assets owned by the protocol
-        address[] memory assets = TRSRY.getAssets();
-
-        // Get the addresses of POL assets in the treasury
-        address[] memory polAssets = TRSRY.getAssetsByCategory(
-            toCategory("protocol-owned-liquidity")
+        // Get the POL reserves from the SPPLY module
+        SPPLYv1.Reserves[] memory reserves = SPPLY.getReservesByCategory(
+            toSupplyCategory("protocol-owned-liquidity")
         );
 
         uint256 value;
-        uint256 len = assets.length;
+        uint256 len = reserves.length;
         for (uint256 i; i < len; ) {
-            if (assets[i] != ohm) {
-                (uint256 assetValue, ) = _assetValue(assets[i]);
-                if (_inArray(assets[i], polAssets)) {
-                    // TODO dividing by 2 only works with 50/50 xyk pools. Need to make more general
-                    // Another to do it could be to get the POL supply from SPPLY module, calculate its value,
-                    // and then subtract it from the total market value of the treasury
-                    assetValue >> 1; // divide by 2, bitshifting is cheaper than division
+            uint256 tokens = reserves[i].tokens.length;
+            for (uint256 j; j < tokens; ) {
+                // Get current asset price
+                (uint256 price, ) = PRICE.getPrice(reserves[i].tokens[j], PRICEv2.Variant.CURRENT);
+                // Calculate current asset valuation
+                value +=
+                    (price * reserves[i].balances[j]) /
+                    (10 ** ERC20(reserves[i].tokens[j]).decimals());
+                unchecked {
+                    ++j;
                 }
-                value += assetValue;
             }
             unchecked {
                 ++i;
             }
         }
-
         return value;
     }
 
