@@ -62,6 +62,11 @@ contract OlympusPricev2 is PRICEv2 {
     // ========== ASSET PRICES ========== //
 
     /// @inheritdoc PRICEv2
+    /// @dev        Optimistically uses the cached price if it has been updated this block, otherwise calculates price dynamically
+    ///
+    /// @dev        Will revert if:
+    /// @dev        - `asset_` is not approved
+    /// @dev        - No price could be determined
     function getPrice(address asset_) external view override returns (uint256) {
         // Try to use the last price, must be updated on the current timestamp
         // getPrice checks if asset is approved
@@ -74,6 +79,9 @@ contract OlympusPricev2 is PRICEv2 {
     }
 
     /// @inheritdoc PRICEv2
+    /// @dev        Will revert if:
+    /// @dev        - `asset_` is not approved
+    /// @dev        - No price could be determined
     function getPrice(address asset_, uint48 maxAge_) external view override returns (uint256) {
         // Try to use the last price, must be updated more recently than maxAge
         // getPrice checks if asset is approved
@@ -87,8 +95,9 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @inheritdoc PRICEv2
     /// @dev        Will revert if:
-    ///             - `asset_` is not approved
-    ///             - An invalid variant is requested
+    /// @dev        - `asset_` is not approved
+    /// @dev        - No price could be determined
+    /// @dev        - An invalid variant is requested
     function getPrice(
         address asset_,
         Variant variant_
@@ -108,14 +117,14 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @notice         Gets the current price of the asset
     /// @dev            This function follows this logic:
-    ///                 - Get the price from each feed
-    ///                 - If using the moving average, append the moving average to the results
-    ///                 - If there is only one price and it is not zero, return it
-    ///                 - Process the prices with the configured strategy
+    /// @dev            - Get the price from each feed
+    /// @dev            - If using the moving average, append the moving average to the results
+    /// @dev            - If there is only one price and it is not zero, return it
+    /// @dev            - Process the prices with the configured strategy
     ///
-    ///                 Will revert if:
-    ///                 - The resulting price is zero
-    ///                 - The configured strategy cannot aggregate the prices
+    /// @dev            Will revert if:
+    /// @dev            - The resulting price is zero
+    /// @dev            - The configured strategy cannot aggregate the prices
     ///
     /// @param asset_   Asset to get the price of
     /// @return         The price of the asset and the current block timestamp
@@ -175,10 +184,10 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @notice         Gets the last cached price of the asset
     /// @dev            This function follows this logic:
-    ///                 - Get the last observation stored for the asset and return it
+    /// @dev            - Get the last observation stored for the asset and return it
     ///
-    ///                 If no price has been ever cached, this function will automatically
-    ///                 return (0, 0).
+    /// @dev            If no price has been ever cached, this function will automatically
+    /// @dev            return (0, 0).
     ///
     /// @param asset_   Asset to get the price of
     /// @return         The price of the asset and asset's last observation time
@@ -199,10 +208,10 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @notice         Gets the moving average price of the asset
     /// @dev            This function follows this logic:
-    ///                 - Calculate the moving average using the `cumulativeObs` / `numObservations`
+    /// @dev            - Calculate the moving average using the `cumulativeObs` / `numObservations`
     ///
-    ///                 Will revert if:
-    ///                 - The moving average is not stored for the asset
+    /// @dev            Will revert if:
+    /// @dev            - The moving average is not stored for the asset
     ///
     /// @param asset_   Asset to get the price of
     /// @return         The price of the asset and asset's last observation time
@@ -223,6 +232,7 @@ contract OlympusPricev2 is PRICEv2 {
     }
 
     /// @inheritdoc PRICEv2
+    /// @dev        Optimistically uses the cached price if it has been updated this block, otherwise calculates price dynamically
     function getPriceIn(address asset_, address base_) external view override returns (uint256) {
         // Get the last price of each asset (getPrice checks if asset is approved)
         (uint256 assetPrice, uint48 assetTime) = getPrice(asset_, Variant.LAST);
@@ -296,6 +306,8 @@ contract OlympusPricev2 is PRICEv2 {
     ///
     ///             Will revert if:
     ///             - The asset is not approved
+    ///             - The caller is not permissioned
+    ///             - The price was not able to be determined
     function storePrice(address asset_) public override permissioned {
         Asset storage asset = _assetData[asset_];
 
@@ -325,18 +337,19 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @inheritdoc PRICEv2
     /// @dev        Implements the following logic:
-    ///             - Performs basic checks on the parameters
-    ///             - Sets the price strategy using `_updateAssetPriceStrategy()`
-    ///             - Sets the price feeds using `_updateAssetPriceFeeds()`
-    ///             - Sets the moving average data using `_updateAssetMovingAverage()`
-    ///             - Validates the configuration using `_getCurrentPrice()`, which will revert if there is a mis-configuration
-    ///             - Adds the asset to the `assets` array and marks it as approved
+    /// @dev        - Performs basic checks on the parameters
+    /// @dev        - Sets the price strategy using `_updateAssetPriceStrategy()`
+    /// @dev        - Sets the price feeds using `_updateAssetPriceFeeds()`
+    /// @dev        - Sets the moving average data using `_updateAssetMovingAverage()`
+    /// @dev        - Validates the configuration using `_getCurrentPrice()`, which will revert if there is a mis-configuration
+    /// @dev        - Adds the asset to the `assets` array and marks it as approved
     ///
-    ///             Will revert if:
-    ///             - `asset_` is not a contract
-    ///             - `asset_` is already approved
-    ///             - The moving average is being used, but not stored
-    ///             - An empty strategy was specified, but the number of feeds requires a strategy
+    /// @dev        Will revert if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `asset_` is not a contract
+    /// @dev        - `asset_` is already approved
+    /// @dev        - The moving average is being used, but not stored
+    /// @dev        - An empty strategy was specified, but the number of feeds requires a strategy
     function addAsset(
         address asset_,
         bool storeMovingAverage_,
@@ -399,7 +412,8 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @inheritdoc PRICEv2
     /// @dev        Will revert if:
-    ///             - `asset_` is not approved
+    /// @dev        - `asset_` is not approved
+    /// @dev        - The caller is not permissioned
     function removeAsset(address asset_) external override permissioned {
         // Ensure asset is already added
         if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
@@ -426,14 +440,15 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @inheritdoc PRICEv2
     /// @dev        Implements the following logic:
-    ///             - Performs basic checks on the parameters
-    ///             - Sets the price feeds using `_updateAssetPriceFeeds()`
-    ///             - Validates the configuration using `_getCurrentPrice()`, which will revert if there is a mis-configuration
+    /// @dev        - Performs basic checks on the parameters
+    /// @dev        - Sets the price feeds using `_updateAssetPriceFeeds()`
+    /// @dev        - Validates the configuration using `_getCurrentPrice()`, which will revert if there is a mis-configuration
     ///
-    ///             Will revert if:
-    ///             - `asset_` is not approved
-    ///             - `_updateAssetPriceFeeds()` reverts
-    ///             - `_getCurrentPrice()` reverts
+    /// @dev        Will revert if:
+    /// @dev        - `asset_` is not approved
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `_updateAssetPriceFeeds()` reverts
+    /// @dev        - `_getCurrentPrice()` reverts
     function updateAssetPriceFeeds(
         address asset_,
         Component[] memory feeds_
@@ -452,12 +467,12 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @notice         Updates the price feeds for the asset
     /// @dev            Implements the following logic:
-    ///                 - Performs basic checks on the parameters
-    ///                 - Sets the price feeds for the asset
+    /// @dev            - Performs basic checks on the parameters
+    /// @dev            - Sets the price feeds for the asset
     ///
-    ///                 Will revert if:
-    ///                 - The number of feeds is zero
-    ///                 - Any feed has a submodule that is not installed
+    /// @dev            Will revert if:
+    /// @dev            - The number of feeds is zero
+    /// @dev            - Any feed has a submodule that is not installed
     ///
     /// @param asset_   Asset to update the price feeds for
     /// @param feeds_   Array of price feed components
@@ -497,14 +512,15 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @inheritdoc PRICEv2
     /// @dev        Implements the following logic:
-    ///             - Performs basic checks on the parameters
-    ///             - Sets the price strategy using `_updateAssetPriceStrategy()`
-    ///             - Validates the configuration using `_getCurrentPrice()`, which will revert if there is a mis-configuration
+    /// @dev        - Performs basic checks on the parameters
+    /// @dev        - Sets the price strategy using `_updateAssetPriceStrategy()`
+    /// @dev        - Validates the configuration using `_getCurrentPrice()`, which will revert if there is a mis-configuration
     ///
-    ///             Will revert if:
-    ///             - `asset_` is not approved
-    ///             - The moving average is used, but is not stored
-    ///             - An empty strategy was specified, but the number of feeds requires a strategy
+    /// @dev        Will revert if:
+    /// @dev        - `asset_` is not approved
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The moving average is used, but is not stored
+    /// @dev        - An empty strategy was specified, but the number of feeds requires a strategy
     function updateAssetPriceStrategy(
         address asset_,
         Component memory strategy_,
@@ -541,12 +557,12 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @notice                     Updates the price strategy for the asset
     /// @dev                        Implements the following logic:
-    ///                             - Performs basic checks on the parameters
-    ///                             - Sets the price strategy for the asset
-    ///                             - Sets the `useMovingAverage` flag for the asset
+    /// @dev                        - Performs basic checks on the parameters
+    /// @dev                        - Sets the price strategy for the asset
+    /// @dev                        - Sets the `useMovingAverage` flag for the asset
     ///
-    ///                             Will revert if:
-    ///                             - The submodule used by the strategy is not installed
+    /// @dev                        Will revert if:
+    /// @dev                        - The submodule used by the strategy is not installed
     ///
     /// @param asset_               Asset to update the price strategy for
     /// @param strategy_            Price strategy component
@@ -573,12 +589,13 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @inheritdoc                     PRICEv2
     /// @dev                            Implements the following logic:
-    ///                                 - Performs basic checks on the parameters
-    ///                                 - Sets the moving average data using `_updateAssetMovingAverage()`
+    /// @dev                            - Performs basic checks on the parameters
+    /// @dev                            - Sets the moving average data using `_updateAssetMovingAverage()`
     ///
-    ///                                 Will revert if:
-    ///                                 - `asset_` is not approved
-    ///                                 - The moving average is used, but is not stored
+    /// @dev                            Will revert if:
+    /// @dev                            - `asset_` is not approved
+    /// @dev                            - The caller is not permissioned
+    /// @dev                            - The moving average is used, but is not stored
     ///
     /// @param asset_                   Asset to update the moving average data for
     /// @param storeMovingAverage_      Flag to indicate if the moving average should be stored
@@ -615,15 +632,15 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @notice                         Updates the moving average data for the asset
     /// @dev                            Implements the following logic:
-    ///                                 - Removes existing moving average data
-    ///                                 - Performs basic checks on the parameters
-    ///                                 - Sets the moving average data for the asset
-    ///                                 - If the moving average is not stored, gets the current price and stores it so that every asset has at least one cached value
+    /// @dev                            - Removes existing moving average data
+    /// @dev                            - Performs basic checks on the parameters
+    /// @dev                            - Sets the moving average data for the asset
+    /// @dev                            - If the moving average is not stored, gets the current price and stores it so that every asset has at least one cached value
     ///
-    ///                                 Will revert if:
-    ///                                 - `lastObservationTime_` is in the future
-    ///                                 - Any observation is zero
-    ///                                 - The number of observations provided is insufficient
+    /// @dev                            Will revert if:
+    /// @dev                            - `lastObservationTime_` is in the future
+    /// @dev                            - Any observation is zero
+    /// @dev                            - The number of observations provided is insufficient
     ///
     /// @param asset_                   Asset to update the moving average data for
     /// @param storeMovingAverage_      Flag to indicate if the moving average should be stored
