@@ -297,7 +297,8 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     ///
     /// @param metric_  The metric to query
     /// @param variant_ The variant to query
-    /// @return         The value of the metric in the module's configured decimals and the timestamp at which it was calculated
+    /// @return         The value of the metric in the module's configured decimals
+    /// @return         The timestamp at which it was calculated
     function getMetric(
         Metric metric_,
         Variant variant_
