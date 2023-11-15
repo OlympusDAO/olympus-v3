@@ -579,7 +579,6 @@ contract AuraBalancerSupplyTest is Test {
         balancerPoolBalances[1] = poolOhmBalance;
         balancerVault.setBalances(BALANCER_POOL_ID, balancerPoolBalances);
 
-        // TODO check decimals
         uint256 expected = (polManagerBptBalance + polManagerAuraBptBalance).mulDiv(
             poolOhmBalance,
             bptTotalSupply
