@@ -372,7 +372,10 @@ contract Appraiser is IAppraiser, Policy {
     /// @return         The market cap
     function _marketCap() internal view returns (uint256) {
         // Get supply of ohm
-        (uint256 supply, ) = SPPLY.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, SPPLYv1.Variant.CURRENT);
+        (uint256 supply, ) = SPPLY.getMetric(
+            SPPLYv1.Metric.CIRCULATING_SUPPLY,
+            SPPLYv1.Variant.CURRENT
+        );
 
         // Get price of ohm
         (uint256 price, ) = PRICE.getPrice(ohm, PRICEv2.Variant.CURRENT);

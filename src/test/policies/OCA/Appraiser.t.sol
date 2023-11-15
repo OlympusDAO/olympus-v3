@@ -170,7 +170,10 @@ contract AppraiserTest is Test {
                 SupplyCategory.wrap("protocol-owned-liquidity")
             );
             bookkeeper.categorizeSupply(daoWallet, SupplyCategory.wrap("dao"));
-            bookkeeper.categorizeSupply(protocolWallet, SupplyCategory.wrap("protocol-owned-treasury"));
+            bookkeeper.categorizeSupply(
+                protocolWallet,
+                SupplyCategory.wrap("protocol-owned-treasury")
+            );
         }
 
         // Mint tokens
@@ -1087,7 +1090,11 @@ contract AppraiserTest is Test {
             assertEq(variantTimestamp, uint48(block.timestamp));
 
             // Market cap = circulating supply * price
-            assertEq(value, SPPLY.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY).mulDiv(OHM_PRICE, 1e9), "MARKET_CAP_VIA_SPPLY");
+            assertEq(
+                value,
+                SPPLY.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY).mulDiv(OHM_PRICE, 1e9),
+                "MARKET_CAP_VIA_SPPLY"
+            );
 
             (value, variantTimestamp) = abi.decode(premiumData, (uint256, uint48));
             assertEq(value, expectedMarketCap.mulDiv(1e18, expectedMarketVal), "PREMIUM");
