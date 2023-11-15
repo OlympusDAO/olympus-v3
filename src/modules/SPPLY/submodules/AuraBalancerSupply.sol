@@ -1,32 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
+import {IBalancerPool} from "src/external/balancer/interfaces/IBalancerPool.sol";
+import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
+import {IAuraRewardPool} from "src/external/aura/interfaces/IAuraRewardPool.sol";
+
 import "modules/SPPLY/SPPLY.v1.sol";
-
-/// @dev    Interface for the Aura base reward pool
-///         Example contract: https://etherscan.io/address/0xB9D6ED734Ccbdd0b9CadFED712Cf8AC6D0917EcD
-interface IAuraPool {
-    function balanceOf(address account_) external view returns (uint256);
-
-    function asset() external view returns (address);
-}
-
-interface IBalancerPool {
-    function balanceOf(address account_) external view returns (uint256);
-
-    function totalSupply() external view returns (uint256);
-
-    function getPoolId() external view returns (bytes32);
-}
-
-interface IVault {
-    function getPoolTokens(
-        bytes32 poolId
-    )
-        external
-        view
-        returns (address[] memory tokens, uint256[] memory balances, uint256 lastChangeBlock);
-}
 
 /// @title      AuraBalancerSupply
 /// @author     Oighty
@@ -75,24 +54,35 @@ contract AuraBalancerSupply is SupplySubmodule {
 
     // ========== STATE VARIABLES ========== //
 
+    /// @notice         Struct that represents a Balancer/Aura pool pair
     struct Pool {
+        /// @notice     Balancer pool
         IBalancerPool balancerPool;
-        IAuraPool auraPool;
+        /// @notice     Aura pool. Optional.
+        IAuraRewardPool auraPool;
     }
 
-    address public polManager;
-    address internal ohm;
-    IVault public balVault;
+    /// @notice     Address of the POL manager.
+    address public immutable polManager;
+
+    /// @notice     Address of the OHM token. Cached at contract creation.
+    address internal immutable ohm;
+
+    /// @notice     Address of the Balancer Vault. Cached at contract creation.
+    IVault public immutable balVault;
+
+    /// @notice     Array of Balancer/Aura pool pairs.
+    /// @dev        The pools can be added and removed using the `addPool()` and `removePool()` functions.
     Pool[] public pools;
 
     // ========== CONSTRUCTOR ========== //
 
     /// @notice             Constructor for the AuraBalancerSupply submodule
     /// @dev                Will revert if:
-    ///                     - The `polManager_` address is 0
-    ///                     - The `balVault_` address is 0
-    ///                     - There is an invalid entry in the `pools_` array (see `addPool()`)
-    ///                     - Calling the `Submodule` constructor fails
+    /// @dev                - The `polManager_` address is 0
+    /// @dev                - The `balVault_` address is 0
+    /// @dev                - There is an invalid entry in the `pools_` array (see `addPool()`)
+    /// @dev                - Calling the `Submodule` constructor fails
     ///
     /// @param parent_      Address of the parent contract, the SPPLY module
     /// @param polManager_  Address of the POL manager
@@ -222,6 +212,100 @@ contract AuraBalancerSupply is SupplySubmodule {
         return reserves;
     }
 
+    /// @inheritdoc SupplySubmodule
+    function getSourceCount() external view override returns (uint256) {
+        return pools.length;
+    }
+
+    /// @notice Get the list of configured pools
+    /// @return Array of Balancer/Aura pool pairs
+    function getPools() external view returns (Pool[] memory) {
+        return pools;
+    }
+
+    // =========== ADMIN FUNCTIONS =========== //
+
+    /// @notice                 Add a Balancer/Aura Pool pair to the list of pools
+    /// @dev                    Will revert if:
+    /// @dev                    - The `balancerPool_` address is 0
+    /// @dev                    - The `balancerPool_` address is already added
+    /// @dev                    - The `balancerPool_` address is not the asset of the specified Aura pool
+    /// @dev                    - The caller is not the parent module
+    ///
+    /// @param balancerPool_    Address of the Balancer pool
+    /// @param auraPool_        Address of the Aura pool
+    function addPool(address balancerPool_, address auraPool_) external onlyParent {
+        // Don't add address 0
+        if (balancerPool_ == address(0)) revert AuraBalSupply_InvalidParams();
+
+        // Check that the pool isn't already added
+        if (_inArray(balancerPool_))
+            revert AuraBalSupply_PoolAlreadyAdded(balancerPool_, auraPool_);
+
+        // Check that the aura pool is for the associated balancer pool unless it is blank
+        if (address(auraPool_) != address(0) && balancerPool_ != IAuraRewardPool(auraPool_).asset())
+            revert AuraBalSupply_PoolMismatch();
+
+        // Add the pool to the array
+        pools.push(
+            Pool({balancerPool: IBalancerPool(balancerPool_), auraPool: IAuraRewardPool(auraPool_)})
+        );
+
+        emit PoolAdded(balancerPool_, auraPool_);
+    }
+
+    /// @notice                 Remove a Balancer/Aura Pool pair from the list of pools
+    /// @dev                    Will revert if:
+    /// @dev                    - The `balancerPool_` address is 0
+    /// @dev                    - The `balancerPool_` address is not already added
+    /// @dev                    - The caller is not the parent module
+    ///
+    /// @param balancerPool_    Address of the Balancer pool
+    function removePool(address balancerPool_) external onlyParent {
+        // Ignore address 0
+        if (balancerPool_ == address(0)) revert AuraBalSupply_InvalidParams();
+
+        // Check that the pool is present
+        if (!_inArray(balancerPool_)) revert AuraBalSupply_InvalidParams();
+
+        uint256 len = pools.length;
+        for (uint256 i; i < len; ) {
+            if (balancerPool_ == address(pools[i].balancerPool)) {
+                address auraPool = address(pools[i].auraPool);
+                pools[i] = pools[len - 1];
+                pools.pop();
+                emit PoolRemoved(balancerPool_, auraPool);
+                return;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    // =========== HELPER FUNCTIONS =========== //
+
+    /// @notice     Determines if `balancerPool_` is contained in the `pools` array
+    ///
+    /// @param      balancerPool_ Address of the Balancer pool
+    /// @return     True if the pool is present, false otherwise
+    function _inArray(address balancerPool_) internal view returns (bool) {
+        uint256 len = pools.length;
+        for (uint256 i; i < len; ) {
+            if (balancerPool_ == address(pools[i].balancerPool)) {
+                return true;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        return false;
+    }
+
+    /// @notice        Get the reserves of a Balancer/Aura pool pair
+    ///
+    /// @param pool    Balancer/Aura pool pair
+    /// @return        Reserves of the pool
     function _getReserves(Pool storage pool) internal view returns (SPPLYv1.Reserves memory) {
         // Get the balancer pool token balance of the manager
         uint256 balBalance = pool.balancerPool.balanceOf(polManager);
@@ -259,88 +343,5 @@ contract AuraBalancerSupply is SupplySubmodule {
         reserves.tokens = _vaultTokens;
         reserves.balances = balances;
         return reserves;
-    }
-
-    /// @inheritdoc SupplySubmodule
-    function getSourceCount() external view override returns (uint256) {
-        return pools.length;
-    }
-
-    // =========== ADMIN FUNCTIONS =========== //
-
-    /// @notice                 Add a Balancer/Aura Pool pair to the list of pools
-    /// @dev                    Will revert if:
-    ///                         - The `balancerPool_` address is 0
-    ///                         - The `balancerPool_` address is already added
-    ///                         - The `balancerPool_` address is not the asset of the specified Aura pool
-    ///                         - The caller is not the parent module
-    ///
-    /// @param balancerPool_    Address of the Balancer pool
-    /// @param auraPool_        Address of the Aura pool
-    function addPool(address balancerPool_, address auraPool_) external onlyParent {
-        // Don't add address 0
-        if (balancerPool_ == address(0)) revert AuraBalSupply_InvalidParams();
-
-        // Check that the pool isn't already added
-        if (_inArray(balancerPool_))
-            revert AuraBalSupply_PoolAlreadyAdded(balancerPool_, auraPool_);
-
-        // Check that the aura pool is for the associated balancer pool unless it is blank
-        if (address(auraPool_) != address(0) && balancerPool_ != IAuraPool(auraPool_).asset())
-            revert AuraBalSupply_PoolMismatch();
-
-        // Add the pool to the array
-        pools.push(
-            Pool({balancerPool: IBalancerPool(balancerPool_), auraPool: IAuraPool(auraPool_)})
-        );
-
-        emit PoolAdded(balancerPool_, auraPool_);
-    }
-
-    /// @notice                 Remove a Balancer/Aura Pool pair from the list of pools
-    /// @dev                    Will revert if:
-    ///                         - The `balancerPool_` address is 0
-    ///                         - The `balancerPool_` address is not already added
-    ///                         - The caller is not the parent module
-    ///
-    /// @param balancerPool_    Address of the Balancer pool
-    function removePool(address balancerPool_) external onlyParent {
-        // Ignore address 0
-        if (balancerPool_ == address(0)) revert AuraBalSupply_InvalidParams();
-
-        // Check that the pool is present
-        if (!_inArray(balancerPool_)) revert AuraBalSupply_InvalidParams();
-
-        uint256 len = pools.length;
-        for (uint256 i; i < len; ) {
-            if (balancerPool_ == address(pools[i].balancerPool)) {
-                address auraPool = address(pools[i].auraPool);
-                pools[i] = pools[len - 1];
-                pools.pop();
-                emit PoolRemoved(balancerPool_, auraPool);
-                return;
-            }
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    function _inArray(address balancerPool_) internal view returns (bool) {
-        uint256 len = pools.length;
-        for (uint256 i; i < len; ) {
-            if (balancerPool_ == address(pools[i].balancerPool)) {
-                return true;
-            }
-            unchecked {
-                ++i;
-            }
-        }
-        return false;
-    }
-
-    /// @notice Get the list of configured pools
-    function getPools() external view returns (Pool[] memory) {
-        return pools;
     }
 }

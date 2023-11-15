@@ -22,7 +22,9 @@ import {Bookkeeper, AssetCategory} from "policies/OCA/Bookkeeper.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 // Submodules
-import {AuraBalancerSupply, IBalancerPool, IAuraPool} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {AuraBalancerSupply} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {IBalancerPool} from "src/external/balancer/interfaces/IBalancerPool.sol";
+import {IAuraRewardPool} from "src/external/aura/interfaces/IAuraRewardPool.sol";
 
 // Interfaces
 import {IAppraiser} from "policies/OCA/interfaces/IAppraiser.sol";
@@ -170,7 +172,10 @@ contract AppraiserTest is Test {
                 SupplyCategory.wrap("protocol-owned-liquidity")
             );
             bookkeeper.categorizeSupply(daoWallet, SupplyCategory.wrap("dao"));
-            bookkeeper.categorizeSupply(protocolWallet, SupplyCategory.wrap("protocol-owned-treasury"));
+            bookkeeper.categorizeSupply(
+                protocolWallet,
+                SupplyCategory.wrap("protocol-owned-treasury")
+            );
         }
 
         // Mint tokens
@@ -207,7 +212,10 @@ contract AppraiserTest is Test {
         balancerPool.setDecimals(uint8(18));
 
         AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](1);
-        pools[0] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraPool(address(0)));
+        pools[0] = AuraBalancerSupply.Pool(
+            IBalancerPool(balancerPool),
+            IAuraRewardPool(address(0))
+        );
 
         submoduleAuraBalancerSupply = new AuraBalancerSupply(
             SPPLY,
@@ -1087,7 +1095,11 @@ contract AppraiserTest is Test {
             assertEq(variantTimestamp, uint48(block.timestamp));
 
             // Market cap = circulating supply * price
-            assertEq(value, SPPLY.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY).mulDiv(OHM_PRICE, 1e9), "MARKET_CAP_VIA_SPPLY");
+            assertEq(
+                value,
+                SPPLY.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY).mulDiv(OHM_PRICE, 1e9),
+                "MARKET_CAP_VIA_SPPLY"
+            );
 
             (value, variantTimestamp) = abi.decode(premiumData, (uint256, uint48));
             assertEq(value, expectedMarketCap.mulDiv(1e18, expectedMarketVal), "PREMIUM");

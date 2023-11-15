@@ -7,15 +7,15 @@ import "modules/SPPLY/SPPLY.v1.sol";
 /// @author     0xJem
 /// @notice     Abstract SPPLY submodule with configurable supply values
 /// @dev        This submodule can be used when there are contract interactions that are
-///             unable to be supported by a standard SPPLY submodule.
+/// @dev        unable to be supported by a standard SPPLY submodule.
 ///
-///             For example:
-///             - OHM supply in non-Ethereum mainnet lending markets (as cross-chain supply is not categorized)
-///             - OHM supply in non-Ethereum mainnet AMMs (as cross-chain supply is not categorized)
+/// @dev        For example:
+/// @dev        - OHM supply in non-Ethereum mainnet lending markets (as cross-chain supply is not categorized)
+/// @dev        - OHM supply in non-Ethereum mainnet AMMs (as cross-chain supply is not categorized)
 ///
-///             This submodule is intended to be used as a parent contract for a custom submodule. This is mainly
-///             due to the value returned by the `SUBKEYCODE()` function needs to be unique for each submodule,
-///             but as it is a pure function, it cannot read from the state of the contract.
+/// @dev        This submodule is intended to be used as a parent contract for a custom submodule. This is mainly
+/// @dev        due to the value returned by the `SUBKEYCODE()` function needs to be unique for each submodule,
+/// @dev        but as it is a pure function, it cannot read from the state of the contract.
 abstract contract CustomSupply is SupplySubmodule {
     // ========== EVENTS ========== //
 

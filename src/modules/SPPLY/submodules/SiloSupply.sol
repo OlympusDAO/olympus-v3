@@ -29,14 +29,27 @@ contract SiloSupply is SupplySubmodule {
 
     // ========== EVENTS ========== //
 
+    /// @notice         Emitted when the addresses of the Silo contracts are updated
+    ///
+    /// @param amo_     The address of the Olympus Silo AMO Policy / silo OHM token holder
+    /// @param lens_    The address of the SiloLens contract
+    /// @param silo_    The address of the Silo market
     event SourcesUpdated(address amo_, address lens_, address silo_);
 
     // ========== STATE VARIABLES ========== //
 
+    /// @notice         The address of the SiloLens contract
     ISiloLens public lens;
+
+    /// @notice         The address of the Olympus Silo AMO Policy / silo OHM token holder
     address public amo;
-    address internal ohm;
+
+    /// @notice         The address of the Silo market
     IBaseSilo public silo;
+
+    /// @notice         The address of the OHM token
+    /// @dev            Set at the time of contract creation
+    address internal immutable ohm;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -76,12 +89,12 @@ contract SiloSupply is SupplySubmodule {
 
     /// @inheritdoc     SupplySubmodule
     /// @dev            Collateralized OHM is calculated as the minimum of:
-    ///                 - OHM supplied/minted into the Silo market
-    ///                 - OHM borrowed from the Silo market
+    /// @dev            - OHM supplied/minted into the Silo market
+    /// @dev            - OHM borrowed from the Silo market
     ///
-    ///                 This is also equal to the remainder of OHM minted into the Silo market - protocol-owned borrowable OHM.
+    /// @dev            This is also equal to the remainder of OHM minted into the Silo market - protocol-owned borrowable OHM.
     ///
-    ///                 This function assumes that the protocol provided OHM is borrowable.
+    /// @dev            This function assumes that the protocol provided OHM is borrowable.
     function getCollateralizedOhm() external view override returns (uint256) {
         // Get OHM collateral token for this silo
         address ohmCollateralToken = silo.assetStorage(ohm).collateralToken;
@@ -100,12 +113,12 @@ contract SiloSupply is SupplySubmodule {
 
     /// @inheritdoc     SupplySubmodule
     /// @dev            Protocol-owned borrowable OHM is calculated as the maximum of:
-    ///                 - The difference between the OHM supplied/minted into the Silo market and the OHM borrowed from the Silo market
-    ///                 - 0
+    /// @dev                - The difference between the OHM supplied/minted into the Silo market and the OHM borrowed from the Silo market
+    /// @dev                - 0
     ///
-    ///                 We assume that any OHM borrowed from the pool, up to the minted amount, is protocol-owned since it will the last to withdraw in the event of a run.
+    /// @dev            We assume that any OHM borrowed from the pool, up to the minted amount, is protocol-owned since it will the last to withdraw in the event of a run.
     ///
-    ///                 This function assumes that the protocol provided OHM is borrowable.
+    /// @dev            This function assumes that the protocol provided OHM is borrowable.
     function getProtocolOwnedBorrowableOhm() external view override returns (uint256) {
         // Get OHM collateral token for this silo
         /// @dev note: this assumes that the protocol provided OHM is borrowable. if not, this token is not correct.
@@ -133,7 +146,7 @@ contract SiloSupply is SupplySubmodule {
     /// @inheritdoc     SupplySubmodule
     /// @dev            Protocol-owned liquidity OHM is always zero for lending facilities.
     ///
-    ///                 This function returns an array with the same length as `getSourceCount()`, but with empty values.
+    /// @dev            This function returns an array with the same length as `getSourceCount()`, but with empty values.
     function getProtocolOwnedLiquidityReserves()
         external
         view
@@ -161,8 +174,8 @@ contract SiloSupply is SupplySubmodule {
     /// @notice         Set the source addresses for Silo lending data
     /// @dev            All params are optional and will keep existing values if omitted
     ///
-    ///                 Will revert if:
-    ///                 - The caller is not the parent module
+    /// @dev            Will revert if:
+    /// @dev            - The caller is not the parent module
     ///
     /// @param amo_     The address of the Olympus Silo AMO Policy / silo OHM token holder
     /// @param lens_    The address of the SiloLens contract

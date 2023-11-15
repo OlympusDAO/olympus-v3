@@ -30,6 +30,7 @@ contract IncurDebtSupply is SupplySubmodule {
 
     // ========== EVENTS ========== //
 
+    /// @notice     Emitted when the address of the IncurDebt contract is updated
     event IncurDebtUpdated(address incurDebt_);
 
     // ========== STATE VARIABLES ========== //
@@ -40,10 +41,10 @@ contract IncurDebtSupply is SupplySubmodule {
 
     /// @notice             Constructor for the IncurDebtSupply submodule
     /// @dev                Will revert if:
-    ///                     - Calling the `Submodule` constructor fails
-    ///                     - The `incurDebt_` address is the zero address
+    /// @dev                - Calling the `Submodule` constructor fails
+    /// @dev                - The `incurDebt_` address is the zero address
     ///
-    ///                     Emits the IncurDebtUpdated event
+    /// @dev                Emits the IncurDebtUpdated event
     ///
     /// @param parent_      The address of the parent SPPLY module
     /// @param incurDebt_   The address of the IncurDebt contract
@@ -95,7 +96,7 @@ contract IncurDebtSupply is SupplySubmodule {
 
     /// @inheritdoc     SupplySubmodule
     /// @dev            Protocol-owned liquidity OHM is always zero for lending facilities.
-    ///
+    /// @dev
     ///                 This function returns an array with the same length as `getSourceCount()`, but with empty values.
     function getProtocolOwnedLiquidityReserves()
         external
@@ -123,10 +124,10 @@ contract IncurDebtSupply is SupplySubmodule {
 
     /// @notice             Set the address of the IncurDebt contract
     /// @dev                Will revert if:
-    ///                     - The address is the zero address
-    ///                     - The caller is not the parent module
+    /// @dev                - The address is the zero address
+    /// @dev                - The caller is not the parent module
     ///
-    ///                     Emits the IncurDebtUpdated event
+    /// @dev                Emits the IncurDebtUpdated event
     ///
     /// @param incurDebt_   The address of the IncurDebt contract
     function setIncurDebt(address incurDebt_) external onlyParent {

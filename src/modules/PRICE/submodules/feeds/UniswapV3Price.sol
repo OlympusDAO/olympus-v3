@@ -8,6 +8,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 /// @title      UniswapV3Price
+/// @author     0xJem
 /// @notice     Provides prices derived from the TWAP of a Uniswap V3 pool
 contract UniswapV3Price is PriceSubmodule {
     using FullMath for uint256;
@@ -115,10 +116,12 @@ contract UniswapV3Price is PriceSubmodule {
 
     // ========== SUBMODULE FUNCTIONS =========== //
 
+    /// @inheritdoc      Submodule
     function SUBKEYCODE() public pure override returns (SubKeycode) {
         return toSubKeycode("PRICE.UNIV3");
     }
 
+    /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
         major = 1;
         minor = 0;

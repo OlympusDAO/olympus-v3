@@ -10,13 +10,19 @@ import "modules/SPPLY/SPPLY.v1.sol";
 // [X] Handle OHM in liquidity pools (POL vs not)
 // [X] Allow caching supply metrics
 
+/// @notice     OlympusSupply implements the SPPLY interface to track the supply and categorization of OHM
+/// @author     Oighty
 contract OlympusSupply is SPPLYv1 {
+    // ========== STATE VARIABLES ========== //
+
+    /// @notice        Submodule selectors providing metrics
     bytes4[3] internal SUPPLY_SUBMODULE_METRIC_SELECTORS = [
         SupplySubmodule.getCollateralizedOhm.selector,
         SupplySubmodule.getProtocolOwnedBorrowableOhm.selector,
         SupplySubmodule.getProtocolOwnedLiquidityOhm.selector
     ];
 
+    /// @notice        Submodule selectors providing reserve records
     bytes4[1] internal SUPPLY_SUBMODULE_RESERVES_SELECTORS = [
         SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
     ];
@@ -24,6 +30,17 @@ contract OlympusSupply is SPPLYv1 {
     //============================================================================================//
     //                                        MODULE SETUP                                        //
     //============================================================================================//
+
+    /// @notice                             Initialize the OlympusSupply module
+    /// @dev                                The following categories will also be added:
+    /// @dev                                - protocol-owned-treasury
+    /// @dev                                - dao
+    /// @dev                                - protocol-owned-liquidity
+    /// @dev                                - protocol-owned-borrowable
+    ///
+    /// @param kernel_                      The address of the Kernel contract
+    /// @param tokens_                      The addresses of the OHM and gOHM tokens (in that order)
+    /// @param initialCrossChainSupply_     The initial cross-chain supply of OHM
     constructor(
         Kernel kernel_,
         address[2] memory tokens_, // [ohm, gOHM]
@@ -74,6 +91,11 @@ contract OlympusSupply is SPPLYv1 {
     //============================================================================================//
 
     /// @inheritdoc SPPLYv1
+    /// @dev        Will revert if:
+    /// @dev        - `_addCategory()` reverts
+    /// @dev        - The caller is not permissioned
+    ///
+    /// @dev        This function will emit the `CategoryAdded` event if successful
     function addCategory(
         Category category_,
         bool useSubmodules_,
@@ -88,6 +110,18 @@ contract OlympusSupply is SPPLYv1 {
         );
     }
 
+    /// @notice                             Adds a category to the list of approved categories
+    /// @dev                                Will revert if:
+    /// @dev                                - category is empty
+    /// @dev                                - category is already approved
+    /// @dev                                - submodules are enabled and the metric selector is empty
+    /// @dev                                - submodules are not enabled and the metric or reserves selector is specified
+    /// @dev                                - an invalid metric or reserves selector is specified
+    ///
+    /// @param category_                    The category to add
+    /// @param useSubmodules_               Whether or not the category requires data from submodules
+    /// @param submoduleMetricSelector_     The selector to use to get the metric from the submodule
+    /// @param submoduleReservesSelector_   The selector to use to get the reserves from the submodule
     function _addCategory(
         Category category_,
         bool useSubmodules_,
@@ -156,6 +190,12 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    /// @dev        Will revert if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - category does not exist/is not approved
+    /// @dev        - category is still in use by a location
+    ///
+    /// @dev        This function will emit the `CategoryRemoved` event if successful
     function removeCategory(Category category_) external override permissioned {
         // Check if category is approved, if not revert
         if (!categoryData[category_].approved) revert SPPLY_CategoryNotApproved(category_);
@@ -180,8 +220,13 @@ contract OlympusSupply is SPPLYv1 {
         emit CategoryRemoved(category_);
     }
 
+    /// @notice             Removes the categorization for `location_`
+    /// @dev                Will revert if:
+    /// @dev                - location is not categorized
+    ///
+    /// @param location_    The location to uncategorize
     function _uncategorize(address location_) internal {
-        // Check if the location is already in the category, if not revert
+        // Revert if the location is not categorized
         if (fromCategory(categorization[location_]) == bytes32(uint256(0)))
             revert SPPLY_LocationNotCategorized(location_);
 
@@ -205,6 +250,17 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    /// @dev        To add a location to a category, pass in the address and category
+    ///
+    /// @dev        To remove a location from all categories, pass in the address and an empty category
+    ///
+    /// @dev        This function will revert if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The category is not approved
+    /// @dev        - The location is already in the same category
+    /// @dev        - The location is not in the specified category and the category is empty
+    ///
+    /// @dev        This function will emit the `LocationCategorized` event if successful
     function categorize(address location_, Category category) external override permissioned {
         bool toRemove = fromCategory(category) == bytes32(uint256(0));
 
@@ -256,6 +312,8 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    /// @dev        Will revert if:
+    /// @dev        - The category is not approved
     function getLocationsByCategory(
         Category category_
     ) public view override returns (address[] memory) {
@@ -305,6 +363,11 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    /// @dev        This function will first attempt to return the cached value for the current
+    /// @dev        timestamp, if available. Otherwise, it will re-calculate the value.
+    ///
+    /// @dev        Will revert if:
+    /// @dev        - The category is not approved
     function getSupplyByCategory(Category category_) external view override returns (uint256) {
         // Try to use the last value, must be updated on the current timestamp
         // getSupplyByCategory checks if category is approved
@@ -317,6 +380,11 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    /// @dev        This function will first check the validity of the last-cached value.
+    /// @dev        Otherwise, it will re-calculate the value.
+    ///
+    /// @dev        Will revert if:
+    /// @dev        - The category is not approved
     function getSupplyByCategory(
         Category category_,
         uint48 maxAge_
@@ -332,6 +400,8 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    /// @dev        Will revert if:
+    /// @dev        - The category is not approved
     function getSupplyByCategory(
         Category category_,
         Variant variant_
@@ -351,6 +421,7 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @notice             Returns the balance of gOHM (in terms of OHM) for the provided location
+    ///
     /// @param location_    The location to get the gOHM balance for
     /// @return             The balance of gOHM (in terms of OHM) for the provided location
     function _getOhmForGOhmBalance(address location_) internal view returns (uint256) {
@@ -361,6 +432,15 @@ contract OlympusSupply is SPPLYv1 {
         return gohmBalance != 0 ? gohm.balanceFrom(gohmBalance) : 0;
     }
 
+    /// @notice             Returns the supply of OHM for the provided category
+    /// @dev                This function first obtains the balance of OHM and gOHM (in terms of OHM)
+    /// @dev                for each location in the category, then sums them together.
+    ///
+    /// @dev                If submodules are enabled for the category, the function represented by `submoduleMetricSelector`
+    /// @dev                will be called on each submodule and the returned value will be added to the total.
+    ///
+    /// @param category_    The category to get the supply for
+    /// @return             The supply of OHM for the provided category
     function _getSupplyByCategory(Category category_) internal view returns (uint256) {
         // Total up the supply of OHM of all locations in the category. Also accounts for gOHM.
         uint256 len = locations.length;
@@ -502,6 +582,9 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    /// @dev        Will revert if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The category is not approved
     function storeCategorySupply(Category category_) external override permissioned {
         (uint256 supply, uint48 timestamp) = getSupplyByCategory(category_, Variant.CURRENT);
         categoryData[category_].total = Cache(supply, timestamp);
@@ -512,6 +595,10 @@ contract OlympusSupply is SPPLYv1 {
     //============================================================================================//
 
     /// @inheritdoc SPPLYv1
+    /// @dev        Optimistically uses the cached value if it has been updated this block, otherwise calculates value dynamically
+    ///
+    /// @dev        Will revert if:
+    /// @dev        - The value for `metric_` is invalid
     function getMetric(Metric metric_) external view override returns (uint256) {
         // Get the cached value of the metric
         (uint256 value, uint48 timestamp) = getMetric(metric_, Variant.LAST);
@@ -526,6 +613,10 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    /// @dev        If the cached value is older than the provided age, then the value is calculated dynamically
+    ///
+    /// @dev        Will revert if:
+    /// @dev        - The value for `metric_` is invalid
     function getMetric(Metric metric_, uint48 maxAge_) external view override returns (uint256) {
         // Get the cached value of the metric
         (uint256 value, uint48 timestamp) = getMetric(metric_, Variant.LAST);
@@ -540,6 +631,11 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    /// @dev        If the `Variant.LAST` variant is requested and it has not yet been stored, then (0, 0) will be returned.
+    ///
+    /// @dev        Will revert if:
+    /// @dev        - The value for `metric_` is invalid
+    /// @dev        - The value for `variant_` is invalid
     function getMetric(
         Metric metric_,
         Variant variant_
@@ -566,6 +662,9 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    /// @dev        Will revert if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The value for `metric_` is invalid
     function storeMetric(Metric metric_) external override permissioned {
         (uint256 result, uint48 timestamp) = getMetric(metric_, Variant.CURRENT);
         metricCache[metric_] = Cache(result, timestamp);
@@ -573,6 +672,10 @@ contract OlympusSupply is SPPLYv1 {
 
     /// @notice         Calculates the total supply of OHM
     /// @notice         Accounts for CrossChain supply
+    ///
+    /// @dev            Calculated as:
+    /// @dev            - the total supply of OHM on mainnet
+    /// @dev            - plus: the value of `totalCrossChainSupply`
     ///
     /// @return         The value of the total OHM supply
     function _totalSupply() internal view returns (uint256) {
@@ -610,6 +713,10 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @notice         Calculates the collateralized (non-backed) supply of OHM
+    /// @notice         Calculated as:
+    /// @notice         - The sum of the values returned by calling `getCollateralizedOhm()` on submodules
+    ///
+    /// @return         The value of the collateralized OHM supply
     function _collateralizedSupply() internal view returns (uint256) {
         // There isn't any collateralized supply from simple balance lookups, so we forgo the supply by category call
         // Iterate through the submodules and get the collateralized supply from each lending facility
