@@ -35,6 +35,9 @@ contract AppraiserTest is Test {
     MockERC20 internal reserve;
     MockERC20 internal weth;
 
+    address internal daoWallet = address(bytes20("DAO"));
+    address internal protocolWallet = address(bytes20("POT"));
+
     Kernel internal kernel;
 
     MockPrice internal PRICE;
@@ -53,6 +56,8 @@ contract AppraiserTest is Test {
     uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
     uint256 internal constant OHM_PRICE = 10e18;
     uint256 internal constant OHM_MINT_BALANCE = 999_900e9;
+    uint256 internal constant OHM_MINT_DAO = 100e9;
+    uint256 internal constant OHM_MINT_PROTOCOL = 200e9;
 
     uint256 internal constant RESERVE_VALUE_AT_1 = 1_000_000e18;
     uint256 internal constant RESERVE_VALUE_AT_2 = 2_000_000e18;
@@ -164,11 +169,15 @@ contract AppraiserTest is Test {
                 address(bytes20("POL")),
                 SupplyCategory.wrap("protocol-owned-liquidity")
             );
+            bookkeeper.categorizeSupply(daoWallet, SupplyCategory.wrap("dao"));
+            bookkeeper.categorizeSupply(protocolWallet, SupplyCategory.wrap("protocol-owned-treasury"));
         }
 
         // Mint tokens
         {
             ohm.mint(address(this), OHM_MINT_BALANCE);
+            ohm.mint(address(daoWallet), OHM_MINT_DAO);
+            ohm.mint(address(protocolWallet), OHM_MINT_PROTOCOL);
             reserve.mint(address(TRSRY), 1_000_000e18);
             weth.mint(address(TRSRY), 1_000e18);
         }
@@ -1076,6 +1085,9 @@ contract AppraiserTest is Test {
             (value, variantTimestamp) = abi.decode(mcData, (uint256, uint48));
             assertEq(value, expectedMarketCap, "MARKET_CAP");
             assertEq(variantTimestamp, uint48(block.timestamp));
+
+            // Market cap = circulating supply * price
+            assertEq(value, SPPLY.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY).mulDiv(OHM_PRICE, 1e9), "MARKET_CAP_VIA_SPPLY");
 
             (value, variantTimestamp) = abi.decode(premiumData, (uint256, uint48));
             assertEq(value, expectedMarketCap.mulDiv(1e18, expectedMarketVal), "PREMIUM");
