@@ -547,7 +547,12 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     /// @dev        This function reverts if:
     /// @dev        - The caller is not permissioned
     /// @dev        - `group_` exists
+    /// @dev        - `group_` is empty or 0
     function addCategoryGroup(CategoryGroup group_) external override permissioned {
+        // Check if the category group is valid
+        if (fromCategoryGroup(group_) == bytes32(0))
+            revert TRSRY_InvalidParams(0, abi.encode(group_));
+
         // Check if the category group exists
         if (_categoryGroupExists(group_)) revert TRSRY_CategoryGroupExists(group_);
 
@@ -581,10 +586,15 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     /// @dev        This function reverts if:
     /// @dev        - The caller is not permissioned
     /// @dev        - `group_` does not exist
+    /// @dev        - `category_` is empty or 0
     /// @dev        - `category_` exists
     function addCategory(Category category_, CategoryGroup group_) external override permissioned {
         // Check if the category group exists
         if (!_categoryGroupExists(group_)) revert TRSRY_CategoryGroupDoesNotExist(group_);
+
+        // Check if the category is valid
+        if (fromCategory(category_) == bytes32(0))
+            revert TRSRY_InvalidParams(0, abi.encode(category_));
 
         // Check if the category exists by seeing if it has a non-zero category group
         if (fromCategoryGroup(categoryToGroup[category_]) != bytes32(0))

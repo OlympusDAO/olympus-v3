@@ -1085,6 +1085,32 @@ contract TRSRYv1_1Test is Test {
         TRSRY.addCategoryGroup(toCategoryGroup("liquidity-preference"));
     }
 
+    function testCorrectness_addCategoryGroupRevertsIfEmptyString() public {
+        // Try to push '' category group
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_InvalidParams(uint256,bytes)",
+            0,
+            abi.encode(toCategoryGroup(""))
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup(""));
+    }
+
+    function testCorrectness_addCategoryGroupRevertsIfZero() public {
+        // Try to push a 0 category group
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_InvalidParams(uint256,bytes)",
+            0,
+            abi.encode(toCategoryGroup(0))
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup(0));
+    }
+
     function testCorrectness_addCategoryGroupAddsGroup(bytes32 groupName_) public {
         vm.assume(
             groupName_ != bytes32("liquidity-preference") &&
@@ -1146,6 +1172,30 @@ contract TRSRYv1_1Test is Test {
 
         vm.prank(godmode);
         TRSRY.addCategory(toCategory("test"), toCategoryGroup("abcdef"));
+    }
+
+    function testCorrectness_addCategoryRevertsIfEmptyStringGroup() public {
+        // Try to push to '' category group which does not exist
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_CategoryGroupDoesNotExist(bytes32)",
+            toCategoryGroup("")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup(""));
+    }
+
+    function testCorrectness_addCategoryRevertsIfZeroGroup() public {
+        // Try to push to empty category group which does not exist
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_CategoryGroupDoesNotExist(bytes32)",
+            toCategoryGroup(0)
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup(0));
     }
 
     function testCorrectness_addCategoryRevertsIfGroupExists() public {
@@ -1262,6 +1312,32 @@ contract TRSRYv1_1Test is Test {
         vm.stopPrank();
     }
 
+    function testCorrectness_addCategoryRevertsIfCategoryEmptyString() public {
+        // Try to push an empty category to 'liquidity-preference' group
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_InvalidParams(uint256,bytes)",
+            0,
+            abi.encode(toCategory(""))
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.addCategory(toCategory(""), toCategoryGroup("liquidity-preference"));
+    }
+
+    function testCorrectness_addCategoryRevertsIfCategoryZero() public {
+        // Try to push an empty category to 'liquidity-preference' group
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_InvalidParams(uint256,bytes)",
+            0,
+            abi.encode(toCategory(0))
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.addCategory(toCategory(0), toCategoryGroup("liquidity-preference"));
+    }
+
     // ========= removeCategory ========= //
 
     function testCorrectness_removeCategoryRevertsIfUnconfiguredGroup() public {
@@ -1274,6 +1350,30 @@ contract TRSRYv1_1Test is Test {
 
         vm.prank(godmode);
         TRSRY.removeCategory(toCategory("test"));
+    }
+
+    function testCorrectness_removeCategoryRevertsIfEmptyStringCategory() public {
+        // Try to remove '' category which does not exist
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_CategoryDoesNotExist(bytes32)",
+            toCategory("")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.removeCategory(toCategory(""));
+    }
+
+    function testCorrectness_removeCategoryRevertsIfZeroCategory() public {
+        // Try to remove 0 category which does not exist
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_CategoryDoesNotExist(bytes32)",
+            toCategory(0)
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.removeCategory(toCategory(0));
     }
 
     function testCorrectness_removeCategoryRemovesCategoryInfo() public {
@@ -1323,6 +1423,38 @@ contract TRSRYv1_1Test is Test {
 
         vm.prank(godmode);
         TRSRY.categorize(address(reserve), toCategory("abcdef"));
+    }
+
+    function testCorrectness_categorizeRevertsIfEmptyStringCategory() public {
+        // Add asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(reserve), new address[](0));
+
+        // Try to add to empty string category
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_CategoryDoesNotExist(bytes32)",
+            toCategory("")
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.categorize(address(reserve), toCategory(""));
+    }
+
+    function testCorrectness_categorizeRevertsIfZeroCategory() public {
+        // Add asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(reserve), new address[](0));
+
+        // Try to add to zero category
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_CategoryDoesNotExist(bytes32)",
+            toCategory(0)
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.categorize(address(reserve), toCategory(0));
     }
 
     function testCorrectness_categorizeStoresCorrectlyZeroPrior() public {
@@ -1481,5 +1613,29 @@ contract TRSRYv1_1Test is Test {
             fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup("test-group"))),
             bytes32(0)
         );
+    }
+
+    function testCorrectness_uncategorizeRevertsIfCategoryDoesNotExist() public {
+        // Create category groups and categories
+        vm.startPrank(godmode);
+        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+
+        // Add asset
+        TRSRY.addAsset(address(reserve), new address[](0));
+
+        // Categorize asset
+        TRSRY.categorize(address(reserve), toCategory("test"));
+
+        // Try to uncategorize from test2
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_AssetNotInCategory(address,bytes32)",
+            address(reserve),
+            toCategory("test2") // Doesn't exist
+        );
+        vm.expectRevert(err);
+
+        TRSRY.uncategorize(address(reserve), toCategory("test2"));
+        vm.stopPrank();
     }
 }
