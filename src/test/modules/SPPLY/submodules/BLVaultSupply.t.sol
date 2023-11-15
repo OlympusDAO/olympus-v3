@@ -8,37 +8,15 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockGohm} from "test/mocks/OlympusMocks.sol";
+import {MockVaultManager} from "test/mocks/MockBLVaultManager.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 import {Math as OZMath} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "src/modules/SPPLY/OlympusSupply.sol";
-import {BLVaultSupply, IBLVaultManager} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
+import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
-
-contract MockVaultManager is IBLVaultManager {
-    uint256 public poolOhmShare;
-    bool public poolOhmShareReverts;
-
-    constructor(uint256 poolOhmShare_) {
-        poolOhmShare = poolOhmShare_;
-    }
-
-    function setPoolOhmShareReverts(bool reverts_) external {
-        poolOhmShareReverts = reverts_;
-    }
-
-    function setPoolOhmShare(uint256 poolOhmShare_) external {
-        poolOhmShare = poolOhmShare_;
-    }
-
-    function getPoolOhmShare() external view override returns (uint256) {
-        if (poolOhmShareReverts) revert();
-
-        return poolOhmShare;
-    }
-}
 
 contract BLVaultSupplyTest is Test {
     using FullMath for uint256;
@@ -93,7 +71,7 @@ contract BLVaultSupplyTest is Test {
             writer = moduleSupply.generateGodmodeFixture(type(OlympusSupply).name);
         }
 
-        // Deploy Silo submodule
+        // Deploy BLV submodule
         {
             // Create vault managers
             MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
