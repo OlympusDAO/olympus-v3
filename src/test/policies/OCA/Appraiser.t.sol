@@ -22,7 +22,9 @@ import {Bookkeeper, AssetCategory} from "policies/OCA/Bookkeeper.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 // Submodules
-import {AuraBalancerSupply, IBalancerPool, IAuraPool} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {AuraBalancerSupply} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {IBalancerPool} from "src/external/balancer/interfaces/IBalancerPool.sol";
+import {IAuraRewardPool} from "src/external/aura/interfaces/IAuraRewardPool.sol";
 
 // Interfaces
 import {IAppraiser} from "policies/OCA/interfaces/IAppraiser.sol";
@@ -210,7 +212,7 @@ contract AppraiserTest is Test {
         balancerPool.setDecimals(uint8(18));
 
         AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](1);
-        pools[0] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraPool(address(0)));
+        pools[0] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraRewardPool(address(0)));
 
         submoduleAuraBalancerSupply = new AuraBalancerSupply(
             SPPLY,
