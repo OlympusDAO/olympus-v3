@@ -353,7 +353,7 @@ contract Appraiser is IAppraiser, Policy {
 
         // Divide liquid backing by backed supply
         // and correct scale
-        return (liquidBacking * priceScale / backedSupply) / OHM_SCALE;
+        return ((liquidBacking * priceScale) / backedSupply) / OHM_SCALE;
     }
 
     /// @notice         Calculates the market value of the treasury
