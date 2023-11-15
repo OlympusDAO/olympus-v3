@@ -212,7 +212,10 @@ contract AppraiserTest is Test {
         balancerPool.setDecimals(uint8(18));
 
         AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](1);
-        pools[0] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraRewardPool(address(0)));
+        pools[0] = AuraBalancerSupply.Pool(
+            IBalancerPool(balancerPool),
+            IAuraRewardPool(address(0))
+        );
 
         submoduleAuraBalancerSupply = new AuraBalancerSupply(
             SPPLY,
