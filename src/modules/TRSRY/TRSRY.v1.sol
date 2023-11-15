@@ -153,6 +153,7 @@ abstract contract TRSRYv1_1 is TRSRYv1 {
     error TRSRY_CategoryExists(Category category_);
     error TRSRY_CategoryDoesNotExist(Category category_);
     error TRSRY_InvalidCalculation(address asset_, Variant variant_);
+    error TRSRY_AssetNotInCategory(address asset_, Category category_);
 
     // ========== STATE ========== //
     enum Variant {
@@ -180,21 +181,40 @@ abstract contract TRSRYv1_1 is TRSRYv1 {
 
     // ========== ASSET INFORMATION ========== //
 
+    /// @notice             Gets all the assets tracked by the treasury
+    /// @return address[]   Array of all the assets
     function getAssets() external view virtual returns (address[] memory);
 
+    /// @notice         Gets the data for a specific asset
+    /// @param  asset_  Address of the asset to get the data of
+    /// @return Asset   Struct of the asset's data
     function getAssetData(address asset_) external view virtual returns (Asset memory);
 
+    /// @notice             Gets all the assets in a specific category
+    /// @param  category_   Category to get the assets of
+    /// @return address[]   Array of assets in the category
     function getAssetsByCategory(Category category_) public view virtual returns (address[] memory);
 
-    /// @notice Returns the requested variant of the protocol balance of the asset and the timestamp at which it was calculated
+    /// @notice                     Returns the requested variant of the protocol balance of the asset and the timestamp at which it was calculated
+    /// @param  asset_              Address of the asset to get the balance of
+    /// @param  variant_            Variant of the balance to get (current or last)
+    /// @return uint256             Balance of the asset
+    /// @return uint48              Timestamp at which the balance was calculated
     function getAssetBalance(
         address asset_,
         Variant variant_
     ) public view virtual returns (uint256, uint48);
 
-    /// @notice Calculates and stores the current balance of an asset
+    /// @notice         Calculates and stores the current balance of an asset
+    /// @param  asset_  Address of the asset to store the balance of
+    /// @return uint256 Current balance of the asset
     function storeBalance(address asset_) external virtual returns (uint256);
 
+    /// @notice             Gets the balance for a category by summing the balance of each asset in the category
+    /// @param  category_   Category to get the balance of
+    /// @param  variant_    Variant of the balance to get (current or last)
+    /// @return uint256     Balance of the category
+    /// @return uint48      Timestamp at which the balance was calculated
     function getCategoryBalance(
         Category category_,
         Variant variant_
@@ -202,20 +222,65 @@ abstract contract TRSRYv1_1 is TRSRYv1 {
 
     // ========== DATA MANAGEMENT ========== //
 
+    /// @notice             Adds an asset for tracking by the treasury
+    /// @dev                Asset must be a contract and must not already be approved
+    /// @param  asset_      Address of the asset to add
+    /// @param  locations_  Addresses of external addresses outside of the treasury that hold the asset, but should
+    ///                     be considered part of the treasury balance
     function addAsset(address asset_, address[] calldata locations_) external virtual;
 
+    /// @notice             Removes an asset from tracking by the treasury
+    /// @dev                Asset must be approved
+    /// @param  asset_      Address of the asset to remove
+    function removeAsset(address asset_) external virtual;
+
+    /// @notice             Adds an additional external address that holds an asset and should be considered part of
+    ///                     the treasury balance
+    /// @dev                Asset must already be approved and the location cannot be the zero address
+    /// @param  asset_      Address of the asset to add an additional location for
+    /// @param  location_   Address of the external address that holds the asset
     function addAssetLocation(address asset_, address location_) external virtual;
 
+    /// @notice             Removes an external address that holds an asset and should no longer be considered part of the
+    ///                     treasury balance
+    /// @dev                Asset must already be approved
+    /// @param  asset_      Address of the asset to remove a location for
+    /// @param  location_   External address that holds the asset to remove tracking of
     function removeAssetLocation(address asset_, address location_) external virtual;
 
+    /// @notice                 Adds an additional category group
+    /// @dev                    Category group must not already exist
+    /// @param  categoryGroup_  Category group to add
     function addCategoryGroup(CategoryGroup categoryGroup_) external virtual;
 
+    /// @notice                 Removes a category group
+    /// @dev                    Category group must exist
+    /// @param  categoryGroup_  Category group to remove
+    function removeCategoryGroup(CategoryGroup categoryGroup_) external virtual;
+
+    /// @notice                 Adds an additional category
+    /// @dev                    The cateogory group must exist and the category must not already exist
+    /// @param  category_       Category to add
+    /// @param  categoryGroup_  Category group to add the category to
     function addCategory(Category category_, CategoryGroup categoryGroup_) external virtual;
 
-    /// @notice Mark an asset as a member of specific categories
-    /// @dev    This categorization is done within a category group. So for example if an asset is categorized
-    ///         as 'liquid' which is part of the 'liquidity-preference' group, but then is changed to 'illiquid'
-    ///         which falls under the same 'liquidity-preference' group, the asset will lose its 'liquid' categorization
-    ///         and gain the 'illiquid' categorization (all under the 'liquidity-preference' group).
+    /// @notice                 Removes a category
+    /// @dev                    The category must exist
+    /// @param  category_       Category to remove
+    function removeCategory(Category category_) external virtual;
+
+    /// @notice             Mark an asset as a member of specific categories
+    /// @dev                This categorization is done within a category group. So for example if an asset is categorized
+    ///                     as 'liquid' which is part of the 'liquidity-preference' group, but then is changed to 'illiquid'
+    ///                     which falls under the same 'liquidity-preference' group, the asset will lose its 'liquid' categorization
+    ///                     and gain the 'illiquid' categorization (all under the 'liquidity-preference' group).
+    /// @param  asset_      Address of the asset to categorize
+    /// @param  category_   Category to add the asset to
     function categorize(address asset_, Category category_) external virtual;
+
+    /// @notice             Removes an asset from a category
+    /// @dev                Asset must be approved, category must exist, and asset must be a member of the category
+    /// @param  asset_      Address of the asset to remove from the category
+    /// @param  category_   Category to remove the asset from
+    function uncategorize(address asset_, Category category_) external virtual;
 }
