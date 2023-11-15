@@ -565,6 +565,7 @@ contract OlympusSupply is SPPLYv1 {
         }
     }
 
+    /// @inheritdoc SPPLYv1
     function storeMetric(Metric metric_) external override permissioned {
         (uint256 result, uint48 timestamp) = getMetric(metric_, Variant.CURRENT);
         metricCache[metric_] = Cache(result, timestamp);
@@ -579,8 +580,10 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @notice         Calculates the circulating supply of OHM
-    /// @notice         Circulating is defined as:
-    /// @notice         > Total supply - OHM in Treasury - DAO OHM
+    /// @notice         Circulating supply is defined as:
+    /// @notice         - Total supply
+    /// @notice         - Minus: OHM in Treasury
+    /// @notice         - Minus: DAO OHM
     ///
     /// @return         The value of the circulating OHM supply
     function _circulatingSupply() internal view returns (uint256) {
@@ -593,7 +596,9 @@ contract OlympusSupply is SPPLYv1 {
 
     /// @notice         Calculates the floating supply of OHM
     /// @notice         Floating is defined as:
-    /// @notice         > Circulating supply - Protocol Owned Liquidity OHM - Borrowable OHM
+    /// @notice         - Circulating supply
+    /// @notice         - Minus: OHM in Protocol Owned Liquidity
+    /// @notice         - Minus: Borrowable OHM
     ///
     /// @return         The value of the floating OHM supply
     function _floatingSupply() internal view returns (uint256) {
@@ -633,7 +638,8 @@ contract OlympusSupply is SPPLYv1 {
 
     /// @notice         Calculates the backed supply of OHM
     /// @notice         Backed supply is defined as:
-    /// @notice         > Floating supply - Collateralized (non-backed) OHM
+    /// @notice         - Floating supply
+    /// @notice         - Minus: Collateralized (non-backed) OHM
     ///
     /// @return         The value of the backed OHM supply
     function _backedSupply() internal view returns (uint256) {
