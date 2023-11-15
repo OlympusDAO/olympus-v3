@@ -6,5 +6,6 @@
     },
     "solidity.defaultCompiler": "remote",
     "solidity.compileUsingRemoteVersion": "v0.8.15+commit.e14f2714",
-    "solidity-metrics.file.exclusions.glob": "{**/node_modules,**/mock*,**/test*,**/migrations,**/Migrations.sol,lib,**/external,**/libraries}"
+    "solidity-metrics.file.exclusions.glob": "{**/node_modules,**/mock*,**/test*,**/migrations,**/Migrations.sol,lib,**/external,**/libraries}",
+    "solidity.monoRepoSupport": false
 }
