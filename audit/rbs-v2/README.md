@@ -150,6 +150,10 @@ Tests for the in-scope contracts are contained in the following locations:
     * [CrossChainBridgeFork.t.sol](../../src/test/policies/CrossChainBridgeFork.t.sol)
   * [Submodules.t.sol](../../src/test/Submodules.t.sol)
 
+Notes:
+
+* PRICEv2 and its Submodules have already been audited ([audit section](#previous-audits)), and are therefore out of scope. However, some minor changes may have been made, and new Submodules added. To determine which changes are in-scope, compare the current state against commit `9c10dc188210632b6ce46c7a836484e8e063151f`.
+
 ### External Contracts
 
 The in-scope contracts depend on external contracts or interfaces:
@@ -247,7 +251,7 @@ The in-scope contracts depend on or are dependencies for these previously audite
 
 Olympus V3 was audited multiple times prior to launch in November, 2022. The currently deployed Olympus V3 contracts can be found on [GitHub](https://github.com/OlympusDAO/olympus-v3).
 
-You can reference these audits here:
+You can review previous audits here:
 
 * Spearbit (07/2022)
   * [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2022-08%20Code4rena.pdf)
@@ -258,12 +262,16 @@ You can reference these audits here:
   * [Remediation Audit Phase 1 Report](https://hackmd.io/tJdujc0gSICv06p_9GgeFQ)
   * [Remediation Audit Phase 2 Report](https://hackmd.io/@12og4u7y8i/rk5PeIiEs)
   * [Follow-on Audit Report](https://hackmd.io/@12og4u7y8i/Sk56otcBs)
-* Cross-Chain Bridge by OtterSec (04/2023)
+* Cross-Chain Bridge by OtterSec (04/2023)🙏🏼
   * [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/Olympus-CrossChain-Audit.pdf)
 * PRICEv2 by HickupHH3 (06/2023)
   * [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2023_7_OlympusDAO-final.pdf)
+  * [Pre-Audit Commit](https://github.com/OlympusDAO/bophades/tree/17fe660525b2f0d706ca318b53111fbf103949ba)
+  * [Post-Remediations Commit](https://github.com/OlympusDAO/bophades/tree/9c10dc188210632b6ce46c7a836484e8e063151f)
 * RBS 1.3 & 1.4 by HickupHH3 (11/2023)
   * [Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/OlympusDAO%20Nov%202023.pdf)
+  * [Pre-Audit Commit](https://github.com/OlympusDAO/bophades/tree/7a0902cf3ced19d41aafa83e96cf235fb3f15921)
+  * [Post-Remediations Commit](https://github.com/OlympusDAO/bophades/tree/e61d954cc620254effb014f2d2733e59d828b5b1)
 
 ## Architecture
 
