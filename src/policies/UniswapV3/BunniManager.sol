@@ -761,8 +761,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             (address token0Address, address token1Address) = UniswapV3PoolLibrary.getPoolTokens(
                 currentPool
             );
-            uint256 token0Fees = uint256(fees0).mulDiv(priceScale, 10 ** ERC20(token0Address).decimals());
-            uint256 token1Fees = uint256(fees1).mulDiv(priceScale, 10 ** ERC20(token1Address).decimals());
+            uint256 token0Fees = uint256(fees0).mulDiv(
+                priceScale,
+                10 ** ERC20(token0Address).decimals()
+            );
+            uint256 token1Fees = uint256(fees1).mulDiv(
+                priceScale,
+                10 ** ERC20(token1Address).decimals()
+            );
 
             // Get the USD value of the fees
             feeUsdValue += PRICE.getPrice(token0Address).mulDiv(token0Fees, priceScale);
@@ -871,7 +877,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param pool_    The address of the pool
     /// @param key_     The BunniKey representing the position
     /// @return         The BunniToken for the pool
-    function _getPoolToken(address pool_, BunniKey memory key_) internal view returns (IBunniToken) {
+    function _getPoolToken(
+        address pool_,
+        BunniKey memory key_
+    ) internal view returns (IBunniToken) {
         IBunniToken token = bunniHub.getBunniToken(key_);
 
         // Ensure the token exists
