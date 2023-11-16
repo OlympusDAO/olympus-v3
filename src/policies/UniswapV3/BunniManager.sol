@@ -12,7 +12,6 @@ import {BunniKey} from "src/external/bunni/base/Structs.sol";
 import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
 import {BunniHub} from "src/external/bunni/BunniHub.sol";
 import {BunniLens} from "src/external/bunni/BunniLens.sol";
-import {IERC20} from "src/external/bunni/interfaces/IERC20.sol";
 
 import {IBunniManager} from "policies/UniswapV3/interfaces/IBunniManager.sol";
 
@@ -197,7 +196,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     uint256 public poolCount;
 
     /// @notice     An array of unique tokens that have been used in the pools
-    IERC20[] public poolUnderlyingTokens;
+    ERC20[] public poolUnderlyingTokens;
     uint256 public poolUnderlyingTokenCount;
 
     // Modules
@@ -675,7 +674,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         // Burn/transfer any swept tokens
         for (uint256 i = 0; i < poolUnderlyingTokens.length; i++) {
-            IERC20 poolUnderlyingToken = poolUnderlyingTokens[i];
+            ERC20 poolUnderlyingToken = poolUnderlyingTokens[i];
             _transferOrBurn(
                 address(poolUnderlyingToken),
                 poolUnderlyingToken.balanceOf(address(this))
@@ -917,7 +916,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         // Add the token
-        poolUnderlyingTokens.push(IERC20(token_));
+        poolUnderlyingTokens.push(ERC20(token_));
         poolUnderlyingTokenCount++;
     }
 

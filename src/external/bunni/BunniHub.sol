@@ -11,13 +11,13 @@ import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/Liquid
 
 import {Owned} from "solmate/auth/Owned.sol";
 import {CREATE3} from "solmate/utils/CREATE3.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import "./base/Structs.sol";
 import {BunniToken} from "./BunniToken.sol";
-import {IERC20} from "./interfaces/IERC20.sol";
 import {IBunniHub} from "./interfaces/IBunniHub.sol";
 import {IBunniToken} from "./interfaces/IBunniToken.sol";
-import {SafeTransferLib} from "./lib/SafeTransferLib.sol";
 import {LiquidityManagement} from "./uniswap/LiquidityManagement.sol";
 
 /// @title BunniHub
@@ -26,6 +26,11 @@ import {LiquidityManagement} from "./uniswap/LiquidityManagement.sol";
 /// which is the ERC20 LP token for the Uniswap V3 position specified by the BunniKey.
 /// Use deposit()/withdraw() to mint/burn LP tokens, and use compound() to compound the swap fees
 /// back into the LP position.
+/// @dev    Imported at commit: https://github.com/ZeframLou/bunni/tree/fd65011c4e24660d0a63295cb3812c1821529842
+///
+/// @dev    The following changes were made from the original source code:
+/// @dev    - Use solmate ERC20 and SafeTransferLib instead of the local IERC20 and SafeTransferLib
+/// @dev    - updateSwapFees() function added
 contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagement {
     uint256 internal constant WAD = 1e18;
     uint256 internal constant MAX_PROTOCOL_FEE = 5e17;
@@ -322,7 +327,7 @@ contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagemen
 
     /// @inheritdoc IBunniHub
     function sweepTokens(
-        IERC20[] calldata tokenList,
+        ERC20[] calldata tokenList,
         address recipient
     ) external override onlyOwner {
         uint256 tokenListLength = tokenList.length;
