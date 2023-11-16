@@ -37,32 +37,29 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
     // =========  STATE ========= //
 
-    // Operator variables, defined in the interface on the external getter functions
+    // @notice Operator variables, defined in the interface on the external getter functions
     Status internal _status;
     Config internal _config;
 
     /// @notice Whether the Operator has been initialized
     bool public initialized;
 
-    /// @notice    Whether the Operator is active
+    /// @notice Whether the Operator is active
     bool public active;
 
-    // Modules
+    /// @notice Olympus Modules
     PRICEv2 internal PRICE;
     RANGEv2 internal RANGE;
     TRSRYv1 internal TRSRY;
     MINTRv1 internal MINTR;
 
-    // Other Policies
+    /// @notice Olympus Policies
     IAppraiser public appraiser;
-
-    // External contracts
-    /// @notice Auctioneer contract used for cushion bond market deployments
-    IBondSDA public auctioneer;
-    /// @notice Callback contract used for cushion bond market payouts
     IBondCallback public callback;
 
-    // Tokens
+    /// @notice Auctioneer contract (external) used for cushion bond market deployments
+    IBondSDA public auctioneer;
+
     /// @notice OHM token contract
     ERC20 public immutable _ohm;
     uint8 internal immutable _ohmDecimals;
@@ -73,7 +70,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev _wrappedReserveDecimals == _reserveDecimals
     ERC4626 public immutable _wrappedReserve;
 
-    // Constants
+    /// @notice Constants
     uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
     uint32 internal constant ONE_PERCENT = 1e2;
 
@@ -323,14 +320,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Calculate amount out (checks for sufficient capacity)
             amountOut = getAmountOut(tokenIn_, amountIn_);
 
-            // Revert if amount out less than the minimum specified
-            /// @dev even though price is fixed most of the time,
-            /// it is possible that the amount out could change on a sender
-            /// due to the wall prices being updated before their transaction is processed.
-            /// This would be the equivalent of the heart.beat front-running the sender.
-            if (amountOut < minAmountOut_)
-                revert Operator_AmountLessThanMinimum(amountOut, minAmountOut_);
-
             // Decrement wall capacity
             _updateCapacity(false, amountOut);
 
@@ -362,14 +351,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Calculate amount out (checks for sufficient capacity)
             amountOut = getAmountOut(tokenIn_, amountIn_);
 
-            // Revert if amount out less than the minimum specified
-            /// @dev even though price is fixed most of the time,
-            /// it is possible that the amount out could change on a sender
-            /// due to the wall prices being updated before their transaction is processed.
-            /// This would be the equivalent of the heart.beat front-running the sender.
-            if (amountOut < minAmountOut_)
-                revert Operator_AmountLessThanMinimum(amountOut, minAmountOut_);
-
             // Decrement wall capacity
             _updateCapacity(true, amountOut);
 
@@ -390,6 +371,14 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         } else {
             revert Operator_InvalidParams();
         }
+
+        // Revert if amount out less than the minimum specified
+        /// @dev even though price is fixed most of the time,
+        /// it is possible that the amount out could change on a sender
+        /// due to the wall prices being updated before their transaction is processed.
+        /// This would be the equivalent of the heart.beat front-running the sender.
+        if (amountOut < minAmountOut_)
+            revert Operator_AmountLessThanMinimum(amountOut, minAmountOut_);
     }
 
     // =========  BOND MARKET OPERATIONS (CUSHION) ========= //
@@ -419,20 +408,34 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         RANGEv2.Range memory range = RANGE.range();
         // Cache config struct to avoid multiple SLOADs
         Config memory config_ = _config;
-
+        
+        // Initialize common variables
+        ERC20 quoteToken;
+        ERC20 payoutToken;
+        int8 priceDecimals;
+        int8 scaleAdjustment;
+        uint256 bondScale;
+        uint256 oracleScale;
+        uint256 initialPrice;
+        uint256 minimumPrice;
+        uint256 marketCapacity;
         if (high_) {
+            // Define quote and payout tokens
+            quoteToken = _reserve;
+            payoutToken = _ohm;
+
             // Calculate scaleAdjustment for bond market
             // Price decimals are returned from the perspective of the quote token
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
-            int8 priceDecimals = _getPriceDecimals(range.high.cushion.price);
-            int8 scaleAdjustment = int8(_ohmDecimals) -
+            priceDecimals = _getPriceDecimals(range.high.cushion.price);
+            scaleAdjustment = int8(_ohmDecimals) -
                 int8(_reserveDecimals) +
                 (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-            uint256 bondScale = 10 **
+            oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
+            bondScale = 10 **
                 uint8(
                     36 +
                         scaleAdjustment +
@@ -440,41 +443,19 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
                         int8(_ohmDecimals) -
                         priceDecimals
                 );
-            uint256 initialPrice = currentPrice_.mulDiv(bondScale, oracleScale);
-            uint256 minimumPrice = range.high.cushion.price.mulDiv(bondScale, oracleScale);
+            initialPrice = currentPrice_.mulDiv(bondScale, oracleScale);
+            minimumPrice = range.high.cushion.price.mulDiv(bondScale, oracleScale);
 
             // Calculate market capacity from the cushion factor
-            uint256 marketCapacity = range.high.capacity.mulDiv(
+            marketCapacity = range.high.capacity.mulDiv(
                 config_.cushionFactor,
                 ONE_HUNDRED_PERCENT
             );
-
-            // Create new bond market to buy the reserve with OHM
-            uint256 market = auctioneer.createMarket(
-                abi.encode(
-                    IBondSDA.MarketParams({
-                        payoutToken: _ohm,
-                        quoteToken: _reserve,
-                        callbackAddr: address(callback),
-                        capacityInQuote: false,
-                        capacity: marketCapacity,
-                        formattedInitialPrice: initialPrice,
-                        formattedMinimumPrice: minimumPrice,
-                        debtBuffer: config_.cushionDebtBuffer,
-                        vesting: uint48(0), // Instant swaps
-                        conclusion: uint48(block.timestamp + config_.cushionDuration),
-                        depositInterval: config_.cushionDepositInterval,
-                        scaleAdjustment: scaleAdjustment
-                    })
-                )
-            );
-
-            // Whitelist the bond market on the callback
-            callback.whitelist(address(auctioneer.getTeller()), market);
-
-            // Update the market information on the range module
-            RANGE.updateMarket(true, market, marketCapacity);
         } else {
+            // Define quote and payout tokens
+            quoteToken = _ohm;
+            payoutToken = _reserve;
+    
             // Calculate inverse prices from the oracle feed for the low side
             uint256 invCushionPrice = 10 ** (_oracleDecimals * 2) / range.low.cushion.price;
             uint256 invCurrentPrice = 10 ** (_oracleDecimals * 2) / currentPrice_;
@@ -483,14 +464,14 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Price decimals are returned from the perspective of the quote token
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
-            int8 priceDecimals = _getPriceDecimals(invCushionPrice);
-            int8 scaleAdjustment = int8(_reserveDecimals) -
+            priceDecimals = _getPriceDecimals(invCushionPrice);
+            scaleAdjustment = int8(_reserveDecimals) -
                 int8(_ohmDecimals) +
                 (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-            uint256 bondScale = 10 **
+            oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
+            bondScale = 10 **
                 uint8(
                     36 +
                         scaleAdjustment +
@@ -499,42 +480,42 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
                         priceDecimals
                 );
 
-            uint256 initialPrice = invCurrentPrice.mulDiv(bondScale, oracleScale);
-            uint256 minimumPrice = invCushionPrice.mulDiv(bondScale, oracleScale);
+            initialPrice = invCurrentPrice.mulDiv(bondScale, oracleScale);
+            minimumPrice = invCushionPrice.mulDiv(bondScale, oracleScale);
 
             // Calculate market capacity from the cushion factor
-            uint256 marketCapacity = range.low.capacity.mulDiv(
+            marketCapacity = range.low.capacity.mulDiv(
                 config_.cushionFactor,
                 ONE_HUNDRED_PERCENT
             );
-
-            // Create new bond market to buy OHM with the reserve
-            uint256 market = auctioneer.createMarket(
-                abi.encode(
-                    IBondSDA.MarketParams({
-                        payoutToken: _reserve,
-                        quoteToken: _ohm,
-                        callbackAddr: address(callback),
-                        capacityInQuote: false,
-                        capacity: marketCapacity,
-                        formattedInitialPrice: initialPrice,
-                        formattedMinimumPrice: minimumPrice,
-                        debtBuffer: config_.cushionDebtBuffer,
-                        vesting: uint48(0), // Instant swaps
-                        conclusion: uint48(block.timestamp + config_.cushionDuration),
-                        depositInterval: config_.cushionDepositInterval,
-                        scaleAdjustment: scaleAdjustment
-                    })
-                )
-            );
-
-            // Whitelist the bond market on the callback
-            callback.whitelist(address(auctioneer.getTeller()), market);
-
-            // Update the market information on the range module
-            RANGE.updateMarket(false, market, marketCapacity);
         }
-    }
+
+        // Create new bond market
+        uint256 market = auctioneer.createMarket(
+            abi.encode(
+                IBondSDA.MarketParams({
+                    payoutToken: payoutToken,
+                    quoteToken: quoteToken,
+                    callbackAddr: address(callback),
+                    capacityInQuote: false,
+                    capacity: marketCapacity,
+                    formattedInitialPrice: initialPrice,
+                    formattedMinimumPrice: minimumPrice,
+                    debtBuffer: config_.cushionDebtBuffer,
+                    vesting: uint48(0), // Instant swaps
+                    conclusion: uint48(block.timestamp + config_.cushionDuration),
+                    depositInterval: config_.cushionDepositInterval,
+                    scaleAdjustment: scaleAdjustment
+                })
+            )
+        );
+
+        // Whitelist the bond market on the callback
+        callback.whitelist(address(auctioneer.getTeller()), market);
+
+        // Update the market information on the range module
+        RANGE.updateMarket(high_, market, marketCapacity);
+}
 
     /// @notice      Deactivate a cushion by closing a bond market (if it is active)
     /// @param high_ Whether the cushion is for the high or low side of the range (true = high, false = low)
