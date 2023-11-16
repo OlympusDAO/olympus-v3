@@ -334,6 +334,18 @@ Legend:
 
 The components are outlined in the following sub-sections.
 
+### Submodules
+
+The requirements of the system necessitated expanding our current protocol design paradigms to include a new component: Submodules.
+
+Submodules can be thought of as upgradable components of a Module. They are installed and managed locally by a Module. The rest of the system has no context for them and must interact with them through a Module. The reason to have upgradeable components of a Module is to avoid the need to migrate data from one version of a Module to another. This is somewhat analogous to a Diamond pattern, but is more "Default-native". The Submodules implemented in this system do not need to be called directly by external contracts since their return data is processed before being returned, but a version that incorporates delegatecall logic could expose the Submodule functionality directly.
+
+Submodules borrow the "keycode" identification system used by the Kernel for modules to allow simpler references and upgrading of submodules within the parent Module.
+
+Submodules can have permissioned or unpermissioned functions, but the only permission available is `onlyParent` which requires a function to be called by the parent Module.
+
+The Submodules implemented for the PRICEv2 module are all stateless adapters to external price sources, but Submodules can be stateful as well, e.g. if configuration data for a specific adapter was stored on the Submodule. On the other hand, the Submodules for the SPPLY module are stateful.
+
 ### TRSRY v1.1 (Module)
 
 Features:
@@ -347,6 +359,12 @@ Features:
 
 An upgraded PRICE module that standardizes and simplifies the consumption of oracle price feeds across the Olympus protocol. The vast majority of this module has already undergone an audit.
 
+The PRICEv2 oracle system has 3 main pieces:
+
+* PRICEv2 Module The core of the oracle system. The module exposes two key functions `getPrice(asset)` and `getPriceIn(asset,base)` which allow policies to easily retrieve prices of configured assets in the system unit of account (USD) or in terms of another asset
+* Feed Submodules: Submodules that serve as an adapter to specific price feeds and handle all validation of price data from them
+* Strategy Submodules: Submodules that performs logic on an array of prices from different feeds and returns a canonical value for the asset.
+
 Features:
 
 * Add/remove price definitions for assets
@@ -354,6 +372,20 @@ Features:
 * Set a strategy to handle the price(s) received
 * Caching price values
 * Tracking a moving average
+
+#### Price Resolution
+
+Oracles are a large risk in any DeFi system that incorporates them. Most systems use a single oracle feed for an asset and exit if there is a problem validating the data provided. To avoid reliance on any single oracle or any one provider long-term, we designed this system to be able to ingest one or more price feeds for a specific asset and then apply a strategy to determine a canonical price to use for any system within the protocol. Therefore, an asset can be configured with:
+
+* 1 or more price feed sources (e.g. Chainlink, UniV3)
+* A strategy to resolve data from the various price feeds (e.g. median, average, first non-zero). A strategy is not required if there is only one price feed.
+
+Additionally, some token prices are based on the price of a bundle of assets which they represent a claim on (e.g. LP tokens, ERC4626 vaults). By allowing recursion from a Submodule back to the PRICEv2 module, we can dynamically calculate prices for these tokens. An example would be a Balancer OHM-WETH token. The BalancerPoolTokenPrice submodule gets the tokens in the pool and calls `PRICEv2.getPrice()` for each asset and then uses balance data to determine get the pool token value. We recognize that many recent exploits have happened due to vulnerable LP token pricing oracles. As such, we've implemented re-entrancy guard checks on both the Balancer and UniV2 LP calculations to ensure the internal balances have not been altered via a flash loan during a transaction. We have a submodule implemented for Curve LP tokens as well, but we have not identified a solution to triggering the lock within a staticcall.
+
+The amount of abstraction and external calls in this design comes at the cost of some additional gas costs. We seek to mitigate these where possible, but do value the long-term flexibility this design offers. One way to mitigate operation gas costs is to avoid multiple calls for the same data within a given time period. As such, every configured asset can have a value cached by calling `PRICEv2.storePrice()`. This single function stores observations whether a moving average is being tracked or just a single value is cached. Because we cache values and (potentially) store moving averages, the `PRICEv2.getPrice(asset, variant)` takes an asset address and a enum called Variant, which can be Current, Last, or MovingAverage and returns the price value and the timestamp it is current until. We have added additional convenience functions that allow conditionally falling back to the current price if the cached value isn't current or past a certain age.
+
+Here is a diagram showing pseudo-code for the getPrice function and an example call trace:
+![getPrice Call Trace](../price-v2/getPrice_calltrace.png)
 
 ### SPPLY (Module)
 
@@ -399,10 +431,26 @@ Features:
 * Harvest and re-invest fees from the position back into the pool
 * Register an existing Bunni LP token with the policy, to be used when migrating policy versions
 
-### Operator (Policy)
+### RBS - Operator/Heart (Policy)
 
-Features:
+The OlympusDAO RBS system was audited extensively from 07/2022 to 11/2023 (see links above). The general purpose of the system is to perform market operations to stabilize the price of OHM against a reserve asset (current configured as DAI). It does so by offering fixed price "wall" swaps at a certain spread to the current target price, and by deploying dutch auction "cushion" markets at a narrow spread. Recent changes include:
 
+* v1.1
+  * Add a minimum target price to the system that is manually set by permissioned roles
+* v1.2
+  * Change the heart reward logic to use a reverse dutch auction system to allow for more reliable incentivization of keepers
+* v1.3
+  * Uses sDAI (stored in the Bophades TRSRY module) as a source of funds for RBS operations
+* v1.4
+  * Asymmetric spreads (including a breaking change in the RANGE module)
+  * Minting of OHM for keeper rewards (instead of requiring manual deposits)
+  * Trigger the OHM Distributor during the heartbeat
+
+Additionally, the introduction of the PRICEv2 system requires some additional small updates to use the new oracle system instead of the purpose-built PRICEv1 version. The changes in this version include:
+
+* Moving the minimum target price variable and setter functions from the PRICEv1 module contract to the Operator policy contract.
+* Swapping out PRICEv1 references for PRICEv2 in the Operator policy contract (e.g. `PRICEv1.getLastPrice()` to `PRICEv2.getPriceIn(ohm, reserve)`).
+* Swapping out PRICEv1 references for PRICEv2 in the Heart policy contract (e.g. `PRICEv1.updateMovingAverage()` to `PRICEv2.storePrice(ohm); PRICEv2.storePrice(reserve);`).
 * Utilises the liquid backing per backed OHM metric from Appraiser as the target price, instead of a manual value
 
 ## Frequently-Asked Questions
