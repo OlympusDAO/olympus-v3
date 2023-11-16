@@ -199,6 +199,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ERC20[] public poolUnderlyingTokens;
     uint256 public poolUnderlyingTokenCount;
 
+    address internal ohm;
+
     // Modules
     TRSRYv1_1 internal TRSRY;
     PRICEv2 internal PRICE;
@@ -240,6 +242,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         TRSRY = TRSRYv1_1(getModuleAddress(dependencies[1]));
         PRICE = PRICEv2(getModuleAddress(dependencies[2]));
         MINTR = MINTRv1(getModuleAddress(dependencies[3]));
+        ohm = address(MINTR.ohm());
         SPPLY = SPPLYv1(getModuleAddress(dependencies[4]));
 
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
@@ -776,10 +779,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             (address token0Address, address token1Address) = UniswapV3PoolLibrary.getPoolTokens(
                 currentPool
             );
-            ERC20 token0 = ERC20(token0Address);
-            ERC20 token1 = ERC20(token1Address);
-            uint256 token0Fees = uint256(fees0).mulDiv(priceScale, 10 ** token0.decimals());
-            uint256 token1Fees = uint256(fees1).mulDiv(priceScale, 10 ** token1.decimals());
+            uint256 token0Fees = uint256(fees0).mulDiv(priceScale, 10 ** ERC20(token0Address).decimals());
+            uint256 token1Fees = uint256(fees1).mulDiv(priceScale, 10 ** ERC20(token1Address).decimals());
 
             // Get the USD value of the fees
             feeUsdValue += PRICE.getPrice(token0Address).mulDiv(token0Fees, priceScale);
@@ -790,7 +791,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         uint256 rewardUsdValue = feeUsdValue.mulDiv(harvestRewardFee, BPS_MAX);
 
         // Convert in terms of OHM
-        uint256 ohmPrice = PRICE.getPrice(address(MINTR.ohm())); // This will revert if the asset is not defined or 0
+        uint256 ohmPrice = PRICE.getPrice(ohm); // This will revert if the asset is not defined or 0
         uint256 ohmAmount = rewardUsdValue.mulDiv(1e9, ohmPrice); // Scale: OHM decimals
 
         // Returns the minimum
@@ -885,7 +886,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param token_   The address of the token
     /// @param amount_  The amount of tokens to transfer/mint
     function _transferOrMint(address token_, uint256 amount_) internal {
-        if (token_ == address(MINTR.ohm())) {
+        if (token_ == ohm) {
             MINTR.increaseMintApproval(address(this), amount_);
             MINTR.mintOhm(address(this), amount_);
         } else {
@@ -912,7 +913,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Nothing to burn
         if (amount_ == 0) return;
 
-        if (token_ == address(MINTR.ohm())) {
+        if (token_ == ohm) {
             MINTR.burnOhm(address(this), amount_);
         } else {
             // All tokens are pre-filtered by TRSRY, so safeTransfer is not needed
