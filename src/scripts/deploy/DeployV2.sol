@@ -43,7 +43,7 @@ import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
-import {IAppraiser} from "src/policies/OCA/interfaces/IAppraiser.sol";
+import {Appraiser} from "policies/OCA/Appraiser.sol";
 
 // Bophades Modules
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
@@ -134,7 +134,7 @@ contract OlympusDeploy is Script {
     CrossChainBridge public bridge;
     Bookkeeper public bookkeeper;
     BunniManager public bunniManager;
-    IAppraiser public appraiser;
+    Appraiser public appraiser;
 
     // External contracts
     BunniHub public bunniHub;
@@ -150,6 +150,7 @@ contract OlympusDeploy is Script {
     ERC20 public lusd;
     ERC20 public aura;
     ERC20 public bal;
+    ERC20 public gOHM;
 
     // Bond system addresses
     IBondSDA public bondAuctioneer;
@@ -243,6 +244,7 @@ contract OlympusDeploy is Script {
 
         // Non-bophades contracts
         ohm = ERC20(envAddress("olympus.legacy.OHM"));
+        gOHM = ERC20(envAddress("olympus.legacy.gOHM"));
         reserve = ERC20(envAddress("external.tokens.DAI"));
         wrappedReserve = ERC4626(envAddress("external.tokens.sDAI"));
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
@@ -309,7 +311,7 @@ contract OlympusDeploy is Script {
         bridge = CrossChainBridge(envAddress("olympus.policies.CrossChainBridge"));
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
-        appraiser = IAppraiser(envAddress("olympus.policies.Appraiser"));
+        appraiser = Appraiser(envAddress("olympus.policies.Appraiser"));
 
         // PRICE submodules
         simplePriceFeedStrategy = SimplePriceFeedStrategy(
@@ -569,12 +571,12 @@ contract OlympusDeploy is Script {
         ];
 
         // Check that the environment variables are loaded
-        if (address(kernel) == address(0)) revert "Kernel address not set";
-        if (address(appraiser) == address(0)) revert "Appraiser address not set";
-        if (address(bondAuctioneer) == address(0)) revert "BondAuctioneer address not set";
-        if (address(callback) == address(0)) revert "Callback address not set";
-        if (address(ohm) == address(0)) revert "OHM address not set";
-        if (address(reserve) == address(0)) revert "Reserve address not set";
+        if (address(kernel) == address(0)) revert("Kernel address not set");
+        if (address(appraiser) == address(0)) revert("Appraiser address not set");
+        if (address(bondAuctioneer) == address(0)) revert("BondAuctioneer address not set");
+        if (address(callback) == address(0)) revert("Callback address not set");
+        if (address(ohm) == address(0)) revert("OHM address not set");
+        if (address(reserve) == address(0)) revert("Reserve address not set");
 
         console2.log("kernel", address(kernel));
         console2.log("appraiser", address(appraiser));
@@ -622,10 +624,10 @@ contract OlympusDeploy is Script {
         (uint48 auctionDuration, uint256 maxReward) = abi.decode(args, (uint48, uint256));
 
         // Check that the environment variables are loaded
-        if (address(kernel) == address(0)) revert "Kernel address not set";
-        if (address(operator) == address(0)) revert "Operator address not set";
-        if (address(appraiser) == address(0)) revert "Appraiser address not set";
-        if (address(zeroDistributor) == address(0)) revert "ZeroDistributor address not set";
+        if (address(kernel) == address(0)) revert("Kernel address not set");
+        if (address(operator) == address(0)) revert("Operator address not set");
+        if (address(appraiser) == address(0)) revert("Appraiser address not set");
+        if (address(zeroDistributor) == address(0)) revert("ZeroDistributor address not set");
 
         // Deploy OlympusHeart policy
         vm.broadcast();
@@ -978,7 +980,7 @@ contract OlympusDeploy is Script {
         console2.log("uniswapFactory", uniswapFactory);
         
         // Check that the environment variables are loaded
-        if (address(kernel) == address(0)) revert "Kernel address not set";
+        if (address(kernel) == address(0)) revert("Kernel address not set");
 
         // Deployment steps
         vm.broadcast();
@@ -1016,15 +1018,15 @@ contract OlympusDeploy is Script {
         // Arguments
         // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
         (
-            uint256 initialCrossChainSupply,
+            uint256 initialCrossChainSupply
         ) = abi.decode(args, (uint256));
 
         console2.log("initialCrossChainSupply", initialCrossChainSupply);
 
         // Check that environment variables are loaded
-        if (address(kernel) == address(0)) revert "Kernel address not set";
-        if (address(ohm) == address(0)) revert "OHM address not set";
-        if (address(gOHM) == address(0)) revert "gOHM address not set";
+        if (address(kernel) == address(0)) revert("Kernel address not set");
+        if (address(ohm) == address(0)) revert("OHM address not set");
+        if (address(gOHM) == address(0)) revert("gOHM address not set");
 
         address[2] memory tokens = [address(ohm), address(gOHM)];
 
@@ -1048,6 +1050,9 @@ contract OlympusDeploy is Script {
     function _deploySimplePriceFeedStrategy(bytes memory args) public returns (address) {
         // No additional arguments for SimplePriceFeedStrategy submodule
 
+        // Check that environment variables are loaded
+        if (address(PRICEv2) == address(0)) revert("PRICEv2 address not set");
+
         // Deploy SimplePriceFeedStrategy submodule
         vm.broadcast();
         simplePriceFeedStrategy = new SimplePriceFeedStrategy(PRICEv2);
@@ -1058,6 +1063,10 @@ contract OlympusDeploy is Script {
 
     function _deployBalancerPoolTokenPrice(bytes memory args) public returns (address) {
         // No additional arguments for BalancerPoolTokenPrice submodule
+
+        // Check that environment variables are loaded
+        if (address(PRICEv2) == address(0)) revert("PRICEv2 address not set");
+        if (address(balancerVault) == address(0)) revert("balancerVault address not set");
 
         // Deploy BalancerPoolTokenPrice submodule
         vm.broadcast();
@@ -1073,6 +1082,9 @@ contract OlympusDeploy is Script {
     function _deployChainlinkPriceFeeds(bytes memory args) public returns (address) {
         // No additional arguments for ChainlinkPriceFeeds submodule
 
+        // Check that environment variables are loaded
+        if (address(PRICEv2) == address(0)) revert("PRICEv2 address not set");
+
         // Deploy ChainlinkPriceFeeds submodule
         vm.broadcast();
         chainlinkPriceFeeds = new ChainlinkPriceFeeds(PRICEv2);
@@ -1084,6 +1096,9 @@ contract OlympusDeploy is Script {
     function _deployUniswapV2PoolTokenPrice(bytes memory args) public returns (address) {
         // No additional arguments for UniswapV2PoolTokenPrice submodule
 
+        // Check that environment variables are loaded
+        if (address(PRICEv2) == address(0)) revert("PRICEv2 address not set");
+
         // Deploy UniswapV2PoolTokenPrice submodule
         vm.broadcast();
         uniswapV2PoolTokenPrice = new UniswapV2PoolTokenPrice(PRICEv2);
@@ -1094,6 +1109,9 @@ contract OlympusDeploy is Script {
 
     function _deployUniswapV3Price(bytes memory args) public returns (address) {
         // No additional arguments for UniswapV3Price submodule
+
+        // Check that environment variables are loaded
+        if (address(PRICEv2) == address(0)) revert("PRICEv2 address not set");
 
         // Deploy UniswapV3Price submodule
         vm.broadcast();
@@ -1107,7 +1125,7 @@ contract OlympusDeploy is Script {
         // No additional arguments for BunniPrice submodule
 
         // Check that the environment variables are loaded
-        if (address(PRICEv2) == address(0)) revert "PRICEv2 address not set";
+        if (address(PRICEv2) == address(0)) revert("PRICEv2 address not set");
 
         // Deploy BunniPrice submodule
         vm.broadcast();
@@ -1123,9 +1141,9 @@ contract OlympusDeploy is Script {
         // No additional arguments for AuraBalancerSupply submodule
 
         // Check that the environment variables are loaded
-        if (address(SPPLY) == address(0)) revert "SPPLY address not set";
-        if (address(TRSRY) == address(0)) revert "TRSRY address not set";
-        if (address(balancerVault) == address(0)) revert "balancerVault address not set";
+        if (address(SPPLY) == address(0)) revert("SPPLY address not set");
+        if (address(TRSRY) == address(0)) revert("TRSRY address not set");
+        if (address(balancerVault) == address(0)) revert("balancerVault address not set");
 
         AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](0);
 
@@ -1141,13 +1159,13 @@ contract OlympusDeploy is Script {
         // No additional arguments for BLVaultSupply submodule
 
         // Check that the environment variables are loaded
-        if (address(SPPLY) == address(0)) revert "SPPLY address not set";
-        if (address(lidoVaultManager) == address(0)) revert "lidoVaultManager address not set";
-        if (address(lusdVaultManager) == address(0)) revert "lusdVaultManager address not set";
+        if (address(SPPLY) == address(0)) revert("SPPLY address not set");
+        if (address(lidoVaultManager) == address(0)) revert("lidoVaultManager address not set");
+        if (address(lusdVaultManager) == address(0)) revert("lusdVaultManager address not set");
 
         address[] memory vaultManagers = new address[](2);
-        vaultManagers[0] = lidoVaultManager;
-        vaultManagers[1] = lusdVaultManager;
+        vaultManagers[0] = address(lidoVaultManager);
+        vaultManagers[1] = address(lusdVaultManager);
 
         // Deploy BLVaultSupply submodule
         vm.broadcast();
@@ -1161,7 +1179,7 @@ contract OlympusDeploy is Script {
         // No additional arguments for BunniSupply submodule
 
         // Check that the environment variables are loaded
-        if (address(SPPLY) == address(0)) revert "SPPLY address not set";
+        if (address(SPPLY) == address(0)) revert("SPPLY address not set");
 
         // Deploy BunniSupply submodule
         vm.broadcast();
