@@ -408,7 +408,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         RANGEv2.Range memory range = RANGE.range();
         // Cache config struct to avoid multiple SLOADs
         Config memory config_ = _config;
-        
+
         // Initialize common variables
         ERC20 quoteToken;
         ERC20 payoutToken;
@@ -429,33 +429,29 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
             priceDecimals = _getPriceDecimals(range.high.cushion.price);
-            scaleAdjustment = int8(_ohmDecimals) -
-                int8(_reserveDecimals) +
-                (priceDecimals / 2);
+            scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
             oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-            bondScale = 10 **
-                uint8(
-                    36 +
-                        scaleAdjustment +
-                        int8(_reserveDecimals) -
-                        int8(_ohmDecimals) -
-                        priceDecimals
-                );
+            bondScale =
+                10 **
+                    uint8(
+                        36 +
+                            scaleAdjustment +
+                            int8(_reserveDecimals) -
+                            int8(_ohmDecimals) -
+                            priceDecimals
+                    );
             initialPrice = currentPrice_.mulDiv(bondScale, oracleScale);
             minimumPrice = range.high.cushion.price.mulDiv(bondScale, oracleScale);
 
             // Calculate market capacity from the cushion factor
-            marketCapacity = range.high.capacity.mulDiv(
-                config_.cushionFactor,
-                ONE_HUNDRED_PERCENT
-            );
+            marketCapacity = range.high.capacity.mulDiv(config_.cushionFactor, ONE_HUNDRED_PERCENT);
         } else {
             // Define quote and payout tokens
             quoteToken = _ohm;
             payoutToken = _reserve;
-    
+
             // Calculate inverse prices from the oracle feed for the low side
             uint256 invCushionPrice = 10 ** (_oracleDecimals * 2) / range.low.cushion.price;
             uint256 invCurrentPrice = 10 ** (_oracleDecimals * 2) / currentPrice_;
@@ -465,29 +461,25 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
             priceDecimals = _getPriceDecimals(invCushionPrice);
-            scaleAdjustment = int8(_reserveDecimals) -
-                int8(_ohmDecimals) +
-                (priceDecimals / 2);
+            scaleAdjustment = int8(_reserveDecimals) - int8(_ohmDecimals) + (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
             oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-            bondScale = 10 **
-                uint8(
-                    36 +
-                        scaleAdjustment +
-                        int8(_ohmDecimals) -
-                        int8(_reserveDecimals) -
-                        priceDecimals
-                );
+            bondScale =
+                10 **
+                    uint8(
+                        36 +
+                            scaleAdjustment +
+                            int8(_ohmDecimals) -
+                            int8(_reserveDecimals) -
+                            priceDecimals
+                    );
 
             initialPrice = invCurrentPrice.mulDiv(bondScale, oracleScale);
             minimumPrice = invCushionPrice.mulDiv(bondScale, oracleScale);
 
             // Calculate market capacity from the cushion factor
-            marketCapacity = range.low.capacity.mulDiv(
-                config_.cushionFactor,
-                ONE_HUNDRED_PERCENT
-            );
+            marketCapacity = range.low.capacity.mulDiv(config_.cushionFactor, ONE_HUNDRED_PERCENT);
         }
 
         // Create new bond market
@@ -515,7 +507,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
         // Update the market information on the range module
         RANGE.updateMarket(high_, market, marketCapacity);
-}
+    }
 
     /// @notice      Deactivate a cushion by closing a bond market (if it is active)
     /// @param high_ Whether the cushion is for the high or low side of the range (true = high, false = low)
