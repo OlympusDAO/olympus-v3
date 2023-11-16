@@ -620,7 +620,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         // Move the tokens into the policy
-        _transferFromTRSRY(address(existingToken), shares_);
+        _transferOrMint(address(existingToken), shares_);
 
         // Construct the parameters
         IBunniHub.WithdrawParams memory params = IBunniHub.WithdrawParams({
@@ -911,24 +911,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             });
     }
 
-    /// @notice         Transfers the tokens from TRSRY
-    /// @param token_   The address of the token
-    /// @param amount_  The amount of tokens to transfer
-    function _transferFromTRSRY(address token_, uint256 amount_) internal {
-        // Check the balance
-        ERC20 token = ERC20(token_);
-        uint256 actualBalance = token.balanceOf(address(TRSRY));
-        if (actualBalance < amount_) {
-            revert BunniManager_InsufficientBalance(token_, amount_, actualBalance);
-        }
-
-        // Increase the allowance
-        TRSRY.increaseWithdrawApproval(address(this), token, amount_);
-
-        // Transfer into the policy
-        TRSRY.withdrawReserves(address(this), token, amount_);
-    }
-
     /// @notice         Transfers the tokens from TRSRY or mints them if the token is OHM
     /// @param token_   The address of the token
     /// @param amount_  The amount of tokens to transfer/mint
@@ -937,7 +919,18 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             MINTR.increaseMintApproval(address(this), amount_);
             MINTR.mintOhm(address(this), amount_);
         } else {
-            _transferFromTRSRY(token_, amount_);
+            // Check the balance
+            ERC20 token = ERC20(token_);
+            uint256 actualBalance = token.balanceOf(address(TRSRY));
+            if (actualBalance < amount_) {
+                revert BunniManager_InsufficientBalance(token_, amount_, actualBalance);
+            }
+
+            // Increase the allowance
+            TRSRY.increaseWithdrawApproval(address(this), token, amount_);
+
+            // Transfer into the policy
+            TRSRY.withdrawReserves(address(this), token, amount_);
         }
     }
 
