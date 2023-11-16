@@ -887,6 +887,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @notice         Transfers the tokens to TRSRY or burns them if the token is OHM
+    ///
     /// @param token_   The address of the token
     /// @param amount_  The amount of tokens to transfer/burn
     function _transferOrBurn(address token_, uint256 amount_) internal {
@@ -923,8 +924,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice     Updates the swap fees for all pools
     /// @dev        This internal function is provided as external/public functions
-    ///             (such as `harvest()`) need to use this functionality, but would
-    ///             run into re-entrancy issues using the external/public function.
+    /// @dev        (such as `harvest()`) need to use this functionality, but would
+    /// @dev        run into re-entrancy issues using the external/public function.
     function _updateSwapFees() internal {
         for (uint256 i = 0; i < poolCount; i++) {
             address poolAddress = pools[i];
@@ -941,8 +942,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice             Registers `poolToken_` as an asset in the PRICE module
     /// @dev                This function performs the following:
-    ///                     - Checks if the asset is already registered, and reverts if so
-    ///                     - Calls `PRICE.addAsset`
+    /// @dev                - Checks if the asset is already registered, and reverts if so
+    /// @dev                - Calls `PRICE.addAsset`
     ///
     /// @param pool_        The pool to register
     /// @param poolToken_   The pool token to register
@@ -982,10 +983,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice             Registers `poolToken_` as an asset in the TRSRY module
     /// @dev                This function performs the following:
-    ///                     - Checks if the asset is already registered, and reverts if so
-    ///                     - Adds the asset to TRSRY (if needed)
-    ///                     - Adds the TRSRY location to the asset
-    ///                     - Categorizes the asset
+    /// @dev                - Checks if the asset is already registered, and reverts if so
+    /// @dev                - Adds the asset to TRSRY (if needed)
+    /// @dev                - Adds the TRSRY location to the asset
+    /// @dev                - Categorizes the asset
     ///
     /// @param pool_        The pool to register
     /// @param poolToken_   The pool token to register
@@ -1018,8 +1019,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice             Registers `poolToken_` as an asset in the SPPLY module
     /// @dev                This function performs the following:
-    ///                     - Checks if the asset is already registered, and reverts if so
-    ///                     - Calls `SPPLY.categorize`
+    /// @dev                - Checks if the asset is already registered, and reverts if so
+    /// @dev                - Calls `SPPLY.categorize`
     ///
     /// @param pool_        The pool to register
     /// @param poolToken_   The pool token to register
@@ -1047,8 +1048,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice             Deregisters `poolToken_` as an asset in the PRICE module
     /// @dev                This function performs the following:
-    ///                     - Checks if the asset is registered, or exits if not
-    ///                     - Calls `PRICE.removeAsset`
+    /// @dev                - Checks if the asset is registered, or exits if not
+    /// @dev                - Calls `PRICE.removeAsset`
     ///
     /// @param poolToken_   The pool token to deregister
     function _removePoolTokenFromPRICE(address poolToken_) internal {
@@ -1064,9 +1065,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice             Deregisters `poolToken_` as an asset in the TRSRY module
     /// @dev                This function performs the following:
-    ///                     - Checks if the asset is registered, or exits if not
-    ///                     - Removes the TRSRY location from the asset
-    ///                     - Removes the categorization of the asset
+    /// @dev                - Checks if the asset is registered, or exits if not
+    /// @dev                - Removes the TRSRY location from the asset
+    /// @dev                - Removes the categorization of the asset
     ///
     /// @param poolToken_   The pool token to deregister
     function _removePoolTokenFromTRSRY(address poolToken_) internal {
@@ -1084,8 +1085,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice             Deregisters `poolToken_` as an asset in the SPPLY module
     /// @dev                This function performs the following:
-    ///                     - Checks if the asset is registered, or exits if not
-    ///                     - Calls `BunniSupply.removeBunniToken`
+    /// @dev                - Checks if the asset is registered, or exits if not
+    /// @dev                - Calls `BunniSupply.removeBunniToken`
     ///
     /// @param poolToken_   The pool token to deregister
     function _removePoolTokenFromSPPLY(address poolToken_) internal {
@@ -1112,7 +1113,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice         Modifier to assert that the `bunniHub` state variable is set
     /// @dev            The `bunniHub` state variable is set after deployment, so this
-    ///                 modifier is needed to check that the configuration is valid.
+    /// @dev            modifier is needed to check that the configuration is valid.
     modifier bunniHubSet() {
         if (address(bunniHub) == address(0)) revert BunniManager_HubNotSet();
         _;
