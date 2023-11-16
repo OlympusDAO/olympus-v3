@@ -514,29 +514,27 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         // Move non-OHM tokens from TRSRY to this contract
         (address token0Address, address token1Address) = UniswapV3PoolLibrary.getPoolTokens(pool_);
-        ERC20 token0 = ERC20(token0Address);
-        ERC20 token1 = ERC20(token1Address);
 
         // Determine token amounts
         uint256 token0Amount;
         uint256 token1Amount;
         {
-            if (address(token0) == tokenA_) {
+            if (token0Address == tokenA_) {
                 token0Amount = amountA_;
                 token1Amount = amountB_;
             } else {
                 token0Amount = amountB_;
                 token1Amount = amountA_;
             }
+
+            // Move tokens into the policy
+            _transferOrMint(token0Address, token0Amount);
+            _transferOrMint(token1Address, token1Amount);
+
+            // Approve BunniHub to use the tokens
+            ERC20(token0Address).approve(address(bunniHub), token0Amount);
+            ERC20(token1Address).approve(address(bunniHub), token1Amount);
         }
-
-        // Move tokens into the policy
-        _transferOrMint(token0Address, token0Amount);
-        _transferOrMint(token1Address, token1Amount);
-
-        // Approve BunniHub to use the tokens
-        token0.approve(address(bunniHub), token0Amount);
-        token1.approve(address(bunniHub), token1Amount);
 
         // Construct the parameters
         IBunniHub.DepositParams memory params = IBunniHub.DepositParams({
@@ -546,15 +544,15 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             amount0Min: UniswapV3PoolLibrary.getAmountMin(token0Amount, slippageBps_),
             amount1Min: UniswapV3PoolLibrary.getAmountMin(token1Amount, slippageBps_),
             deadline: block.timestamp, // Ensures that the action be executed in this block or reverted
-            recipient: getModuleAddress(toKeycode("TRSRY")) // Transfers directly into TRSRY
+            recipient: address(TRSRY) // Transfers directly into TRSRY
         });
 
         // Deposit
         (uint256 shares, , , ) = bunniHub.deposit(params);
 
         // Return/burn remaining tokens
-        _transferOrBurn(token0Address, token0.balanceOf(address(this)));
-        _transferOrBurn(token1Address, token1.balanceOf(address(this)));
+        _transferOrBurn(token0Address, ERC20(token0Address).balanceOf(address(this)));
+        _transferOrBurn(token1Address, ERC20(token1Address).balanceOf(address(this)));
 
         return shares;
     }
