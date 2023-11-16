@@ -417,7 +417,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         // Check that the position has liquidity
-        if (!UniswapV3Positions.positionHasLiquidity(key.pool, key.tickLower, key.tickUpper, address(bunniHub))) {
+        if (
+            !UniswapV3Positions.positionHasLiquidity(
+                key.pool,
+                key.tickLower,
+                key.tickUpper,
+                address(bunniHub)
+            )
+        ) {
             revert BunniManager_PoolHasNoLiquidity(pool_);
         }
 
@@ -452,7 +459,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         // Check that the position has NO liquidity
-        if (UniswapV3Positions.positionHasLiquidity(key.pool, key.tickLower, key.tickUpper, address(bunniHub))) {
+        if (
+            UniswapV3Positions.positionHasLiquidity(
+                key.pool,
+                key.tickLower,
+                key.tickUpper,
+                address(bunniHub)
+            )
+        ) {
             revert BunniManager_PoolHasLiquidity(pool_);
         }
 
@@ -585,7 +599,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         uint256 amount0Min;
         uint256 amount1Min;
         {
-            (uint256 amount0, uint256 amount1) = UniswapV3Positions.getPositionAmounts(key.pool, key.tickLower, key.tickUpper, address(bunniHub));
+            (uint256 amount0, uint256 amount1) = UniswapV3Positions.getPositionAmounts(
+                key.pool,
+                key.tickLower,
+                key.tickUpper,
+                address(bunniHub)
+            );
 
             // Adjust for proportion of total supply
             uint256 totalSupply = existingToken.totalSupply();
@@ -754,7 +773,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             );
 
             // Convert fees from native into PRICE decimals
-            (address token0Address, address token1Address) = UniswapV3PoolLibrary.getPoolTokens(currentPool);
+            (address token0Address, address token1Address) = UniswapV3PoolLibrary.getPoolTokens(
+                currentPool
+            );
             ERC20 token0 = ERC20(token0Address);
             ERC20 token1 = ERC20(token1Address);
             uint256 token0Fees = uint256(fees0).mulDiv(priceScale, 10 ** token0.decimals());

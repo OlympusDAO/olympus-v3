@@ -18,13 +18,12 @@ library UniswapV3Positions {
     /// @param owner_       The owner of the position
     /// @return             The amount of token0
     /// @return             The amount of token1
-    function getPositionAmounts(IUniswapV3Pool pool_, int24 tickLower_, int24 tickUpper_, address owner_)
-    public
-    view
-    returns (
-      uint256,
-      uint256
-    ) {
+    function getPositionAmounts(
+        IUniswapV3Pool pool_,
+        int24 tickLower_,
+        int24 tickUpper_,
+        address owner_
+    ) public view returns (uint256, uint256) {
         (uint160 sqrtRatioX96, , , , , , ) = pool_.slot0();
         uint160 sqrtRatioAX96 = TickMath.getSqrtRatioAtTick(tickLower_);
         uint160 sqrtRatioBX96 = TickMath.getSqrtRatioAtTick(tickUpper_);
@@ -52,7 +51,12 @@ library UniswapV3Positions {
     /// @param owner_       The owner of the position
     /// @return             The amount of token0 fees accrued
     /// @return             The amount of token1 fees accrued
-    function getPositionFees(IUniswapV3Pool pool_, int24 tickLower_, int24 tickUpper_, address owner_) public view returns (uint128, uint128) {
+    function getPositionFees(
+        IUniswapV3Pool pool_,
+        int24 tickLower_,
+        int24 tickUpper_,
+        address owner_
+    ) public view returns (uint128, uint128) {
         (, , , uint128 fees0, uint128 fees1) = pool_.positions(
             keccak256(abi.encodePacked(address(owner_), tickLower_, tickUpper_))
         );
@@ -67,7 +71,12 @@ library UniswapV3Positions {
     /// @param tickUpper_   The upper tick of the position
     /// @param owner_       The owner of the position
     /// @return             The amount of liquidity
-    function getPositionLiquidity(IUniswapV3Pool pool_, int24 tickLower_, int24 tickUpper_, address owner_) public view returns (uint128) {
+    function getPositionLiquidity(
+        IUniswapV3Pool pool_,
+        int24 tickLower_,
+        int24 tickUpper_,
+        address owner_
+    ) public view returns (uint128) {
         (uint128 liquidity, , , , ) = pool_.positions(
             keccak256(abi.encodePacked(address(owner_), tickLower_, tickUpper_))
         );
@@ -82,7 +91,12 @@ library UniswapV3Positions {
     /// @param tickUpper_   The upper tick of the position
     /// @param owner_       The owner of the position
     /// @return             True if the position has liquidity
-    function positionHasLiquidity(IUniswapV3Pool pool_, int24 tickLower_, int24 tickUpper_, address owner_) public view returns (bool) {
+    function positionHasLiquidity(
+        IUniswapV3Pool pool_,
+        int24 tickLower_,
+        int24 tickUpper_,
+        address owner_
+    ) public view returns (bool) {
         return getPositionLiquidity(pool_, tickLower_, tickUpper_, owner_) > 0;
     }
 }

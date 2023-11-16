@@ -7,7 +7,6 @@ import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Po
 /// @author     0xJem
 /// @notice     Library for common functions on Uniswap V3 pool contracts
 library UniswapV3PoolLibrary {
-
     // ========  Constants  ========
 
     uint16 public constant SLIPPAGE_SCALE = 10_000; // 100%
@@ -65,9 +64,8 @@ library UniswapV3PoolLibrary {
     /// @return             The minimum amount of tokens to receive
     function getAmountMin(uint256 amount_, uint16 slippageBps_) public pure returns (uint256) {
         // Check bounds
-        if (slippageBps_ > SLIPPAGE_SCALE)
-            revert InvalidSlippage(slippageBps_, SLIPPAGE_SCALE);
+        if (slippageBps_ > SLIPPAGE_SCALE) revert InvalidSlippage(slippageBps_, SLIPPAGE_SCALE);
 
-        return amount_ * uint256(SLIPPAGE_SCALE - slippageBps_) / uint256(SLIPPAGE_SCALE);
+        return (amount_ * uint256(SLIPPAGE_SCALE - slippageBps_)) / uint256(SLIPPAGE_SCALE);
     }
 }
