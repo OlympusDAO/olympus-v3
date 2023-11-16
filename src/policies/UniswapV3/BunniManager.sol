@@ -414,10 +414,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
 
         // Check that the token has been deployed
-        address poolTokenAddress = address(bunniHub.getBunniToken(key));
-        if (poolTokenAddress == address(0)) {
-            revert BunniManager_PoolNotFound(pool_);
-        }
+        IBunniToken poolToken = _getPoolToken(pool_, key);
+        address poolTokenAddress = address(poolToken);
 
         // Check that the position has liquidity
         if (
@@ -456,10 +454,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
 
         // Check that the token has been deployed
-        address poolTokenAddress = address(bunniHub.getBunniToken(key));
-        if (poolTokenAddress == address(0)) {
-            revert BunniManager_PoolNotFound(pool_);
-        }
+        IBunniToken poolToken = _getPoolToken(pool_, key);
+        address poolTokenAddress = address(poolToken);
 
         // Check that the position has NO liquidity
         if (
@@ -519,12 +515,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
 
         // Check that the token has been deployed
-        {
-            IBunniToken existingToken = bunniHub.getBunniToken(key);
-            if (address(existingToken) == address(0)) {
-                revert BunniManager_PoolNotFound(pool_);
-            }
-        }
+        _getPoolToken(pool_, key);
 
         // Move non-OHM tokens from TRSRY to this contract
         (address token0Address, address token1Address) = UniswapV3PoolLibrary.getPoolTokens(pool_);
@@ -593,10 +584,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Get the appropriate BunniKey representing the position
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
 
-        IBunniToken existingToken = bunniHub.getBunniToken(key);
-        if (address(existingToken) == address(0)) {
-            revert BunniManager_PoolNotFound(pool_);
-        }
+        // Get the existing token (or revert)
+        IBunniToken existingToken = _getPoolToken(pool_, key);
 
         // Determine the minimum amounts
         uint256 amount0Min;
@@ -725,14 +714,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Get the appropriate BunniKey representing the position
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
 
-        IBunniToken token = bunniHub.getBunniToken(key);
-
-        // Ensure the token exists
-        if (address(token) == address(0)) {
-            revert BunniManager_PoolNotFound(pool_);
-        }
-
-        return token;
+        return _getPoolToken(pool_, key);
     }
 
     /// @inheritdoc IBunniManager
@@ -881,6 +863,24 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     //============================================================================================//
     //                                      INTERNAL FUNCTIONS                                    //
     //============================================================================================//
+
+    /// @notice         Obtains the BunniToken for the given pool
+    /// @dev            This function reverts if:
+    ///                 - A BunniToken for `key_` cannot be found
+    ///
+    /// @param pool_    The address of the pool
+    /// @param key_     The BunniKey representing the position
+    /// @return         The BunniToken for the pool
+    function _getPoolToken(address pool_, BunniKey memory key_) internal view returns (IBunniToken) {
+        IBunniToken token = bunniHub.getBunniToken(key_);
+
+        // Ensure the token exists
+        if (address(token) == address(0)) {
+            revert BunniManager_PoolNotFound(pool_);
+        }
+
+        return token;
+    }
 
     /// @notice         Transfers the tokens from TRSRY or mints them if the token is OHM
     /// @param token_   The address of the token
