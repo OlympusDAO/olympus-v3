@@ -21,6 +21,7 @@ interface IOperator {
 
     // =========  ERRORS ========= //
 
+    error Operator_WrongModuleVersion(uint8[5] expectedMajors);
     error Operator_InvalidParams();
     error Operator_InsufficientCapacity();
     error Operator_AmountLessThanMinimum(uint256 amountOut, uint256 minAmountOut);
@@ -92,9 +93,10 @@ interface IOperator {
     /// @notice Set the wall and cushion spreads
     /// @notice Access restricted
     /// @dev    Interface for externally setting these values on the RANGE module
+    /// @param  high_ - Whether to set the spreads for the high or low side (true = high, false = low)
     /// @param  cushionSpread_ - Percent spread to set the cushions at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%)
     /// @param  wallSpread_ - Percent spread to set the walls at above/below the moving average, assumes 2 decimals (i.e. 1000 = 10%)
-    function setSpreads(uint256 cushionSpread_, uint256 wallSpread_) external;
+    function setSpreads(bool high_, uint256 cushionSpread_, uint256 wallSpread_) external;
 
     /// @notice Set the threshold factor for when a wall is considered "down"
     /// @notice Access restricted

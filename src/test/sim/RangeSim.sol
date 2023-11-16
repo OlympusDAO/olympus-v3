@@ -7,6 +7,7 @@ import {console2} from "forge-std/console2.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
+import {MockStakingZD} from "test/mocks/MockStakingForZD.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
 import {BondFixedTermSDA} from "test/lib/bonds/BondFixedTermSDA.sol";
@@ -38,6 +39,7 @@ import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -198,6 +200,7 @@ abstract contract RangeSim is Test {
     OlympusHeart public heart;
     OlympusPriceConfig public priceConfig;
     RolesAdmin public rolesAdmin;
+    ZeroDistributor public distributor;
 
     mapping(uint32 => SimIO.Params) internal params; // map of sim keys to sim params
     mapping(uint32 => mapping(uint32 => int256)) internal netflows; // map of sim keys to epochs to netflows
@@ -221,6 +224,7 @@ abstract contract RangeSim is Test {
     ZuniswapV2Router internal router;
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal reserveEthPriceFeed;
+    MockStakingZD public staking;
 
     // =========  SIMULATION VARIABLES ========= //
 
@@ -365,8 +369,8 @@ abstract contract RangeSim is Test {
                 kernel,
                 ERC20(ohm), ERC20(reserve),
                 vm.envUint("THRESHOLD_FACTOR"),
-                uint256(_params.cushionSpread),
-                uint256(_params.wallSpread)
+                [uint256(_params.cushionSpread), uint256(_params.wallSpread)],
+                [uint256(_params.cushionSpread), uint256(_params.wallSpread)]
             );
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
@@ -400,6 +404,9 @@ abstract contract RangeSim is Test {
                 ]
             );
 
+            staking = new MockStakingZD(8 hours, 0, block.timestamp);
+            distributor = new ZeroDistributor(address(staking));
+
             // Deploy PriceConfig
             priceConfig = new OlympusPriceConfig(kernel);
 
@@ -407,7 +414,7 @@ abstract contract RangeSim is Test {
             heart = new OlympusHeart(
                 kernel,
                 operator,
-                reserve,
+                distributor,
                 uint256(0), // no keeper rewards for sim
                 uint48(0) // no keeper rewards for sim
             );
@@ -1035,10 +1042,10 @@ abstract contract RangeSim is Test {
             supply,
             _range.low.capacity,
             _range.high.capacity,
-            _range.wall.low.price,
-            _range.wall.high.price,
-            _range.cushion.low.price,
-            _range.cushion.high.price
+            _range.low.wall.price,
+            _range.high.wall.price,
+            _range.low.cushion.price,
+            _range.high.cushion.price
         );
     }
 

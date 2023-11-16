@@ -33,7 +33,8 @@ import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
-import {Distributor} from "policies/Distributor.sol";
+import {Distributor} from "policies/Distributor/Distributor.sol";
+import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {Emergency} from "policies/Emergency.sol";
 import {BondManager} from "policies/BondManager.sol";
 import {Burner} from "policies/Burner.sol";
@@ -77,6 +78,7 @@ contract OlympusDeploy is Script {
     RolesAdmin public rolesAdmin;
     TreasuryCustodian public treasuryCustodian;
     Distributor public distributor;
+    ZeroDistributor public zeroDistributor;
     Emergency public emergency;
     BondManager public bondManager;
     Burner public burner;
@@ -134,7 +136,7 @@ contract OlympusDeploy is Script {
     string[] public deployments;
     mapping(string => address) public deployedTo;
 
-    function _setUp(string calldata chain_) internal {
+    function _setUp(string calldata chain_, string calldata deployFilePath) internal {
         chain = chain_;
 
         // Setup contract -> selector mappings
@@ -153,6 +155,7 @@ contract OlympusDeploy is Script {
         selectorMap["RolesAdmin"] = this._deployRolesAdmin.selector;
         selectorMap["TreasuryCustodian"] = this._deployTreasuryCustodian.selector;
         selectorMap["Distributor"] = this._deployDistributor.selector;
+        selectorMap["ZeroDistributor"] = this._deployZeroDistributor.selector;
         selectorMap["Emergency"] = this._deployEmergency.selector;
         selectorMap["BondManager"] = this._deployBondManager.selector;
         selectorMap["Burner"] = this._deployBurner.selector;
@@ -217,6 +220,7 @@ contract OlympusDeploy is Script {
         rolesAdmin = RolesAdmin(envAddress("olympus.policies.RolesAdmin"));
         treasuryCustodian = TreasuryCustodian(envAddress("olympus.policies.TreasuryCustodian"));
         distributor = Distributor(envAddress("olympus.policies.Distributor"));
+        zeroDistributor = ZeroDistributor(envAddress("olympus.policies.ZeroDistributor"));
         emergency = Emergency(envAddress("olympus.policies.Emergency"));
         bondManager = BondManager(envAddress("olympus.policies.BondManager"));
         burner = Burner(envAddress("olympus.policies.Burner"));
@@ -227,7 +231,7 @@ contract OlympusDeploy is Script {
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
 
         // Load deployment data
-        string memory data = vm.readFile("./src/scripts/deploy/deploy.json");
+        string memory data = vm.readFile(deployFilePath);
 
         // Parse deployment sequence and names
         string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
@@ -273,9 +277,9 @@ contract OlympusDeploy is Script {
     //     kernel.executeAction(Actions.ActivatePolicy, address(policy_));
     // }
 
-    function deploy(string calldata chain_) external {
+    function deploy(string calldata chain_, string calldata deployFilePath) external {
         // Setup
-        _setUp(chain_);
+        _setUp(chain_, deployFilePath);
 
         // Check that deployments is not empty
         uint256 len = deployments.length;
@@ -342,18 +346,30 @@ contract OlympusDeploy is Script {
 
     function _deployRange(bytes memory args) public returns (address) {
         // Decode arguments for Range module
-        (uint256 thresholdFactor, uint256 cushionSpread, uint256 wallSpread) = abi.decode(
-            args,
-            (uint256, uint256, uint256)
-        );
+        (
+            uint256 highCushionSpread,
+            uint256 highWallSpread,
+            uint256 lowCushionSpread,
+            uint256 lowWallSpread,
+            uint256 thresholdFactor
+        ) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
 
-        console2.log("CushionSpread", cushionSpread);
-        console2.log("WallSpread", wallSpread);
-        console2.log("thresholdFactor", thresholdFactor);
+        console2.log("   highCushionSpread", highCushionSpread);
+        console2.log("   highWallSpread", highWallSpread);
+        console2.log("   lowCushionSpread", lowCushionSpread);
+        console2.log("   lowWallSpread", lowWallSpread);
+        console2.log("   thresholdFactor", thresholdFactor);
 
         // Deploy Range module
         vm.broadcast();
-        RANGE = new OlympusRange(kernel, ohm, reserve, thresholdFactor, cushionSpread, wallSpread);
+        RANGE = new OlympusRange(
+            kernel,
+            ohm,
+            reserve,
+            thresholdFactor,
+            [lowCushionSpread, lowWallSpread],
+            [highCushionSpread, highWallSpread]
+        );
         console2.log("Range deployed at:", address(RANGE));
 
         return address(RANGE);
@@ -433,19 +449,20 @@ contract OlympusDeploy is Script {
             uint32(regenObserve)
         ];
 
-        console2.log("kernel", address(kernel));
-        console2.log("bondAuctioneer", address(bondAuctioneer));
-        console2.log("callback", address(callback));
-        console2.log("ohm", address(ohm));
-        console2.log("reserve", address(reserve));
-        console2.log("cushionDebtBuffer", cushionDebtBuffer);
-        console2.log("cushionDepositInterval", cushionDepositInterval);
-        console2.log("cushionDuration", cushionDuration);
-        console2.log("cushionFactor", cushionFactor);
-        console2.log("regenObserve", regenObserve);
-        console2.log("regenThreshold", regenThreshold);
-        console2.log("regenWait", regenWait);
-        console2.log("reserveFactor", reserveFactor);
+        console2.log("   kernel", address(kernel));
+        console2.log("   bondAuctioneer", address(bondAuctioneer));
+        console2.log("   callback", address(callback));
+        console2.log("   ohm", address(ohm));
+        console2.log("   reserve", address(reserve));
+        console2.log("   wrappedReserve", address(wrappedReserve));
+        console2.log("   cushionDebtBuffer", cushionDebtBuffer);
+        console2.log("   cushionDepositInterval", cushionDepositInterval);
+        console2.log("   cushionDuration", cushionDuration);
+        console2.log("   cushionFactor", cushionFactor);
+        console2.log("   regenObserve", regenObserve);
+        console2.log("   regenThreshold", regenThreshold);
+        console2.log("   regenWait", regenWait);
+        console2.log("   reserveFactor", reserveFactor);
 
         // Deploy Operator policy
         vm.broadcast();
@@ -478,7 +495,7 @@ contract OlympusDeploy is Script {
 
         // Deploy OlympusHeart policy
         vm.broadcast();
-        heart = new OlympusHeart(kernel, operator, ohm, maxReward, auctionDuration);
+        heart = new OlympusHeart(kernel, operator, zeroDistributor, maxReward, auctionDuration);
         console2.log("OlympusHeart deployed at:", address(heart));
 
         return address(heart);
@@ -525,6 +542,15 @@ contract OlympusDeploy is Script {
         vm.broadcast();
         distributor = new Distributor(kernel, address(ohm), staking, initialRate);
         console2.log("Distributor deployed at:", address(distributor));
+
+        return address(distributor);
+    }
+
+    function _deployZeroDistributor(bytes memory args) public returns (address) {
+        // Deploy ZeroDistributor policy
+        vm.broadcast();
+        zeroDistributor = new ZeroDistributor(staking);
+        console2.log("ZeroDistributor deployed at:", address(distributor));
 
         return address(distributor);
     }

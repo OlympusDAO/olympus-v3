@@ -22,7 +22,8 @@ import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "policies/PriceConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
-import {Distributor} from "policies/Distributor.sol";
+import {Distributor} from "policies/Distributor/Distributor.sol";
+import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {Emergency} from "policies/Emergency.sol";
 import {BondManager} from "policies/BondManager.sol";
 
@@ -52,6 +53,7 @@ contract OlympusDeploy is Script {
     RolesAdmin public rolesAdmin;
     TreasuryCustodian public treasuryCustodian;
     Distributor public distributor;
+    ZeroDistributor public zeroDistributor;
     Emergency public emergency;
     BondManager public bondManager;
 
@@ -122,7 +124,14 @@ contract OlympusDeploy is Script {
         );
         console2.log("Price module deployed at:", address(PRICE));
 
-        RANGE = new OlympusRange(kernel, ohm, reserve, uint256(100), uint256(1675), uint256(2950));
+        RANGE = new OlympusRange(
+            kernel,
+            ohm,
+            reserve,
+            uint256(100),
+            [uint256(1675), uint256(2950)],
+            [uint256(1675), uint256(2950)]
+        );
         console2.log("Range module deployed at:", address(RANGE));
 
         ROLES = new OlympusRoles(kernel);
@@ -150,7 +159,10 @@ contract OlympusDeploy is Script {
         );
         console2.log("Operator deployed at:", address(operator));
 
-        heart = new OlympusHeart(kernel, operator, rewardToken, 10 * 1e9, uint48(12 * 25)); // TODO verify initial keeper reward and auction duration
+        zeroDistributor = new ZeroDistributor(staking);
+        console2.log("ZeroDistributor deployed at:", address(distributor));
+
+        heart = new OlympusHeart(kernel, operator, zeroDistributor, 10 * 1e9, uint48(12 * 25)); // TODO verify initial keeper reward and auction duration
         console2.log("Heart deployed at:", address(heart));
 
         priceConfig = new OlympusPriceConfig(kernel);
@@ -161,9 +173,6 @@ contract OlympusDeploy is Script {
 
         treasuryCustodian = new TreasuryCustodian(kernel);
         console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
-
-        distributor = new Distributor(kernel, address(ohm), staking, vm.envUint("REWARD_RATE"));
-        console2.log("Distributor deployed at:", address(distributor));
 
         emergency = new Emergency(kernel);
         console2.log("Emergency deployed at:", address(emergency));
@@ -184,7 +193,7 @@ contract OlympusDeploy is Script {
         kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
-        kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        // kernel.executeAction(Actions.ActivatePolicy, address(distributor));
         kernel.executeAction(Actions.ActivatePolicy, address(emergency));
 
         /// Configure access control for policies
@@ -211,7 +220,7 @@ contract OlympusDeploy is Script {
         /// TreasuryCustodian roles
         rolesAdmin.grantRole("custodian", guardian_);
 
-        /// Distributor roles
+        /// ZeroDistributor roles
         rolesAdmin.grantRole("distributor_admin", policy_);
 
         /// Emergency roles
@@ -268,6 +277,7 @@ contract OlympusDeploy is Script {
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
         treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
         distributor = Distributor(vm.envAddress("DISTRIBUTOR"));
+        zeroDistributor = ZeroDistributor(vm.envAddress("ZERO_DISTRIBUTOR"));
         emergency = Emergency(vm.envAddress("EMERGENCY"));
         bondManager = BondManager(vm.envAddress("BONDMANAGER"));
 
@@ -345,7 +355,7 @@ contract OlympusDeploy is Script {
         /// TreasuryCustodian Roles
         require(ROLES.hasRole(guardian_, "custodian"));
 
-        /// Distributor Roles
+        /// ZeroDistributor Roles
         require(ROLES.hasRole(policy_, "distributor_admin"));
 
         /// Emergency Roles
@@ -456,7 +466,7 @@ contract OlympusDeploy is Script {
             file,
             string.concat(
                 '"',
-                type(Distributor).name,
+                type(ZeroDistributor).name,
                 '": "',
                 vm.toString(address(distributor)),
                 '",'

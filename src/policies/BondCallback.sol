@@ -215,9 +215,14 @@ contract BondCallback is Policy, ReentrancyGuard, IBondCallback, RolesConsumer {
                 TRSRY.withdrawReserves(msg.sender, payoutToken, outputAmount_);
             } else {
                 // Since TRSRY hold a wrapped version of the payoutToken, it must be unwrapped first.
-                uint256 wrappedOutputAmount = wrappedPayoutToken.previewWithdraw(outputAmount_);
-                TRSRY.withdrawReserves(address(this), wrappedPayoutToken, wrappedOutputAmount);
-                wrappedPayoutToken.withdraw(wrappedOutputAmount, msg.sender, address(this));
+                TRSRY.withdrawReserves(
+                    address(this),
+                    wrappedPayoutToken,
+                    wrappedPayoutToken.previewWithdraw(outputAmount_)
+                );
+
+                // Unwrap reserves and transfer to sender
+                wrappedPayoutToken.withdraw(outputAmount_, msg.sender, address(this));
             }
 
             // Burn OHM received from sender

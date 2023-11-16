@@ -128,8 +128,8 @@ contract BondCallbackTest is Test {
                 ERC20(ohm),
                 ERC20(reserve),
                 uint256(100),
-                uint256(1000),
-                uint256(2000)
+                [uint256(1000), uint256(2000)],
+                [uint256(1000), uint256(2000)]
             );
             TRSRY = new OlympusTreasury(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
@@ -234,6 +234,8 @@ contract BondCallbackTest is Test {
         reserve.approve(address(wrappedReserve), testReserve * 100);
         wrappedReserve.deposit(testReserve * 100, address(TRSRY));
         vm.stopPrank();
+        // Simuilate yield generation on wrappedReserve
+        reserve.mint(address(wrappedReserve), testReserve * 1);
 
         // Approve the operator and bond teller for the tokens to swap
         vm.prank(alice);
@@ -574,7 +576,7 @@ contract BondCallbackTest is Test {
         // Create three new markets to test whitelist functionality
         uint256 wlOne = createMarket(reserve, ohm, 0, 1, 3);
         uint256 wlTwo = createMarket(ohm, nakedReserve, 1, 0, 3);
-        uint256 wlThree = createMarket(ohm, wrappedReserve, 1, 0, 3);
+        uint256 wlThree = createMarket(ohm, reserve, 1, 0, 3);
 
         // Attempt to whitelist a market as a non-approved address, expect revert
         bytes memory err = abi.encodeWithSelector(
@@ -586,6 +588,7 @@ contract BondCallbackTest is Test {
         callback.whitelist(address(teller), wlOne);
 
         // -- Whitelist 1:
+        console2.log("Case 1: Regular Bond (Reserve -> OHM)");
         // Cache initial approval
         uint256 initApproval = MINTR.mintApproval(address(callback));
 
@@ -630,6 +633,7 @@ contract BondCallbackTest is Test {
         );
 
         // -- Whitelist 2:
+        console2.log("Case 2: Regular Bond (OHM -> Reserve held in naked form)");
         // Cache initial approval
         initApproval = TRSRY.withdrawApproval(address(callback), nakedReserve);
 
@@ -668,6 +672,7 @@ contract BondCallbackTest is Test {
         );
 
         // -- Whitelist 3:
+        console2.log("Case 3: Regular Bond (OHM -> Reserve stored in wrapped form)");
         // Cache initial approval
         initApproval = TRSRY.withdrawApproval(address(callback), wrappedReserve);
 
@@ -683,7 +688,7 @@ contract BondCallbackTest is Test {
         );
         previousMintApproval = MINTR.mintApproval(address(callback));
 
-        // Whitelist the second bond market from the operator address
+        // Whitelist the third bond market from the operator address
         vm.prank(address(operator));
         callback.whitelist(address(teller), wlThree);
 
@@ -739,6 +744,20 @@ contract BondCallbackTest is Test {
 
         /// Check that the operator contract has been set
         assertEq(address(callback.operator()), alice);
+    }
+
+    function testCorrectness_useWrappedVersion() public {
+        // Configure callback to use the naked reserve.
+        vm.prank(guardian);
+        callback.useWrappedVersion(address(reserve), address(0));
+
+        assertEq(callback.wrapped(address(reserve)), address(0));
+
+        // Configure callback to use a wrapped reserve for reserve
+        vm.prank(guardian);
+        callback.useWrappedVersion(address(reserve), address(wrappedReserve));
+
+        assertEq(callback.wrapped(address(reserve)), address(wrappedReserve));
     }
 
     function testCorrectness_batchToTreasury() public {

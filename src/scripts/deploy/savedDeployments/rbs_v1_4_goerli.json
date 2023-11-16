@@ -1,6 +1,9 @@
 {
     "sequence": [
         {
+            "name": "ZeroDistributor"
+        },
+        {
             "name": "OlympusRange",
             "args": {
                 "highCushionSpread": 1000,
