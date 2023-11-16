@@ -722,7 +722,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        This function reverts if:
     ///             - The `bunniHub` state variable is not set
     ///             - An ERC20 token for `pool_` has not been deployed/registered
-    function getPoolTokenBalance(address pool_) public view override returns (uint256) {
+    function getPoolTokenBalance(address pool_) public view override bunniHubSet returns (uint256) {
         // Get the token
         // `getPoolToken` will revert if the pool is not found
         IBunniToken token = getPoolToken(pool_);
@@ -740,7 +740,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///
     ///             This function assumes that the pending fees for the pools are up-to-date. Calling
     ///             functions should update the pending fees before calling this function using `updateSwapFees()`.
-    function getCurrentHarvestReward() public view override returns (uint256 reward) {
+    function getCurrentHarvestReward() public view override bunniHubSet returns (uint256 reward) {
         // 0 if enough time has not elapsed
         if (lastHarvest + harvestFrequency < block.timestamp) return 0;
 
