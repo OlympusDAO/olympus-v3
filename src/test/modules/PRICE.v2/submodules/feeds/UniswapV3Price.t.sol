@@ -1,22 +1,29 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
+// Uniswap V3
+import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+
+// Libraries
+import {FixedPointMathLib} from "lib/solmate/src/utils/FixedPointMathLib.sol";
+import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {FullMath} from "libraries/FullMath.sol";
+
+// Test
 import {Test, stdError} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
-import "src/Kernel.sol";
+// Mocks
+import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
+import {MockUniswapV2Pool} from "test/mocks/MockUniswapV2Pool.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 
+// Bophades
+import "src/Kernel.sol";
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
-import {IUniswapV3Pool} from "src/interfaces/UniswapV3/IUniswapV3Pool.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
-import {FixedPointMathLib} from "lib/solmate/src/utils/FixedPointMathLib.sol";
-import {TickMath} from "src/libraries/UniswapV3/TickMath.sol";
-import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
-import {MockUniswapV2Pool} from "test/mocks/MockUniswapV2Pool.sol";
 
 contract UniswapV3PriceTest is Test {
     using FullMath for uint256;

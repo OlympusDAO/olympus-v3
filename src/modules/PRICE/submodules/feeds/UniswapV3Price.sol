@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "modules/PRICE/PRICE.v2.sol";
-import {IUniswapV3Pool} from "interfaces/UniswapV3/IUniswapV3Pool.sol";
-import {OracleLibrary} from "libraries/UniswapV3/OracleLibrary.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+
+// Libraries
 import {FullMath} from "libraries/FullMath.sol";
+
+// Uniswap V3
+import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
+
+// Bophades
+import "modules/PRICE/PRICE.v2.sol";
 
 /// @title      UniswapV3Price
 /// @author     0xJem
