@@ -141,6 +141,19 @@ contract MockUpgradedSubmoduleSupply is SupplySubmodule {
     function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
         return 0;
     }
+
+    function getSourceCount() external view override returns (uint256) {
+        return 0;
+    }
+
+    function getProtocolOwnedLiquidityReserves()
+        external
+        view
+        override
+        returns (SPPLYv1.Reserves[] memory)
+    {
+        return new SPPLYv1.Reserves[](0);
+    }
 }
 
 contract BookkeeperTest is Test {
