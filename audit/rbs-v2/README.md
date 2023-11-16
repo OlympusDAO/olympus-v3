@@ -275,16 +275,16 @@ The diagram demonstrates the interactions of the different components when calli
 sequenceDiagram
   participant Operator
   participant Appraiser
+  participant TRSRY
+  participant PRICE
+  participant SPPLY
   Operator->>Appraiser: getMetric(LBBO)
-  create participant TRSRY
   Note over Appraiser, TRSRY: Calculate liquid backing
   Appraiser->>TRSRY: getAssets()
   Appraiser->>TRSRY: getAssetsByCategory(POL)
-  create participant PRICE
   loop Each asset
   Appraiser->>PRICE: getPrice()
   end
-  create participant SPPLY
   Appraiser->>SPPLY: getReservesByCategory(POL)
   loop Each POL asset
   Appraiser->>PRICE: getPrice()
