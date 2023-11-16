@@ -3,7 +3,6 @@ pragma solidity 0.8.15;
 
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
-import {TransferHelper} from "libraries/TransferHelper.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -50,7 +49,6 @@ import "src/Kernel.sol";
 ///         - Setting the protocol fee on the BunniHub instance (applied when compounding pool fees), as there is no use for having the protocol fees applied.
 contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     using FullMath for uint256;
-    using TransferHelper for ERC20;
 
     //============================================================================================//
     //                                      EVENTS                                                //
@@ -897,7 +895,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         if (token_ == address(MINTR.ohm())) {
             MINTR.burnOhm(address(this), amount_);
         } else {
-            ERC20(token_).safeTransfer(address(TRSRY), amount_);
+            // All tokens are pre-filtered by TRSRY, so safeTransfer is not needed
+            ERC20(token_).transfer(address(TRSRY), amount_);
         }
     }
 
