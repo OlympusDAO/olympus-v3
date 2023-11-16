@@ -405,9 +405,19 @@ Features:
 
 * Utilises the liquid backing per backed OHM metric from Appraiser as the target price, instead of a manual value
 
-## Frequent Questions
+## Frequently-Asked Questions
 
-TODO
+### Q: Is the code/contract expected to comply with any EIPs? Are there specific assumptions around adhering to those EIPs that Watsons should be aware of?
+
+A: None
+
+### Q: Please list any known issues/acceptable risks that should not result in a valid finding
+
+A: The following are known issues/limitations:
+
+1. The PRICE and SPPLY submodules that use an on-chain method to access the reserves of a liquidity pool or positions are susceptible to sandwich attacks and multi-block manipulation
+    * Assets in PRICEv2 can be configured to track the moving average of an asset price in order to mitigate this risk
+    * Assets in PRICEv2 can be configured with multiple price feeds and a reconciliation strategy (e.g. average, median, average if a deviation is present) in order to mitigate this risk
 
 ## Getting Started
 
