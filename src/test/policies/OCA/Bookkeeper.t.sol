@@ -8,16 +8,18 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockGohm} from "test/mocks/OlympusMocks.sol";
+import {MockVaultManager} from "test/mocks/MockBLVaultManager.sol";
 
 import "src/Submodules.sol";
 import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
 import {OlympusPricev2, PRICEv2, PriceSubmodule} from "modules/PRICE/OlympusPrice.v2.sol";
-import {OlympusSupply, SPPLYv1, Category as SupplyCategory} from "modules/SPPLY/OlympusSupply.sol";
+import {OlympusSupply, SPPLYv1, Category as SupplyCategory, SupplySubmodule} from "modules/SPPLY/OlympusSupply.sol";
 import {OlympusTreasury, TRSRYv1_1, CategoryGroup as AssetCategoryGroup, Category as AssetCategory} from "modules/TRSRY/OlympusTreasury.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 
 // Tests for Bookkeeper v1.0.0
 //
@@ -46,9 +48,11 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 // [X] installSubmodule
 //     [X] only "bookkeeper_admin" role can call
 //     [X] inputs to PRICEv2.installSubmodule are correct
+//     [X] inputs to SPPLYv1.installSubmodule are correct
 // [X] upgradeSubmodule
 //     [X] only "bookkeeper_admin" role can call
 //     [X] inputs to PRICEv2.upgradeSubmodule are correct
+//     [X] inputs to SPPLYv1.upgradeSubmodule are correct
 //
 // SPPLYv1 Configuration
 // [X] addAsset
@@ -101,7 +105,7 @@ contract MockStrategy is PriceSubmodule {
     }
 }
 
-contract MockUpgradedSubmodule is PriceSubmodule {
+contract MockUpgradedSubmodulePrice is PriceSubmodule {
     constructor(Module parent_) Submodule(parent_) {}
 
     function SUBKEYCODE() public pure override returns (SubKeycode) {
@@ -111,6 +115,31 @@ contract MockUpgradedSubmodule is PriceSubmodule {
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
         major = 2;
         minor = 0;
+    }
+}
+
+contract MockUpgradedSubmoduleSupply is SupplySubmodule {
+    constructor(Module parent_) Submodule(parent_) {}
+
+    function SUBKEYCODE() public pure override returns (SubKeycode) {
+        return toSubKeycode("SPPLY.BLV");
+    }
+
+    function VERSION() public pure override returns (uint8 major, uint8 minor) {
+        major = 2;
+        minor = 0;
+    }
+
+    function getCollateralizedOhm() external view override returns (uint256) {
+        return 0;
+    }
+
+    function getProtocolOwnedBorrowableOhm() external view override returns (uint256) {
+        return 0;
+    }
+
+    function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
+        return 0;
     }
 }
 
@@ -852,7 +881,7 @@ contract BookkeeperTest is Test {
         assertEq(submodule, address(newStrategy));
     }
 
-    function test_installSubmodule() public {
+    function test_installSubmodule_PRICE() public {
         // Create new submodule to install
         MockStrategy newStrategy = new MockStrategy(PRICE);
 
@@ -869,11 +898,35 @@ contract BookkeeperTest is Test {
         assertEq(submodule, address(newStrategy));
     }
 
+    function test_installSubmodule_SPPLY() public {
+        // Create vault managers
+        MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
+        MockVaultManager[] memory vaultManagers = new MockVaultManager[](1);
+        address[] memory vaultManagerAddresses = new address[](1);
+        vaultManagers[0] = vaultManager1;
+        vaultManagerAddresses[0] = address(vaultManager1);
+
+        // Create new submodule to install
+        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
+
+        // Confirm submodule is not installed on SPPLY
+        address submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
+        assertEq(submodule, address(0));
+
+        // Install new submodule with admin account
+        vm.prank(admin);
+        bookkeeper.installSubmodule(toKeycode("SPPLY"), supplyBLV);
+
+        // Confirm submodule was installed
+        submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
+        assertEq(submodule, address(supplyBLV));
+    }
+
     function testRevert_upgradeSubmodule_onlyAdmin(address user_) public {
         vm.assume(user_ != admin);
 
         // Create mock upgrade for chainlink submodule
-        MockUpgradedSubmodule newChainlink = new MockUpgradedSubmodule(PRICE);
+        MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
 
         // Confirm chainlink submodule is installed on PRICE and the version is 1.0
         address chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -910,9 +963,9 @@ contract BookkeeperTest is Test {
         assertEq(minor, 0);
     }
 
-    function test_upgradeSubmodule() public {
+    function test_upgradeSubmodule_PRICE() public {
         // Create mock upgrade for chainlink submodule
-        MockUpgradedSubmodule newChainlink = new MockUpgradedSubmodule(PRICE);
+        MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
 
         // Confirm chainlink submodule is installed on PRICE and the version is 1.0
         address chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -929,6 +982,43 @@ contract BookkeeperTest is Test {
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
         assertEq(chainlink, address(newChainlink));
         (major, minor) = Submodule(chainlink).VERSION();
+        assertEq(major, 2);
+        assertEq(minor, 0);
+    }
+
+    function test_upgradeSubmodule_SPPLY() public {
+        // Create vault managers
+        MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
+        MockVaultManager[] memory vaultManagers = new MockVaultManager[](1);
+        address[] memory vaultManagerAddresses = new address[](1);
+        vaultManagers[0] = vaultManager1;
+        vaultManagerAddresses[0] = address(vaultManager1);
+
+        // Create new submodule to install
+        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
+
+        // Install new submodule with admin account
+        vm.prank(admin);
+        bookkeeper.installSubmodule(toKeycode("SPPLY"), supplyBLV);
+
+        // Confirm BLV submodule is installed on SPPLY and the version is 1.0
+        address submodule = address(SPPLY.getSubmoduleForKeycode(toSubKeycode("SPPLY.BLV")));
+        assertEq(submodule, address(supplyBLV));
+        (uint8 major, uint8 minor) = Submodule(submodule).VERSION();
+        assertEq(major, 1);
+        assertEq(minor, 0);
+
+        // Create mock upgrade for BLV submodule
+        MockUpgradedSubmoduleSupply newBLV = new MockUpgradedSubmoduleSupply(SPPLY);
+
+        // Upgrade BLV submodule with admin account, expect success
+        vm.prank(admin);
+        bookkeeper.upgradeSubmodule(toKeycode("SPPLY"), newBLV);
+
+        // Confirm BLV submodule was upgraded
+        submodule = address(SPPLY.getSubmoduleForKeycode(toSubKeycode("SPPLY.BLV")));
+        assertEq(submodule, address(newBLV));
+        (major, minor) = Submodule(submodule).VERSION();
         assertEq(major, 2);
         assertEq(minor, 0);
     }

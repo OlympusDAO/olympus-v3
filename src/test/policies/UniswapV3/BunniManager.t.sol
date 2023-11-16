@@ -39,6 +39,8 @@ import {BunniLens} from "src/external/bunni/BunniLens.sol";
 import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
 
+import {UniswapV3PoolLibrary} from "libraries/UniswapV3/PoolLibrary.sol";
+
 import {toSubKeycode} from "src/Submodules.sol";
 
 import "src/Kernel.sol";
@@ -343,7 +345,7 @@ contract BunniManagerTest is Test {
 
     function _expectRevert_invalidSlippage(uint16 slippage_) internal {
         bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_Params_InvalidSlippage.selector,
+            UniswapV3PoolLibrary.InvalidSlippage.selector,
             slippage_,
             SLIPPAGE_MAX
         );

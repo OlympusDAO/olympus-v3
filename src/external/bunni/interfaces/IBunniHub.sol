@@ -7,8 +7,9 @@ import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Po
 import {IMulticall} from "@uniswap/v3-periphery/contracts/interfaces/IMulticall.sol";
 import {ISelfPermit} from "@uniswap/v3-periphery/contracts/interfaces/ISelfPermit.sol";
 
+import {ERC20} from "solmate/tokens/ERC20.sol";
+
 import "../base/Structs.sol";
-import {IERC20} from "./IERC20.sol";
 import {IBunniToken} from "./IBunniToken.sol";
 import {ILiquidityManagement} from "./ILiquidityManagement.sol";
 
@@ -18,6 +19,11 @@ import {ILiquidityManagement} from "./ILiquidityManagement.sol";
 /// which is the ERC20 LP token for the Uniswap V3 position specified by the BunniKey.
 /// Use deposit()/withdraw() to mint/burn LP tokens, and use compound() to compound the swap fees
 /// back into the LP position.
+/// @dev    Imported at commit: https://github.com/ZeframLou/bunni/tree/fd65011c4e24660d0a63295cb3812c1821529842
+///
+/// @dev    The following changes were made from the original source code:
+/// @dev    - Use solmate ERC20 and SafeTransferLib instead of the local IERC20 and SafeTransferLib
+/// @dev    - updateSwapFees() function added
 interface IBunniHub is IMulticall, ISelfPermit, ILiquidityManagement {
     /// @notice Emitted when liquidity is increased via deposit
     /// @param sender The msg.sender address
@@ -197,7 +203,7 @@ interface IBunniHub is IMulticall, ISelfPermit, ILiquidityManagement {
     /// Only callable by the owner.
     /// @param tokenList The list of ERC20 tokens to sweep
     /// @param recipient The token recipient address
-    function sweepTokens(IERC20[] calldata tokenList, address recipient) external;
+    function sweepTokens(ERC20[] calldata tokenList, address recipient) external;
 
     /// @notice Updates the protocol fee value. Scaled by 1e18. Only callable by the owner.
     /// @param value The new protocol fee value

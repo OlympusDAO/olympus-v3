@@ -24,6 +24,7 @@ fs_permissions = [
 ]
 solc_version = "0.8.15"
 optimizer = true
+# Default is 200
 optimizer_runs = 10
 
 [fuzz]
