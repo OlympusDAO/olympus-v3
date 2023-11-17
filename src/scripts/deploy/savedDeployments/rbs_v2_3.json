@@ -1,0 +1,49 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusPrice",
+            "args": {
+                "decimals": 18,
+                "observationFrequency": 28800
+            }
+        },
+        {
+            "name": "BunniManager",
+            "args": {
+                "harvestRewardMax": 0,
+                "harvestRewardFee": 0,
+                "harvestFrequency": 0
+            }
+        },
+        {
+            "name": "Appraiser",
+            "args": {}
+        },
+        {
+            "name": "Bookkeeper",
+            "args": {}
+        },
+        {
+            "name": "OlympusHeart",
+            "args": {
+                "maxReward": 0,
+                "auctionDuration": 0
+            }
+        },
+        {
+            "name": "Operator",
+            "args": {
+                "configParams": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            }
+        }
+    ]
+}
