@@ -1023,6 +1023,8 @@ contract OlympusDeploy is Script {
         // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
         uint256 initialCrossChainSupply = abi.decode(args, (uint256));
 
+        // TODO fill in the initialCrossChainSupply value
+
         console2.log("initialCrossChainSupply", initialCrossChainSupply);
 
         // Check that environment variables are loaded
