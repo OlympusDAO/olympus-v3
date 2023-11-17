@@ -16,7 +16,6 @@ import {TRSRYv1_1, CategoryGroup, toCategoryGroup, fromCategoryGroup, toCategory
 import "src/Kernel.sol";
 
 // Tests for OlympusTreasury v1.1
-// TODO
 // Asset Information
 // [X] getAssets - returns all assets configured in the treasury
 //      [X] zero assets

@@ -18,3 +18,11 @@
 [submodule "lib/clones-with-immutable-args"]
 	path = lib/clones-with-immutable-args
 	url = https://github.com/wighawag/clones-with-immutable-args
+[submodule "lib/uniswap-v3-core"]
+	path = lib/uniswap-v3-core
+	url = https://github.com/uniswap/v3-core
+	branch = 0.8
+[submodule "lib/uniswap-v3-periphery"]
+	path = lib/uniswap-v3-periphery
+	url = https://github.com/uniswap/v3-periphery
+	branch = 0.8
