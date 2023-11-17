@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
+import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -14,6 +15,7 @@ import {MockMultiplePoolBalancerVault} from "test/mocks/MockBalancerVault.sol";
 import "src/Submodules.sol";
 import {OlympusSupply, SPPLYv1, Category as SupplyCategory} from "modules/SPPLY/OlympusSupply.sol";
 import {OlympusTreasury, TRSRYv1_1} from "modules/TRSRY/OlympusTreasury.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
@@ -44,6 +46,9 @@ contract AppraiserTest is Test {
 
     address internal daoWallet = address(bytes20("DAO"));
     address internal protocolWallet = address(bytes20("POT"));
+
+    UserFactory public userCreator;
+    address internal policy;
 
     Kernel internal kernel;
 
@@ -93,11 +98,15 @@ contract AppraiserTest is Test {
     uint256 internal POL_BACKING_AT_1 = backingPOL;
     uint256 internal POL_BACKING_AT_2 = 2 * backingPOL;
 
+    uint16 internal APPRAISER_RESERVES_DEVIATION_BPS = 100; // 1%
+
     enum Variant {
         CURRENT,
         LAST,
         ERROR
     }
+
+    event ReservesDeviationBpsSet(uint16 reservesDeviationBps_);
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -123,7 +132,7 @@ contract AppraiserTest is Test {
 
         // Policies
         {
-            appraiser = new Appraiser(kernel);
+            appraiser = new Appraiser(kernel, APPRAISER_RESERVES_DEVIATION_BPS);
             bookkeeper = new Bookkeeper(kernel);
             rolesAdmin = new RolesAdmin(kernel);
         }
@@ -153,11 +162,21 @@ contract AppraiserTest is Test {
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
 
+        // Create users
+        userCreator = new UserFactory();
+        {
+            address[] memory users = userCreator.create(1);
+            policy = users[0];
+        }
+
         // Roles management
         {
             // Bookkeeper roles
             rolesAdmin.grantRole("bookkeeper_policy", address(this));
             rolesAdmin.grantRole("bookkeeper_admin", address(this));
+
+            // Appraiser roles
+            rolesAdmin.grantRole("appraiser_policy", policy);
         }
 
         // Configure assets
@@ -1298,6 +1317,50 @@ contract AppraiserTest is Test {
         (cacheValue, timestamp) = appraiser.metricCache(IAppraiser.Metric.BACKING);
         assertEq(cacheValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
         assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    // [X] setReservesDeviationBps
+    //  [X] reverts if not owner
+    //  [X] reverts if deviation is too high
+    //  [X] sets deviation
+
+    function test_setReservesDeviationBps_notOwner_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("appraiser_policy")
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.setReservesDeviationBps(10_000);
+    }
+
+    function test_setReservesDeviationBps_tooHigh_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_InvalidParams.selector,
+            0,
+            abi.encode(10_001)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        vm.prank(policy);
+        appraiser.setReservesDeviationBps(10_001);
+    }
+
+    function test_setReservesDeviationBps() public {
+        // Expect event to be emitted
+        vm.expectEmit(true, false, false, false);
+        emit ReservesDeviationBpsSet(500);
+
+        // Set deviation
+        vm.prank(policy);
+        appraiser.setReservesDeviationBps(500);
+
+        // Assert deviation is set
+        assertEq(appraiser.reservesDeviationBps(), 500);
     }
 }
 

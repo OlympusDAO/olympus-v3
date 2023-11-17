@@ -538,12 +538,15 @@ contract OlympusDeploy is Script {
         return address(BLREG);
     }
 
-    function _deployAppraiser(bytes memory) public returns (address) {
-        // No additional arguments for Appraiser module
+    function _deployAppraiser(bytes memory args) public returns (address) {
+        // Decode arguments for Appraiser policy
+        (uint16 reservesDeviationBps) = abi.decode(args, (uint16));
+
+        console2.log("   reservesDeviationBps", reservesDeviationBps); // e.g. 100 = 1%
 
         // Deploy Appraiser module
         vm.broadcast();
-        appraiser = new Appraiser(kernel);
+        appraiser = new Appraiser(kernel, reservesDeviationBps);
         console2.log("Appraiser deployed at:", address(appraiser));
 
         return address(appraiser);

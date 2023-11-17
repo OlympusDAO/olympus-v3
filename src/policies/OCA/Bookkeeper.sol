@@ -56,6 +56,20 @@ contract Bookkeeper is Policy, RolesConsumer {
         PRICE = PRICEv2(getModuleAddress(dependencies[1]));
         SPPLY = SPPLYv1(getModuleAddress(dependencies[2]));
         TRSRY = TRSRYv1_1(getModuleAddress(dependencies[3]));
+
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 SPPLY_MAJOR, ) = SPPLY.VERSION();
+        (uint8 TRSRY_MAJOR, uint8 TRSRY_MINOR) = TRSRY.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([2, 1, 1, 1]);
+        if (PRICE_MAJOR != 2 || ROLES_MAJOR != 1 || SPPLY_MAJOR != 1 || TRSRY_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
+
+        // Check TRSRY minor version
+        if (TRSRY_MINOR < 1) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy

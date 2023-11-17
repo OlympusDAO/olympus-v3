@@ -5,13 +5,19 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import "src/Kernel.sol";
+import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {IAppraiser} from "src/policies/OCA/interfaces/IAppraiser.sol";
 import {TRSRYv1_1, Category as TreasuryCategory, toCategory as toTreasuryCategory} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {SPPLYv1, toCategory as toSupplyCategory} from "src/modules/SPPLY/SPPLY.v1.sol";
 
-contract Appraiser is IAppraiser, Policy {
+contract Appraiser is IAppraiser, Policy, RolesConsumer {
     // ========== EVENTS ========== //
+
+    /// @notice                         Emitted when the reserves deviation is updated
+    ///
+    /// @param reservesDeviationBps_    The new value of the reserves deviation
+    event ReservesDeviationBpsSet(uint16 reservesDeviationBps_);
 
     // ========== ERRORS ========== //
 
@@ -67,20 +73,39 @@ contract Appraiser is IAppraiser, Policy {
     //                                     POLICY SETUP                                           //
     //============================================================================================//
 
-    constructor(Kernel kernel_) Policy(kernel_) {
-        // TODO add reservesDeviationBps as argument
+    constructor(Kernel kernel_, uint16 reservesDeviationBps_) Policy(kernel_) {
+        reservesDeviationBps = reservesDeviationBps_;
+
+        emit ReservesDeviationBpsSet(reservesDeviationBps_);
     }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
-        dependencies[0] = toKeycode("PRICE");
-        dependencies[1] = toKeycode("SPPLY");
-        dependencies[2] = toKeycode("TRSRY");
+        dependencies = new Keycode[](4);
+        dependencies[0] = toKeycode("ROLES");
+        dependencies[1] = toKeycode("PRICE");
+        dependencies[2] = toKeycode("SPPLY");
+        dependencies[3] = toKeycode("TRSRY");
 
-        PRICE = PRICEv2(getModuleAddress(dependencies[0]));
-        SPPLY = SPPLYv1(getModuleAddress(dependencies[1]));
-        TRSRY = TRSRYv1_1(getModuleAddress(dependencies[2]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[0]));
+        PRICE = PRICEv2(getModuleAddress(dependencies[1]));
+        SPPLY = SPPLYv1(getModuleAddress(dependencies[2]));
+        TRSRY = TRSRYv1_1(getModuleAddress(dependencies[3]));
+
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 SPPLY_MAJOR, ) = SPPLY.VERSION();
+        (uint8 TRSRY_MAJOR, uint8 TRSRY_MINOR) = TRSRY.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([2, 1, 1, 1]);
+        if (PRICE_MAJOR != 2 || ROLES_MAJOR != 1 || SPPLY_MAJOR != 1 || TRSRY_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
+
+        // Check TRSRY minor version
+        if (TRSRY_MINOR < 1) revert Policy_WrongModuleVersion(expected);
+
         ohm = address(SPPLY.ohm());
         decimals = PRICE.decimals();
         priceScale = 10 ** decimals;
@@ -569,6 +594,27 @@ contract Appraiser is IAppraiser, Policy {
     function storeMetric(Metric metric_) external override {
         (uint256 result, uint48 timestamp) = getMetric(metric_, Variant.CURRENT);
         metricCache[metric_] = Cache(result, timestamp);
+    }
+
+    //============================================================================================//
+    //                                       ADMIN                                                //
+    //============================================================================================//
+
+    /// @notice                         Sets the deviation allowed between the reserves and lookup price of a pool token
+    /// @notice                         This is used to mitigate the risk of price manipulation by third-party actors
+    /// @dev                            This function will revert if:
+    /// @dev                            - `reservesDeviationBps_` is greater than the maximum allowed, `DEVIATION_MAX`
+    ///
+    /// @param reservesDeviationBps_    The new value of the reserves deviation
+    function setReservesDeviationBps(uint16 reservesDeviationBps_) external onlyRole("appraiser_policy") {
+        // Check bounds
+        if (reservesDeviationBps_ > DEVIATION_MAX) {
+            revert Appraiser_InvalidParams(0, abi.encode(reservesDeviationBps_));
+        }
+
+        reservesDeviationBps = reservesDeviationBps_;
+
+        emit ReservesDeviationBpsSet(reservesDeviationBps_);
     }
 
     //============================================================================================//
