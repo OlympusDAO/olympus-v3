@@ -68,6 +68,7 @@ import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
 import {AuraBalancerSupply} from "modules/SPPLY/submodules/AuraBalancerSupply.sol";
 import {BLVaultSupply} from "modules/SPPLY/submodules/BLVaultSupply.sol";
 import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
+import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
 
 // External contracts
 import {BunniHub} from "src/external/bunni/BunniHub.sol";
@@ -114,6 +115,7 @@ contract OlympusDeploy is Script {
     AuraBalancerSupply public auraBalancerSupply;
     BLVaultSupply public blVaultSupply;
     BunniSupply public bunniSupply;
+    MigrationOffsetSupply public migrationOffsetSupply;
 
     // Policies
     Operator public operator;
@@ -238,6 +240,7 @@ contract OlympusDeploy is Script {
         selectorMap["AuraBalancerSupply"] = this._deployAuraBalancerSupply.selector;
         selectorMap["BLVaultSupply"] = this._deployBLVaultSupply.selector;
         selectorMap["BunniSupply"] = this._deployBunniSupply.selector;
+        selectorMap["MigrationOffsetSupply"] = this._deployMigrationOffsetSupply.selector;
 
         // Load environment addresses
         env = vm.readFile("./src/scripts/env.json");
@@ -335,6 +338,9 @@ contract OlympusDeploy is Script {
         );
         blVaultSupply = BLVaultSupply(envAddress("olympus.submodules.SPPLY.BLVaultSupply"));
         bunniSupply = BunniSupply(envAddress("olympus.submodules.SPPLY.BunniSupply"));
+        migrationOffsetSupply = MigrationOffsetSupply(
+            envAddress("olympus.submodules.SPPLY.MigrationOffsetSupply")
+        );
 
         // External contracts
         bunniHub = BunniHub(envAddress("external.UniswapV3.BunniHub"));
@@ -1187,6 +1193,23 @@ contract OlympusDeploy is Script {
         console2.log("BunniSupply deployed at:", address(bunniSupply));
 
         return address(bunniSupply);
+    }
+
+    function _deployMigrationOffsetSupply(bytes memory args) public returns (address) {
+        // Decode arguments for MigrationOffsetSupply submodule
+        (uint256 migrationOffset) = abi.decode(args, (uint256));
+
+        console2.log("migrationOffset", migrationOffset);
+
+        // Check that the environment variables are loaded
+        if (address(SPPLY) == address(0)) revert("SPPLY address not set");
+
+        // Deploy MigrationOffsetSupply submodule
+        vm.broadcast();
+        migrationOffsetSupply = new MigrationOffsetSupply(SPPLY, migrationOffset);
+        console2.log("MigrationOffsetSupply deployed at:", address(migrationOffsetSupply));
+
+        return address(migrationOffsetSupply);
     }
 
     // ========== VERIFICATION ========== //
