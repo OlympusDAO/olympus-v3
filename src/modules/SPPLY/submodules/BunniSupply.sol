@@ -123,6 +123,10 @@ contract BunniSupply is SupplySubmodule {
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Returns the total of OHM and non-OHM reserves in the submodule
+    ///
+    /// @dev        NOTE: The result of this function is susceptible to manipulation by a third-party.
+    /// @dev        Sanity-checks should be performed on the reserve values if they are to be used
+    /// @dev        for any critical calculations.
     function getProtocolOwnedLiquidityReserves()
         external
         view
