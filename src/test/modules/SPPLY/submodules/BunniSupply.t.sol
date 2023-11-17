@@ -1,29 +1,39 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.15;
 
+// Test
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
+// Mocks
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockGohm} from "test/mocks/OlympusMocks.sol";
 import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 
+// Libraries
 import {FullMath} from "libraries/FullMath.sol";
+import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
+import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
+// Uniswap V3
+import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
+import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+
+// Bophades Modules
+import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 import "src/modules/SPPLY/OlympusSupply.sol";
+
+// SPPLY Submodules
 import {BunniSupply} from "src/modules/SPPLY/submodules/BunniSupply.sol";
+
+// Bunni external contracts
 import {BunniHub} from "src/external/bunni/BunniHub.sol";
 import {BunniLens} from "src/external/bunni/BunniLens.sol";
 import {BunniToken} from "src/external/bunni/BunniToken.sol";
 import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
-
-import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
-import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
-
-import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 
 contract BunniSupplyTest is Test {
     using FullMath for uint256;
@@ -331,6 +341,7 @@ contract BunniSupplyTest is Test {
     //  [X] no tokens
     //  [X] single token
     //  [X] multiple tokens
+    //  [ ] reverts on TWAP deviation
 
     function test_getProtocolOwnedLiquidityReserves_noTokens() public {
         // Don't add the token
@@ -408,6 +419,55 @@ contract BunniSupplyTest is Test {
         assertEq(reserves[1].balances.length, 2);
         assertEq(reserves[1].balances[0], ohmReservesTwo_);
         assertEq(reserves[1].balances[1], wethReservesTwo_);
+    }
+
+    function test_getProtocolOwnedLiquidityReserves_twapDeviationReverts() public {
+        // Register one token
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+
+        // Determine the amount of reserves in the pool, which should be consistent with the lens value
+        (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
+        console2.log("ohmReserves_", ohmReserves_);
+        console2.log("usdcReserves_", usdcReserves_);
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // Decimals: 6 (USDC)
+        console2.log("reservesRatio", reservesRatio);
+
+        // Mock the pool returning a TWAP that deviates enough to revert
+        int56 tickCumulative0_ = -2416639538393;
+        int56 tickCumulative1_ = -2416640880953;
+        int56[] memory tickCumulatives = new int56[](2);
+        tickCumulatives[0] = tickCumulative0_;
+        tickCumulatives[1] = tickCumulative1_;
+        uniswapPool.setTickCumulatives(tickCumulatives);
+        int24 timeWeightedTick = int24((tickCumulative1_ - tickCumulative0_) / 30);
+
+        uint256 lookupInQuote = OracleLibrary.getQuoteAtTick(
+            timeWeightedTick,
+            uint128(10 ** 9), // OHM quantity
+            ohmAddress,
+            usdcAddress
+        );
+        console2.log("lookupInQuote", lookupInQuote);
+
+        int24 tick = TickMath.getTickAtSqrtRatio(POOL_SQRTPRICEX96);
+        console2.log("tick", tick);
+
+        uint256 token0Amount = uint256((POOL_SQRTPRICEX96 / (2 ** 96)) ** 2).mulDiv(10 ** 9, 10 ** 6);
+        console2.log("token0Amount", token0Amount);
+        uint256 token1Amount = (10 ** 9 / token0Amount);
+        console2.log("token1Amount", token1Amount);
+
+        // Set up revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_ReserveDeviation.selector,
+            address(poolTokenAddress),
+            reservesRatio
+        );
+        vm.expectRevert(err);
+
+        submoduleBunniSupply
+            .getProtocolOwnedLiquidityReserves();
     }
 
     // =========  addBunniToken ========= //

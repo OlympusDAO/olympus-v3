@@ -1491,6 +1491,8 @@ contract BunniManagerTest is Test {
         // Check that the price is non-zero
         assertTrue(PRICE.getPrice(address(poolToken)) > 0);
 
+        // TODO mock TWAP, check for TWAP deviation
+
         // Check that the token is included in SPPLY metrics
         uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
         assertTrue(polo > 0);

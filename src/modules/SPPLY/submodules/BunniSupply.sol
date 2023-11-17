@@ -15,17 +15,28 @@ contract BunniSupply is SupplySubmodule {
     // ========== ERRORS ========== //
 
     /// @notice             The specified token is not a valid BunniToken
+    ///
     /// @param token_       The address of the token
     error BunniSupply_Params_InvalidBunniToken(address token_);
 
     /// @notice             The specified lens is not a valid BunniLens
+    ///
     /// @param lens_        The address of the lens
     error BunniSupply_Params_InvalidBunniLens(address lens_);
 
     /// @notice             The token and lens do not have the same BunniHub address
+    ///
     /// @param tokenHub_    The BunniHub address of the token
     /// @param lensHub_     The BunniHub address of the lens
     error BunniSupply_Params_HubMismatch(address tokenHub_, address lensHub_);
+
+    /// @notice                     The deviation between the reserves and TWAP is too high
+    /// @notice                     This indicates that the pool reserves have been manipulated
+    ///
+    /// @param token_               The address of the token
+    /// @param reservesTokenRatio_  The ratio of token0 to token1 from the position reserves
+    /// @param twapTokenRatio_      The ratio of token0 to token1 from the TWAP
+    error BunniSupply_ReserveDeviation(address token_, uint256 reservesTokenRatio_, uint256 twapTokenRatio_);
 
     // ========== EVENTS ========== //
 
@@ -56,6 +67,9 @@ contract BunniSupply is SupplySubmodule {
     /// @notice     The address of the OHM token
     /// @dev        Set at deployment-time
     address internal immutable ohm;
+
+    // TODO shift to addBunniToken parameter
+    uint16 constant internal MAX_RESERVE_DEVIATION = 100; // 1%
 
     // ========== CONSTRUCTOR ========== //
 
@@ -190,6 +204,8 @@ contract BunniSupply is SupplySubmodule {
     function addBunniToken(address token_, address bunniLens_) external onlyParent {
         if (token_ == address(0) || _inTokenArray(token_))
             revert BunniSupply_Params_InvalidBunniToken(token_);
+
+        // TODO add observation window (seconds), deviation bps
 
         if (bunniLens_ == address(0)) revert BunniSupply_Params_InvalidBunniLens(bunniLens_);
 
