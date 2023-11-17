@@ -10,8 +10,18 @@ interface IgOHM is IERC20 {
 
     function index() external view returns (uint256);
 
+    /**
+        @notice converts gOHM amount to OHM
+        @param _amount uint
+        @return uint
+     */
     function balanceFrom(uint256 _amount) external view returns (uint256);
 
+    /**
+        @notice converts OHM amount to gOHM
+        @param _amount uint
+        @return uint
+     */
     function balanceTo(uint256 _amount) external view returns (uint256);
 
     function migrate(address _staking, address _sOHM) external;
