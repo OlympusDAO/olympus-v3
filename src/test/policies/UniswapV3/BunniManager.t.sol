@@ -1830,6 +1830,23 @@ contract BunniManagerTest is Test {
         assertEq(ohm.totalSupply(), ohmSupplyBefore);
     }
 
+    function test_deposit_invalidUnderlyingTokenReverts() public {
+        // Deploy the token
+        vm.prank(policy);
+        IBunniToken bunniToken = bunniManager.deployPoolToken(address(pool));
+
+        // Expect a revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniManager.BunniManager_Params_InvalidUnderlyingToken.selector,
+            address(wETH)
+        );
+        vm.expectRevert(err);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(address(pool), address(wETH), 1e9, 1e6, SLIPPAGE_DEFAULT);
+    }
+
     function test_deposit_ohmToken_fuzz(uint256 amount_) public {
         uint256 amount = bound(amount_, 100e6, 1e12);
         uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
