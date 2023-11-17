@@ -154,6 +154,8 @@ contract OlympusDeploy is Script {
     ERC20 public bal;
     ERC20 public gOHM;
 
+    address public migrationContract;
+
     // Bond system addresses
     IBondSDA public bondAuctioneer;
     IBondSDA public bondFixedExpiryAuctioneer;
@@ -253,6 +255,7 @@ contract OlympusDeploy is Script {
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
         aura = ERC20(envAddress("external.tokens.AURA"));
         bal = ERC20(envAddress("external.tokens.BAL"));
+        migrationContract = envAddress("olympus.legacy.Migration");
         bondAuctioneer = IBondSDA(envAddress("external.bond-protocol.BondFixedTermAuctioneer"));
         bondFixedExpiryAuctioneer = IBondSDA(
             envAddress("external.bond-protocol.BondFixedExpiryAuctioneer")
@@ -1203,10 +1206,11 @@ contract OlympusDeploy is Script {
 
         // Check that the environment variables are loaded
         if (address(SPPLY) == address(0)) revert("SPPLY address not set");
+        if (migrationContract == address(0)) revert("migrationContract address not set");
 
         // Deploy MigrationOffsetSupply submodule
         vm.broadcast();
-        migrationOffsetSupply = new MigrationOffsetSupply(SPPLY, migrationOffset);
+        migrationOffsetSupply = new MigrationOffsetSupply(SPPLY, migrationContract, migrationOffset);
         console2.log("MigrationOffsetSupply deployed at:", address(migrationOffsetSupply));
 
         return address(migrationOffsetSupply);
