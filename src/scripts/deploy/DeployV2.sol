@@ -470,11 +470,11 @@ contract OlympusDeploy is Script {
             uint256 thresholdFactor
         ) = abi.decode(args, (uint256, uint256, uint256, uint256, uint256));
 
-        console2.log("highCushionSpread", highCushionSpread);
-        console2.log("highWallSpread", highWallSpread);
-        console2.log("lowCushionSpread", lowCushionSpread);
-        console2.log("lowWallSpread", lowWallSpread);
-        console2.log("thresholdFactor", thresholdFactor);
+        console2.log("   highCushionSpread", highCushionSpread);
+        console2.log("   highWallSpread", highWallSpread);
+        console2.log("   lowCushionSpread", lowCushionSpread);
+        console2.log("   lowWallSpread", lowWallSpread);
+        console2.log("   thresholdFactor", thresholdFactor);
 
         // Deploy Range module
         vm.broadcast();
@@ -584,20 +584,21 @@ contract OlympusDeploy is Script {
         if (address(ohm) == address(0)) revert("OHM address not set");
         if (address(reserve) == address(0)) revert("Reserve address not set");
 
-        console2.log("kernel", address(kernel));
-        console2.log("appraiser", address(appraiser));
-        console2.log("bondAuctioneer", address(bondAuctioneer));
-        console2.log("callback", address(callback));
-        console2.log("ohm", address(ohm));
-        console2.log("reserve", address(reserve));
-        console2.log("cushionDebtBuffer", cushionDebtBuffer);
-        console2.log("cushionDepositInterval", cushionDepositInterval);
-        console2.log("cushionDuration", cushionDuration);
-        console2.log("cushionFactor", cushionFactor);
-        console2.log("regenObserve", regenObserve);
-        console2.log("regenThreshold", regenThreshold);
-        console2.log("regenWait", regenWait);
-        console2.log("reserveFactor", reserveFactor);
+        console2.log("   kernel", address(kernel));
+        console2.log("   appraiser", address(appraiser));
+        console2.log("   bondAuctioneer", address(bondAuctioneer));
+        console2.log("   callback", address(callback));
+        console2.log("   ohm", address(ohm));
+        console2.log("   reserve", address(reserve));
+        console2.log("   wrappedReserve", address(wrappedReserve));
+        console2.log("   cushionDebtBuffer", cushionDebtBuffer);
+        console2.log("   cushionDepositInterval", cushionDepositInterval);
+        console2.log("   cushionDuration", cushionDuration);
+        console2.log("   cushionFactor", cushionFactor);
+        console2.log("   regenObserve", regenObserve);
+        console2.log("   regenThreshold", regenThreshold);
+        console2.log("   regenWait", regenWait);
+        console2.log("   reserveFactor", reserveFactor);
 
         // Deploy Operator policy
         vm.broadcast();

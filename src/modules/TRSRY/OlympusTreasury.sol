@@ -9,7 +9,9 @@ import {TransferHelper} from "libraries/TransferHelper.sol";
 import "src/modules/TRSRY/TRSRY.v1.sol";
 import "src/Kernel.sol";
 
-/// @notice Treasury holds all other assets under the control of the protocol.
+/// @title      OlympusTreasury
+/// @author     Oighty
+/// @notice     Treasury holds all other assets under the control of the protocol.
 contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     using TransferHelper for ERC20;
 
@@ -22,14 +24,18 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
 
         // Configure Asset Categories and Groups
 
-        // Liquidity Preference: Liquid, Illiquid
+        // Create category groups
         categoryGroups.push(toCategoryGroup("liquidity-preference"));
+        categoryGroups.push(toCategoryGroup("value-baskets"));
+        categoryGroups.push(toCategoryGroup("market-sensitivity"));
+
+        // Liquidity Preference: Liquid, Illiquid
         categoryToGroup[toCategory("liquid")] = toCategoryGroup("liquidity-preference");
         groupToCategories[toCategoryGroup("liquidity-preference")].push(toCategory("liquid"));
         categoryToGroup[toCategory("illiquid")] = toCategoryGroup("liquidity-preference");
         groupToCategories[toCategoryGroup("liquidity-preference")].push(toCategory("illiquid"));
+
         // Value Baskets: Reserves, Strategic, Protocol-Owned Liquidity
-        categoryGroups.push(toCategoryGroup("value-baskets"));
         categoryToGroup[toCategory("reserves")] = toCategoryGroup("value-baskets");
         groupToCategories[toCategoryGroup("value-baskets")].push(toCategory("reserves"));
         categoryToGroup[toCategory("strategic")] = toCategoryGroup("value-baskets");
@@ -38,8 +44,8 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         groupToCategories[toCategoryGroup("value-baskets")].push(
             toCategory("protocol-owned-liquidity")
         );
+
         // Market Sensitivity: Stable, Volatile
-        categoryGroups.push(toCategoryGroup("market-sensitivity"));
         categoryToGroup[toCategory("stable")] = toCategoryGroup("market-sensitivity");
         groupToCategories[toCategoryGroup("market-sensitivity")].push(toCategory("stable"));
         categoryToGroup[toCategory("volatile")] = toCategoryGroup("market-sensitivity");
@@ -62,6 +68,8 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     //============================================================================================//
 
     /// @inheritdoc TRSRYv1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
     function increaseWithdrawApproval(
         address withdrawer_,
         ERC20 token_,
@@ -78,6 +86,8 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
     function decreaseWithdrawApproval(
         address withdrawer_,
         ERC20 token_,
@@ -92,6 +102,9 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The module is not active
     function withdrawReserves(
         address to_,
         ERC20 token_,
@@ -107,6 +120,8 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     // =========  DEBT FUNCTIONS ========= //
 
     /// @inheritdoc TRSRYv1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
     function increaseDebtorApproval(
         address debtor_,
         ERC20 token_,
@@ -118,6 +133,8 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
     function decreaseDebtorApproval(
         address debtor_,
         ERC20 token_,
@@ -129,6 +146,9 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The module is not active
     function incurDebt(
         ERC20 token_,
         uint256 amount_
@@ -145,6 +165,9 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The debt for `token_` and `debtor_` is 0
     function repayDebt(
         address debtor_,
         ERC20 token_,
@@ -169,6 +192,8 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
     function setDebt(
         address debtor_,
         ERC20 token_,
@@ -185,11 +210,15 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
     function deactivate() external override permissioned {
         active = false;
     }
 
     /// @inheritdoc TRSRYv1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
     function activate() external override permissioned {
         active = true;
     }
@@ -220,6 +249,8 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - `category_` is not a valid category
     function getAssetsByCategory(
         Category category_
     ) public view override returns (address[] memory) {
@@ -255,6 +286,10 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - `asset_` is not approved
+    /// @dev        - `variant_` is invalid
+    /// @dev        - There is an error when determining the balance
     function getAssetBalance(
         address asset_,
         Variant variant_
@@ -272,7 +307,13 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         }
     }
 
+    /// @notice         Returns the current balance of `asset_` (including debt) across all locations
+    ///
+    /// @param asset_   The asset to get the balance of
+    /// @return         The current balance of `asset_`
+    /// @return         The timestamp of the current balance
     function _getCurrentBalance(address asset_) internal view returns (uint256, uint48) {
+        // Cast asset to ERC20
         Asset memory asset = assetData[asset_];
         ERC20 token = ERC20(asset_);
 
@@ -291,12 +332,20 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         return (balance, uint48(block.timestamp));
     }
 
+    /// @notice        Returns the last cached balance of `asset_` (including debt) across all locations
+    ///
+    /// @param asset_  The asset to get the balance of
+    /// @return        The last cached balance of `asset_`
+    /// @return        The timestamp of the last cached balance
     function _getLastBalance(address asset_) internal view returns (uint256, uint48) {
         // Return last balance and time
         return (assetData[asset_].lastBalance, assetData[asset_].updatedAt);
     }
 
     /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `asset_` is not approved
     function storeBalance(address asset_) external override permissioned returns (uint256) {
         Asset storage asset = assetData[asset_];
 
@@ -317,6 +366,9 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - `category_` is invalid
+    /// @dev        - `getAssetsByCategory()` reverts
     function getCategoryBalance(
         Category category_,
         Variant variant_
@@ -329,18 +381,21 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         // Get category assets
         address[] memory categoryAssets = getAssetsByCategory(category_);
 
-        // Get balance for each asset and add to total
+        // Get balance for each asset in the category and add to total
         uint256 len = categoryAssets.length;
         uint256 balance;
         uint48 time;
         for (uint256 i; i < len; ) {
             (uint256 assetBalance, uint48 assetTime) = getAssetBalance(categoryAssets[i], variant_);
             balance += assetBalance;
+
+            // Get the most outdated time
             if (i == 0) {
                 time = assetTime;
             } else if (assetTime < time) {
                 time = assetTime;
             }
+
             unchecked {
                 ++i;
             }
@@ -352,6 +407,11 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     // ========== DATA MANAGEMENT ========== //
 
     /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `asset_` is already approved
+    /// @dev        - `asset_` is not a contract
+    /// @dev        - `locations_` contains the zero address
     function addAsset(
         address asset_,
         address[] calldata locations_
@@ -384,6 +444,57 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `asset_` is not approved
+    function removeAsset(address asset_) external override permissioned {
+        Asset storage asset = assetData[asset_];
+
+        // Check that asset is approved
+        if (!asset.approved) revert TRSRY_AssetNotApproved(asset_);
+
+        // Remove asset
+        uint256 len = assets.length;
+        for (uint256 i; i < len; ) {
+            if (assets[i] == asset_) {
+                assets[i] = assets[len - 1];
+                assets.pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Remove locations
+        len = asset.locations.length;
+        for (uint256 i; i < len; ) {
+            asset.locations[i] = asset.locations[len - 1];
+            asset.locations.pop();
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Remove categorization
+        len = categoryGroups.length;
+        for (uint256 i; i < len; ) {
+            categorization[asset_][categoryGroups[i]] = toCategory(bytes32(0));
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Remove asset data
+        delete assetData[asset_];
+    }
+
+    /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `asset_` is not approved
+    /// @dev        - `location_` is the zero address
+    /// @dev        - `location_` is already added to `asset_`
     function addAssetLocation(address asset_, address location_) external override permissioned {
         Asset storage asset = assetData[asset_];
 
@@ -408,6 +519,9 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `asset_` is not approved
     function removeAssetLocation(address asset_, address location_) external override permissioned {
         Asset storage asset = assetData[asset_];
 
@@ -430,7 +544,15 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `group_` exists
+    /// @dev        - `group_` is empty or 0
     function addCategoryGroup(CategoryGroup group_) external override permissioned {
+        // Check if the category group is valid
+        if (fromCategoryGroup(group_) == bytes32(0))
+            revert TRSRY_InvalidParams(0, abi.encode(group_));
+
         // Check if the category group exists
         if (_categoryGroupExists(group_)) revert TRSRY_CategoryGroupExists(group_);
 
@@ -439,9 +561,40 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `group_` does not exist
+    function removeCategoryGroup(CategoryGroup group_) external override permissioned {
+        // Check if the category group exists
+        if (!_categoryGroupExists(group_)) revert TRSRY_CategoryGroupDoesNotExist(group_);
+
+        // Remove category group
+        uint256 len = categoryGroups.length;
+        for (uint256 i; i < len; ) {
+            if (fromCategoryGroup(categoryGroups[i]) == fromCategoryGroup(group_)) {
+                categoryGroups[i] = categoryGroups[len - 1];
+                categoryGroups.pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `group_` does not exist
+    /// @dev        - `category_` is empty or 0
+    /// @dev        - `category_` exists
     function addCategory(Category category_, CategoryGroup group_) external override permissioned {
         // Check if the category group exists
         if (!_categoryGroupExists(group_)) revert TRSRY_CategoryGroupDoesNotExist(group_);
+
+        // Check if the category is valid
+        if (fromCategory(category_) == bytes32(0))
+            revert TRSRY_InvalidParams(0, abi.encode(category_));
 
         // Check if the category exists by seeing if it has a non-zero category group
         if (fromCategoryGroup(categoryToGroup[category_]) != bytes32(0))
@@ -452,6 +605,36 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         groupToCategories[group_].push(category_);
     }
 
+    /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `category_` does not exist
+    function removeCategory(Category category_) external override permissioned {
+        // Check if the category exists by seeing if it has a non-zero category group
+        CategoryGroup group = categoryToGroup[category_];
+        if (fromCategoryGroup(group) == bytes32(0)) revert TRSRY_CategoryDoesNotExist(category_);
+
+        // Remove category data
+        categoryToGroup[category_] = toCategoryGroup(bytes32(0));
+
+        // Remove category from group
+        uint256 len = groupToCategories[group].length;
+        for (uint256 i; i < len; ) {
+            if (fromCategory(groupToCategories[group][i]) == fromCategory(category_)) {
+                groupToCategories[group][i] = groupToCategories[group][len - 1];
+                groupToCategories[group].pop();
+                break;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @notice                 Checks if a category group exists
+    ///
+    /// @param categoryGroup_   The category group to check
+    /// @return                 True if the category group exists, otherwise false
     function _categoryGroupExists(CategoryGroup categoryGroup_) internal view returns (bool) {
         // It's expected that the number of category groups will be fairly small
         // so we should be able to iterate through them instead of creating a mapping
@@ -467,6 +650,10 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `asset_` is not approved
+    /// @dev        - `category_` does not exist
     function categorize(address asset_, Category category_) external override permissioned {
         // Check that asset is initialized
         if (!assetData[asset_].approved) revert TRSRY_InvalidParams(0, abi.encode(asset_));
@@ -477,5 +664,23 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
 
         // Store category data for address
         categorization[asset_][group] = category_;
+    }
+
+    /// @inheritdoc TRSRYv1_1
+    /// @dev        This function reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - `asset_` is not approved
+    /// @dev        - `category_` does not contain `asset_`
+    function uncategorize(address asset_, Category category_) external override permissioned {
+        // Check that asset is initialized
+        if (!assetData[asset_].approved) revert TRSRY_InvalidParams(0, abi.encode(asset_));
+
+        // Check that the asset is in the category
+        CategoryGroup group = categoryToGroup[category_];
+        if (fromCategory(categorization[asset_][group]) != fromCategory(category_))
+            revert TRSRY_AssetNotInCategory(asset_, category_);
+
+        // Remove category data for address
+        categorization[asset_][group] = toCategory(bytes32(0));
     }
 }
