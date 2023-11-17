@@ -540,7 +540,7 @@ contract OlympusDeploy is Script {
 
     function _deployAppraiser(bytes memory args) public returns (address) {
         // Decode arguments for Appraiser policy
-        (uint16 reservesDeviationBps) = abi.decode(args, (uint16));
+        uint16 reservesDeviationBps = abi.decode(args, (uint16));
 
         console2.log("   reservesDeviationBps", reservesDeviationBps); // e.g. 100 = 1%
 

@@ -606,7 +606,9 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     /// @dev                            - `reservesDeviationBps_` is greater than the maximum allowed, `DEVIATION_MAX`
     ///
     /// @param reservesDeviationBps_    The new value of the reserves deviation
-    function setReservesDeviationBps(uint16 reservesDeviationBps_) external onlyRole("appraiser_policy") {
+    function setReservesDeviationBps(
+        uint16 reservesDeviationBps_
+    ) external onlyRole("appraiser_policy") {
         // Check bounds
         if (reservesDeviationBps_ > DEVIATION_MAX) {
             revert Appraiser_InvalidParams(0, abi.encode(reservesDeviationBps_));
