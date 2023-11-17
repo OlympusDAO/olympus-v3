@@ -77,8 +77,16 @@ contract AppraiserTest is Test {
     uint256 internal constant BALANCER_POOL_OHM_BALANCE = 10e9; // 10 OHM
     uint256 internal constant BALANCER_POOL_TOTAL_SUPPLY = 100e18; // 100 LP
     uint256 internal constant BPT_BALANCE = 1e18;
-    uint256 internal constant BPT_PRICE = (BALANCER_POOL_RESERVE_BALANCE * RESERVE_PRICE / 1e18 + BALANCER_POOL_OHM_BALANCE * OHM_PRICE / 1e9) * 1e18 / BALANCER_POOL_TOTAL_SUPPLY; // (100 RSV * $1 + 10 OHM * $10) / total supply
-    uint256 internal constant BPT_PRICE_2 = (BALANCER_POOL_RESERVE_BALANCE * RESERVE_PRICE_2 / 1e18 + BALANCER_POOL_OHM_BALANCE * OHM_PRICE / 1e9) * 1e18 / BALANCER_POOL_TOTAL_SUPPLY; // (100 RSV * $2 + 10 OHM * $10) / total supply
+    uint256 internal constant BPT_PRICE =
+        (((BALANCER_POOL_RESERVE_BALANCE * RESERVE_PRICE) /
+            1e18 +
+            (BALANCER_POOL_OHM_BALANCE * OHM_PRICE) /
+            1e9) * 1e18) / BALANCER_POOL_TOTAL_SUPPLY; // (100 RSV * $1 + 10 OHM * $10) / total supply
+    uint256 internal constant BPT_PRICE_2 =
+        (((BALANCER_POOL_RESERVE_BALANCE * RESERVE_PRICE_2) /
+            1e18 +
+            (BALANCER_POOL_OHM_BALANCE * OHM_PRICE) /
+            1e9) * 1e18) / BALANCER_POOL_TOTAL_SUPPLY; // (100 RSV * $2 + 10 OHM * $10) / total supply
     uint256 internal backingPOL =
         BPT_BALANCE.mulDiv(BALANCER_POOL_RESERVE_BALANCE, BALANCER_POOL_TOTAL_SUPPLY);
     uint256 internal POL_VALUE_AT_1 = BPT_BALANCE.mulDiv(BPT_PRICE, 1e18);
@@ -1176,7 +1184,11 @@ contract AppraiserTest is Test {
         balancerVault.setBalances(balancerPoolId, balancerPoolBalances);
 
         // Calculate the POL price from reserves
-        uint256 derivedPolPrice = (balancerPoolBalances[0].mulDiv(RESERVE_PRICE, 1e18) + balancerPoolBalances[1].mulDiv(OHM_PRICE, 1e9)).mulDiv(BPT_BALANCE, BALANCER_POOL_TOTAL_SUPPLY);
+        uint256 derivedPolPrice = (balancerPoolBalances[0].mulDiv(RESERVE_PRICE, 1e18) +
+            balancerPoolBalances[1].mulDiv(OHM_PRICE, 1e9)).mulDiv(
+                BPT_BALANCE,
+                BALANCER_POOL_TOTAL_SUPPLY
+            );
 
         // Expect revert
         bytes memory err = abi.encodeWithSelector(

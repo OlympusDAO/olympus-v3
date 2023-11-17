@@ -37,7 +37,11 @@ contract Appraiser is IAppraiser, Policy {
     /// @param asset_           The address of the pool token that had a mismatch
     /// @param reservesPrice_   The price of the pool token derived from the reserves
     /// @param lookupPrice_     The price of the pool token derived from the PRICE lookup
-    error Appraiser_ReservesPriceMismatch(address asset_, uint256 reservesPrice_, uint256 lookupPrice_);
+    error Appraiser_ReservesPriceMismatch(
+        address asset_,
+        uint256 reservesPrice_,
+        uint256 lookupPrice_
+    );
 
     // ========== STATE ========== //
 
@@ -331,10 +335,7 @@ contract Appraiser is IAppraiser, Policy {
             for (uint256 j; j < tokenLen; ) {
                 address currentToken = reserves[i].tokens[j];
                 // Get current asset price
-                (uint256 price, ) = PRICE.getPrice(
-                    currentToken,
-                    PRICEv2.Variant.CURRENT
-                );
+                (uint256 price, ) = PRICE.getPrice(currentToken, PRICEv2.Variant.CURRENT);
 
                 // Calculate current asset valuation
                 uint256 tokenValue = (price * reserves[i].balances[j]) /
@@ -358,9 +359,12 @@ contract Appraiser is IAppraiser, Policy {
                     reserves[i].source,
                     PRICEv2.Variant.MOVINGAVERAGE
                 );
-                
+
                 // Get the balance of the pool token
-                (uint256 poolTokenBalance, ) = TRSRY.getAssetBalance(reserves[i].source, TRSRYv1_1.Variant.CURRENT);
+                (uint256 poolTokenBalance, ) = TRSRY.getAssetBalance(
+                    reserves[i].source,
+                    TRSRYv1_1.Variant.CURRENT
+                );
                 // If the balance is zero, the unit price cannot be determined.
                 // Additionally, the balance cannot be zero if reserves are being returned.
                 if (poolTokenBalance == 0) {
@@ -368,15 +372,18 @@ contract Appraiser is IAppraiser, Policy {
                 }
 
                 // Determine the unit price of a single pool token
-                uint256 poolTokenReservesUnitPrice = poolTokenReservesValue * 1e18 / poolTokenBalance;
+                uint256 poolTokenReservesUnitPrice = (poolTokenReservesValue * 1e18) /
+                    poolTokenBalance;
 
                 // Check if the absolute deviation between the lookup and reserves price differs by more than reservesDeviationBps
                 // If so, the reserves may be manipulated
                 if (
                     poolTokenLookupPrice <
-                    (poolTokenReservesUnitPrice * (DEVIATION_MAX - reservesDeviationBps)) / DEVIATION_MAX ||
+                    (poolTokenReservesUnitPrice * (DEVIATION_MAX - reservesDeviationBps)) /
+                        DEVIATION_MAX ||
                     poolTokenLookupPrice >
-                    (poolTokenReservesUnitPrice * (DEVIATION_MAX + reservesDeviationBps)) / DEVIATION_MAX
+                    (poolTokenReservesUnitPrice * (DEVIATION_MAX + reservesDeviationBps)) /
+                        DEVIATION_MAX
                 ) {
                     revert Appraiser_ReservesPriceMismatch(
                         reserves[i].source,
