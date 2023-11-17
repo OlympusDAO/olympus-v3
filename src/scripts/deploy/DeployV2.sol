@@ -984,7 +984,7 @@ contract OlympusDeploy is Script {
         console2.log("harvestRewardFee", harvestRewardFee);
         console2.log("harvestRewardMax", harvestRewardMax);
         console2.log("uniswapFactory", uniswapFactory);
-        
+
         // Check that the environment variables are loaded
         if (address(kernel) == address(0)) revert("Kernel address not set");
 
@@ -1009,9 +1009,7 @@ contract OlympusDeploy is Script {
         console2.log("BunniHub deployed at:", address(bunniHub));
 
         // Deploy the BunniLens
-        bunniLens = new BunniLens(
-            bunniHub
-        );
+        bunniLens = new BunniLens(bunniHub);
         console2.log("BunniLens deployed at:", address(bunniLens));
 
         // Post-deployment steps (requiring permissions):
@@ -1023,9 +1021,7 @@ contract OlympusDeploy is Script {
     function _deploySupply(bytes memory args) public returns (address) {
         // Arguments
         // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
-        (
-            uint256 initialCrossChainSupply
-        ) = abi.decode(args, (uint256));
+        uint256 initialCrossChainSupply = abi.decode(args, (uint256));
 
         console2.log("initialCrossChainSupply", initialCrossChainSupply);
 
@@ -1040,11 +1036,7 @@ contract OlympusDeploy is Script {
         vm.broadcast();
 
         // Deploy the module
-        SPPLY = new OlympusSupply(
-            kernel,
-            tokens,
-            initialCrossChainSupply
-        );
+        SPPLY = new OlympusSupply(kernel, tokens, initialCrossChainSupply);
 
         console2.log("SPPLY deployed at:", address(SPPLY));
 
@@ -1155,7 +1147,12 @@ contract OlympusDeploy is Script {
 
         // Deploy AuraBalancerSupply submodule
         vm.broadcast();
-        auraBalancerSupply = new AuraBalancerSupply(SPPLY, address(TRSRY), address(balancerVault), pools);
+        auraBalancerSupply = new AuraBalancerSupply(
+            SPPLY,
+            address(TRSRY),
+            address(balancerVault),
+            pools
+        );
         console2.log("AuraBalancerSupply deployed at:", address(auraBalancerSupply));
 
         return address(auraBalancerSupply);
@@ -1197,7 +1194,7 @@ contract OlympusDeploy is Script {
 
     function _deployMigrationOffsetSupply(bytes memory args) public returns (address) {
         // Decode arguments for MigrationOffsetSupply submodule
-        (uint256 migrationOffset) = abi.decode(args, (uint256));
+        uint256 migrationOffset = abi.decode(args, (uint256));
 
         console2.log("migrationOffset", migrationOffset);
 

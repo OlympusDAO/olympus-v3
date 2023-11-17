@@ -9,7 +9,6 @@ import {IgOHM} from "src/interfaces/IgOHM.sol";
 /// @author     0xJem
 /// @notice     SPPLY submodule representing a manual adjustment for OHM in the migration contract
 contract MigrationOffsetSupply is CustomSupply {
-
     /// @notice     The quantity of gOHM (in native decimals) to offset in the migration contract
     uint256 public gOhmOffset;
 
@@ -19,17 +18,7 @@ contract MigrationOffsetSupply is CustomSupply {
 
     // ========== CONSTRUCTOR ========== //
 
-    constructor(
-        Module parent_,
-        uint256 gOhmOffset_
-    )
-        CustomSupply(
-            parent_,
-            0,
-            0,
-            0
-        )
-    {
+    constructor(Module parent_, uint256 gOhmOffset_) CustomSupply(parent_, 0, 0, 0) {
         gOhmOffset = gOhmOffset_;
 
         emit GOhmOffsetUpdated(gOhmOffset_);
