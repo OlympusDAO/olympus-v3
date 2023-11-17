@@ -169,6 +169,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param maxMultipier_    The maximum allowed multiplier
     error BunniManager_Params_InvalidHarvestFee(uint16 newMultiplier_, uint16 maxMultipier_);
 
+    /// @notice                 Emitted if the given token (used for determining the order) is not in the pool
+    ///
+    /// @param token_           The address of the token
+    error BunniManager_Params_InvalidUnderlyingToken(address token_);
+
     //============================================================================================//
     //                                      STATE                                                 //
     //============================================================================================//
@@ -494,6 +499,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///             - The caller is unauthorized
     ///             - The `bunniHub` state variable is not set
     ///             - An ERC20 token for `pool_` has not been deployed/registered
+    ///             - `tokenA_` is not an underlying token for the pool
     ///             - There is insufficient balance of tokens
     ///             - The BunniHub instance reverts
     function deposit(
@@ -524,6 +530,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         uint256 token0Amount;
         uint256 token1Amount;
         {
+            // Double-check that the given token (used for determining the order) is actually contained in the pool
+            if (tokenA_ != token0Address && tokenA_ != token1Address) {
+                revert BunniManager_Params_InvalidUnderlyingToken(tokenA_);
+            }
+
             if (token0Address == tokenA_) {
                 token0Amount = amountA_;
                 token1Amount = amountB_;
