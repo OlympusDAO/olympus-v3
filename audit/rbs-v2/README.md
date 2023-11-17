@@ -277,6 +277,51 @@ You can review previous audits here:
 
 ### Overview
 
+The diagram illustrates the architecture of the components:
+
+```mermaid
+flowchart TD
+  Heart((Heart)) --> Operator
+  Operator((Operator)) --> Appraiser((Appraiser))
+
+  Appraiser --> TRSRY[(TRSRY)]
+  Appraiser --> SPPLY[(SPPLY)]
+  Appraiser --> PRICE[(PRICE)]
+
+  BookKeeper((BookKeeper))
+  BookKeeper --> TRSRY
+  BookKeeper --> SPPLY
+  BookKeeper --> PRICE
+
+  SPPLY --> AuraBalancerSupply
+  SPPLY --> BLVaultSupply
+  SPPLY --> BunniSupply
+  SPPLY --> MigrationOffsetSupply
+  SPPLY --> SiloSupply
+
+  PRICE --> BalancerPoolTokenPrice
+  PRICE --> BunniPrice
+  PRICE --> ChainlinkPriceFeeds
+  PRICE --> ERC4626Price
+  PRICE --> UniswapV2PoolTokenPrice
+  PRICE --> UniswapV3Price
+
+  BunniHub{{BunniHub}} --> UniswapV3POL{{UniswapV3POL}}
+
+  BunniManager((BunniManager)) --> BunniHub
+
+  BunniPrice --> BunniHub
+  
+  BunniSupply --> BunniLens{{BunniLens}} --> BunniHub
+```
+
+Legend:
+
+* Circle: policy
+* Cylinder: module
+* Rectangle: submodule
+* Hexagon: external contract
+
 The diagram demonstrates the interactions of the different components when calling `getMetric()` to obtain liquid backing per backed OHM:
 
 ```mermaid
@@ -303,42 +348,6 @@ sequenceDiagram
   end
   Appraiser->>SPPLY: getMetric(backedSupply)
 ```
-
-The diagram illustrates the architecture of the components:
-
-```mermaid
-flowchart TD
-  Operator((Operator)) --> Appraiser((Appraiser))
-
-  Appraiser --> TRSRY[(TRSRY)]
-  Appraiser --> SPPLY[(SPPLY)]
-  Appraiser --> PRICE[(PRICE)]
-
-  SPPLY --> BunniSupply
-  SPPLY --> BLVaultSupply
-
-  PRICE --> BunniPrice
-  PRICE --> ChainlinkPriceFeeds
-  PRICE --> ERC4626Price
-  PRICE --> UniswapV3Price
-  PRICE --> BalancerPoolTokenPrice
-  PRICE --> UniswapV2PoolTokenPrice
-
-  BunniHub{{BunniHub}} --> UniswapV3POL{{UniswapV3POL}}
-
-  BunniManager((BunniManager)) --> BunniHub
-
-  BunniPrice --> BunniHub
-  
-  BunniSupply --> BunniLens{{BunniLens}} --> BunniHub
-```
-
-Legend:
-
-* Circle: policy
-* Cylinder: module
-* Rectangle: submodule
-* Hexagon: external contract
 
 The components are outlined in the following sub-sections.
 
