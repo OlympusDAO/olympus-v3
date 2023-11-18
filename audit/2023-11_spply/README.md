@@ -25,6 +25,11 @@ The contracts in-scope for this audit are:
       * [SiloSupply.sol](../../src/modules/SPPLY/submodules/SiloSupply.sol)
     * [OlympusSupply.sol](../../src/modules/SPPLY/OlympusSupply.sol)
     * [SPPLY.v1.sol](../../src/modules/SPPLY/SPPLY.v1.sol)
+* [scripts/](../../src/scripts)
+  * [deploy/](../../src/scripts/deploy)
+    * [DeployV2.sol](../../src/scripts/deploy/DeployV2.sol)
+  * [env.json](../../src/scripts/env.json)
+* [Submodules.sol](../../src/Submodules.sol)
 
 The following file(s) are excluded:
 
@@ -175,6 +180,7 @@ A: The following are known issues/limitations:
 
 1. The SPPLY submodules that use an on-chain method to access the reserves of a liquidity pool or positions are susceptible to sandwich attacks and multi-block manipulation
     * Where possible, downstream consumers of the data need to conduct sanity-checks.
+    * Where possible, SPPLY submodules will check for re-entrancy in the source (e.g. liquidity pool). This has been implemented in the AuraBalancerSupply submodule.
 
 ## Getting Started
 
