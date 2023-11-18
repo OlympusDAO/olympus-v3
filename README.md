@@ -67,7 +67,9 @@ Here is an example for the `SPPLY` module:
 
 The report will be written to `/metrics.html` and can be moved into place after that.
 
-Pass `--exclude=<FILE>` to ignore specific files from the analysis.
+Pass `--exclude=<FILE>` to ignore specific files from the analysis. For example:
+
+`pnpm run metrics --exclude=src/modules/SPPLY/submodules/BunniSupply.sol src/modules/SPPLY/**/*.sol src/scripts/deploy/DeployV2.sol`
 
 ## Deployment
 
