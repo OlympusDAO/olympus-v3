@@ -83,14 +83,14 @@ let outputFile = "solidity-metrics.html";
 process.argv.slice(1,).forEach(f => {
   if (f.startsWith("--exclude")) {
     console.log("excluding", f.split("=")[1]);
-    globExclusions.push(f.split(" ")[1]);
+    globExclusions.push(f.split("=")[1]);
   } else if (f.startsWith("--")) {
     options.push(f);
   }
 });
 
 let metrics = new SolidityMetricsContainer("'CLI'", {
-  basePath: "src/",
+  basePath: undefined,
   initDoppelGanger: undefined,
   inputFileGlobExclusions: convertGlobExclusions(),
   inputFileGlob: undefined,
@@ -103,7 +103,9 @@ process.argv.slice(1,).forEach(f => {
   if (f.endsWith(".sol") && !f.startsWith("--exclude")) {
     console.log("analysing", f);
     // analyze files
-    glob.sync(f).forEach(fg => metrics.analyze(fg));
+    glob.sync(f, {
+      ignore: globExclusions,
+    }).forEach(fg => metrics.analyze(fg));
   }
 });
 

@@ -67,6 +67,8 @@ Here is an example for the `SPPLY` module:
 
 The report will be written to `/metrics.html` and can be moved into place after that.
 
+Pass `--exclude=<FILE>` to ignore specific files from the analysis.
+
 ## Deployment
 
 ### Environment
