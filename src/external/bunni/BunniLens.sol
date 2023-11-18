@@ -13,10 +13,20 @@ import {IBunniToken} from "./interfaces/IBunniToken.sol";
 /// @title BunniLens
 /// @author zefram.eth
 /// @notice Helper functions for fetching info about Bunni positions
+/// @dev    Imported at commit: https://github.com/ZeframLou/bunni/tree/fd65011c4e24660d0a63295cb3812c1821529842
+///
+/// @dev    The following changes were made from the original source code:
+/// @dev    - getUncollectedFees() function added
+/// @dev    - Re-entrancy check added into _getReserves()
 contract BunniLens is IBunniLens {
     uint256 internal constant SHARE_PRECISION = 1e18;
 
     IBunniHub public immutable override hub;
+
+    /// @notice         Triggered if `pool_` is locked, which indicates re-entrancy
+    ///
+    /// @param pool_    The address of the affected Uniswap V3 pool
+    error BunniLens_Reentrant(address pool_);
 
     constructor(IBunniHub hub_) {
         hub = hub_;
@@ -42,6 +52,9 @@ contract BunniLens is IBunniLens {
     }
 
     /// @inheritdoc IBunniLens
+    /// @dev        This function accesses the reserves of the specified
+    /// @dev        Uniswap V3 pool. To guard against re-entrancy attacks,
+    /// @dev        it checks if the pool has been entered, indicated by the `unlocked` variable in the results of `slot0()`.
     function getReserves(
         BunniKey calldata key
     ) external view override returns (uint112 reserve0, uint112 reserve1) {
@@ -100,7 +113,13 @@ contract BunniLens is IBunniLens {
         BunniKey calldata key,
         uint128 existingLiquidity
     ) internal view returns (uint112 reserve0, uint112 reserve1) {
-        (uint160 sqrtRatioX96, , , , , , ) = key.pool.slot0();
+        (uint160 sqrtRatioX96, , , , , , bool unlocked) = key.pool.slot0();
+
+        // Check for re-entrancy
+        if (unlocked == false) {
+            revert BunniLens_Reentrant(address(key.pool));
+        }
+
         uint160 sqrtRatioAX96 = TickMath.getSqrtRatioAtTick(key.tickLower);
         uint160 sqrtRatioBX96 = TickMath.getSqrtRatioAtTick(key.tickUpper);
         (uint256 amount0, uint256 amount1) = LiquidityAmounts.getAmountsForLiquidity(

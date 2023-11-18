@@ -70,6 +70,10 @@ contract BunniPrice is PriceSubmodule {
     /// @dev                    - Fetches the reserves contained in the Uniswap V3 position
     /// @dev                    - Determines the value of each reserve token in USD
     ///
+    /// @dev                    This function accesses the reserves of the registered
+    /// @dev                    Uniswap V3 pools, and can be susceptible to re-entrancy attacks.
+    /// @dev                    The BunniLens contract used by this Submodule performs a re-entrancy check.
+    ///
     /// @dev                    This function reverts if:
     /// @dev                    - The token is not a valid BunniToken
     /// @dev                    - The lens (from `params_`) is not a valid BunniLens
