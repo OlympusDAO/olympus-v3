@@ -31,7 +31,8 @@
     "devDependencies": {
         "prettier": "^2.5.1",
         "prettier-plugin-solidity": "^1.0.0-beta.19",
-        "solhint": "^3.3.7"
+        "solhint": "^3.3.7",
+        "solidity-code-metrics": "^0.0.25"
     },
     "prettier": {
         "tabWidth": 4,
