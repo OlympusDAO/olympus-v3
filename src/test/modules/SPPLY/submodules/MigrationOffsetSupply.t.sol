@@ -71,7 +71,11 @@ contract MigrationOffsetSupplyTest is Test {
 
         // Deploy submodule
         {
-            submoduleMigrationOffsetSupply = new MigrationOffsetSupply(moduleSupply, MIGRATION_CONTRACT, GOHM_OFFSET);
+            submoduleMigrationOffsetSupply = new MigrationOffsetSupply(
+                moduleSupply,
+                MIGRATION_CONTRACT,
+                GOHM_OFFSET
+            );
         }
 
         // Initialize
@@ -149,7 +153,11 @@ contract MigrationOffsetSupplyTest is Test {
         emit GOhmOffsetUpdated(2e18);
 
         // New MigrationOffsetSupply
-        submoduleMigrationOffsetSupply = new MigrationOffsetSupply(moduleSupply, MIGRATION_CONTRACT, 2e18);
+        submoduleMigrationOffsetSupply = new MigrationOffsetSupply(
+            moduleSupply,
+            MIGRATION_CONTRACT,
+            2e18
+        );
 
         assertEq(submoduleMigrationOffsetSupply.gOhmOffset(), 2e18);
     }
