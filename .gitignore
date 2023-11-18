@@ -11,3 +11,4 @@ src/test/sim/sims/*.t.sol
 docs/
 .env_deploy*
 coverage/
+metrics.html

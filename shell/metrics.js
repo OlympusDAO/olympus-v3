@@ -65,6 +65,8 @@ let metrics = new SolidityMetricsContainer("'CLI'", {
 
 let options = [];
 
+let outputFile = "metrics.html";
+
 process.argv.slice(1,).forEach(f => {
   if (f.startsWith("--")) {
     options.push(f);
@@ -84,6 +86,7 @@ try {
 }
 
 metrics.generateReportMarkdown().then(md => {
-  // Print to stdout as HTML
-  console.log(exportAsHtml(md, metrics.totals(), dotGraphs));
+  const htmlOutput = exportAsHtml(md, metrics.totals(), dotGraphs);
+
+  fs.writeFileSync(outputFile, htmlOutput);
 });
