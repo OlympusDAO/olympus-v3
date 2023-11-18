@@ -41,14 +41,6 @@ The contracts in-scope for this audit are:
     * [interfaces/](../../src/policies/UniswapV3/interfaces)
       * [IBunniManager.sol](../../src/policies/UniswapV3/interfaces/IBunniManager.sol)
     * [BunniManager.sol](../../src/policies/UniswapV3/BunniManager.sol)
-* [scripts/](../../src/scripts)
-  * [deploy/](../../src/scripts/deploy)
-    * [DeployV2.sol](../../src/scripts/deploy/DeployV2.sol)
-  * [ops/](../../src/scripts/ops)
-    * [batches/](../../src/scripts/ops/batches)
-      * [RBS2Install.sol](../../src/scripts/ops/batches/RBS2Install.sol)
-  * [README.md](../../src/scripts/README.md)
-  * [env.json](../../src/scripts/env.json)
 
 Tests for the in-scope contracts are contained in the following locations:
 
@@ -78,6 +70,7 @@ Tests for the in-scope contracts are contained in the following locations:
 Notes:
 
 * PRICEv2 and its Submodules have already been audited ([audit section](#previous-audits)), and are therefore out of scope. However, some minor changes may have been made, and new Submodules added. To determine which changes are in-scope, compare the current state against commit `9c10dc188210632b6ce46c7a836484e8e063151f`.
+* Additional context may be gained from analysing the `src/scripts/deploy/DeployV2.sol` file.
 
 ### External Contracts
 

@@ -59,6 +59,10 @@ Tests for the in-scope contracts are contained in the following locations:
       * [SPPLY.v1.t.sol](../../src/test/modules/SPPLY/SPPLY.v1.t.sol)
   * [Submodules.t.sol](../../src/test/Submodules.t.sol)
 
+Notes:
+
+* Additional context may be gained from analysing the `src/scripts/deploy/DeployV2.sol` file.
+
 ### External Contracts
 
 Several external interfaces and libraries are used to interact with other protocols. These dependencies are stored locally in the following folders:
