@@ -15,7 +15,17 @@ const fs = require("fs");
 const { SolidityMetricsContainer } = require("solidity-code-metrics");
 const { exportAsHtml } = require("solidity-code-metrics/src/metrics/helper");
 
-const globExclusions = "{**/node_modules,**/mock*,**/test*,**/migrations,**/Migrations.sol,lib,**/external,**/libraries,**/interfaces}";
+const globExclusions = [
+  "**/node_modules",
+  "**/mock*",
+  "**/test*",
+  "**/migrations",
+  "**/Migrations.sol",
+  "lib",
+  "**/external",
+  "**/libraries",
+  "**/interfaces",
+];
 
 function getWsGitInfo(rootPath) {
   let branch = "unknown_branch";
@@ -53,24 +63,45 @@ function getWsGitInfo(rootPath) {
   };
 }
 
-let metrics = new SolidityMetricsContainer("'CLI'", {
-  basePath: "src/",
-  initDoppelGanger: undefined,
-  inputFileGlobExclusions: globExclusions,
-  inputFileGlob: undefined,
-  inputFileGlobLimit: undefined,
-  debug: false,
-  repoInfo: getWsGitInfo("src/"),
-});
+function convertGlobExclusions() {
+  let result = "{";
+  for (let i = 0; i < globExclusions.length; i++) {
+    result += globExclusions[i];
+    if (i < globExclusions.length - 1) {
+      result += ",";
+    }
+  }
+  result += "}";
+
+  return result;
+}
 
 let options = [];
 
 let outputFile = "solidity-metrics.html";
 
 process.argv.slice(1,).forEach(f => {
-  if (f.startsWith("--")) {
+  if (f.startsWith("--exclude")) {
+    console.log("excluding", f.split("=")[1]);
+    globExclusions.push(f.split(" ")[1]);
+  } else if (f.startsWith("--")) {
     options.push(f);
-  } else if (f.endsWith(".sol")) {
+  }
+});
+
+let metrics = new SolidityMetricsContainer("'CLI'", {
+  basePath: "src/",
+  initDoppelGanger: undefined,
+  inputFileGlobExclusions: convertGlobExclusions(),
+  inputFileGlob: undefined,
+  inputFileGlobLimit: undefined,
+  debug: false,
+  repoInfo: getWsGitInfo("src/"),
+});
+
+process.argv.slice(1,).forEach(f => {
+  if (f.endsWith(".sol") && !f.startsWith("--exclude")) {
+    console.log("analysing", f);
     // analyze files
     glob.sync(f).forEach(fg => metrics.analyze(fg));
   }
