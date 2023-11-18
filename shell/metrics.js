@@ -65,7 +65,7 @@ let metrics = new SolidityMetricsContainer("'CLI'", {
 
 let options = [];
 
-let outputFile = "metrics.html";
+let outputFile = "solidity-metrics.html";
 
 process.argv.slice(1,).forEach(f => {
   if (f.startsWith("--")) {
