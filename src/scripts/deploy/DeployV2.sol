@@ -1210,7 +1210,11 @@ contract OlympusDeploy is Script {
 
         // Deploy MigrationOffsetSupply submodule
         vm.broadcast();
-        migrationOffsetSupply = new MigrationOffsetSupply(SPPLY, migrationContract, migrationOffset);
+        migrationOffsetSupply = new MigrationOffsetSupply(
+            SPPLY,
+            migrationContract,
+            migrationOffset
+        );
         console2.log("MigrationOffsetSupply deployed at:", address(migrationOffsetSupply));
 
         return address(migrationOffsetSupply);

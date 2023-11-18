@@ -79,7 +79,7 @@ abstract contract CustomSupply is SupplySubmodule {
     function getProtocolOwnedLiquidityReserves()
         external
         view
-        virtual 
+        virtual
         override
         returns (SPPLYv1.Reserves[] memory)
     {

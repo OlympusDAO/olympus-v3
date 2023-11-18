@@ -371,10 +371,6 @@ contract BunniPriceTest is Test {
 
         // Call
         bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
-        submoduleBunniPrice.getBunniTokenPrice(
-            poolTokenAddress,
-            PRICE_DECIMALS,
-            params
-        );
+        submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
     }
 }
