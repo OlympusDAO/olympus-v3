@@ -313,6 +313,14 @@ Features:
 * Harvest and re-invest fees from the position back into the pool
 * Register an existing Bunni LP token with the policy, to be used when migrating policy versions
 
+The policy would typically be used in the following manner:
+
+1. Call `BunniManager.deployPoolToken()` with the address of the Uniswap V3 pool
+    * This would result in an ERC20 token being created to represent the full-range liquidity position
+2. Call `BunniManager.deposit()` with the amount of liquidity desired
+    * An equivalent amount of shares of the ERC20 token would be minted and deposited into `TRSRY`
+3. Call `BunniManager.activatePoolToken()`, which would configure the ERC20 token with `TRSRY`, `SPPLY` and `PRICE`
+
 ### RBS - Operator/Heart (Policy)
 
 The OlympusDAO RBS system was audited extensively from 07/2022 to 11/2023 (see links above). The general purpose of the system is to perform market operations to stabilize the price of OHM against a reserve asset (current configured as DAI). It does so by offering fixed price "wall" swaps at a certain spread to the current target price, and by deploying dutch auction "cushion" markets at a narrow spread. Recent changes include:
