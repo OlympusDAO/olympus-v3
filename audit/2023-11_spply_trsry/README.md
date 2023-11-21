@@ -1,8 +1,8 @@
-# OlympusDAO SPPLY Audit
+# OlympusDAO SPPLY and TRSRY v1.1 Audit
 
 ## Purpose
 
-The purpose of this audit is to review the SPPLY system that provides data and metrics on the supply of the OHM token. This is part of a larger on-chain accounting system that will provide data to an automated Range-Bound Stability (RBS) 2.0.
+The purpose of this audit is to review the SPPLY system that provides data and metrics on the supply of the OHM token and the upgraded TRSRY module that provides data on asset balances. This is part of a larger on-chain accounting system that will provide data to an automated Range-Bound Stability (RBS) 2.0.
 
 These contracts will be installed in the Olympus V3 "Bophades" system, based on the [Default Framework](https://palm-cause-2bd.notion.site/Default-A-Design-Pattern-for-Better-Protocol-Development-7f8ace6d263c4303b108dc5f8c3055b1).
 
@@ -17,6 +17,7 @@ The contracts in-scope for this audit are:
     * [submodules/](../../src/modules/SPPLY/submodules)
       * [AuraBalancerSupply.sol](../../src/modules/SPPLY/submodules/AuraBalancerSupply.sol)
       * [BLVaultSupply.sol](../../src/modules/SPPLY/submodules/BLVaultSupply.sol)
+      * [BunniSupply.sol](../../src/modules/SPPLY/submodules/BunniSupply.sol)
       * [CustomSupply.sol](../../src/modules/SPPLY/submodules/CustomSupply.sol)
       * [IncurDebtSupply.sol](../../src/modules/SPPLY/submodules/IncurDebtSupply.sol)
       * [MigrationOffsetSupply.sol](../../src/modules/SPPLY/submodules/MigrationOffsetSupply.sol)
@@ -25,18 +26,9 @@ The contracts in-scope for this audit are:
       * [SiloSupply.sol](../../src/modules/SPPLY/submodules/SiloSupply.sol)
     * [OlympusSupply.sol](../../src/modules/SPPLY/OlympusSupply.sol)
     * [SPPLY.v1.sol](../../src/modules/SPPLY/SPPLY.v1.sol)
-* [scripts/](../../src/scripts)
-  * [deploy/](../../src/scripts/deploy)
-    * [DeployV2.sol](../../src/scripts/deploy/DeployV2.sol)
-  * [env.json](../../src/scripts/env.json)
-* [Submodules.sol](../../src/Submodules.sol)
-
-The following file(s) are excluded:
-
-* [modules/](../../src/modules)
-  * [SPPLY/](../../src/modules/SPPLY)
-    * [submodules/](../../src/modules/SPPLY/submodules)
-      * [BunniSupply.sol](../../src/modules/SPPLY/submodules/BunniSupply.sol)
+  * [TRSRY/](../../src/modules/TRSRY)
+    * [OlympusTreasury.sol](../../src/modules/TRSRY/OlympusTreasury.sol)
+    * [TRSRY.v1.sol](../../src/modules/TRSRY/TRSRY.v1.sol)
 
 Tests for the in-scope contracts are contained in the following locations:
 
@@ -52,6 +44,7 @@ Tests for the in-scope contracts are contained in the following locations:
       * [submodules/](../../src/test/modules/SPPLY/submodules)
         * [AuraBalancerSupply.t.sol](../../src/test/modules/SPPLY/submodules/AuraBalancerSupply.t.sol)
         * [BLVaultSupply.t.sol](../../src/test/modules/SPPLY/submodules/BLVaultSupply.t.sol)
+        * [BunniSupply.t.sol](../../src/test/modules/SPPLY/submodules/BunniSupply.t.sol)
         * [IncurDebtSupply.t.sol](../../src/test/modules/SPPLY/submodules/IncurDebtSupply.t.sol)
         * [SentimentArbSupply.t.sol](../../src/test/modules/SPPLY/submodules/SentimentArbSupply.t.sol)
         * [SiloArbSupply.t.sol](../../src/test/modules/SPPLY/submodules/SiloArbSupply.t.sol)
@@ -116,6 +109,9 @@ The diagram illustrates the architecture of the components:
 flowchart TD
   SPPLY --> AuraBalancerSupply
   SPPLY --> BLVaultSupply
+  SPPLY --> BunniSupply
+  BunniSupply --> BunniLens{{BunniLens}}
+  BunniLens --> UniswapV3Pool{{UniswapV3Pool}}
   SPPLY --> MigrationOffsetSupply
   SPPLY --> SiloSupply
 ```
@@ -133,7 +129,6 @@ The diagram demonstrates the interactions of the different components when calli
 sequenceDiagram
   participant User
   participant SPPLY
-  participant Submodules
   User->>SPPLY: getSupplyByCategory(protocol-owned-liquidity)
   loop Each location in the category
   SPPLY->>OHM: balanceOf(location)
@@ -158,6 +153,15 @@ Submodules borrow the "keycode" identification system used by the Kernel for mod
 Submodules can have permissioned or unpermissioned functions, but the only permission available is `onlyParent` which requires a function to be called by the parent Module.
 
 The Submodules implemented for the SPPLY module are all stateful adapters to external sources, but Submodules can be stateless as well.
+
+### TRSRY v1.1 (Module)
+
+Features:
+
+* Add/remove assets to be managed and tracked
+* Add/remove assets to/from categories
+* Add/remove locations to track asset balances in
+* Category groups containing mutually-exclusive categories (e.g. liquid and illiquid)
 
 ### SPPLY (Module)
 

@@ -1,8 +1,8 @@
-# OlympusDAO PRICE v2 and TRSRY v1.1 Audit
+# OlympusDAO PRICE v2 Audit
 
 ## Purpose
 
-The purpose of this audit is to review the upgraded PRICE and TRSRY modules that provide data on asset prices and balances, respectively, to other components in the Olympus Bophades system. This is part of a larger on-chain accounting system that will provide data to an automated Range-Bound Stability (RBS) 2.0.
+The purpose of this audit is to review the upgraded PRICE module that provides data on asset prices to other components in the Olympus Bophades system. This is part of a larger on-chain accounting system that will provide data to an automated Range-Bound Stability (RBS) 2.0.
 
 These contracts will be installed in the Olympus V3 "Bophades" system, based on the [Default Framework](https://palm-cause-2bd.notion.site/Default-A-Design-Pattern-for-Better-Protocol-Development-7f8ace6d263c4303b108dc5f8c3055b1).
 
@@ -17,6 +17,7 @@ The contracts in-scope for this audit are:
     * [submodules/](../../src/modules/PRICE/submodules)
       * [feeds/](../../src/modules/PRICE/submodules/feeds)
         * [BalancerPoolTokenPrice.sol](../../src/modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol)
+        * [BunniPrice.sol](../../src/modules/PRICE/submodules/feeds/BunniPrice.sol)
         * [ChainlinkPriceFeeds.sol](../../src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol)
         * [ERC4626Price.sol](../../src/modules/PRICE/submodules/feeds/ERC4626Price.sol)
         * [UniswapV2PoolTokenPrice.sol](../../src/modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol)
@@ -25,25 +26,7 @@ The contracts in-scope for this audit are:
         * [SimplePriceFeedStrategy.sol](../../src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol)
     * [OlympusPrice.v2.sol](../../src/modules/PRICE/OlympusPrice.v2.sol)
     * [PRICE.v2.sol](../../src/modules/PRICE/PRICE.v2.sol)
-  * [TRSRY/](../../src/modules/TRSRY)
-    * [OlympusTreasury.sol](../../src/modules/TRSRY/OlympusTreasury.sol)
-    * [TRSRY.v1.sol](../../src/modules/TRSRY/TRSRY.v1.sol)
-* [scripts/](../../src/scripts)
-  * [deploy/](../../src/scripts/deploy)
-    * [DeployV2.sol](../../src/scripts/deploy/DeployV2.sol)
-  * [ops/](../../src/scripts/ops)
-    * [batches/](../../src/scripts/ops/batches)
-      * [PRICEv2Install.sol](../../src/scripts/ops/batches/PRICEv2Install.sol)
-  * [env.json](../../src/scripts/env.json)
 * [Submodules.sol](../../src/Submodules.sol)
-
-The following file(s) are excluded:
-
-* [modules/](../../src/modules)
-  * [PRICE/](../../src/modules/PRICE)
-    * [submodules/](../../src/modules/PRICE/submodules)
-      * [feeds/](../../src/modules/PRICE/submodules/feeds)
-        * [BunniPrice.sol](../../src/modules/PRICE/submodules/feeds/BunniPrice.sol)
 
 Tests for the in-scope contracts are contained in the following locations:
 
@@ -54,6 +37,7 @@ Tests for the in-scope contracts are contained in the following locations:
         * [feeds/](../../src/test/modules/PRICE.v2/submodules/feeds)
           * [BalancerPoolTokenPriceStable.t.sol](../../src/test/modules/PRICE.v2/submodules/feeds/BalancerPoolTokenPriceStable.t.sol)
           * [BalancerPoolTokenPriceWeighted.t.sol](../../src/test/modules/PRICE.v2/submodules/feeds/BalancerPoolTokenPriceWeighted.t.sol)
+          * [BunniPrice.t.sol](../../src/test/modules/PRICE.v2/submodules/feeds/BunniPrice.t.sol)
           * [ChainlinkPriceFeeds.t.sol](../../src/test/modules/PRICE.v2/submodules/feeds/ChainlinkPriceFeeds.t.sol)
           * [ERC4626Price.t.sol](../../src/test/modules/PRICE.v2/submodules/feeds/ERC4626Price.t.sol)
           * [UniswapV2PoolTokenPrice.t.sol](../../src/test/modules/PRICE.v2/submodules/feeds/UniswapV2PoolTokenPrice.t.sol)
@@ -162,15 +146,6 @@ Submodules borrow the "keycode" identification system used by the Kernel for mod
 Submodules can have permissioned or unpermissioned functions, but the only permission available is `onlyParent` which requires a function to be called by the parent Module.
 
 The Submodules implemented for the PRICEv2 module are all stateless adapters to external price sources, but Submodules can be stateful as well, e.g. if configuration data for a specific adapter was stored on the Submodule. On the other hand, the Submodules for the SPPLY module are stateful.
-
-### TRSRY v1.1 (Module)
-
-Features:
-
-* Add/remove assets to be managed and tracked
-* Add/remove assets to/from categories
-* Add/remove locations to track asset balances in
-* Category groups containing mutually-exclusive categories (e.g. liquid and illiquid)
 
 ### PRICE v2 (Module)
 
