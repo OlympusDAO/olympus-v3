@@ -8,6 +8,34 @@
             }
         },
         {
+            "name": "BalancerPoolTokenPrice",
+            "args": {}
+        },
+        {
+            "name": "BunniPrice",
+            "args": {}
+        },
+        {
+            "name": "ChainlinkPriceFeeds",
+            "args": {}
+        },
+        {
+            "name": "ERC4626Price",
+            "args": {}
+        },
+        {
+            "name": "UniswapV2PoolTokenPrice",
+            "args": {}
+        },
+        {
+            "name": "UniswapV3Price",
+            "args": {}
+        },
+        {
+            "name": "SimplePriceFeedStrategy",
+            "args": {}
+        },
+        {
             "name": "BunniManager",
             "args": {
                 "harvestRewardMax": 0,

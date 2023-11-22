@@ -25,7 +25,7 @@ contract RBSv2Install_1 is OlyBatch {
     address aura;
 
     // New contracts
-    address new_trsry;
+    address newTrsry;
 
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
@@ -38,7 +38,7 @@ contract RBSv2Install_1 is OlyBatch {
         bal = envAddress("current", "external.tokens.BAL");
         aura = envAddress("current", "external.tokens.AURA");
 
-        new_trsry = envAddress("current", "olympus.modules.OlympusTreasury");
+        newTrsry = envAddress("current", "olympus.modules.OlympusTreasury");
     }
 
     function RBSv2Install_1(bool send_) external isDaoBatch(send_) {
@@ -49,25 +49,31 @@ contract RBSv2Install_1 is OlyBatch {
         // 1. Transfer all tokens from the old treasury to the new treasury
         uint256 sdaiBalance = ERC20(sdai).balanceOf(trsry);
         addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, sdai, sdaiBalance));
-        addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, new_trsry, sdai, sdaiBalance));
+        addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, newTrsry, sdai, sdaiBalance));
+        console2.log("Transfered sDAI: %s", sdaiBalance);
 
         uint256 lusdBalance = ERC20(lusd).balanceOf(trsry);
         addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, lusd, lusdBalance));
-        addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, new_trsry, lusd, lusdBalance));
+        addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, newTrsry, lusd, lusdBalance));
+        console2.log("Transfered LUSD: %s", lusdBalance);
 
         uint256 wstethBalance = ERC20(wsteth).balanceOf(trsry);
         addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, wsteth, wstethBalance));
-        addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, new_trsry, wsteth, wstethBalance));
+        addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, newTrsry, wsteth, wstethBalance));
+        console2.log("Transfered wstETH: %s", wstethBalance);
 
         uint256 balBalance = ERC20(bal).balanceOf(trsry);
         addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, bal, balBalance));
-        addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, new_trsry, bal, balBalance));
+        addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, newTrsry, bal, balBalance));
+        console2.log("Transfered BAL: %s", balBalance);
 
         uint256 auraBalance = ERC20(aura).balanceOf(trsry);
         addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, aura, auraBalance));
-        addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, new_trsry, aura, auraBalance));
+        addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, newTrsry, aura, auraBalance));
+        console2.log("Transfered AURA: %s", auraBalance);
 
         // 2. Upgrade the OlympusTreasury contract to the new version
-        addToBatch(kernel, abi.encodeWithSelector(Kernel.executeAction.selector, Actions.UpgradeModule, new_trsry));
+        addToBatch(kernel, abi.encodeWithSelector(Kernel.executeAction.selector, Actions.UpgradeModule, newTrsry));
+        console2.log("Upgraded OlympusTreasury to new version: %s", newTrsry);
     }
 }

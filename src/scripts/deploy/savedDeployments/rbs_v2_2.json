@@ -7,6 +7,21 @@
             }
         },
         {
+            "name": "BLVaultSupply",
+            "args": {}
+        },
+        {
+            "name": "BunniSupply",
+            "args": {}
+        },
+        {
+            "name": "MigrationOffsetSupply",
+            "args": {
+                "source": "0x000.000",
+                "gOhmOffset": 0
+            }
+        },
+        {
             "name": "CrossChainBridge",
             "args": {
                 "lzEndpoint": "0x66A71Dcef29A0fFBDBE3c6a460a3B5BC225Cd675"
