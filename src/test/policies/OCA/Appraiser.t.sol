@@ -1353,6 +1353,10 @@ contract AppraiserTest is Test {
         assertEq(timestamp, uint48(block.timestamp));
     }
 
+    //============================================================================================//
+    //                                       ADMIN                                                //
+    //============================================================================================//
+
     // [X] setReservesDeviationBps
     //  [X] reverts if not owner
     //  [X] reverts if deviation is too high
@@ -1397,6 +1401,10 @@ contract AppraiserTest is Test {
         assertEq(appraiser.reservesDeviationBps(), 500);
     }
 }
+
+//============================================================================================//
+//                                       MOCKS                                                //
+//============================================================================================//
 
 contract MockBalancerPool is IBalancerPool {
     bytes32 internal immutable _poolId;
