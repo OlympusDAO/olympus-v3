@@ -871,7 +871,7 @@ contract AppraiserTest is Test {
     ///     [X]  if latest value was captured at the current timestamp, return that value
     ///     [X]  if latest value was captured at a previous timestamp, fetch and return the current value
     ///     [X]  correctly calculates backing with non-OHM in POL
-
+    ///     [X]  reverts if POL value diverges from MA by more than allowed deviation %
     function testCorrectness_getMetricCurrentTimestamp() public {
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
@@ -930,6 +930,40 @@ contract AppraiserTest is Test {
         uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
         // Assert that metric value is correct
         assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000 + POL_BACKING_AT_2);
+    }
+
+    function testRevert_getMetric_backing_POL_manipulated() public {
+        uint256 deviationBase = 10_000;
+        uint256 deviationBps = appraiser.reservesDeviationBps() + 1;
+        // Cache deviated prices
+        uint256 BPT_PRICE_UP = BPT_PRICE.mulDiv(deviationBase + deviationBps, deviationBase);
+        uint256 BPT_PRICE_DOWN = BPT_PRICE.mulDiv(deviationBase - deviationBps, deviationBase);
+
+        // Set MA so that the current pool price deviates too much from that
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_DOWN);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_ReservesPriceMismatch.selector,
+            address(balancerPool),
+            BPT_PRICE,
+            BPT_PRICE_DOWN
+        );
+        vm.expectRevert(err);
+        appraiser.getMetric(IAppraiser.Metric.BACKING);
+
+        // Set MA so that the current pool price deviates too much from that
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_UP);
+
+        // Expect revert
+        err = abi.encodeWithSelector(
+            Appraiser.Appraiser_ReservesPriceMismatch.selector,
+            address(balancerPool),
+            BPT_PRICE,
+            BPT_PRICE_UP
+        );
+        vm.expectRevert(err);
+        appraiser.getMetric(IAppraiser.Metric.BACKING);
     }
 
     /// [X]  getMetric(Metric metric_, uint48 maxAge_)

@@ -365,19 +365,20 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
                 // Calculate current asset valuation
                 uint256 tokenValue = (price * reserves[i].balances[j]) /
                     (10 ** ERC20(currentToken).decimals());
-                poolTokenReservesValue += tokenValue;
+
+                // Update pool reserves based on current asset
+                if (tokenLen != 1) poolTokenReservesValue += tokenValue;
 
                 // Exclude OHM from the `backedValue` calculation
-                if (currentToken != ohm) {
-                    backedValue += tokenValue;
-                }
+                if (currentToken != ohm) backedValue += tokenValue;
+
                 unchecked {
                     ++j;
                 }
             }
 
-            // Perform a sanity check on the reserves value, but only if it has a calculated value and it is a pool
-            if (poolTokenReservesValue > 0 && tokenLen > 1) {
+            // For pools, perform a sanity check on the reserves value
+            if (poolTokenReservesValue != 0) {
                 // Determine the moving average price of a single pool token
                 // Scale: PRICE decimals
                 (uint256 poolTokenLookupPrice, ) = PRICE.getPrice(
