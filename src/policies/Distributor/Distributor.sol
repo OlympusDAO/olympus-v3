@@ -10,26 +10,15 @@ import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {IDistributor} from "policies/interfaces/IDistributor.sol";
+import {IStaking} from "src/interfaces/IStaking.sol";
 
-/// Import interfaces
-import "src/interfaces/Uniswap/IUniswapV2Pair.sol";
+/// Import external interfaces
+import {IUniswapV2Pair} from "src/interfaces/Uniswap/IUniswapV2Pair.sol";
 
-/// Define Inline Interfaces
-interface IStaking {
-    function unstake(
-        address _to,
-        uint256 _amount,
-        bool _trigger,
-        bool _rebasing
-    ) external returns (uint256);
-}
-
-contract Distributor is Policy, RolesConsumer {
+contract Distributor is IDistributor, Policy, RolesConsumer {
     // ========= ERRORS ========= //
     error Distributor_InvalidConstruction();
-    error Distributor_NoRebaseOccurred();
-    error Distributor_OnlyStaking();
-    error Distributor_NotUnlocked();
     error Distributor_SanityCheck();
     error Distributor_AdjustmentLimit();
     error Distributor_AdjustmentUnderflow();
@@ -86,6 +75,16 @@ contract Distributor is Policy, RolesConsumer {
         MINTR = MINTRv1(getModuleAddress(dependencies[0]));
         TRSRY = TRSRYv1(getModuleAddress(dependencies[1]));
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
+
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1, 1]);
+        if (MINTR_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
