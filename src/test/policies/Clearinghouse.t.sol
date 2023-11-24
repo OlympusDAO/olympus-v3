@@ -10,11 +10,11 @@ import {MockStaking} from "test/mocks/MockStaking.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 
-//import {} from "olympus-v3/Kernel.sol";
 import {RolesAdmin, Kernel, Actions, Permissions, Keycode, fromKeycode, toKeycode} from "olympus-v3/policies/RolesAdmin.sol";
-import {OlympusRoles, ROLESv1} from "olympus-v3/modules/ROLES/OlympusRoles.sol";
-import {OlympusMinter, MINTRv1} from "olympus-v3/modules/MINTR/OlympusMinter.sol";
-import {OlympusTreasury, TRSRYv1} from "olympus-v3/modules/TRSRY/OlympusTreasury.sol";
+import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
+import {OlympusMinter, MINTRv1} from "modules/MINTR/OlympusMinter.sol";
+import {OlympusTreasury, TRSRYv1} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusClearinghouseRegistry, CHREGv1} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 
 import {Clearinghouse, Cooler, CoolerFactory, CoolerCallback} from "policies/Clearinghouse.sol";
 
@@ -22,6 +22,8 @@ import {Clearinghouse, Cooler, CoolerFactory, CoolerCallback} from "policies/Cle
 //
 // Clearinghouse Setup and Permissions.
 // [X] configureDependencies
+//     [X] dependencies are properly configured.
+//     [X] clearinghouse is stored in the CHREG.
 // [X] requestPermissions
 //
 // Clearinghouse Functions
@@ -75,6 +77,7 @@ contract ClearinghouseTest is Test {
     OlympusRoles internal ROLES;
     OlympusMinter internal MINTR;
     OlympusTreasury internal TRSRY;
+    OlympusClearinghouseRegistry internal CHREG;
     RolesAdmin internal rolesAdmin;
     Clearinghouse internal clearinghouse;
     CoolerFactory internal factory;
@@ -88,8 +91,8 @@ contract ClearinghouseTest is Test {
     // Clearinghouse Expected events
     event Defund(address token, uint256 amount);
     event Rebalance(bool defund, uint256 daiAmount);
+    event Activate();
     event Deactivate();
-    event Reactivate();
 
     function setUp() public {
         address[] memory users = (new UserFactory()).create(3);
@@ -110,6 +113,7 @@ contract ClearinghouseTest is Test {
         TRSRY = new OlympusTreasury(kernel);
         MINTR = new OlympusMinter(kernel, address(ohm));
         ROLES = new OlympusRoles(kernel);
+        CHREG = new OlympusClearinghouseRegistry(kernel, address(0), new address[](0));
 
         clearinghouse = new Clearinghouse(
             address(ohm),
@@ -124,6 +128,7 @@ contract ClearinghouseTest is Test {
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
         kernel.executeAction(Actions.InstallModule, address(MINTR));
         kernel.executeAction(Actions.InstallModule, address(ROLES));
+        kernel.executeAction(Actions.InstallModule, address(CHREG));
 
         kernel.executeAction(Actions.ActivatePolicy, address(clearinghouse));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
@@ -140,6 +145,9 @@ contract ClearinghouseTest is Test {
         dai.approve(address(sdai), mintAmount);
         sdai.deposit(mintAmount, address(TRSRY));
         vm.stopPrank();
+
+        vm.prank(overseer);
+        clearinghouse.activate();
 
         // Initial rebalance to fund the clearinghouse
         clearinghouse.rebalance();
@@ -195,10 +203,11 @@ contract ClearinghouseTest is Test {
     // --- SETUP, DEPENDENCIES, AND PERMISSIONS --------------------------
 
     function test_configureDependencies() public {
-        Keycode[] memory expectedDeps = new Keycode[](3);
-        expectedDeps[0] = toKeycode("TRSRY");
+        Keycode[] memory expectedDeps = new Keycode[](4);
+        expectedDeps[0] = toKeycode("CHREG");
         expectedDeps[1] = toKeycode("MINTR");
         expectedDeps[2] = toKeycode("ROLES");
+        expectedDeps[3] = toKeycode("TRSRY");
 
         Keycode[] memory deps = clearinghouse.configureDependencies();
         // Check: configured dependencies storage
@@ -206,16 +215,20 @@ contract ClearinghouseTest is Test {
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+        assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](4);
-        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+        Permissions[] memory expectedPerms = new Permissions[](6);
+        Keycode CHREG_KEYCODE = toKeycode("CHREG");
         Keycode MINTR_KEYCODE = toKeycode("MINTR");
-        expectedPerms[0] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
-        expectedPerms[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
-        expectedPerms[2] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        expectedPerms[3] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+        expectedPerms[0] = Permissions(CHREG_KEYCODE, CHREG.activateClearinghouse.selector);
+        expectedPerms[1] = Permissions(CHREG_KEYCODE, CHREG.deactivateClearinghouse.selector);
+        expectedPerms[2] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        expectedPerms[3] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
+        expectedPerms[4] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        expectedPerms[5] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
 
         Permissions[] memory perms = clearinghouse.requestPermissions();
         // Check: permission storage
@@ -638,6 +651,12 @@ contract ClearinghouseTest is Test {
         uint256 sdaiTrsryBal = sdai.balanceOf(address(TRSRY));
         uint256 sdaiCHBal = sdai.balanceOf(address(clearinghouse));
 
+        // Check: clearinghouse is deactivated in the CHREG
+        assertEq(CHREG.activeCount(), 1);
+        assertEq(CHREG.registryCount(), 1);
+        assertEq(CHREG.active(0), address(clearinghouse));
+        assertEq(CHREG.registry(0), address(clearinghouse));
+
         // Ensure that the event is emitted
         vm.expectEmit(address(clearinghouse));
         emit Deactivate();
@@ -646,6 +665,11 @@ contract ClearinghouseTest is Test {
         clearinghouse.emergencyShutdown();
         assertEq(clearinghouse.active(), false);
         assertEq(sdai.balanceOf(address(TRSRY)), sdaiTrsryBal + sdaiCHBal);
+
+        // Check: clearinghouse is deactivated in the CHREG
+        assertEq(CHREG.activeCount(), 0);
+        assertEq(CHREG.registryCount(), 1);
+        assertEq(CHREG.registry(0), address(clearinghouse));
     }
 
     function testRevert_emergencyShutdown_onlyRole() public {
@@ -661,17 +685,23 @@ contract ClearinghouseTest is Test {
 
         // Ensure that the event is emitted
         vm.expectEmit(address(clearinghouse));
-        emit Reactivate();
+        emit Activate();
         // Reactivate
-        clearinghouse.reactivate();
+        clearinghouse.activate();
         assertEq(clearinghouse.active(), true);
         vm.stopPrank();
+
+        // Check: clearinghouse is stored in the CHREG
+        assertEq(CHREG.activeCount(), 1);
+        assertEq(CHREG.registryCount(), 1);
+        assertEq(CHREG.active(0), address(clearinghouse));
+        assertEq(CHREG.registry(0), address(clearinghouse));
     }
 
     function testRevert_restartAfterShutdown_onlyRole() public {
         vm.prank(others);
         vm.expectRevert();
-        clearinghouse.reactivate();
+        clearinghouse.activate();
     }
 
     // --- CALLBACKS: ON LOAN REPAYMENT ----------------------------------

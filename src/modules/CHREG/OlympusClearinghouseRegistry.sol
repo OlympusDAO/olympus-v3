@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.15;
 
-import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import "src/Kernel.sol";
+import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
 /// @title  Olympus Clearinghouse Registry
 /// @notice Olympus Clearinghouse Registry (Module) Contract
@@ -87,7 +87,12 @@ contract OlympusClearinghouseRegistry is CHREGv1 {
                 ++i;
             }
         }
-        if (!registered) registry.push(clearinghouse_);
+        if (!registered) {
+            registry.push(clearinghouse_);
+            unchecked {
+                ++registryCount;
+            }
+        }
 
         emit ClearinghouseActivated(clearinghouse_);
     }

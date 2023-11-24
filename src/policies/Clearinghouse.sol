@@ -8,10 +8,11 @@ import {IStaking} from "interfaces/IStaking.sol";
 import {CoolerFactory, Cooler} from "cooler/CoolerFactory.sol";
 import {CoolerCallback} from "cooler/CoolerCallback.sol";
 
-import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import "src/Kernel.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
-import "src/Kernel.sol";
+import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
+import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 
 /// @title  Olympus Clearinghouse.
 /// @notice Olympus Clearinghouse (Policy) Contract.
@@ -35,10 +36,10 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
 
     // --- EVENTS ----------------------------------------------------
 
+    /// @notice Logs whenever the Clearinghouse is initialized or reactivated.
+    event Activate();
     /// @notice Logs whenever the Clearinghouse is deactivated.
     event Deactivate();
-    /// @notice Logs whenever the Clearinghouse is reactivated.
-    event Reactivate();
     /// @notice Logs whenever the treasury is defunded.
     event Defund(address token, uint256 amount);
     /// @notice Logs the balance change (in DAI terms) whenever a rebalance occurs.
@@ -54,8 +55,9 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
 
     // --- MODULES ---------------------------------------------------
 
-    TRSRYv1 public TRSRY; // Olympus V3 Treasury Module
+    CHREGv1 public CHREG; // Olympus V3 Clearinghouse Registry Module
     MINTRv1 public MINTR; // Olympus V3 Minter Module
+    TRSRYv1 public TRSRY; // Olympus V3 Treasury Module
 
     // --- PARAMETER BOUNDS ------------------------------------------
 
@@ -96,24 +98,33 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         staking = IStaking(staking_);
         sdai = ERC4626(sdai_);
         dai = ERC20(sdai.asset());
-
-        // Initialize the contract status and its funding schedule.
-        active = true;
-        fundTime = block.timestamp;
     }
 
     /// @notice Default framework setup. Configure dependencies for olympus-v3 modules.
     /// @dev    This function will be called when the `executor` installs the Clearinghouse
     ///         policy in the olympus-v3 `Kernel`.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
-        dependencies[0] = toKeycode("TRSRY");
+        dependencies = new Keycode[](4);
+        dependencies[0] = toKeycode("CHREG");
         dependencies[1] = toKeycode("MINTR");
         dependencies[2] = toKeycode("ROLES");
+        dependencies[3] = toKeycode("TRSRY");
 
-        TRSRY = TRSRYv1(getModuleAddress(toKeycode("TRSRY")));
+        CHREG = CHREGv1(getModuleAddress(toKeycode("CHREG")));
         MINTR = MINTRv1(getModuleAddress(toKeycode("MINTR")));
         ROLES = ROLESv1(getModuleAddress(toKeycode("ROLES")));
+        TRSRY = TRSRYv1(getModuleAddress(toKeycode("TRSRY")));
+
+        (uint8 CHREG_MAJOR, ) = CHREG.VERSION();
+        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([1, 1, 1, 1]);
+        if (CHREG_MAJOR != 1 || MINTR_MAJOR != 1 || ROLES_MAJOR != 1 || TRSRY_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
         ohm.approve(address(MINTR), type(uint256).max);
@@ -123,13 +134,17 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
     /// @dev    This function will be called when the `executor` installs the Clearinghouse
     ///         policy in the olympus-v3 `Kernel`.
     function requestPermissions() external view override returns (Permissions[] memory requests) {
+        Keycode CHREG_KEYCODE = toKeycode("CHREG");
+        Keycode MINTR_KEYCODE = toKeycode("MINTR");
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
 
-        requests = new Permissions[](4);
-        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
-        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
-        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
-        requests[3] = Permissions(toKeycode("MINTR"), MINTR.burnOhm.selector);
+        requests = new Permissions[](6);
+        requests[0] = Permissions(CHREG_KEYCODE, CHREG.activateClearinghouse.selector);
+        requests[1] = Permissions(CHREG_KEYCODE, CHREG.deactivateClearinghouse.selector);
+        requests[2] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
+        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
     }
 
     // --- OPERATION -------------------------------------------------
@@ -369,6 +384,46 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         sdai.deposit(amount_, address(this));
     }
 
+    /// @notice Public function to burn gOHM.
+    /// @dev    Can be used to burn any gOHM defaulted using the Cooler instead of the Clearinghouse.
+    function burn() public {
+        uint256 gohmBalance = gohm.balanceOf(address(this));
+        // Unstake and burn gOHM holdings.
+        gohm.approve(address(staking), gohmBalance);
+        MINTR.burnOhm(address(this), staking.unstake(address(this), gohmBalance, false, false));
+    }
+
+    // --- ADMIN ---------------------------------------------------
+
+    /// @notice Activate the contract.
+    function activate() external onlyRole("cooler_overseer") {
+        active = true;
+        fundTime = block.timestamp;
+
+        // Signal to CHREG that the contract has been activated.
+        CHREG.activateClearinghouse(address(this));
+
+        emit Activate();
+    }
+
+    /// @notice Deactivate the contract and return funds to treasury.
+    function emergencyShutdown() external onlyRole("emergency_shutdown") {
+        active = false;
+
+        // If necessary, defund sDAI.
+        uint256 sdaiBalance = sdai.balanceOf(address(this));
+        if (sdaiBalance != 0) _defund(sdai, sdaiBalance);
+
+        // If necessary, defund DAI.
+        uint256 daiBalance = dai.balanceOf(address(this));
+        if (daiBalance != 0) _defund(dai, daiBalance);
+
+        // Signal to CHREG that the contract has been deactivated.
+        CHREG.deactivateClearinghouse(address(this));
+
+        emit Deactivate();
+    }
+
     /// @notice Return funds to treasury.
     /// @param  token_ to transfer.
     /// @param  amount_ to transfer.
@@ -397,38 +452,6 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         // Defund and log the event
         token_.transfer(address(TRSRY), amount_);
         emit Defund(address(token_), amount_);
-    }
-
-    /// @notice Public function to burn gOHM.
-    /// @dev    Can be used to burn any gOHM defaulted using the Cooler instead of the Clearinghouse.
-    function burn() public {
-        uint256 gohmBalance = gohm.balanceOf(address(this));
-        // Unstake and burn gOHM holdings.
-        gohm.approve(address(staking), gohmBalance);
-        MINTR.burnOhm(address(this), staking.unstake(address(this), gohmBalance, false, false));
-    }
-
-    /// @notice Deactivate the contract and return funds to treasury.
-    function emergencyShutdown() external onlyRole("emergency_shutdown") {
-        active = false;
-
-        // If necessary, defund sDAI.
-        uint256 sdaiBalance = sdai.balanceOf(address(this));
-        if (sdaiBalance != 0) _defund(sdai, sdaiBalance);
-
-        // If necessary, defund DAI.
-        uint256 daiBalance = dai.balanceOf(address(this));
-        if (daiBalance != 0) _defund(dai, daiBalance);
-
-        emit Deactivate();
-    }
-
-    /// @notice Reactivate the contract.
-    function reactivate() external onlyRole("cooler_overseer") {
-        active = true;
-        fundTime = block.timestamp;
-
-        emit Reactivate();
     }
 
     // --- AUX FUNCTIONS ---------------------------------------------
