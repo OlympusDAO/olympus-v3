@@ -3,8 +3,7 @@
         {
             "name": "LegacyBurner",
             "args": {
-                "rewardsPerSecond": 2,
-                "maxRewardRate": 500000
+                "reward": 40000000000
             }
         }
     ]

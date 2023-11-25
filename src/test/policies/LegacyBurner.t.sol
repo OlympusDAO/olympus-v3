@@ -85,8 +85,7 @@ contract LegacyBurnerTest is Test {
                 address(ohm),
                 address(bondManager),
                 address(inverseBondDepo),
-                1,
-                500_000
+                50e9
             );
         }
 
@@ -140,18 +139,15 @@ contract LegacyBurnerTest is Test {
         // Use governor to set replacementAuthority on inverse bond depo
         vm.prank(guardian);
         inverseBondDepo.setAuthority(address(replacementAuthority));
-
-        // Warp a day for non-zero rewards
-        vm.warp(1 days);
     }
 
     /// [X]  burn
     ///     [X]  reverts if bond manager has not given approval
     ///     [X]  reverts if replacementAuthority has not been set on inverse bond depo
-    ///     [X]  reverts if rewards are 0
+    ///     []  reverts if burn has happened already
     ///     [X]  burn can be called by anyone
     ///     [X]  burns OHM from bond manager and inverse bond depo
-    ///     [X]  calculates and mints rewards to caller
+    ///     [X]  mints rewards to caller
 
     function test_burnRevertsIfBondManagerHasNotGivenApproval() public {
         vm.expectRevert("ERC20: transfer amount exceeds allowance");
@@ -167,16 +163,11 @@ contract LegacyBurnerTest is Test {
         burner.burn();
     }
 
-    function test_burnRevertsIfRewardsAreZero() public {
-        // Use policy to set approval for Burner on BondManager
-        vm.prank(policy);
-        bondManager.emergencySetApproval(address(burner), type(uint256).max);
+    function test_burnRevertsIfAlreadyCalled() public {
+        _setUpForBurning();
+        burner.burn();
 
-        // Use governor to set replacementAuthority on inverse bond depo
-        vm.prank(guardian);
-        inverseBondDepo.setAuthority(address(replacementAuthority));
-
-        bytes memory err = abi.encodeWithSignature("MINTR_ZeroAmount()");
+        bytes memory err = abi.encodeWithSignature("LegacyBurner_RewardAlreadyClaimed()");
         vm.expectRevert(err);
         burner.burn();
     }
@@ -207,32 +198,15 @@ contract LegacyBurnerTest is Test {
         assertEq(depoBalance, 0);
     }
 
-    function test_burnCalculatesAndMintsRewardsToCaller(uint256 time) public {
-        vm.assume(time > 1 && time <= 90 days);
-
-        // Use policy to set approval for Burner on BondManager
-        vm.prank(policy);
-        bondManager.emergencySetApproval(address(burner), type(uint256).max);
-
-        // Use governor to set replacementAuthority on inverse bond depo
-        vm.prank(guardian);
-        inverseBondDepo.setAuthority(address(replacementAuthority));
-
-        vm.warp(time);
+    function test_burnMintsRewardsToCaller() public {
+        _setUpForBurning();
 
         uint256 callerBalance = ohm.balanceOf(address(this));
-
         assertEq(callerBalance, 0);
 
         burner.burn();
 
-        // Calculate expected reward
-        uint256 rewards = (time - 1); // contract gets initialized at timestamp 1 in setUp, and rewardsPerSecond is set to 1
-        uint256 rewardRate = rewards > 500_000 ? 500_000 : rewards;
-
-        uint256 expectedReward = (2_000_000e9 * rewardRate) / 100_000_000;
         callerBalance = ohm.balanceOf(address(this));
-
-        assertApproxEqRel(callerBalance, expectedReward, 1e16);
+        assertEq(callerBalance, 50e9);
     }
 }
