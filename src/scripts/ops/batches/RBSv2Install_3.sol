@@ -32,8 +32,21 @@ contract RBSv2Install_3 is OlyBatch {
     address priceConfig;
     address rolesAdmin;
     address bondCallback;
+    address clearinghouse;
 
-    // New Contracts
+    // Tokens
+    address ohm;
+    address dai;
+    address sdai;
+    address polBunni;
+
+    // Price Feeds
+    address ohmEthPriceFeed;
+    address ethUsdPriceFeed;
+    address daiEthPriceFeed;
+    address daiUsdPriceFeed;
+
+    // New Olympus Contracts
     address priceV2;
     address balancerPoolTokenPrice;
     address bunniPrice;
@@ -55,6 +68,17 @@ contract RBSv2Install_3 is OlyBatch {
         priceConfig = envAddress("current", "olympus.policies.PriceConfig");
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
         bondCallback = envAddress("current", "olympus.policies.BondCallback");
+        clearinghouse = envAddress("current", "olympus.policies.Clearinghouse");
+
+        ohm = envAddress("current", "olympus.legacy.OHM");
+        dai = envAddress("current", "external.tokens.DAI");
+        sdai = envAddress("current", "external.tokens.sDAI");
+        polBunni = envAddress("current", "external.tokens.polBunni");
+
+        ohmEthPriceFeed = envAddress("current", "external.chainlink.ohmEthPriceFeed");
+        ethUsdPriceFeed = envAddress("current", "external.chainlink.ethUsdPriceFeed");
+        daiEthPriceFeed = envAddress("current", "external.chainlink.daiEthPriceFeed");
+        daiUsdPriceFeed = envAddress("current", "external.chainlink.daiUsdPriceFeed");
 
         priceV2 = envAddress("current", "olympus.modules.OlympusPriceV2");
         balancerPoolTokenPrice = envAddress("current", "olympus.submodules.PRICE.BalancerPoolTokenPrice");
@@ -138,10 +162,26 @@ contract RBSv2Install_3 is OlyBatch {
         addToBatch(bondCallback, abi.encodeWithSelector(BondCallback.setOperator.selector, newOperator));
     }
 
-    function RBSv2Install_3_2(bool send_, uint256[] memory ohmObs_, uint48 ohmLastObsTime_, uint256[] memory daiObs_, uint48 daiLastObsTime_) public isPolicyBatch(send_) {
+    function RBSv2Install_3_2(
+        bool send_,
+        uint256[] memory ohmObs_,
+        uint48 ohmLastObsTime_,
+        uint256[] memory daiObs_,
+        uint48 daiLastObsTime_,
+        uint256[] memory sdaiObs_,
+        uint48 sdaiLastObsTime_,
+        uint256[] memory polBunniObs_,
+        uint48 polBunniLastObsTime_
+    ) public isPolicyBatch(send_) {
         // This Policy MS batch:
         // 1. Configures OHM price feed and moving average data on PRICE
         // 2. Configures DAI price feed and moving average data on PRICE
+        // 3. Configures sDAI price feed and moving average data on PRICE
+        // 4. Configures polBunni price feed and moving average data on PRICE
+        // 5. Add and categorize DAI on Bookkeeper
+        // 6. Add and categorize sDAI on Bookkeeper
+        // 7. Add and categorize POL
+        // 8. Add and categorize OHM
 
         // 1. Configure OHM price feed and moving average data on PRICE
         PRICEv2.Component[] memory ohmFeeds = new PRICEv2.Component[](1);
@@ -213,6 +253,119 @@ contract RBSv2Install_3 is OlyBatch {
                 ),
                 daiFeeds
             )
+        );
+
+        // 3. Configure sDAI price feed and moving average data on PRICE
+        PRICEv2.Component[] memory sdaiFeeds = new PRICEv2.Component[](1);
+        sdaiFeeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.ERC4626"),
+            ERC4626Price.getPriceFromUnderlying.selector,
+            abi.encode(sdai, ERC20(sdai).decimals(), "")
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(
+                Bookkeeper.addAssetPrice.selector,
+                sdai,
+                true, // store moving average
+                true, // use the moving average as part of price strategy
+                uint32(30 days), // 30 day moving average
+                sdaiLastObsTime_,
+                sdaiObs_,
+                PRICEv2.Component(
+                    toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                    SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                    abi.encode(0)
+                ),
+                sdaiFeeds
+            )
+        );
+
+        // 4. Configure polBunni price feed and moving average data on PRICE
+        PRICEv2.Component[] memory polBunniFeeds = new PRICEv2.Component[](1);
+        polBunniFeeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.UNIV3"),
+            UniswapV3Price.getTokenTWAP.selector,
+            abi.encode(polBunni, ERC20(polBunni).decimals(), "") // TODO: Change bytes params?
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(
+                Bookkeeper.addAssetPrice.selector,
+                polBunni,
+                true, // store moving average
+                true, // use the moving average as part of price strategy
+                uint32(30 days), // 30 day moving average
+                polBunniLastObsTime_,
+                polBunniObs_,
+                PRICEv2.Component(
+                    toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                    SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                    abi.encode(0)
+                ),
+                polBunniFeeds
+            )
+        );
+
+        // 5. Add and categorize DAI on Bookkeeper
+        //      - liquid, stable, reserves
+        address[] memory locations = new address[](1);
+        locations[0] = clearinghouse;
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.addAsset.selector, dai, locations)
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, dai, AssetCategory.wrap("liquid"))
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, dai, AssetCategory.wrap("stable"))
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, dai, AssetCategory.wrap("reserves"))
+        );
+
+        // 6. Add and categorize sDAI on Bookkeeper
+        //      - liquid, stable, reserves
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.addAsset.selector, sdai, locations)
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, sdai, AssetCategory.wrap("liquid"))
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, sdai, AssetCategory.wrap("stable"))
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, sdai, AssetCategory.wrap("reserves"))
+        );
+
+        // 7. Add and categorize POL
+        //      - liquid, protocol-owned-liquidity
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.addAsset.selector, polBunni, new address[](0))
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, polBunni, AssetCategory.wrap("liquid"))
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, polBunni, AssetCategory.wrap("protocol-owned-liquidity"))
+        );
+
+        // 8. Add and categorize OHM
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, polBunni, SupplyCategory.wrap("protocol-owned-liquidity"))
         );
     }
 
