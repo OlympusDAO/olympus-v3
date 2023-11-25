@@ -60,6 +60,7 @@ import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 import {BalancerPoolTokenPrice} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {ERC4626Price} from "modules/PRICE/submodules/feeds/ERC4626Price.sol";
 import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
@@ -107,6 +108,7 @@ contract OlympusDeploy is Script {
     SimplePriceFeedStrategy public simplePriceFeedStrategy;
     BalancerPoolTokenPrice public balancerPoolTokenPrice;
     ChainlinkPriceFeeds public chainlinkPriceFeeds;
+    ERC4626Price public erc4626Price;
     UniswapV2PoolTokenPrice public uniswapV2PoolTokenPrice;
     UniswapV3Price public uniswapV3Price;
     BunniPrice public bunniPrice;
@@ -234,6 +236,7 @@ contract OlympusDeploy is Script {
         selectorMap["SimplePriceFeedStrategy"] = this._deploySimplePriceFeedStrategy.selector;
         selectorMap["BalancerPoolTokenPrice"] = this._deployBalancerPoolTokenPrice.selector;
         selectorMap["ChainlinkPriceFeeds"] = this._deployChainlinkPriceFeeds.selector;
+        selectorMap["ERC4626Price"] = this._deployERC4626Price.selector;
         selectorMap["UniswapV2PoolTokenPrice"] = this._deployUniswapV2PoolTokenPrice.selector;
         selectorMap["UniswapV3Price"] = this._deployUniswapV3Price.selector;
         selectorMap["BunniPrice"] = this._deployBunniPrice.selector;
@@ -328,6 +331,9 @@ contract OlympusDeploy is Script {
         );
         chainlinkPriceFeeds = ChainlinkPriceFeeds(
             envAddress("olympus.submodules.PRICE.ChainlinkPriceFeeds")
+        );
+        erc4626Price = ERC4626Price(
+            envAddress("olympus.submodules.PRICE.ERC4626Price")
         );
         uniswapV2PoolTokenPrice = UniswapV2PoolTokenPrice(
             envAddress("olympus.submodules.PRICE.UniswapV2PoolTokenPrice")
@@ -1095,6 +1101,20 @@ contract OlympusDeploy is Script {
         console2.log("ChainlinkPriceFeeds deployed at:", address(chainlinkPriceFeeds));
 
         return address(chainlinkPriceFeeds);
+    }
+
+    function _deployERC4626Price(bytes memory args) public returns (address) {
+        // No additional arguments for ERC4626Price submodules
+
+        // Check that environment variables are loaded
+        if (address(PRICEv2) == address(0)) revert("PRICEv2 address not set");
+
+        // Deploy ERC4626Price submodule
+        vm.broadcast();
+        erc4626Price = new ERC4626Price(PRICEv2);
+        console2.log("ERC4626Price deployed at:", address(erc4626Price));
+
+        return address(erc4626Price);
     }
 
     function _deployUniswapV2PoolTokenPrice(bytes memory args) public returns (address) {

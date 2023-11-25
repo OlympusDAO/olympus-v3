@@ -17,7 +17,6 @@
         {
             "name": "MigrationOffsetSupply",
             "args": {
-                "source": "0x000.000",
                 "gOhmOffset": 0
             }
         },

@@ -1,7 +1,7 @@
 {
     "sequence": [
         {
-            "name": "OlympusPrice",
+            "name": "OlympusPricev2",
             "args": {
                 "decimals": 18,
                 "observationFrequency": 28800
@@ -40,7 +40,8 @@
             "args": {
                 "harvestRewardMax": 0,
                 "harvestRewardFee": 0,
-                "harvestFrequency": 0
+                "harvestFrequency": 0,
+                "uniswapFactory": "0x000.000"
             }
         },
         {
@@ -54,8 +55,8 @@
         {
             "name": "OlympusHeart",
             "args": {
-                "maxReward": 0,
-                "auctionDuration": 0
+                "auctionDuration": 0,
+                "maxReward": 0
             }
         },
         {
