@@ -33,12 +33,7 @@ contract MockLegacyAuthorityV2 is IOlympusAuthority {
     address internal policyAddr;
     address internal vaultAddr;
 
-    constructor(
-        address governor_,
-        address guardian_,
-        address policy_,
-        address vault_
-    ) {
+    constructor(address governor_, address guardian_, address policy_, address vault_) {
         governorAddr = governor_;
         guardianAddr = guardian_;
         policyAddr = policy_;
