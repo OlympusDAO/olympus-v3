@@ -118,11 +118,8 @@ contract LegacyBurner is Policy {
     /// @notice Burns OHM from the bond manager
     /// @dev    An infinite approval (via Policy MS) for this contract to spend OHM from the bond manager is required
     function _burnBondManagerOhm(uint256 amount_) internal {
-        // Transfer from BondManager
-        ohm.transferFrom(bondManager, address(this), amount_);
-
         // Burn the OHM
-        MINTR.burnOhm(address(this), amount_);
+        MINTR.burnOhm(bondManager, amount_);
     }
 
     /// @notice Burns OHM from the legacy inverse bond depository

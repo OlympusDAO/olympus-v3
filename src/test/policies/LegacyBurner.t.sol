@@ -132,9 +132,9 @@ contract LegacyBurnerTest is Test {
     // ========= HELPERS ========= //
 
     function _setUpForBurning() internal {
-        // Use policy to set approval for Burner on BondManager
+        // Use policy to set approval for Burner on MINTR so the OHM can be burnt
         vm.prank(policy);
-        bondManager.emergencySetApproval(address(burner), type(uint256).max);
+        bondManager.emergencySetApproval(address(mintr), type(uint256).max);
 
         // Use governor to set replacementAuthority on inverse bond depo
         vm.prank(guardian);
@@ -144,13 +144,13 @@ contract LegacyBurnerTest is Test {
     /// [X]  burn
     ///     [X]  reverts if bond manager has not given approval
     ///     [X]  reverts if replacementAuthority has not been set on inverse bond depo
-    ///     []  reverts if burn has happened already
+    ///     [X]  reverts if burn has happened already
     ///     [X]  burn can be called by anyone
     ///     [X]  burns OHM from bond manager and inverse bond depo
     ///     [X]  mints rewards to caller
 
     function test_burnRevertsIfBondManagerHasNotGivenApproval() public {
-        vm.expectRevert("ERC20: transfer amount exceeds allowance");
+        vm.expectRevert("ERC20: burn amount exceeds allowance");
         burner.burn();
     }
 
