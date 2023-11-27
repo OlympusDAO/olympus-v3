@@ -22,6 +22,7 @@ import {Operator} from "policies/RBS/Operator.sol";
 import {PriceConfig} from "policies/RBS/PriceConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {BondCallback} from "policies/Bonds/BondCallback.sol";
+import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 
 contract RBSv2Install_3 is OlyBatch {
     // Existing Olympus Contracts
@@ -39,12 +40,33 @@ contract RBSv2Install_3 is OlyBatch {
     address dai;
     address sdai;
     address polBunni;
+    address weth;
+    address veFXS;
+    address fxs;
+    address usdc;
 
     // Price Feeds
     address ohmEthPriceFeed;
     address ethUsdPriceFeed;
     address daiEthPriceFeed;
     address daiUsdPriceFeed;
+    address fxsUsdPriceFeed;
+    address usdcUsdPriceFeed;
+
+    // Uniswap Pools
+    address daiUsdcPool;
+    address wethUsdcPool;
+    address ohmDaiPool;
+
+    // Allocators
+    address veFXSAllocator;
+
+    // BLV
+    address blvLido;
+    address blvLusd;
+
+    // Other
+    address daoWorkingWallet;
 
     // New Olympus Contracts
     address priceV2;
@@ -59,6 +81,7 @@ contract RBSv2Install_3 is OlyBatch {
     address bookkeeper;
     address newHeart;
     address newOperator;
+    address bunniManager;
 
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
@@ -79,6 +102,19 @@ contract RBSv2Install_3 is OlyBatch {
         ethUsdPriceFeed = envAddress("current", "external.chainlink.ethUsdPriceFeed");
         daiEthPriceFeed = envAddress("current", "external.chainlink.daiEthPriceFeed");
         daiUsdPriceFeed = envAddress("current", "external.chainlink.daiUsdPriceFeed");
+        fxsUsdPriceFeed = envAddress("current", "external.chainlink.fxsUsdPriceFeed");
+        usdcUsdPriceFeed = envAddress("current", "external.chainlink.usdcUsdPriceFeed");
+
+        daiUsdcPool = envAddress("current", "external.uniswapV3.DaiUsdcPool");
+        wethUsdcPool = envAddress("current", "external.uniswapV3.WethUsdcPool");
+        ohmDaiPool = envAddress("current", "external.uniswapV2.OhmDaiPool");
+
+        veFXSAllocator = envAddress("current", "olympus.legacy.veFXSAllocator");
+
+        blvLido = envAddress("current", "olympus.policies.BLVaultManagerLido");
+        blvLusd = envAddress("current", "olympus.policies.BLVaultManagerLusd");
+
+        daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
 
         priceV2 = envAddress("current", "olympus.modules.OlympusPriceV2");
         balancerPoolTokenPrice = envAddress("current", "olympus.submodules.PRICE.BalancerPoolTokenPrice");
@@ -92,6 +128,7 @@ contract RBSv2Install_3 is OlyBatch {
         bookkeeper = envAddress("current", "olympus.policies.Bookkeeper");
         newHeart = envAddress("current", "olympus.policies.OlympusHeart");
         newOperator = envAddress("current", "olympus.policies.Operator");
+        bunniManager = envAddress("current", "olympus.policies.BunniManager");
     }
 
     function RBSv2Install_3_1(bool send_) external isDaoBatch(send_) {
@@ -171,40 +208,51 @@ contract RBSv2Install_3 is OlyBatch {
         uint256[] memory sdaiObs_,
         uint48 sdaiLastObsTime_,
         uint256[] memory polBunniObs_,
-        uint48 polBunniLastObsTime_
+        uint48 polBunniLastObsTime_,
+        uint256[] memory wethObs_,
+        uint48 wethLastObsTime_,
+        uint256[] memory veFXSObs_,
+        uint48 veFXSLastObsTime_,
+        uint256[] memory fxsObs_,
+        uint48 fxsLastObsTime_,
+        uint256[] memory usdcObs_,
+        uint48 usdcLastObsTime_
     ) public isPolicyBatch(send_) {
         // This Policy MS batch:
         // 1. Configures OHM price feed and moving average data on PRICE
         // 2. Configures DAI price feed and moving average data on PRICE
         // 3. Configures sDAI price feed and moving average data on PRICE
         // 4. Configures polBunni price feed and moving average data on PRICE
-        // 5. Add and categorize DAI on Bookkeeper
-        // 6. Add and categorize sDAI on Bookkeeper
-        // 7. Add and categorize POL
-        // 8. Add and categorize OHM
+        // 5. Configure WETH price feed and moving average data on PRICE
+        // 6. Configure veFXS price feed and moving average data on PRICE
+        // 7. Configure FXS price feed and moving average data on PRICE
+        // 8. Configure USDC price feed and moving average data on PRICE
+        // 9. Add and categorize DAI
+        // 10. Add and categorize sDAI
+        // 11. Add and categorize POL
+        // 12. Add and categorize OHM
+        // 13. Add and categorize WETH
+        // 14. Add and categorize veFXS
+        // 15. Add and categorize FXS
+        // 16. Categorize protocol-owned-treasury supply
+        // 17. Categorize dao supply
+        // 18. Categorize BLV supply
 
         // 1. Configure OHM price feed and moving average data on PRICE
         PRICEv2.Component[] memory ohmFeeds = new PRICEv2.Component[](1);
         ohmFeeds[0] = PRICEv2.Component(
-            toSubKeycode("PRICE.CHAINLINK"),
-            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
-            abi.encode(
-                ChainlinkPriceFeeds.TwoFeedParams(
-                    AggregatorV2V3Interface(ohmEthPriceFeed),
-                    uint48(24 hours),
-                    AggregatorV2V3Interface(ethUsdPriceFeed),
-                    uint48(24 hours)
-                )
-            )
+            toSubKeycode("PRICE.UNIV3"),
+            UniswapV3Price.getTokenTWAP.selector,
+            abi.encode(ohmDaiPool, 18, "")
         );
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
                 Bookkeeper.addAssetPrice.selector,
                 ohm,
-                true, // store moving average
+                false, // don't store moving average
                 false, // don't use the moving average as part of price strategy
-                uint32(30 days), // 30 day moving average
+                0,
                 ohmLastObsTime_,
                 ohmObs_,
                 PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
@@ -216,18 +264,6 @@ contract RBSv2Install_3 is OlyBatch {
         PRICEv2.Component[] memory daiFeeds = new PRICEv2.Component[](2);
         daiFeeds[0] = PRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
-            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
-            abi.encode(
-                ChainlinkPriceFeeds.TwoFeedParams(
-                    AggregatorV2V3Interface(daiEthPriceFeed),
-                    uint48(24 hours),
-                    AggregatorV2V3Interface(ethUsdPriceFeed),
-                    uint48(24 hours)
-                )
-            )
-        );
-        daiFeeds[1] = PRICEv2.Component(
-            toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getOneFeedPrice.selector,
             abi.encode(
                 ChainlinkPriceFeeds.OneFeedParams(
@@ -236,6 +272,11 @@ contract RBSv2Install_3 is OlyBatch {
                 )
             )
         );
+        daiFeeds[1] = PRICEv2.Component(
+            toSubKeycode("PRICE.UNIV3"),
+            UniswapV3Price.getTokenTWAP.selector,
+            abi.encode(daiUsdcPool, 18, "")
+        )
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -248,7 +289,7 @@ contract RBSv2Install_3 is OlyBatch {
                 daiObs_,
                 PRICEv2.Component(
                     toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                    SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                    SimplePriceFeedStrategy.getAveragePrice.selector,
                     abi.encode(0)
                 ),
                 daiFeeds
@@ -267,16 +308,12 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(
                 Bookkeeper.addAssetPrice.selector,
                 sdai,
-                true, // store moving average
-                true, // use the moving average as part of price strategy
-                uint32(30 days), // 30 day moving average
+                false, // don't store moving average
+                false, // don't use the moving average as part of price strategy
+                0, // 30 day moving average
                 sdaiLastObsTime_,
                 sdaiObs_,
-                PRICEv2.Component(
-                    toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                    SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
-                    abi.encode(0)
-                ),
+                PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
                 sdaiFeeds
             )
         );
@@ -284,8 +321,8 @@ contract RBSv2Install_3 is OlyBatch {
         // 4. Configure polBunni price feed and moving average data on PRICE
         PRICEv2.Component[] memory polBunniFeeds = new PRICEv2.Component[](1);
         polBunniFeeds[0] = PRICEv2.Component(
-            toSubKeycode("PRICE.UNIV3"),
-            UniswapV3Price.getTokenTWAP.selector,
+            toSubKeycode("PRICE.BNI"),
+            BunniPrice.getBunniTokenPrice.selector,
             abi.encode(polBunni, ERC20(polBunni).decimals(), "") // TODO: Change bytes params?
         );
         addToBatch(
@@ -293,21 +330,134 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(
                 Bookkeeper.addAssetPrice.selector,
                 polBunni,
-                true, // store moving average
-                true, // use the moving average as part of price strategy
-                uint32(30 days), // 30 day moving average
+                false, // don't store moving average
+                false, // don't use the moving average as part of price strategy
+                0, // 30 day moving average
                 polBunniLastObsTime_,
                 polBunniObs_,
-                PRICEv2.Component(
-                    toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                    SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
-                    abi.encode(0)
-                ),
+                PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
                 polBunniFeeds
             )
         );
 
-        // 5. Add and categorize DAI on Bookkeeper
+        // 5. Configure WETH price feed and moving average data on PRICE
+        PRICEv2.Component[] memory wethFeeds = new PRICEv2.Component[](2);
+        wethFeeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(
+                ChainlinkPriceFeeds.OneFeedParams(
+                    AggregatorV2V3Interface(ethUsdPriceFeed),
+                    uint48(24 hours)
+                )
+            )
+        );
+        wethFeeds[1] = PRICEv2.Component(
+            toSubKeycode("PRICE.UNIV3"),
+            UniswapV3Price.getTokenTWAP.selector,
+            abi.encode(wethUsdcPool, 18, "")
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(
+                bookkeeper.addAssetPrice.selector,
+                weth,
+                true, // store moving average
+                true, // use the moving average as part of price strategy
+                uint32(30 days), // 30 day moving average
+                wethLastObsTime_,
+                wethObs_,
+                PRICEv2.Component(
+                    toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                    SimplePriceFeedStrategy.getAveragePrice.selector,
+                    abi.encode(0)
+                ),
+                wethFeeds
+            )
+        );
+
+        // 6. Configure veFXS price feed and moving average data on PRICE
+        PRICEv2.Component[] memory veFXSFeeds = new PRICEv2.Component[](1);
+        veFXSFeeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(
+                ChainlinkPriceFeeds.OneFeedParams(
+                    AggregatorV2V3Interface(fxsUsdPriceFeed),
+                    uint48(24 hours)
+                )
+            )
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(
+                bookkeeper.addAssetPrice.selector,
+                veFXS,
+                false, // don't store moving average
+                false, // don't use the moving average as part of price strategy
+                0, // 30 day moving average
+                veFXSLastObsTime_,
+                veFXSObs_,
+                PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
+                veFXSFeeds
+            )
+        );
+
+        // 7. Configure FXS price feed and moving average data on PRICE
+        PRICEv2.Component[] memory fxsFeeds = new PRICEv2.Component[](1);
+        fxsFeeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(
+                ChainlinkPriceFeeds.OneFeedParams(
+                    AggregatorV2V3Interface(fxsUsdPriceFeed),
+                    uint48(24 hours)
+                )
+            )
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(
+                bookkeeper.addAssetPrice.selector,
+                fxs,
+                false, // don't store moving average
+                false, // don't use the moving average as part of price strategy
+                0, // 30 day moving average
+                fxsLastObsTime_,
+                fxsObs_,
+                PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
+                fxsFeeds
+            )
+        );
+
+        // 8. Configure USDC price feed and moving average data on PRICE
+        PRICEv2.Component[] memory usdcFeeds = new PRICEv2.Component[](1);
+        usdcFeeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(
+                ChainlinkPriceFeeds.OneFeedParams(
+                    AggregatorV2V3Interface(usdcUsdPriceFeed),
+                    uint48(24 hours)
+                )
+            )
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(
+                bookkeeper.addAssetPrice.selector,
+                usdc,
+                true, // store moving average
+                true, // use the moving average as part of price strategy
+                uint32(30 days), // 30 day moving average
+                usdcLastObsTime_,
+                usdcObs_,
+                PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
+                usdcFeeds
+            )
+        );
+
+        // 9. Add and categorize DAI on Bookkeeper
         //      - liquid, stable, reserves
         address[] memory locations = new address[](1);
         locations[0] = clearinghouse;
@@ -328,7 +478,7 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, dai, AssetCategory.wrap("reserves"))
         );
 
-        // 6. Add and categorize sDAI on Bookkeeper
+        // 10. Add and categorize sDAI on Bookkeeper
         //      - liquid, stable, reserves
         addToBatch(
             bookkeeper,
@@ -347,11 +497,13 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, sdai, AssetCategory.wrap("reserves"))
         );
 
-        // 7. Add and categorize POL
+        // 11. Add and categorize POL
         //      - liquid, protocol-owned-liquidity
+        address[] memory polLocations = new address[](1);
+        polLocations[0] = BunniManager(bunniManager).bunniHub();
         addToBatch(
             bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.addAsset.selector, polBunni, new address[](0))
+            abi.encodeWithSelector(Bookkeeper.addAsset.selector, polBunni, polLocations)
         );
         addToBatch(
             bookkeeper,
@@ -362,10 +514,82 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, polBunni, AssetCategory.wrap("protocol-owned-liquidity"))
         );
 
-        // 8. Add and categorize OHM
+        // 12. Add and categorize OHM
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, polBunni, SupplyCategory.wrap("protocol-owned-liquidity"))
+        );
+
+        // 13. Add and categorize WETH
+        //      - liquid, volatile
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.addAsset.selector, weth, new address[](0))
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, weth, AssetCategory.wrap("liquid"))
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, weth, AssetCategory.wrap("volatile"))
+        );
+
+        // 14. Add and categorize veFXS
+        //      - illiquid, volatile
+        address[] memory veFXSLocations = new address[](1);
+        veFXSLocations[0] = veFXSAllocator;
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.addAsset.selector, veFXS, veFXSLocations)
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, veFXS, AssetCategory.wrap("illiquid"))
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, veFXS, AssetCategory.wrap("volatile"))
+        );
+
+        // 15. Add and categorize FXS
+        //      - illiquid, volatile
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.addAsset.selector, fxs, veFXSLocations)
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, fxs, AssetCategory.wrap("illiquid"))
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, fxs, AssetCategory.wrap("volatile"))
+        );
+
+        // 16. Categorize protocol-owned-treasury supply
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, daoMS, SupplyCategory.wrap("protocol-owned-treasury"))
+        );
+        // TODO - Manual offset??
+        // TODO - Bricked supply??
+
+        // 17. Categorize dao supply
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, daoWorkingWallet, SupplyCategory.wrap("dao"))
+        );
+
+        // 18. Categorize BLV supply
+        // TODO - fix. this is wrong. i don't fully understand the supply categorization with submodules
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, blvLido, SupplyCategory.wrap("blv"))
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, blvLusd, SupplyCategory.wrap("blv"))
         );
     }
 
