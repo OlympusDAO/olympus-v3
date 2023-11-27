@@ -57,6 +57,36 @@ contract VohmVaultTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, godmode);
     }
 
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](1);
+        expectedDeps[0] = toKeycode("VOTES");
+
+        Keycode[] memory deps = vOHMvault.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](5);
+        expectedPerms[0] = Permissions(toKeycode("VOTES"), VOTES.deposit.selector);
+        expectedPerms[1] = Permissions(toKeycode("VOTES"), VOTES.mint.selector);
+        expectedPerms[2] = Permissions(toKeycode("VOTES"), VOTES.withdraw.selector);
+        expectedPerms[3] = Permissions(toKeycode("VOTES"), VOTES.redeem.selector);
+        expectedPerms[4] = Permissions(toKeycode("VOTES"), VOTES.transferFrom.selector);
+        Permissions[] memory perms = vOHMvault.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
+        }
+    }
+
+    // ======== VAULT TESTS ======= //
+
     function testCorrectness_deposit() public {
         uint256 amt = 100 * 1e18;
         gOHM.mint(user1, amt);
