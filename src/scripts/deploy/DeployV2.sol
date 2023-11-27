@@ -106,7 +106,6 @@ contract OlympusDeploy is Script {
     ERC20 public lusd;
     ERC20 public aura;
     ERC20 public bal;
-    ERC4626 public wrappedReserve;
 
     /// Bond system addresses
     IBondSDA public bondAuctioneer;
