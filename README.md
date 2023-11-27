@@ -55,6 +55,22 @@ Up-to-date addresses of all the deployments can be found in:
 
 To generate documentation, run `forge doc`
 
+## Solidity Code Metrics
+
+When preparing the codebase for an audit, it is necessary to generate code metrics.
+
+A script has been prepared to generate the metrics in a relatively easy manner - easier than using the standard CLI or VSCode extension.
+
+Here is an example for the `SPPLY` module:
+
+`pnpm run metrics src/modules/SPPLY/**/*.sol`
+
+The report will be written to `/metrics.html` and can be moved into place after that.
+
+Pass `--exclude=<FILE>` to ignore specific files from the analysis. For example:
+
+`pnpm run metrics --exclude=src/modules/SPPLY/submodules/BunniSupply.sol src/modules/SPPLY/**/*.sol src/scripts/deploy/DeployV2.sol`
+
 ## Deployment
 
 ### Environment

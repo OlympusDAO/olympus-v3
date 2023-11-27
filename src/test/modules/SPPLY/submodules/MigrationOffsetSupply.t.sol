@@ -40,6 +40,7 @@ contract MigrationOffsetSupplyTest is Test {
     event GOhmOffsetUpdated(uint256 gOhmOffset_);
 
     uint256 internal constant GOHM_OFFSET = 2013e18;
+    address internal constant MIGRATION_CONTRACT = 0x184f3FAd8618a6F458C16bae63F70C426fE784B3;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -70,7 +71,11 @@ contract MigrationOffsetSupplyTest is Test {
 
         // Deploy submodule
         {
-            submoduleMigrationOffsetSupply = new MigrationOffsetSupply(moduleSupply, GOHM_OFFSET);
+            submoduleMigrationOffsetSupply = new MigrationOffsetSupply(
+                moduleSupply,
+                MIGRATION_CONTRACT,
+                GOHM_OFFSET
+            );
         }
 
         // Initialize
@@ -129,7 +134,7 @@ contract MigrationOffsetSupplyTest is Test {
         // There's no error message, so just check that a revert happens when attempting to call the module
         vm.expectRevert();
 
-        new MigrationOffsetSupply(Module(newLocations[0]), 0);
+        new MigrationOffsetSupply(Module(newLocations[0]), MIGRATION_CONTRACT, 0);
     }
 
     function test_constructor_parent_notSpply_reverts() public {
@@ -139,7 +144,7 @@ contract MigrationOffsetSupplyTest is Test {
         bytes memory err = abi.encodeWithSignature("Submodule_InvalidParent()");
         vm.expectRevert(err);
 
-        new MigrationOffsetSupply(modulePrice, 0);
+        new MigrationOffsetSupply(modulePrice, MIGRATION_CONTRACT, 0);
     }
 
     function test_constructor_emitsEvent() public {
@@ -148,7 +153,11 @@ contract MigrationOffsetSupplyTest is Test {
         emit GOhmOffsetUpdated(2e18);
 
         // New MigrationOffsetSupply
-        submoduleMigrationOffsetSupply = new MigrationOffsetSupply(moduleSupply, 2e18);
+        submoduleMigrationOffsetSupply = new MigrationOffsetSupply(
+            moduleSupply,
+            MIGRATION_CONTRACT,
+            2e18
+        );
 
         assertEq(submoduleMigrationOffsetSupply.gOhmOffset(), 2e18);
     }

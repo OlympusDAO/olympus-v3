@@ -1,32 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
+// Balancer
+import {IBalancerPool} from "src/external/balancer/interfaces/IBalancerPool.sol";
+import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
+import {IAuraRewardPool} from "src/external/aura/interfaces/IAuraRewardPool.sol";
+import {VaultReentrancyLib} from "src/libraries/Balancer/contracts/VaultReentrancyLib.sol";
+
+// Bophades Modules
 import "modules/SPPLY/SPPLY.v1.sol";
-
-/// @dev    Interface for the Aura base reward pool
-///         Example contract: https://etherscan.io/address/0xB9D6ED734Ccbdd0b9CadFED712Cf8AC6D0917EcD
-interface IAuraPool {
-    function balanceOf(address account_) external view returns (uint256);
-
-    function asset() external view returns (address);
-}
-
-interface IBalancerPool {
-    function balanceOf(address account_) external view returns (uint256);
-
-    function totalSupply() external view returns (uint256);
-
-    function getPoolId() external view returns (bytes32);
-}
-
-interface IVault {
-    function getPoolTokens(
-        bytes32 poolId
-    )
-        external
-        view
-        returns (address[] memory tokens, uint256[] memory balances, uint256 lastChangeBlock);
-}
 
 /// @title      AuraBalancerSupply
 /// @author     Oighty
@@ -75,24 +57,35 @@ contract AuraBalancerSupply is SupplySubmodule {
 
     // ========== STATE VARIABLES ========== //
 
+    /// @notice         Struct that represents a Balancer/Aura pool pair
     struct Pool {
+        /// @notice     Balancer pool
         IBalancerPool balancerPool;
-        IAuraPool auraPool;
+        /// @notice     Aura pool. Optional.
+        IAuraRewardPool auraPool;
     }
 
-    address public polManager;
-    address internal ohm;
-    IVault public balVault;
+    /// @notice     Address of the POL manager.
+    address public immutable polManager;
+
+    /// @notice     Address of the OHM token. Cached at contract creation.
+    address internal immutable ohm;
+
+    /// @notice     Address of the Balancer Vault. Cached at contract creation.
+    IVault public immutable balVault;
+
+    /// @notice     Array of Balancer/Aura pool pairs.
+    /// @dev        The pools can be added and removed using the `addPool()` and `removePool()` functions.
     Pool[] public pools;
 
     // ========== CONSTRUCTOR ========== //
 
     /// @notice             Constructor for the AuraBalancerSupply submodule
     /// @dev                Will revert if:
-    ///                     - The `polManager_` address is 0
-    ///                     - The `balVault_` address is 0
-    ///                     - There is an invalid entry in the `pools_` array (see `addPool()`)
-    ///                     - Calling the `Submodule` constructor fails
+    /// @dev                - The `polManager_` address is 0
+    /// @dev                - The `balVault_` address is 0
+    /// @dev                - There is an invalid entry in the `pools_` array (see `addPool()`)
+    /// @dev                - Calling the `Submodule` constructor fails
     ///
     /// @param parent_      Address of the parent contract, the SPPLY module
     /// @param polManager_  Address of the POL manager
@@ -173,46 +166,29 @@ contract AuraBalancerSupply is SupplySubmodule {
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Protocol-owned liquidity OHM is calculated as the sum of the protocol-owned OHM in each pool
+    ///
+    /// @dev        This function accesses the reserves of the monitored pools.
+    /// @dev        In order to protect against re-entrancy attacks,
+    /// @dev        it utilises the Balancer VaultReentrancyLib.
     function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
+        // Prevent re-entrancy attacks
+        VaultReentrancyLib.ensureNotInVaultContext(balVault);
+
         // Iterate through the pools and get the POL supply from each
         uint256 supply;
         uint256 len = pools.length;
         for (uint256 i; i < len; ) {
-            // Get the balancer pool token balance of the manager
-            uint256 balBalance = pools[i].balancerPool.balanceOf(polManager);
-            // If an aura pool is defined, get the underlying balance and add to the balancer pool balance before adding to the total POL supply
-            // We don't have to do a ERC4626 shares to assets conversion because aura pools are all 1:1 with balancer pool balances
-            if (address(pools[i].auraPool) != address(0))
-                balBalance += pools[i].auraPool.balanceOf(polManager);
+            SPPLYv1.Reserves memory reserve = _getReserves(pools[i]);
 
-            // Get the total supply of the balancer pool
-            uint256 balTotalSupply = pools[i].balancerPool.totalSupply();
-
-            // Continue only if total supply is not 0
-            if (balTotalSupply != 0) {
-                // Get the pool tokens and balances of the pool
-                (address[] memory tokens, uint256[] memory balances, ) = balVault.getPoolTokens(
-                    pools[i].balancerPool.getPoolId()
-                );
-
-                // Calculate the amount of OHM in the pool owned by the polManager
-                // We have to iterate through the tokens array to find the index of OHM
-                uint256 tokenLen = tokens.length;
-                for (uint256 j; j < tokenLen; ) {
-                    if (tokens[j] == ohm) {
-                        // Get the amount of OHM in the pool
-                        uint256 ohmBalance = balances[j];
-                        // Calculate the amount of OHM owned by the polManager
-                        uint256 polBalance = (ohmBalance * balBalance) / balTotalSupply;
-                        // Add the amount of OHM owned by the polManager to the total POL supply
-                        supply += polBalance;
-                        // Break out of the loop
-                        break;
-                    }
-
-                    unchecked {
-                        ++j;
-                    }
+            // Iterate over the tokens and add the OHM balance to the total POL supply
+            uint256 tokenLen = reserve.tokens.length;
+            for (uint256 j; j < tokenLen; ) {
+                if (reserve.tokens[j] == ohm) {
+                    supply += reserve.balances[j];
+                    break;
+                }
+                unchecked {
+                    ++j;
                 }
             }
 
@@ -224,14 +200,53 @@ contract AuraBalancerSupply is SupplySubmodule {
         return supply;
     }
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        This function accesses the reserves of the monitored pools.
+    /// @dev        In order to protect against re-entrancy attacks,
+    /// @dev        it utilises the Balancer VaultReentrancyLib.
+    function getProtocolOwnedLiquidityReserves()
+        external
+        view
+        override
+        returns (SPPLYv1.Reserves[] memory)
+    {
+        // Prevent re-entrancy attacks
+        VaultReentrancyLib.ensureNotInVaultContext(balVault);
+
+        // Iterate through tokens and add the reserves of each pool
+        uint256 len = pools.length;
+        SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
+        for (uint256 i; i < len; ) {
+            SPPLYv1.Reserves memory reserve = _getReserves(pools[i]);
+            reserves[i] = reserve;
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return reserves;
+    }
+
+    /// @inheritdoc SupplySubmodule
+    function getSourceCount() external view override returns (uint256) {
+        return pools.length;
+    }
+
+    /// @notice Get the list of configured pools
+    /// @return Array of Balancer/Aura pool pairs
+    function getPools() external view returns (Pool[] memory) {
+        return pools;
+    }
+
     // =========== ADMIN FUNCTIONS =========== //
 
     /// @notice                 Add a Balancer/Aura Pool pair to the list of pools
     /// @dev                    Will revert if:
-    ///                         - The `balancerPool_` address is 0
-    ///                         - The `balancerPool_` address is already added
-    ///                         - The `balancerPool_` address is not the asset of the specified Aura pool
-    ///                         - The caller is not the parent module
+    /// @dev                    - The `balancerPool_` address is 0
+    /// @dev                    - The `balancerPool_` address is already added
+    /// @dev                    - The `balancerPool_` address is not the asset of the specified Aura pool
+    /// @dev                    - The caller is not the parent module
     ///
     /// @param balancerPool_    Address of the Balancer pool
     /// @param auraPool_        Address of the Aura pool
@@ -244,12 +259,12 @@ contract AuraBalancerSupply is SupplySubmodule {
             revert AuraBalSupply_PoolAlreadyAdded(balancerPool_, auraPool_);
 
         // Check that the aura pool is for the associated balancer pool unless it is blank
-        if (address(auraPool_) != address(0) && balancerPool_ != IAuraPool(auraPool_).asset())
+        if (address(auraPool_) != address(0) && balancerPool_ != IAuraRewardPool(auraPool_).asset())
             revert AuraBalSupply_PoolMismatch();
 
         // Add the pool to the array
         pools.push(
-            Pool({balancerPool: IBalancerPool(balancerPool_), auraPool: IAuraPool(auraPool_)})
+            Pool({balancerPool: IBalancerPool(balancerPool_), auraPool: IAuraRewardPool(auraPool_)})
         );
 
         emit PoolAdded(balancerPool_, auraPool_);
@@ -257,9 +272,9 @@ contract AuraBalancerSupply is SupplySubmodule {
 
     /// @notice                 Remove a Balancer/Aura Pool pair from the list of pools
     /// @dev                    Will revert if:
-    ///                         - The `balancerPool_` address is 0
-    ///                         - The `balancerPool_` address is not already added
-    ///                         - The caller is not the parent module
+    /// @dev                    - The `balancerPool_` address is 0
+    /// @dev                    - The `balancerPool_` address is not already added
+    /// @dev                    - The caller is not the parent module
     ///
     /// @param balancerPool_    Address of the Balancer pool
     function removePool(address balancerPool_) external onlyParent {
@@ -284,6 +299,12 @@ contract AuraBalancerSupply is SupplySubmodule {
         }
     }
 
+    // =========== HELPER FUNCTIONS =========== //
+
+    /// @notice     Determines if `balancerPool_` is contained in the `pools` array
+    ///
+    /// @param      balancerPool_ Address of the Balancer pool
+    /// @return     True if the pool is present, false otherwise
     function _inArray(address balancerPool_) internal view returns (bool) {
         uint256 len = pools.length;
         for (uint256 i; i < len; ) {
@@ -297,8 +318,47 @@ contract AuraBalancerSupply is SupplySubmodule {
         return false;
     }
 
-    /// @notice Get the list of configured pools
-    function getPools() external view returns (Pool[] memory) {
-        return pools;
+    /// @notice         Get the reserves of a Balancer/Aura pool pair
+    /// @dev            The calling function is responsible for protecting against re-entrancy.
+    ///
+    /// @param pool     Balancer/Aura pool pair
+    /// @return         Reserves of the pool
+    function _getReserves(Pool storage pool) internal view returns (SPPLYv1.Reserves memory) {
+        // Get the balancer pool token balance of the manager
+        uint256 balBalance = pool.balancerPool.balanceOf(polManager);
+        // If an aura pool is defined, get the underlying balance and add to the balancer pool balance before adding to the total POL supply
+        // We don't have to do a ERC4626 shares to assets conversion because aura pools are all 1:1 with balancer pool balances
+        if (address(pool.auraPool) != address(0)) balBalance += pool.auraPool.balanceOf(polManager);
+
+        // Get the pool tokens and total balances of the pool
+        (address[] memory _vaultTokens, uint256[] memory _vaultBalances, ) = balVault.getPoolTokens(
+            pool.balancerPool.getPoolId()
+        );
+
+        // Get the total supply of the balancer pool
+        uint256 balTotalSupply = pool.balancerPool.totalSupply();
+        uint256[] memory balances = new uint256[](_vaultTokens.length);
+        // Calculate the proportion of the pool balances owned by the polManager
+        if (balTotalSupply != 0) {
+            // Calculate the amount of OHM in the pool owned by the polManager
+            // We have to iterate through the tokens array to find the index of OHM
+            uint256 tokenLen = _vaultTokens.length;
+            for (uint256 i; i < tokenLen; ) {
+                uint256 balance = _vaultBalances[i];
+                uint256 polBalance = (balance * balBalance) / balTotalSupply;
+
+                balances[i] = polBalance;
+
+                unchecked {
+                    ++i;
+                }
+            }
+        }
+
+        SPPLYv1.Reserves memory reserves;
+        reserves.source = address(pool.balancerPool);
+        reserves.tokens = _vaultTokens;
+        reserves.balances = balances;
+        return reserves;
     }
 }

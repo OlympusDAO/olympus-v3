@@ -154,6 +154,8 @@ contract OlympusDeploy is Script {
     ERC20 public bal;
     ERC20 public gOHM;
 
+    address public migrationContract;
+
     // Bond system addresses
     IBondSDA public bondAuctioneer;
     IBondSDA public bondFixedExpiryAuctioneer;
@@ -253,6 +255,7 @@ contract OlympusDeploy is Script {
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
         aura = ERC20(envAddress("external.tokens.AURA"));
         bal = ERC20(envAddress("external.tokens.BAL"));
+        migrationContract = envAddress("olympus.legacy.Migration");
         bondAuctioneer = IBondSDA(envAddress("external.bond-protocol.BondFixedTermAuctioneer"));
         bondFixedExpiryAuctioneer = IBondSDA(
             envAddress("external.bond-protocol.BondFixedExpiryAuctioneer")
@@ -535,12 +538,15 @@ contract OlympusDeploy is Script {
         return address(BLREG);
     }
 
-    function _deployAppraiser(bytes memory) public returns (address) {
-        // No additional arguments for Appraiser module
+    function _deployAppraiser(bytes memory args) public returns (address) {
+        // Decode arguments for Appraiser policy
+        uint16 reservesDeviationBps = abi.decode(args, (uint16));
+
+        console2.log("   reservesDeviationBps", reservesDeviationBps); // e.g. 100 = 1%
 
         // Deploy Appraiser module
         vm.broadcast();
-        appraiser = new Appraiser(kernel);
+        appraiser = new Appraiser(kernel, reservesDeviationBps);
         console2.log("Appraiser deployed at:", address(appraiser));
 
         return address(appraiser);
@@ -1203,10 +1209,15 @@ contract OlympusDeploy is Script {
 
         // Check that the environment variables are loaded
         if (address(SPPLY) == address(0)) revert("SPPLY address not set");
+        if (migrationContract == address(0)) revert("migrationContract address not set");
 
         // Deploy MigrationOffsetSupply submodule
         vm.broadcast();
-        migrationOffsetSupply = new MigrationOffsetSupply(SPPLY, migrationOffset);
+        migrationOffsetSupply = new MigrationOffsetSupply(
+            SPPLY,
+            migrationContract,
+            migrationOffset
+        );
         console2.log("MigrationOffsetSupply deployed at:", address(migrationOffsetSupply));
 
         return address(migrationOffsetSupply);

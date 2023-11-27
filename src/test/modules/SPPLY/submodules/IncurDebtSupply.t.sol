@@ -179,6 +179,8 @@ contract IncurDebtSupplyTest is Test {
         submoduleIncurDebtSupply = new IncurDebtSupply(moduleSupply, address(incurDebt));
 
         assertEq(submoduleIncurDebtSupply.getIncurDebt(), address(incurDebt));
+
+        assertEq(submoduleIncurDebtSupply.getSourceCount(), 1);
     }
 
     // =========  getCollateralizedOhm ========= //
@@ -206,6 +208,22 @@ contract IncurDebtSupplyTest is Test {
         incurDebt.setTotalDebt(totalDebt);
 
         assertEq(submoduleIncurDebtSupply.getProtocolOwnedLiquidityOhm(), 0);
+    }
+
+    // =========  getProtocolOwnedLiquidityReserves ========= //
+
+    function test_getProtocolOwnedLiquidityReserves_fuzz(uint256 totalDebt_) public {
+        uint256 totalDebt = bound(totalDebt_, 0, 1000e9);
+        incurDebt.setTotalDebt(totalDebt);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleIncurDebtSupply
+            .getProtocolOwnedLiquidityReserves();
+
+        // No POL
+        assertEq(reserves.length, 1);
+        assertEq(reserves[0].source, address(incurDebt));
+        assertEq(reserves[0].tokens.length, 0);
+        assertEq(reserves[0].balances.length, 0);
     }
 
     // =========  setIncurDebt ========= //

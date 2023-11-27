@@ -6,6 +6,7 @@ import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 /// @title      ChainlinkPriceFeeds
+/// @author     0xJem
 /// @notice     Provides prices derived from Chainlink price feed(s)
 contract ChainlinkPriceFeeds is PriceSubmodule {
     using FullMath for uint256;
@@ -14,6 +15,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     uint8 internal constant BASE_10_MAX_EXPONENT = 50;
 
     /// @notice                 Parameters for a single Chainlink price feed
+    ///
     /// @param feed             Address of the Chainlink price feed
     /// @param updateThreshold  The maximum number of seconds elapsed since the last price feed update
     struct OneFeedParams {
@@ -22,6 +24,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     }
 
     /// @notice                         Parameters for a two Chainlink price feeds
+    ///
     /// @param firstFeed                First: Address of the Chainlink price feed
     /// @param firstUpdateThreshold     First: The maximum number of seconds elapsed since the last price feed update
     /// @param secondFeed               Second: Address of the Chainlink price feed
@@ -33,6 +36,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         uint48 secondUpdateThreshold;
     }
 
+    /// @notice                         Struct to represent data returned by the Chainlink price feed
     struct FeedRoundData {
         uint80 roundId;
         int256 priceInt;
@@ -44,6 +48,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     // ========== ERRORS ========== //
 
     /// @notice                 The number of decimals of the price feed is greater than the maximum allowed
+    ///
     /// @param feed_            The address of the price feed
     /// @param feedDecimals_    The number of decimals of the price feed
     /// @param maxDecimals_     The maximum number of decimals allowed
@@ -51,7 +56,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
 
     /// @notice                 The price returned by the price feed is invalid
     /// @dev                    This could be because:
-    ///                         - The price is <= 0
+    /// @dev                    - The price is <= 0
     ///
     /// @param feed_            The address of the price feed
     /// @param price_           The price returned by the price feed
@@ -59,7 +64,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
 
     /// @notice                 The round returned by the price feed is invalid
     /// @dev                    This could be because:
-    ///                         - The round ID is different to the round it was answered in
+    /// @dev                    - The round ID is different to the round it was answered in
     ///
     /// @param feed_            The address of the price feed
     /// @param roundId_         The round ID returned by the price feed
@@ -68,7 +73,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
 
     /// @notice                     The data returned by the price feed is stale
     /// @dev                        This could be because:
-    ///                             - The price feed was last updated before the update threshold
+    /// @dev                        - The price feed was last updated before the update threshold
     ///
     /// @param feed_                The address of the price feed
     /// @param roundTimestamp_      The timestamp of the round returned by the price feed
@@ -80,6 +85,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     );
 
     /// @notice                 A price feed specified in the parameters is invalid
+    ///
     /// @param paramsIndex_     The index of the parameter
     /// @param feed_            The address of the price feed
     error Chainlink_ParamsFeedInvalid(uint8 paramsIndex_, address feed_);
@@ -93,12 +99,13 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
 
     /// @notice                 The price feed is invalid
     /// @dev                    This is triggered if the price feed reverted when called,
-    ///                         and indicates that the feed address is not a Chainlink price feed.
+    /// @dev                    and indicates that the feed address is not a Chainlink price feed.
     ///
     /// @param feed_            The address of the price feed
     error Chainlink_FeedInvalid(address feed_);
 
     /// @notice                 The number of decimals to return the price in is greater than the maximum allowed
+    ///
     /// @param outputDecimals_  The number of decimals to return the price in
     /// @param maxDecimals_     The maximum number of decimals allowed
     error Chainlink_OutputDecimalsOutOfBounds(uint8 outputDecimals_, uint8 maxDecimals_);
@@ -109,10 +116,12 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
 
     // ========== KERNEL FUNCTIONS =========== //
 
+    /// @inheritdoc      Submodule
     function SUBKEYCODE() public pure override returns (SubKeycode) {
         return toSubKeycode("PRICE.CHAINLINK");
     }
 
+    /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
         major = 1;
         minor = 0;
@@ -122,9 +131,9 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
 
     /// @notice                         Validates the result of the price feed
     /// @dev                            This function will revert if:
-    ///                                 - Answer <= 0
-    ///                                 - Updated at timestamp before the update threshold from the current time
-    ///                                 - Answered in round ID different to the round ID
+    /// @dev                            - Answer <= 0
+    /// @dev                            - Updated at timestamp before the update threshold from the current time
+    /// @dev                            - Answered in round ID different to the round ID
     ///
     /// @param feed_                    Chainlink price feed
     /// @param roundData                The round data returned by the price feed
@@ -191,8 +200,8 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
 
     /// @notice                 Returns the price from a single Chainlink feed, as specified in `params_`.
     /// @dev                    This function will revert if:
-    ///                         - PRICE's priceDecimals or the feed's decimals are out of bounds and would lead to an overflow
-    ///                         - The price feed's results are invalid
+    /// @dev                    - PRICE's priceDecimals or the feed's decimals are out of bounds and would lead to an overflow
+    /// @dev                    - The price feed's results are invalid
     ///
     /// @param asset_           Unused
     /// @param outputDecimals_  The number of decimals to return the price in
@@ -234,16 +243,15 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @notice                 Returns the result of dividing the price from the first Chainlink feed by the price from the second.
     /// @dev                    For example, passing in ETH-DAI and USD-DAI will return the ETH-USD price.
     ///
-    ///                         This function will revert if:
-    ///                         - PRICE's priceDecimals or any of the feed's decimals are out of bounds and would lead to an overflow
-    ///                         - Any of the price feeds' results are invalid
+    /// @dev                    This function will revert if:
+    /// @dev                    - PRICE's priceDecimals or any of the feed's decimals are out of bounds and would lead to an overflow
+    /// @dev                    - Any of the price feeds' results are invalid
     ///
-    /// @param asset_           Unused
     /// @param outputDecimals_  The number of decimals to return the price in
     /// @param params_          Chainlink pool parameters of type `TwoFeedParams`
     /// @return                 Price in the scale of `outputDecimals_`.
     function getTwoFeedPriceDiv(
-        address asset_,
+        address,
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
@@ -299,16 +307,15 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @notice                 Returns the result of multiplying the price from the first Chainlink feed by the price from the second.
     /// @dev                    For example, passing in ETH-DAI and DAI-USD will return the ETH-USD price.
     ///
-    ///                         This function will revert if:
-    ///                         - PRICE's priceDecimals or any of the feed's decimals are out of bounds and would lead to an overflow
-    ///                         - Any of the price feeds' results are invalid
+    /// @dev                    This function will revert if:
+    /// @dev                   - PRICE's priceDecimals or any of the feed's decimals are out of bounds and would lead to an overflow
+    /// @dev                   - Any of the price feeds' results are invalid
     ///
-    /// @param asset_           Unused
     /// @param outputDecimals_  The number of decimals to return the price in
     /// @param params_          Chainlink pool parameters of type `TwoFeedParams`
     /// @return                 Price in the scale of `outputDecimals_`.
     function getTwoFeedPriceMul(
-        address asset_,
+        address,
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {

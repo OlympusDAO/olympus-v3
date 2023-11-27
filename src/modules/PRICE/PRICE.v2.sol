@@ -3,6 +3,8 @@ pragma solidity 0.8.15;
 
 import "src/Submodules.sol";
 
+/// @notice     Abstract Bophades module for price resolution
+/// @author     Oighty
 abstract contract PRICEv2 is ModuleWithSubmodules {
     // ========== EVENTS ========== //
 
@@ -174,12 +176,15 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
 
     // ========== STATE ========== //
 
+    /// @notice         Struct to hold the configuration for calling a function on a contract
+    /// @dev            Used to configure strategy and fees in the `Asset` struct
     struct Component {
         SubKeycode target; // submodule keycode
         bytes4 selector; // the function selector of the contract's get() function
         bytes params; // the parameters to be passed to the contract's get() function
     }
 
+    /// @notice         Struct to hold the configuration for an asset
     struct Asset {
         bool approved; // whether the asset is approved for use in the system
         bool storeMovingAverage; // whether the moving average should be stored on heartbeats
@@ -200,9 +205,18 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
         MOVINGAVERAGE
     }
 
+    // ========== STATIC VARIABLES ========== //
+
+    /// @notice     The frequency of price observations (in seconds)
     uint32 public observationFrequency;
+
+    /// @notice     The number of decimals to used in output values
     uint8 public decimals;
+
+    /// @notice     The addresses of tracked assets
     address[] public assets;
+
+    /// @notice     Maps asset addresses to configuration data
     mapping(address => Asset) internal _assetData;
 
     ////////////////////////////////////////////////////////////////
@@ -225,7 +239,6 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     // ========== ASSET PRICES ========== //
 
     /// @notice         Returns the current price of an asset in the system unit of account
-    /// @dev            Optimistically uses the cached price if it has been updated this block, otherwise calculates price dynamically
     ///
     /// @param asset_   The address of the asset
     /// @return         The USD price of the asset in the scale of `decimals`
@@ -250,7 +263,6 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     ) public view virtual returns (uint256 _price, uint48 _timestamp);
 
     /// @notice         Returns the current price of an asset in terms of the base asset
-    /// @dev            Optimistically uses the cached price if it has been updated this block, otherwise calculates price dynamically
     ///
     /// @param asset_   The address of the asset
     /// @param base_    The address of the base asset that the price will be calculated in
@@ -283,7 +295,6 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     ) external view virtual returns (uint256 _price, uint48 _timestamp);
 
     /// @notice         Calculates and stores the current price of an asset
-    /// @dev            Emits the PriceStored event
     ///
     /// @param asset_   The address of the asset
     function storePrice(address asset_) external virtual;
@@ -351,10 +362,13 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
 
 abstract contract PriceSubmodule is Submodule {
     // ========== SUBMODULE SETUP ========== //
+
+    /// @inheritdoc Submodule
     function PARENT() public pure override returns (Keycode) {
         return toKeycode("PRICE");
     }
 
+    /// @notice The parent PRICE module
     function _PRICE() internal view returns (PRICEv2) {
         return PRICEv2(address(parent));
     }

@@ -3,6 +3,8 @@
     "nomicfoundation.hardhat-solidity",
     "gruntfuggly.todo-tree",
     "ryanluker.vscode-coverage-gutters",
-    "github.vscode-github-actions"
+    "github.vscode-github-actions",
+    "d-koppenhagen.file-tree-to-text-generator",
+    "tintinweb.solidity-metrics"
   ]
 }

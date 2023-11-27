@@ -2,29 +2,53 @@
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
+import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
+import {FullMath} from "libraries/FullMath.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockGohm} from "test/mocks/OlympusMocks.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
+import {MockMultiplePoolBalancerVault} from "test/mocks/MockBalancerVault.sol";
 
 // Modules and Submodules
 import "src/Submodules.sol";
 import {OlympusSupply, SPPLYv1, Category as SupplyCategory} from "modules/SPPLY/OlympusSupply.sol";
 import {OlympusTreasury, TRSRYv1_1} from "modules/TRSRY/OlympusTreasury.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
+import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 
 // Policies
 import {Appraiser} from "policies/OCA/Appraiser.sol";
 import {Bookkeeper, AssetCategory} from "policies/OCA/Bookkeeper.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
+// Submodules
+import {AuraBalancerSupply} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {IBalancerPool} from "src/external/balancer/interfaces/IBalancerPool.sol";
+import {IAuraRewardPool} from "src/external/aura/interfaces/IAuraRewardPool.sol";
+
 // Interfaces
 import {IAppraiser} from "policies/OCA/interfaces/IAppraiser.sol";
 
 contract AppraiserTest is Test {
+    using FullMath for uint256;
+
     MockERC20 internal ohm;
+    MockGohm internal gohm;
     MockERC20 internal reserve;
     MockERC20 internal weth;
+
+    MockMultiplePoolBalancerVault internal balancerVault;
+    bytes32 internal balancerPoolId;
+    address internal balancerPool;
+
+    address internal daoWallet = address(bytes20("DAO"));
+    address internal protocolWallet = address(bytes20("POT"));
+
+    UserFactory public userCreator;
+    address internal policy;
 
     Kernel internal kernel;
 
@@ -37,13 +61,44 @@ contract AppraiserTest is Test {
     Bookkeeper internal bookkeeper;
     RolesAdmin internal rolesAdmin;
 
+    AuraBalancerSupply internal submoduleAuraBalancerSupply;
+
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
     uint8 internal constant DECIMALS = 18;
+    uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
+    uint256 internal constant OHM_PRICE = 10e18;
+    uint256 internal constant OHM_MINT_BALANCE = 999_900e9;
+    uint256 internal constant OHM_MINT_DAO = 100e9;
+    uint256 internal constant OHM_MINT_PROTOCOL = 200e9;
+    uint256 internal constant RESERVE_PRICE = 1e18;
+    uint256 internal constant RESERVE_PRICE_2 = 2e18;
 
     uint256 internal constant RESERVE_VALUE_AT_1 = 1_000_000e18;
     uint256 internal constant RESERVE_VALUE_AT_2 = 2_000_000e18;
     uint256 internal constant WETH_VALUE_AT_2000 = 2_000_000e18;
     uint256 internal constant WETH_VALUE_AT_4000 = 4_000_000e18;
+
+    uint256 internal constant BALANCER_POOL_RESERVE_BALANCE = 100e18; // 100 RSV
+    uint256 internal constant BALANCER_POOL_OHM_BALANCE = 10e9; // 10 OHM
+    uint256 internal constant BALANCER_POOL_TOTAL_SUPPLY = 100e18; // 100 LP
+    uint256 internal constant BPT_BALANCE = 1e18;
+    uint256 internal constant BPT_PRICE =
+        (((BALANCER_POOL_RESERVE_BALANCE * RESERVE_PRICE) /
+            1e18 +
+            (BALANCER_POOL_OHM_BALANCE * OHM_PRICE) /
+            1e9) * 1e18) / BALANCER_POOL_TOTAL_SUPPLY; // (100 RSV * $1 + 10 OHM * $10) / total supply
+    uint256 internal constant BPT_PRICE_2 =
+        (((BALANCER_POOL_RESERVE_BALANCE * RESERVE_PRICE_2) /
+            1e18 +
+            (BALANCER_POOL_OHM_BALANCE * OHM_PRICE) /
+            1e9) * 1e18) / BALANCER_POOL_TOTAL_SUPPLY; // (100 RSV * $2 + 10 OHM * $10) / total supply
+    uint256 internal backingPOL =
+        BPT_BALANCE.mulDiv(BALANCER_POOL_RESERVE_BALANCE, BALANCER_POOL_TOTAL_SUPPLY);
+    uint256 internal POL_VALUE_AT_1 = BPT_BALANCE.mulDiv(BPT_PRICE, 1e18);
+    uint256 internal POL_BACKING_AT_1 = backingPOL;
+    uint256 internal POL_BACKING_AT_2 = 2 * backingPOL;
+
+    uint16 internal APPRAISER_RESERVES_DEVIATION_BPS = 100; // 1%
 
     enum Variant {
         CURRENT,
@@ -51,19 +106,22 @@ contract AppraiserTest is Test {
         ERROR
     }
 
+    event ReservesDeviationBpsSet(uint16 reservesDeviationBps_);
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
 
         // Tokens
         {
             ohm = new MockERC20("Olympus", "OHM", 9);
+            gohm = new MockGohm(GOHM_INDEX);
             reserve = new MockERC20("Reserve", "RSV", 18);
             weth = new MockERC20("Wrapped ETH", "WETH", 18);
         }
 
         // Kernel and Modules
         {
-            address[2] memory tokens = [address(ohm), address(reserve)];
+            address[2] memory tokens = [address(ohm), address(gohm)];
 
             kernel = new Kernel();
             PRICE = new MockPrice(kernel, DECIMALS, OBSERVATION_FREQUENCY);
@@ -74,16 +132,20 @@ contract AppraiserTest is Test {
 
         // Policies
         {
-            appraiser = new Appraiser(kernel);
+            appraiser = new Appraiser(kernel, APPRAISER_RESERVES_DEVIATION_BPS);
             bookkeeper = new Bookkeeper(kernel);
             rolesAdmin = new RolesAdmin(kernel);
         }
 
+        balancerPool = _setupSupplySubmodules();
+
         // Configure Price mock
         {
-            PRICE.setPrice(address(ohm), 10e18);
-            PRICE.setPrice(address(reserve), 1e18);
+            PRICE.setPrice(address(ohm), OHM_PRICE);
+            PRICE.setPrice(address(reserve), RESERVE_PRICE);
             PRICE.setPrice(address(weth), 2000e18);
+            PRICE.setPrice(balancerPool, BPT_PRICE);
+            PRICE.setMovingAverage(balancerPool, BPT_PRICE);
         }
 
         // Default Framework Initialization
@@ -100,11 +162,21 @@ contract AppraiserTest is Test {
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
 
+        // Create users
+        userCreator = new UserFactory();
+        {
+            address[] memory users = userCreator.create(1);
+            policy = users[0];
+        }
+
         // Roles management
         {
             // Bookkeeper roles
             rolesAdmin.grantRole("bookkeeper_policy", address(this));
             rolesAdmin.grantRole("bookkeeper_admin", address(this));
+
+            // Appraiser roles
+            rolesAdmin.grantRole("appraiser_policy", policy);
         }
 
         // Configure assets
@@ -114,19 +186,81 @@ contract AppraiserTest is Test {
             bookkeeper.addAsset(address(reserve), locations);
             bookkeeper.addAsset(address(weth), locations);
 
+            locations = new address[](1);
+            locations[0] = address(bytes20("POL"));
+            bookkeeper.addAsset(balancerPool, locations);
+
             // Categorize assets
             bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("liquid"));
             bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("stable"));
             bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("reserves"));
             bookkeeper.categorizeAsset(address(weth), AssetCategory.wrap("liquid"));
+            bookkeeper.categorizeAsset(address(weth), AssetCategory.wrap("volatile"));
+            bookkeeper.categorizeAsset(
+                balancerPool,
+                AssetCategory.wrap("protocol-owned-liquidity")
+            );
+
+            // Categorize supplies
+            bookkeeper.installSubmodule(SPPLY.KEYCODE(), submoduleAuraBalancerSupply);
+            bookkeeper.categorizeSupply(
+                address(bytes20("POL")),
+                SupplyCategory.wrap("protocol-owned-liquidity")
+            );
+            bookkeeper.categorizeSupply(daoWallet, SupplyCategory.wrap("dao"));
+            bookkeeper.categorizeSupply(
+                protocolWallet,
+                SupplyCategory.wrap("protocol-owned-treasury")
+            );
         }
 
         // Mint tokens
         {
-            ohm.mint(address(this), 1_000_000e9);
+            ohm.mint(address(this), OHM_MINT_BALANCE);
+            ohm.mint(address(daoWallet), OHM_MINT_DAO);
+            ohm.mint(address(protocolWallet), OHM_MINT_PROTOCOL);
             reserve.mint(address(TRSRY), 1_000_000e18);
             weth.mint(address(TRSRY), 1_000e18);
         }
+    }
+
+    function _setupSupplySubmodules() internal returns (address) {
+        // AuraBalancerSupply setup
+        balancerVault = new MockMultiplePoolBalancerVault();
+        balancerPoolId = "hello";
+
+        address[] memory balancerPoolTokens = new address[](2);
+        balancerPoolTokens[0] = address(reserve);
+        balancerPoolTokens[1] = address(ohm);
+        balancerVault.setTokens(balancerPoolId, balancerPoolTokens);
+
+        uint256[] memory balancerPoolBalances = new uint256[](2);
+        balancerPoolBalances[0] = BALANCER_POOL_RESERVE_BALANCE;
+        balancerPoolBalances[1] = BALANCER_POOL_OHM_BALANCE;
+        balancerVault.setBalances(balancerPoolId, balancerPoolBalances);
+
+        // Mint the OHM in the pool
+        ohm.mint(address(balancerVault), BALANCER_POOL_OHM_BALANCE);
+
+        MockBalancerPool mockBalancerPool = new MockBalancerPool(balancerPoolId);
+        mockBalancerPool.setTotalSupply(BALANCER_POOL_TOTAL_SUPPLY);
+        mockBalancerPool.setBalance(address(bytes20("POL")), BPT_BALANCE); // balance for POL address
+        mockBalancerPool.setDecimals(uint8(18));
+
+        AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](1);
+        pools[0] = AuraBalancerSupply.Pool(
+            IBalancerPool(mockBalancerPool),
+            IAuraRewardPool(address(0))
+        );
+
+        submoduleAuraBalancerSupply = new AuraBalancerSupply(
+            SPPLY,
+            address(bytes20("POL")),
+            address(balancerVault),
+            pools
+        );
+
+        return address(mockBalancerPool);
     }
 
     //============================================================================================//
@@ -162,8 +296,10 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + 100);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Assert value is in cache
         (uint256 cacheValue, uint48 timestamp) = appraiser.assetValueCache(address(reserve));
@@ -194,8 +330,10 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + maxAge_ - 1);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Assert value is in cache
         (uint256 cacheValue, uint48 timestamp) = appraiser.assetValueCache(address(reserve));
@@ -222,8 +360,10 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + maxAge_ + 1);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Assert value is in cache
         (uint256 cacheValue, uint48 timestamp) = appraiser.assetValueCache(address(reserve));
@@ -266,8 +406,10 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + 100);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Assert value is in cache
         (uint256 cacheValue, uint48 timestamp) = appraiser.assetValueCache(address(reserve));
@@ -301,8 +443,10 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + 100);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Assert value is in cache
         (uint256 cacheValue, uint48 timestamp) = appraiser.assetValueCache(address(reserve));
@@ -391,10 +535,12 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + 100);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
         PRICE.setPrice(address(weth), 4000e18);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Assert category values are in cache
         (uint256 liquidCacheValue, uint48 liquidTimestamp) = appraiser.categoryValueCache(
@@ -453,10 +599,12 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + maxAge_ - 1);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
         PRICE.setPrice(address(weth), 4000e18);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Get category values
         (bool liquidSuccess, bytes memory liquidData) = address(appraiser).call(
@@ -507,10 +655,12 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + maxAge_ + 1);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
         PRICE.setPrice(address(weth), 4000e18);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Get category values
         (bool liquidSuccess, bytes memory liquidData) = address(appraiser).call(
@@ -601,10 +751,12 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + 100);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
         PRICE.setPrice(address(weth), 4000e18);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Directly call getCategoryValue with valid variant
         (bool liquidSuccess, bytes memory liquidData) = address(appraiser).call(
@@ -659,10 +811,12 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + 100);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
         PRICE.setPrice(address(weth), 4000e18);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Directly call getCategoryValue with valid variant
         (bool liquidSuccess, bytes memory liquidData) = address(appraiser).call(
@@ -716,7 +870,8 @@ contract AppraiserTest is Test {
     /// [X]  getMetric(Metric metric_)
     ///     [X]  if latest value was captured at the current timestamp, return that value
     ///     [X]  if latest value was captured at a previous timestamp, fetch and return the current value
-
+    ///     [X]  correctly calculates backing with non-OHM in POL
+    ///     [X]  reverts if POL value diverges from MA by more than allowed deviation %
     function testCorrectness_getMetricCurrentTimestamp() public {
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
@@ -725,7 +880,7 @@ contract AppraiserTest is Test {
         uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
 
         // Assert that metric value is correct
-        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
     }
 
     function testCorrectness_getMetricPreviousTimestamp() public {
@@ -734,16 +889,81 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + 100);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
         PRICE.setPrice(address(weth), 4000e18);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Get metric value
         uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
 
         // Assert that metric value is correct
-        assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000);
+        assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000 + POL_BACKING_AT_2);
+    }
+
+    function testCorrectness_getMetric_backing_POL() public {
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Get metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
+        // Assert that metric value is correct
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
+    }
+
+    function testCorrectness_getMetricPreviousTimestamp_backing_POL() public {
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Now update price and timestamp
+        vm.warp(block.timestamp + 100);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
+        PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(address(weth), 4000e18);
+        PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
+
+        // Get metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
+        // Assert that metric value is correct
+        assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000 + POL_BACKING_AT_2);
+    }
+
+    function testRevert_getMetric_backing_POL_manipulated() public {
+        uint256 deviationBase = 10_000;
+        uint256 deviationBps = appraiser.reservesDeviationBps() + 1;
+        // Cache deviated prices
+        uint256 BPT_PRICE_UP = BPT_PRICE.mulDiv(deviationBase + deviationBps, deviationBase);
+        uint256 BPT_PRICE_DOWN = BPT_PRICE.mulDiv(deviationBase - deviationBps, deviationBase);
+
+        // Set MA so that the current pool price deviates too much from that
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_DOWN);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_ReservesPriceMismatch.selector,
+            address(balancerPool),
+            BPT_PRICE,
+            BPT_PRICE_DOWN
+        );
+        vm.expectRevert(err);
+        appraiser.getMetric(IAppraiser.Metric.BACKING);
+
+        // Set MA so that the current pool price deviates too much from that
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_UP);
+
+        // Expect revert
+        err = abi.encodeWithSelector(
+            Appraiser.Appraiser_ReservesPriceMismatch.selector,
+            address(balancerPool),
+            BPT_PRICE,
+            BPT_PRICE_UP
+        );
+        vm.expectRevert(err);
+        appraiser.getMetric(IAppraiser.Metric.BACKING);
     }
 
     /// [X]  getMetric(Metric metric_, uint48 maxAge_)
@@ -758,16 +978,18 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + maxAge_ - 1);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
         PRICE.setPrice(address(weth), 4000e18);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Get metric value
         uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING, maxAge_);
 
         // Assert that metric value is correct
-        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
     }
 
     function testCorrectness_getMetricAgeOutdatedTimestamp(uint48 maxAge_) public {
@@ -778,16 +1000,18 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + maxAge_ + 1);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
         PRICE.setPrice(address(weth), 4000e18);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Get metric value
         uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING, maxAge_);
 
         // Assert that metric value is correct
-        assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000);
+        assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000 + POL_BACKING_AT_2);
     }
 
     /// [X]  getMetric(Metric metric_, Variant variant_)
@@ -832,10 +1056,12 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + 100);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
         PRICE.setPrice(address(weth), 4000e18);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Directly call getMetric with variant LAST
         (bool success, bytes memory data) = address(appraiser).call(
@@ -849,7 +1075,7 @@ contract AppraiserTest is Test {
         (uint256 value, uint48 variantTimestamp) = abi.decode(data, (uint256, uint48));
 
         // Assert value is from cache and cache is unchanged
-        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
         assertEq(variantTimestamp, timestampBefore);
     }
 
@@ -859,10 +1085,12 @@ contract AppraiserTest is Test {
 
         // Now update price and timestamp
         vm.warp(block.timestamp + 100);
-        PRICE.setPrice(address(reserve), 2e18);
+        PRICE.setPrice(address(reserve), RESERVE_PRICE_2);
         PRICE.setTimestamp(uint48(block.timestamp));
         PRICE.setPrice(address(weth), 4000e18);
         PRICE.setTimestamp(uint48(block.timestamp));
+        PRICE.setPrice(balancerPool, BPT_PRICE_2);
+        PRICE.setMovingAverage(balancerPool, BPT_PRICE_2);
 
         // Directly call getMetric with variant CURRENT
         (bool success, bytes memory data) = address(appraiser).call(
@@ -876,7 +1104,7 @@ contract AppraiserTest is Test {
         (uint256 value, uint48 variantTimestamp) = abi.decode(data, (uint256, uint48));
 
         // Assert value is current but cache is unchanged
-        assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000);
+        assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000 + POL_BACKING_AT_2);
         assertEq(variantTimestamp, uint48(block.timestamp));
     }
 
@@ -926,12 +1154,12 @@ contract AppraiserTest is Test {
         // Decode return data to values and timestamps
         {
             (uint256 value, uint48 variantTimestamp) = abi.decode(backingData, (uint256, uint48));
-            assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
+            assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1, "BACKING");
             assertEq(variantTimestamp, uint48(block.timestamp));
         }
         {
             (uint256 value, uint48 variantTimestamp) = abi.decode(liquidData, (uint256, uint48));
-            assertEq(value, RESERVE_VALUE_AT_1);
+            assertEq(value, RESERVE_VALUE_AT_1 + POL_BACKING_AT_1, "LIQUID"); // wEth is illiquid, so excluded
             assertEq(variantTimestamp, uint48(block.timestamp));
         }
         {
@@ -939,29 +1167,93 @@ contract AppraiserTest is Test {
                 liquidPerOhmData,
                 (uint256, uint48)
             );
-            assertEq(value, 1e18);
+            // Backed OHM = Floating OHM = All minted OHM - OHM in Protocol Owned Liq
+            uint256 expectedBackedSupply = OHM_MINT_BALANCE +
+                BALANCER_POOL_OHM_BALANCE -
+                BALANCER_POOL_OHM_BALANCE.mulDiv(BPT_BALANCE, BALANCER_POOL_TOTAL_SUPPLY);
+            assertEq(
+                value,
+                (RESERVE_VALUE_AT_1 + POL_BACKING_AT_1).mulDiv(1e9, expectedBackedSupply), // wEth is illiquid, so excluded
+                "LIQUID_PER_OHM"
+            );
             assertEq(variantTimestamp, uint48(block.timestamp));
         }
         {
             (uint256 value, uint48 variantTimestamp) = abi.decode(mvData, (uint256, uint48));
-            assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
+            uint256 expectedMarketVal = RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_VALUE_AT_1;
+            assertEq(
+                value,
+                RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_VALUE_AT_1,
+                "MARKET_VALUE"
+            );
             assertEq(variantTimestamp, uint48(block.timestamp));
-        }
-        {
-            (uint256 value, uint48 variantTimestamp) = abi.decode(mcData, (uint256, uint48));
-            assertEq(value, 10_000_000e18);
+
+            uint256 expectedMarketCap = (OHM_MINT_BALANCE + BALANCER_POOL_OHM_BALANCE).mulDiv(
+                OHM_PRICE,
+                1e9
+            );
+            (value, variantTimestamp) = abi.decode(mcData, (uint256, uint48));
+            assertEq(value, expectedMarketCap, "MARKET_CAP");
             assertEq(variantTimestamp, uint48(block.timestamp));
-        }
-        {
-            (uint256 value, uint48 variantTimestamp) = abi.decode(premiumData, (uint256, uint48));
-            assertEq(value, 3333333333333333333);
+
+            // Market cap = circulating supply * price
+            assertEq(
+                value,
+                SPPLY.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY).mulDiv(OHM_PRICE, 1e9),
+                "MARKET_CAP_VIA_SPPLY"
+            );
+
+            (value, variantTimestamp) = abi.decode(premiumData, (uint256, uint48));
+            assertEq(value, expectedMarketCap.mulDiv(1e18, expectedMarketVal), "PREMIUM");
             assertEq(variantTimestamp, uint48(block.timestamp));
         }
         {
             (uint256 value, uint48 variantTimestamp) = abi.decode(volData, (uint256, uint48));
-            assertEq(value, 0);
+            assertEq(value, 0, "VOLATILITY");
             assertEq(variantTimestamp, uint48(block.timestamp));
         }
+    }
+
+    function test_getMetricBacking_POLMovingAverageDisabled_reverts() public {
+        // No moving average stored
+        PRICE.setMovingAverage(address(balancerPool), 0);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_MovingAverageNotStored.selector,
+            address(balancerPool)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.getMetric(IAppraiser.Metric.BACKING);
+    }
+
+    function test_getMetricBacking_withPOLReservesMismatch_reverts() public {
+        // Amend the Balancer pool to have imabalanced reserves
+        uint256[] memory balancerPoolBalances = new uint256[](2);
+        balancerPoolBalances[0] = BALANCER_POOL_RESERVE_BALANCE / 2;
+        balancerPoolBalances[1] = BALANCER_POOL_OHM_BALANCE;
+        balancerVault.setBalances(balancerPoolId, balancerPoolBalances);
+
+        // Calculate the POL price from reserves
+        uint256 derivedPolPrice = (balancerPoolBalances[0].mulDiv(RESERVE_PRICE, 1e18) +
+            balancerPoolBalances[1].mulDiv(OHM_PRICE, 1e9)).mulDiv(
+                BPT_BALANCE,
+                BALANCER_POOL_TOTAL_SUPPLY
+            );
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_ReservesPriceMismatch.selector,
+            address(balancerPool),
+            derivedPolPrice,
+            BPT_PRICE
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.getMetric(IAppraiser.Metric.BACKING);
     }
 
     function testCorrectness_getMetricVolatility() public {
@@ -1057,7 +1349,98 @@ contract AppraiserTest is Test {
 
         // Assert value is in cache
         (cacheValue, timestamp) = appraiser.metricCache(IAppraiser.Metric.BACKING);
-        assertEq(cacheValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
+        assertEq(cacheValue, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
         assertEq(timestamp, uint48(block.timestamp));
+    }
+
+    //============================================================================================//
+    //                                       ADMIN                                                //
+    //============================================================================================//
+
+    // [X] setReservesDeviationBps
+    //  [X] reverts if not owner
+    //  [X] reverts if deviation is too high
+    //  [X] sets deviation
+
+    function test_setReservesDeviationBps_notOwner_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("appraiser_policy")
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.setReservesDeviationBps(10_000);
+    }
+
+    function test_setReservesDeviationBps_tooHigh_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_InvalidParams.selector,
+            0,
+            abi.encode(10_001)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        vm.prank(policy);
+        appraiser.setReservesDeviationBps(10_001);
+    }
+
+    function test_setReservesDeviationBps() public {
+        // Expect event to be emitted
+        vm.expectEmit(true, false, false, false);
+        emit ReservesDeviationBpsSet(500);
+
+        // Set deviation
+        vm.prank(policy);
+        appraiser.setReservesDeviationBps(500);
+
+        // Assert deviation is set
+        assertEq(appraiser.reservesDeviationBps(), 500);
+    }
+}
+
+//============================================================================================//
+//                                       MOCKS                                                //
+//============================================================================================//
+
+contract MockBalancerPool is IBalancerPool {
+    bytes32 internal immutable _poolId;
+    uint8 internal _decimals;
+    uint256 internal _totalSupply;
+    mapping(address => uint256) internal _balanceOf;
+
+    constructor(bytes32 poolId_) {
+        _poolId = poolId_;
+    }
+
+    function getPoolId() external view returns (bytes32) {
+        return _poolId;
+    }
+
+    function decimals() external view returns (uint8) {
+        return _decimals;
+    }
+
+    function setDecimals(uint8 decimals_) public {
+        _decimals = decimals_;
+    }
+
+    function setTotalSupply(uint256 totalSupply_) external {
+        _totalSupply = totalSupply_;
+    }
+
+    function totalSupply() external view override returns (uint256) {
+        return _totalSupply;
+    }
+
+    function setBalance(address address_, uint256 balance_) external {
+        _balanceOf[address_] = balance_;
+    }
+
+    function balanceOf(address address_) external view override returns (uint256) {
+        return _balanceOf[address_];
     }
 }

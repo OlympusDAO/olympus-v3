@@ -101,6 +101,8 @@ contract BondCallbackTest is Test {
     uint256 internal constant GOHM_INDEX = 300000000000;
     uint8 internal constant DECIMALS = 18;
 
+    uint16 internal constant APPRAISER_RESERVES_DEVIATION_BPS = 100; // 1%
+
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
         userCreator = new UserFactory();
@@ -169,7 +171,7 @@ contract BondCallbackTest is Test {
             // Deploy new bookkeeper
             bookkeeper = new Bookkeeper(kernel);
             // Deploy new appraiser
-            appraiser = new Appraiser(kernel);
+            appraiser = new Appraiser(kernel, APPRAISER_RESERVES_DEVIATION_BPS);
             /// Deploy operator
             operator = new Operator(
                 kernel,
@@ -238,7 +240,7 @@ contract BondCallbackTest is Test {
 
         // Configure SPPLY, so that when the Operator calls Appraiser, it does not fail
         vm.prank(policy);
-        bookkeeper.categorize(dao, SupplyCategory.wrap("dao"));
+        bookkeeper.categorizeSupply(dao, SupplyCategory.wrap("dao"));
         // Mint OHM into a non-protocol wallet, so that there is circulating supply
         ohm.mint(alice, 1e9);
 

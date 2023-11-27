@@ -44,6 +44,7 @@ contract SiloArbSupplyTest is Test {
     event CollateralizedValueUpdated(uint256 value);
     event ProtocolOwnedBorrowableValueUpdated(uint256 value);
     event ProtocolOwnedLiquidityValueUpdated(uint256 value);
+    event SourceValueUpdated(address value);
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -177,13 +178,15 @@ contract SiloArbSupplyTest is Test {
 
         // Create a new submodule
         vm.startPrank(writer);
-        new SiloArbSupply(
+        submoduleSiloArbSupply = new SiloArbSupply(
             moduleSupply,
             COLLATERALIZED_OHM,
             PROTOCOL_OWNED_BORROWABLE_OHM,
             PROTOCOL_OWNED_LIQUIDITY_OHM
         );
         vm.stopPrank();
+
+        assertEq(submoduleSiloArbSupply.getSourceCount(), 1);
     }
 
     // =========  getCollateralizedOhm ========= //
@@ -208,6 +211,20 @@ contract SiloArbSupplyTest is Test {
             submoduleSiloArbSupply.getProtocolOwnedLiquidityOhm(),
             PROTOCOL_OWNED_LIQUIDITY_OHM
         );
+    }
+
+    // =========  getProtocolOwnedLiquidityReserves ========= //
+
+    function test_getProtocolOwnedLiquidityReserves() public {
+        SPPLYv1.Reserves[] memory reserves = submoduleSiloArbSupply
+            .getProtocolOwnedLiquidityReserves();
+
+        assertEq(reserves.length, 1);
+        assertEq(reserves[0].source, address(0));
+        assertEq(reserves[0].tokens.length, 1);
+        assertEq(reserves[0].tokens[0], address(ohm));
+        assertEq(reserves[0].balances.length, 1);
+        assertEq(reserves[0].balances[0], PROTOCOL_OWNED_LIQUIDITY_OHM);
     }
 
     // =========  setCollateralizedOhm ========= //
@@ -313,5 +330,42 @@ contract SiloArbSupplyTest is Test {
 
         // Check the value
         assertEq(submoduleSiloArbSupply.getProtocolOwnedLiquidityOhm(), 10e9);
+    }
+
+    // =========  setSource ========= //
+
+    function test_setSource_notParent_reverts() public {
+        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(this));
+        vm.expectRevert(err);
+
+        submoduleSiloArbSupply.setSource(address(0xe));
+    }
+
+    function test_setSource_notParent_writer_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "Submodule_OnlyParent(address)",
+            address(writer)
+        );
+        vm.expectRevert(err);
+
+        vm.startPrank(writer);
+        submoduleSiloArbSupply.setSource(address(0xe));
+        vm.stopPrank();
+    }
+
+    function test_setSource() public {
+        // Expect event to be emitted
+        vm.expectEmit(true, false, false, true);
+        emit SourceValueUpdated(address(0xe));
+
+        // Set the value
+        vm.startPrank(address(moduleSupply));
+        submoduleSiloArbSupply.setSource(address(0xe));
+        vm.stopPrank();
+
+        // Check the value
+        SPPLYv1.Reserves[] memory reserves = submoduleSiloArbSupply
+            .getProtocolOwnedLiquidityReserves();
+        assertEq(reserves[0].source, address(0xe));
     }
 }

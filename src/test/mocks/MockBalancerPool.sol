@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import {IBasePool, IWeightedPool, IStablePool} from "src/modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
+import {IBasePool} from "src/libraries/Balancer/interfaces/IBasePool.sol";
+import {IWeightedPool} from "src/libraries/Balancer/interfaces/IWeightedPool.sol";
+import {IStablePool} from "src/libraries/Balancer/interfaces/IStablePool.sol";
 
 contract MockBalancerPool is IBasePool {
     bytes32 internal _poolId;

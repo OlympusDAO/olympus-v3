@@ -101,9 +101,9 @@ contract BLVaultSupplyTest is Test {
     // [X] Submodule
     //  [X] Version
     //  [X] Subkeycode
-    // [ ] Constructor
+    // [X] Constructor
     //  [X] Incorrect parent
-    //  [ ] Duplicate vault managers
+    //  [X] Duplicate vault managers
     // [X] getCollateralizedOhm
     //  [X] no vault managers
     //  [X] one vault manager
@@ -161,13 +161,40 @@ contract BLVaultSupplyTest is Test {
         new BLVaultSupply(modulePrice, vaultManagerAddresses);
     }
 
+    function test_submodule_addressZeroVaultManager() public {
+        vaultManagerAddresses = new address[](1);
+        vaultManagerAddresses[0] = address(0);
+
+        // Expect an error to be emitted
+        bytes memory err = abi.encodeWithSignature("BLVaultSupply_InvalidParams()");
+        vm.expectRevert(err);
+
+        // Create a new BLVaultSupply with duplicate vault managers
+        new BLVaultSupply(moduleSupply, vaultManagerAddresses);
+    }
+
+    function test_submodule_duplicateVaultManagers() public {
+        vaultManagerAddresses = new address[](2);
+        vaultManagerAddresses[0] = address(vaultManagers[0]);
+        vaultManagerAddresses[1] = address(vaultManagers[0]);
+
+        // Expect an error to be emitted
+        bytes memory err = abi.encodeWithSignature("BLVaultSupply_InvalidParams()");
+        vm.expectRevert(err);
+
+        // Create a new BLVaultSupply with duplicate vault managers
+        new BLVaultSupply(moduleSupply, vaultManagerAddresses);
+    }
+
     function test_submodule_emitsEvent() public {
         // Expect an event to be emitted
         vm.expectEmit(true, false, false, true);
         emit VaultManagerAdded(vaultManagerAddresses[0]);
 
         // New BLVaultSupply
-        new BLVaultSupply(moduleSupply, vaultManagerAddresses);
+        BLVaultSupply submoduleVaultSupply = new BLVaultSupply(moduleSupply, vaultManagerAddresses);
+
+        assertEq(submoduleVaultSupply.getSourceCount(), 1);
     }
 
     // =========  getCollateralizedOhm ========= //
@@ -229,6 +256,65 @@ contract BLVaultSupplyTest is Test {
         vaultManagers[0].setPoolOhmShare(poolOhmShare);
 
         assertEq(submoduleBLVaultSupply.getProtocolOwnedLiquidityOhm(), 0);
+    }
+
+    // =========  getProtocolOwnedLiquidityReserves ========= //
+
+    function test_getProtocolOwnedLiquidityReserves_noVaultManagers() public {
+        // Create a new BLVaultSupply with no vault managers
+        BLVaultSupply newSubmoduleBLVaultSupply = new BLVaultSupply(moduleSupply, new address[](0));
+
+        SPPLYv1.Reserves[] memory reserves = newSubmoduleBLVaultSupply
+            .getProtocolOwnedLiquidityReserves();
+        assertEq(reserves.length, 0);
+    }
+
+    function test_getProtocolOwnedLiquidityReserves_oneVaultManager_fuzz(
+        uint256 poolOhmShare_
+    ) public {
+        uint256 poolOhmShare = bound(poolOhmShare_, 0, 1000e9);
+        vaultManagers[0].setPoolOhmShare(poolOhmShare);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleBLVaultSupply
+            .getProtocolOwnedLiquidityReserves();
+        assertEq(reserves.length, 1);
+        assertEq(reserves[0].source, address(vaultManagers[0]));
+        assertEq(reserves[0].tokens.length, 0);
+        assertEq(reserves[0].balances.length, 0);
+    }
+
+    function test_getProtocolOwnedLiquidityReserves_multipleVaultManagers(
+        uint256 poolOhmShareOne_,
+        uint256 poolOhmShareTwo_
+    ) public {
+        uint256 poolOhmShareOne = bound(poolOhmShareOne_, 0, 1000e9);
+        uint256 poolOhmShareTwo = bound(poolOhmShareTwo_, 0, 1000e9);
+
+        // Create a second vault manager
+        MockVaultManager vaultManager2 = new MockVaultManager(2000e9);
+        vaultManagers.push(vaultManager2);
+        vaultManagerAddresses.push(address(vaultManager2));
+
+        vaultManagers[0].setPoolOhmShare(poolOhmShareOne);
+        vaultManagers[1].setPoolOhmShare(poolOhmShareTwo);
+
+        // Create a new BLVaultSupply with multiple vault managers
+        BLVaultSupply newSubmoduleBLVaultSupply = new BLVaultSupply(
+            moduleSupply,
+            vaultManagerAddresses
+        );
+
+        SPPLYv1.Reserves[] memory reserves = newSubmoduleBLVaultSupply
+            .getProtocolOwnedLiquidityReserves();
+        assertEq(reserves.length, 2);
+
+        assertEq(reserves[0].source, address(vaultManagers[0]));
+        assertEq(reserves[0].tokens.length, 0);
+        assertEq(reserves[0].balances.length, 0);
+
+        assertEq(reserves[1].source, address(vaultManagers[1]));
+        assertEq(reserves[1].tokens.length, 0);
+        assertEq(reserves[1].balances.length, 0);
     }
 
     // =========  addVaultManager ========= //
@@ -295,6 +381,7 @@ contract BLVaultSupplyTest is Test {
         // Check that the vault manager was added
         assertEq(address(submoduleBLVaultSupply.vaultManagers(1)), address(vaultManager2));
         assertEq(submoduleBLVaultSupply.getCollateralizedOhm(), 1000e9 + 2000e9);
+        assertEq(submoduleBLVaultSupply.getSourceCount(), 2);
     }
 
     // =========  removeVaultManager ========= //
@@ -350,5 +437,6 @@ contract BLVaultSupplyTest is Test {
 
         // Check that the vault manager was removed
         assertEq(submoduleBLVaultSupply.getCollateralizedOhm(), 0);
+        assertEq(submoduleBLVaultSupply.getSourceCount(), 0);
     }
 }

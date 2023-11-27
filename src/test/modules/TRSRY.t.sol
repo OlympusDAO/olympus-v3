@@ -86,9 +86,6 @@ contract TRSRYTest is Test {
         assertEq(ngmi.balanceOf(address(this)), amount_);
     }
 
-    // TODO test if can withdraw more than allowed amount
-    //function testRevert_WithdrawMoreThanApproved(uint256 amount_) public {}
-
     function testRevert_UnauthorizedCannotWithdrawToken(uint256 amount_) public {
         vm.assume(amount_ < INITIAL_TOKEN_AMOUNT);
         vm.assume(amount_ > 0);

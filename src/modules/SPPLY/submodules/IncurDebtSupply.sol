@@ -30,6 +30,7 @@ contract IncurDebtSupply is SupplySubmodule {
 
     // ========== EVENTS ========== //
 
+    /// @notice     Emitted when the address of the IncurDebt contract is updated
     event IncurDebtUpdated(address incurDebt_);
 
     // ========== STATE VARIABLES ========== //
@@ -40,10 +41,10 @@ contract IncurDebtSupply is SupplySubmodule {
 
     /// @notice             Constructor for the IncurDebtSupply submodule
     /// @dev                Will revert if:
-    ///                     - Calling the `Submodule` constructor fails
-    ///                     - The `incurDebt_` address is the zero address
+    /// @dev                - Calling the `Submodule` constructor fails
+    /// @dev                - The `incurDebt_` address is the zero address
     ///
-    ///                     Emits the IncurDebtUpdated event
+    /// @dev                Emits the IncurDebtUpdated event
     ///
     /// @param parent_      The address of the parent SPPLY module
     /// @param incurDebt_   The address of the IncurDebt contract
@@ -77,30 +78,56 @@ contract IncurDebtSupply is SupplySubmodule {
     /// @inheritdoc SupplySubmodule
     /// @dev        The value of IncurDebt.totalOutstandingGlobalDebt() is returned, as
     ///             the OHM minted against gOHM collateral is fully-collateralized.
-    function getCollateralizedOhm() external view virtual override returns (uint256) {
+    function getCollateralizedOhm() external view override returns (uint256) {
         return _incurDebt.totalOutstandingGlobalDebt();
     }
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Not applicable to IncurDebt
-    function getProtocolOwnedBorrowableOhm() external view virtual override returns (uint256) {
+    function getProtocolOwnedBorrowableOhm() external pure override returns (uint256) {
         return 0;
     }
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Not applicable to IncurDebt
-    function getProtocolOwnedLiquidityOhm() external view virtual override returns (uint256) {
+    function getProtocolOwnedLiquidityOhm() external pure override returns (uint256) {
         return 0;
+    }
+
+    /// @inheritdoc     SupplySubmodule
+    /// @dev            Protocol-owned liquidity OHM is always zero for lending facilities.
+    /// @dev
+    ///                 This function returns an array with the same length as `getSourceCount()`, but with empty values.
+    function getProtocolOwnedLiquidityReserves()
+        external
+        view
+        override
+        returns (SPPLYv1.Reserves[] memory)
+    {
+        SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](1);
+        reserves[0] = SPPLYv1.Reserves({
+            source: address(_incurDebt),
+            tokens: new address[](0),
+            balances: new uint256[](0)
+        });
+
+        return reserves;
+    }
+
+    /// @inheritdoc     SupplySubmodule
+    /// @dev            This always returns a value of one, as there is a 1:1 mapping between an IncurDebt contract and the Submodule
+    function getSourceCount() external pure override returns (uint256) {
+        return 1;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @notice             Set the address of the IncurDebt contract
     /// @dev                Will revert if:
-    ///                     - The address is the zero address
-    ///                     - The caller is not the parent module
+    /// @dev                - The address is the zero address
+    /// @dev                - The caller is not the parent module
     ///
-    ///                     Emits the IncurDebtUpdated event
+    /// @dev                Emits the IncurDebtUpdated event
     ///
     /// @param incurDebt_   The address of the IncurDebt contract
     function setIncurDebt(address incurDebt_) external onlyParent {

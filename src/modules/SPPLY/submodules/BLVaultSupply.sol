@@ -31,12 +31,15 @@ contract BLVaultSupply is SupplySubmodule {
 
     // ========== EVENTS ========== //
 
+    /// @notice     Emitted when a BLVaultManager is added to the list of managers
     event VaultManagerAdded(address vaultManager_);
 
+    /// @notice     Emitted when a BLVaultManager is removed from the list of managers
     event VaultManagerRemoved(address vaultManager_);
 
     // ========== STATE VARIABLES ========== //
 
+    /// @notice     The addresses of the BLVaultManager contracts
     IBLVaultManager[] public vaultManagers;
 
     // ========== CONSTRUCTOR ========== //
@@ -49,9 +52,14 @@ contract BLVaultSupply is SupplySubmodule {
         uint256 len = vaultManagers_.length;
 
         for (uint256 i = 0; i < len; i++) {
-            vaultManagers.push(IBLVaultManager(vaultManagers_[i]));
+            address vaultManager = vaultManagers_[i];
 
-            emit VaultManagerAdded(vaultManagers_[i]);
+            if (vaultManager == address(0) || _inArray(vaultManager))
+                revert BLVaultSupply_InvalidParams();
+
+            vaultManagers.push(IBLVaultManager(vaultManager));
+
+            emit VaultManagerAdded(vaultManager);
         }
     }
 
@@ -103,13 +111,45 @@ contract BLVaultSupply is SupplySubmodule {
         return 0;
     }
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        Protocol-owned liquidity OHM is always zero for BLVaults.
+    ///
+    ///             This function returns an array with the same length as `getSourceCount()`, but with empty values.
+    function getProtocolOwnedLiquidityReserves()
+        external
+        view
+        override
+        returns (SPPLYv1.Reserves[] memory)
+    {
+        uint256 len = vaultManagers.length;
+        SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
+        for (uint256 i; i < len; ) {
+            reserves[i] = SPPLYv1.Reserves({
+                source: address(vaultManagers[i]),
+                tokens: new address[](0),
+                balances: new uint256[](0)
+            });
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return reserves;
+    }
+
+    /// @inheritdoc SupplySubmodule
+    function getSourceCount() external view override returns (uint256) {
+        return vaultManagers.length;
+    }
+
     // =========== ADMIN FUNCTIONS =========== //
 
     /// @notice                 Add a BLVaultManager to the list of managers
     /// @dev                    Reverts if:
-    ///                         - The address is the zero address
-    ///                         - The address is already in the list
-    ///                         - The caller is not the parent module
+    /// @dev                    - The address is the zero address
+    /// @dev                    - The address is already in the list
+    /// @dev                    - The caller is not the parent module
     ///
     /// @param vaultManager_    The address of the BLVaultManager contract
     function addVaultManager(address vaultManager_) external onlyParent {
@@ -122,9 +162,9 @@ contract BLVaultSupply is SupplySubmodule {
 
     /// @notice                 Remove a BLVaultManager from the list of managers
     /// @dev                    Reverts if:
-    ///                         - The address is the zero address
-    ///                         - The address is not in the list
-    ///                         - The caller is not the parent module
+    /// @dev                    - The address is the zero address
+    /// @dev                    - The address is not in the list
+    /// @dev                    - The caller is not the parent module
     ///
     /// @param vaultManager_    The address of the BLVaultManager contract
     function removeVaultManager(address vaultManager_) external onlyParent {
@@ -145,6 +185,12 @@ contract BLVaultSupply is SupplySubmodule {
         }
     }
 
+    // =========== HELPER FUNCTIONS =========== //
+
+    /// @notice     Determines if `vaultManager_` is contained in the `vaultManagers` array
+    ///
+    /// @param      vaultManager_  The address of a vault manager
+    /// @return     True if the address is in the array, false otherwise
     function _inArray(address vaultManager_) internal view returns (bool) {
         uint256 len = vaultManagers.length;
         for (uint256 i; i < len; ) {

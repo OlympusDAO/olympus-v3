@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
-import "modules/PRICE/PRICE.v2.sol";
-import {IUniswapV3Pool} from "interfaces/UniswapV3/IUniswapV3Pool.sol";
-import {OracleLibrary} from "libraries/UniswapV3/OracleLibrary.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+
+// Libraries
 import {FullMath} from "libraries/FullMath.sol";
 
+// Uniswap V3
+import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
+
+// Bophades
+import "modules/PRICE/PRICE.v2.sol";
+
 /// @title      UniswapV3Price
+/// @author     0xJem
 /// @notice     Provides prices derived from the TWAP of a Uniswap V3 pool
 contract UniswapV3Price is PriceSubmodule {
     using FullMath for uint256;
@@ -115,10 +122,12 @@ contract UniswapV3Price is PriceSubmodule {
 
     // ========== SUBMODULE FUNCTIONS =========== //
 
+    /// @inheritdoc      Submodule
     function SUBKEYCODE() public pure override returns (SubKeycode) {
         return toSubKeycode("PRICE.UNIV3");
     }
 
+    /// @inheritdoc      Submodule
     function VERSION() public pure override returns (uint8 major, uint8 minor) {
         major = 1;
         minor = 0;

@@ -10,7 +10,7 @@ import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
 /// @title      BunniSupply
 /// @author     0xJem
 /// @notice     A SPPLY submodule that provides data on OHM deployed into Uniswap V3 pools that
-///             are managed by the BunniManager policy and its associated BunniHub.
+/// @notice     are managed by the BunniManager policy and its associated BunniHub.
 contract BunniSupply is SupplySubmodule {
     // ========== ERRORS ========== //
 
@@ -42,17 +42,20 @@ contract BunniSupply is SupplySubmodule {
 
     /// @notice     The list of BunniTokens that are being monitored
     BunniToken[] public bunniTokens;
+
     /// @notice     The number of BunniTokens that are being monitored
     uint256 public bunniTokenCount;
+
     /// @notice     The list of BunniLenses that are being monitored
     ///             The values are stored in the same order as the bunniTokens array
     BunniLens[] public bunniLenses;
+
     /// @notice     The number of BunniLenses that are being monitored
     uint256 public bunniLensCount;
 
     /// @notice     The address of the OHM token
     /// @dev        Set at deployment-time
-    address internal ohm;
+    address internal immutable ohm;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -82,6 +85,11 @@ contract BunniSupply is SupplySubmodule {
     // ========== DATA FUNCTIONS ========== //
 
     /// @inheritdoc SupplySubmodule
+    function getSourceCount() external view override returns (uint256) {
+        return bunniTokens.length;
+    }
+
+    /// @inheritdoc SupplySubmodule
     /// @dev        Not applicable for Uniswap V3 pools managed by BunniHub
     function getCollateralizedOhm() external pure override returns (uint256) {
         return 0;
@@ -95,6 +103,10 @@ contract BunniSupply is SupplySubmodule {
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Returns the total of OHM in all of the registered tokens representing Uniswap V3 pools
+    ///
+    /// @dev        This function accesses the reserves of the registered
+    /// @dev        Uniswap V3 pools, and can be susceptible to re-entrancy attacks.
+    /// @dev        The BunniLens contract used by this Submodule performs a re-entrancy check.
     function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
         // Iterate through tokens and total up the pool OHM reserves as the POL supply
         uint256 len = bunniTokens.length;
@@ -113,7 +125,52 @@ contract BunniSupply is SupplySubmodule {
         return total;
     }
 
-    // =========== HELPER FUNCTIONS =========== //
+    /// @inheritdoc SupplySubmodule
+    /// @dev        Returns the total of OHM and non-OHM reserves in the submodule
+    ///
+    /// @dev        NOTE: The result of this function is susceptible to manipulation by a third-party.
+    /// @dev        Sanity-checks should be performed on the reserve values if they are to be used
+    /// @dev        for any critical calculations.
+    function getProtocolOwnedLiquidityReserves()
+        external
+        view
+        override
+        returns (SPPLYv1.Reserves[] memory)
+    {
+        // Iterate through tokens and total up the reserves of each pool
+        uint256 len = bunniTokens.length;
+        SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
+        for (uint256 i; i < len; ) {
+            BunniToken token = bunniTokens[i];
+            BunniLens lens = bunniLenses[i];
+            BunniKey memory key = _getBunniKey(token);
+            (
+                address token0,
+                address token1,
+                uint256 reserve0,
+                uint256 reserve1
+            ) = _getReservesWithFees(key, lens);
+
+            address[] memory underlyingTokens = new address[](2);
+            underlyingTokens[0] = token0;
+            underlyingTokens[1] = token1;
+            uint256[] memory underlyingReserves = new uint256[](2);
+            underlyingReserves[0] = reserve0;
+            underlyingReserves[1] = reserve1;
+
+            reserves[i] = SPPLYv1.Reserves({
+                source: address(token),
+                tokens: underlyingTokens,
+                balances: underlyingReserves
+            });
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return reserves;
+    }
 
     /// @notice         Determines whether `token_` has been registered
     ///
@@ -129,12 +186,12 @@ contract BunniSupply is SupplySubmodule {
 
     /// @notice                 Adds a deployed BunniToken address to the list of monitored tokens
     /// @dev                    Reverts if:
-    ///                         - The address is the zero address
-    ///                         - The address is already managed
-    ///                         - The caller is not the parent module
-    ///                         - `token_` does not adhere to the IBunniToken interface
-    ///                         - `bunniLens_` does not adhere to the IBunniLens interface
-    ///                         - `token_` and `bunniLens_` do not have the same BunniHub address
+    /// @dev                    - The address is the zero address
+    /// @dev                    - The address is already managed
+    /// @dev                    - The caller is not the parent module
+    /// @dev                    - `token_` does not adhere to the IBunniToken interface
+    /// @dev                    - `bunniLens_` does not adhere to the IBunniLens interface
+    /// @dev                    - `token_` and `bunniLens_` do not have the same BunniHub address
     ///
     /// @param token_           The address of the BunniToken contract
     /// @param bunniLens_       The address of the BunniLens contract
@@ -175,9 +232,9 @@ contract BunniSupply is SupplySubmodule {
 
     /// @notice                 Remove a deployed BunniToken address from the list of monitored tokens
     /// @dev                    Reverts if:
-    ///                         - The address is the zero address
-    ///                         - The address is not managed
-    ///                         - The caller is not the parent module
+    /// @dev                    - The address is the zero address
+    /// @dev                    - The address is not managed
+    /// @dev                    - The caller is not the parent module
     ///
     /// @param token_           The address of the BunniToken contract
     function removeBunniToken(address token_) external onlyParent {
@@ -211,6 +268,10 @@ contract BunniSupply is SupplySubmodule {
 
     // =========== INTERNAL FUNCTIONS =========== //
 
+    /// @notice         Returns the BunniKey for the pool repesented by `token_` and the full-range ticks
+    ///
+    /// @param token_   The address of the BunniToken contract
+    /// @return         The BunniKey for the pool
     function _getBunniKey(BunniToken token_) internal view returns (BunniKey memory) {
         return
             BunniKey({
@@ -220,6 +281,11 @@ contract BunniSupply is SupplySubmodule {
             });
     }
 
+    /// @notice         Returns the OHM reserves for the pool represented by `key_`
+    ///
+    /// @param key_     The BunniKey for the pool
+    /// @param lens_    The BunniLens contract
+    /// @return         The OHM reserves for the pool
     function _getOhmReserves(
         BunniKey memory key_,
         BunniLens lens_
@@ -232,6 +298,26 @@ contract BunniSupply is SupplySubmodule {
         }
     }
 
+    /// @notice         Returns the reserves for the pool represented by `key_`
+    /// @dev            Includes uncollected fees
+    ///
+    /// @param key_     The BunniKey for the pool
+    /// @param lens_    The BunniLens contract
+    /// @return         The reserves for the pool in the order of (token0, token1, reserve0, reserv1)
+    function _getReservesWithFees(
+        BunniKey memory key_,
+        BunniLens lens_
+    ) internal view returns (address, address, uint256, uint256) {
+        (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
+        (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
+
+        return (key_.pool.token0(), key_.pool.token1(), reserve0 + fee0, reserve1 + fee1);
+    }
+
+    /// @notice         Determines whether `token_` is in the `bunniTokens` array
+    ///
+    /// @param token_   The address of the token
+    /// @return         True if the token is in the array, otherwise false
     function _inTokenArray(address token_) internal view returns (bool) {
         uint256 len = bunniTokens.length;
         for (uint256 i; i < len; ) {

@@ -56,6 +56,20 @@ contract Bookkeeper is Policy, RolesConsumer {
         PRICE = PRICEv2(getModuleAddress(dependencies[1]));
         SPPLY = SPPLYv1(getModuleAddress(dependencies[2]));
         TRSRY = TRSRYv1_1(getModuleAddress(dependencies[3]));
+
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 SPPLY_MAJOR, ) = SPPLY.VERSION();
+        (uint8 TRSRY_MAJOR, uint8 TRSRY_MINOR) = TRSRY.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([2, 1, 1, 1]);
+        if (PRICE_MAJOR != 2 || ROLES_MAJOR != 1 || SPPLY_MAJOR != 1 || TRSRY_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
+
+        // Check TRSRY minor version
+        if (TRSRY_MINOR < 1) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
@@ -183,24 +197,30 @@ contract Bookkeeper is Policy, RolesConsumer {
 
     /// @notice Add a new category to the supply tracking system
     /// @param category_ The category to add
-    function addCategory(
+    function addSupplyCategory(
         SupplyCategory category_,
         bool useSubmodules_,
-        bytes4 submoduleSelector_
+        bytes4 submoduleSelector_,
+        bytes4 submoduleReservesSelector_
     ) external onlyRole("bookkeeper_policy") {
-        SPPLY.addCategory(category_, useSubmodules_, submoduleSelector_);
+        SPPLY.addCategory(
+            category_,
+            useSubmodules_,
+            submoduleSelector_,
+            submoduleReservesSelector_
+        );
     }
 
     /// @notice Remove a category from the supply tracking system
     /// @param category_ The category to remove
-    function removeCategory(SupplyCategory category_) external onlyRole("bookkeeper_policy") {
+    function removeSupplyCategory(SupplyCategory category_) external onlyRole("bookkeeper_policy") {
         SPPLY.removeCategory(category_);
     }
 
     /// @notice Categorize an address in a supply category
     /// @param location_ The address to categorize
     /// @param category_ The category to add the address to
-    function categorize(
+    function categorizeSupply(
         address location_,
         SupplyCategory category_
     ) external onlyRole("bookkeeper_policy") {

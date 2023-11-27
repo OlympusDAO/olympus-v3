@@ -19,7 +19,9 @@ import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import "src/modules/SPPLY/OlympusSupply.sol";
-import {AuraBalancerSupply, IBalancerPool, IAuraPool} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {AuraBalancerSupply} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
+import {IBalancerPool} from "src/external/balancer/interfaces/IBalancerPool.sol";
+import {IAuraRewardPool} from "src/external/aura/interfaces/IAuraRewardPool.sol";
 import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 
@@ -43,7 +45,9 @@ import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 //  [X] reverts if category already approved
 //  [X] reverts if category is empty
 //  [X] reverts if an incorrect submodules selector is provided
+//  [X] reverts if an incorrect submodules reserves selector is provided
 //  [X] reverts if a submodules selector is provided when disabled
+//  [X] reverts if a submodules reserves selector is provided when disabled
 //  [X] stores category in categories array, emits event
 //  [X] stores category with submodules enabled in categories array, emits event
 // [X] removeCategory - removes a category from supply tracking
@@ -150,7 +154,7 @@ contract SupplyTest is Test {
     using ModuleTestFixtureGenerator for OlympusSupply;
 
     MockERC20 internal ohm;
-    MockGohm internal gOhm;
+    MockGohm internal gohm;
 
     Kernel internal kernel;
 
@@ -172,6 +176,7 @@ contract SupplyTest is Test {
     uint256 internal constant INITIAL_CROSS_CHAIN_SUPPLY = 100e9; // 100 OHM
 
     uint256 internal constant CATEGORIES_DEFAULT_COUNT = 4;
+    uint256 internal constant CATEGORIES_RESERVES_DEFAULT_COUNT = 1;
 
     // Events
     event CrossChainSupplyUpdated(uint256 supply_);
@@ -185,7 +190,7 @@ contract SupplyTest is Test {
         // Tokens
         {
             ohm = new MockERC20("OHM", "OHM", 9);
-            gOhm = new MockGohm(GOHM_INDEX);
+            gohm = new MockGohm(GOHM_INDEX);
         }
 
         // Locations
@@ -204,7 +209,7 @@ contract SupplyTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             // Deploy SPPLY module
-            address[2] memory tokens = [address(ohm), address(gOhm)];
+            address[2] memory tokens = [address(ohm), address(gohm)];
             moduleSupply = new OlympusSupply(kernel, tokens, INITIAL_CROSS_CHAIN_SUPPLY);
 
             // Deploy mock module writer
@@ -265,7 +270,10 @@ contract SupplyTest is Test {
             balancerPool.setBalance(BPT_BALANCE); // balance for polAddress
 
             AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](1);
-            pools[0] = AuraBalancerSupply.Pool(IBalancerPool(balancerPool), IAuraPool(address(0)));
+            pools[0] = AuraBalancerSupply.Pool(
+                IBalancerPool(balancerPool),
+                IAuraRewardPool(address(0))
+            );
 
             submoduleAuraBalancerSupply = new AuraBalancerSupply(
                 moduleSupply,
@@ -410,7 +418,7 @@ contract SupplyTest is Test {
         );
         vm.expectRevert(err);
 
-        moduleSupply.addCategory(toCategory("test"), false, "");
+        moduleSupply.addCategory(toCategory("test"), false, bytes4(0), bytes4(0));
     }
 
     function test_addCategory_alreadyApproved_reverts() public {
@@ -421,7 +429,12 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("protocol-owned-treasury"), false, "");
+        moduleSupply.addCategory(
+            toCategory("protocol-owned-treasury"),
+            false,
+            bytes4(0),
+            bytes4(0)
+        );
         vm.stopPrank();
     }
 
@@ -430,7 +443,7 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory(""), false, "");
+        moduleSupply.addCategory(toCategory(""), false, bytes4(0), bytes4(0));
         vm.stopPrank();
     }
 
@@ -439,38 +452,109 @@ contract SupplyTest is Test {
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory(0), false, "");
+        moduleSupply.addCategory(toCategory(0), false, bytes4(0), bytes4(0));
         vm.stopPrank();
     }
 
-    function test_addCategory_emptyStringSubmoduleSelector_reverts() public {
+    function test_addCategory_emptyStringSubmoduleMetricSelector_reverts() public {
         bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), true, "");
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            bytes4(""),
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+        );
         vm.stopPrank();
     }
 
-    function test_addCategory_emptySubmoduleSelector_reverts() public {
+    function test_addCategory_emptySubmoduleMetricSelector_reverts() public {
         bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), true, bytes4(0));
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            bytes4(0),
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+        );
         vm.stopPrank();
     }
 
-    function test_addCategory_invalidSubmoduleSelector_reverts() public {
+    function test_addCategory_invalidSubmoduleMetricSelector_reverts() public {
         bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), true, bytes4("junk"));
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector,
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+        );
         vm.stopPrank();
     }
 
-    function test_addCategory_submodulesDisabled_withSelector_reverts() public {
+    function test_addCategory_emptyStringSubmoduleReservesSelector() public {
+        vm.startPrank(writer);
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            SupplySubmodule.getCollateralizedOhm.selector,
+            bytes4("")
+        );
+        vm.stopPrank();
+
+        // Check that the category is contained in the categoryData mapping
+        SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
+        assertEq(categoryData.approved, true);
+        assertEq(categoryData.useSubmodules, true);
+        assertEq(
+            categoryData.submoduleMetricSelector,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
+        assertEq(categoryData.submoduleReservesSelector, bytes4(0)); // submoduleReservesSelector is optional
+    }
+
+    function test_addCategory_emptySubmoduleReservesSelector() public {
+        vm.startPrank(writer);
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            SupplySubmodule.getCollateralizedOhm.selector,
+            bytes4(0)
+        );
+        vm.stopPrank();
+
+        // Check that the category is contained in the categoryData mapping
+        SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
+        assertEq(categoryData.approved, true);
+        assertEq(categoryData.useSubmodules, true);
+        assertEq(
+            categoryData.submoduleMetricSelector,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
+        assertEq(categoryData.submoduleReservesSelector, bytes4(0)); // submoduleReservesSelector is optional
+    }
+
+    function test_addCategory_invalidSubmoduleReservesSelector_reverts() public {
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
+        vm.expectRevert(err);
+
+        vm.startPrank(writer);
+        moduleSupply.addCategory(
+            toCategory("test"),
+            true,
+            SupplySubmodule.getCollateralizedOhm.selector,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
+        vm.stopPrank();
+    }
+
+    function test_addCategory_submodulesDisabled_withSubmoduleMetricSelector_reverts() public {
         bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
         vm.expectRevert(err);
 
@@ -478,7 +562,22 @@ contract SupplyTest is Test {
         moduleSupply.addCategory(
             toCategory("test"),
             false,
-            SupplySubmodule.getCollateralizedOhm.selector
+            SupplySubmodule.getCollateralizedOhm.selector,
+            bytes4(0)
+        );
+        vm.startPrank(writer);
+    }
+
+    function test_addCategory_submodulesDisabled_withSubmoduleReservesSelector_reverts() public {
+        bytes memory err = abi.encodeWithSignature("SPPLY_InvalidParams()");
+        vm.expectRevert(err);
+
+        vm.startPrank(writer);
+        moduleSupply.addCategory(
+            toCategory("test"),
+            false,
+            bytes4(0),
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
         );
         vm.startPrank(writer);
     }
@@ -490,7 +589,7 @@ contract SupplyTest is Test {
 
         // Add category
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), false, "");
+        moduleSupply.addCategory(toCategory("test"), false, bytes4(0), bytes4(0));
         vm.stopPrank();
 
         // Get categories
@@ -509,7 +608,8 @@ contract SupplyTest is Test {
         SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
         assertEq(categoryData.approved, true);
         assertEq(categoryData.useSubmodules, false);
-        assertEq(categoryData.submoduleSelector, bytes4(0));
+        assertEq(categoryData.submoduleMetricSelector, bytes4(0));
+        assertEq(categoryData.submoduleReservesSelector, bytes4(0));
     }
 
     function test_addCategory_withSubmodules() public {
@@ -522,7 +622,8 @@ contract SupplyTest is Test {
         moduleSupply.addCategory(
             toCategory("test"),
             true,
-            SupplySubmodule.getCollateralizedOhm.selector
+            SupplySubmodule.getCollateralizedOhm.selector,
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
         );
         vm.stopPrank();
 
@@ -542,14 +643,21 @@ contract SupplyTest is Test {
         SPPLYv1.CategoryData memory categoryData = moduleSupply.getCategoryData(toCategory("test"));
         assertEq(categoryData.approved, true);
         assertEq(categoryData.useSubmodules, true);
-        assertEq(categoryData.submoduleSelector, SupplySubmodule.getCollateralizedOhm.selector);
+        assertEq(
+            categoryData.submoduleMetricSelector,
+            SupplySubmodule.getCollateralizedOhm.selector
+        );
+        assertEq(
+            categoryData.submoduleReservesSelector,
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+        );
     }
 
     // =========  removeCategory ========= //
 
     function _addCategory(bytes32 name_) internal {
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory(name_), false, "");
+        moduleSupply.addCategory(toCategory(name_), false, bytes4(0), bytes4(0));
         vm.stopPrank();
     }
 
@@ -892,7 +1000,12 @@ contract SupplyTest is Test {
         // Create categories
         for (uint256 i = 0; i < locationCount; i++) {
             vm.startPrank(writer);
-            moduleSupply.addCategory(toCategory(bytes32(bytes(categoryNames[i]))), false, "");
+            moduleSupply.addCategory(
+                toCategory(bytes32(bytes(categoryNames[i]))),
+                false,
+                bytes4(0),
+                bytes4(0)
+            );
             vm.stopPrank();
         }
 
@@ -991,7 +1104,7 @@ contract SupplyTest is Test {
 
         assertEq(categoryData.approved, true);
         assertEq(categoryData.useSubmodules, false);
-        assertEq(categoryData.submoduleSelector, bytes4(0));
+        assertEq(categoryData.submoduleMetricSelector, bytes4(0));
     }
 
     function test_getCategoryData_categoryNotApproved_reverts() public {
@@ -1097,7 +1210,7 @@ contract SupplyTest is Test {
 
     function test_getSupplyByCategory_gOhmSupply() public {
         // Add gOHM in the treasury
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         uint256 expectedOhmSupply = uint256(1e18).mulDiv(GOHM_INDEX, 1e18); // 9 decimals
 
@@ -1112,7 +1225,7 @@ contract SupplyTest is Test {
 
         // Add OHM/gOHM in the treasury
         ohm.mint(address(treasuryAddress), 100e9);
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         // Categories already defined
 
@@ -1128,7 +1241,7 @@ contract SupplyTest is Test {
 
         // Add OHM/gOHM in the treasury
         ohm.mint(address(treasuryAddress), 100e9);
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         // Categories already defined
 
@@ -1147,14 +1260,15 @@ contract SupplyTest is Test {
 
         // Add OHM/gOHM in the treasury
         ohm.mint(address(treasuryAddress), 100e9);
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         // Define category for collateralized OHM
         vm.startPrank(writer);
         moduleSupply.addCategory(
             toCategory("collateralized-ohm"),
             true,
-            SupplySubmodule.getCollateralizedOhm.selector
+            SupplySubmodule.getCollateralizedOhm.selector,
+            bytes4(0)
         );
         vm.stopPrank();
 
@@ -1170,11 +1284,11 @@ contract SupplyTest is Test {
 
         // Add OHM/gOHM in the treasury
         ohm.mint(address(treasuryAddress), 100e9);
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         // Define a new category with submodules disabled
         vm.startPrank(writer);
-        moduleSupply.addCategory(toCategory("test"), false, "");
+        moduleSupply.addCategory(toCategory("test"), false, bytes4(0), bytes4(0));
         vm.stopPrank();
 
         uint256 expected = 0;
@@ -1202,14 +1316,15 @@ contract SupplyTest is Test {
 
         // Add OHM/gOHM in the treasury
         ohm.mint(address(treasuryAddress), 100e9);
-        gOhm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
 
         // Define category for collateralized OHM
         vm.startPrank(writer);
         moduleSupply.addCategory(
             toCategory("collateralized-ohm"),
             true,
-            SupplySubmodule.getCollateralizedOhm.selector
+            SupplySubmodule.getCollateralizedOhm.selector,
+            bytes4(0)
         );
         vm.stopPrank();
 
@@ -2206,5 +2321,168 @@ contract SupplyTest is Test {
             SPPLYv1.Variant.LAST
         );
         assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
+    }
+
+    // =========  getReservesByCategory ========= //
+
+    // [X] getReservesByCategory
+    //  [X] categoryNotApproved
+    //  [X] supply calculations
+    //    [X] no locations in category
+    //    [X] no submodule selector defined
+    //    [X] zero supply
+    //    [X] OHM supply
+    //    [X] gOHM supply
+    //    [X] uses submodule reserves
+    //    [X] reverts upon submodule failure
+
+    function test_getReservesByCategory_categoryNotApproved_reverts() public {
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_CategoryNotApproved(bytes32)",
+            toCategory("junk")
+        );
+        vm.expectRevert(err);
+
+        // Get supply
+        moduleSupply.getReservesByCategory(toCategory("junk"));
+    }
+
+    function test_getReservesByCategory_noLocations() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Remove the existing location
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(treasuryAddress), toCategory(0));
+        vm.stopPrank();
+
+        // Check supply
+        SPPLYv1.Reserves[] memory reserves = moduleSupply.getReservesByCategory(
+            toCategory("protocol-owned-treasury")
+        );
+
+        assertEq(reserves.length, 0);
+    }
+
+    function test_getReservesByCategory_noSubmoduleReservesSelector() public {
+        // Add OHM in the treasury
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Check supply
+        SPPLYv1.Reserves[] memory reserves = moduleSupply.getReservesByCategory(
+            toCategory("protocol-owned-treasury")
+        );
+
+        assertEq(reserves.length, 1);
+        assertEq(reserves[0].tokens.length, 1);
+        assertEq(reserves[0].tokens[0], address(ohm));
+        assertEq(reserves[0].balances.length, 1);
+        assertEq(reserves[0].balances[0], 100e9);
+    }
+
+    function test_getReservesByCategory_submoduleFailureReverts() public {
+        _setUpSubmodules();
+
+        // Set up submodule failure
+        {
+            vm.mockCallRevert(
+                address(submoduleBLVaultSupply),
+                abi.encodeWithSelector(SupplySubmodule.getProtocolOwnedLiquidityReserves.selector),
+                abi.encode("revert")
+            );
+        }
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "SPPLY_SubmoduleFailed(address,bytes4)",
+            address(submoduleBLVaultSupply),
+            SupplySubmodule.getProtocolOwnedLiquidityReserves.selector
+        );
+        vm.expectRevert(err);
+
+        // Check reserves
+        moduleSupply.getReservesByCategory(toCategory("protocol-owned-liquidity"));
+    }
+
+    function test_getReservesByCategory_includesSubmodules() public {
+        _setUpSubmodules();
+
+        // Add OHM/gOHM in the treasury (which will not be included)
+        ohm.mint(address(treasuryAddress), 100e9);
+        gohm.mint(address(treasuryAddress), 1e18); // 1 gOHM
+
+        // Categories already defined
+
+        uint256 expectedBptDai = BPT_BALANCE.mulDiv(
+            BALANCER_POOL_DAI_BALANCE,
+            BALANCER_POOL_TOTAL_SUPPLY
+        );
+        uint256 expectedBptOhm = BPT_BALANCE.mulDiv(
+            BALANCER_POOL_OHM_BALANCE,
+            BALANCER_POOL_TOTAL_SUPPLY
+        );
+
+        // Check reserves
+        SPPLYv1.Reserves[] memory reserves = moduleSupply.getReservesByCategory(
+            toCategory("protocol-owned-liquidity")
+        );
+        assertEq(reserves.length, 3);
+        // Check reserves: Aura - Balancer
+        assertEq(reserves[0].tokens.length, 2);
+        assertEq(reserves[0].balances[0], expectedBptDai);
+        assertEq(reserves[0].balances[1], expectedBptOhm);
+        // Check reserves: BLVault
+        assertEq(reserves[1].tokens.length, 0);
+        assertEq(reserves[1].balances.length, 0);
+        // Check reserves: Silo
+        assertEq(reserves[2].tokens.length, 0);
+        assertEq(reserves[2].balances.length, 0);
+        // Treasury OHM/gOHM not included in the category
+    }
+
+    function test_getReservesByCategory_includesSubmodulesAndOhm() public {
+        _setUpSubmodules();
+
+        // Add OHM/gOHM in the polAddress
+        ohm.mint(address(polAddress), 100e9);
+        gohm.mint(address(polAddress), 1e18); // 1 gOHM
+
+        // Add polAddress to the POL category
+        vm.startPrank(writer);
+        moduleSupply.categorize(address(polAddress), toCategory("protocol-owned-liquidity"));
+        vm.stopPrank();
+
+        uint256 expectedBptDai = BPT_BALANCE.mulDiv(
+            BALANCER_POOL_DAI_BALANCE,
+            BALANCER_POOL_TOTAL_SUPPLY
+        );
+        uint256 expectedBptOhm = BPT_BALANCE.mulDiv(
+            BALANCER_POOL_OHM_BALANCE,
+            BALANCER_POOL_TOTAL_SUPPLY
+        );
+        uint256 expectedOhm = 100e9 + gohm.balanceFrom(1e18);
+
+        // Check reserves
+        SPPLYv1.Reserves[] memory reserves = moduleSupply.getReservesByCategory(
+            toCategory("protocol-owned-liquidity")
+        );
+
+        assertEq(reserves.length, 4);
+        // Check reserves: Aura - Balancer
+        assertEq(reserves[0].tokens.length, 2);
+        assertEq(reserves[0].balances[0], expectedBptDai);
+        assertEq(reserves[0].balances[1], expectedBptOhm);
+        // Check reserves: BLVault
+        assertEq(reserves[1].tokens.length, 0);
+        assertEq(reserves[1].balances.length, 0);
+        // Check reserves: Silo
+        assertEq(reserves[2].tokens.length, 0);
+        assertEq(reserves[2].balances.length, 0);
+        // Check reserves: Treasury
+        assertEq(reserves[3].source, polAddress);
+        assertEq(reserves[3].tokens.length, 1);
+        assertEq(reserves[3].tokens[0], address(ohm));
+        assertEq(reserves[3].balances.length, 1);
+        assertEq(reserves[3].balances[0], expectedOhm);
     }
 }
