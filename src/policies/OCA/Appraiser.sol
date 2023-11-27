@@ -5,19 +5,49 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import "src/Kernel.sol";
+import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {IAppraiser} from "src/policies/OCA/interfaces/IAppraiser.sol";
-import {TRSRYv1_1, Category, toCategory} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {TRSRYv1_1, Category as TreasuryCategory, toCategory as toTreasuryCategory} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {SPPLYv1, toCategory as toSupplyCategory} from "src/modules/SPPLY/SPPLY.v1.sol";
 
-contract Appraiser is IAppraiser, Policy {
+contract Appraiser is IAppraiser, Policy, RolesConsumer {
     // ========== EVENTS ========== //
 
+    /// @notice                         Emitted when the reserves deviation is updated
+    ///
+    /// @param reservesDeviationBps_    The new value of the reserves deviation
+    event ReservesDeviationBpsSet(uint16 reservesDeviationBps_);
+
     // ========== ERRORS ========== //
+
+    /// @notice                 Indicates that the value of `asset_` could not be calculated
+    ///
+    /// @param asset_           The address of the asset that could not be valued
     error Appraiser_ValueCallFailed(address asset_);
+
+    /// @notice                 Indicates that the value of `asset_` is zero
+    ///
+    /// @param asset_           The address of the asset that has a value of zero
     error Appraiser_ValueZero(address asset_);
+
+    /// @notice                 Indicates that invalid parameters were provided
+    ///
+    /// @param index            The index of the invalid parameter
+    /// @param params           The parameters that were provided
     error Appraiser_InvalidParams(uint256 index, bytes params);
-    error Appraiser_InvalidCalculation(address asset_, Variant variant_);
+
+    /// @notice                 Indicates that there was a mismatch between the lookup price of `asset_` and the price derived from the reserves
+    /// @notice                 This indicates that the reserves in the current block may be manipulated
+    ///
+    /// @param asset_           The address of the pool token that had a mismatch
+    /// @param reservesPrice_   The price of the pool token derived from the reserves
+    /// @param lookupPrice_     The price of the pool token derived from the PRICE lookup
+    error Appraiser_ReservesPriceMismatch(
+        address asset_,
+        uint256 reservesPrice_,
+        uint256 lookupPrice_
+    );
 
     // ========== STATE ========== //
 
@@ -31,28 +61,51 @@ contract Appraiser is IAppraiser, Policy {
     uint256 internal constant OHM_SCALE = 1e9;
     uint256 internal priceScale;
     uint8 public decimals;
+    uint16 public reservesDeviationBps = 100; // 100 = 1%
+    uint16 internal constant DEVIATION_MAX = 10_000; // 10_000 = 100%
 
     // Cache
     mapping(Metric => Cache) public metricCache;
     mapping(address => Cache) public assetValueCache;
-    mapping(Category => Cache) public categoryValueCache;
+    mapping(TreasuryCategory => Cache) public categoryValueCache;
 
     //============================================================================================//
     //                                     POLICY SETUP                                           //
     //============================================================================================//
 
-    constructor(Kernel kernel_) Policy(kernel_) {}
+    constructor(Kernel kernel_, uint16 reservesDeviationBps_) Policy(kernel_) {
+        reservesDeviationBps = reservesDeviationBps_;
+
+        emit ReservesDeviationBpsSet(reservesDeviationBps_);
+    }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
-        dependencies[0] = toKeycode("PRICE");
-        dependencies[1] = toKeycode("SPPLY");
-        dependencies[2] = toKeycode("TRSRY");
+        dependencies = new Keycode[](4);
+        dependencies[0] = toKeycode("ROLES");
+        dependencies[1] = toKeycode("PRICE");
+        dependencies[2] = toKeycode("SPPLY");
+        dependencies[3] = toKeycode("TRSRY");
 
-        PRICE = PRICEv2(getModuleAddress(dependencies[0]));
-        SPPLY = SPPLYv1(getModuleAddress(dependencies[1]));
-        TRSRY = TRSRYv1_1(getModuleAddress(dependencies[2]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[0]));
+        PRICE = PRICEv2(getModuleAddress(dependencies[1]));
+        SPPLY = SPPLYv1(getModuleAddress(dependencies[2]));
+        TRSRY = TRSRYv1_1(getModuleAddress(dependencies[3]));
+
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 SPPLY_MAJOR, ) = SPPLY.VERSION();
+        (uint8 TRSRY_MAJOR, uint8 TRSRY_MINOR) = TRSRY.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([2, 1, 1, 1]);
+        if (PRICE_MAJOR != 2 || ROLES_MAJOR != 1 || SPPLY_MAJOR != 1 || TRSRY_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
+
+        // Check TRSRY minor version
+        if (TRSRY_MINOR < 1) revert Policy_WrongModuleVersion(expected);
+
         ohm = address(SPPLY.ohm());
         decimals = PRICE.decimals();
         priceScale = 10 ** decimals;
@@ -126,7 +179,7 @@ contract Appraiser is IAppraiser, Policy {
     }
 
     /// @inheritdoc IAppraiser
-    function getCategoryValue(Category category_) external view override returns (uint256) {
+    function getCategoryValue(TreasuryCategory category_) external view override returns (uint256) {
         // Get the cached category value
         (uint256 value, uint48 timestamp) = getCategoryValue(category_, Variant.LAST);
 
@@ -141,7 +194,7 @@ contract Appraiser is IAppraiser, Policy {
 
     /// @inheritdoc IAppraiser
     function getCategoryValue(
-        Category category_,
+        TreasuryCategory category_,
         uint48 maxAge_
     ) external view override returns (uint256) {
         // Get the cached category value
@@ -158,7 +211,7 @@ contract Appraiser is IAppraiser, Policy {
 
     /// @inheritdoc IAppraiser
     function getCategoryValue(
-        Category category_,
+        TreasuryCategory category_,
         Variant variant_
     ) public view override returns (uint256, uint48) {
         if (variant_ == Variant.LAST) {
@@ -175,7 +228,7 @@ contract Appraiser is IAppraiser, Policy {
     /// @param category_    The TRSRY category to get the value of
     /// @return             The value of the assets in the category (in terms of `decimals`)
     /// @return             The timestamp at which the value was calculated
-    function _categoryValue(Category category_) internal view returns (uint256, uint48) {
+    function _categoryValue(TreasuryCategory category_) internal view returns (uint256, uint48) {
         // Get the assets in the category
         address[] memory assets = TRSRY.getAssetsByCategory(category_);
 
@@ -262,6 +315,14 @@ contract Appraiser is IAppraiser, Policy {
     /// @notice         - Excluding: OHM held by the protocol
     /// @notice         - Excluding: OHM in protocol-owned liquidity
     ///
+    /// @dev            This function interacts with the raw reserves in protocol-owned liquidity,
+    /// @dev            which can be manipulated by third-party actors in order to manipulate
+    /// @dev            prices and protocol metrics.
+    /// @dev            To mitigate this, the value of POL reserves (containing > 1 asset) returned by
+    /// @dev            the SPPLY module will be compared against the moving average price of the
+    /// @dev            pool token. A deviation outside of the `reservesDeviationBps` value will cause
+    /// @dev            the function to revert.
+    ///
     /// @return         The value of the protocol backing (in terms of `decimals`)
     function _backing() internal view returns (uint256) {
         // Get list of assets owned by the protocol
@@ -269,17 +330,17 @@ contract Appraiser is IAppraiser, Policy {
 
         // Get the addresses of POL assets in the treasury
         address[] memory polAssets = TRSRY.getAssetsByCategory(
-            toCategory("protocol-owned-liquidity")
+            toTreasuryCategory("protocol-owned-liquidity")
         );
 
         // Calculate the value of all the non-POL assets
-        uint256 value;
+        uint256 backedValue;
         uint256 len = assets.length;
         for (uint256 i; i < len; ) {
             if (assets[i] != ohm) {
                 (uint256 assetValue, ) = _assetValue(assets[i]);
                 if (!_inArray(assets[i], polAssets)) {
-                    value += assetValue;
+                    backedValue += assetValue;
                 }
             }
             unchecked {
@@ -294,28 +355,75 @@ contract Appraiser is IAppraiser, Policy {
 
         len = reserves.length;
         for (uint256 i; i < len; ) {
-            uint256 tokens = reserves[i].tokens.length;
-            for (uint256 j; j < tokens; ) {
-                if (reserves[i].tokens[j] != ohm) {
-                    // Get current asset price
-                    (uint256 price, ) = PRICE.getPrice(
-                        reserves[i].tokens[j],
-                        PRICEv2.Variant.CURRENT
-                    );
-                    // Calculate current asset valuation
-                    value +=
-                        (price * reserves[i].balances[j]) /
-                        (10 ** ERC20(reserves[i].tokens[j]).decimals());
-                }
+            uint256 tokenLen = reserves[i].tokens.length;
+            uint256 poolTokenReservesValue;
+            for (uint256 j; j < tokenLen; ) {
+                address currentToken = reserves[i].tokens[j];
+                // Get current asset price
+                (uint256 price, ) = PRICE.getPrice(currentToken, PRICEv2.Variant.CURRENT);
+
+                // Calculate current asset valuation
+                uint256 tokenValue = (price * reserves[i].balances[j]) /
+                    (10 ** ERC20(currentToken).decimals());
+
+                // Update pool reserves based on current asset
+                if (tokenLen != 1) poolTokenReservesValue += tokenValue;
+
+                // Exclude OHM from the `backedValue` calculation
+                if (currentToken != ohm) backedValue += tokenValue;
+
                 unchecked {
                     ++j;
                 }
             }
+
+            // For pools, perform a sanity check on the reserves value
+            if (poolTokenReservesValue != 0) {
+                // Determine the moving average price of a single pool token
+                // Scale: PRICE decimals
+                (uint256 poolTokenLookupPrice, ) = PRICE.getPrice(
+                    reserves[i].source,
+                    PRICEv2.Variant.MOVINGAVERAGE
+                );
+
+                // Get the balance of the pool token
+                (uint256 poolTokenBalance, ) = TRSRY.getAssetBalance(
+                    reserves[i].source,
+                    TRSRYv1_1.Variant.CURRENT
+                );
+                // If the balance is zero, the unit price cannot be determined.
+                // Additionally, the balance cannot be zero if reserves are being returned.
+                if (poolTokenBalance == 0) {
+                    revert Appraiser_ValueZero(reserves[i].source);
+                }
+
+                // Determine the unit price of a single pool token
+                uint256 poolTokenReservesUnitPrice = (poolTokenReservesValue * 1e18) /
+                    poolTokenBalance;
+
+                // Check if the absolute deviation between the lookup and reserves price differs by more than reservesDeviationBps
+                // If so, the reserves may be manipulated
+                if (
+                    poolTokenLookupPrice <
+                    (poolTokenReservesUnitPrice * (DEVIATION_MAX - reservesDeviationBps)) /
+                        DEVIATION_MAX ||
+                    poolTokenLookupPrice >
+                    (poolTokenReservesUnitPrice * (DEVIATION_MAX + reservesDeviationBps)) /
+                        DEVIATION_MAX
+                ) {
+                    revert Appraiser_ReservesPriceMismatch(
+                        reserves[i].source,
+                        poolTokenReservesUnitPrice,
+                        poolTokenLookupPrice
+                    );
+                }
+            }
+
             unchecked {
                 ++i;
             }
         }
-        return value;
+        return backedValue;
     }
 
     /// @notice         Calculates the value of liquid backing
@@ -329,7 +437,7 @@ contract Appraiser is IAppraiser, Policy {
         uint256 backing = _backing();
 
         // Get value of assets categorized as illiquid
-        (uint256 illiquidValue, ) = _categoryValue(toCategory("illiquid"));
+        (uint256 illiquidValue, ) = _categoryValue(toTreasuryCategory("illiquid"));
 
         // Subtract illiquid value from total backing
         return backing - illiquidValue;
@@ -478,7 +586,7 @@ contract Appraiser is IAppraiser, Policy {
     }
 
     /// @inheritdoc IAppraiser
-    function storeCategoryValue(Category category_) external override {
+    function storeCategoryValue(TreasuryCategory category_) external override {
         (uint256 value, uint48 timestamp) = getCategoryValue(category_, Variant.CURRENT);
         categoryValueCache[category_] = Cache(value, timestamp);
     }
@@ -487,6 +595,29 @@ contract Appraiser is IAppraiser, Policy {
     function storeMetric(Metric metric_) external override {
         (uint256 result, uint48 timestamp) = getMetric(metric_, Variant.CURRENT);
         metricCache[metric_] = Cache(result, timestamp);
+    }
+
+    //============================================================================================//
+    //                                       ADMIN                                                //
+    //============================================================================================//
+
+    /// @notice                         Sets the deviation allowed between the reserves and lookup price of a pool token
+    /// @notice                         This is used to mitigate the risk of price manipulation by third-party actors
+    /// @dev                            This function will revert if:
+    /// @dev                            - `reservesDeviationBps_` is greater than the maximum allowed, `DEVIATION_MAX`
+    ///
+    /// @param reservesDeviationBps_    The new value of the reserves deviation
+    function setReservesDeviationBps(
+        uint16 reservesDeviationBps_
+    ) external onlyRole("appraiser_policy") {
+        // Check bounds
+        if (reservesDeviationBps_ > DEVIATION_MAX) {
+            revert Appraiser_InvalidParams(0, abi.encode(reservesDeviationBps_));
+        }
+
+        reservesDeviationBps = reservesDeviationBps_;
+
+        emit ReservesDeviationBpsSet(reservesDeviationBps_);
     }
 
     //============================================================================================//
