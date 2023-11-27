@@ -222,10 +222,9 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
         uint256 loans = loans_.length;
         if (loans != coolers_.length) revert LengthDiscrepancy();
 
-        uint256 totalPrincipal;
-        uint256 totalInterest;
-        uint256 totalCollateral;
         uint256 keeperRewards;
+        uint256 totalInterest;
+        uint256 totalPrincipal;
         for (uint256 i = 0; i < loans; ) {
             // Validate that cooler was deployed by the trusted factory.
             if (!factory.created(coolers_[i])) revert OnlyFromFactory();
@@ -242,7 +241,6 @@ contract Clearinghouse is Policy, RolesConsumer, CoolerCallback {
                 // Cannot overflow due to max supply limits for both tokens
                 totalPrincipal += principal;
                 totalInterest += interest;
-                totalCollateral += collateral;
                 // There will not exist more than 2**256 loans
                 ++i;
             }
