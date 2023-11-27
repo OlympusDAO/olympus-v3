@@ -65,6 +65,9 @@ contract MockPrice is PRICEv2 {
             price = prices[asset_];
         } else if (variant_ == Variant.MOVINGAVERAGE) {
             price = movingAverages[asset_];
+
+            // There is a specific error when calling getPrice for an asset that does not store the moving average
+            if (price == 0) revert PRICE_MovingAverageNotStored(asset_);
         } else {
             revert PRICE_ParamsVariantInvalid(variant_);
         }

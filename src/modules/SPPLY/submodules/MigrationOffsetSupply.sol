@@ -18,7 +18,11 @@ contract MigrationOffsetSupply is CustomSupply {
 
     // ========== CONSTRUCTOR ========== //
 
-    constructor(Module parent_, address source_, uint256 gOhmOffset_) CustomSupply(parent_, 0, 0, 0, source_) {
+    constructor(
+        Module parent_,
+        address source_,
+        uint256 gOhmOffset_
+    ) CustomSupply(parent_, 0, 0, 0, source_) {
         gOhmOffset = gOhmOffset_;
 
         emit GOhmOffsetUpdated(gOhmOffset_);

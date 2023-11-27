@@ -10,6 +10,7 @@ contract MockUniV3Pair is IUniswapV3Pool {
     int56[] internal _tickCumulatives;
     bool internal _observeReverts;
     uint128 internal _liquidity;
+    bool internal _unlocked = true;
 
     // Setters
 
@@ -33,6 +34,10 @@ contract MockUniV3Pair is IUniswapV3Pool {
         _liquidity = liquidity_;
     }
 
+    function setUnlocked(bool unlocked_) public {
+        _unlocked = unlocked_;
+    }
+
     // Standard functions
 
     function slot0()
@@ -48,7 +53,7 @@ contract MockUniV3Pair is IUniswapV3Pool {
             bool unlocked
         )
     {
-        return (_sqrtPrice, 0, 0, 0, 0, 0, true);
+        return (_sqrtPrice, 0, 0, 0, 0, 0, _unlocked);
     }
 
     function observe(

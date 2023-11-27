@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
+// Balancer
 import {IBalancerPool} from "src/external/balancer/interfaces/IBalancerPool.sol";
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 import {IAuraRewardPool} from "src/external/aura/interfaces/IAuraRewardPool.sol";
+import {VaultReentrancyLib} from "src/libraries/Balancer/contracts/VaultReentrancyLib.sol";
 
+// Bophades Modules
 import "modules/SPPLY/SPPLY.v1.sol";
 
 /// @title      AuraBalancerSupply
@@ -163,7 +166,14 @@ contract AuraBalancerSupply is SupplySubmodule {
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Protocol-owned liquidity OHM is calculated as the sum of the protocol-owned OHM in each pool
+    ///
+    /// @dev        This function accesses the reserves of the monitored pools.
+    /// @dev        In order to protect against re-entrancy attacks,
+    /// @dev        it utilises the Balancer VaultReentrancyLib.
     function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
+        // Prevent re-entrancy attacks
+        VaultReentrancyLib.ensureNotInVaultContext(balVault);
+
         // Iterate through the pools and get the POL supply from each
         uint256 supply;
         uint256 len = pools.length;
@@ -191,12 +201,18 @@ contract AuraBalancerSupply is SupplySubmodule {
     }
 
     /// @inheritdoc SupplySubmodule
+    /// @dev        This function accesses the reserves of the monitored pools.
+    /// @dev        In order to protect against re-entrancy attacks,
+    /// @dev        it utilises the Balancer VaultReentrancyLib.
     function getProtocolOwnedLiquidityReserves()
         external
         view
         override
         returns (SPPLYv1.Reserves[] memory)
     {
+        // Prevent re-entrancy attacks
+        VaultReentrancyLib.ensureNotInVaultContext(balVault);
+
         // Iterate through tokens and add the reserves of each pool
         uint256 len = pools.length;
         SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
@@ -302,10 +318,11 @@ contract AuraBalancerSupply is SupplySubmodule {
         return false;
     }
 
-    /// @notice        Get the reserves of a Balancer/Aura pool pair
+    /// @notice         Get the reserves of a Balancer/Aura pool pair
+    /// @dev            The calling function is responsible for protecting against re-entrancy.
     ///
-    /// @param pool    Balancer/Aura pool pair
-    /// @return        Reserves of the pool
+    /// @param pool     Balancer/Aura pool pair
+    /// @return         Reserves of the pool
     function _getReserves(Pool storage pool) internal view returns (SPPLYv1.Reserves memory) {
         // Get the balancer pool token balance of the manager
         uint256 balBalance = pool.balancerPool.balanceOf(polManager);
