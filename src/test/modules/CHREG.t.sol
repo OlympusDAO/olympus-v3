@@ -133,6 +133,7 @@ contract CHREGTest is Test {
 
         // Verify clearinghouse was activateed
         assertEq(chreg.activeCount(), 1);
+        assertEq(chreg.registryCount(), 1);
         assertEq(chreg.active(0), address(1));
         assertEq(chreg.registry(0), address(1));
     }
@@ -151,6 +152,7 @@ contract CHREGTest is Test {
 
         // Verify clearinghouse was activateed
         assertEq(chreg.activeCount(), 1);
+        assertEq(chreg.registryCount(), 1);
         assertEq(chreg.active(0), address(1));
         assertEq(chreg.registry(0), address(1));
 
@@ -158,6 +160,7 @@ contract CHREGTest is Test {
 
         // Verify clearinghouse was deactivateed
         assertEq(chreg.activeCount(), 0);
+        assertEq(chreg.registryCount(), 1);
         assertEq(chreg.registry(0), address(1));
 
         // Ensure that the event is emitted
@@ -168,6 +171,7 @@ contract CHREGTest is Test {
 
         // Verify clearinghouse was activateed
         assertEq(chreg.activeCount(), 1);
+        assertEq(chreg.registryCount(), 1);
         assertEq(chreg.active(0), address(1));
         assertEq(chreg.registry(0), address(1));
         // Verify any element wasn't pushed to registry.
@@ -193,6 +197,7 @@ contract CHREGTest is Test {
 
         // Verify clearinghouse was activateed
         assertEq(chreg.activeCount(), 1);
+        assertEq(chreg.registryCount(), 1);
         assertEq(chreg.active(0), address(1));
         assertEq(chreg.registry(0), address(1));
 
@@ -224,6 +229,7 @@ contract CHREGTest is Test {
 
         // Verify initial state
         assertEq(chreg.activeCount(), 3);
+        assertEq(chreg.registryCount(), 3);
         assertEq(chreg.active(0), address(1));
         assertEq(chreg.active(1), address(2));
         assertEq(chreg.active(2), address(3));
@@ -241,6 +247,7 @@ contract CHREGTest is Test {
 
         // Verify clearinghouse was deactivated
         assertEq(chreg.activeCount(), 2);
+        assertEq(chreg.registryCount(), 3);
         assertEq(chreg.active(1), address(2));
         assertEq(chreg.active(0), address(3));
         assertEq(chreg.registry(0), address(1));
@@ -253,6 +260,7 @@ contract CHREGTest is Test {
 
         // Verify initial state
         assertEq(chreg.activeCount(), 3);
+        assertEq(chreg.registryCount(), 3);
         assertEq(chreg.active(0), address(1));
         assertEq(chreg.active(1), address(2));
         assertEq(chreg.active(2), address(3));
@@ -270,6 +278,7 @@ contract CHREGTest is Test {
 
         // Verify clearinghouse was deactivated
         assertEq(chreg.activeCount(), 2);
+        assertEq(chreg.registryCount(), 3);
         assertEq(chreg.active(1), address(2));
         assertEq(chreg.active(0), address(3));
         assertEq(chreg.registry(0), address(1));
