@@ -335,6 +335,25 @@ contract BunniSupplyTest is Test {
         assertEq(polo, ohmReserves + ohmReservesTwo);
     }
 
+    function test_getProtocolOwnedLiquidityOhm_reentrancyReverts() public {
+        // Register one token
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+
+        // Set the UniV3 pair to be locked, which indicates re-entrancy
+        uniswapPool.setUnlocked(false);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniLens.BunniLens_Reentrant.selector,
+            address(uniswapPool)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        submoduleBunniSupply.getProtocolOwnedLiquidityOhm();
+    }
+
     // =========  getProtocolOwnedLiquidityReserves ========= //
 
     // [X] getProtocolOwnedLiquidityReserves
@@ -419,6 +438,25 @@ contract BunniSupplyTest is Test {
         assertEq(reserves[1].balances.length, 2);
         assertEq(reserves[1].balances[0], ohmReservesTwo_);
         assertEq(reserves[1].balances[1], wethReservesTwo_);
+    }
+
+    function test_getProtocolOwnedLiquidityReserves_reentrancyReverts() public {
+        // Register one token
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+
+        // Set the UniV3 pair to be locked, which indicates re-entrancy
+        uniswapPool.setUnlocked(false);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniLens.BunniLens_Reentrant.selector,
+            address(uniswapPool)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        submoduleBunniSupply.getProtocolOwnedLiquidityReserves();
     }
 
     function test_getProtocolOwnedLiquidityReserves_twapDeviationReverts() public {

@@ -345,6 +345,9 @@ contract OlympusPricev2 is PRICEv2 {
     /// @dev        - Validates the configuration using `_getCurrentPrice()`, which will revert if there is a mis-configuration
     /// @dev        - Adds the asset to the `assets` array and marks it as approved
     ///
+    /// @dev        NOTE: when adding an asset representing POL, `storeMovingAverage_` must be true, otherwise the `Appraiser`
+    /// @dev        policy will not be able to perform sanity-checks on POL reserves.
+    ///
     /// @dev        Will revert if:
     /// @dev        - The caller is not permissioned
     /// @dev        - `asset_` is not a contract

@@ -61,17 +61,17 @@ abstract contract CustomSupply is SupplySubmodule {
     // ========== DATA FUNCTIONS ========== //
 
     /// @inheritdoc SupplySubmodule
-    function getCollateralizedOhm() external view override returns (uint256) {
+    function getCollateralizedOhm() external view virtual override returns (uint256) {
         return _collateralizedOhm;
     }
 
     /// @inheritdoc SupplySubmodule
-    function getProtocolOwnedBorrowableOhm() external view override returns (uint256) {
+    function getProtocolOwnedBorrowableOhm() external view virtual override returns (uint256) {
         return _protocolOwnedBorrowableOhm;
     }
 
     /// @inheritdoc SupplySubmodule
-    function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
+    function getProtocolOwnedLiquidityOhm() external view virtual override returns (uint256) {
         return _protocolOwnedLiquidityOhm;
     }
 
@@ -79,6 +79,7 @@ abstract contract CustomSupply is SupplySubmodule {
     function getProtocolOwnedLiquidityReserves()
         external
         view
+        virtual
         override
         returns (SPPLYv1.Reserves[] memory)
     {

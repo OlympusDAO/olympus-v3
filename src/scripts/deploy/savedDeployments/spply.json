@@ -1,0 +1,10 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusSupply",
+            "args": {
+                "initialCrossChainSupply": 0
+            }
+        }
+    ]
+}
