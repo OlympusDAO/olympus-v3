@@ -7,6 +7,15 @@ import {BunniToken} from "src/external/bunni/BunniToken.sol";
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
 import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
 
+import {ERC20} from "solmate/tokens/ERC20.sol";
+
+import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
+
+import {Deviation} from "libraries/Deviation.sol";
+
+import {console2} from "forge-std/Console2.sol";
+
 /// @title      BunniSupply
 /// @author     0xJem
 /// @notice     A SPPLY submodule that provides data on OHM deployed into Uniswap V3 pools that
@@ -121,6 +130,9 @@ contract BunniSupply is SupplySubmodule {
     /// @dev        This function accesses the reserves of the registered
     /// @dev        Uniswap V3 pools, and can be susceptible to re-entrancy attacks.
     /// @dev        The BunniLens contract used by this Submodule performs a re-entrancy check.
+    ///
+    /// @dev        Additionally, the reserves and TWAP are compared to ensure that the reserves
+    /// @dev        have not been manipulated.
     function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
         // Iterate through tokens and total up the pool OHM reserves as the POL supply
         uint256 len = bunniTokens.length;
@@ -129,6 +141,9 @@ contract BunniSupply is SupplySubmodule {
             BunniToken token = bunniTokens[i];
             BunniLens lens = bunniLenses[i];
             BunniKey memory key = _getBunniKey(token);
+
+            // Validate reserves
+            _validateReserves(key, lens);
 
             total += _getOhmReserves(key, lens);
             unchecked {
@@ -145,6 +160,9 @@ contract BunniSupply is SupplySubmodule {
     /// @dev        This function accesses the reserves of the registered
     /// @dev        Uniswap V3 pools, and can be susceptible to re-entrancy attacks.
     /// @dev        The BunniLens contract used by this Submodule performs a re-entrancy check.
+    ///
+    /// @dev        Additionally, the reserves and TWAP are compared to ensure that the reserves
+    /// @dev        have not been manipulated.
     function getProtocolOwnedLiquidityReserves()
         external
         view
@@ -164,6 +182,9 @@ contract BunniSupply is SupplySubmodule {
                 uint256 reserve0,
                 uint256 reserve1
             ) = _getReservesWithFees(key, lens);
+
+            // Validate reserves
+            _validateReserves(key, lens);
 
             address[] memory underlyingTokens = new address[](2);
             underlyingTokens[0] = token0;
@@ -345,5 +366,52 @@ contract BunniSupply is SupplySubmodule {
             }
         }
         return false;
+    }
+
+    /// @notice         Validates that the reserves of the pool represented by `key_` are within
+    /// @notice         the maximum deviation from the pool's TWAP.
+    ///
+    /// @param key_     The BunniKey for the pool
+    /// @param lens_    The BunniLens contract
+    function _validateReserves(BunniKey memory key_, BunniLens lens_) internal view {
+        (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
+        (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
+
+        uint256 reservesTokenRatio = _getReservesRatio(reserve0 + fee0, reserve1 + fee1);
+        uint256 twapTokenRatio = _getTWAPTokenRatio(address(key_.pool), 30);
+
+        // Revert if the relative deviation is greater than the maximum
+        if (Deviation.isDeviating(reservesTokenRatio, twapTokenRatio, MAX_RESERVE_DEVIATION, 10000)) {
+            revert BunniSupply_ReserveDeviation(address(key_.pool), reservesTokenRatio, twapTokenRatio);
+        }
+    }
+
+    function _getReservesRatio(
+        uint256 reserve0_,
+        uint256 reserve1_
+    ) internal pure returns (uint256) {
+        return (reserve0_ * 1e18) / reserve1_;
+    }
+
+    function _getTWAPTokenRatio(
+        address pool_,
+        uint32 period_
+    ) internal view returns (uint256) {
+        // Get tick and liquidity from the TWAP
+        (int24 arithmeticMeanTick, ) = OracleLibrary.consult(pool_, period_);
+
+        // Get the tokens from the pool
+        IUniswapV3Pool pool = IUniswapV3Pool(pool_);
+        ERC20 token0 = ERC20(pool.token0());
+        ERC20 token1 = ERC20(pool.token1());
+
+        uint256 token0token1Ratio = OracleLibrary.getQuoteAtTick(
+            arithmeticMeanTick,
+            uint128(10 ** token0.decimals()), // 1 unit of token0
+            address(token0),
+            address(token1)
+        );
+        console2.log("ratio", token0token1Ratio);
+        return token0token1Ratio;
     }
 }
