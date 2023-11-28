@@ -6,7 +6,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import "src/Kernel.sol";
 import {IAppraiser} from "src/policies/OCA/interfaces/IAppraiser.sol";
-import {TRSRYv1_1, Category, toCategory} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {TRSRYv1_1, Category as TreasuryCategory, toCategory as toTreasuryCategory} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {SPPLYv1, toCategory as toSupplyCategory} from "src/modules/SPPLY/SPPLY.v1.sol";
 
@@ -14,10 +14,22 @@ contract Appraiser is IAppraiser, Policy {
     // ========== EVENTS ========== //
 
     // ========== ERRORS ========== //
+
+    /// @notice                 Indicates that the value of `asset_` could not be calculated
+    ///
+    /// @param asset_           The address of the asset that could not be valued
     error Appraiser_ValueCallFailed(address asset_);
+
+    /// @notice                 Indicates that the value of `asset_` is zero
+    ///
+    /// @param asset_           The address of the asset that has a value of zero
     error Appraiser_ValueZero(address asset_);
+
+    /// @notice                 Indicates that invalid parameters were provided
+    ///
+    /// @param index            The index of the invalid parameter
+    /// @param params           The parameters that were provided
     error Appraiser_InvalidParams(uint256 index, bytes params);
-    error Appraiser_InvalidCalculation(address asset_, Variant variant_);
 
     // ========== STATE ========== //
 
@@ -35,7 +47,7 @@ contract Appraiser is IAppraiser, Policy {
     // Cache
     mapping(Metric => Cache) public metricCache;
     mapping(address => Cache) public assetValueCache;
-    mapping(Category => Cache) public categoryValueCache;
+    mapping(TreasuryCategory => Cache) public categoryValueCache;
 
     //============================================================================================//
     //                                     POLICY SETUP                                           //
@@ -53,6 +65,20 @@ contract Appraiser is IAppraiser, Policy {
         PRICE = PRICEv2(getModuleAddress(dependencies[0]));
         SPPLY = SPPLYv1(getModuleAddress(dependencies[1]));
         TRSRY = TRSRYv1_1(getModuleAddress(dependencies[2]));
+
+        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
+        (uint8 SPPLY_MAJOR, ) = SPPLY.VERSION();
+        (uint8 TRSRY_MAJOR, uint8 TRSRY_MINOR) = TRSRY.VERSION();
+
+        // Ensure Modules are using the expected major version.
+        // Modules should be sorted in alphabetical order.
+        bytes memory expected = abi.encode([2, 1, 1]);
+        if (PRICE_MAJOR != 2 || SPPLY_MAJOR != 1 || TRSRY_MAJOR != 1)
+            revert Policy_WrongModuleVersion(expected);
+
+        // Check TRSRY minor version
+        if (TRSRY_MINOR < 1) revert Policy_WrongModuleVersion(expected);
+
         ohm = address(SPPLY.ohm());
         decimals = PRICE.decimals();
         priceScale = 10 ** decimals;
@@ -126,7 +152,7 @@ contract Appraiser is IAppraiser, Policy {
     }
 
     /// @inheritdoc IAppraiser
-    function getCategoryValue(Category category_) external view override returns (uint256) {
+    function getCategoryValue(TreasuryCategory category_) external view override returns (uint256) {
         // Get the cached category value
         (uint256 value, uint48 timestamp) = getCategoryValue(category_, Variant.LAST);
 
@@ -141,7 +167,7 @@ contract Appraiser is IAppraiser, Policy {
 
     /// @inheritdoc IAppraiser
     function getCategoryValue(
-        Category category_,
+        TreasuryCategory category_,
         uint48 maxAge_
     ) external view override returns (uint256) {
         // Get the cached category value
@@ -158,7 +184,7 @@ contract Appraiser is IAppraiser, Policy {
 
     /// @inheritdoc IAppraiser
     function getCategoryValue(
-        Category category_,
+        TreasuryCategory category_,
         Variant variant_
     ) public view override returns (uint256, uint48) {
         if (variant_ == Variant.LAST) {
@@ -175,7 +201,7 @@ contract Appraiser is IAppraiser, Policy {
     /// @param category_    The TRSRY category to get the value of
     /// @return             The value of the assets in the category (in terms of `decimals`)
     /// @return             The timestamp at which the value was calculated
-    function _categoryValue(Category category_) internal view returns (uint256, uint48) {
+    function _categoryValue(TreasuryCategory category_) internal view returns (uint256, uint48) {
         // Get the assets in the category
         address[] memory assets = TRSRY.getAssetsByCategory(category_);
 
@@ -269,7 +295,7 @@ contract Appraiser is IAppraiser, Policy {
 
         // Get the addresses of POL assets in the treasury
         address[] memory polAssets = TRSRY.getAssetsByCategory(
-            toCategory("protocol-owned-liquidity")
+            toTreasuryCategory("protocol-owned-liquidity")
         );
 
         // Calculate the value of all the non-POL assets
@@ -329,7 +355,7 @@ contract Appraiser is IAppraiser, Policy {
         uint256 backing = _backing();
 
         // Get value of assets categorized as illiquid
-        (uint256 illiquidValue, ) = _categoryValue(toCategory("illiquid"));
+        (uint256 illiquidValue, ) = _categoryValue(toTreasuryCategory("illiquid"));
 
         // Subtract illiquid value from total backing
         return backing - illiquidValue;
@@ -478,7 +504,7 @@ contract Appraiser is IAppraiser, Policy {
     }
 
     /// @inheritdoc IAppraiser
-    function storeCategoryValue(Category category_) external override {
+    function storeCategoryValue(TreasuryCategory category_) external override {
         (uint256 value, uint48 timestamp) = getCategoryValue(category_, Variant.CURRENT);
         categoryValueCache[category_] = Cache(value, timestamp);
     }
