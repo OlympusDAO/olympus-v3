@@ -38,14 +38,14 @@ import "src/Kernel.sol";
 /// @notice Bophades policy to manage UniswapV3 positions.
 /// @dev    This policy is paired with a BunniHub instance to manage the lifecycle of BunniTokens.
 ///
-///         Most of the functions are permissioned and require the "bunni_admin" role.
+/// @dev    Most of the functions are permissioned and require the "bunni_admin" role.
 ///
-///         What this policy does not cover:
-///         - Migrating positions between BunniHub deployments. (This could be achieved by withdrawing and depositing into the new BunniHub instance.)
-///         - Migrating positions between Uniswap V3 pools. (This could be achieved by withdrawing and depositing into the new Uniswap V3 pool.)
-///         - Managing positions that were not deployed by this policy. (This could be achieved by deploying a new BunniToken and depositing into it.)
-///         - Migrating LP tokens between addresses. (This could be achieved by transferring the ERC20 tokens to the new address.)
-///         - Setting the protocol fee on the BunniHub instance (applied when compounding pool fees), as there is no use for having the protocol fees applied.
+/// @dev    What this policy does not cover:
+/// @dev    - Migrating positions between BunniHub deployments. (This could be achieved by withdrawing and depositing into the new BunniHub instance.)
+/// @dev    - Migrating positions between Uniswap V3 pools. (This could be achieved by withdrawing and depositing into the new Uniswap V3 pool.)
+/// @dev    - Managing positions that were not deployed by this policy. (This could be achieved by deploying a new BunniToken and depositing into it.)
+/// @dev    - Migrating LP tokens between addresses. (This could be achieved by transferring the ERC20 tokens to the new address.)
+/// @dev    - Setting the protocol fee on the BunniHub instance (applied when compounding pool fees), as there is no use for having the protocol fees applied.
 contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     using FullMath for uint256;
 
@@ -54,44 +54,53 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     //============================================================================================//
 
     /// @notice             Emitted when the BunniLens and BunniHub is set on the policy
+    ///
     /// @param newBunniHub_ The address of the new BunniHub
     /// @param newBunniLens_ The address of the new BunniLens
     event BunniLensSet(address indexed newBunniHub_, address indexed newBunniLens_);
 
     /// @notice             Emitted when the owner of the BunniHub is set on the policy
+    ///
     /// @param bunniHub_    The address of the BunniHub
     /// @param newOwner_    The address of the new owner
     event BunniHubOwnerSet(address indexed bunniHub_, address indexed newOwner_);
 
     /// @notice                 Emitted when the last harvest timestamp is reset
+    ///
     /// @param newLastHarvest_  The new last harvest timestamp
     event LastHarvestReset(uint48 newLastHarvest_);
 
     /// @notice                 Emitted when the harvest frequency is set
+    ///
     /// @param newFrequency_    The new harvest frequency
     event HarvestFrequencySet(uint48 newFrequency_);
 
     /// @notice                 Emitted when the harvest reward parameters are set
+    ///
     /// @param newMaxReward_    The new max reward
     /// @param newFee_          The new fee
     event HarvestRewardParamsSet(uint256 newMaxReward_, uint16 newFee_);
 
     /// @notice                 Emitted when a pool with an already-deployed token is registered
+    ///
     /// @param pool_            The address of the Uniswap V3 pool
     /// @param token_           The address of the existing BunniToken
     event PoolTokenRegistered(address indexed pool_, address indexed token_);
 
     /// @notice                 Emitted when a BunniToken (ERC20-compatible) token is activated for `pool_`
+    ///
     /// @param pool_            The address of the Uniswap V3 pool
     /// @param token_           The address of the BunniToken
     event PoolTokenActivated(address indexed pool_, address indexed token_);
 
     /// @notice                 Emitted when a BunniToken (ERC20-compatible) token is deactivated for `pool_`
+    ///
     /// @param pool_            The address of the Uniswap V3 pool
     /// @param token_           The address of the BunniToken
     event PoolTokenDeactivated(address indexed pool_, address indexed token_);
 
     /// @notice                 Emitted when the swap fees of a pool are updated
+    ///
     /// @param pool_            The address of the Uniswap V3 pool
     event PoolSwapFeesUpdated(address indexed pool_);
 
@@ -303,13 +312,13 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
-    ///             - The policy is inactive
-    ///             - The caller is unauthorized
-    ///             - The `bunniHub` state variable is not set
-    ///             - The pool is already registered with this policy
-    ///             - No BunniToken has been deployed for the pool
-    ///             - `pool_` is not a Uniswap V3 pool
-    ///             - A price cannot be accessed for either token in the pool
+    /// @dev        - The policy is inactive
+    /// @dev        - The caller is unauthorized
+    /// @dev        - The `bunniHub` state variable is not set
+    /// @dev        - The pool is already registered with this policy
+    /// @dev        - No BunniToken has been deployed for the pool
+    /// @dev        - `pool_` is not a Uniswap V3 pool
+    /// @dev        - A price cannot be accessed for either token in the pool
     function registerPool(
         address pool_
     )
@@ -352,12 +361,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
-    ///             - The policy is inactive
-    ///             - The caller is unauthorized
-    ///             - The `bunniHub` state variable is not set
-    ///             - `pool_` is not a Uniswap V3 pool
-    ///             - A BunniToken has already been deployed for the pool
-    ///             - A price cannot be accessed for either token in the pool
+    /// @dev        - The policy is inactive
+    /// @dev        - The caller is unauthorized
+    /// @dev        - The `bunniHub` state variable is not set
+    /// @dev        - `pool_` is not a Uniswap V3 pool
+    /// @dev        - A BunniToken has already been deployed for the pool
+    /// @dev        - A price cannot be accessed for either token in the pool
     function deployPoolToken(
         address pool_
     )
@@ -406,12 +415,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
-    ///             - The policy is inactive
-    ///             - The caller is unauthorized
-    ///             - The `bunniHub` state variable is not set
-    ///             - An ERC20 token for `pool_` has not been deployed/registered
-    ///             - The position representing `pool_` has no liquidity
-    ///             - The ERC20 token for `pool_` has already been activated in TRSRY/SPPLY/PRICE
+    /// @dev        - The policy is inactive
+    /// @dev        - The caller is unauthorized
+    /// @dev        - The `bunniHub` state variable is not set
+    /// @dev        - An ERC20 token for `pool_` has not been deployed/registered
+    /// @dev        - The position representing `pool_` has no liquidity
+    /// @dev        - The ERC20 token for `pool_` has already been activated in TRSRY/SPPLY/PRICE
     function activatePoolToken(
         address pool_
     ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
@@ -444,14 +453,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function will deactivate the pool token by de-registering it in TRSRY, PRICE and SPPLY.
-    ///             If the asset is not registered in any of those modules, it will not raise an error as the outcome is the same.
+    /// @dev        If the asset is not registered in any of those modules, it will not raise an error as the outcome is the same.
     ///
-    ///             This function reverts if:
-    ///             - The policy is inactive
-    ///             - The caller is unauthorized
-    ///             - The `bunniHub` state variable is not set
-    ///             - An ERC20 token for `pool_` has not been deployed/registered
-    ///             - The position representing `pool_` has liquidity
+    /// @dev        This function reverts if:
+    /// @dev        - The policy is inactive
+    /// @dev        - The caller is unauthorized
+    /// @dev        - The `bunniHub` state variable is not set
+    /// @dev        - An ERC20 token for `pool_` has not been deployed/registered
+    /// @dev        - The position representing `pool_` has liquidity
     function deactivatePoolToken(
         address pool_
     ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
@@ -486,22 +495,22 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function does the following:
-    ///             - Determines the correct ordering of tokens
-    ///             - Moves the required non-OHM token(s) from TRSRY to this contract
-    ///             - If one of the tokens is OHM, then mint the OHM
-    ///             - Deposit the tokens into the BunniHub, which mints share tokens
-    ///             - Transfer the share tokens to TRSRY
-    ///             - Return any non-OHM token(s) to the TRSRY
-    ///             - Burns any remaining OHM
+    /// @dev        - Determines the correct ordering of tokens
+    /// @dev        - Moves the required non-OHM token(s) from TRSRY to this contract
+    /// @dev        - If one of the tokens is OHM, then mint the OHM
+    /// @dev        - Deposit the tokens into the BunniHub, which mints share tokens
+    /// @dev        - Transfer the share tokens to TRSRY
+    /// @dev        - Return any non-OHM token(s) to the TRSRY
+    /// @dev        - Burns any remaining OHM
     ///
-    ///             This function reverts if:
-    ///             - The policy is inactive
-    ///             - The caller is unauthorized
-    ///             - The `bunniHub` state variable is not set
-    ///             - An ERC20 token for `pool_` has not been deployed/registered
-    ///             - `tokenA_` is not an underlying token for the pool
-    ///             - There is insufficient balance of tokens
-    ///             - The BunniHub instance reverts
+    /// @dev        This function reverts if:
+    /// @dev        - The policy is inactive
+    /// @dev        - The caller is unauthorized
+    /// @dev        - The `bunniHub` state variable is not set
+    /// @dev        - An ERC20 token for `pool_` has not been deployed/registered
+    /// @dev        - `tokenA_` is not an underlying token for the pool
+    /// @dev        - There is insufficient balance of tokens
+    /// @dev        - The BunniHub instance reverts
     function deposit(
         address pool_,
         address tokenA_,
@@ -575,18 +584,18 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function does the following:
-    ///             - Moves the required shares from TRSRY to this contract
-    ///             - Using BunniHub, withdraws shares from the pool and returns the tokens to this contract
-    ///             - If one of the tokens is OHM, then burn the OHM
-    ///             - Return any non-OHM token(s) to the TRSRY
+    /// @dev        - Moves the required shares from TRSRY to this contract
+    /// @dev        - Using BunniHub, withdraws shares from the pool and returns the tokens to this contract
+    /// @dev        - If one of the tokens is OHM, then burn the OHM
+    /// @dev        - Return any non-OHM token(s) to the TRSRY
     ///
-    ///             This function reverts if:
-    ///             - The policy is inactive
-    ///             - The caller is unauthorized
-    ///             - The `bunniHub` state variable is not set
-    ///             - An ERC20 token for `pool_` has not been deployed/registered
-    ///             - There is insufficient balance of the token
-    ///             - The BunniHub instance reverts
+    /// @dev        This function reverts if:
+    /// @dev        - The policy is inactive
+    /// @dev        - The caller is unauthorized
+    /// @dev        - The `bunniHub` state variable is not set
+    /// @dev        - An ERC20 token for `pool_` has not been deployed/registered
+    /// @dev        - There is insufficient balance of the token
+    /// @dev        - The BunniHub instance reverts
     function withdraw(
         address pool_,
         uint256 shares_,
@@ -644,31 +653,31 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        For each pool, this function does the following:
-    ///             - Calls the `burn()` function with a 0 amount, which triggers a fee update
+    /// @dev        - Calls the `burn()` function with a 0 amount, which triggers a fee update
     ///
-    ///             Reverts if:
-    ///             - The policy is inactive
-    ///             - The `bunniHub` state variable is not set
+    /// @dev        Reverts if:
+    /// @dev        - The policy is inactive
+    /// @dev        - The `bunniHub` state variable is not set
     function updateSwapFees() external nonReentrant onlyIfActive bunniHubSet {
         _updateSwapFees();
     }
 
     /// @inheritdoc     IBunniManager
     /// @dev            This function does the following:
-    ///                 - Determines if enough time has passed since the previous harvest
-    ///                 - Updates the fees for the pools
-    ///                 - For each pool:
-    ///                     - Calls the `compound()` function on BunniHub
-    ///                 - Returns any extraneous tokens in BunniHub to the TRSRY (or burns, if OHM)
-    ///                 - Mints OHM as a reward and transfers it to the caller (provided there are pools to harvest from)
+    /// @dev            - Determines if enough time has passed since the previous harvest
+    /// @dev            - Updates the fees for the pools
+    /// @dev            - For each pool:
+    /// @dev                - Calls the `compound()` function on BunniHub
+    /// @dev            - Returns any extraneous tokens in BunniHub to the TRSRY (or burns, if OHM)
+    /// @dev            - Mints OHM as a reward and transfers it to the caller (provided there are pools to harvest from)
     ///
-    ///                 The reward for harvesting is determined by `getCurrentHarvestReward`.
+    /// @dev            The reward for harvesting is determined by `getCurrentHarvestReward`.
     ///
-    ///                 Reverts if:
-    ///                 - The policy is inactive
-    ///                 - The `bunniHub` state variable is not set
-    ///                 - Not enough time has elapsed from the previous harvest
-    ///                 - The BunniHub instance reverts while calling `compound()`
+    /// @dev            Reverts if:
+    /// @dev            - The policy is inactive
+    /// @dev            - The `bunniHub` state variable is not set
+    /// @dev            - Not enough time has elapsed from the previous harvest
+    /// @dev            - The BunniHub instance reverts while calling `compound()`
     function harvest() external nonReentrant onlyIfActive bunniHubSet {
         uint48 minHarvest = lastHarvest + harvestFrequency;
         if (minHarvest > block.timestamp) revert BunniManager_HarvestTooEarly(minHarvest);
@@ -719,8 +728,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
-    ///             - The `bunniHub` state variable is not set
-    ///             - An ERC20 token for `pool_` has not been deployed/registered
+    /// @dev        - The `bunniHub` state variable is not set
+    /// @dev        - An ERC20 token for `pool_` has not been deployed/registered
     function getPoolToken(address pool_) public view override bunniHubSet returns (IBunniToken) {
         // Get the appropriate BunniKey representing the position
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
@@ -730,8 +739,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
-    ///             - The `bunniHub` state variable is not set
-    ///             - An ERC20 token for `pool_` has not been deployed/registered
+    /// @dev        - The `bunniHub` state variable is not set
+    /// @dev        - An ERC20 token for `pool_` has not been deployed/registered
     function getPoolTokenBalance(address pool_) public view override bunniHubSet returns (uint256) {
         // Get the token
         // `getPoolToken` will revert if the pool is not found
@@ -743,13 +752,13 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        The harvest reward is determined in the following manner:
-    ///             - For all managed pools, determine the total amount of fees that have been collected
-    ///             - Get the USD value of the fees
-    ///             - Determine the potential harvest reward as the fee multiplier * USD value of fees
-    ///             - Return the reward as the minimum of the potential reward and the max reward
+    /// @dev        - For all managed pools, determine the total amount of fees that have been collected
+    /// @dev        - Get the USD value of the fees
+    /// @dev        - Determine the potential harvest reward as the fee multiplier * USD value of fees
+    /// @dev        - Return the reward as the minimum of the potential reward and the max reward
     ///
-    ///             This function assumes that the pending fees for the pools are up-to-date. Calling
-    ///             functions should update the pending fees before calling this function using `updateSwapFees()`.
+    /// @dev        This function assumes that the pending fees for the pools are up-to-date. Calling
+    /// @dev        functions should update the pending fees before calling this function using `updateSwapFees()`.
     function getCurrentHarvestReward() public view override bunniHubSet returns (uint256 reward) {
         // 0 if enough time has not elapsed
         if (lastHarvest + harvestFrequency < block.timestamp) return 0;
@@ -803,9 +812,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
-    ///             - The caller is unauthorized
-    ///             - `newBunniLens_` is the zero address
-    ///             - The `hub` state variable on `newBunniLens_` is not set
+    /// @dev        - The caller is unauthorized
+    /// @dev        - `newBunniLens_` is the zero address
+    /// @dev        - The `hub` state variable on `newBunniLens_` is not set
     function setBunniLens(
         address newBunniLens_
     ) external override nonReentrant onlyRole("bunni_admin") {
@@ -824,9 +833,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc IBunniManager
     /// @dev        This function reverts if:
-    ///             - The caller is unauthorized
-    ///             - The `bunniHub` state variable is not set
-    ///             - `newOwner_` is the zero address
+    /// @dev        - The caller is unauthorized
+    /// @dev        - The `bunniHub` state variable is not set
+    /// @dev        - `newOwner_` is the zero address
     function setBunniOwner(
         address newOwner_
     ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet {
@@ -883,7 +892,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice         Obtains the BunniToken for the given pool
     /// @dev            This function reverts if:
-    ///                 - A BunniToken for `key_` cannot be found
+    /// @dev            - A BunniToken for `key_` cannot be found
     ///
     /// @param pool_    The address of the pool
     /// @param key_     The BunniKey representing the position
@@ -903,6 +912,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @notice         Transfers the tokens from TRSRY or mints them if the token is OHM
+    ///
     /// @param token_   The address of the token
     /// @param amount_  The amount of tokens to transfer/mint
     function _transferOrMint(address token_, uint256 amount_) internal {
