@@ -6,6 +6,15 @@ import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 /// @title  IBunniManager
 /// @author 0xJem
 /// @notice Bophades policy to manage UniswapV3 positions.
+/// @dev    This policy is paired with a BunniHub instance to manage the lifecycle of BunniTokens.
+///
+///         What this policy does not cover:
+///         - Migrating positions between BunniHub deployments. (This could be achieved by withdrawing and depositing into the new BunniHub instance.)
+///         - Migrating positions between Uniswap V3 pools. (This could be achieved by withdrawing and depositing into the new Uniswap V3 pool.)
+///         - Managing positions that were not deployed by this policy. (This could be achieved by deploying a new BunniToken and depositing into it.)
+///         - Harvesting pool fees. (There is a separate, public policy for this purpose.)
+///         - Migrating LP tokens between addresses. (This could be achieved by transferring the ERC20 tokens to the new address.)
+///         - Setting the protocol fee on the BunniHub instance (applied when compounding pool fees), as there is no use for having the protocol fees applied.
 interface IBunniManager {
     // =========  EVENTS ========= //
 
@@ -15,7 +24,7 @@ interface IBunniManager {
 
     /// @notice         Registers a Uniswap V3 pool with the policy
     ///
-    /// @notice         This is useful when migrating to a new policy.
+    ///                 This is useful when migrating to a new policy.
     ///
     /// @param pool_    The address of the Uniswap V3 pool
     /// @return token   The address of the ERC20-compatible BunniToken
@@ -23,46 +32,40 @@ interface IBunniManager {
 
     /// @notice       Deploys a new ERC20 token for the given Uniswap V3 pool
     ///
-    /// @notice       The BunniToken contract is used to wrap the Uniswap V3 position,
-    /// @notice       as TRSRY cannot receive ERC721 Uniswap V3 positions.
+    ///               The BunniToken contract is used to wrap the Uniswap V3 position,
+    ///               as TRSRY cannot receive ERC721 Uniswap V3 positions.
     ///
-    /// @notice       As Olympus Protocol-Owned Liquidity is full-range, the token
-    /// @notice       will be deployed with tickLower and tickUpper set to the pool's min and max.
+    ///               As Olympus Protocol-Owned Liquidity is full-range, the token
+    ///               will be deployed with tickLower and tickUpper set to the pool's min and max.
     ///
     /// @param pool_  The address of the Uniswap V3 pool
     /// @return token The ERC20-compatible BunniToken
     function deployPoolToken(address pool_) external returns (IBunniToken token);
 
-    /// @notice                             Activates the ERC20 token for the given Uniswap V3 pool
+    /// @notice         Activates the ERC20 token for the given Uniswap V3 pool
     ///
-    /// @notice                             This can only be called after `deployPoolToken` or `registerPool` has been called
-    /// @notice                             to deploy the ERC20 token for this pool.
+    ///                 This can only be called after `deployPoolToken` or `registerPool` has been called
+    ///                 to deploy the ERC20 token for this pool.
     ///
-    /// @notice                             This function will register the pool token with TRSRY, PRICE and SPPLY.
+    ///                 This function will register the pool token with TRSRY, PRICE and SPPLY.
     ///
-    /// @param pool_                        The address of the Uniswap V3 pool
-    /// @param priceMovingAverageDuration_  The duration of the moving average for the TWAP price
-    /// @param priceObservations_           The number of price observations to use for the TWAP price
-    function activatePoolToken(
-        address pool_,
-        uint32 priceMovingAverageDuration_,
-        uint256[] memory priceObservations_
-    ) external;
+    /// @param pool_    The address of the Uniswap V3 pool
+    function activatePoolToken(address pool_) external;
 
     /// @notice         Deactivates the ERC20 token for the given Uniswap V3 pool
     ///
-    /// @notice         This function will de-register the pool token with TRSRY, PRICE and SPPLY.
+    ///                 This function will de-register the pool token with TRSRY, PRICE and SPPLY.
     ///
     /// @param pool_    The address of the Uniswap V3 pool
     function deactivatePoolToken(address pool_) external;
 
-    /// @notice             Deposits liquidity into the given Uniswap V3 pool
+    /// @notice         Deposits liquidity into the given Uniswap V3 pool
     ///
-    /// @notice             This can only be called after `deployPoolToken` has been called
-    /// @notice             to deploy the ERC20 token for this pool.
+    ///                 This can only be called after `deployPoolToken` has been called
+    ///                 to deploy the ERC20 token for this pool.
     ///
-    /// @notice             The ordering of tokenA and tokenB is irrelevant. The `deposit` function
-    /// @notice             will handle the ordering of the tokens.
+    ///                 The ordering of tokenA and tokenB is irrelevant. The `deposit` function
+    ///                 will handle the ordering of the tokens.
     ///
     /// @param pool_        The address of the Uniswap V3 pool
     /// @param tokenA_      The address of a token (used to determine the orientation of pool tokens)
@@ -80,10 +83,10 @@ interface IBunniManager {
 
     /// @notice             Withdraws liquidity from the given Uniswap V3 pool
     ///
-    /// @notice             This can only be called after `deployPoolToken` has been called
-    /// @notice             to deploy the ERC20 token for this pool.
+    ///                     This can only be called after `deployPoolToken` has been called
+    ///                     to deploy the ERC20 token for this pool.
     ///
-    /// @notice             The LP tokens will be withdrawn from TRSRY and burned.
+    ///                     The LP tokens will be withdrawn from TRSRY and burned.
     ///
     /// @param pool_        The address of the Uniswap V3 pool
     /// @param shares_      The amount of shares to withdraw
@@ -95,13 +98,15 @@ interface IBunniManager {
 
     /// @notice             Harvests fees from the deployed Uniswap V3 pools
     ///
-    /// @notice             The fees will be added back into the pool, and the caller will
-    /// @notice             receive a reward in OHM.
+    ///                     The fees will be added back into the pool, and the caller will
+    ///                     receive a reward in OHM.
     function harvest() external;
 
     // =========  VIEW FUNCTIONS ========= //
 
     /// @notice         Get the ERC20-compatible BunniToken for the given Uniswap V3 pool address
+    /// @dev            Reverts if:
+    ///                 - `pool_` is not managed by this policy and its BunniHub instance
     ///
     /// @param pool_    The address of the Uniswap V3 pool
     /// @return token   The ERC20-compatible BunniToken
@@ -125,6 +130,8 @@ interface IBunniManager {
     function setBunniLens(address newBunniLens_) external;
 
     /// @notice             Sets the owner of the BunniHub contract
+    /// @dev                This can be used when a new policy is deployed that needs to manage the
+    ///                     Uniswap V3 positions through the BunniHub.
     ///
     /// @param newOwner_    The address of the new owner
     function setBunniOwner(address newOwner_) external;
