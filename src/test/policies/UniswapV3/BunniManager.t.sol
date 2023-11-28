@@ -118,14 +118,12 @@ contract BunniManagerTest is Test {
     uint256 private constant USDC_PRICE = 1e18;
     uint256 private constant OHM_PRICE = OHM_USDC_PRICE;
 
-    uint32 private constant POOL_PRICE_MA_DURATION = uint32(24 hours);
-    uint256[] private POOL_PRICE_MA_OBSERVATIONS;
-
     // Keep the max reward low and fee high, so that the capped reward is low
     uint256 private constant HARVEST_REWARD = 1e9;
     uint16 private constant HARVEST_REWARD_FEE = 1000; // 10%
     uint48 private constant HARVEST_FREQUENCY = uint48(24 hours);
 
+    // DO NOT change these salt values, as they are used to ensure that the addresses are deterministic, and the SQRTPRICEX96 values depend on the ordering
     bytes32 private constant OHM_SALT =
         0x0000000000000000000000000000000000000000000000000000000000000001;
     bytes32 private constant USDC_SALT =
@@ -133,7 +131,7 @@ contract BunniManagerTest is Test {
     bytes32 private constant WETH_SALT =
         0x0000000000000000000000000000000000000000000000000000000000000002;
     bytes32 private constant DAI_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000010;
+        0x0000000000000000000000000000000000000000000000000000000000000004;
 
     mapping(address => mapping(address => uint256)) private tokenBalances;
 
@@ -288,12 +286,6 @@ contract BunniManagerTest is Test {
 
             // Initialize it
             pool.initialize(OHM_USDC_SQRTPRICEX96);
-
-            // Set observations
-            POOL_PRICE_MA_OBSERVATIONS = new uint256[](3); // 24 hours / 8 hours frequency
-            POOL_PRICE_MA_OBSERVATIONS[0] = 1e18;
-            POOL_PRICE_MA_OBSERVATIONS[1] = 1e18;
-            POOL_PRICE_MA_OBSERVATIONS[2] = 1e18;
         }
 
         {
@@ -1153,7 +1145,6 @@ contract BunniManagerTest is Test {
     //  [X] reverts if bunniHub not set
     //  [X] reverts if token not deployed
     //  [X] reverts if no liquidity
-    //  [X] reverts if PRICE parameters are invalid
     //  [X] reverts if already registered with TRSRY
     //  [X] reverts if already registered with PRICE
     //  [X] reverts if already registered with SPPLY
@@ -1163,11 +1154,7 @@ contract BunniManagerTest is Test {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
-        bunniManager.activatePoolToken(
-            address(pool),
-            POOL_PRICE_MA_DURATION,
-            POOL_PRICE_MA_OBSERVATIONS
-        );
+        bunniManager.activatePoolToken(address(pool));
     }
 
     function test_activatePoolToken_inactiveReverts() public {
@@ -1177,11 +1164,7 @@ contract BunniManagerTest is Test {
         _expectRevert_inactive();
 
         vm.prank(policy);
-        newBunniManager.activatePoolToken(
-            address(pool),
-            POOL_PRICE_MA_DURATION,
-            POOL_PRICE_MA_OBSERVATIONS
-        );
+        newBunniManager.activatePoolToken(address(pool));
     }
 
     function test_activatePoolToken_bunniHubNotSetReverts() public {
@@ -1191,22 +1174,14 @@ contract BunniManagerTest is Test {
         _expectRevert_bunniHubNotSet();
 
         vm.prank(policy);
-        newBunniManager.activatePoolToken(
-            address(pool),
-            POOL_PRICE_MA_DURATION,
-            POOL_PRICE_MA_OBSERVATIONS
-        );
+        newBunniManager.activatePoolToken(address(pool));
     }
 
     function test_activatePoolToken_tokenNotDeployedReverts() public {
         _expectRevert_poolNotFound(address(pool));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
-            address(pool),
-            POOL_PRICE_MA_DURATION,
-            POOL_PRICE_MA_OBSERVATIONS
-        );
+        bunniManager.activatePoolToken(address(pool));
     }
 
     function test_activatePoolToken_noLiquidityReverts() public {
@@ -1221,11 +1196,7 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
-            address(pool),
-            POOL_PRICE_MA_DURATION,
-            POOL_PRICE_MA_OBSERVATIONS
-        );
+        bunniManager.activatePoolToken(address(pool));
     }
 
     function test_activatePoolToken_registeredWithTrsryLocationsReverts() public {
@@ -1261,11 +1232,7 @@ contract BunniManagerTest is Test {
         _expectRevert_tokenActivated(address(pool), toKeycode("TRSRY"));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
-            address(pool),
-            POOL_PRICE_MA_DURATION,
-            POOL_PRICE_MA_OBSERVATIONS
-        );
+        bunniManager.activatePoolToken(address(pool));
     }
 
     function test_activatePoolToken_registeredWithPriceReverts() public {
@@ -1320,11 +1287,7 @@ contract BunniManagerTest is Test {
         _expectRevert_tokenActivated(address(pool), toKeycode("PRICE"));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
-            address(pool),
-            POOL_PRICE_MA_DURATION,
-            POOL_PRICE_MA_OBSERVATIONS
-        );
+        bunniManager.activatePoolToken(address(pool));
     }
 
     function test_activatePoolToken_registeredWithSupplyReverts() public {
@@ -1358,11 +1321,7 @@ contract BunniManagerTest is Test {
         _expectRevert_tokenActivated(address(pool), toKeycode("SPPLY"));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
-            address(pool),
-            POOL_PRICE_MA_DURATION,
-            POOL_PRICE_MA_OBSERVATIONS
-        );
+        bunniManager.activatePoolToken(address(pool));
     }
 
     function test_activatePoolToken_registeredTreasuryAsset() public {
@@ -1399,11 +1358,7 @@ contract BunniManagerTest is Test {
         emit PoolTokenActivated(address(pool), address(poolToken));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
-            address(pool),
-            POOL_PRICE_MA_DURATION,
-            POOL_PRICE_MA_OBSERVATIONS
-        );
+        bunniManager.activatePoolToken(address(pool));
 
         // Check that the token has been added to TRSRY
         OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
@@ -1464,11 +1419,7 @@ contract BunniManagerTest is Test {
         emit PoolTokenActivated(address(pool), address(poolToken));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
-            address(pool),
-            POOL_PRICE_MA_DURATION,
-            POOL_PRICE_MA_OBSERVATIONS
-        );
+        bunniManager.activatePoolToken(address(pool));
 
         // Check that the token has been added to TRSRY
         OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
@@ -1491,42 +1442,6 @@ contract BunniManagerTest is Test {
         // Check that the token is included in SPPLY metrics
         uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
         assertTrue(polo > 0);
-    }
-
-    function test_activatePoolToken_invalidMovingAverageReverts() public {
-        uint256 amount = 100e6;
-        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
-        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
-
-        // Deploy a token so that the ERC20 exists
-        vm.prank(policy);
-        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
-
-        // Mint tokens to the TRSRY
-        vm.prank(policy);
-        usdc.mint(treasuryAddress, USDC_DEPOSIT);
-
-        // Deposit
-        vm.prank(policy);
-        bunniManager.deposit(
-            address(pool),
-            ohmAddress,
-            OHM_DEPOSIT,
-            USDC_DEPOSIT,
-            SLIPPAGE_DEFAULT
-        );
-
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(
-            PRICEv2.PRICE_ParamsMovingAverageDurationInvalid.selector,
-            address(poolToken),
-            uint32(9 hours), // Needs to be multiple of 8 hours
-            uint32(8 hours)
-        );
-        vm.expectRevert(err);
-
-        vm.prank(policy);
-        bunniManager.activatePoolToken(address(pool), uint32(9 hours), POOL_PRICE_MA_OBSERVATIONS);
     }
 
     function test_activatePoolToken() public {
@@ -1557,11 +1472,7 @@ contract BunniManagerTest is Test {
         emit PoolTokenActivated(address(pool), address(poolToken));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(
-            address(pool),
-            POOL_PRICE_MA_DURATION,
-            POOL_PRICE_MA_OBSERVATIONS
-        );
+        bunniManager.activatePoolToken(address(pool));
 
         // Check that the token has been added to TRSRY
         OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
@@ -1578,7 +1489,6 @@ contract BunniManagerTest is Test {
         // Check that the token has been added to PRICEv2
         PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
         assertTrue(priceAsset.approved);
-        assertTrue(priceAsset.storeMovingAverage);
         // Check that the price is non-zero
         assertTrue(PRICE.getPrice(address(poolToken)) > 0);
 
@@ -1690,11 +1600,7 @@ contract BunniManagerTest is Test {
 
         // Activate the token
         vm.prank(policy);
-        bunniManager.activatePoolToken(
-            address(pool),
-            POOL_PRICE_MA_DURATION,
-            POOL_PRICE_MA_OBSERVATIONS
-        );
+        bunniManager.activatePoolToken(address(pool));
 
         // Withdraw
         vm.prank(policy);

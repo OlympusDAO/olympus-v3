@@ -230,7 +230,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     //============================================================================================//
 
     /// @dev    The BunniLens and BunniHub contracts cannot be passed into the constructor, as it requires the owner to
-    /// @dev    be set to this contract. Therefore, the BunniLens must be set manually after deployment using `setBunniLens`.
+    ///         be set to this contract. Therefore, the BunniLens must be set manually after deployment using `setBunniLens`.
     constructor(
         Kernel kernel_,
         uint256 harvestRewardMax_,
@@ -422,9 +422,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        - The position representing `pool_` has no liquidity
     /// @dev        - The ERC20 token for `pool_` has already been activated in TRSRY/SPPLY/PRICE
     function activatePoolToken(
-        address pool_,
-        uint32 priceMovingAverageDuration_,
-        uint256[] memory priceObservations_
+        address pool_
     ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
         // Get the appropriate BunniKey representing the position
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
@@ -446,12 +444,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         // Register the pool token with TRSRY, PRICE and SPPLY (each will check for prior activation)
-        _addPoolTokenToPRICE(
-            pool_,
-            poolTokenAddress,
-            priceMovingAverageDuration_,
-            priceObservations_
-        );
+        _addPoolTokenToPRICE(pool_, poolTokenAddress);
         _addPoolTokenToTRSRY(pool_, poolTokenAddress);
         _addPoolTokenToSPPLY(pool_, poolTokenAddress);
 
@@ -662,7 +655,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev        For each pool, this function does the following:
     /// @dev        - Calls the `burn()` function with a 0 amount, which triggers a fee update
     ///
-    ///             Reverts if:
+    /// @dev        Reverts if:
     /// @dev        - The policy is inactive
     /// @dev        - The `bunniHub` state variable is not set
     function updateSwapFees() external nonReentrant onlyIfActive bunniHubSet {
@@ -671,20 +664,20 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @inheritdoc     IBunniManager
     /// @dev            This function does the following:
-    ///                 - Determines if enough time has passed since the previous harvest
-    ///                 - Updates the fees for the pools
-    ///                 - For each pool:
-    ///                     - Calls the `compound()` function on BunniHub
-    ///                 - Returns any extraneous tokens in BunniHub to the TRSRY (or burns, if OHM)
-    ///                 - Mints OHM as a reward and transfers it to the caller (provided there are pools to harvest from)
+    /// @dev            - Determines if enough time has passed since the previous harvest
+    /// @dev            - Updates the fees for the pools
+    /// @dev            - For each pool:
+    /// @dev                - Calls the `compound()` function on BunniHub
+    /// @dev            - Returns any extraneous tokens in BunniHub to the TRSRY (or burns, if OHM)
+    /// @dev            - Mints OHM as a reward and transfers it to the caller (provided there are pools to harvest from)
     ///
-    ///                 The reward for harvesting is determined by `getCurrentHarvestReward`.
+    /// @dev            The reward for harvesting is determined by `getCurrentHarvestReward`.
     ///
-    ///                 Reverts if:
-    ///                 - The policy is inactive
-    ///                 - The `bunniHub` state variable is not set
-    ///                 - Not enough time has elapsed from the previous harvest
-    ///                 - The BunniHub instance reverts while calling `compound()`
+    /// @dev            Reverts if:
+    /// @dev            - The policy is inactive
+    /// @dev            - The `bunniHub` state variable is not set
+    /// @dev            - Not enough time has elapsed from the previous harvest
+    /// @dev            - The BunniHub instance reverts while calling `compound()`
     function harvest() external nonReentrant onlyIfActive bunniHubSet {
         uint48 minHarvest = lastHarvest + harvestFrequency;
         if (minHarvest > block.timestamp) revert BunniManager_HarvestTooEarly(minHarvest);
@@ -839,9 +832,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     /// @inheritdoc IBunniManager
-    /// @dev        This can be used when a new policy is deployed that needs to manage the
-    /// @dev        Uniswap V3 positions through the BunniHub.
-    ///
     /// @dev        This function reverts if:
     /// @dev        - The caller is unauthorized
     /// @dev        - The `bunniHub` state variable is not set
@@ -1000,21 +990,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
     }
 
-    /// @notice                             Registers `poolToken_` as an asset in the PRICE module
-    /// @dev                                This function performs the following:
-    /// @dev                                - Checks if the asset is already registered, and reverts if so
-    /// @dev                                - Calls `PRICE.addAsset`
+    /// @notice             Registers `poolToken_` as an asset in the PRICE module
+    /// @dev                This function performs the following:
+    /// @dev                - Checks if the asset is already registered, and reverts if so
+    /// @dev                - Calls `PRICE.addAsset`
     ///
-    /// @param pool_                        The pool to register
-    /// @param poolToken_                   The pool token to register
-    /// @param priceMovingAverageDuration_  The duration of the moving average
-    /// @param priceObservations_           The price observations
-    function _addPoolTokenToPRICE(
-        address pool_,
-        address poolToken_,
-        uint32 priceMovingAverageDuration_,
-        uint256[] memory priceObservations_
-    ) internal {
+    /// @param pool_        The pool to register
+    /// @param poolToken_   The pool token to register
+    function _addPoolTokenToPRICE(address pool_, address poolToken_) internal {
         PRICEv2.Asset memory assetData = PRICE.getAssetData(poolToken_);
         // Revert if already activated
         if (assetData.approved == true) {
@@ -1034,16 +1017,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         // Add asset
-        // storeMovingAverage_ is enabled, so that Appraiser can use the moving average
-        // PRICE will revert if the configuration is invalid
         {
             PRICE.addAsset(
                 poolToken_, // address asset_
-                true, // bool storeMovingAverage_
+                false, // bool storeMovingAverage_
                 false, // bool useMovingAverage_
-                priceMovingAverageDuration_, // uint32 movingAverageDuration_
-                uint48(block.timestamp), // uint48 lastObservationTime_
-                priceObservations_, // uint256[] memory observations_
+                uint32(0), // uint32 movingAverageDuration_
+                uint48(0), // uint48 lastObservationTime_
+                new uint256[](0), // uint256[] memory observations_
                 PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
                 feeds // Component[] memory feeds_
             );
