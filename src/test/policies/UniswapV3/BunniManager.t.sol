@@ -123,6 +123,7 @@ contract BunniManagerTest is Test {
     uint16 private constant HARVEST_REWARD_FEE = 1000; // 10%
     uint48 private constant HARVEST_FREQUENCY = uint48(24 hours);
 
+    // DO NOT change these salt values, as they are used to ensure that the addresses are deterministic, and the SQRTPRICEX96 values depend on the ordering
     bytes32 private constant OHM_SALT =
         0x0000000000000000000000000000000000000000000000000000000000000001;
     bytes32 private constant USDC_SALT =
@@ -130,7 +131,7 @@ contract BunniManagerTest is Test {
     bytes32 private constant WETH_SALT =
         0x0000000000000000000000000000000000000000000000000000000000000002;
     bytes32 private constant DAI_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000010;
+        0x0000000000000000000000000000000000000000000000000000000000000004;
 
     mapping(address => mapping(address => uint256)) private tokenBalances;
 
