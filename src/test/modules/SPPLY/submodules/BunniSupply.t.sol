@@ -68,7 +68,7 @@ contract BunniSupplyTest is Test {
     uint256 internal constant INITIAL_CROSS_CHAIN_SUPPLY = 0; // 0 OHM
 
     uint128 internal constant POOL_LIQUIDITY = 349484367626548;
-    uint160 internal constant POOL_SQRTPRICEX96 = 8467282393668682240084879204;
+    uint160 internal constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
 
     // Events
     event BunniTokenAdded(address token_, address bunniLens_);
@@ -141,7 +141,7 @@ contract BunniSupplyTest is Test {
                 MockUniV3Pair uniswapPool_,
                 BunniKey memory poolTokenKey_,
                 BunniToken poolToken_
-            ) = _setUpPool(ohmAddress, usdcAddress, POOL_LIQUIDITY, POOL_SQRTPRICEX96);
+            ) = _setUpPool(ohmAddress, usdcAddress, POOL_LIQUIDITY, OHM_USDC_SQRTPRICEX96);
 
             uniswapPool = uniswapPool_;
             poolTokenKey = poolTokenKey_;
@@ -288,6 +288,7 @@ contract BunniSupplyTest is Test {
     //  [X] no tokens
     //  [X] single token
     //  [X] multiple tokens
+    //  [X] reverts on TWAP deviation
 
     function test_getProtocolOwnedLiquidityOhm_noTokens() public {
         // Don't add the token
@@ -354,13 +355,44 @@ contract BunniSupplyTest is Test {
         submoduleBunniSupply.getProtocolOwnedLiquidityOhm();
     }
 
+    function test_getProtocolOwnedLiquidityOhm_twapDeviationReverts() public {
+        // Register one token
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+
+        // Determine the amount of reserves in the pool, which should be consistent with the lens value
+        (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
+        // 11421651 = 11.42 USD/OHM
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // Decimals: 6 (USDC)
+
+        // Mock the pool returning a TWAP that deviates enough to revert
+        int56 tickCumulative0_ = -2416639538393;
+        int56 tickCumulative1_ = -2416640880953;
+        int56[] memory tickCumulatives = new int56[](2);
+        tickCumulatives[0] = tickCumulative0_;
+        tickCumulatives[1] = tickCumulative1_;
+        uniswapPool.setTickCumulatives(tickCumulatives);
+
+        // Set up revert
+        // Will revert as the TWAP deviates from the reserves ratio
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_ReserveDeviation.selector,
+            address(poolTokenAddress),
+            reservesRatio
+        );
+        vm.expectRevert(err);
+
+        // Call
+        submoduleBunniSupply.getProtocolOwnedLiquidityOhm();
+    }
+
     // =========  getProtocolOwnedLiquidityReserves ========= //
 
     // [X] getProtocolOwnedLiquidityReserves
     //  [X] no tokens
     //  [X] single token
     //  [X] multiple tokens
-    //  [ ] reverts on TWAP deviation
+    //  [X] reverts on TWAP deviation
 
     function test_getProtocolOwnedLiquidityReserves_noTokens() public {
         // Don't add the token
@@ -466,10 +498,8 @@ contract BunniSupplyTest is Test {
 
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
-        console2.log("ohmReserves_", ohmReserves_);
-        console2.log("usdcReserves_", usdcReserves_);
+        // 11421651 = 11.42 USD/OHM
         uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // Decimals: 6 (USDC)
-        console2.log("reservesRatio", reservesRatio);
 
         // Mock the pool returning a TWAP that deviates enough to revert
         int56 tickCumulative0_ = -2416639538393;
@@ -478,25 +508,9 @@ contract BunniSupplyTest is Test {
         tickCumulatives[0] = tickCumulative0_;
         tickCumulatives[1] = tickCumulative1_;
         uniswapPool.setTickCumulatives(tickCumulatives);
-        int24 timeWeightedTick = int24((tickCumulative1_ - tickCumulative0_) / 30);
-
-        uint256 lookupInQuote = OracleLibrary.getQuoteAtTick(
-            timeWeightedTick,
-            uint128(10 ** 9), // OHM quantity
-            ohmAddress,
-            usdcAddress
-        );
-        console2.log("lookupInQuote", lookupInQuote);
-
-        int24 tick = TickMath.getTickAtSqrtRatio(POOL_SQRTPRICEX96);
-        console2.log("tick", tick);
-
-        uint256 token0Amount = uint256((POOL_SQRTPRICEX96 / (2 ** 96)) ** 2).mulDiv(10 ** 9, 10 ** 6);
-        console2.log("token0Amount", token0Amount);
-        uint256 token1Amount = (10 ** 9 / token0Amount);
-        console2.log("token1Amount", token1Amount);
 
         // Set up revert
+        // Will revert as the TWAP deviates from the reserves ratio
         bytes memory err = abi.encodeWithSelector(
             BunniSupply.BunniSupply_ReserveDeviation.selector,
             address(poolTokenAddress),
@@ -504,6 +518,7 @@ contract BunniSupplyTest is Test {
         );
         vm.expectRevert(err);
 
+        // Call
         submoduleBunniSupply
             .getProtocolOwnedLiquidityReserves();
     }
