@@ -68,7 +68,10 @@ contract BunniSupplyTest is Test {
     uint256 internal constant INITIAL_CROSS_CHAIN_SUPPLY = 0; // 0 OHM
 
     uint128 internal constant POOL_LIQUIDITY = 349484367626548;
+    // Current tick: -44579
     uint160 internal constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
+    int56 internal constant OHM_USDC_TICK_CUMULATIVE_0 = -2463078395000;
+    int56 internal constant OHM_USDC_TICK_CUMULATIVE_1 = -2463079732370;
 
     // Events
     event BunniTokenAdded(address token_, address bunniLens_);
@@ -85,6 +88,9 @@ contract BunniSupplyTest is Test {
 
             ohmAddress = address(ohm);
             usdcAddress = address(usdc);
+
+            console2.log("ohm", ohmAddress);
+            console2.log("usdc", usdcAddress);
         }
 
         // Locations
@@ -141,7 +147,14 @@ contract BunniSupplyTest is Test {
                 MockUniV3Pair uniswapPool_,
                 BunniKey memory poolTokenKey_,
                 BunniToken poolToken_
-            ) = _setUpPool(ohmAddress, usdcAddress, POOL_LIQUIDITY, OHM_USDC_SQRTPRICEX96);
+            ) = _setUpPool(
+                    ohmAddress,
+                    usdcAddress,
+                    POOL_LIQUIDITY,
+                    OHM_USDC_SQRTPRICEX96,
+                    OHM_USDC_TICK_CUMULATIVE_0,
+                    OHM_USDC_TICK_CUMULATIVE_1
+                );
 
             uniswapPool = uniswapPool_;
             poolTokenKey = poolTokenKey_;
@@ -154,13 +167,22 @@ contract BunniSupplyTest is Test {
         address token0_,
         address token1_,
         uint128 liquidity_,
-        uint160 sqrtPriceX96_
+        uint160 sqrtPriceX96_,
+        int56 sqrtPriceX96Cumulative0_,
+        int56 sqrtPriceX96Cumulative1_
     ) internal returns (MockUniV3Pair, BunniKey memory, BunniToken) {
         MockUniV3Pair pool = new MockUniV3Pair();
         pool.setToken0(token0_);
         pool.setToken1(token1_);
         pool.setLiquidity(liquidity_);
         pool.setSqrtPrice(sqrtPriceX96_);
+        console2.log("token0", token0_);
+        console2.log("token1", token1_);
+
+        int56[] memory tickCumulatives = new int56[](2);
+        tickCumulatives[0] = sqrtPriceX96Cumulative0_;
+        tickCumulatives[1] = sqrtPriceX96Cumulative1_;
+        pool.setTickCumulatives(tickCumulatives);
 
         BunniKey memory key = BunniKey({
             pool: IUniswapV3Pool(address(pool)),
@@ -320,7 +342,9 @@ contract BunniSupplyTest is Test {
             ohmAddress,
             address(wETH),
             liquidityTwo,
-            sqrtPriceX96Two
+            sqrtPriceX96Two,
+            0,
+            0
         );
         vm.prank(address(moduleSupply));
         submoduleBunniSupply.addBunniToken(address(poolTokenTwo), bunniLensAddress);
@@ -364,6 +388,10 @@ contract BunniSupplyTest is Test {
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
         // 11421651 = 11.42 USD/OHM
         uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // Decimals: 6 (USDC)
+
+        // Get the tick
+        int24 currentTick = TickMath.getTickAtSqrtRatio(OHM_USDC_SQRTPRICEX96);
+        console2.log("tick", currentTick);
 
         // Mock the pool returning a TWAP that deviates enough to revert
         int56 tickCumulative0_ = -2416639538393;
@@ -438,7 +466,9 @@ contract BunniSupplyTest is Test {
             ohmAddress,
             address(wETH),
             liquidityTwo,
-            sqrtPriceX96Two
+            sqrtPriceX96Two,
+            0,
+            0
         );
         vm.prank(address(moduleSupply));
         submoduleBunniSupply.addBunniToken(address(poolTokenTwo), bunniLensAddress);
@@ -519,8 +549,7 @@ contract BunniSupplyTest is Test {
         vm.expectRevert(err);
 
         // Call
-        submoduleBunniSupply
-            .getProtocolOwnedLiquidityReserves();
+        submoduleBunniSupply.getProtocolOwnedLiquidityReserves();
     }
 
     // =========  addBunniToken ========= //
@@ -646,7 +675,9 @@ contract BunniSupplyTest is Test {
             ohmAddress,
             address(wETH),
             liquidityTwo,
-            sqrtPriceX96Two
+            sqrtPriceX96Two,
+            0,
+            0
         );
         address poolTokenTwoAddress = address(poolTokenTwo);
 
@@ -680,7 +711,9 @@ contract BunniSupplyTest is Test {
             ohmAddress,
             address(wETH),
             liquidityTwo,
-            sqrtPriceX96Two
+            sqrtPriceX96Two,
+            0,
+            0
         );
         address poolTokenTwoAddress = address(poolTokenTwo);
 
@@ -786,7 +819,9 @@ contract BunniSupplyTest is Test {
             ohmAddress,
             address(wETH),
             liquidityTwo,
-            sqrtPriceX96Two
+            sqrtPriceX96Two,
+            0,
+            0
         );
         address poolTokenTwoAddress = address(poolTokenTwo);
 
@@ -822,7 +857,9 @@ contract BunniSupplyTest is Test {
             ohmAddress,
             address(wETH),
             liquidityTwo,
-            sqrtPriceX96Two
+            sqrtPriceX96Two,
+            0,
+            0
         );
         address poolTokenTwoAddress = address(poolTokenTwo);
 

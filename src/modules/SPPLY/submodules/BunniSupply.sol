@@ -12,6 +12,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 
+import {FullMath} from "libraries/FullMath.sol";
+
 import {Deviation} from "libraries/Deviation.sol";
 
 import {console2} from "forge-std/Console2.sol";
@@ -21,6 +23,8 @@ import {console2} from "forge-std/Console2.sol";
 /// @notice     A SPPLY submodule that provides data on OHM deployed into Uniswap V3 pools that
 /// @notice     are managed by the BunniManager policy and its associated BunniHub.
 contract BunniSupply is SupplySubmodule {
+    using FullMath for uint256;
+
     // ========== ERRORS ========== //
 
     /// @notice             The specified token is not a valid BunniToken
@@ -45,7 +49,11 @@ contract BunniSupply is SupplySubmodule {
     /// @param token_               The address of the token
     /// @param reservesTokenRatio_  The ratio of token0 to token1 from the position reserves
     /// @param twapTokenRatio_      The ratio of token0 to token1 from the TWAP
-    error BunniSupply_ReserveDeviation(address token_, uint256 reservesTokenRatio_, uint256 twapTokenRatio_);
+    error BunniSupply_ReserveDeviation(
+        address token_,
+        uint256 reservesTokenRatio_,
+        uint256 twapTokenRatio_
+    );
 
     // ========== EVENTS ========== //
 
@@ -78,7 +86,10 @@ contract BunniSupply is SupplySubmodule {
     address internal immutable ohm;
 
     // TODO shift to addBunniToken parameter
-    uint16 constant internal MAX_RESERVE_DEVIATION = 100; // 1%
+    uint16 internal constant MAX_RESERVE_DEVIATION = 100; // 1%
+
+    /// @notice     Decimal scale used for internal comparisons
+    uint256 internal constant DECIMAL_SCALE = 1e18;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -374,44 +385,86 @@ contract BunniSupply is SupplySubmodule {
     /// @param key_     The BunniKey for the pool
     /// @param lens_    The BunniLens contract
     function _validateReserves(BunniKey memory key_, BunniLens lens_) internal view {
-        (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
-        (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
+        // Get the tokens from the pool
+        ERC20 token0 = ERC20(key_.pool.token0());
+        ERC20 token1 = ERC20(key_.pool.token1());
 
-        uint256 reservesTokenRatio = _getReservesRatio(reserve0 + fee0, reserve1 + fee1);
-        uint256 twapTokenRatio = _getTWAPTokenRatio(address(key_.pool), 30);
+        uint256 reservesTokenRatio = _getReservesRatio(key_, lens_, token0, token1);
+        uint256 twapTokenRatio = _getTWAPTokenRatio(key_.pool, 30, token0, token1);
+        console2.log("reserves", reservesTokenRatio);
+        console2.log("twap", twapTokenRatio);
 
         // Revert if the relative deviation is greater than the maximum
-        if (Deviation.isDeviating(reservesTokenRatio, twapTokenRatio, MAX_RESERVE_DEVIATION, 10000)) {
-            revert BunniSupply_ReserveDeviation(address(key_.pool), reservesTokenRatio, twapTokenRatio);
+        if (
+            Deviation.isDeviating(reservesTokenRatio, twapTokenRatio, MAX_RESERVE_DEVIATION, 10000)
+        ) {
+            revert BunniSupply_ReserveDeviation(
+                address(key_.pool),
+                reservesTokenRatio,
+                twapTokenRatio
+            );
         }
     }
 
+    /// @notice         Returns the ratio of token1 to token0 based on the position reserves
+    /// @dev            Includes uncollected fees
+    ///
+    /// @param key_     The BunniKey for the pool
+    /// @param lens_    The BunniLens contract
+    /// @param token0_  The address of token0
+    /// @param token1_  The address of token1
+    /// @return         The ratio of token1 to token0 in terms of `DECIMAL_SCALE`
     function _getReservesRatio(
-        uint256 reserve0_,
-        uint256 reserve1_
-    ) internal pure returns (uint256) {
-        return (reserve0_ * 1e18) / reserve1_;
+        BunniKey memory key_,
+        BunniLens lens_,
+        ERC20 token0_,
+        ERC20 token1_
+    ) internal view returns (uint256) {
+        (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
+        (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
+
+        console2.log("reserve0 + fee0", reserve0 + fee0);
+        console2.log("reserve1 + fee1", reserve1 + fee1);
+
+        // Calculate the ratio of token1 to token0 and adjust to `DECIMALS` scale
+        return
+            ((reserve1 + fee1).mulDiv(DECIMAL_SCALE, 10 ** token1_.decimals())).mulDiv(
+                DECIMAL_SCALE,
+                ((reserve0 + fee0).mulDiv(DECIMAL_SCALE, 10 ** token0_.decimals()))
+            );
     }
 
+    /// @notice         Returns the ratio of token1 to token0 based on the TWAP
+    ///
+    /// @param pool_    The Uniswap V3 pool
+    /// @param period_  The period of the TWAP in seconds
+    /// @param token0_  The address of token0
+    /// @param token1_  The address of token1
+    /// @return         The ratio of token1 to token0 in terms of `DECIMAL_SCALE`
     function _getTWAPTokenRatio(
-        address pool_,
-        uint32 period_
+        IUniswapV3Pool pool_,
+        uint32 period_,
+        ERC20 token0_,
+        ERC20 token1_
     ) internal view returns (uint256) {
         // Get tick and liquidity from the TWAP
-        (int24 arithmeticMeanTick, ) = OracleLibrary.consult(pool_, period_);
+        uint32[] memory observationWindow = new uint32[](2);
+        observationWindow[0] = period_;
+        observationWindow[1] = 0;
 
-        // Get the tokens from the pool
-        IUniswapV3Pool pool = IUniswapV3Pool(pool_);
-        ERC20 token0 = ERC20(pool.token0());
-        ERC20 token1 = ERC20(pool.token1());
+        (int56[] memory tickCumulatives, ) = pool_.observe(observationWindow);
+        int56 timeWeightedTick = (tickCumulatives[0] - tickCumulatives[1]) / int32(period_);
 
-        uint256 token0token1Ratio = OracleLibrary.getQuoteAtTick(
-            arithmeticMeanTick,
-            uint128(10 ** token0.decimals()), // 1 unit of token0
-            address(token0),
-            address(token1)
+        // Quantity of token1 for 1 unit of token0 at the time-weighted tick
+        // Scale: token1 decimals
+        uint256 token1token0Ratio = OracleLibrary.getQuoteAtTick(
+            int24(timeWeightedTick), // TODO check bounds
+            uint128(10 ** token0_.decimals()), // 1 unit of token0
+            address(token0_),
+            address(token1_)
         );
-        console2.log("ratio", token0token1Ratio);
-        return token0token1Ratio;
+
+        // Adjust to `DECIMALS` scale
+        return token1token0Ratio.mulDiv(DECIMAL_SCALE, 10 ** token1_.decimals());
     }
 }
