@@ -41,6 +41,7 @@ contract BunniSupplyTest is Test {
 
     MockERC20 internal ohm;
     MockERC20 internal usdc;
+    MockERC20 internal wETH;
     MockGohm internal gOhm;
     address internal ohmAddress;
     address internal usdcAddress;
@@ -67,11 +68,29 @@ contract BunniSupplyTest is Test {
     uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
     uint256 internal constant INITIAL_CROSS_CHAIN_SUPPLY = 0; // 0 OHM
 
-    uint128 internal constant POOL_LIQUIDITY = 349484367626548;
+    // OHM-USDC Uni V3 pool, based on: 0x893f503fac2ee1e5b78665db23f9c94017aae97d
+    // token0: OHM, token1: USDC
+    uint128 internal constant OHM_USDC_POOL_LIQUIDITY = 349484367626548;
     // Current tick: -44579
     uint160 internal constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
+    // NOTE: these numbers are fudged to match the current tick
     int56 internal constant OHM_USDC_TICK_CUMULATIVE_0 = -2463078395000;
     int56 internal constant OHM_USDC_TICK_CUMULATIVE_1 = -2463079732370;
+
+    uint128 internal constant OHM_WETH_POOL_LIQUIDITY = 602219599341335870;
+    // Current tick: 156194
+    uint160 internal constant OHM_WETH_SQRTPRICEX96 = 195181081174522229204497247535278;
+    // NOTE: these numbers are fudged to match the current tick
+    int56 internal constant OHM_WETH_TICK_CUMULATIVE_0 = -2463078395000;
+    int56 internal constant OHM_WETH_TICK_CUMULATIVE_1 = -2463073709180;
+
+    // DO NOT change these salt values, as they are used to ensure that the addresses are deterministic, and the SQRTPRICEX96 values depend on the ordering
+    bytes32 private constant OHM_SALT =
+        0x0000000000000000000000000000000000000000000000000000000000000001;
+    bytes32 private constant USDC_SALT =
+        0x0000000000000000000000000000000000000000000000000000000000000000;
+    bytes32 private constant WETH_SALT =
+        0x0000000000000000000000000000000000000000000000000000000000000002;
 
     // Events
     event BunniTokenAdded(address token_, address bunniLens_);
@@ -82,8 +101,11 @@ contract BunniSupplyTest is Test {
 
         // Tokens
         {
-            ohm = new MockERC20("OHM", "OHM", 9);
-            usdc = new MockERC20("USDC", "USDC", 6);
+            // Use salt to ensure that the addresses are deterministic, otherwise changing variables above will change the addresses and mess with the UniV3 pool
+            // Source: https://docs.soliditylang.org/en/v0.8.19/control-structures.html#salted-contract-creations-create2
+            ohm = new MockERC20{salt: OHM_SALT}("Olympus", "OHM", 9);
+            usdc = new MockERC20{salt: USDC_SALT}("USDC", "USDC", 6);
+            wETH = new MockERC20{salt: WETH_SALT}("Wrapped Ether", "wETH", 18);
             gOhm = new MockGohm(GOHM_INDEX);
 
             ohmAddress = address(ohm);
@@ -150,7 +172,7 @@ contract BunniSupplyTest is Test {
             ) = _setUpPool(
                     ohmAddress,
                     usdcAddress,
-                    POOL_LIQUIDITY,
+                    OHM_USDC_POOL_LIQUIDITY,
                     OHM_USDC_SQRTPRICEX96,
                     OHM_USDC_TICK_CUMULATIVE_0,
                     OHM_USDC_TICK_CUMULATIVE_1
@@ -334,17 +356,16 @@ contract BunniSupplyTest is Test {
         vm.prank(address(moduleSupply));
         submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
 
+        console2.log("wETH tick", TickMath.getTickAtSqrtRatio(OHM_WETH_SQRTPRICEX96));
+
         // Set up a second pool and token
-        MockERC20 wETH = new MockERC20("wETH", "wETH", 18);
-        uint128 liquidityTwo = 602219599341335870;
-        uint160 sqrtPriceX96Two = 195181081174522229204497247535278;
         (, BunniKey memory poolTokenKeyTwo, BunniToken poolTokenTwo) = _setUpPool(
             ohmAddress,
             address(wETH),
-            liquidityTwo,
-            sqrtPriceX96Two,
-            0,
-            0
+            OHM_WETH_POOL_LIQUIDITY,
+            OHM_WETH_SQRTPRICEX96,
+            OHM_WETH_TICK_CUMULATIVE_0,
+            OHM_WETH_TICK_CUMULATIVE_1
         );
         vm.prank(address(moduleSupply));
         submoduleBunniSupply.addBunniToken(address(poolTokenTwo), bunniLensAddress);
@@ -459,16 +480,13 @@ contract BunniSupplyTest is Test {
         submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
 
         // Set up a second pool and token
-        MockERC20 wETH = new MockERC20("wETH", "wETH", 18);
-        uint128 liquidityTwo = 602219599341335870;
-        uint160 sqrtPriceX96Two = 195181081174522229204497247535278;
         (, BunniKey memory poolTokenKeyTwo, BunniToken poolTokenTwo) = _setUpPool(
             ohmAddress,
             address(wETH),
-            liquidityTwo,
-            sqrtPriceX96Two,
-            0,
-            0
+            OHM_WETH_POOL_LIQUIDITY,
+            OHM_WETH_SQRTPRICEX96,
+            OHM_WETH_TICK_CUMULATIVE_0,
+            OHM_WETH_TICK_CUMULATIVE_1
         );
         vm.prank(address(moduleSupply));
         submoduleBunniSupply.addBunniToken(address(poolTokenTwo), bunniLensAddress);
@@ -668,16 +686,13 @@ contract BunniSupplyTest is Test {
         submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
 
         // Set up a second pool and token
-        MockERC20 wETH = new MockERC20("wETH", "wETH", 18);
-        uint128 liquidityTwo = 602219599341335870;
-        uint160 sqrtPriceX96Two = 195181081174522229204497247535278;
         (, , BunniToken poolTokenTwo) = _setUpPool(
             ohmAddress,
             address(wETH),
-            liquidityTwo,
-            sqrtPriceX96Two,
-            0,
-            0
+            OHM_WETH_POOL_LIQUIDITY,
+            OHM_WETH_SQRTPRICEX96,
+            OHM_WETH_TICK_CUMULATIVE_0,
+            OHM_WETH_TICK_CUMULATIVE_1
         );
         address poolTokenTwoAddress = address(poolTokenTwo);
 
@@ -704,16 +719,13 @@ contract BunniSupplyTest is Test {
         submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
 
         // Set up a second pool and token
-        MockERC20 wETH = new MockERC20("wETH", "wETH", 18);
-        uint128 liquidityTwo = 602219599341335870;
-        uint160 sqrtPriceX96Two = 195181081174522229204497247535278;
         (, , BunniToken poolTokenTwo) = _setUpPool(
             ohmAddress,
             address(wETH),
-            liquidityTwo,
-            sqrtPriceX96Two,
-            0,
-            0
+            OHM_WETH_POOL_LIQUIDITY,
+            OHM_WETH_SQRTPRICEX96,
+            OHM_WETH_TICK_CUMULATIVE_0,
+            OHM_WETH_TICK_CUMULATIVE_1
         );
         address poolTokenTwoAddress = address(poolTokenTwo);
 
@@ -812,16 +824,13 @@ contract BunniSupplyTest is Test {
         submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
 
         // Set up a second pool and token
-        MockERC20 wETH = new MockERC20("wETH", "wETH", 18);
-        uint128 liquidityTwo = 602219599341335870;
-        uint160 sqrtPriceX96Two = 195181081174522229204497247535278;
         (, , BunniToken poolTokenTwo) = _setUpPool(
             ohmAddress,
             address(wETH),
-            liquidityTwo,
-            sqrtPriceX96Two,
-            0,
-            0
+            OHM_WETH_POOL_LIQUIDITY,
+            OHM_WETH_SQRTPRICEX96,
+            OHM_WETH_TICK_CUMULATIVE_0,
+            OHM_WETH_TICK_CUMULATIVE_1
         );
         address poolTokenTwoAddress = address(poolTokenTwo);
 
@@ -850,16 +859,13 @@ contract BunniSupplyTest is Test {
         submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
 
         // Set up a second pool and token
-        MockERC20 wETH = new MockERC20("wETH", "wETH", 18);
-        uint128 liquidityTwo = 602219599341335870;
-        uint160 sqrtPriceX96Two = 195181081174522229204497247535278;
         (, , BunniToken poolTokenTwo) = _setUpPool(
             ohmAddress,
             address(wETH),
-            liquidityTwo,
-            sqrtPriceX96Two,
-            0,
-            0
+            OHM_WETH_POOL_LIQUIDITY,
+            OHM_WETH_SQRTPRICEX96,
+            OHM_WETH_TICK_CUMULATIVE_0,
+            OHM_WETH_TICK_CUMULATIVE_1
         );
         address poolTokenTwoAddress = address(poolTokenTwo);
 

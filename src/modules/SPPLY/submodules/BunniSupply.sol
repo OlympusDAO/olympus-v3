@@ -453,18 +453,20 @@ contract BunniSupply is SupplySubmodule {
         observationWindow[1] = 0;
 
         (int56[] memory tickCumulatives, ) = pool_.observe(observationWindow);
-        int56 timeWeightedTick = (tickCumulatives[0] - tickCumulatives[1]) / int32(period_);
+        int56 timeWeightedTick = (tickCumulatives[1] - tickCumulatives[0]) / int32(period_);
+        console2.log("timeWeightedTick", timeWeightedTick);
 
         // Quantity of token1 for 1 unit of token0 at the time-weighted tick
         // Scale: token1 decimals
-        uint256 token1token0Ratio = OracleLibrary.getQuoteAtTick(
+        uint256 tokenRatio = OracleLibrary.getQuoteAtTick(
             int24(timeWeightedTick), // TODO check bounds
             uint128(10 ** token0_.decimals()), // 1 unit of token0
             address(token0_),
             address(token1_)
         );
+        console2.log("tokenRatio", tokenRatio);
 
         // Adjust to `DECIMALS` scale
-        return token1token0Ratio.mulDiv(DECIMAL_SCALE, 10 ** token1_.decimals());
+        return tokenRatio.mulDiv(DECIMAL_SCALE, 10 ** token1_.decimals());
     }
 }
