@@ -110,9 +110,6 @@ contract BunniSupplyTest is Test {
 
             ohmAddress = address(ohm);
             usdcAddress = address(usdc);
-
-            console2.log("ohm", ohmAddress);
-            console2.log("usdc", usdcAddress);
         }
 
         // Locations
@@ -198,8 +195,6 @@ contract BunniSupplyTest is Test {
         pool.setToken1(token1_);
         pool.setLiquidity(liquidity_);
         pool.setSqrtPrice(sqrtPriceX96_);
-        console2.log("token0", token0_);
-        console2.log("token1", token1_);
 
         int56[] memory tickCumulatives = new int56[](2);
         tickCumulatives[0] = sqrtPriceX96Cumulative0_;
@@ -356,8 +351,6 @@ contract BunniSupplyTest is Test {
         vm.prank(address(moduleSupply));
         submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
 
-        console2.log("wETH tick", TickMath.getTickAtSqrtRatio(OHM_WETH_SQRTPRICEX96));
-
         // Set up a second pool and token
         (, BunniKey memory poolTokenKeyTwo, BunniToken poolTokenTwo) = _setUpPool(
             ohmAddress,
@@ -408,11 +401,13 @@ contract BunniSupplyTest is Test {
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
         // 11421651 = 11.42 USD/OHM
-        uint256 reservesRatio = usdcReserves_.mulDiv(1e18, 1e6).mulDiv(1e18, ohmReserves_.mulDiv(1e18, 1e9)); // Decimals: 18
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e18, 1e6).mulDiv(
+            1e18,
+            ohmReserves_.mulDiv(1e18, 1e9)
+        ); // Decimals: 18
 
         // Get the tick
         int24 currentTick = TickMath.getTickAtSqrtRatio(OHM_USDC_SQRTPRICEX96);
-        console2.log("tick", currentTick);
 
         // Mock the pool returning a TWAP that deviates enough to revert
         int56 tickCumulative0_ = -2416639538393;
@@ -424,12 +419,14 @@ contract BunniSupplyTest is Test {
 
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) / 30;
-        uint256 twapRatio = OracleLibrary.getQuoteAtTick(
-            int24(timeWeightedTick),
-            uint128(10 ** 9), // token0 (OHM) decimals
-            ohmAddress,
-            usdcAddress
-        ).mulDiv(1e18, 1e6); // Decimals: 18
+        uint256 twapRatio = OracleLibrary
+            .getQuoteAtTick(
+                int24(timeWeightedTick),
+                uint128(10 ** 9), // token0 (OHM) decimals
+                ohmAddress,
+                usdcAddress
+            )
+            .mulDiv(1e18, 1e6); // Decimals: 18
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
@@ -557,7 +554,10 @@ contract BunniSupplyTest is Test {
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
         // 11421651 = 11.42 USD/OHM
-        uint256 reservesRatio = usdcReserves_.mulDiv(1e18, 1e6).mulDiv(1e18, ohmReserves_.mulDiv(1e18, 1e9)); // Decimals: 18
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e18, 1e6).mulDiv(
+            1e18,
+            ohmReserves_.mulDiv(1e18, 1e9)
+        ); // Decimals: 18
 
         // Mock the pool returning a TWAP that deviates enough to revert
         int56 tickCumulative0_ = -2416639538393;
@@ -569,12 +569,14 @@ contract BunniSupplyTest is Test {
 
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) / 30;
-        uint256 twapRatio = OracleLibrary.getQuoteAtTick(
-            int24(timeWeightedTick),
-            uint128(10 ** 9), // token0 (OHM) decimals
-            ohmAddress,
-            usdcAddress
-        ).mulDiv(1e18, 1e6); // Decimals: 18
+        uint256 twapRatio = OracleLibrary
+            .getQuoteAtTick(
+                int24(timeWeightedTick),
+                uint128(10 ** 9), // token0 (OHM) decimals
+                ohmAddress,
+                usdcAddress
+            )
+            .mulDiv(1e18, 1e6); // Decimals: 18
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio

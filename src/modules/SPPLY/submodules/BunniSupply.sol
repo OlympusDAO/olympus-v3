@@ -16,8 +16,6 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {Deviation} from "libraries/Deviation.sol";
 
-import {console2} from "forge-std/Console2.sol";
-
 /// @title      BunniSupply
 /// @author     0xJem
 /// @notice     A SPPLY submodule that provides data on OHM deployed into Uniswap V3 pools that
@@ -390,8 +388,6 @@ contract BunniSupply is SupplySubmodule {
 
         uint256 reservesTokenRatio = _getReservesRatio(key_, lens_, token0, token1);
         uint256 twapTokenRatio = _getTWAPTokenRatio(key_.pool, 30, token0, token1);
-        console2.log("reserves", reservesTokenRatio);
-        console2.log("twap", twapTokenRatio);
 
         // Revert if the relative deviation is greater than the maximum
         if (
@@ -422,9 +418,6 @@ contract BunniSupply is SupplySubmodule {
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
         (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
 
-        console2.log("reserve0 + fee0", reserve0 + fee0);
-        console2.log("reserve1 + fee1", reserve1 + fee1);
-
         // Calculate the ratio of token1 to token0 and adjust to `DECIMALS` scale
         return
             ((reserve1 + fee1).mulDiv(DECIMAL_SCALE, 10 ** token1_.decimals())).mulDiv(
@@ -453,7 +446,6 @@ contract BunniSupply is SupplySubmodule {
 
         (int56[] memory tickCumulatives, ) = pool_.observe(observationWindow);
         int56 timeWeightedTick = (tickCumulatives[1] - tickCumulatives[0]) / int32(period_);
-        console2.log("timeWeightedTick", timeWeightedTick);
 
         // Quantity of token1 for 1 unit of token0 at the time-weighted tick
         // Scale: token1 decimals
@@ -463,7 +455,6 @@ contract BunniSupply is SupplySubmodule {
             address(token0_),
             address(token1_)
         );
-        console2.log("tokenRatio", tokenRatio);
 
         // Adjust to `DECIMALS` scale
         return tokenRatio.mulDiv(DECIMAL_SCALE, 10 ** token1_.decimals());
