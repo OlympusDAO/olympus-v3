@@ -44,10 +44,7 @@ library BunniHelper {
     /// @param key_     The BunniKey for the pool
     /// @param lens_    The BunniLens contract
     /// @return         The ratio of token1 to token0 in terms of token1 decimals
-    function getReservesRatio(
-        BunniKey memory key_,
-        BunniLens lens_
-    ) public view returns (uint256) {
+    function getReservesRatio(BunniKey memory key_, BunniLens lens_) public view returns (uint256) {
         IUniswapV3Pool pool = key_.pool;
         uint8 token0Decimals = ERC20(pool.token0()).decimals();
 

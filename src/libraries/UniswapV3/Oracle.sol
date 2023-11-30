@@ -52,10 +52,7 @@ library UniswapV3OracleHelper {
     /// @param pool_       The address of the Uniswap V3 pool
     /// @param period_     The period (in seconds) over which to calculate the time-weighted tick
     /// @return            The time-weighted tick
-    function getTimeWeightedTick(
-        address pool_,
-        uint32 period_
-    ) public view returns (int56) {
+    function getTimeWeightedTick(address pool_, uint32 period_) public view returns (int56) {
         IUniswapV3Pool pool = IUniswapV3Pool(pool_);
 
         // Get tick and liquidity from the TWAP
@@ -68,9 +65,7 @@ library UniswapV3OracleHelper {
             int56[] memory tickCumulatives,
             uint160[] memory
         ) {
-            timeWeightedTick =
-                (tickCumulatives[1] - tickCumulatives[0]) /
-                int32(period_);
+            timeWeightedTick = (tickCumulatives[1] - tickCumulatives[0]) / int32(period_);
         } catch (bytes memory) {
             // This function will revert if the observation window is longer than the oldest observation in the pool
             // https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/Oracle.sol#L226C30-L226C30
@@ -95,13 +90,8 @@ library UniswapV3OracleHelper {
     /// @param pool_            The Uniswap V3 pool
     /// @param period_          The period of the TWAP in seconds
     /// @return                 The ratio of token1 to token0 in the scale of token1 decimals
-    function getTWAPRatio(
-        address pool_,
-        uint32 period_
-    ) public view returns (uint256) {
-        int56 timeWeightedTick = getTimeWeightedTick(
-            pool_,
-            period_);
+    function getTWAPRatio(address pool_, uint32 period_) public view returns (uint256) {
+        int56 timeWeightedTick = getTimeWeightedTick(pool_, period_);
 
         IUniswapV3Pool pool = IUniswapV3Pool(pool_);
         ERC20 token0 = ERC20(pool.token0());

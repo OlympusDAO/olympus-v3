@@ -386,13 +386,12 @@ contract BunniSupplyTest is Test {
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) /
             int32(observationWindow);
-        uint256 twapRatio = OracleLibrary
-            .getQuoteAtTick(
-                int24(timeWeightedTick),
-                uint128(10 ** 9), // token0 (OHM) decimals
-                ohmAddress,
-                usdcAddress
-            ); // USDC decimals: 6
+        uint256 twapRatio = OracleLibrary.getQuoteAtTick(
+            int24(timeWeightedTick),
+            uint128(10 ** 9), // token0 (OHM) decimals
+            ohmAddress,
+            usdcAddress
+        ); // USDC decimals: 6
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
@@ -522,13 +521,12 @@ contract BunniSupplyTest is Test {
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) /
             int32(TWAP_OBSERVATION_WINDOW);
-        uint256 twapRatio = OracleLibrary
-            .getQuoteAtTick(
-                int24(timeWeightedTick),
-                uint128(10 ** 9), // token0 (OHM) decimals
-                ohmAddress,
-                usdcAddress
-            ); // USDC decimals: 6
+        uint256 twapRatio = OracleLibrary.getQuoteAtTick(
+            int24(timeWeightedTick),
+            uint128(10 ** 9), // token0 (OHM) decimals
+            ohmAddress,
+            usdcAddress
+        ); // USDC decimals: 6
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
@@ -610,13 +608,12 @@ contract BunniSupplyTest is Test {
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) /
             int32(observationWindow);
-        uint256 twapRatio = OracleLibrary
-            .getQuoteAtTick(
-                int24(timeWeightedTick),
-                uint128(10 ** 9), // token0 (OHM) decimals
-                ohmAddress,
-                usdcAddress
-            ); // USDC decimals: 6
+        uint256 twapRatio = OracleLibrary.getQuoteAtTick(
+            int24(timeWeightedTick),
+            uint128(10 ** 9), // token0 (OHM) decimals
+            ohmAddress,
+            usdcAddress
+        ); // USDC decimals: 6
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
@@ -775,13 +772,12 @@ contract BunniSupplyTest is Test {
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) /
             int32(TWAP_OBSERVATION_WINDOW);
-        uint256 twapRatio = OracleLibrary
-            .getQuoteAtTick(
-                int24(timeWeightedTick),
-                uint128(10 ** 9), // token0 (OHM) decimals
-                ohmAddress,
-                usdcAddress
-            ); // USDC decimals: 6
+        uint256 twapRatio = OracleLibrary.getQuoteAtTick(
+            int24(timeWeightedTick),
+            uint128(10 ** 9), // token0 (OHM) decimals
+            ohmAddress,
+            usdcAddress
+        ); // USDC decimals: 6
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
