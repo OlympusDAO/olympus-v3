@@ -212,7 +212,7 @@ contract UniswapV3Price is PriceSubmodule {
 
         // Check for re-entrancy
         if (unlocked == false) revert UniswapV3_PoolReentrancy(address(params.pool));
-        
+
         uint256 baseInQuotePrice = OracleLibrary.getQuoteAtTick(
             currentTick,
             uint128(10 ** lookupTokenDecimals),
