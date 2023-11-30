@@ -222,7 +222,10 @@ contract SentimentArbSupplyTest is Test {
     // =========  getProtocolOwnedTreasuryOhm  ========= //
 
     function test_getProtocolOwnedTreasuryOhm() public {
-        assertEq(submoduleSentimentArbSupply.getProtocolOwnedTreasuryOhm(), PROTOCOL_OWNED_TREASURY_OHM);
+        assertEq(
+            submoduleSentimentArbSupply.getProtocolOwnedTreasuryOhm(),
+            PROTOCOL_OWNED_TREASURY_OHM
+        );
     }
 
     // =========  getProtocolOwnedLiquidityReserves ========= //

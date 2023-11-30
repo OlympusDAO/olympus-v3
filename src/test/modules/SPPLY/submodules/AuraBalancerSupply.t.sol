@@ -445,10 +445,9 @@ contract AuraBalancerSupplyTest is Test {
 
     // =========  getCollateralizedOhm ========= //
 
-    function test_getCollateralizedOhm(
-        uint256 polManagerBptBalance_,
-        uint256 poolOhmBalance_
-    ) public {
+    function test_getCollateralizedOhm(uint256 polManagerBptBalance_, uint256 poolOhmBalance_)
+        public
+    {
         uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
         uint256 polManagerBptBalance = bound(polManagerBptBalance_, 0, bptTotalSupply);
         uint256 polManagerAuraBptBalance = 0;

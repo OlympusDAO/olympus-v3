@@ -59,7 +59,12 @@ contract SiloSupply is SupplySubmodule {
     /// @param amo_     The address of the Olympus Silo AMO Policy / silo OHM token holder
     /// @param lens_    The address of the SiloLens contract
     /// @param silo_    The address of the Silo market
-    constructor(Module parent_, address amo_, address lens_, address silo_) Submodule(parent_) {
+    constructor(
+        Module parent_,
+        address amo_,
+        address lens_,
+        address silo_
+    ) Submodule(parent_) {
         amo = amo_;
         lens = ISiloLens(lens_);
         silo = IBaseSilo(silo_);
@@ -187,7 +192,11 @@ contract SiloSupply is SupplySubmodule {
     /// @param amo_     The address of the Olympus Silo AMO Policy / silo OHM token holder
     /// @param lens_    The address of the SiloLens contract
     /// @param silo_    The address of the Silo market
-    function setSources(address amo_, address lens_, address silo_) external onlyParent {
+    function setSources(
+        address amo_,
+        address lens_,
+        address silo_
+    ) external onlyParent {
         if (amo_ != address(0)) amo = amo_;
         if (lens_ != address(0)) lens = ISiloLens(lens_);
         if (silo_ != address(0)) silo = IBaseSilo(silo_);

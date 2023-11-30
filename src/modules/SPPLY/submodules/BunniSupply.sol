@@ -292,10 +292,11 @@ contract BunniSupply is SupplySubmodule {
     /// @param key_     The BunniKey for the pool
     /// @param lens_    The BunniLens contract
     /// @return         The OHM reserves for the pool
-    function _getOhmReserves(
-        BunniKey memory key_,
-        BunniLens lens_
-    ) internal view returns (uint256) {
+    function _getOhmReserves(BunniKey memory key_, BunniLens lens_)
+        internal
+        view
+        returns (uint256)
+    {
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
         if (key_.pool.token0() == ohm) {
             return reserve0;
@@ -310,10 +311,16 @@ contract BunniSupply is SupplySubmodule {
     /// @param key_     The BunniKey for the pool
     /// @param lens_    The BunniLens contract
     /// @return         The reserves for the pool in the order of (token0, token1, reserve0, reserv1)
-    function _getReservesWithFees(
-        BunniKey memory key_,
-        BunniLens lens_
-    ) internal view returns (address, address, uint256, uint256) {
+    function _getReservesWithFees(BunniKey memory key_, BunniLens lens_)
+        internal
+        view
+        returns (
+            address,
+            address,
+            uint256,
+            uint256
+        )
+    {
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
         (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
 

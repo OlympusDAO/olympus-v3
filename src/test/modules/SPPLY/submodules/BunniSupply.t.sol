@@ -145,7 +145,14 @@ contract BunniSupplyTest is Test {
         address token1_,
         uint128 liquidity_,
         uint160 sqrtPriceX96_
-    ) internal returns (MockUniV3Pair, BunniKey memory, BunniToken) {
+    )
+        internal
+        returns (
+            MockUniV3Pair,
+            BunniKey memory,
+            BunniToken
+        )
+    {
         MockUniV3Pair pool = new MockUniV3Pair();
         pool.setToken0(token0_);
         pool.setToken1(token1_);
@@ -163,10 +170,11 @@ contract BunniSupplyTest is Test {
         return (pool, key, token);
     }
 
-    function _getOhmReserves(
-        BunniKey memory key_,
-        BunniLens lens_
-    ) internal view returns (uint256) {
+    function _getOhmReserves(BunniKey memory key_, BunniLens lens_)
+        internal
+        view
+        returns (uint256)
+    {
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
         if (key_.pool.token0() == ohmAddress) {
             return reserve0;
@@ -175,10 +183,11 @@ contract BunniSupplyTest is Test {
         }
     }
 
-    function _getReserves(
-        BunniKey memory key_,
-        BunniLens lens_
-    ) internal view returns (uint256, uint256) {
+    function _getReserves(BunniKey memory key_, BunniLens lens_)
+        internal
+        view
+        returns (uint256, uint256)
+    {
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
         return (reserve0, reserve1);
     }
