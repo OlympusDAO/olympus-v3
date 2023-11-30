@@ -5,6 +5,7 @@ pragma solidity >=0.8.0;
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
 // Libraries
+import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.sol";
 import {FixedPointMathLib} from "lib/solmate/src/utils/FixedPointMathLib.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -321,8 +322,8 @@ contract UniswapV3PriceTest is Test {
         );
 
         bytes memory err = abi.encodeWithSelector(
-            UniswapV3Price.UniswapV3_ParamsObservationWindowTooShort.selector,
-            1,
+            OracleHelper.UniswapV3OracleHelper_ObservationTooShort.selector,
+            address(mockUniPair),
             observationWindow,
             MIN_OBSERVATION_SECONDS
         );
@@ -339,7 +340,7 @@ contract UniswapV3PriceTest is Test {
         mockUniPair.setObserveReverts(true);
 
         bytes memory err = abi.encodeWithSelector(
-            UniswapV3Price.UniswapV3_InvalidObservation.selector,
+            OracleHelper.UniswapV3OracleHelper_InvalidObservation.selector,
             address(mockUniPair),
             observationWindow
         );
@@ -385,7 +386,7 @@ contract UniswapV3PriceTest is Test {
         mockUniPair.setTickCumulatives(tickCumulatives);
 
         bytes memory err = abi.encodeWithSelector(
-            UniswapV3Price.UniswapV3_TickOutOfBounds.selector,
+            OracleHelper.UniswapV3OracleHelper_TickOutOfBounds.selector,
             address(mockUniPair),
             (tick1 - tick0) / int56(int32(OBSERVATION_SECONDS)),
             MIN_TICK,
@@ -424,7 +425,7 @@ contract UniswapV3PriceTest is Test {
         mockUniPair.setTickCumulatives(tickCumulatives);
 
         bytes memory err = abi.encodeWithSelector(
-            UniswapV3Price.UniswapV3_TickOutOfBounds.selector,
+            OracleHelper.UniswapV3OracleHelper_TickOutOfBounds.selector,
             address(mockUniPair),
             (tick1 - tick0) / int56(int32(OBSERVATION_SECONDS)),
             MIN_TICK,

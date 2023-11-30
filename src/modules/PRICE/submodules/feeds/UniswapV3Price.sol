@@ -5,6 +5,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // Libraries
 import {FullMath} from "libraries/FullMath.sol";
+import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.sol";
 
 // Uniswap V3
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
@@ -70,16 +71,6 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param pool_            The address of the pool
     error UniswapV3_ParamsPoolInvalid(uint8 paramsIndex_, address pool_);
 
-    /// @notice                                 The observation window specified in the parameters is too short
-    /// @param paramsIndex_                     The index of the parameter
-    /// @param observationWindowSeconds_        The observation window in seconds
-    /// @param minimumObservationWindowSeconds_ The minimum observation window in seconds
-    error UniswapV3_ParamsObservationWindowTooShort(
-        uint8 paramsIndex_,
-        uint32 observationWindowSeconds_,
-        uint32 minimumObservationWindowSeconds_
-    );
-
     /// @notice                 The pool tokens are invalid
     /// @param pool_            The address of the pool
     /// @param tokenIndex_      The index of the token
@@ -92,29 +83,6 @@ contract UniswapV3Price is PriceSubmodule {
     ///
     /// @param pool_            The address of the pool
     error UniswapV3_PoolTypeInvalid(address pool_);
-
-    /// @notice                             The pool is invalid or the observation window is too long.
-    /// @dev                                This is triggered if the pool reverted when called,
-    ///                                     and indicates that the feed address is not a UniswapV3 pool
-    ///                                     or that the observation window is too long.
-    ///
-    /// @param pool_                        The address of the pool
-    /// @param observationWindowSeconds_    The observation window in seconds
-    error UniswapV3_InvalidObservation(address pool_, uint32 observationWindowSeconds_);
-
-    /// @notice                 The calculated tick is out of bounds
-    /// @dev                    The tick is calculated as the average of the ticks over the observation window.
-    ///
-    /// @param pool_            The address of the pool
-    /// @param calculatedTick_  The calculated tick
-    /// @param minTick_         The minimum tick
-    /// @param maxTick_         The maximum tick
-    error UniswapV3_TickOutOfBounds(
-        address pool_,
-        int56 calculatedTick_,
-        int24 minTick_,
-        int24 maxTick_
-    );
 
     /// @notice                   The calculated pool price deviates from the TWAP by more than the maximum deviation.
     ///
@@ -176,11 +144,12 @@ contract UniswapV3Price is PriceSubmodule {
             uint8 lookupTokenDecimals
         ) = _checkPoolAndTokenParams(lookupToken_, outputDecimals_, params.pool);
 
-        uint256 baseInQuotePrice = _getTokenTWAP(
+        uint256 baseInQuotePrice = OracleHelper.getTWAPRatio(
+            address(params.pool),
+            params.observationWindowSeconds,
             lookupToken_,
-            lookupTokenDecimals,
             quoteToken,
-            params
+            lookupTokenDecimals
         );
 
         // Get the price of {quoteToken} in USD
@@ -226,11 +195,12 @@ contract UniswapV3Price is PriceSubmodule {
         ) = _checkPoolAndTokenParams(lookupToken_, outputDecimals_, params.pool);
 
         // Get the TWAP price of the lookup token in terms of the quote token
-        uint256 baseInQuoteTWAP = _getTokenTWAP(
+        uint256 baseInQuoteTWAP = OracleHelper.getTWAPRatio(
+            address(params.pool),
+            params.observationWindowSeconds,
             lookupToken_,
-            lookupTokenDecimals,
             quoteToken,
-            params
+            lookupTokenDecimals
         );
 
         // Get the current price of the lookup token in terms of the quote token
@@ -270,74 +240,6 @@ contract UniswapV3Price is PriceSubmodule {
     }
 
     // ========== INTERNAL FUNCTIONS ========== //
-
-    /// @notice  Obtains the price of `baseToken_` in `quoteToken_` terms, using the TWAP from the specified Uniswap V3 oracle.
-    /// @dev                       This function will revert if:
-    ///                            - The value of `params_.observationWindowSeconds` is less than `TWAP_MINIMUM_OBSERVATION_SECONDS`
-    ///                            - The calculated time-weighted tick is outside the bounds of int24
-    ///
-    /// @param baseToken_          The token to determine the price of
-    /// @param baseTokenDecimals_  The decimals of `baseToken`
-    /// @param quoteToken_         The token to quote the price in
-    /// @param params_             Pool parameters of type `UniswapV3Params`
-    /// @return                    Price in the scale of `quoteToken` decimals
-    function _getTokenTWAP(
-        address baseToken_,
-        uint8 baseTokenDecimals_,
-        address quoteToken_,
-        UniswapV3Params memory params_
-    ) internal view returns (uint256) {
-        // Revert if the observation window is less than the minimum (which would not give manipulation-resistant results)
-        if (params_.observationWindowSeconds < TWAP_MINIMUM_OBSERVATION_SECONDS)
-        revert UniswapV3_ParamsObservationWindowTooShort(
-            1,
-            params_.observationWindowSeconds,
-            TWAP_MINIMUM_OBSERVATION_SECONDS
-        );
-
-        // Determine the tick over the observation window
-        int56 timeWeightedTick;
-        {
-            uint32[] memory observationWindow = new uint32[](2);
-            observationWindow[0] = params_.observationWindowSeconds;
-            observationWindow[1] = 0;
-
-            try params_.pool.observe(observationWindow) returns (
-                int56[] memory tickCumulatives,
-                uint160[] memory secondsPerLiquidityCumulativeX128s
-            ) {
-                timeWeightedTick =
-                    (tickCumulatives[1] - tickCumulatives[0]) /
-                    int32(params_.observationWindowSeconds);
-            } catch (bytes memory) {
-                // This function will revert if the observation window is longer than the oldest observation in the pool
-                // https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/Oracle.sol#L226C30-L226C30
-                revert UniswapV3_InvalidObservation(
-                    address(params_.pool),
-                    params_.observationWindowSeconds
-                );
-            }
-        }
-
-        // Ensure the time-weighted tick is within the bounds of permissible ticks
-        // Otherwise getQuoteAtTick will revert: https://docs.uniswap.org/contracts/v3/reference/error-codes
-        if (timeWeightedTick > MAX_TICK || timeWeightedTick < MIN_TICK)
-            revert UniswapV3_TickOutOfBounds(
-                address(params_.pool),
-                timeWeightedTick,
-                MIN_TICK,
-                MAX_TICK
-            );
-
-        // Convert the tick to a price in terms of the other token
-        // Decimals: quoteTokenDecimals
-        return OracleLibrary.getQuoteAtTick(
-            int24(timeWeightedTick),
-            uint128(10 ** baseTokenDecimals_),
-            baseToken_,
-            quoteToken_
-        );
-    }
 
     /// @notice  Performs checks to ensure that the pool, the tokens, and the decimals are valid.
     /// @dev                    This function will revert if:
