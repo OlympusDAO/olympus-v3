@@ -51,7 +51,7 @@ contract OlympusSupply is SPPLYv1 {
         totalCrossChainSupply = initialCrossChainSupply_;
 
         // Add categories that are required for the metrics functions
-        _addCategory(toCategory("protocol-owned-treasury"), false, 0x00000000, 0x00000000);
+        _addCategory(toCategory("protocol-owned-treasury"), false, 0xb600c5e2, 0x00000000); // getProtocolOwnedTreasuryOhm()
         _addCategory(toCategory("dao"), false, 0x00000000, 0x00000000);
         _addCategory(toCategory("protocol-owned-liquidity"), true, 0x8ebf7278, 0x55bdad01); // getProtocolOwnedLiquidityOhm(), getProtocolOwnedLiquidityReserves()
         _addCategory(toCategory("protocol-owned-borrowable"), true, 0x117fb54a, 0x00000000); // getProtocolOwnedBorrowableOhm()

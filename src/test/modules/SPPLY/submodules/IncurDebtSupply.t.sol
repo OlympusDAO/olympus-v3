@@ -116,6 +116,7 @@ contract IncurDebtSupplyTest is Test {
     // [X] getCollateralizedOhm
     // [X] getProtocolOwnedBorrowableOhm
     // [X] getProtocolOwnedLiquidityOhm
+    // [] getProtocolOwnedTreasuryOhm
     // [X] setIncurDebt
     //  [X] not parent
     //  [X] address(0)
@@ -208,6 +209,15 @@ contract IncurDebtSupplyTest is Test {
         incurDebt.setTotalDebt(totalDebt);
 
         assertEq(submoduleIncurDebtSupply.getProtocolOwnedLiquidityOhm(), 0);
+    }
+
+    // =========  getProtocolOwnedTreasuryOhm  ========= //
+
+    function test_getProtocolOwnedTreasuryOhm_fuzz(uint256 totalDebt_) public {
+        uint256 totalDebt = bound(totalDebt_, 0, 1000e9);
+        incurDebt.setTotalDebt(totalDebt);
+
+        assertEq(submoduleIncurDebtSupply.getProtocolOwnedTreasuryOhm(), 0);
     }
 
     // =========  getProtocolOwnedLiquidityReserves ========= //

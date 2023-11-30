@@ -125,6 +125,7 @@ contract SiloSupplyTest is Test {
     //  [X] supplied < borrowed
     //  [X] supplied == borrowed
     // [X] getProtocolOwnedLiquidityOhm
+    // [] getProtocolOwnedTreasuryOhm
     // [X] setSources
     //  [X] not parent
     //  [X] amo address
@@ -235,6 +236,16 @@ contract SiloSupplyTest is Test {
 
         // No OHM is liquidity OHM
         assertEq(submoduleSiloSupply.getProtocolOwnedLiquidityOhm(), 0);
+    }
+
+    // =========  getProtocolOwnedTreasuryOhm  ========= //
+
+    function test_getProtocolOwnedTreasuryOhm_fuzz(uint256 borrowed_) public {
+        uint256 borrowed = bound(borrowed_, 0, LENS_TOTAL_DEPOSITED_AMOUNT);
+        siloLens.setTotalBorrowAmountWithInterest(borrowed);
+
+        // No OHM is treasury OHM
+        assertEq(submoduleSiloSupply.getProtocolOwnedTreasuryOhm(), 0);
     }
 
     // =========  getProtocolOwnedLiquidityReserves ========= //

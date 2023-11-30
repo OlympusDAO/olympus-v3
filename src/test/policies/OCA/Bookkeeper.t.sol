@@ -142,6 +142,10 @@ contract MockUpgradedSubmoduleSupply is SupplySubmodule {
         return 0;
     }
 
+    function getProtocolOwnedTreasuryOhm() external view override returns (uint256) {
+        return 0;
+    }
+
     function getSourceCount() external view override returns (uint256) {
         return 0;
     }

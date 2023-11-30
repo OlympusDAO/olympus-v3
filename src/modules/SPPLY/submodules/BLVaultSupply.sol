@@ -112,6 +112,12 @@ contract BLVaultSupply is SupplySubmodule {
     }
 
     /// @inheritdoc SupplySubmodule
+    function getProtocolOwnedTreasuryOhm() external pure override returns (uint256) {
+        // POTO is always zero for BLVaults
+        return 0;
+    }
+
+    /// @inheritdoc SupplySubmodule
     /// @dev        Protocol-owned liquidity OHM is always zero for BLVaults.
     ///
     ///             This function returns an array with the same length as `getSourceCount()`, but with empty values.
