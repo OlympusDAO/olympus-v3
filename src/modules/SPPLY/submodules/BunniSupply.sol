@@ -11,6 +11,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
+import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -72,6 +73,28 @@ contract BunniSupply is SupplySubmodule {
         address pool_,
         uint256 baseInQuoteTWAP_,
         uint256 baseInQuotePrice_
+    );
+
+    /// @notice                     The observation window for `pool_` is invalid
+    ///
+    /// @param pool_                The address of the pool
+    /// @param observationWindow_   The observation window
+    error BunniSupply_InvalidObservation(
+        address pool_,
+        uint32 observationWindow_
+    );
+
+    /// @notice                     The time-weighted tick is out of bounds
+    ///
+    /// @param pool_                The address of the pool
+    /// @param timeWeightedTick_    The time-weighted tick
+    /// @param minTick_             The minimum tick
+    /// @param maxTick_             The maximum tick
+    error BunniSupply_TickOutOfBounds(
+        address pool_,
+        int56 timeWeightedTick_,
+        int24 minTick_,
+        int24 maxTick_
     );
 
     // ========== EVENTS ========== //
@@ -521,13 +544,37 @@ contract BunniSupply is SupplySubmodule {
         observationWindow[0] = period_;
         observationWindow[1] = 0;
 
-        (int56[] memory tickCumulatives, ) = pool_.observe(observationWindow);
-        int56 timeWeightedTick = (tickCumulatives[1] - tickCumulatives[0]) / int32(period_);
+        int56 timeWeightedTick;
+        try pool_.observe(observationWindow) returns (
+            int56[] memory tickCumulatives,
+            uint160[] memory
+        ) {
+            timeWeightedTick =
+                (tickCumulatives[1] - tickCumulatives[0]) /
+                int32(period_);
+        } catch (bytes memory) {
+            // This function will revert if the observation window is longer than the oldest observation in the pool
+            // https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/Oracle.sol#L226C30-L226C30
+            revert BunniSupply_InvalidObservation(
+                address(pool_),
+                period_
+            );
+        }
+
+        // Ensure the time-weighted tick is within the bounds of permissible ticks
+        // Otherwise getQuoteAtTick will revert: https://docs.uniswap.org/contracts/v3/reference/error-codes
+        if (timeWeightedTick > TickMath.MAX_TICK || timeWeightedTick < TickMath.MIN_TICK)
+            revert BunniSupply_TickOutOfBounds(
+                address(pool_),
+                timeWeightedTick,
+                TickMath.MIN_TICK,
+                TickMath.MAX_TICK
+            );
 
         // Quantity of token1 for 1 unit of token0 at the time-weighted tick
         // Scale: token1 decimals
         uint256 tokenRatio = OracleLibrary.getQuoteAtTick(
-            int24(timeWeightedTick), // TODO check bounds
+            int24(timeWeightedTick),
             uint128(10 ** token0_.decimals()), // 1 unit of token0
             address(token0_),
             address(token1_)
