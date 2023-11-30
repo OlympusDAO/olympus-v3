@@ -381,10 +381,7 @@ contract BunniSupplyTest is Test {
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
         // 11421651 = 11.42 USD/OHM
-        uint256 reservesRatio = usdcReserves_.mulDiv(1e18, 1e6).mulDiv(
-            1e18,
-            ohmReserves_.mulDiv(1e18, 1e9)
-        ); // Decimals: 18
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // USDC decimals: 6
 
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) /
@@ -395,8 +392,7 @@ contract BunniSupplyTest is Test {
                 uint128(10 ** 9), // token0 (OHM) decimals
                 ohmAddress,
                 usdcAddress
-            )
-            .mulDiv(1e18, 1e6); // Decimals: 18
+            ); // USDC decimals: 6
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
@@ -513,10 +509,7 @@ contract BunniSupplyTest is Test {
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
         // 11421651 = 11.42 USD/OHM
-        uint256 reservesRatio = usdcReserves_.mulDiv(1e18, 1e6).mulDiv(
-            1e18,
-            ohmReserves_.mulDiv(1e18, 1e9)
-        ); // Decimals: 18
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // USDC decimals: 6
 
         // Mock the pool returning a TWAP that deviates enough to revert
         int56 tickCumulative0_ = -2416639538393;
@@ -535,8 +528,7 @@ contract BunniSupplyTest is Test {
                 uint128(10 ** 9), // token0 (OHM) decimals
                 ohmAddress,
                 usdcAddress
-            )
-            .mulDiv(1e18, 1e6); // Decimals: 18
+            ); // USDC decimals: 6
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
@@ -613,10 +605,7 @@ contract BunniSupplyTest is Test {
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
         // 11421651 = 11.42 USD/OHM
-        uint256 reservesRatio = usdcReserves_.mulDiv(1e18, 1e6).mulDiv(
-            1e18,
-            ohmReserves_.mulDiv(1e18, 1e9)
-        ); // Decimals: 18
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // USDC decimals: 6
 
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) /
@@ -627,8 +616,7 @@ contract BunniSupplyTest is Test {
                 uint128(10 ** 9), // token0 (OHM) decimals
                 ohmAddress,
                 usdcAddress
-            )
-            .mulDiv(1e18, 1e6); // Decimals: 18
+            ); // USDC decimals: 6
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
@@ -774,10 +762,7 @@ contract BunniSupplyTest is Test {
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
         // 11421651 = 11.42 USD/OHM
-        uint256 reservesRatio = usdcReserves_.mulDiv(1e18, 1e6).mulDiv(
-            1e18,
-            ohmReserves_.mulDiv(1e18, 1e9)
-        ); // Decimals: 18
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // USDC decimals: 6
 
         // Mock the pool returning a TWAP that deviates enough to revert
         int56 tickCumulative0_ = -2416639538393;
@@ -796,8 +781,7 @@ contract BunniSupplyTest is Test {
                 uint128(10 ** 9), // token0 (OHM) decimals
                 ohmAddress,
                 usdcAddress
-            )
-            .mulDiv(1e18, 1e6); // Decimals: 18
+            ); // USDC decimals: 6
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio

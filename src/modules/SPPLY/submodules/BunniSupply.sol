@@ -1,21 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
+// Bophades modules
 import "modules/SPPLY/SPPLY.v1.sol";
+
+// Bunni contracts
 import {BunniLens} from "src/external/bunni/BunniLens.sol";
 import {BunniToken} from "src/external/bunni/BunniToken.sol";
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
 import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
 
+// Standard libraries
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+/// Uniswap V3
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
-import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
+// Libraries
 import {FullMath} from "libraries/FullMath.sol";
-
 import {Deviation} from "libraries/Deviation.sol";
+import {UniswapV3OracleHelper} from "libraries/UniswapV3/Oracle.sol";
+import {BunniHelper} from "libraries/UniswapV3/BunniHelper.sol";
 
 /// @title      BunniSupply
 /// @author     0xJem
@@ -75,25 +81,6 @@ contract BunniSupply is SupplySubmodule {
         uint256 baseInQuotePrice_
     );
 
-    /// @notice                     The observation window for `pool_` is invalid
-    ///
-    /// @param pool_                The address of the pool
-    /// @param observationWindow_   The observation window
-    error BunniSupply_InvalidObservation(address pool_, uint32 observationWindow_);
-
-    /// @notice                     The time-weighted tick is out of bounds
-    ///
-    /// @param pool_                The address of the pool
-    /// @param timeWeightedTick_    The time-weighted tick
-    /// @param minTick_             The minimum tick
-    /// @param maxTick_             The maximum tick
-    error BunniSupply_TickOutOfBounds(
-        address pool_,
-        int56 timeWeightedTick_,
-        int24 minTick_,
-        int24 maxTick_
-    );
-
     // ========== EVENTS ========== //
 
     /// @notice             Emitted when a new BunniToken is added
@@ -127,13 +114,6 @@ contract BunniSupply is SupplySubmodule {
     address internal immutable ohm;
 
     uint16 internal constant TWAP_MAX_DEVIATION_BASE = 10_000; // 100%
-
-    /// @notice     The minimum length of the TWAP observation window in seconds
-    ///             From testing, a value under 19 seconds is rejected by `OracleLibrary.getQuoteAtTick()`
-    uint32 internal constant TWAP_MIN_OBSERVATION_WINDOW = 19; // seconds
-
-    /// @notice     Decimal scale used for internal comparisons
-    uint256 internal constant DECIMAL_SCALE = 1e18;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -314,10 +294,10 @@ contract BunniSupply is SupplySubmodule {
                 twapMaxDeviationBps_
             );
 
-        if (twapObservationWindow_ < TWAP_MIN_OBSERVATION_WINDOW)
+        if (twapObservationWindow_ < UniswapV3OracleHelper.TWAP_MIN_OBSERVATION_WINDOW)
             revert BunniSupply_Params_InvalidTwapObservationWindow(
                 token_,
-                TWAP_MIN_OBSERVATION_WINDOW,
+                UniswapV3OracleHelper.TWAP_MIN_OBSERVATION_WINDOW,
                 twapObservationWindow_
             );
 
@@ -469,16 +449,10 @@ contract BunniSupply is SupplySubmodule {
         uint16 twapMaxDeviationBps_,
         uint32 twapObservationWindow_
     ) internal view {
-        // Get the tokens from the pool
-        ERC20 token0 = ERC20(key_.pool.token0());
-        ERC20 token1 = ERC20(key_.pool.token1());
-
-        uint256 reservesTokenRatio = _getReservesRatio(key_, lens_, token0, token1);
-        uint256 twapTokenRatio = _getTWAPTokenRatio(
-            key_.pool,
-            twapObservationWindow_,
-            token0,
-            token1
+        uint256 reservesTokenRatio = BunniHelper.getReservesRatio(key_, lens_);
+        uint256 twapTokenRatio = UniswapV3OracleHelper.getTWAPRatio(
+            address(key_.pool),
+            twapObservationWindow_
         );
 
         // Revert if the relative deviation is greater than the maximum
@@ -496,83 +470,5 @@ contract BunniSupply is SupplySubmodule {
                 reservesTokenRatio
             );
         }
-    }
-
-    /// @notice         Returns the ratio of token1 to token0 based on the position reserves
-    /// @dev            Includes uncollected fees
-    ///
-    /// @param key_     The BunniKey for the pool
-    /// @param lens_    The BunniLens contract
-    /// @param token0_  The address of token0
-    /// @param token1_  The address of token1
-    /// @return         The ratio of token1 to token0 in terms of `DECIMAL_SCALE`
-    function _getReservesRatio(
-        BunniKey memory key_,
-        BunniLens lens_,
-        ERC20 token0_,
-        ERC20 token1_
-    ) internal view returns (uint256) {
-        (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
-        (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
-
-        // Calculate the ratio of token1 to token0 and adjust to `DECIMALS` scale
-        return
-            ((reserve1 + fee1).mulDiv(DECIMAL_SCALE, 10 ** token1_.decimals())).mulDiv(
-                DECIMAL_SCALE,
-                ((reserve0 + fee0).mulDiv(DECIMAL_SCALE, 10 ** token0_.decimals()))
-            );
-    }
-
-    /// @notice         Returns the ratio of token1 to token0 based on the TWAP
-    ///
-    /// @param pool_    The Uniswap V3 pool
-    /// @param period_  The period of the TWAP in seconds
-    /// @param token0_  The address of token0
-    /// @param token1_  The address of token1
-    /// @return         The ratio of token1 to token0 in terms of `DECIMAL_SCALE`
-    function _getTWAPTokenRatio(
-        IUniswapV3Pool pool_,
-        uint32 period_,
-        ERC20 token0_,
-        ERC20 token1_
-    ) internal view returns (uint256) {
-        // Get tick and liquidity from the TWAP
-        uint32[] memory observationWindow = new uint32[](2);
-        observationWindow[0] = period_;
-        observationWindow[1] = 0;
-
-        int56 timeWeightedTick;
-        try pool_.observe(observationWindow) returns (
-            int56[] memory tickCumulatives,
-            uint160[] memory
-        ) {
-            timeWeightedTick = (tickCumulatives[1] - tickCumulatives[0]) / int32(period_);
-        } catch (bytes memory) {
-            // This function will revert if the observation window is longer than the oldest observation in the pool
-            // https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/Oracle.sol#L226C30-L226C30
-            revert BunniSupply_InvalidObservation(address(pool_), period_);
-        }
-
-        // Ensure the time-weighted tick is within the bounds of permissible ticks
-        // Otherwise getQuoteAtTick will revert: https://docs.uniswap.org/contracts/v3/reference/error-codes
-        if (timeWeightedTick > TickMath.MAX_TICK || timeWeightedTick < TickMath.MIN_TICK)
-            revert BunniSupply_TickOutOfBounds(
-                address(pool_),
-                timeWeightedTick,
-                TickMath.MIN_TICK,
-                TickMath.MAX_TICK
-            );
-
-        // Quantity of token1 for 1 unit of token0 at the time-weighted tick
-        // Scale: token1 decimals
-        uint256 tokenRatio = OracleLibrary.getQuoteAtTick(
-            int24(timeWeightedTick),
-            uint128(10 ** token0_.decimals()), // 1 unit of token0
-            address(token0_),
-            address(token1_)
-        );
-
-        // Adjust to `DECIMALS` scale
-        return tokenRatio.mulDiv(DECIMAL_SCALE, 10 ** token1_.decimals());
     }
 }
