@@ -514,11 +514,8 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, polBunni, AssetCategory.wrap("protocol-owned-liquidity"))
         );
 
-        // 12. Add and categorize OHM
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, polBunni, SupplyCategory.wrap("protocol-owned-liquidity"))
-        );
+        // 12. Categorize manual offset
+        
 
         // 13. Add and categorize WETH
         //      - liquid, volatile
