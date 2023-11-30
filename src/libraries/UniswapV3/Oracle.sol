@@ -26,7 +26,11 @@ library UniswapV3OracleHelper {
     /// @param pool_                  The address of the pool
     /// @param observationWindow_     The observation window
     /// @param minObservationWindow_  The minimum observation window
-    error UniswapV3OracleHelper_ObservationTooShort(address pool_, uint32 observationWindow_, uint32 minObservationWindow_);
+    error UniswapV3OracleHelper_ObservationTooShort(
+        address pool_,
+        uint32 observationWindow_,
+        uint32 minObservationWindow_
+    );
 
     /// @notice                     The observation window for `pool_` is invalid
     ///
@@ -65,11 +69,11 @@ library UniswapV3OracleHelper {
 
         // Ensure the observation window is long enough
         if (period_ < TWAP_MIN_OBSERVATION_WINDOW)
-        revert UniswapV3OracleHelper_ObservationTooShort(
-            pool_,
-            period_,
-            TWAP_MIN_OBSERVATION_WINDOW
-        );
+            revert UniswapV3OracleHelper_ObservationTooShort(
+                pool_,
+                period_,
+                TWAP_MIN_OBSERVATION_WINDOW
+            );
 
         // Get tick and liquidity from the TWAP
         uint32[] memory observationWindow = new uint32[](2);

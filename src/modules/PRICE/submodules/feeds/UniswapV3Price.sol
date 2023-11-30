@@ -4,8 +4,9 @@ pragma solidity 0.8.15;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // Libraries
-import {FullMath} from "libraries/FullMath.sol";
 import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.sol";
+import {Deviation} from "libraries/Deviation.sol";
+import {FullMath} from "libraries/FullMath.sol";
 
 // Uniswap V3
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
@@ -35,6 +36,7 @@ contract UniswapV3Price is PriceSubmodule {
     struct UniswapV3Params {
         IUniswapV3Pool pool;
         uint32 observationWindowSeconds;
+        uint16 maxDeviationBps;
     }
 
     /// @notice     The minimum tick that can be used in a pool, as defined by UniswapV3 libraries
@@ -162,7 +164,6 @@ contract UniswapV3Price is PriceSubmodule {
         return baseInQuotePrice.mulDiv(quoteInUsdPrice, 10 ** quoteTokenDecimals);
     }
 
-
     /// @notice                  Obtains the price of `lookupToken_` in USD, using the current Slot0 price from the specified Uniswap V3 oracle.
     /// @dev                     This function will revert if:
     ///                          - The current price differs from the TWAP by more than `maxDeviationBps_`
@@ -178,13 +179,11 @@ contract UniswapV3Price is PriceSubmodule {
     ///
     /// @param lookupToken_      The token to determine the price of.
     /// @param outputDecimals_   The number of decimals to return the price in
-    /// @param maxDeviationBps_  The number of decimals to return the price in
     /// @param params_           Pool parameters of type `UniswapV3Params`
     /// @return                  Price in the scale of `outputDecimals_`
     function getTokenPrice(
         address lookupToken_,
         uint8 outputDecimals_,
-        uint16 maxDeviationBps_,
         bytes calldata params_
     ) external view returns (uint256) {
         UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
@@ -204,7 +203,7 @@ contract UniswapV3Price is PriceSubmodule {
         );
 
         // Get the current price of the lookup token in terms of the quote token
-        (, int24 currentTick,,,,,) = params.pool.slot0();
+        (, int24 currentTick, , , , , ) = params.pool.slot0();
         uint256 baseInQuotePrice = OracleLibrary.getQuoteAtTick(
             currentTick,
             uint128(10 ** lookupTokenDecimals),
@@ -215,18 +214,14 @@ contract UniswapV3Price is PriceSubmodule {
         // Check if the absolute deviation between the lookup and reserves price differs by more than reservesDeviationBps
         // If so, the reserves may be manipulated
         if (
-            baseInQuotePrice <
-            (baseInQuoteTWAP * (DEVIATION_BASE - maxDeviationBps_)) /
-                DEVIATION_BASE ||
-            baseInQuotePrice >
-            (baseInQuoteTWAP * (DEVIATION_BASE + maxDeviationBps_)) /
-                DEVIATION_BASE
-        ) {
-            revert UniswapV3_PriceMismatch(
-                address(params.pool),
+            Deviation.isDeviating(
+                baseInQuotePrice,
                 baseInQuoteTWAP,
-                baseInQuotePrice
-            );
+                params.maxDeviationBps,
+                DEVIATION_BASE
+            )
+        ) {
+            revert UniswapV3_PriceMismatch(address(params.pool), baseInQuoteTWAP, baseInQuotePrice);
         }
 
         // Get the price of {quoteToken} in USD
@@ -256,8 +251,7 @@ contract UniswapV3Price is PriceSubmodule {
         uint8 outputDecimals_,
         IUniswapV3Pool pool_
     ) internal view returns (address, uint8, uint8) {
-        if (address(pool_) == address(0))
-            revert UniswapV3_ParamsPoolInvalid(0, address(pool_));
+        if (address(pool_) == address(0)) revert UniswapV3_ParamsPoolInvalid(0, address(pool_));
 
         try pool_.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
             // Do nothing
