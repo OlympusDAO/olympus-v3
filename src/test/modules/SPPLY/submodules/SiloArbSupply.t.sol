@@ -109,7 +109,7 @@ contract SiloArbSupplyTest is Test {
     // [X] getCollateralizedOhm
     // [X] getProtocolOwnedBorrowableOhm
     // [X] getProtocolOwnedLiquidityOhm
-    // [] getProtocolOwnedTreasuryOhm
+    // [X] getProtocolOwnedTreasuryOhm
     // [X] setCollateralizedOhm
     //  [X] not parent
     //  [X] success

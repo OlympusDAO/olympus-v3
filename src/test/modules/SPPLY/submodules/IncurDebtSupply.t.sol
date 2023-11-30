@@ -116,7 +116,7 @@ contract IncurDebtSupplyTest is Test {
     // [X] getCollateralizedOhm
     // [X] getProtocolOwnedBorrowableOhm
     // [X] getProtocolOwnedLiquidityOhm
-    // [] getProtocolOwnedTreasuryOhm
+    // [X] getProtocolOwnedTreasuryOhm
     // [X] setIncurDebt
     //  [X] not parent
     //  [X] address(0)

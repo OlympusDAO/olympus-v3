@@ -207,7 +207,7 @@ contract AuraBalancerSupplyTest is Test {
     //  [X] No aura pool defined
     //  [X] Aura pool/Balancer pool BPT balances + pool OHM balance
     //  [X] multiple pools
-    // [] getProtocolOwnedTreasuryOhm
+    // [X] getProtocolOwnedTreasuryOhm
     // [X] addPool
     //  [X] 0 address Balancer pool
     //  [X] 0 address Aura pool

@@ -125,7 +125,7 @@ contract SiloSupplyTest is Test {
     //  [X] supplied < borrowed
     //  [X] supplied == borrowed
     // [X] getProtocolOwnedLiquidityOhm
-    // [] getProtocolOwnedTreasuryOhm
+    // [X] getProtocolOwnedTreasuryOhm
     // [X] setSources
     //  [X] not parent
     //  [X] amo address

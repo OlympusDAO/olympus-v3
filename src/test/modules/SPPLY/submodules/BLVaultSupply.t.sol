@@ -110,7 +110,7 @@ contract BLVaultSupplyTest is Test {
     //  [X] multiple vault managers
     // [X] getProtocolOwnedBorrowableOhm
     // [X] getProtocolOwnedLiquidityOhm
-    // [] getProtocolOwnedTreasuryOhm
+    // [X] getProtocolOwnedTreasuryOhm
     // [X] addVaultManager
     //  [X] not parent
     //  [X] address(0)
