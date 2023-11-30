@@ -79,10 +79,7 @@ contract BunniSupply is SupplySubmodule {
     ///
     /// @param pool_                The address of the pool
     /// @param observationWindow_   The observation window
-    error BunniSupply_InvalidObservation(
-        address pool_,
-        uint32 observationWindow_
-    );
+    error BunniSupply_InvalidObservation(address pool_, uint32 observationWindow_);
 
     /// @notice                     The time-weighted tick is out of bounds
     ///
@@ -549,16 +546,11 @@ contract BunniSupply is SupplySubmodule {
             int56[] memory tickCumulatives,
             uint160[] memory
         ) {
-            timeWeightedTick =
-                (tickCumulatives[1] - tickCumulatives[0]) /
-                int32(period_);
+            timeWeightedTick = (tickCumulatives[1] - tickCumulatives[0]) / int32(period_);
         } catch (bytes memory) {
             // This function will revert if the observation window is longer than the oldest observation in the pool
             // https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/Oracle.sol#L226C30-L226C30
-            revert BunniSupply_InvalidObservation(
-                address(pool_),
-                period_
-            );
+            revert BunniSupply_InvalidObservation(address(pool_), period_);
         }
 
         // Ensure the time-weighted tick is within the bounds of permissible ticks
