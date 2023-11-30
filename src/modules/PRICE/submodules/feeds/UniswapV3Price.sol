@@ -86,6 +86,11 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param pool_            The address of the pool
     error UniswapV3_PoolTypeInvalid(address pool_);
 
+    /// @notice         Triggered if `pool_` is locked, which indicates re-entrancy
+    ///
+    /// @param pool_    The address of the affected Uniswap V3 pool
+    error UniswapV3_PoolReentrancy(address pool_);
+
     /// @notice                   The calculated pool price deviates from the TWAP by more than the maximum deviation.
     ///
     /// @param pool_              The address of the pool
@@ -203,7 +208,11 @@ contract UniswapV3Price is PriceSubmodule {
         );
 
         // Get the current price of the lookup token in terms of the quote token
-        (, int24 currentTick, , , , , ) = params.pool.slot0();
+        (, int24 currentTick, , , , , bool unlocked) = params.pool.slot0();
+
+        // Check for re-entrancy
+        if (unlocked == false) revert UniswapV3_PoolReentrancy(address(params.pool));
+        
         uint256 baseInQuotePrice = OracleLibrary.getQuoteAtTick(
             currentTick,
             uint128(10 ** lookupTokenDecimals),
