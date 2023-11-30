@@ -1315,7 +1315,7 @@ contract BunniManagerTest is Test {
 
         // Register the asset with SPPLY
         vm.prank(address(SPPLY));
-        supplySubmoduleBunni.addBunniToken(address(poolToken), address(bunniLens));
+        supplySubmoduleBunni.addBunniToken(address(poolToken), address(bunniLens), 100, 30);
 
         // Expect a revert
         _expectRevert_tokenActivated(address(pool), toKeycode("SPPLY"));
@@ -1491,6 +1491,8 @@ contract BunniManagerTest is Test {
         assertTrue(priceAsset.approved);
         // Check that the price is non-zero
         assertTrue(PRICE.getPrice(address(poolToken)) > 0);
+
+        // TODO mock TWAP, check for TWAP deviation
 
         // Check that the token is included in SPPLY metrics
         uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
