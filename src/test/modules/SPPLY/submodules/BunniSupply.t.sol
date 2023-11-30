@@ -341,8 +341,8 @@ contract BunniSupplyTest is Test {
     //  [X] single token
     //  [X] multiple tokens
     //  [X] reverts on TWAP deviation
-    //  [ ] respects observation window
-    //  [ ] respects deviation
+    //  [X] respects observation window
+    //  [X] respects deviation
 
     function test_getProtocolOwnedLiquidityOhm_noTokens() public {
         // Don't add the token
@@ -359,6 +359,78 @@ contract BunniSupplyTest is Test {
             TWAP_MAX_DEVIATION_BPS,
             TWAP_OBSERVATION_WINDOW
         );
+
+        // Determine the amount of OHM in the pool, which should be consistent with the lens value
+        uint256 ohmReserves = _getOhmReserves(poolTokenKey, bunniLens);
+
+        assertEq(submoduleBunniSupply.getProtocolOwnedLiquidityOhm(), ohmReserves);
+    }
+
+    function test_getProtocolOwnedLiquidityOhm_singleToken_observationWindow() public {
+        uint32 observationWindow = 60;
+
+        // Register one token
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            TWAP_MAX_DEVIATION_BPS,
+            observationWindow
+        );
+
+        // Determine the amount of reserves in the pool, which should be consistent with the lens value
+        (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
+        // 11421651 = 11.42 USD/OHM
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e18, 1e6).mulDiv(
+            1e18,
+            ohmReserves_.mulDiv(1e18, 1e9)
+        ); // Decimals: 18
+
+        // Calculate the expected TWAP price
+        int56 timeWeightedTick = (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) /
+            int32(observationWindow);
+        uint256 twapRatio = OracleLibrary
+            .getQuoteAtTick(
+                int24(timeWeightedTick),
+                uint128(10 ** 9), // token0 (OHM) decimals
+                ohmAddress,
+                usdcAddress
+            )
+            .mulDiv(1e18, 1e6); // Decimals: 18
+
+        // Set up revert
+        // Will revert as the TWAP deviates from the reserves ratio
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_PriceMismatch.selector,
+            address(uniswapPool),
+            twapRatio,
+            reservesRatio
+        );
+        vm.expectRevert(err);
+
+        // Call
+        submoduleBunniSupply.getProtocolOwnedLiquidityOhm();
+    }
+
+    function test_getProtocolOwnedLiquidityOhm_singleToken_deviationBps() public {
+        uint16 deviationBps = 1000; // 10%
+
+        // Register one token
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            deviationBps, // Wider deviation
+            TWAP_OBSERVATION_WINDOW
+        );
+
+        // Mock the pool returning a TWAP that would normally deviate enough to revert
+        int56 tickCumulative0_ = -2416639538393;
+        int56 tickCumulative1_ = -2416640880953;
+        int56[] memory tickCumulatives = new int56[](2);
+        tickCumulatives[0] = tickCumulative0_;
+        tickCumulatives[1] = tickCumulative1_;
+        uniswapPool.setTickCumulatives(tickCumulatives);
 
         // Determine the amount of OHM in the pool, which should be consistent with the lens value
         uint256 ohmReserves = _getOhmReserves(poolTokenKey, bunniLens);
@@ -455,7 +527,8 @@ contract BunniSupplyTest is Test {
         uniswapPool.setTickCumulatives(tickCumulatives);
 
         // Calculate the expected TWAP price
-        int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) / 30;
+        int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) /
+            int32(TWAP_OBSERVATION_WINDOW);
         uint256 twapRatio = OracleLibrary
             .getQuoteAtTick(
                 int24(timeWeightedTick),
@@ -486,8 +559,8 @@ contract BunniSupplyTest is Test {
     //  [X] single token
     //  [X] multiple tokens
     //  [X] reverts on TWAP deviation
-    //  [ ] respects observation window
-    //  [ ] respects deviation
+    //  [X] respects observation window
+    //  [X] respects deviation
 
     function test_getProtocolOwnedLiquidityReserves_noTokens() public {
         // Don't add the token
@@ -507,6 +580,89 @@ contract BunniSupplyTest is Test {
             TWAP_MAX_DEVIATION_BPS,
             TWAP_OBSERVATION_WINDOW
         );
+
+        // Determine the amount of reserves in the pool, which should be consistent with the lens value
+        (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleBunniSupply
+            .getProtocolOwnedLiquidityReserves();
+
+        assertEq(reserves.length, 1);
+
+        assertEq(reserves[0].source, poolTokenAddress);
+        assertEq(reserves[0].tokens.length, 2);
+        assertEq(reserves[0].tokens[0], ohmAddress);
+        assertEq(reserves[0].tokens[1], usdcAddress);
+        assertEq(reserves[0].balances.length, 2);
+        assertEq(reserves[0].balances[0], ohmReserves_);
+        assertEq(reserves[0].balances[1], usdcReserves_);
+    }
+
+    function test_getProtocolOwnedLiquidityReserves_singleToken_observationWindow() public {
+        uint32 observationWindow = 60;
+
+        // Register one token
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            TWAP_MAX_DEVIATION_BPS,
+            observationWindow
+        );
+
+        // Determine the amount of reserves in the pool, which should be consistent with the lens value
+        (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
+        // 11421651 = 11.42 USD/OHM
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e18, 1e6).mulDiv(
+            1e18,
+            ohmReserves_.mulDiv(1e18, 1e9)
+        ); // Decimals: 18
+
+        // Calculate the expected TWAP price
+        int56 timeWeightedTick = (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) /
+            int32(observationWindow);
+        uint256 twapRatio = OracleLibrary
+            .getQuoteAtTick(
+                int24(timeWeightedTick),
+                uint128(10 ** 9), // token0 (OHM) decimals
+                ohmAddress,
+                usdcAddress
+            )
+            .mulDiv(1e18, 1e6); // Decimals: 18
+
+        // Set up revert
+        // Will revert as the TWAP deviates from the reserves ratio
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_PriceMismatch.selector,
+            address(uniswapPool),
+            twapRatio,
+            reservesRatio
+        );
+        vm.expectRevert(err);
+
+        // Call
+        submoduleBunniSupply.getProtocolOwnedLiquidityReserves();
+    }
+
+    function test_getProtocolOwnedLiquidityReserves_singleToken_deviationBps() public {
+        uint16 deviationBps = 1000; // 10%
+
+        // Register one token
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            deviationBps, // Wider deviation
+            TWAP_OBSERVATION_WINDOW
+        );
+
+        // Mock the pool returning a TWAP that would normally deviate enough to revert
+        int56 tickCumulative0_ = -2416639538393;
+        int56 tickCumulative1_ = -2416640880953;
+        int56[] memory tickCumulatives = new int56[](2);
+        tickCumulatives[0] = tickCumulative0_;
+        tickCumulatives[1] = tickCumulative1_;
+        uniswapPool.setTickCumulatives(tickCumulatives);
 
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
@@ -632,7 +788,8 @@ contract BunniSupplyTest is Test {
         uniswapPool.setTickCumulatives(tickCumulatives);
 
         // Calculate the expected TWAP price
-        int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) / 30;
+        int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) /
+            int32(TWAP_OBSERVATION_WINDOW);
         uint256 twapRatio = OracleLibrary
             .getQuoteAtTick(
                 int24(timeWeightedTick),
