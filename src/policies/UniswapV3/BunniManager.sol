@@ -1085,6 +1085,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             revert BunniManager_TokenActivated(pool_, toKeycode("SPPLY"));
         }
 
+        // TODO add deviation and observation window parameters
+
         // Register the asset with SPPLY submodule
         SPPLY.execOnSubmodule(
             toSubKeycode("SPPLY.BNI"),

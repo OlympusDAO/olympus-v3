@@ -92,6 +92,9 @@ contract BunniSupplyTest is Test {
     bytes32 private constant WETH_SALT =
         0x0000000000000000000000000000000000000000000000000000000000000002;
 
+    uint16 internal constant TWAP_MAX_DEVIATION_BPS = 100; // 1%
+    uint56 internal constant TWAP_OBSERVATION_WINDOW = 30;
+
     // Events
     event BunniTokenAdded(address token_, address bunniLens_);
     event BunniTokenRemoved(address token_);
@@ -302,7 +305,7 @@ contract BunniSupplyTest is Test {
     function test_getCollateralizedOhm() public {
         // Register the pool with the submodule
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Will always be zero
         assertEq(submoduleBunniSupply.getCollateralizedOhm(), 0);
@@ -315,7 +318,7 @@ contract BunniSupplyTest is Test {
     function test_getProtocolOwnedBorrowableOhm() public {
         // Register the pool with the submodule
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Will always be zero
         assertEq(submoduleBunniSupply.getProtocolOwnedBorrowableOhm(), 0);
@@ -328,6 +331,8 @@ contract BunniSupplyTest is Test {
     //  [X] single token
     //  [X] multiple tokens
     //  [X] reverts on TWAP deviation
+    //  [ ] respects observation window
+    //  [ ] respects deviation
 
     function test_getProtocolOwnedLiquidityOhm_noTokens() public {
         // Don't add the token
@@ -338,7 +343,7 @@ contract BunniSupplyTest is Test {
     function test_getProtocolOwnedLiquidityOhm_singleToken() public {
         // Register one token
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Determine the amount of OHM in the pool, which should be consistent with the lens value
         uint256 ohmReserves = _getOhmReserves(poolTokenKey, bunniLens);
@@ -349,7 +354,7 @@ contract BunniSupplyTest is Test {
     function test_getProtocolOwnedLiquidityOhm_multipleToken() public {
         // Register one token
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Set up a second pool and token
         (, BunniKey memory poolTokenKeyTwo, BunniToken poolTokenTwo) = _setUpPool(
@@ -361,7 +366,7 @@ contract BunniSupplyTest is Test {
             OHM_WETH_TICK_CUMULATIVE_1
         );
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(address(poolTokenTwo), bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(address(poolTokenTwo), bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Determine the amount of OHM in the pool, which should be consistent with the lens value
         uint256 ohmReserves = _getOhmReserves(poolTokenKey, bunniLens);
@@ -377,7 +382,7 @@ contract BunniSupplyTest is Test {
     function test_getProtocolOwnedLiquidityOhm_reentrancyReverts() public {
         // Register one token
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Set the UniV3 pair to be locked, which indicates re-entrancy
         uniswapPool.setUnlocked(false);
@@ -396,7 +401,7 @@ contract BunniSupplyTest is Test {
     function test_getProtocolOwnedLiquidityOhm_twapDeviationReverts() public {
         // Register one token
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
@@ -449,6 +454,8 @@ contract BunniSupplyTest is Test {
     //  [X] single token
     //  [X] multiple tokens
     //  [X] reverts on TWAP deviation
+    //  [ ] respects observation window
+    //  [ ] respects deviation
 
     function test_getProtocolOwnedLiquidityReserves_noTokens() public {
         // Don't add the token
@@ -462,7 +469,7 @@ contract BunniSupplyTest is Test {
     function test_getProtocolOwnedLiquidityReserves_singleToken() public {
         // Register one token
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
@@ -484,7 +491,7 @@ contract BunniSupplyTest is Test {
     function test_getProtocolOwnedLiquidityReserves_multipleToken() public {
         // Register one token
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Set up a second pool and token
         (, BunniKey memory poolTokenKeyTwo, BunniToken poolTokenTwo) = _setUpPool(
@@ -496,7 +503,7 @@ contract BunniSupplyTest is Test {
             OHM_WETH_TICK_CUMULATIVE_1
         );
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(address(poolTokenTwo), bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(address(poolTokenTwo), bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
@@ -530,7 +537,7 @@ contract BunniSupplyTest is Test {
     function test_getProtocolOwnedLiquidityReserves_reentrancyReverts() public {
         // Register one token
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Set the UniV3 pair to be locked, which indicates re-entrancy
         uniswapPool.setUnlocked(false);
@@ -549,7 +556,7 @@ contract BunniSupplyTest is Test {
     function test_getProtocolOwnedLiquidityReserves_twapDeviationReverts() public {
         // Register one token
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
@@ -602,6 +609,8 @@ contract BunniSupplyTest is Test {
     //  [X] reverts if invalid token
     //  [X] reverts if invalid lens
     //  [X] reverts if token and lens hub addresses don't match
+    //  [X] reverts in TWAP deviation is invalid
+    //  [X] reverts if observation window is invalid
     //  [X] single token
     //  [X] multiple tokens, single lens
     //  [X] multiple tokens, multiple lenses
@@ -610,7 +619,7 @@ contract BunniSupplyTest is Test {
         bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(this));
         vm.expectRevert(err);
 
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
     }
 
     function test_addBunniToken_notParent_writer_reverts() public {
@@ -621,46 +630,46 @@ contract BunniSupplyTest is Test {
         vm.expectRevert(err);
 
         vm.prank(writer);
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
     }
 
     function test_addBunniToken_tokenAddressZero_reverts() public {
         _expectRevert_invalidBunniToken(address(0));
 
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(address(0), bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(address(0), bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
     }
 
     function test_addBunniToken_lensAddressZero_reverts() public {
         _expectRevert_invalidBunniLens(address(0));
 
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, address(0));
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, address(0), TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
     }
 
     function test_addBunniToken_alreadyAdded_reverts() public {
         // Register one token
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         _expectRevert_invalidBunniToken(poolTokenAddress);
 
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
     }
 
     function test_addBunniToken_invalidTokenReverts() public {
         _expectRevert_invalidBunniToken(ohmAddress);
 
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(ohmAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(ohmAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
     }
 
     function test_addBunniToken_invalidLensReverts() public {
         _expectRevert_invalidBunniLens(ohmAddress);
 
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, ohmAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, ohmAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
     }
 
     function test_addBunniToken_hubMismatchReverts() public {
@@ -683,7 +692,39 @@ contract BunniSupplyTest is Test {
         vm.expectRevert(err);
 
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, address(newBunniLens));
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, address(newBunniLens), TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
+    }
+
+    function test_addBunniToken_twapMaxDeviationOutOfBoundsReverts(uint256 twapMaxDeviationBps_) public {
+        uint16 twapMaxDeviationBps = uint16(bound(twapMaxDeviationBps_, 10001, type(uint16).max));
+
+        // Expect error
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidTwapMaxDeviationBps.selector,
+            address(bunniHub),
+            10000,
+            twapMaxDeviationBps
+        );
+        vm.expectRevert(err);
+
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, twapMaxDeviationBps, TWAP_OBSERVATION_WINDOW);
+    }
+
+    function test_addBunniToken_twapObservationWindowBelowMinimum(uint256 twapObservationWindow_) public {
+        uint56 twapObservationWindow = uint56(bound(twapObservationWindow_, 0, 18));
+
+        // Expect error
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidTwapObservationWindow.selector,
+            address(bunniHub),
+            19,
+            twapObservationWindow
+        );
+        vm.expectRevert(err);
+
+        vm.prank(address(moduleSupply));
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, twapObservationWindow);
     }
 
     function test_addBunniToken() public {
@@ -693,7 +734,7 @@ contract BunniSupplyTest is Test {
 
         // Add bunni token to BunniSupply
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Check that the token was added
         assertEq(address(submoduleBunniSupply.bunniTokens(0)), poolTokenAddress);
@@ -705,7 +746,7 @@ contract BunniSupplyTest is Test {
     function test_addBunniToken_multipleTokens_singleLens() public {
         // Add bunni token to BunniSupply
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Set up a second pool and token
         (, , BunniToken poolTokenTwo) = _setUpPool(
@@ -724,7 +765,7 @@ contract BunniSupplyTest is Test {
 
         // Add bunni token to BunniSupply
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenTwoAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenTwoAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Check that the token was added
         assertEq(address(submoduleBunniSupply.bunniTokens(0)), poolTokenAddress);
@@ -738,7 +779,7 @@ contract BunniSupplyTest is Test {
     function test_addBunniToken_multipleTokens_multipleLenses() public {
         // Add bunni token to BunniSupply
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Set up a second pool and token
         (, , BunniToken poolTokenTwo) = _setUpPool(
@@ -761,7 +802,7 @@ contract BunniSupplyTest is Test {
 
         // Add bunni token to BunniSupply
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenTwoAddress, bunniLensTwoAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenTwoAddress, bunniLensTwoAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Check that the token was added
         assertEq(address(submoduleBunniSupply.bunniTokens(0)), poolTokenAddress);
@@ -825,7 +866,7 @@ contract BunniSupplyTest is Test {
     function test_removeBunniToken() public {
         // Add bunni token to BunniSupply
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         vm.expectEmit(true, false, false, true);
         emit BunniTokenRemoved(poolTokenAddress);
@@ -843,7 +884,7 @@ contract BunniSupplyTest is Test {
     function test_removeBunniToken_multipleTokens_singleLens() public {
         // Add bunni token to BunniSupply
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Set up a second pool and token
         (, , BunniToken poolTokenTwo) = _setUpPool(
@@ -858,7 +899,7 @@ contract BunniSupplyTest is Test {
 
         // Add bunni token to BunniSupply
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenTwoAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenTwoAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Expect event
         vm.expectEmit(true, false, false, true);
@@ -878,7 +919,7 @@ contract BunniSupplyTest is Test {
     function test_removeBunniToken_multipleTokens_multipleLenses() public {
         // Add bunni token to BunniSupply
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Set up a second pool and token
         (, , BunniToken poolTokenTwo) = _setUpPool(
@@ -897,7 +938,7 @@ contract BunniSupplyTest is Test {
 
         // Add bunni token to BunniSupply
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenTwoAddress, bunniLensTwoAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenTwoAddress, bunniLensTwoAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Expect event
         vm.expectEmit(true, false, false, true);
@@ -924,7 +965,7 @@ contract BunniSupplyTest is Test {
     function test_hasBunniToken_addressZero() public {
         // Add bunni token to BunniSupply
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Call
         bool hasToken = submoduleBunniSupply.hasBunniToken(address(0));
@@ -946,7 +987,7 @@ contract BunniSupplyTest is Test {
     function test_hasBunniToken() public {
         // Add bunni token to BunniSupply
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Call
         bool hasToken = submoduleBunniSupply.hasBunniToken(poolTokenAddress);

@@ -41,6 +41,20 @@ contract BunniSupply is SupplySubmodule {
     /// @param lensHub_     The BunniHub address of the lens
     error BunniSupply_Params_HubMismatch(address tokenHub_, address lensHub_);
 
+    /// @notice                     The specified maximum deviation from the TWAP is invalid
+    ///
+    /// @param token_               The address of the token
+    /// @param maximumDeviationBps_ The maximum allowed value
+    /// @param actualDeviationBps_  The maximum deviation from the TWAP in basis points
+    error BunniSupply_Params_InvalidTwapMaxDeviationBps(address token_, uint16 maximumDeviationBps_, uint16 actualDeviationBps_);
+
+    /// @notice                             The specified observation window for the TWAP is invalid
+    ///
+    /// @param token_                       The address of the token
+    /// @param minimumObservationWindow_    The minimum value of the observation window
+    /// @param actualObservationWindow_     The actual value of the observation window
+    error BunniSupply_Params_InvalidTwapObservationWindow(address token_, uint56 minimumObservationWindow_, uint56 actualObservationWindow_);
+
     /// @notice                   The calculated pool price deviates from the TWAP by more than the maximum deviation.
     ///
     /// @param pool_              The address of the pool
@@ -82,8 +96,11 @@ contract BunniSupply is SupplySubmodule {
     /// @dev        Set at deployment-time
     address internal immutable ohm;
 
-    // TODO shift to addBunniToken parameter
-    uint16 internal constant MAX_RESERVE_DEVIATION = 100; // 1%
+    uint16 internal constant TWAP_MAX_DEVIATION_BASE = 10_000; // 100%
+
+    /// @notice     The minimum length of the TWAP observation window in seconds
+    ///             From testing, a value under 19 seconds is rejected by `OracleLibrary.getQuoteAtTick()`
+    uint56 internal constant TWAP_MIN_OBSERVATION_WINDOW = 19; // seconds
 
     /// @notice     Decimal scale used for internal comparisons
     uint256 internal constant DECIMAL_SCALE = 1e18;
@@ -227,22 +244,28 @@ contract BunniSupply is SupplySubmodule {
 
     // =========== ADMIN FUNCTIONS =========== //
 
-    /// @notice                 Adds a deployed BunniToken address to the list of monitored tokens
-    /// @dev                    Reverts if:
-    /// @dev                    - The address is the zero address
-    /// @dev                    - The address is already managed
-    /// @dev                    - The caller is not the parent module
-    /// @dev                    - `token_` does not adhere to the IBunniToken interface
-    /// @dev                    - `bunniLens_` does not adhere to the IBunniLens interface
-    /// @dev                    - `token_` and `bunniLens_` do not have the same BunniHub address
+    /// @notice                         Adds a deployed BunniToken address to the list of monitored tokens
+    /// @dev                            Reverts if:
+    /// @dev                            - The address is the zero address
+    /// @dev                            - The address is already managed
+    /// @dev                            - The caller is not the parent module
+    /// @dev                            - `token_` does not adhere to the IBunniToken interface
+    /// @dev                            - `bunniLens_` does not adhere to the IBunniLens interface
+    /// @dev                            - `token_` and `bunniLens_` do not have the same BunniHub address
     ///
-    /// @param token_           The address of the BunniToken contract
-    /// @param bunniLens_       The address of the BunniLens contract
-    function addBunniToken(address token_, address bunniLens_) external onlyParent {
+    /// @param token_                   The address of the BunniToken contract
+    /// @param bunniLens_               The address of the BunniLens contract
+    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP in basis points
+    /// @param twapObservationWindow_   The TWAP observation window in seconds
+    function addBunniToken(address token_, address bunniLens_, uint16 twapMaxDeviationBps_, uint56 twapObservationWindow_) external onlyParent {
         if (token_ == address(0) || _inTokenArray(token_))
             revert BunniSupply_Params_InvalidBunniToken(token_);
 
-        // TODO add observation window (seconds), deviation bps
+        if (twapMaxDeviationBps_ > TWAP_MAX_DEVIATION_BASE)
+            revert BunniSupply_Params_InvalidTwapMaxDeviationBps(token_, TWAP_MAX_DEVIATION_BASE, twapMaxDeviationBps_);
+
+        if (twapObservationWindow_ < TWAP_MIN_OBSERVATION_WINDOW)
+            revert BunniSupply_Params_InvalidTwapObservationWindow(token_, TWAP_MIN_OBSERVATION_WINDOW, twapObservationWindow_);
 
         if (bunniLens_ == address(0)) revert BunniSupply_Params_InvalidBunniLens(bunniLens_);
 

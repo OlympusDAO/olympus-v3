@@ -1315,7 +1315,7 @@ contract BunniManagerTest is Test {
 
         // Register the asset with SPPLY
         vm.prank(address(SPPLY));
-        supplySubmoduleBunni.addBunniToken(address(poolToken), address(bunniLens));
+        supplySubmoduleBunni.addBunniToken(address(poolToken), address(bunniLens), 100, 30);
 
         // Expect a revert
         _expectRevert_tokenActivated(address(pool), toKeycode("SPPLY"));
