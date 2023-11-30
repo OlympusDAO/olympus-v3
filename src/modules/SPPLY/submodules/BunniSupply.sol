@@ -43,16 +43,15 @@ contract BunniSupply is SupplySubmodule {
     /// @param lensHub_     The BunniHub address of the lens
     error BunniSupply_Params_HubMismatch(address tokenHub_, address lensHub_);
 
-    /// @notice                     The deviation between the reserves and TWAP is too high
-    /// @notice                     This indicates that the pool reserves have been manipulated
+    /// @notice                   The calculated pool price deviates from the TWAP by more than the maximum deviation.
     ///
-    /// @param token_               The address of the token
-    /// @param reservesTokenRatio_  The ratio of token0 to token1 from the position reserves
-    /// @param twapTokenRatio_      The ratio of token0 to token1 from the TWAP
-    error BunniSupply_ReserveDeviation(
-        address token_,
-        uint256 reservesTokenRatio_,
-        uint256 twapTokenRatio_
+    /// @param pool_              The address of the pool
+    /// @param baseInQuoteTWAP_   The calculated TWAP price in terms of the quote token
+    /// @param baseInQuotePrice_  The calculated current price in terms of the quote token
+    error BunniSupply_PriceMismatch(
+        address pool_,
+        uint256 baseInQuoteTWAP_,
+        uint256 baseInQuotePrice_
     );
 
     // ========== EVENTS ========== //
@@ -398,10 +397,10 @@ contract BunniSupply is SupplySubmodule {
         if (
             Deviation.isDeviating(reservesTokenRatio, twapTokenRatio, MAX_RESERVE_DEVIATION, 10000)
         ) {
-            revert BunniSupply_ReserveDeviation(
+            revert BunniSupply_PriceMismatch(
                 address(key_.pool),
-                reservesTokenRatio,
-                twapTokenRatio
+                twapTokenRatio,
+                reservesTokenRatio
             );
         }
     }

@@ -408,7 +408,7 @@ contract BunniSupplyTest is Test {
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
         // 11421651 = 11.42 USD/OHM
-        uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // Decimals: 6 (USDC)
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e18, 1e6).mulDiv(1e18, ohmReserves_.mulDiv(1e18, 1e9)); // Decimals: 18
 
         // Get the tick
         int24 currentTick = TickMath.getTickAtSqrtRatio(OHM_USDC_SQRTPRICEX96);
@@ -422,11 +422,21 @@ contract BunniSupplyTest is Test {
         tickCumulatives[1] = tickCumulative1_;
         uniswapPool.setTickCumulatives(tickCumulatives);
 
+        // Calculate the expected TWAP price
+        int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) / 30;
+        uint256 twapRatio = OracleLibrary.getQuoteAtTick(
+            int24(timeWeightedTick),
+            uint128(10 ** 9), // token0 (OHM) decimals
+            ohmAddress,
+            usdcAddress
+        ).mulDiv(1e18, 1e6); // Decimals: 18
+
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
         bytes memory err = abi.encodeWithSelector(
-            BunniSupply.BunniSupply_ReserveDeviation.selector,
-            address(poolTokenAddress),
+            BunniSupply.BunniSupply_PriceMismatch.selector,
+            address(uniswapPool),
+            twapRatio,
             reservesRatio
         );
         vm.expectRevert(err);
@@ -547,7 +557,7 @@ contract BunniSupplyTest is Test {
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
         // 11421651 = 11.42 USD/OHM
-        uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // Decimals: 6 (USDC)
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e18, 1e6).mulDiv(1e18, ohmReserves_.mulDiv(1e18, 1e9)); // Decimals: 18
 
         // Mock the pool returning a TWAP that deviates enough to revert
         int56 tickCumulative0_ = -2416639538393;
@@ -557,11 +567,21 @@ contract BunniSupplyTest is Test {
         tickCumulatives[1] = tickCumulative1_;
         uniswapPool.setTickCumulatives(tickCumulatives);
 
+        // Calculate the expected TWAP price
+        int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) / 30;
+        uint256 twapRatio = OracleLibrary.getQuoteAtTick(
+            int24(timeWeightedTick),
+            uint128(10 ** 9), // token0 (OHM) decimals
+            ohmAddress,
+            usdcAddress
+        ).mulDiv(1e18, 1e6); // Decimals: 18
+
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
         bytes memory err = abi.encodeWithSelector(
-            BunniSupply.BunniSupply_ReserveDeviation.selector,
-            address(poolTokenAddress),
+            BunniSupply.BunniSupply_PriceMismatch.selector,
+            address(uniswapPool),
+            twapRatio,
             reservesRatio
         );
         vm.expectRevert(err);
