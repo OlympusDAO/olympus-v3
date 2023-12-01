@@ -766,7 +766,7 @@ contract UniswapV3PriceTest is Test {
         assertEq(price, 6074476658258328000);
     }
 
-    function testRevert_getTokenPrice_tokenDecimalsSame() public {
+    function testRevert_getTokenPrice_deviationOutOfBounds() public {
         // Mock the UNI-wETH pool
         mockUniPair.setToken0(UNI);
         mockUniPair.setToken1(WETH);
@@ -813,7 +813,7 @@ contract UniswapV3PriceTest is Test {
             UniswapV3Price.UniswapV3_PriceMismatch.selector,
             address(mockUniPair),
             4049651105505552, // TWAP price in ETH terms
-            4008556656876033  // Slot0 price in ETH terms
+            4008556656876033 // Slot0 price in ETH terms
         );
         vm.expectRevert(err);
         uniSubmodule.getTokenPrice(UNI, PRICE_DECIMALS, params);
