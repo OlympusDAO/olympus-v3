@@ -220,8 +220,8 @@ contract OlympusDeploy is Script {
 
         // Bophades contracts
         kernel = Kernel(envAddress("olympus.Kernel"));
-        PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPrice"));
-        RANGE = OlympusRange(envAddress("olympus.modules.OlympusRange"));
+        PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPriceV2"));
+        RANGE = OlympusRange(envAddress("olympus.modules.OlympusRangeV2"));
         TRSRY = OlympusTreasury(envAddress("olympus.modules.OlympusTreasury"));
         MINTR = OlympusMinter(envAddress("olympus.modules.OlympusMinter"));
         INSTR = OlympusInstructions(envAddress("olympus.modules.OlympusInstructions"));
