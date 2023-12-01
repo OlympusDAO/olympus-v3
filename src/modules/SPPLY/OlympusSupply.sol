@@ -16,10 +16,11 @@ contract OlympusSupply is SPPLYv1 {
     // ========== STATE VARIABLES ========== //
 
     /// @notice        Submodule selectors providing metrics
-    bytes4[3] internal SUPPLY_SUBMODULE_METRIC_SELECTORS = [
+    bytes4[4] internal SUPPLY_SUBMODULE_METRIC_SELECTORS = [
         SupplySubmodule.getCollateralizedOhm.selector,
         SupplySubmodule.getProtocolOwnedBorrowableOhm.selector,
-        SupplySubmodule.getProtocolOwnedLiquidityOhm.selector
+        SupplySubmodule.getProtocolOwnedLiquidityOhm.selector,
+        SupplySubmodule.getProtocolOwnedTreasuryOhm.selector
     ];
 
     /// @notice        Submodule selectors providing reserve records
