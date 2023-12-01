@@ -18,6 +18,9 @@ import {IVault, IBasePool, IBalancerHelper} from "policies/BoostedLiquidity/inte
 // Aura
 import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
+// Cooler Loans
+import {CoolerFactory, Cooler} from "cooler/CoolerFactory.sol";
+
 import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
@@ -26,6 +29,7 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusInstructions} from "modules/INSTR/OlympusInstructions.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
+import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
@@ -45,6 +49,7 @@ import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
+import {Clearinghouse} from "policies/Clearinghouse.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
@@ -69,6 +74,7 @@ contract OlympusDeploy is Script {
     OlympusInstructions public INSTR;
     OlympusRoles public ROLES;
     OlympusBoostedLiquidityRegistry public BLREG;
+    OlympusClearinghouseRegistry public CHREG;
 
     /// Policies
     Operator public operator;
@@ -87,11 +93,13 @@ contract OlympusDeploy is Script {
     BLVaultManagerLusd public lusdVaultManager;
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
+    Clearinghouse public clearinghouse;
 
     /// Construction variables
 
     /// Token addresses
     ERC20 public ohm;
+    ERC20 public gohm;
     ERC20 public reserve;
     ERC4626 public wrappedReserve;
     ERC20 public wsteth;
@@ -128,6 +136,9 @@ contract OlympusDeploy is Script {
     IAuraRewardPool public ohmWstethRewardsPool;
     IAuraRewardPool public ohmLusdRewardsPool;
 
+    // Cooler Loan contracts
+    CoolerFactory public coolerFactory;
+
     // Deploy system storage
     string public chain;
     string public env;
@@ -136,7 +147,7 @@ contract OlympusDeploy is Script {
     string[] public deployments;
     mapping(string => address) public deployedTo;
 
-    function _setUp(string calldata chain_, string calldata deployFilePath) internal {
+    function _setUp(string calldata chain_, string calldata deployFilePath_) internal {
         chain = chain_;
 
         // Setup contract -> selector mappings
@@ -148,6 +159,7 @@ contract OlympusDeploy is Script {
         selectorMap["OlympusBoostedLiquidityRegistry"] = this
             ._deployBoostedLiquidityRegistry
             .selector;
+        selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["Operator"] = this._deployOperator.selector;
         selectorMap["OlympusHeart"] = this._deployHeart.selector;
         selectorMap["BondCallback"] = this._deployBondCallback.selector;
@@ -164,17 +176,20 @@ contract OlympusDeploy is Script {
         selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
+        selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
 
         // Load environment addresses
         env = vm.readFile("./src/scripts/env.json");
 
         // Non-bophades contracts
         ohm = ERC20(envAddress("olympus.legacy.OHM"));
+        gohm = ERC20(envAddress("olympus.legacy.gOHM"));
         reserve = ERC20(envAddress("external.tokens.DAI"));
         wrappedReserve = ERC4626(envAddress("external.tokens.sDAI"));
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
         aura = ERC20(envAddress("external.tokens.AURA"));
         bal = ERC20(envAddress("external.tokens.BAL"));
+        wrappedReserve = ERC4626(envAddress("external.tokens.sDAI"));
         bondAuctioneer = IBondSDA(envAddress("external.bond-protocol.BondFixedTermAuctioneer"));
         bondFixedExpiryAuctioneer = IBondSDA(
             envAddress("external.bond-protocol.BondFixedExpiryAuctioneer")
@@ -201,6 +216,7 @@ contract OlympusDeploy is Script {
         auraMiningLib = IAuraMiningLib(envAddress("external.aura.AuraMiningLib"));
         ohmWstethRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmWstethRewardsPool"));
         ohmLusdRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmLusdRewardsPool"));
+        coolerFactory = CoolerFactory(envAddress("external.cooler.CoolerFactory"));
 
         // Bophades contracts
         kernel = Kernel(envAddress("olympus.Kernel"));
@@ -229,20 +245,23 @@ contract OlympusDeploy is Script {
         bridge = CrossChainBridge(envAddress("olympus.policies.CrossChainBridge"));
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
+        clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
 
         // Load deployment data
-        string memory data = vm.readFile(deployFilePath);
+        string memory data = vm.readFile(deployFilePath_);
 
         // Parse deployment sequence and names
-        string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
-        uint256 len = names.length;
+        bytes[] memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes[]));
+        uint256 len = sequence.length;
+        console2.log("Contracts to be deployed:", len);
 
-        // Iterate through deployment sequence and set deployment args
-        for (uint256 i = 0; i < len; i++) {
-            string memory name = names[i];
+        if (len == 0) {
+            return;
+        } else if (len == 1) {
+            // Only one deployment
+            string memory name = abi.decode(data.parseRaw(".sequence..name"), (string));
             deployments.push(name);
             console2.log("Deploying", name);
-
             // Parse and store args if not kernel
             // Note: constructor args need to be provided in alphabetical order
             // due to changes with forge-std or a struct needs to be used
@@ -251,6 +270,23 @@ contract OlympusDeploy is Script {
                     string.concat(".sequence[?(@.name == '", name, "')].args")
                 );
             }
+        } else {
+            // More than one deployment
+            string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
+            for (uint256 i = 0; i < len; i++) {
+                string memory name = names[i];
+                deployments.push(name);
+                console2.log("Deploying", name);
+
+                // Parse and store args if not kernel
+                // Note: constructor args need to be provided in alphabetical order
+                // due to changes with forge-std or a struct needs to be used
+                if (keccak256(bytes(name)) != keccak256(bytes("Kernel"))) {
+                    argsMap[name] = data.parseRaw(
+                        string.concat(".sequence[?(@.name == '", name, "')].args")
+                    );
+                }
+            }
         }
     }
 
@@ -258,28 +294,9 @@ contract OlympusDeploy is Script {
         return env.readAddress(string.concat(".current.", chain, ".", key_));
     }
 
-    /// @dev Installs, upgrades, activations, and deactivations as well as access control settings must be done via olymsig batches since DAO MS is multisig executor on mainnet
-    /// @dev If we can get multisig batch functionality in foundry, then we can add to these scripts
-    // function _installModule(Module module_) internal {
-    //     // Check if module is installed on the kernel and determine which type of install to use
-    //     vm.startBroadcast();
-    //     if (address(kernel.getModuleForKeycode(module_.KEYCODE())) != address(0)) {
-    //         kernel.executeAction(Actions.UpgradeModule, address(module_));
-    //     } else {
-    //         kernel.executeAction(Actions.InstallModule, address(module_));
-    //     }
-    //     vm.stopBroadcast();
-    // }
-
-    // function _activatePolicy(Policy policy_) internal {
-    //     // Check if policy is activated on the kernel and determine which type of activation to use
-    //     vm.broadcast();
-    //     kernel.executeAction(Actions.ActivatePolicy, address(policy_));
-    // }
-
-    function deploy(string calldata chain_, string calldata deployFilePath) external {
+    function deploy(string calldata chain_, string calldata deployFilePath_) external {
         // Setup
-        _setUp(chain_, deployFilePath);
+        _setUp(chain_, deployFilePath_);
 
         // Check that deployments is not empty
         uint256 len = deployments.length;
@@ -793,6 +810,44 @@ contract OlympusDeploy is Script {
         console2.log("Bridge deployed at:", address(bridge));
 
         return address(bridge);
+    }
+
+    function _deployClearinghouse(bytes memory args) public returns (address) {
+        if (address(coolerFactory) == address(0)) {
+            // Deploy a new Cooler Factory implementation
+            vm.broadcast();
+            coolerFactory = new CoolerFactory();
+            console2.log("Cooler Factory deployed at:", address(coolerFactory));
+        } else {
+            // Use the input Cooler Factory implmentation
+            console2.log("Input Factory Implementation:", address(coolerFactory));
+        }
+
+        // Deploy Clearinghouse policy
+        vm.broadcast();
+        clearinghouse = new Clearinghouse({
+            ohm_: address(ohm),
+            gohm_: address(gohm),
+            staking_: address(staking),
+            sdai_: address(wrappedReserve),
+            coolerFactory_: address(coolerFactory),
+            kernel_: address(kernel)
+        });
+        console2.log("Clearinghouse deployed at:", address(clearinghouse));
+
+        return address(clearinghouse);
+    }
+
+    function _deployClearinghouseRegistry(bytes calldata args) public returns (address) {
+        // Necessary to truncate the first word (32 bytes) of args due to a potential bug in the JSON parser.
+        address[] memory inactive = abi.decode(args[32:], (address[]));
+
+        // Deploy Clearinghouse Registry module
+        vm.broadcast();
+        CHREG = new OlympusClearinghouseRegistry(kernel, address(clearinghouse), inactive);
+        console2.log("CHREG deployed at:", address(CHREG));
+
+        return address(CHREG);
     }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
