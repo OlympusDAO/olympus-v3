@@ -393,3 +393,11 @@ Pre-configured `solhint` and `prettier-plugin-solidity`. Can be run by
 ```sh
 pnpm run lint
 ```
+
+### Code Metrics
+
+Code metrics have been calculated using the following command:
+
+```shell
+pnpm run metrics src/modules/PRICE/submodules/feeds/BunniPrice.sol src/modules/SPPLY/submodules/BunniSupply.sol src/scripts/deploy/DeployV2.sol src/policies/OCA/**.sol src/policies/RBS/**.sol src/policies/UniswapV3/BunniManager.sol src/policies/Bonds/**.sol src/modules/RANGE/**.sol --exclude=src/policies/RBS/PriceConfig.sol --exclude=src/modules/RANGE/RANGE.v1.sol
+```

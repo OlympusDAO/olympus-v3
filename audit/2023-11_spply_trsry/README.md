@@ -231,3 +231,11 @@ Pre-configured `solhint` and `prettier-plugin-solidity`. Can be run by
 ```sh
 pnpm run lint
 ```
+
+### Code Metrics
+
+Code metrics have been calculated using the following command:
+
+```shell
+pnpm run metrics src/modules/SPPLY/**/*.sol src/modules/TRSRY/**/*.sol src/libraries/Deviation.sol src/libraries/UniswapV3/BunniHelper.sol src/libraries/UniswapV3/Oracle.sol
+```
