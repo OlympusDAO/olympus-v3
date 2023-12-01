@@ -8,12 +8,12 @@ Use `pnpm run build` to refresh deps.
 
 This requires the following to be installed:
 
-- jq: `brew install jq`
-- foundry: [instructions](https://book.getfoundry.sh/getting-started/installation)
+-   jq: `brew install jq`
+-   foundry: [instructions](https://book.getfoundry.sh/getting-started/installation)
 
 ### Local Dependencies
 
-- Use `npm run build` to install all project dependencies
+-   Use `npm run build` to install all project dependencies
 
 ### Environment Variables
 
@@ -50,10 +50,10 @@ Up-to-date addresses of all the deployments can be found in:
 
 #### Privileged Testnet Accounts (Multi-sigs)
 
-- Executor - 0x84C0C005cF574D0e5C602EA7b366aE9c707381E0
-- Guardian - 0x84C0C005cF574D0e5C602EA7b366aE9c707381E0
-- Policy - 0x3dC18017cf8d8F4219dB7A8B93315fEC2d15B8a7
-- Emergency - 0x3dC18017cf8d8F4219dB7A8B93315fEC2d15B8a7
+-   Executor - 0x84C0C005cF574D0e5C602EA7b366aE9c707381E0
+-   Guardian - 0x84C0C005cF574D0e5C602EA7b366aE9c707381E0
+-   Policy - 0x3dC18017cf8d8F4219dB7A8B93315fEC2d15B8a7
+-   Emergency - 0x3dC18017cf8d8F4219dB7A8B93315fEC2d15B8a7
 
 ## Documentation
 
@@ -134,6 +134,6 @@ Sometimes the automatic etherscan verification fails when deploying a contract. 
 
 ## Boosted Liquidity Vault Setup
 
-- Deploy any dependencies (if on testnet)
-- Deploy BLV contracts
-- Activate BLV contracts with the BLV registry (using an olymsig script)
+-   Deploy any dependencies (if on testnet)
+-   Deploy BLV contracts
+-   Activate BLV contracts with the BLV registry (using an olymsig script)
