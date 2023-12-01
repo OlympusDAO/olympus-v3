@@ -149,7 +149,6 @@ contract OlympusDeploy is Script {
 
     function _setUp(string calldata chain_, string calldata deployFilePath_) internal {
         chain = chain_;
-        deployFilePath = deployFilePath_;
 
         // Setup contract -> selector mappings
         selectorMap["OlympusPrice"] = this._deployPrice.selector;
@@ -249,7 +248,7 @@ contract OlympusDeploy is Script {
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
 
         // Load deployment data
-        string memory data = vm.readFile(deployFilePath);
+        string memory data = vm.readFile(deployFilePath_);
 
         // Parse deployment sequence and names
         bytes[] memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes[]));
