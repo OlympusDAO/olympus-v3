@@ -40,6 +40,7 @@ contract SentimentArbSupplyTest is Test {
     uint256 internal constant COLLATERALIZED_OHM = 1e9;
     uint256 internal constant PROTOCOL_OWNED_BORROWABLE_OHM = 2e9;
     uint256 internal constant PROTOCOL_OWNED_LIQUIDITY_OHM = 3e9;
+    uint256 internal constant PROTOCOL_OWNED_TREASURY_OHM = 0;
 
     event CollateralizedValueUpdated(uint256 value);
     event ProtocolOwnedBorrowableValueUpdated(uint256 value);
@@ -79,7 +80,8 @@ contract SentimentArbSupplyTest is Test {
                 moduleSupply,
                 COLLATERALIZED_OHM,
                 PROTOCOL_OWNED_BORROWABLE_OHM,
-                PROTOCOL_OWNED_LIQUIDITY_OHM
+                PROTOCOL_OWNED_LIQUIDITY_OHM,
+                PROTOCOL_OWNED_TREASURY_OHM
             );
         }
 
@@ -107,6 +109,7 @@ contract SentimentArbSupplyTest is Test {
     // [X] getCollateralizedOhm
     // [X] getProtocolOwnedBorrowableOhm
     // [X] getProtocolOwnedLiquidityOhm
+    // [X] getProtocolOwnedTreasuryOhm
     // [X] setCollateralizedOhm
     //  [X] not parent
     //  [X] success
@@ -150,7 +153,8 @@ contract SentimentArbSupplyTest is Test {
             Module(newLocations[0]),
             COLLATERALIZED_OHM,
             PROTOCOL_OWNED_BORROWABLE_OHM,
-            PROTOCOL_OWNED_LIQUIDITY_OHM
+            PROTOCOL_OWNED_LIQUIDITY_OHM,
+            PROTOCOL_OWNED_TREASURY_OHM
         );
     }
 
@@ -165,7 +169,8 @@ contract SentimentArbSupplyTest is Test {
             modulePrice,
             COLLATERALIZED_OHM,
             PROTOCOL_OWNED_BORROWABLE_OHM,
-            PROTOCOL_OWNED_LIQUIDITY_OHM
+            PROTOCOL_OWNED_LIQUIDITY_OHM,
+            PROTOCOL_OWNED_TREASURY_OHM
         );
     }
 
@@ -182,7 +187,8 @@ contract SentimentArbSupplyTest is Test {
             moduleSupply,
             COLLATERALIZED_OHM,
             PROTOCOL_OWNED_BORROWABLE_OHM,
-            PROTOCOL_OWNED_LIQUIDITY_OHM
+            PROTOCOL_OWNED_LIQUIDITY_OHM,
+            PROTOCOL_OWNED_TREASURY_OHM
         );
         vm.stopPrank();
 
@@ -210,6 +216,15 @@ contract SentimentArbSupplyTest is Test {
         assertEq(
             submoduleSentimentArbSupply.getProtocolOwnedLiquidityOhm(),
             PROTOCOL_OWNED_LIQUIDITY_OHM
+        );
+    }
+
+    // =========  getProtocolOwnedTreasuryOhm  ========= //
+
+    function test_getProtocolOwnedTreasuryOhm() public {
+        assertEq(
+            submoduleSentimentArbSupply.getProtocolOwnedTreasuryOhm(),
+            PROTOCOL_OWNED_TREASURY_OHM
         );
     }
 

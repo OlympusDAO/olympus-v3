@@ -126,6 +126,12 @@ contract BunniSupply is SupplySubmodule {
     }
 
     /// @inheritdoc SupplySubmodule
+    function getProtocolOwnedTreasuryOhm() external pure override returns (uint256) {
+        // POTO is always zero for BunniTokens
+        return 0;
+    }
+
+    /// @inheritdoc SupplySubmodule
     /// @dev        Returns the total of OHM and non-OHM reserves in the submodule
     ///
     /// @dev        This function accesses the reserves of the registered

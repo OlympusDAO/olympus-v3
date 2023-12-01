@@ -110,6 +110,7 @@ contract BLVaultSupplyTest is Test {
     //  [X] multiple vault managers
     // [X] getProtocolOwnedBorrowableOhm
     // [X] getProtocolOwnedLiquidityOhm
+    // [X] getProtocolOwnedTreasuryOhm
     // [X] addVaultManager
     //  [X] not parent
     //  [X] address(0)
@@ -256,6 +257,15 @@ contract BLVaultSupplyTest is Test {
         vaultManagers[0].setPoolOhmShare(poolOhmShare);
 
         assertEq(submoduleBLVaultSupply.getProtocolOwnedLiquidityOhm(), 0);
+    }
+
+    // =========  getProtocolOwnedTreasuryOhm  ========= //
+
+    function test_getProtocolOwnedTreasuryOhm_fuzz(uint256 poolOhmShare_) public {
+        uint256 poolOhmShare = bound(poolOhmShare_, 0, 1000e9);
+        vaultManagers[0].setPoolOhmShare(poolOhmShare);
+
+        assertEq(submoduleBLVaultSupply.getProtocolOwnedTreasuryOhm(), 0);
     }
 
     // =========  getProtocolOwnedLiquidityReserves ========= //

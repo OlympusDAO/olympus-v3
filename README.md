@@ -37,6 +37,10 @@ Add `FORK_TEST_RPC_URL`, `ETH_MAINNET_RPC_URL` and `POLYGON_MAINNET_RPC_URL` to 
 ├─ test - "General test utilities and mocks/larps"
 ```
 
+### Function Selectors
+
+If the hexadecimal version of a function selector is required (e.g. see `OlympusSupply.sol`), the following Replit can be used to generate it: [https://replit.com/@0xJem/SolidityFunctionSelector?v=1](https://replit.com/@0xJem/SolidityFunctionSelector?v=1)
+
 ## Deployments
 
 Up-to-date addresses of all the deployments can be found in:

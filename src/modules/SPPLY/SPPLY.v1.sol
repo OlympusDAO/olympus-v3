@@ -343,6 +343,9 @@ abstract contract SupplySubmodule is Submodule {
     /// @return     Quantity in the configured decimals
     function getProtocolOwnedLiquidityOhm() external view virtual returns (uint256);
 
+    /// @notice     OHM in arbitrary locations that is owned by the protocol
+    function getProtocolOwnedTreasuryOhm() external view virtual returns (uint256);
+
     /// @notice     Details of Protocol-Owned Liquidity Reserves in the assets monitored by the submodule
     /// @notice     This provides the details of OHM and non-OHM reserves in the submodule,
     /// @notice     and can be used to determine the market and backing value of a category.

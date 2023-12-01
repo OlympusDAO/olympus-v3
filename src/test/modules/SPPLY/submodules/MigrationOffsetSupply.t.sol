@@ -98,7 +98,7 @@ contract MigrationOffsetSupplyTest is Test {
     // [X] Constructor
     //  [X] Incorrect parent
     //  [X] Success
-    // [X] getCollateralizedOhm
+    // [X] getProtocolOwnedTreasuryOhm
     // [X] getProtocolOwnedBorrowableOhm
     // [X] getProtocolOwnedLiquidityOhm
     // [X] setGOhmOffset
@@ -162,15 +162,15 @@ contract MigrationOffsetSupplyTest is Test {
         assertEq(submoduleMigrationOffsetSupply.gOhmOffset(), 2e18);
     }
 
-    // =========  getCollateralizedOhm ========= //
+    // =========  getProtocolOwnedTreasuryOhm ========= //
 
-    function test_getCollateralizedOhm() public {
+    function test_getProtocolOwnedTreasuryOhm() public {
         uint256 expectedOffset = GOHM_OFFSET.mulDiv(GOHM_INDEX, 1e18); // Scale: 9 decimals
 
-        assertEq(submoduleMigrationOffsetSupply.getCollateralizedOhm(), expectedOffset);
+        assertEq(submoduleMigrationOffsetSupply.getProtocolOwnedTreasuryOhm(), expectedOffset);
     }
 
-    function test_getCollateralizedOhm_fuzz(uint256 gOhmOffset_) public {
+    function test_getProtocolOwnedTreasuryOhm_fuzz(uint256 gOhmOffset_) public {
         uint256 gOhmOffset = bound(gOhmOffset_, 1e18, 20e18);
         vm.startPrank(address(moduleSupply));
         submoduleMigrationOffsetSupply.setGOhmOffset(gOhmOffset);
@@ -178,7 +178,7 @@ contract MigrationOffsetSupplyTest is Test {
 
         uint256 expectedOffset = gOhmOffset.mulDiv(GOHM_INDEX, 1e18); // Scale: 9 decimals
 
-        assertEq(submoduleMigrationOffsetSupply.getCollateralizedOhm(), expectedOffset);
+        assertEq(submoduleMigrationOffsetSupply.getProtocolOwnedTreasuryOhm(), expectedOffset);
     }
 
     // =========  getProtocolOwnedBorrowableOhm ========= //
