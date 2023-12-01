@@ -35,7 +35,11 @@ import "src/Kernel.sol";
 
 /// @title  BunniManager
 /// @author 0xJem
-/// @notice Bophades policy to manage UniswapV3 positions.
+/// @notice Bophades policy to manage UniswapV3 positions
+/// @dev    The policy is required as Uniswap V3 positions are not ERC20-compatible,
+/// @dev    and the TRSRY module is unable to custody them. This policy uses the Bunni framework
+/// @dev    to deploy ERC20-compatible tokens that represent the Uniswap V3 positions.
+///
 /// @dev    This policy is paired with a BunniHub instance to manage the lifecycle of BunniTokens.
 ///
 /// @dev    Most of the functions are permissioned and require the "bunni_admin" role.

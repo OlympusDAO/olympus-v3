@@ -5,7 +5,7 @@ import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 
 /// @title  IBunniManager
 /// @author 0xJem
-/// @notice Bophades policy to manage UniswapV3 positions.
+/// @notice Bophades policy to manage Uniswap V3 positions
 interface IBunniManager {
     // =========  EVENTS ========= //
 
