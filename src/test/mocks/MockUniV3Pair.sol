@@ -2,9 +2,11 @@
 pragma solidity 0.8.15;
 
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
 contract MockUniV3Pair is IUniswapV3Pool {
     uint160 internal _sqrtPrice;
+    int24 internal _tick;
     address internal _token0;
     address internal _token1;
     int56[] internal _tickCumulatives;
@@ -16,6 +18,12 @@ contract MockUniV3Pair is IUniswapV3Pool {
 
     function setSqrtPrice(uint160 sqrtPrice_) public {
         _sqrtPrice = sqrtPrice_;
+        _tick = TickMath.getTickAtSqrtRatio(sqrtPrice_);
+    }
+
+    function setTick(int24 tick_) public {
+        _tick = tick_;
+        _sqrtPrice = TickMath.getSqrtRatioAtTick(tick_);
     }
 
     function setToken0(address token_) public {
@@ -53,7 +61,7 @@ contract MockUniV3Pair is IUniswapV3Pool {
             bool unlocked
         )
     {
-        return (_sqrtPrice, 0, 0, 0, 0, 0, _unlocked);
+        return (_sqrtPrice, _tick, 0, 0, 0, 0, _unlocked);
     }
 
     function observe(

@@ -507,7 +507,7 @@ contract PriceV2Test is Test {
                 );
 
             UniswapV3Price.UniswapV3Params memory ohmFeedThreeParams = UniswapV3Price
-                .UniswapV3Params(ohmEthUniV3Pool, uint32(60 seconds));
+                .UniswapV3Params(ohmEthUniV3Pool, uint32(60 seconds), 0);
 
             PRICEv2.Component[] memory feeds = new PRICEv2.Component[](3);
             feeds[0] = PRICEv2.Component(
@@ -788,7 +788,7 @@ contract PriceV2Test is Test {
         assertEq(feeds[2].selector, UniswapV3Price.getTokenTWAP.selector);
         assertEq(
             feeds[2].params,
-            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, uint32(60 seconds)))
+            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, uint32(60 seconds), 0))
         );
     }
 
@@ -926,7 +926,7 @@ contract PriceV2Test is Test {
         uint256 expectedPrice = univ3Price.getTokenTWAP(
             address(ohm),
             price.decimals(),
-            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, uint32(60)))
+            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, uint32(60), 0))
         );
         assertEq(price_, expectedPrice);
     }

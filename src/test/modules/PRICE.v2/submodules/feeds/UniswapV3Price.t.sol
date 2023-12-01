@@ -5,6 +5,7 @@ pragma solidity >=0.8.0;
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
 // Libraries
+import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.sol";
 import {FixedPointMathLib} from "lib/solmate/src/utils/FixedPointMathLib.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -45,6 +46,7 @@ contract UniswapV3PriceTest is Test {
     uint256 internal USDC_PRICE = 10 ** PRICE_DECIMALS;
 
     uint32 internal OBSERVATION_SECONDS = 60;
+    uint16 internal DEVIATION_BASE = 10_000;
 
     // Live value taken from https://etherscan.io/address/0x4e0924d3a751be199c426d52fb1f2337fa96f736#readContract
     uint160 internal uniSqrtPrice = 79406181270273404968401;
@@ -100,9 +102,10 @@ contract UniswapV3PriceTest is Test {
 
     function encodeParams(
         IUniswapV3Pool pool,
-        uint32 observationWindowSeconds
+        uint32 observationWindowSeconds,
+        uint16 maxDeviationBps
     ) internal pure returns (bytes memory params) {
-        return abi.encode(pool, observationWindowSeconds);
+        return abi.encode(pool, observationWindowSeconds, maxDeviationBps);
     }
 
     function mockAssetPrice(address asset_, uint256 price_) internal {
@@ -130,8 +133,17 @@ contract UniswapV3PriceTest is Test {
 
     // ========= TESTS ========= //
 
-    function test_tokenTWAP_success_token0() public {
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+    // [X] getTokenTWAP
+    //  [X] Reverts if params.pool is is not a valid Uniswap V3 pool
+    //  [X] Reverts if params.observationWindowSeconds is less than TWAP_MINIMUM_OBSERVATION_SECONDS
+    //  [X] Reverts if lookupToken is not a one of the pool tokens
+    //  [X] Reverts if any of the pool tokens are not defined as assets in PRICE
+    //  [X] Reverts if the calculated time-weighted tick is outside the bounds of int24
+    //  [X] Correctly calculates the TWAP
+    //  [X] Correctly handles different output decimals
+
+    function test_getTokenTWAP_success_token0() public {
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uint256 price = uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
 
         // Calculate the return value
@@ -144,11 +156,11 @@ contract UniswapV3PriceTest is Test {
         assertEq(price, 1.004412 * 1e18);
     }
 
-    function test_tokenTWAP_success_token1() public {
+    function test_getTokenTWAP_success_token1() public {
         // Mock LUSD as $1 exactly
         mockAssetPrice(LUSD, 1e18);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uint256 price = uniSubmodule.getTokenTWAP(USDC, PRICE_DECIMALS, params);
 
         // Calculate the return value
@@ -161,7 +173,7 @@ contract UniswapV3PriceTest is Test {
         assertEq(price, 995607252620550200);
     }
 
-    function test_tokenTWAP_revertsOnParamsPoolUndefined() public {
+    function testRevert_getTokenTWAPOnParamsPoolUndefined() public {
         bytes memory err = abi.encodeWithSelector(
             UniswapV3Price.UniswapV3_ParamsPoolInvalid.selector,
             0,
@@ -169,11 +181,11 @@ contract UniswapV3PriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodeParams(IUniswapV3Pool(address(0)), OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(IUniswapV3Pool(address(0)), OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function test_tokenTWAP_revertsOnBalancerPoolType() public {
+    function testRevert_getTokenTWAPOnBalancerPoolType() public {
         // Set up a non-weighted pool
         MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
         mockNonWeightedPool.setDecimals(18);
@@ -187,11 +199,11 @@ contract UniswapV3PriceTest is Test {
             address(mockNonWeightedPool)
         );
 
-        bytes memory params = abi.encode(mockNonWeightedPool, OBSERVATION_SECONDS);
+        bytes memory params = abi.encode(mockNonWeightedPool, OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function test_tokenTWAP_revertsOnUniswapV2PoolType() public {
+    function testRevert_getTokenTWAPOnUniswapV2PoolType() public {
         // Set up a Uniswap V2 pool
         MockUniswapV2Pool mockUniPool = new MockUniswapV2Pool();
         mockUniPool.setTotalSupply(10e18);
@@ -204,27 +216,27 @@ contract UniswapV3PriceTest is Test {
             address(mockUniPool)
         );
 
-        bytes memory params = abi.encode(mockUniPool, OBSERVATION_SECONDS);
+        bytes memory params = abi.encode(mockUniPool, OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(WETH, PRICE_DECIMALS, params);
     }
 
-    function test_tokenTWAP_usesPrice() public {
+    function test_getTokenTWAP_usesPrice() public {
         // Mock USDC as $1.01
         mockAssetPrice(USDC, 1.01 * 1e18);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uint256 price = uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
 
         // $1.004412 USDC = $1.004412 * 1.01 = 1.01445612
         assertEq(price, 1.004412 * 1.01 * 1e18);
     }
 
-    function test_tokenTWAP_priceDecimalsFuzz(uint8 priceDecimals_) public {
+    function testFuzz_getTokenTWAP_priceDecimals(uint8 priceDecimals_) public {
         uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
         mockAssetPrice(USDC, USDC_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uint256 price = uniSubmodule.getTokenTWAP(LUSD, priceDecimals, params);
 
         // Calculate the return value
@@ -237,7 +249,7 @@ contract UniswapV3PriceTest is Test {
         assertEq(price, uint256(1004412).mulDiv(10 ** priceDecimals, 10 ** 6));
     }
 
-    function test_tokenTWAP_revertsOnPriceDecimalsMaximum() public {
+    function testRevert_getTokenTWAPOnPriceDecimalsMaximum() public {
         uint8 priceDecimals = MAX_DECIMALS + 1;
         mockAssetPrice(USDC, USDC_PRICE.mulDiv(10 ** MAX_DECIMALS, 10 ** PRICE_DECIMALS));
 
@@ -248,12 +260,12 @@ contract UniswapV3PriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(LUSD, priceDecimals, params);
     }
 
     // The other tests use LUSD and USDC, which have different token decimals. This tests tokens with the same decimals.
-    function test_tokenTWAP_tokenDecimalsSame() public {
+    function test_getTokenTWAP_tokenDecimalsSame() public {
         // Mock the UNI-wETH pool
         mockUniPair.setToken0(UNI);
         mockUniPair.setToken1(WETH);
@@ -265,7 +277,7 @@ contract UniswapV3PriceTest is Test {
         // Mock wETH as $1500 exactly
         mockAssetPrice(WETH, 1500 * 1e18);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uint256 price = uniSubmodule.getTokenTWAP(UNI, PRICE_DECIMALS, params);
 
         // Calculate the return value
@@ -281,7 +293,7 @@ contract UniswapV3PriceTest is Test {
      * the ticks and sqrtPriceX96.
      */
 
-    function test_tokenTWAP_revertsOnLookupTokenDecimalsMaximum() public {
+    function testRevert_getTokenTWAPOnLookupTokenDecimalsMaximum() public {
         // Mock a high number of decimals for the lookup token, which will result in an overflow
         mockERC20Decimals(LUSD, 120);
 
@@ -293,11 +305,11 @@ contract UniswapV3PriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function test_tokenTWAP_revertsOnQuoteTokenDecimalsMaximum() public {
+    function testRevert_getTokenTWAPOnQuoteTokenDecimalsMaximum() public {
         // Mock a high number of decimals for the quote token, which will result in an overflow
         mockERC20Decimals(USDC, 120);
 
@@ -309,11 +321,11 @@ contract UniswapV3PriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function test_tokenTWAP_revertsOnObservationWindowInvalidFuzz(
+    function testRevert_getTokenTWAPOnObservationWindowInvalidFuzz(
         uint32 observationWindow_
     ) public {
         uint32 observationWindow = uint32(
@@ -321,44 +333,44 @@ contract UniswapV3PriceTest is Test {
         );
 
         bytes memory err = abi.encodeWithSelector(
-            UniswapV3Price.UniswapV3_ParamsObservationWindowTooShort.selector,
-            1,
+            OracleHelper.UniswapV3OracleHelper_ObservationTooShort.selector,
+            address(mockUniPair),
             observationWindow,
             MIN_OBSERVATION_SECONDS
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodeParams(mockUniPair, observationWindow);
+        bytes memory params = encodeParams(mockUniPair, observationWindow, 0);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function test_tokenTWAP_revertsOnObservationWindowGreaterThanOldest() public {
+    function testRevert_getTokenTWAPOnObservationWindowGreaterThanOldest() public {
         uint32 observationWindow = 1800;
 
         // Set up the pool to revert as the observation window is too long
         mockUniPair.setObserveReverts(true);
 
         bytes memory err = abi.encodeWithSelector(
-            UniswapV3Price.UniswapV3_InvalidObservation.selector,
+            OracleHelper.UniswapV3OracleHelper_InvalidObservation.selector,
             address(mockUniPair),
             observationWindow
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodeParams(mockUniPair, observationWindow);
+        bytes memory params = encodeParams(mockUniPair, observationWindow, 0);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function test_tokenTWAP_observationWindowValidFuzz(uint32 observationWindow_) public {
+    function testFuzz_getTokenTWAP_observationWindowValid(uint32 observationWindow_) public view {
         uint32 observationWindow = uint32(bound(observationWindow_, MIN_OBSERVATION_SECONDS, 1800));
 
-        bytes memory params = encodeParams(mockUniPair, observationWindow);
+        bytes memory params = encodeParams(mockUniPair, observationWindow, 0);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
 
         // Can't test price
     }
 
-    function test_tokenTWAP_revertsOnTickMaximumFuzz(int56 tick0_, int56 tick1_) public {
+    function testRevert_getTokenTWAPOnTickMaximumFuzz(int56 tick0_, int56 tick1_) public {
         /**
          * Generate an invalid cumulative tick.
          *
@@ -385,7 +397,7 @@ contract UniswapV3PriceTest is Test {
         mockUniPair.setTickCumulatives(tickCumulatives);
 
         bytes memory err = abi.encodeWithSelector(
-            UniswapV3Price.UniswapV3_TickOutOfBounds.selector,
+            OracleHelper.UniswapV3OracleHelper_TickOutOfBounds.selector,
             address(mockUniPair),
             (tick1 - tick0) / int56(int32(OBSERVATION_SECONDS)),
             MIN_TICK,
@@ -393,11 +405,11 @@ contract UniswapV3PriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function test_tokenTWAP_revertsOnTickMinimumFuzz(int56 tick0_, int56 tick1_) public {
+    function testRevert_getTokenTWAPOnTickMinimumFuzz(int56 tick0_, int56 tick1_) public {
         /**
          * Generate an invalid cumulative tick.
          *
@@ -424,7 +436,7 @@ contract UniswapV3PriceTest is Test {
         mockUniPair.setTickCumulatives(tickCumulatives);
 
         bytes memory err = abi.encodeWithSelector(
-            UniswapV3Price.UniswapV3_TickOutOfBounds.selector,
+            OracleHelper.UniswapV3OracleHelper_TickOutOfBounds.selector,
             address(mockUniPair),
             (tick1 - tick0) / int56(int32(OBSERVATION_SECONDS)),
             MIN_TICK,
@@ -432,11 +444,11 @@ contract UniswapV3PriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function test_tokenTWAP_tickValidFuzz(int56 tick0_, int56 tick1_) public {
+    function testFuzz_getTokenTWAP_tickValid(int56 tick0_, int56 tick1_) public {
         /**
          * Generate an valid cumulative tick.
          *
@@ -459,22 +471,22 @@ contract UniswapV3PriceTest is Test {
         tickCumulatives[1] = tick1;
         mockUniPair.setTickCumulatives(tickCumulatives);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
 
         // Can't test the price
     }
 
-    function test_tokenTWAP_revertsOnZeroPrice() public {
+    function testRevert_getTokenTWAPOnZeroPrice() public {
         mockAssetPrice(USDC, 0);
 
         expectRevert_PriceZero(USDC);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function test_tokenTWAP_revertsOnInvalidToken() public {
+    function testRevert_getTokenTWAPOnInvalidToken() public {
         bytes memory err = abi.encodeWithSelector(
             UniswapV3Price.UniswapV3_LookupTokenNotFound.selector,
             address(mockUniPair),
@@ -482,11 +494,11 @@ contract UniswapV3PriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(DAI, PRICE_DECIMALS, params); // DAI is not in the pair
     }
 
-    function test_tokenTWAP_revertsOnInvalidToken0() public {
+    function testRevert_getTokenTWAPOnInvalidToken0() public {
         mockUniPair.setToken0(address(0));
 
         bytes memory err = abi.encodeWithSelector(
@@ -497,11 +509,11 @@ contract UniswapV3PriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
     }
 
-    function test_tokenTWAP_revertsOnInvalidToken1() public {
+    function testRevert_getTokenTWAPOnInvalidToken1() public {
         mockUniPair.setToken1(address(0));
 
         bytes memory err = abi.encodeWithSelector(
@@ -512,7 +524,298 @@ contract UniswapV3PriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
         uniSubmodule.getTokenTWAP(USDC, PRICE_DECIMALS, params);
+    }
+
+    // [X] getTokenPrice
+    //  [X] Reverts if params.pool is is not a valid Uniswap V3 pool
+    //  [X] Reverts if lookupToken is not a one of the pool tokens
+    //  [X] Reverts if any of the pool tokens are not defined as assets in PRICE
+    //  [X] Reverts if the pool is locked
+    //  [X] Reverts if the current price deviates from the TWAP by more than maxDeviationBps
+    //  [X] Correctly calculates the current pool price
+    //  [X] Correctly handles different output decimals
+
+    function testRevert_getTokenPrice_OnParamsPoolUndefined() public {
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_ParamsPoolInvalid.selector,
+            0,
+            address(0)
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(IUniswapV3Pool(address(0)), OBSERVATION_SECONDS, 100);
+        uniSubmodule.getTokenPrice(LUSD, PRICE_DECIMALS, params);
+    }
+
+    function testRevert_getTokenPrice_OnBalancerPoolType() public {
+        // Set up a non-weighted pool
+        MockBalancerPool mockNonWeightedPool = new MockBalancerPool();
+        mockNonWeightedPool.setDecimals(18);
+        mockNonWeightedPool.setTotalSupply(1e8);
+        mockNonWeightedPool.setPoolId(
+            0x96646936b91d6b9d7d0c47c496afbf3d6ec7b6f8000200000000000000000019
+        );
+
+        expectRevert_address(
+            UniswapV3Price.UniswapV3_PoolTypeInvalid.selector,
+            address(mockNonWeightedPool)
+        );
+
+        bytes memory params = abi.encode(mockNonWeightedPool, OBSERVATION_SECONDS, 100);
+        uniSubmodule.getTokenPrice(LUSD, PRICE_DECIMALS, params);
+    }
+
+    function testRevert_getTokenPrice_OnUniswapV2PoolType() public {
+        // Set up a Uniswap V2 pool
+        MockUniswapV2Pool mockUniPool = new MockUniswapV2Pool();
+        mockUniPool.setTotalSupply(10e18);
+        mockUniPool.setToken0(USDC);
+        mockUniPool.setToken1(WETH);
+        mockUniPool.setReserves(1e9, 1e18);
+
+        expectRevert_address(
+            UniswapV3Price.UniswapV3_PoolTypeInvalid.selector,
+            address(mockUniPool)
+        );
+
+        bytes memory params = abi.encode(mockUniPool, OBSERVATION_SECONDS, 100);
+        uniSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, params);
+    }
+
+    function testRevert_getTokenPrice_OnPriceDecimalsMaximum() public {
+        uint8 priceDecimals = MAX_DECIMALS + 1;
+        mockAssetPrice(USDC, USDC_PRICE.mulDiv(10 ** MAX_DECIMALS, 10 ** PRICE_DECIMALS));
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_OutputDecimalsOutOfBounds.selector,
+            priceDecimals,
+            MAX_DECIMALS
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 100);
+        uniSubmodule.getTokenPrice(LUSD, priceDecimals, params);
+    }
+
+    function testRevert_getTokenPrice_OnLookupTokenDecimalsMaximum() public {
+        // Mock a high number of decimals for the lookup token, which will result in an overflow
+        mockERC20Decimals(LUSD, 120);
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_AssetDecimalsOutOfBounds.selector,
+            LUSD,
+            120,
+            MAX_DECIMALS
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 100);
+        uniSubmodule.getTokenPrice(LUSD, PRICE_DECIMALS, params);
+    }
+
+    function testRevert_getTokenPrice_OnQuoteTokenDecimalsMaximum() public {
+        // Mock a high number of decimals for the quote token, which will result in an overflow
+        mockERC20Decimals(USDC, 120);
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_AssetDecimalsOutOfBounds.selector,
+            USDC,
+            120,
+            MAX_DECIMALS
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 100);
+        uniSubmodule.getTokenPrice(LUSD, PRICE_DECIMALS, params);
+    }
+
+    function testRevert_getTokenPrice_OnInvalidToken() public {
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_LookupTokenNotFound.selector,
+            address(mockUniPair),
+            DAI
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 100);
+        uniSubmodule.getTokenPrice(DAI, PRICE_DECIMALS, params); // DAI is not in the pair
+    }
+
+    function testRevert_getTokenPrice_OnInvalidToken0() public {
+        mockUniPair.setToken0(address(0));
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_PoolTokensInvalid.selector,
+            address(mockUniPair),
+            0,
+            address(0)
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 100);
+        uniSubmodule.getTokenPrice(LUSD, PRICE_DECIMALS, params);
+    }
+
+    function testRevert_getTokenPrice_OnInvalidToken1() public {
+        mockUniPair.setToken1(address(0));
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_PoolTokensInvalid.selector,
+            address(mockUniPair),
+            1,
+            address(0)
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 100);
+        uniSubmodule.getTokenPrice(USDC, PRICE_DECIMALS, params);
+    }
+
+    function testRevert_getTokenPrice_reentrancy() public {
+        // Set the UniV3 pair to be locked, which indicates re-entrancy
+        mockUniPair.setUnlocked(false);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_PoolReentrancy.selector,
+            address(mockUniPair)
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 100);
+        uniSubmodule.getTokenPrice(USDC, PRICE_DECIMALS, params);
+    }
+
+    function test_getTokenPrice_usesPrice() public {
+        // Mock USDC as $1.01
+        mockAssetPrice(USDC, 1.01 * 1e18);
+
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 100);
+        uint256 price = uniSubmodule.getTokenPrice(LUSD, PRICE_DECIMALS, params);
+
+        // $1.004412 USDC = $1.004412 * 1.01 = 1.01445612
+        assertEq(price, 1.004412 * 1.01 * 1e18);
+    }
+
+    function testFuzz_getTokenPrice_priceDecimals(uint8 priceDecimals_) public {
+        uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
+
+        mockAssetPrice(USDC, USDC_PRICE.mulDiv(10 ** priceDecimals, 10 ** PRICE_DECIMALS));
+
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 100);
+        uint256 price = uniSubmodule.getTokenPrice(LUSD, priceDecimals, params);
+
+        // Calculate the return value
+        // tick = -276280
+        // quote price = 1.0001 ^ tick
+        // $1.004412 USDC
+        // For this to match, the decimal conversion will have been handled too
+        assertEq(price, uint256(1004412).mulDiv(10 ** priceDecimals, 10 ** 6));
+    }
+
+    function test_getTokenPrice_success_token0() public {
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
+        uint256 price = uniSubmodule.getTokenPrice(LUSD, PRICE_DECIMALS, params);
+
+        // Calculate the return value
+        // tick = -276280
+        // quote price = 1.0001 ^ tick
+        // $1.004412 USDC
+        // For this to match, the decimal conversion will have been handled too
+        assertEq(price, 1.004412 * 1e18);
+    }
+
+    function test_getTokenPrice_success_token1() public {
+        // Mock LUSD as $1 exactly
+        mockAssetPrice(LUSD, 1e18);
+
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
+        uint256 price = uniSubmodule.getTokenPrice(USDC, PRICE_DECIMALS, params);
+
+        // Calculate the return value
+        // tick = -276280
+        // quote price = 1.0001 ^ tick
+        // 1 / $1.004412 USDC = 0.995607252620550200 = 995607252620550200 * 10^-18
+        // For this to match, the decimal conversion will have been handled too
+        assertEq(price, 995607252620550200);
+    }
+
+    // The other tests use LUSD and USDC, which have different token decimals. This tests tokens with the same decimals.
+    function test_getTokenPrice_tokenDecimalsSame() public {
+        // Mock the UNI-wETH pool
+        mockUniPair.setToken0(UNI);
+        mockUniPair.setToken1(WETH);
+        int56[] memory tickCumulatives = new int56[](2);
+        tickCumulatives[0] = -3080970025126;
+        tickCumulatives[1] = -3080973330766;
+        mockUniPair.setTickCumulatives(tickCumulatives);
+        mockUniPair.setTick(int24(-55094));
+
+        // Mock wETH as $1500 exactly
+        mockAssetPrice(WETH, 1500 * 1e18);
+
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 0);
+        uint256 price = uniSubmodule.getTokenPrice(UNI, PRICE_DECIMALS, params);
+
+        // Calculate the return value
+        // tick = -55094
+        // quote price = 1.0001 ^ tick = 0.0040496511 ETH
+        // quote price = 0.0040496511 * 1500 =~ 6.07447665
+        assertEq(price, 6074476658258328000);
+    }
+
+    function testRevert_getTokenPrice_deviationOutOfBounds() public {
+        // Mock the UNI-wETH pool
+        mockUniPair.setToken0(UNI);
+        mockUniPair.setToken1(WETH);
+        int56[] memory tickCumulatives = new int56[](2);
+        tickCumulatives[0] = -3080970025126;
+        tickCumulatives[1] = -3080973330766;
+        mockUniPair.setTickCumulatives(tickCumulatives);
+        mockUniPair.setTick(int24(-55094));
+
+        // Mock wETH as $1500 exactly
+        mockAssetPrice(WETH, 1500 * 1e18);
+
+        // Allow 1% deviation vs TWAP
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 100);
+
+        // Calculate the return value
+        // tick = -55094
+        // quote price = 1.0001 ^ tick = 0.0040496511 ETH
+        // quote price = 0.0040496511 * 1500 =~ 6.07447665
+        uint256 initPrice = uniSubmodule.getTokenPrice(UNI, PRICE_DECIMALS, params);
+        assertEq(initPrice, 6074476658258328000);
+
+        // Update pool price within deviation bounds
+        mockUniPair.setTick(int24(-55195));
+
+        // Calculate the return value
+        // tick = -55195
+        // quote price = 1.0001 ^ tick = 0.0040089575 ETH
+        // quote price = 0.0040089575 * 1500 =~ 6.01343625
+        // deviation = (6.01343625 / 6.07447665) - 1 = 1.00%
+        uint256 newPriceWithinBounds = uniSubmodule.getTokenPrice(UNI, PRICE_DECIMALS, params);
+        assertEq(newPriceWithinBounds, 6013436268812580000);
+
+        // // Update pool price outside deviation bounds
+        mockUniPair.setTickCumulatives(tickCumulatives);
+        mockUniPair.setTick(int24(-55196));
+
+        // Calculate the return value
+        // tick = -55196
+        // quote price = 1.0001 ^ tick = 0.0040085566 ETH
+        // quote price = 0.0040085566 * 1500 =~ 6.013436
+        // deviation = (6.01283498 / 6.07447665) - 1 = 1.01%
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_PriceMismatch.selector,
+            address(mockUniPair),
+            4049651105505552, // TWAP price in ETH terms
+            4008556656876033 // Slot0 price in ETH terms
+        );
+        vm.expectRevert(err);
+        uniSubmodule.getTokenPrice(UNI, PRICE_DECIMALS, params);
     }
 }

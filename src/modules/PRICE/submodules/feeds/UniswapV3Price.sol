@@ -4,6 +4,8 @@ pragma solidity 0.8.15;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // Libraries
+import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.sol";
+import {Deviation} from "libraries/Deviation.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 // Uniswap V3
@@ -34,12 +36,15 @@ contract UniswapV3Price is PriceSubmodule {
     struct UniswapV3Params {
         IUniswapV3Pool pool;
         uint32 observationWindowSeconds;
+        uint16 maxDeviationBps;
     }
 
     /// @notice     The minimum tick that can be used in a pool, as defined by UniswapV3 libraries
     int24 internal constant MIN_TICK = -887272;
     /// @notice     The maximum tick that can be used in a pool, as defined by UniswapV3 libraries
     int24 internal constant MAX_TICK = -MIN_TICK;
+    /// @notice     Represents a deviation of 100% from the TWAP
+    uint16 internal constant DEVIATION_BASE = 10_000;
 
     // ========== ERRORS ========== //
 
@@ -68,16 +73,6 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param pool_            The address of the pool
     error UniswapV3_ParamsPoolInvalid(uint8 paramsIndex_, address pool_);
 
-    /// @notice                                 The observation window specified in the parameters is too short
-    /// @param paramsIndex_                     The index of the parameter
-    /// @param observationWindowSeconds_        The observation window in seconds
-    /// @param minimumObservationWindowSeconds_ The minimum observation window in seconds
-    error UniswapV3_ParamsObservationWindowTooShort(
-        uint8 paramsIndex_,
-        uint32 observationWindowSeconds_,
-        uint32 minimumObservationWindowSeconds_
-    );
-
     /// @notice                 The pool tokens are invalid
     /// @param pool_            The address of the pool
     /// @param tokenIndex_      The index of the token
@@ -91,27 +86,20 @@ contract UniswapV3Price is PriceSubmodule {
     /// @param pool_            The address of the pool
     error UniswapV3_PoolTypeInvalid(address pool_);
 
-    /// @notice                             The pool is invalid or the observation window is too long.
-    /// @dev                                This is triggered if the pool reverted when called,
-    ///                                     and indicates that the feed address is not a UniswapV3 pool
-    ///                                     or that the observation window is too long.
+    /// @notice         Triggered if `pool_` is locked, which indicates re-entrancy
     ///
-    /// @param pool_                        The address of the pool
-    /// @param observationWindowSeconds_    The observation window in seconds
-    error UniswapV3_InvalidObservation(address pool_, uint32 observationWindowSeconds_);
+    /// @param pool_    The address of the affected Uniswap V3 pool
+    error UniswapV3_PoolReentrancy(address pool_);
 
-    /// @notice                 The calculated tick is out of bounds
-    /// @dev                    The tick is calculated as the average of the ticks over the observation window.
+    /// @notice                   The calculated pool price deviates from the TWAP by more than the maximum deviation.
     ///
-    /// @param pool_            The address of the pool
-    /// @param calculatedTick_  The calculated tick
-    /// @param minTick_         The minimum tick
-    /// @param maxTick_         The maximum tick
-    error UniswapV3_TickOutOfBounds(
+    /// @param pool_              The address of the pool
+    /// @param baseInQuoteTWAP_   The calculated TWAP price in terms of the quote token
+    /// @param baseInQuotePrice_  The calculated current price in terms of the quote token
+    error UniswapV3_PriceMismatch(
         address pool_,
-        int56 calculatedTick_,
-        int24 minTick_,
-        int24 maxTick_
+        uint256 baseInQuoteTWAP_,
+        uint256 baseInQuotePrice_
     );
 
     // ========== STATE VARIABLES ========== //
@@ -157,23 +145,138 @@ contract UniswapV3Price is PriceSubmodule {
         bytes calldata params_
     ) external view returns (uint256) {
         UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
-        if (address(params.pool) == address(0))
-            revert UniswapV3_ParamsPoolInvalid(0, address(params.pool));
+        (
+            address quoteToken,
+            uint8 quoteTokenDecimals,
+            uint8 lookupTokenDecimals
+        ) = _checkPoolAndTokenParams(lookupToken_, outputDecimals_, params.pool);
 
-        try params.pool.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
+        uint256 baseInQuotePrice = OracleHelper.getTWAPRatio(
+            address(params.pool),
+            params.observationWindowSeconds,
+            lookupToken_,
+            quoteToken,
+            lookupTokenDecimals
+        );
+
+        // Get the price of {quoteToken} in USD
+        // Decimals: outputDecimals_
+        // PRICE will revert if the price cannot be determined or is 0.
+        (uint256 quoteInUsdPrice, ) = _PRICE().getPrice(quoteToken, PRICEv2.Variant.CURRENT);
+
+        // Calculate final price in USD
+        // Decimals: outputDecimals_
+        return baseInQuotePrice.mulDiv(quoteInUsdPrice, 10 ** quoteTokenDecimals);
+    }
+
+    /// @notice                  Obtains the price of `lookupToken_` in USD, using the current Slot0 price from the specified Uniswap V3 oracle.
+    /// @dev                     This function will revert if:
+    ///                          - The current price differs from the TWAP by more than `maxDeviationBps_`
+    ///                          - The value of `params.observationWindowSeconds` is less than `TWAP_MINIMUM_OBSERVATION_SECONDS`
+    ///                          - Any token decimals or `outputDecimals_` are high enough to cause an overflow
+    ///                          - Any tokens in the pool are not set
+    ///                          - `lookupToken_` is not in the pool
+    ///                          - The calculated time-weighted tick is outside the bounds of int24
+    ///
+    ///                          NOTE: as a UniswapV3 pool can be manipulated using multi-block MEV, the TWAP values
+    ///                          can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
+    ///                          See https://chainsecurity.com/oracle-manipulation-after-merge/
+    ///
+    /// @param lookupToken_      The token to determine the price of.
+    /// @param outputDecimals_   The number of decimals to return the price in
+    /// @param params_           Pool parameters of type `UniswapV3Params`
+    /// @return                  Price in the scale of `outputDecimals_`
+    function getTokenPrice(
+        address lookupToken_,
+        uint8 outputDecimals_,
+        bytes calldata params_
+    ) external view returns (uint256) {
+        UniswapV3Params memory params = abi.decode(params_, (UniswapV3Params));
+        (
+            address quoteToken,
+            uint8 quoteTokenDecimals,
+            uint8 lookupTokenDecimals
+        ) = _checkPoolAndTokenParams(lookupToken_, outputDecimals_, params.pool);
+
+        // Get the TWAP price of the lookup token in terms of the quote token
+        uint256 baseInQuoteTWAP = OracleHelper.getTWAPRatio(
+            address(params.pool),
+            params.observationWindowSeconds,
+            lookupToken_,
+            quoteToken,
+            lookupTokenDecimals
+        );
+
+        // Get the current price of the lookup token in terms of the quote token
+        (, int24 currentTick, , , , , bool unlocked) = params.pool.slot0();
+
+        // Check for re-entrancy
+        if (unlocked == false) revert UniswapV3_PoolReentrancy(address(params.pool));
+
+        uint256 baseInQuotePrice = OracleLibrary.getQuoteAtTick(
+            currentTick,
+            uint128(10 ** lookupTokenDecimals),
+            lookupToken_,
+            quoteToken
+        );
+
+        // Check if the absolute deviation between the lookup and reserves price differs by more than reservesDeviationBps
+        // If so, the reserves may be manipulated
+        if (
+            // `isDeviatingWithBpsCheck()` will revert if `deviationBps` is invalid.
+            Deviation.isDeviatingWithBpsCheck(
+                baseInQuotePrice,
+                baseInQuoteTWAP,
+                params.maxDeviationBps,
+                DEVIATION_BASE
+            )
+        ) {
+            revert UniswapV3_PriceMismatch(address(params.pool), baseInQuoteTWAP, baseInQuotePrice);
+        }
+
+        // Get the price of {quoteToken} in USD
+        // Decimals: outputDecimals_
+        // PRICE will revert if the price cannot be determined or is 0.
+        (uint256 quoteInUsdPrice, ) = _PRICE().getPrice(quoteToken, PRICEv2.Variant.CURRENT);
+
+        // Calculate final price in USD
+        // Decimals: outputDecimals_
+        return baseInQuotePrice.mulDiv(quoteInUsdPrice, 10 ** quoteTokenDecimals);
+    }
+
+    // ========== INTERNAL FUNCTIONS ========== //
+
+    /// @notice  Performs checks to ensure that the pool, the tokens, and the decimals are valid.
+    /// @dev                    This function will revert if:
+    ///                         - Any token decimals or `outputDecimals_` are high enough to cause an overflow
+    ///                         - Any tokens in the pool are not set
+    ///                         - `lookupToken_` is not in the pool
+    ///
+    /// @param lookupToken_     The token to determine the price of
+    /// @param outputDecimals_  The decimals of `baseToken`
+    /// @param pool_            The Uniswap V3 pool to use
+    /// @return                 The `quoteToken`, its decimals, and the decimals of `lookupToken_`
+    function _checkPoolAndTokenParams(
+        address lookupToken_,
+        uint8 outputDecimals_,
+        IUniswapV3Pool pool_
+    ) internal view returns (address, uint8, uint8) {
+        if (address(pool_) == address(0)) revert UniswapV3_ParamsPoolInvalid(0, address(pool_));
+
+        try pool_.slot0() returns (uint160, int24, uint16, uint16, uint16, uint8, bool) {
             // Do nothing
         } catch (bytes memory) {
             // Handle a non-UniswapV3 pool
-            revert UniswapV3_PoolTypeInvalid(address(params.pool));
+            revert UniswapV3_PoolTypeInvalid(address(pool_));
         }
 
         address quoteToken;
         {
             bool lookupTokenFound;
-            try params.pool.token0() returns (address token) {
+            try pool_.token0() returns (address token) {
                 // Check if token is zero address, revert if so
                 if (token == address(0))
-                    revert UniswapV3_PoolTokensInvalid(address(params.pool), 0, token);
+                    revert UniswapV3_PoolTokensInvalid(address(pool_), 0, token);
 
                 // If token is the lookup token, set lookupTokenFound to true
                 // Otherwise, it should be the quote token
@@ -186,12 +289,12 @@ contract UniswapV3Price is PriceSubmodule {
                 }
             } catch (bytes memory) {
                 // Handle a non-UniswapV3 pool
-                revert UniswapV3_PoolTypeInvalid(address(params.pool));
+                revert UniswapV3_PoolTypeInvalid(address(pool_));
             }
-            try params.pool.token1() returns (address token) {
+            try pool_.token1() returns (address token) {
                 // Check if token is zero address, revert if so
                 if (token == address(0))
-                    revert UniswapV3_PoolTokensInvalid(address(params.pool), 1, token);
+                    revert UniswapV3_PoolTokensInvalid(address(pool_), 1, token);
 
                 // If token is the lookup token, set lookupTokenFound to true
                 // Otherwise, it should be the quote token
@@ -204,114 +307,38 @@ contract UniswapV3Price is PriceSubmodule {
                 }
             } catch (bytes memory) {
                 // Handle a non-UniswapV3 pool
-                revert UniswapV3_PoolTypeInvalid(address(params.pool));
+                revert UniswapV3_PoolTypeInvalid(address(pool_));
             }
 
             // If lookup token wasn't found, revert
             if (!lookupTokenFound)
-                revert UniswapV3_LookupTokenNotFound(address(params.pool), lookupToken_);
+                revert UniswapV3_LookupTokenNotFound(address(pool_), lookupToken_);
         }
-
-        // Revert if the observation window is less than the minimum (which would not give manipulation-resistant results)
-        if (params.observationWindowSeconds < TWAP_MINIMUM_OBSERVATION_SECONDS)
-            revert UniswapV3_ParamsObservationWindowTooShort(
-                1,
-                params.observationWindowSeconds,
-                TWAP_MINIMUM_OBSERVATION_SECONDS
-            );
 
         // Validate output decimals are not too high
         if (outputDecimals_ > BASE_10_MAX_EXPONENT)
             revert UniswapV3_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
 
-        // Determine the tick over the observation window
-        int56 timeWeightedTick;
-        {
-            uint32[] memory observationWindow = new uint32[](2);
-            observationWindow[0] = params.observationWindowSeconds;
-            observationWindow[1] = 0;
+        uint8 quoteTokenDecimals = ERC20(quoteToken).decimals();
+        uint8 lookupTokenDecimals = ERC20(lookupToken_).decimals();
 
-            try params.pool.observe(observationWindow) returns (
-                int56[] memory tickCumulatives,
-                uint160[] memory secondsPerLiquidityCumulativeX128s
-            ) {
-                timeWeightedTick =
-                    (tickCumulatives[1] - tickCumulatives[0]) /
-                    int32(params.observationWindowSeconds);
-            } catch (bytes memory) {
-                // This function will revert if the observation window is longer than the oldest observation in the pool
-                // https://github.com/Uniswap/v3-core/blob/d8b1c635c275d2a9450bd6a78f3fa2484fef73eb/contracts/libraries/Oracle.sol#L226C30-L226C30
-                revert UniswapV3_InvalidObservation(
-                    address(params.pool),
-                    params.observationWindowSeconds
-                );
-            }
-        }
+        // Avoid overflows with decimal normalisation
+        if (quoteTokenDecimals > BASE_10_MAX_EXPONENT)
+            revert UniswapV3_AssetDecimalsOutOfBounds(
+                quoteToken,
+                quoteTokenDecimals,
+                BASE_10_MAX_EXPONENT
+            );
 
-        uint256 tokenPrice;
-        {
-            uint8 quoteTokenDecimals;
-            uint256 baseInQuotePrice;
-            {
-                // Convert the tick to a price in terms of the other token
-                quoteTokenDecimals = ERC20(quoteToken).decimals();
-                uint8 baseTokenDecimals = ERC20(lookupToken_).decimals();
+        // lookupTokenDecimals must be less than 38 to avoid overflow when cast to uint128
+        // BASE_10_MAX_EXPONENT is less than 38, so this check is safe
+        if (lookupTokenDecimals > BASE_10_MAX_EXPONENT)
+            revert UniswapV3_AssetDecimalsOutOfBounds(
+                lookupToken_,
+                lookupTokenDecimals,
+                BASE_10_MAX_EXPONENT
+            );
 
-                // Avoid overflows with decimal normalisation
-                if (quoteTokenDecimals > BASE_10_MAX_EXPONENT)
-                    revert UniswapV3_AssetDecimalsOutOfBounds(
-                        quoteToken,
-                        quoteTokenDecimals,
-                        BASE_10_MAX_EXPONENT
-                    );
-
-                // baseTokenDecimals must be less than 38 to avoid overflow when cast to uint128
-                // BASE_10_MAX_EXPONENT is less than 38, so this check is safe
-                if (baseTokenDecimals > BASE_10_MAX_EXPONENT)
-                    revert UniswapV3_AssetDecimalsOutOfBounds(
-                        lookupToken_,
-                        baseTokenDecimals,
-                        BASE_10_MAX_EXPONENT
-                    );
-
-                // Ensure the time-weighted tick is within the bounds of permissible ticks
-                // Otherwise getQuoteAtTick will revert: https://docs.uniswap.org/contracts/v3/reference/error-codes
-                if (timeWeightedTick > MAX_TICK || timeWeightedTick < MIN_TICK)
-                    revert UniswapV3_TickOutOfBounds(
-                        address(params.pool),
-                        timeWeightedTick,
-                        MIN_TICK,
-                        MAX_TICK
-                    );
-
-                // Decimals: quoteTokenDecimals
-                baseInQuotePrice = OracleLibrary.getQuoteAtTick(
-                    int24(timeWeightedTick),
-                    uint128(10 ** baseTokenDecimals),
-                    lookupToken_,
-                    quoteToken
-                );
-            }
-
-            // Get the price of {quoteToken} in USD
-            // Decimals: outputDecimals_
-            // PRICE will revert if the price cannot be determined or is 0.
-            (uint256 quoteInUsdPrice, ) = _PRICE().getPrice(quoteToken, PRICEv2.Variant.CURRENT);
-
-            // Calculate final price in USD
-            // Decimals: outputDecimals_
-            tokenPrice = baseInQuotePrice.mulDiv(quoteInUsdPrice, 10 ** quoteTokenDecimals);
-        }
-
-        return tokenPrice;
+        return (quoteToken, quoteTokenDecimals, lookupTokenDecimals);
     }
-
-    /**
-     * Due to the way that Uniswap V3 is structured, there is no
-     * standard unit price that can be calculated for a pool token.
-     *
-     * However, given the token id of a Uniswap V3 position (stored as an NFT),
-     * the underlying token balances can be retrieved and the value
-     * of that position calculated.
-     */
 }

@@ -12,6 +12,11 @@ These contracts will be installed in the Olympus V3 "Bophades" system, based on 
 
 The contracts in-scope for this audit are:
 
+-   [libraries/](../../src/libraries/)
+    -   [Deviation.sol](../../src/libraries/Deviation.sol)
+    -   [UniswapV3/](../../src/libraries/UniswapV3/)
+        -   [BunniHelper.sol](../../src/libraries/UniswapV3/BunniHelper.sol)
+        -   [Oracle.sol](../../src/libraries/UniswapV3/Oracle.sol)
 -   [modules/](../../src/modules)
     -   [SPPLY/](../../src/modules/SPPLY)
         -   [submodules/](../../src/modules/SPPLY/submodules)
@@ -225,4 +230,12 @@ Pre-configured `solhint` and `prettier-plugin-solidity`. Can be run by
 
 ```sh
 pnpm run lint
+```
+
+### Code Metrics
+
+Code metrics have been calculated using the following command:
+
+```shell
+pnpm run metrics src/modules/SPPLY/**/*.sol src/modules/TRSRY/**/*.sol src/libraries/Deviation.sol src/libraries/UniswapV3/BunniHelper.sol src/libraries/UniswapV3/Oracle.sol
 ```

@@ -35,7 +35,11 @@ import "src/Kernel.sol";
 
 /// @title  BunniManager
 /// @author 0xJem
-/// @notice Bophades policy to manage UniswapV3 positions.
+/// @notice Bophades policy to manage UniswapV3 positions
+/// @dev    The policy is required as Uniswap V3 positions are not ERC20-compatible,
+/// @dev    and the TRSRY module is unable to custody them. This policy uses the Bunni framework
+/// @dev    to deploy ERC20-compatible tokens that represent the Uniswap V3 positions.
+///
 /// @dev    This policy is paired with a BunniHub instance to manage the lifecycle of BunniTokens.
 ///
 /// @dev    Most of the functions are permissioned and require the "bunni_admin" role.
@@ -224,6 +228,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     // Constants
     uint16 private constant BPS_MAX = 10_000; // 100%
     uint16 public constant SLIPPAGE_DEFAULT = 100; // 1%
+
+    /// @notice     The default maximum deviation for Uniswap V3 TWAPs
+    /// @dev        This is used when configuring a pool token with SPPLY and PRICE
+    uint16 public constant TWAP_DEFAULT_MAX_DEVIATION_BPS = 100; // 1%
+
+    /// @notice     The default observation window for Uniswap V3 TWAPs
+    /// @dev        This is used when configuring a pool token with SPPLY and PRICE
+    uint16 public constant TWAP_DEFAULT_OBSERVATION_WINDOW = 600; // 10 minutes
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -424,31 +436,33 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     function activatePoolToken(
         address pool_
     ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
-        // Get the appropriate BunniKey representing the position
-        BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
+        _activatePoolToken(pool_, TWAP_DEFAULT_MAX_DEVIATION_BPS, TWAP_DEFAULT_OBSERVATION_WINDOW);
+    }
 
-        // Check that the token has been deployed
-        IBunniToken poolToken = _getPoolToken(pool_, key);
-        address poolTokenAddress = address(poolToken);
-
-        // Check that the position has liquidity
-        if (
-            !UniswapV3Positions.positionHasLiquidity(
-                key.pool,
-                key.tickLower,
-                key.tickUpper,
-                address(bunniHub)
-            )
-        ) {
-            revert BunniManager_PoolHasNoLiquidity(pool_);
-        }
-
-        // Register the pool token with TRSRY, PRICE and SPPLY (each will check for prior activation)
-        _addPoolTokenToPRICE(pool_, poolTokenAddress);
-        _addPoolTokenToTRSRY(pool_, poolTokenAddress);
-        _addPoolTokenToSPPLY(pool_, poolTokenAddress);
-
-        emit PoolTokenActivated(pool_, poolTokenAddress);
+    /// @notice                         Activates the ERC20 token for the given Uniswap V3 pool
+    ///
+    /// @notice                         This can only be called after `deployPoolToken` or `registerPool` has been called
+    /// @notice                         to deploy the ERC20 token for this pool.
+    ///
+    /// @notice                         This function will register the pool token with TRSRY, PRICE and SPPLY.
+    ///
+    /// @dev                            This function reverts if:
+    /// @dev                            - The policy is inactive
+    /// @dev                            - The caller is unauthorized
+    /// @dev                            - The `bunniHub` state variable is not set
+    /// @dev                            - An ERC20 token for `pool_` has not been deployed/registered
+    /// @dev                            - The position representing `pool_` has no liquidity
+    /// @dev                            - The ERC20 token for `pool_` has already been activated in TRSRY/SPPLY/PRICE
+    ///
+    /// @param pool_                    The address of the Uniswap V3 pool
+    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP
+    /// @param twapObservationWindow_   The TWAP observation window
+    function activatePoolToken(
+        address pool_,
+        uint16 twapMaxDeviationBps_,
+        uint32 twapObservationWindow_
+    ) external nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
+        _activatePoolToken(pool_, twapMaxDeviationBps_, twapObservationWindow_);
     }
 
     /// @inheritdoc IBunniManager
@@ -890,6 +904,53 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     //                                      INTERNAL FUNCTIONS                                    //
     //============================================================================================//
 
+    /// @notice                         Activates the ERC20 token for the given Uniswap V3 pool
+    ///
+    /// @notice                         This can only be called after `deployPoolToken` or `registerPool` has been called
+    /// @notice                         to deploy the ERC20 token for this pool.
+    ///
+    /// @notice                         This function will register the pool token with TRSRY, PRICE and SPPLY.
+    ///
+    /// @dev                            This function reverts if:
+    /// @dev                            - An ERC20 token for `pool_` has not been deployed/registered
+    /// @dev                            - The position representing `pool_` has no liquidity
+    /// @dev                            - The ERC20 token for `pool_` has already been activated in TRSRY/SPPLY/PRICE
+    ///
+    /// @param pool_                    The address of the Uniswap V3 pool
+    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP
+    /// @param twapObservationWindow_   The TWAP observation window
+    function _activatePoolToken(
+        address pool_,
+        uint16 twapMaxDeviationBps_,
+        uint32 twapObservationWindow_
+    ) internal {
+        // Get the appropriate BunniKey representing the position
+        BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
+
+        // Check that the token has been deployed
+        IBunniToken poolToken = _getPoolToken(pool_, key);
+        address poolTokenAddress = address(poolToken);
+
+        // Check that the position has liquidity
+        if (
+            !UniswapV3Positions.positionHasLiquidity(
+                key.pool,
+                key.tickLower,
+                key.tickUpper,
+                address(bunniHub)
+            )
+        ) {
+            revert BunniManager_PoolHasNoLiquidity(pool_);
+        }
+
+        // Register the pool token with TRSRY, PRICE and SPPLY (each will check for prior activation)
+        _addPoolTokenToPRICE(pool_, poolTokenAddress, twapMaxDeviationBps_, twapObservationWindow_);
+        _addPoolTokenToTRSRY(pool_, poolTokenAddress);
+        _addPoolTokenToSPPLY(pool_, poolTokenAddress, twapMaxDeviationBps_, twapObservationWindow_);
+
+        emit PoolTokenActivated(pool_, poolTokenAddress);
+    }
+
     /// @notice         Obtains the BunniToken for the given pool
     /// @dev            This function reverts if:
     /// @dev            - A BunniToken for `key_` cannot be found
@@ -990,14 +1051,21 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
     }
 
-    /// @notice             Registers `poolToken_` as an asset in the PRICE module
-    /// @dev                This function performs the following:
-    /// @dev                - Checks if the asset is already registered, and reverts if so
-    /// @dev                - Calls `PRICE.addAsset`
+    /// @notice                         Registers `poolToken_` as an asset in the PRICE module
+    /// @dev                            This function performs the following:
+    /// @dev                            - Checks if the asset is already registered, and reverts if so
+    /// @dev                            - Calls `PRICE.addAsset`
     ///
-    /// @param pool_        The pool to register
-    /// @param poolToken_   The pool token to register
-    function _addPoolTokenToPRICE(address pool_, address poolToken_) internal {
+    /// @param pool_                    The pool to register
+    /// @param poolToken_               The pool token to register
+    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP
+    /// @param twapObservationWindow_   The TWAP observation window
+    function _addPoolTokenToPRICE(
+        address pool_,
+        address poolToken_,
+        uint16 twapMaxDeviationBps_,
+        uint32 twapObservationWindow_
+    ) internal {
         PRICEv2.Asset memory assetData = PRICE.getAssetData(poolToken_);
         // Revert if already activated
         if (assetData.approved == true) {
@@ -1007,7 +1075,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Prepare price feeds
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         {
-            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(address(bunniLens));
+            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(
+                address(bunniLens),
+                twapMaxDeviationBps_,
+                twapObservationWindow_
+            );
 
             feeds[0] = PRICEv2.Component(
                 toSubKeycode("PRICE.BNI"), // Subkeycode
@@ -1067,14 +1139,21 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         TRSRY.categorize(poolToken_, toTreasuryCategory("protocol-owned-liquidity"));
     }
 
-    /// @notice             Registers `poolToken_` as an asset in the SPPLY module
-    /// @dev                This function performs the following:
-    /// @dev                - Checks if the asset is already registered, and reverts if so
-    /// @dev                - Calls `SPPLY.categorize`
+    /// @notice                         Registers `poolToken_` as an asset in the SPPLY module
+    /// @dev                            This function performs the following:
+    /// @dev                            - Checks if the asset is already registered, and reverts if so
+    /// @dev                            - Calls `SPPLY.categorize`
     ///
-    /// @param pool_        The pool to register
-    /// @param poolToken_   The pool token to register
-    function _addPoolTokenToSPPLY(address pool_, address poolToken_) internal {
+    /// @param pool_                    The pool to register
+    /// @param poolToken_               The pool token to register
+    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP
+    /// @param twapObservationWindow_   The TWAP observation window
+    function _addPoolTokenToSPPLY(
+        address pool_,
+        address poolToken_,
+        uint16 twapMaxDeviationBps_,
+        uint32 twapObservationWindow_
+    ) internal {
         bytes memory hasBunniTokenResult = SPPLY.execOnSubmodule(
             toSubKeycode("SPPLY.BNI"),
             abi.encodeWithSelector(BunniSupply.hasBunniToken.selector, poolToken_)
@@ -1091,7 +1170,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             abi.encodeWithSelector(
                 BunniSupply.addBunniToken.selector,
                 poolToken_,
-                address(bunniLens)
+                address(bunniLens),
+                twapMaxDeviationBps_,
+                twapObservationWindow_
             )
         );
     }

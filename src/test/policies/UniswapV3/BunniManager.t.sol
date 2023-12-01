@@ -30,6 +30,7 @@ import {SqrtPriceMath} from "@uniswap/v3-core/contracts/libraries/SqrtPriceMath.
 
 import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {UniswapV3Pool} from "test/lib/UniswapV3/UniswapV3Pool.sol";
 import {SwapRouter} from "test/lib/UniswapV3/SwapRouter.sol";
 import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
@@ -97,13 +98,16 @@ contract BunniManagerTest is Test {
 
     uint24 private constant POOL_FEE = 500;
     uint256 private constant OHM_USDC_PRICE = 115897 * 1e14; // 11.5897 USDC per OHM in 18 decimal places
+    // Current tick: -44579
     uint160 private constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
+    // NOTE: these numbers are fudged to match the current tick and default observation window from BunniManager
+    int56 internal constant OHM_USDC_TICK_CUMULATIVE_0 = -2463052984970;
+    int56 internal constant OHM_USDC_TICK_CUMULATIVE_1 = -2463079732370;
+
     uint160 private constant DAI_USDC_SQRTPRICEX96 = 79227120762198600072084; // From DAI-USDC, 1 DAI = 1 USDC
 
     uint24 private constant TICK_SPACING_DIVISOR = 50;
     int24 private constant TICK = 887270; // (887272/(500/50))*(500/50)
-
-    uint8 private constant BUNNI_TOKEN_DECIMALS = 18;
 
     uint16 private constant BPS_MAX = 10_000; // 100%
 
@@ -286,6 +290,14 @@ contract BunniManagerTest is Test {
 
             // Initialize it
             pool.initialize(OHM_USDC_SQRTPRICEX96);
+
+            // Mock observations
+            _mockPoolObserve(
+                address(pool),
+                bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW(),
+                OHM_USDC_TICK_CUMULATIVE_0,
+                OHM_USDC_TICK_CUMULATIVE_1
+            );
         }
 
         {
@@ -422,6 +434,31 @@ contract BunniManagerTest is Test {
             address(PRICE),
             abi.encodeWithSignature("getPrice(address)", asset_),
             err
+        );
+    }
+
+    function _mockPoolObserve(
+        address pool_,
+        uint32 period_,
+        int56 tickCumulative0_,
+        int56 tickCumulative1_
+    ) internal {
+        // Input
+        uint32[] memory observationWindow = new uint32[](2);
+        observationWindow[0] = period_;
+        observationWindow[1] = 0;
+
+        // Output
+        int56[] memory tickCumulatives = new int56[](2);
+        tickCumulatives[0] = tickCumulative0_;
+        tickCumulatives[1] = tickCumulative1_;
+
+        uint160[] memory secondsPerLiquidityCumulativeX128s = new uint160[](2);
+
+        vm.mockCall(
+            address(pool_),
+            abi.encodeWithSelector(UniswapV3Pool.observe.selector, observationWindow),
+            abi.encode(tickCumulatives, secondsPerLiquidityCumulativeX128s)
         );
     }
 
@@ -1261,7 +1298,11 @@ contract BunniManagerTest is Test {
         // Prepare parameters for PRICE
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         {
-            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(address(bunniLens));
+            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(
+                address(bunniLens),
+                bunniManager.TWAP_DEFAULT_MAX_DEVIATION_BPS(),
+                bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW()
+            );
 
             feeds[0] = PRICEv2.Component(
                 toSubKeycode("PRICE.BNI"), // Subkeycode
@@ -1315,7 +1356,7 @@ contract BunniManagerTest is Test {
 
         // Register the asset with SPPLY
         vm.prank(address(SPPLY));
-        supplySubmoduleBunni.addBunniToken(address(poolToken), address(bunniLens));
+        supplySubmoduleBunni.addBunniToken(address(poolToken), address(bunniLens), 100, 30);
 
         // Expect a revert
         _expectRevert_tokenActivated(address(pool), toKeycode("SPPLY"));
@@ -1489,12 +1530,122 @@ contract BunniManagerTest is Test {
         // Check that the token has been added to PRICEv2
         PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
         assertTrue(priceAsset.approved);
+
+        // Check that the price feed has the correct parameters
+        PRICEv2.Component[] memory priceFeeds = abi.decode(priceAsset.feeds, (PRICEv2.Component[]));
+        BunniPrice.BunniParams memory bunniParams = abi.decode(
+            priceFeeds[0].params,
+            (BunniPrice.BunniParams)
+        );
+        assertEq(bunniParams.bunniLens, address(bunniLens));
+        assertEq(bunniParams.twapMaxDeviationsBps, bunniManager.TWAP_DEFAULT_MAX_DEVIATION_BPS());
+        assertEq(bunniParams.twapObservationWindow, bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW());
+
         // Check that the price is non-zero
         assertTrue(PRICE.getPrice(address(poolToken)) > 0);
 
         // Check that the token is included in SPPLY metrics
         uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
         assertTrue(polo > 0);
+
+        // Check that the token has been added to the BunniSupply submodule
+        (
+            IBunniToken submoduleBunniToken_,
+            BunniLens submoduleBunniLens_,
+            uint16 submoduleTwapMaxDeviation_,
+            uint32 submoduleTwapObservationWindow_
+        ) = supplySubmoduleBunni.bunniTokens(0);
+        assertEq(address(submoduleBunniToken_), address(poolToken));
+        assertEq(address(submoduleBunniLens_), address(bunniLens));
+        assertEq(submoduleTwapMaxDeviation_, bunniManager.TWAP_DEFAULT_MAX_DEVIATION_BPS());
+        assertEq(submoduleTwapObservationWindow_, bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW());
+    }
+
+    function test_activatePoolToken_twapParameters() public {
+        uint256 amount = 100e6;
+        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
+        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
+
+        // Deploy a token so that the ERC20 exists
+        vm.prank(policy);
+        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
+
+        // Mint tokens to the TRSRY
+        vm.prank(policy);
+        usdc.mint(treasuryAddress, USDC_DEPOSIT);
+
+        // Deposit
+        vm.prank(policy);
+        bunniManager.deposit(
+            address(pool),
+            ohmAddress,
+            OHM_DEPOSIT,
+            USDC_DEPOSIT,
+            SLIPPAGE_DEFAULT
+        );
+
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit PoolTokenActivated(address(pool), address(poolToken));
+
+        // Set TWAP parameters
+        uint16 twapMaxDeviationBps = 5000;
+        uint32 twapObservationWindow = bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW() + 1;
+
+        _mockPoolObserve(
+            address(pool),
+            twapObservationWindow,
+            OHM_USDC_TICK_CUMULATIVE_0,
+            OHM_USDC_TICK_CUMULATIVE_1
+        );
+
+        vm.prank(policy);
+        bunniManager.activatePoolToken(address(pool), twapMaxDeviationBps, twapObservationWindow);
+
+        // Check that the token has been added to TRSRY
+        OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
+        assertTrue(trsryAsset.approved);
+        assertEq(trsryAsset.locations.length, 1);
+        assertEq(trsryAsset.locations[0], treasuryAddress);
+        // Check that the token is categorized in TRSRY
+        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(
+            toTreasuryCategory("protocol-owned-liquidity")
+        );
+        assertEq(trsryPolAssets.length, 1);
+        assertEq(trsryPolAssets[0], address(poolToken));
+
+        // Check that the token has been added to PRICEv2
+        PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
+        assertTrue(priceAsset.approved);
+
+        // Check that the price feed has the correct parameters
+        PRICEv2.Component[] memory priceFeeds = abi.decode(priceAsset.feeds, (PRICEv2.Component[]));
+        BunniPrice.BunniParams memory bunniParams = abi.decode(
+            priceFeeds[0].params,
+            (BunniPrice.BunniParams)
+        );
+        assertEq(bunniParams.bunniLens, address(bunniLens));
+        assertEq(bunniParams.twapMaxDeviationsBps, twapMaxDeviationBps);
+        assertEq(bunniParams.twapObservationWindow, twapObservationWindow);
+
+        // Check that the price is non-zero
+        assertTrue(PRICE.getPrice(address(poolToken)) > 0);
+
+        // Check that the token is included in SPPLY metrics
+        uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
+        assertTrue(polo > 0);
+
+        // Check that the token has been added to the BunniSupply submodule
+        (
+            IBunniToken submoduleBunniToken_,
+            BunniLens submoduleBunniLens_,
+            uint16 submoduleTwapMaxDeviation_,
+            uint32 submoduleTwapObservationWindow_
+        ) = supplySubmoduleBunni.bunniTokens(0);
+        assertEq(address(submoduleBunniToken_), address(poolToken));
+        assertEq(address(submoduleBunniLens_), address(bunniLens));
+        assertEq(submoduleTwapMaxDeviation_, twapMaxDeviationBps);
+        assertEq(submoduleTwapObservationWindow_, twapObservationWindow);
     }
 
     // [X] deactivatePoolToken
@@ -1834,7 +1985,7 @@ contract BunniManagerTest is Test {
     function test_deposit_invalidUnderlyingTokenReverts() public {
         // Deploy the token
         vm.prank(policy);
-        IBunniToken bunniToken = bunniManager.deployPoolToken(address(pool));
+        bunniManager.deployPoolToken(address(pool));
 
         // Expect a revert
         bytes memory err = abi.encodeWithSelector(
