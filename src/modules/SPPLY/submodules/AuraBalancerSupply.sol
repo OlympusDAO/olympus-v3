@@ -201,6 +201,12 @@ contract AuraBalancerSupply is SupplySubmodule {
     }
 
     /// @inheritdoc SupplySubmodule
+    function getProtocolOwnedTreasuryOhm() external pure override returns (uint256) {
+        // POTO is always zero for liquidity pools
+        return 0;
+    }
+
+    /// @inheritdoc SupplySubmodule
     /// @dev        This function accesses the reserves of the monitored pools.
     /// @dev        In order to protect against re-entrancy attacks,
     /// @dev        it utilises the Balancer VaultReentrancyLib.

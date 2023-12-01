@@ -144,6 +144,13 @@ contract SiloSupply is SupplySubmodule {
     }
 
     /// @inheritdoc     SupplySubmodule
+    /// @dev            Protocol-owned treasury OHM is always zero for lending facilities
+    function getProtocolOwnedTreasuryOhm() external pure override returns (uint256) {
+        // POTO is always zero for lending facilities
+        return 0;
+    }
+
+    /// @inheritdoc     SupplySubmodule
     /// @dev            Protocol-owned liquidity OHM is always zero for lending facilities.
     ///
     /// @dev            This function returns an array with the same length as `getSourceCount()`, but with empty values.

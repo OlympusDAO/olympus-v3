@@ -207,6 +207,7 @@ contract AuraBalancerSupplyTest is Test {
     //  [X] No aura pool defined
     //  [X] Aura pool/Balancer pool BPT balances + pool OHM balance
     //  [X] multiple pools
+    // [X] getProtocolOwnedTreasuryOhm
     // [X] addPool
     //  [X] 0 address Balancer pool
     //  [X] 0 address Aura pool
@@ -1046,6 +1047,33 @@ contract AuraBalancerSupplyTest is Test {
         assertEq(reserves[1].balances.length, 2);
         assertEq(reserves[1].balances[0], expectedPoolTwoDaiBalance);
         assertEq(reserves[1].balances[1], expectedPoolTwoOhmBalance);
+    }
+
+    // =========  getProtocolOwnedTreasuryOhm  ========= //
+
+    function test_getProtocolOwnedTreasuryOhm(
+        uint256 polManagerBptBalance_,
+        uint256 poolOhmBalance_
+    ) public {
+        uint256 bptTotalSupply = BALANCER_POOL_TOTAL_SUPPLY;
+        uint256 polManagerBptBalance = bound(polManagerBptBalance_, 0, bptTotalSupply);
+        uint256 polManagerAuraBptBalance = 0;
+        uint256 poolOhmBalance = bound(poolOhmBalance_, 0, 10e9);
+        uint256 poolDaiBalance = 1e18;
+
+        // Set up the balances
+        balancerPool.setTotalSupply(bptTotalSupply);
+        balancerPool.setBalance(polManagerBptBalance);
+        auraPool.setBalance(polManagerAuraBptBalance);
+
+        uint256[] memory balancerPoolBalances = new uint256[](2);
+        balancerPoolBalances[0] = poolDaiBalance;
+        balancerPoolBalances[1] = poolOhmBalance;
+        balancerVault.setBalances(BALANCER_POOL_ID, balancerPoolBalances);
+
+        uint256 actual = submoduleAuraBalancerSupply.getProtocolOwnedTreasuryOhm();
+
+        assertEq(actual, 0);
     }
 
     // =========  addPool ========= //
