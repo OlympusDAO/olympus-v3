@@ -21,6 +21,17 @@ library UniswapV3OracleHelper {
 
     // ========  Errors  ======== //
 
+    /// @notice                       The observation window for `pool_` is too short
+    ///
+    /// @param pool_                  The address of the pool
+    /// @param observationWindow_     The observation window
+    /// @param minObservationWindow_  The minimum observation window
+    error UniswapV3OracleHelper_ObservationTooShort(
+        address pool_,
+        uint32 observationWindow_,
+        uint32 minObservationWindow_
+    );
+
     /// @notice                     The observation window for `pool_` is invalid
     ///
     /// @param pool_                The address of the pool
@@ -46,6 +57,7 @@ library UniswapV3OracleHelper {
     /// @dev               This is calculated as the difference between the tick at the end of the period and the tick at the beginning of the period, divided by the period
     ///
     /// @dev               This function will revert if:
+    ///                    - The observation window is too short
     ///                    - The observation window is longer than the oldest observation in the pool
     ///                    - The time-weighted tick is outside the bounds of permissible ticks
     ///
@@ -54,6 +66,14 @@ library UniswapV3OracleHelper {
     /// @return            The time-weighted tick
     function getTimeWeightedTick(address pool_, uint32 period_) public view returns (int56) {
         IUniswapV3Pool pool = IUniswapV3Pool(pool_);
+
+        // Ensure the observation window is long enough
+        if (period_ < TWAP_MIN_OBSERVATION_WINDOW)
+            revert UniswapV3OracleHelper_ObservationTooShort(
+                pool_,
+                period_,
+                TWAP_MIN_OBSERVATION_WINDOW
+            );
 
         // Get tick and liquidity from the TWAP
         uint32[] memory observationWindow = new uint32[](2);
@@ -104,6 +124,35 @@ library UniswapV3OracleHelper {
             uint128(10 ** token0.decimals()), // 1 unit of token0
             address(token0),
             address(token1)
+        );
+
+        return baseInQuote;
+    }
+
+    /// @notice                 Returns the ratio of token1 to token0 based on the TWAP
+    ///
+    /// @param pool_            The Uniswap V3 pool
+    /// @param period_          The period of the TWAP in seconds
+    /// @param token0_          The `token0` of the pool
+    /// @param token1_          The `token1` of the pool
+    /// @param token0Decimals_  The decimals of `token0_`
+    /// @return                 The ratio of token1 to token0 in the scale of token1 decimals
+    function getTWAPRatio(
+        address pool_,
+        uint32 period_,
+        address token0_,
+        address token1_,
+        uint8 token0Decimals_
+    ) public view returns (uint256) {
+        int56 timeWeightedTick = getTimeWeightedTick(pool_, period_);
+
+        // Quantity of token1 for 1 unit of token0 at the time-weighted tick
+        // Scale: token1 decimals
+        uint256 baseInQuote = OracleLibrary.getQuoteAtTick(
+            int24(timeWeightedTick),
+            uint128(10 ** token0Decimals_), // 1 unit of token0
+            token0_,
+            token1_
         );
 
         return baseInQuote;
