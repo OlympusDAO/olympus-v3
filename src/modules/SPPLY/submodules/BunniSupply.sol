@@ -463,6 +463,7 @@ contract BunniSupply is SupplySubmodule {
 
         // Revert if the relative deviation is greater than the maximum
         if (
+            // Not necessary to use `isDeviatingWithBpsCheck()` as the checked is already performed in `addBunniToken`
             Deviation.isDeviating(
                 reservesTokenRatio,
                 twapTokenRatio,

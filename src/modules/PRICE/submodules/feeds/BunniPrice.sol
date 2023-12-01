@@ -251,9 +251,10 @@ contract BunniPrice is PriceSubmodule {
             twapObservationWindow_
         );
 
-        // Revert if the relative deviation is greater than the maximum
+        // Revert if the relative deviation is greater than the maximum.
         if (
-            Deviation.isDeviating(
+            // `isDeviatingWithBpsCheck()` will revert if `deviationBps` is invalid.
+            Deviation.isDeviatingWithBpsCheck(
                 reservesTokenRatio,
                 twapTokenRatio,
                 twapMaxDeviationBps_,

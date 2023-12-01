@@ -223,7 +223,8 @@ contract UniswapV3Price is PriceSubmodule {
         // Check if the absolute deviation between the lookup and reserves price differs by more than reservesDeviationBps
         // If so, the reserves may be manipulated
         if (
-            Deviation.isDeviating(
+            // `isDeviatingWithBpsCheck()` will revert if `deviationBps` is invalid.
+            Deviation.isDeviatingWithBpsCheck(
                 baseInQuotePrice,
                 baseInQuoteTWAP,
                 params.maxDeviationBps,
