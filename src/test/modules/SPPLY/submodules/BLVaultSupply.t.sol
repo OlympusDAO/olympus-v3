@@ -279,9 +279,9 @@ contract BLVaultSupplyTest is Test {
         assertEq(reserves.length, 0);
     }
 
-    function test_getProtocolOwnedLiquidityReserves_oneVaultManager_fuzz(uint256 poolOhmShare_)
-        public
-    {
+    function test_getProtocolOwnedLiquidityReserves_oneVaultManager_fuzz(
+        uint256 poolOhmShare_
+    ) public {
         uint256 poolOhmShare = bound(poolOhmShare_, 0, 1000e9);
         vaultManagers[0].setPoolOhmShare(poolOhmShare);
 

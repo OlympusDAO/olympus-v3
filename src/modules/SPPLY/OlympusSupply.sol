@@ -302,13 +302,9 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
-    function getCategoryData(Category category_)
-        external
-        view
-        virtual
-        override
-        returns (CategoryData memory)
-    {
+    function getCategoryData(
+        Category category_
+    ) external view virtual override returns (CategoryData memory) {
         // Check if category is approved
         if (!categoryData[category_].approved) revert SPPLY_CategoryNotApproved(category_);
 
@@ -318,12 +314,9 @@ contract OlympusSupply is SPPLYv1 {
     /// @inheritdoc SPPLYv1
     /// @dev        Will revert if:
     /// @dev        - The category is not approved
-    function getLocationsByCategory(Category category_)
-        public
-        view
-        override
-        returns (address[] memory)
-    {
+    function getLocationsByCategory(
+        Category category_
+    ) public view override returns (address[] memory) {
         // Check if category is approved, if not revert
         if (!categoryData[category_].approved) revert SPPLY_CategoryNotApproved(category_);
 
@@ -363,13 +356,9 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
-    function getCategoryByLocation(address location_)
-        external
-        view
-        virtual
-        override
-        returns (Category)
-    {
+    function getCategoryByLocation(
+        address location_
+    ) external view virtual override returns (Category) {
         return categorization[location_];
     }
 
@@ -396,12 +385,10 @@ contract OlympusSupply is SPPLYv1 {
     ///
     /// @dev        Will revert if:
     /// @dev        - The category is not approved
-    function getSupplyByCategory(Category category_, uint48 maxAge_)
-        external
-        view
-        override
-        returns (uint256)
-    {
+    function getSupplyByCategory(
+        Category category_,
+        uint48 maxAge_
+    ) external view override returns (uint256) {
         // Try to use the last value, must be updated more recently than maxAge
         // getSupplyByCategory checks if category is approved
         (uint256 supply, uint48 timestamp) = getSupplyByCategory(category_, Variant.LAST);
@@ -415,12 +402,10 @@ contract OlympusSupply is SPPLYv1 {
     /// @inheritdoc SPPLYv1
     /// @dev        Will revert if:
     /// @dev        - The category is not approved
-    function getSupplyByCategory(Category category_, Variant variant_)
-        public
-        view
-        override
-        returns (uint256, uint48)
-    {
+    function getSupplyByCategory(
+        Category category_,
+        Variant variant_
+    ) public view override returns (uint256, uint48) {
         // Check if category is approved
         if (!categoryData[category_].approved) revert SPPLY_CategoryNotApproved(category_);
 
@@ -500,12 +485,9 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
-    function getReservesByCategory(Category category_)
-        external
-        view
-        override
-        returns (Reserves[] memory)
-    {
+    function getReservesByCategory(
+        Category category_
+    ) external view override returns (Reserves[] memory) {
         // Check if category is approved
         if (!categoryData[category_].approved) revert SPPLY_CategoryNotApproved(category_);
 
@@ -654,12 +636,10 @@ contract OlympusSupply is SPPLYv1 {
     /// @dev        Will revert if:
     /// @dev        - The value for `metric_` is invalid
     /// @dev        - The value for `variant_` is invalid
-    function getMetric(Metric metric_, Variant variant_)
-        public
-        view
-        override
-        returns (uint256, uint48)
-    {
+    function getMetric(
+        Metric metric_,
+        Variant variant_
+    ) public view override returns (uint256, uint48) {
         if (variant_ == Variant.LAST) {
             return (metricCache[metric_].value, metricCache[metric_].timestamp);
         } else if (variant_ == Variant.CURRENT) {

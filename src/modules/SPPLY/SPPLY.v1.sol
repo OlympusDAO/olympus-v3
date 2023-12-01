@@ -222,11 +222,9 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     ///
     /// @param category_    The category to query
     /// @return             The category data
-    function getCategoryData(Category category_)
-        external
-        view
-        virtual
-        returns (CategoryData memory);
+    function getCategoryData(
+        Category category_
+    ) external view virtual returns (CategoryData memory);
 
     /// @notice             Returns the category for a location
     ///
@@ -238,11 +236,9 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     ///
     /// @param category_    The category to query
     /// @return             An array of addresses
-    function getLocationsByCategory(Category category_)
-        external
-        view
-        virtual
-        returns (address[] memory);
+    function getLocationsByCategory(
+        Category category_
+    ) external view virtual returns (address[] memory);
 
     /// @notice             Returns the OHM supply for a category
     ///
@@ -255,22 +251,20 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     /// @param category_    The category to query
     /// @param maxAge_      The maximum age (in seconds) of the cached value
     /// @return             The OHM supply for the category in the configured decimals
-    function getSupplyByCategory(Category category_, uint48 maxAge_)
-        external
-        view
-        virtual
-        returns (uint256);
+    function getSupplyByCategory(
+        Category category_,
+        uint48 maxAge_
+    ) external view virtual returns (uint256);
 
     /// @notice             Returns OHM supply for a category with the requested variant
     ///
     /// @param category_    The category to query
     /// @param variant_     The variant to query
     /// @return             The OHM supply for the category in the configured decimals and the timestamp at which it was calculated
-    function getSupplyByCategory(Category category_, Variant variant_)
-        external
-        view
-        virtual
-        returns (uint256, uint48);
+    function getSupplyByCategory(
+        Category category_,
+        Variant variant_
+    ) external view virtual returns (uint256, uint48);
 
     /// @notice             Calculates and stores the current value of the category supply
     ///
@@ -278,11 +272,9 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     function storeCategorySupply(Category category_) external virtual;
 
     /// @notice             Returns the underlying reserves for a category
-    function getReservesByCategory(Category category_)
-        external
-        view
-        virtual
-        returns (Reserves[] memory);
+    function getReservesByCategory(
+        Category category_
+    ) external view virtual returns (Reserves[] memory);
 
     //============================================================================================//
     //                                       SUPPLY METRICS                                       //
@@ -307,11 +299,10 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     /// @param variant_ The variant to query
     /// @return         The value of the metric in the module's configured decimals
     /// @return         The timestamp at which it was calculated
-    function getMetric(Metric metric_, Variant variant_)
-        external
-        view
-        virtual
-        returns (uint256, uint48);
+    function getMetric(
+        Metric metric_,
+        Variant variant_
+    ) external view virtual returns (uint256, uint48);
 
     /// @notice         Calculates and stores the current value of the metric
     ///
