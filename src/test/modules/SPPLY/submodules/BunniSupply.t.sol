@@ -73,16 +73,16 @@ contract BunniSupplyTest is Test {
     uint128 internal constant OHM_USDC_POOL_LIQUIDITY = 349484367626548;
     // Current tick: -44579
     uint160 internal constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
-    // NOTE: these numbers are fudged to match the current tick
-    int56 internal constant OHM_USDC_TICK_CUMULATIVE_0 = -2463078395000;
+    // NOTE: these numbers are fudged to match the current tick and default observation window from BunniManager
+    int56 internal constant OHM_USDC_TICK_CUMULATIVE_0 = -2463052984970;
     int56 internal constant OHM_USDC_TICK_CUMULATIVE_1 = -2463079732370;
 
     uint128 internal constant OHM_WETH_POOL_LIQUIDITY = 602219599341335870;
     // Current tick: 156194
     uint160 internal constant OHM_WETH_SQRTPRICEX96 = 195181081174522229204497247535278;
-    // NOTE: these numbers are fudged to match the current tick
+    // NOTE: these numbers are fudged to match the current tick and default observation window from BunniManager
     int56 internal constant OHM_WETH_TICK_CUMULATIVE_0 = -2463078395000;
-    int56 internal constant OHM_WETH_TICK_CUMULATIVE_1 = -2463073709180;
+    int56 internal constant OHM_WETH_TICK_CUMULATIVE_1 = -2462984678600;
 
     // DO NOT change these salt values, as they are used to ensure that the addresses are deterministic, and the SQRTPRICEX96 values depend on the ordering
     bytes32 private constant OHM_SALT =
@@ -93,7 +93,7 @@ contract BunniSupplyTest is Test {
         0x0000000000000000000000000000000000000000000000000000000000000002;
 
     uint16 internal constant TWAP_MAX_DEVIATION_BPS = 100; // 1%
-    uint32 internal constant TWAP_OBSERVATION_WINDOW = 30;
+    uint32 internal constant TWAP_OBSERVATION_WINDOW = 600; // 10 minutes
 
     // Events
     event BunniTokenAdded(address token_, address bunniLens_);
@@ -420,8 +420,8 @@ contract BunniSupplyTest is Test {
         );
 
         // Mock the pool returning a TWAP that would normally deviate enough to revert
-        int56 tickCumulative0_ = -2416639538393;
-        int56 tickCumulative1_ = -2416640880953;
+        int56 tickCumulative0_ = -2463052904970;
+        int56 tickCumulative1_ = OHM_USDC_TICK_CUMULATIVE_1;
         int56[] memory tickCumulatives = new int56[](2);
         tickCumulatives[0] = tickCumulative0_;
         tickCumulatives[1] = tickCumulative1_;
@@ -511,14 +511,15 @@ contract BunniSupplyTest is Test {
         uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // USDC decimals: 6
 
         // Mock the pool returning a TWAP that deviates enough to revert
-        int56 tickCumulative0_ = -2416639538393;
-        int56 tickCumulative1_ = -2416640880953;
+        int56 tickCumulative0_ = -2463052904970;
+        int56 tickCumulative1_ = OHM_USDC_TICK_CUMULATIVE_1;
         int56[] memory tickCumulatives = new int56[](2);
         tickCumulatives[0] = tickCumulative0_;
         tickCumulatives[1] = tickCumulative1_;
         uniswapPool.setTickCumulatives(tickCumulatives);
 
         // Calculate the expected TWAP price
+        // 11436143
         int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) /
             int32(TWAP_OBSERVATION_WINDOW);
         uint256 twapRatio = OracleLibrary.getQuoteAtTick(
@@ -529,7 +530,7 @@ contract BunniSupplyTest is Test {
         ); // USDC decimals: 6
 
         // Set up revert
-        // Will revert as the TWAP deviates from the reserves ratio
+        // Will revert as the TWAP deviates from the reserves ratio by more than TWAP_MAX_DEVIATION_BPS
         bytes memory err = abi.encodeWithSelector(
             BunniSupply.BunniSupply_PriceMismatch.selector,
             address(uniswapPool),
@@ -658,8 +659,9 @@ contract BunniSupplyTest is Test {
         );
 
         // Mock the pool returning a TWAP that would normally deviate enough to revert
-        int56 tickCumulative0_ = -2416639538393;
-        int56 tickCumulative1_ = -2416640880953;
+        // 11436143
+        int56 tickCumulative0_ = -2463052904970;
+        int56 tickCumulative1_ = OHM_USDC_TICK_CUMULATIVE_1;
         int56[] memory tickCumulatives = new int56[](2);
         tickCumulatives[0] = tickCumulative0_;
         tickCumulatives[1] = tickCumulative1_;

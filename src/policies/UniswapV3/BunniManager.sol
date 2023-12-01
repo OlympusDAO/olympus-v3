@@ -228,8 +228,14 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     // Constants
     uint16 private constant BPS_MAX = 10_000; // 100%
     uint16 public constant SLIPPAGE_DEFAULT = 100; // 1%
+
+    /// @notice     The default maximum deviation for Uniswap V3 TWAPs
+    /// @dev        This is used when configuring a pool token with SPPLY and PRICE
     uint16 public constant TWAP_DEFAULT_MAX_DEVIATION_BPS = 100; // 1%
-    uint16 public constant TWAP_DEFAULT_OBSERVATION_WINDOW = 30; // seconds
+
+    /// @notice     The default observation window for Uniswap V3 TWAPs
+    /// @dev        This is used when configuring a pool token with SPPLY and PRICE
+    uint16 public constant TWAP_DEFAULT_OBSERVATION_WINDOW = 600; // 10 minutes
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //

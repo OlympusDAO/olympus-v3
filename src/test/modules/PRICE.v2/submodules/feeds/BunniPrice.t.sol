@@ -64,8 +64,8 @@ contract BunniPriceTest is Test {
     uint128 internal constant POOL_LIQUIDITY = 349484367626548;
     // Current tick: -44579
     uint160 internal constant POOL_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
-    // NOTE: these numbers are fudged to match the current tick
-    int56 internal constant OHM_USDC_TICK_CUMULATIVE_0 = -2463078395000;
+    // NOTE: these numbers are fudged to match the current tick and default observation window from BunniManager
+    int56 internal constant OHM_USDC_TICK_CUMULATIVE_0 = -2463052984970;
     int56 internal constant OHM_USDC_TICK_CUMULATIVE_1 = -2463079732370;
 
     uint8 internal constant PRICE_DECIMALS = 18;
@@ -80,7 +80,7 @@ contract BunniPriceTest is Test {
         0x0000000000000000000000000000000000000000000000000000000000000002;
 
     uint16 internal constant TWAP_MAX_DEVIATION_BPS = 100; // 1%
-    uint32 internal constant TWAP_OBSERVATION_WINDOW = 30;
+    uint32 internal constant TWAP_OBSERVATION_WINDOW = 600;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)

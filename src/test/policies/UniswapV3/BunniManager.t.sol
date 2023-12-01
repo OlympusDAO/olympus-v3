@@ -100,16 +100,14 @@ contract BunniManagerTest is Test {
     uint256 private constant OHM_USDC_PRICE = 115897 * 1e14; // 11.5897 USDC per OHM in 18 decimal places
     // Current tick: -44579
     uint160 private constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
-    // NOTE: these numbers are fudged to match the current tick
-    int56 internal constant OHM_USDC_TICK_CUMULATIVE_0 = -2463078395000;
+    // NOTE: these numbers are fudged to match the current tick and default observation window from BunniManager
+    int56 internal constant OHM_USDC_TICK_CUMULATIVE_0 = -2463052984970;
     int56 internal constant OHM_USDC_TICK_CUMULATIVE_1 = -2463079732370;
 
     uint160 private constant DAI_USDC_SQRTPRICEX96 = 79227120762198600072084; // From DAI-USDC, 1 DAI = 1 USDC
 
     uint24 private constant TICK_SPACING_DIVISOR = 50;
     int24 private constant TICK = 887270; // (887272/(500/50))*(500/50)
-
-    uint8 private constant BUNNI_TOKEN_DECIMALS = 18;
 
     uint16 private constant BPS_MAX = 10_000; // 100%
 
@@ -1302,8 +1300,8 @@ contract BunniManagerTest is Test {
         {
             BunniPrice.BunniParams memory params = BunniPrice.BunniParams(
                 address(bunniLens),
-                100,
-                30
+                bunniManager.TWAP_DEFAULT_MAX_DEVIATION_BPS(),
+                bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW()
             );
 
             feeds[0] = PRICEv2.Component(
@@ -1592,7 +1590,7 @@ contract BunniManagerTest is Test {
 
         // Set TWAP parameters
         uint16 twapMaxDeviationBps = 5000;
-        uint32 twapObservationWindow = 29;
+        uint32 twapObservationWindow = bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW() + 1;
 
         _mockPoolObserve(
             address(pool),
