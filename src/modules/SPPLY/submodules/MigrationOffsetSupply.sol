@@ -22,7 +22,7 @@ contract MigrationOffsetSupply is CustomSupply {
         Module parent_,
         address source_,
         uint256 gOhmOffset_
-    ) CustomSupply(parent_, 0, 0, 0, source_) {
+    ) CustomSupply(parent_, 0, 0, 0, 0, source_) {
         gOhmOffset = gOhmOffset_;
 
         emit GOhmOffsetUpdated(gOhmOffset_);
@@ -48,7 +48,7 @@ contract MigrationOffsetSupply is CustomSupply {
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Calculated as the quantity of gOHM (`gOhmOffset`) multiplied by the current index
-    function getCollateralizedOhm() external view override returns (uint256) {
+    function getProtocolOwnedTreasuryOhm() external view override returns (uint256) {
         // Convert from gOHM to OHM using the current index
         IgOHM gOHM = IgOHM(address(SPPLYv1(address(parent)).gohm()));
 
