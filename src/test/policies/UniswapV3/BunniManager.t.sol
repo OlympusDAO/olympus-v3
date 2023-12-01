@@ -1300,7 +1300,11 @@ contract BunniManagerTest is Test {
         // Prepare parameters for PRICE
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         {
-            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(address(bunniLens));
+            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(
+                address(bunniLens),
+                100,
+                30
+            );
 
             feeds[0] = PRICEv2.Component(
                 toSubKeycode("PRICE.BNI"), // Subkeycode
@@ -1528,6 +1532,17 @@ contract BunniManagerTest is Test {
         // Check that the token has been added to PRICEv2
         PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
         assertTrue(priceAsset.approved);
+
+        // Check that the price feed has the correct parameters
+        PRICEv2.Component[] memory priceFeeds = abi.decode(priceAsset.feeds, (PRICEv2.Component[]));
+        BunniPrice.BunniParams memory bunniParams = abi.decode(
+            priceFeeds[0].params,
+            (BunniPrice.BunniParams)
+        );
+        assertEq(bunniParams.bunniLens, address(bunniLens));
+        assertEq(bunniParams.twapMaxDeviationsBps, bunniManager.TWAP_DEFAULT_MAX_DEVIATION_BPS());
+        assertEq(bunniParams.twapObservationWindow, bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW());
+
         // Check that the price is non-zero
         assertTrue(PRICE.getPrice(address(poolToken)) > 0);
 
@@ -1604,6 +1619,17 @@ contract BunniManagerTest is Test {
         // Check that the token has been added to PRICEv2
         PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
         assertTrue(priceAsset.approved);
+
+        // Check that the price feed has the correct parameters
+        PRICEv2.Component[] memory priceFeeds = abi.decode(priceAsset.feeds, (PRICEv2.Component[]));
+        BunniPrice.BunniParams memory bunniParams = abi.decode(
+            priceFeeds[0].params,
+            (BunniPrice.BunniParams)
+        );
+        assertEq(bunniParams.bunniLens, address(bunniLens));
+        assertEq(bunniParams.twapMaxDeviationsBps, twapMaxDeviationBps);
+        assertEq(bunniParams.twapObservationWindow, twapObservationWindow);
+
         // Check that the price is non-zero
         assertTrue(PRICE.getPrice(address(poolToken)) > 0);
 

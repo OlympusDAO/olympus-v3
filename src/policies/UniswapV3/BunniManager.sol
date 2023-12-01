@@ -934,7 +934,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         // Register the pool token with TRSRY, PRICE and SPPLY (each will check for prior activation)
-        _addPoolTokenToPRICE(pool_, poolTokenAddress);
+        _addPoolTokenToPRICE(pool_, poolTokenAddress, twapMaxDeviationBps_, twapObservationWindow_);
         _addPoolTokenToTRSRY(pool_, poolTokenAddress);
         _addPoolTokenToSPPLY(pool_, poolTokenAddress, twapMaxDeviationBps_, twapObservationWindow_);
 
@@ -1041,14 +1041,21 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         }
     }
 
-    /// @notice             Registers `poolToken_` as an asset in the PRICE module
-    /// @dev                This function performs the following:
-    /// @dev                - Checks if the asset is already registered, and reverts if so
-    /// @dev                - Calls `PRICE.addAsset`
+    /// @notice                         Registers `poolToken_` as an asset in the PRICE module
+    /// @dev                            This function performs the following:
+    /// @dev                            - Checks if the asset is already registered, and reverts if so
+    /// @dev                            - Calls `PRICE.addAsset`
     ///
-    /// @param pool_        The pool to register
-    /// @param poolToken_   The pool token to register
-    function _addPoolTokenToPRICE(address pool_, address poolToken_) internal {
+    /// @param pool_                    The pool to register
+    /// @param poolToken_               The pool token to register
+    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP
+    /// @param twapObservationWindow_   The TWAP observation window
+    function _addPoolTokenToPRICE(
+        address pool_,
+        address poolToken_,
+        uint16 twapMaxDeviationBps_,
+        uint32 twapObservationWindow_
+    ) internal {
         PRICEv2.Asset memory assetData = PRICE.getAssetData(poolToken_);
         // Revert if already activated
         if (assetData.approved == true) {
@@ -1058,7 +1065,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Prepare price feeds
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         {
-            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(address(bunniLens));
+            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(
+                address(bunniLens),
+                twapMaxDeviationBps_,
+                twapObservationWindow_
+            );
 
             feeds[0] = PRICEv2.Component(
                 toSubKeycode("PRICE.BNI"), // Subkeycode

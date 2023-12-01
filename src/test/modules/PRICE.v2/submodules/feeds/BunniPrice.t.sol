@@ -26,6 +26,11 @@ import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
 import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 
+// Libraries
+import {FullMath} from "libraries/FullMath.sol";
+import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
+import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
+
 contract BunniPriceTest is Test {
     using FullMath for uint256;
     // using ModuleTestFixtureGenerator for BunniPrice;
@@ -54,25 +59,36 @@ contract BunniPriceTest is Test {
 
     UserFactory public userFactory;
 
+    // OHM-USDC Uni V3 pool, based on: 0x893f503fac2ee1e5b78665db23f9c94017aae97d
+    // token0: OHM, token1: USDC
     uint128 internal constant POOL_LIQUIDITY = 349484367626548;
-    uint160 internal constant POOL_SQRTPRICEX96 = 8467282393668682240084879204;
+    // Current tick: -44579
+    uint160 internal constant POOL_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
+    // NOTE: these numbers are fudged to match the current tick
+    int56 internal constant OHM_USDC_TICK_CUMULATIVE_0 = -2463078395000;
+    int56 internal constant OHM_USDC_TICK_CUMULATIVE_1 = -2463079732370;
 
     uint8 internal constant PRICE_DECIMALS = 18;
 
     uint256 internal constant USDC_PRICE = 1 * 10 ** PRICE_DECIMALS;
     uint256 internal constant OHM_PRICE = 11 * 10 ** PRICE_DECIMALS;
 
-    // Derived from the POOL_LIQUIDITY and POOL_SQRTPRICEX96 constants
-    uint256 internal constant OHM_RESERVES = 3270117020688384;
-    uint256 internal constant USDC_RESERVES = 37350138371995;
+    // DO NOT change these salt values, as they are used to ensure that the addresses are deterministic, and the SQRTPRICEX96 values depend on the ordering
+    bytes32 private constant OHM_SALT =
+        0x0000000000000000000000000000000000000000000000000000000000000001;
+    bytes32 private constant USDC_SALT =
+        0x0000000000000000000000000000000000000000000000000000000000000002;
+
+    uint16 internal constant TWAP_MAX_DEVIATION_BPS = 100; // 1%
+    uint32 internal constant TWAP_OBSERVATION_WINDOW = 30;
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
 
         // Tokens
         {
-            ohmToken = new MockERC20("OHM", "OHM", OHM_DECIMALS);
-            usdcToken = new MockERC20("USDC", "USDC", USDC_DECIMALS);
+            ohmToken = new MockERC20{salt: OHM_SALT}("OHM", "OHM", OHM_DECIMALS);
+            usdcToken = new MockERC20{salt: USDC_SALT}("USDC", "USDC", USDC_DECIMALS);
 
             OHM = address(ohmToken);
             USDC = address(usdcToken);
@@ -112,7 +128,14 @@ contract BunniPriceTest is Test {
                 MockUniV3Pair uniswapPool_,
                 BunniKey memory poolTokenKey_,
                 BunniToken poolToken_
-            ) = _setUpPool(OHM, USDC, POOL_LIQUIDITY, POOL_SQRTPRICEX96);
+            ) = _setUpPool(
+                    OHM,
+                    USDC,
+                    POOL_LIQUIDITY,
+                    POOL_SQRTPRICEX96,
+                    OHM_USDC_TICK_CUMULATIVE_0,
+                    OHM_USDC_TICK_CUMULATIVE_1
+                );
 
             uniswapPool = uniswapPool_;
             poolTokenKey = poolTokenKey_;
@@ -133,13 +156,20 @@ contract BunniPriceTest is Test {
         address token0_,
         address token1_,
         uint128 liquidity_,
-        uint160 sqrtPriceX96_
+        uint160 sqrtPriceX96_,
+        int56 sqrtPriceX96Cumulative0_,
+        int56 sqrtPriceX96Cumulative1_
     ) internal returns (MockUniV3Pair, BunniKey memory, BunniToken) {
         MockUniV3Pair pool = new MockUniV3Pair();
         pool.setToken0(token0_);
         pool.setToken1(token1_);
         pool.setLiquidity(liquidity_);
         pool.setSqrtPrice(sqrtPriceX96_);
+
+        int56[] memory tickCumulatives = new int56[](2);
+        tickCumulatives[0] = sqrtPriceX96Cumulative0_;
+        tickCumulatives[1] = sqrtPriceX96Cumulative1_;
+        pool.setTickCumulatives(tickCumulatives);
 
         BunniKey memory key = BunniKey({
             pool: IUniswapV3Pool(address(pool)),
@@ -174,6 +204,14 @@ contract BunniPriceTest is Test {
             lens_
         );
         vm.expectRevert(err);
+    }
+
+    function _getReserves(
+        BunniKey memory key_,
+        BunniLens lens_
+    ) internal view returns (uint256, uint256) {
+        (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
+        return (reserve0, reserve1);
     }
 
     // ========= TESTS ========= //
@@ -228,11 +266,18 @@ contract BunniPriceTest is Test {
     //  [X] Reverts if bunniToken is not a valid BunniToken
     //  [X] Reverts if bunniToken and bunniLens do not have the same BunniHub
     //  [X] Reverts if any of the reserve assets are not defined as assets in PRICE
+    //  [X] Reverts if the reserves deviate from the TWAP
     //  [X] Correctly calculates balances for different decimal scale
     //  [X] Correctly handles different output decimals
 
     function test_getBunniTokenPrice_zeroBunniLensReverts() public {
-        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: address(0)}));
+        bytes memory params = abi.encode(
+            BunniPrice.BunniParams({
+                bunniLens: address(0),
+                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
+                twapObservationWindow: TWAP_OBSERVATION_WINDOW
+            })
+        );
 
         _expectRevert_invalidBunniLens(address(0));
 
@@ -240,7 +285,13 @@ contract BunniPriceTest is Test {
     }
 
     function test_getBunniTokenPrice_invalidBunniLensReverts() public {
-        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: address(bunniHub)}));
+        bytes memory params = abi.encode(
+            BunniPrice.BunniParams({
+                bunniLens: address(bunniHub),
+                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
+                twapObservationWindow: TWAP_OBSERVATION_WINDOW
+            })
+        );
 
         _expectRevert_invalidBunniLens(address(bunniHub));
 
@@ -248,7 +299,13 @@ contract BunniPriceTest is Test {
     }
 
     function test_getBunniTokenPrice_zeroBunniTokenReverts() public {
-        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+        bytes memory params = abi.encode(
+            BunniPrice.BunniParams({
+                bunniLens: bunniLensAddress,
+                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
+                twapObservationWindow: TWAP_OBSERVATION_WINDOW
+            })
+        );
 
         _expectRevert_invalidBunniToken(address(0));
 
@@ -256,7 +313,13 @@ contract BunniPriceTest is Test {
     }
 
     function test_getBunniTokenPrice_invalidBunniTokenReverts() public {
-        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+        bytes memory params = abi.encode(
+            BunniPrice.BunniParams({
+                bunniLens: bunniLensAddress,
+                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
+                twapObservationWindow: TWAP_OBSERVATION_WINDOW
+            })
+        );
 
         _expectRevert_invalidBunniToken(address(bunniHub));
 
@@ -283,7 +346,11 @@ contract BunniPriceTest is Test {
         vm.expectRevert(err);
 
         bytes memory params = abi.encode(
-            BunniPrice.BunniParams({bunniLens: address(newBunniLens)})
+            BunniPrice.BunniParams({
+                bunniLens: address(newBunniLens),
+                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
+                twapObservationWindow: TWAP_OBSERVATION_WINDOW
+            })
         );
 
         submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
@@ -303,20 +370,33 @@ contract BunniPriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+        bytes memory params = abi.encode(
+            BunniPrice.BunniParams({
+                bunniLens: bunniLensAddress,
+                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
+                twapObservationWindow: TWAP_OBSERVATION_WINDOW
+            })
+        );
 
         submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
     }
 
     function test_getBunniTokenPrice() public {
         // Calculate the expected price
-        uint256 ohmReserve = OHM_RESERVES.mulDiv(10 ** PRICE_DECIMALS, 10 ** OHM_DECIMALS);
-        uint256 usdcReserve = USDC_RESERVES.mulDiv(10 ** PRICE_DECIMALS, 10 ** USDC_DECIMALS);
+        (uint256 ohmReserve_, uint256 usdcReserve_) = _getReserves(poolTokenKey, bunniLens);
+        uint256 ohmReserve = ohmReserve_.mulDiv(10 ** PRICE_DECIMALS, 10 ** OHM_DECIMALS);
+        uint256 usdcReserve = usdcReserve_.mulDiv(10 ** PRICE_DECIMALS, 10 ** USDC_DECIMALS);
         uint256 expectedPrice = ohmReserve.mulDiv(OHM_PRICE, 1e18) +
             usdcReserve.mulDiv(USDC_PRICE, 1e18);
 
         // Call
-        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+        bytes memory params = abi.encode(
+            BunniPrice.BunniParams({
+                bunniLens: bunniLensAddress,
+                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
+                twapObservationWindow: TWAP_OBSERVATION_WINDOW
+            })
+        );
         uint256 price = submoduleBunniPrice.getBunniTokenPrice(
             poolTokenAddress,
             PRICE_DECIMALS,
@@ -326,6 +406,51 @@ contract BunniPriceTest is Test {
         // Check values
         assertTrue(price > 0, "should be non-zero");
         assertEq(price, expectedPrice);
+    }
+
+    function test_getBunniTokenPrice_twapDeviationReverts() public {
+        // Determine the amount of reserves in the pool, which should be consistent with the lens value
+        (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
+        // 11421651 = 11.42 USD/OHM
+        uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // USDC decimals: 6
+
+        // Mock the pool returning a TWAP that deviates enough to revert
+        int56 tickCumulative0_ = -2416639538393;
+        int56 tickCumulative1_ = -2416640880953;
+        int56[] memory tickCumulatives = new int56[](2);
+        tickCumulatives[0] = tickCumulative0_;
+        tickCumulatives[1] = tickCumulative1_;
+        uniswapPool.setTickCumulatives(tickCumulatives);
+
+        // Calculate the expected TWAP price
+        int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) /
+            int32(TWAP_OBSERVATION_WINDOW);
+        uint256 twapRatio = OracleLibrary.getQuoteAtTick(
+            int24(timeWeightedTick),
+            uint128(10 ** 9), // token0 (OHM) decimals
+            OHM,
+            USDC
+        ); // USDC decimals: 6
+
+        // Set up revert
+        // Will revert as the TWAP deviates from the reserves ratio
+        bytes memory err = abi.encodeWithSelector(
+            BunniPrice.BunniPrice_PriceMismatch.selector,
+            address(uniswapPool),
+            twapRatio,
+            reservesRatio
+        );
+        vm.expectRevert(err);
+
+        // Call
+        bytes memory params = abi.encode(
+            BunniPrice.BunniParams({
+                bunniLens: bunniLensAddress,
+                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
+                twapObservationWindow: TWAP_OBSERVATION_WINDOW
+            })
+        );
+        submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
     }
 
     function test_getBunniTokenPrice_outputDecimalsFuzz(uint256 outputDecimals_) public {
@@ -340,13 +465,20 @@ contract BunniPriceTest is Test {
         mockAssetPrice(USDC, usdcPrice);
 
         // Calculate the expected price
-        uint256 ohmReserve = OHM_RESERVES.mulDiv(10 ** outputDecimals, 10 ** OHM_DECIMALS);
-        uint256 usdcReserve = USDC_RESERVES.mulDiv(10 ** outputDecimals, 10 ** USDC_DECIMALS);
+        (uint256 ohmReserve_, uint256 usdcReserve_) = _getReserves(poolTokenKey, bunniLens);
+        uint256 ohmReserve = ohmReserve_.mulDiv(10 ** outputDecimals, 10 ** OHM_DECIMALS);
+        uint256 usdcReserve = usdcReserve_.mulDiv(10 ** outputDecimals, 10 ** USDC_DECIMALS);
         uint256 expectedPrice = ohmReserve.mulDiv(ohmPrice, 10 ** outputDecimals) +
             usdcReserve.mulDiv(usdcPrice, 10 ** outputDecimals);
 
         // Call
-        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+        bytes memory params = abi.encode(
+            BunniPrice.BunniParams({
+                bunniLens: bunniLensAddress,
+                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
+                twapObservationWindow: TWAP_OBSERVATION_WINDOW
+            })
+        );
         uint256 price = submoduleBunniPrice.getBunniTokenPrice(
             poolTokenAddress,
             outputDecimals,
@@ -370,7 +502,13 @@ contract BunniPriceTest is Test {
         vm.expectRevert(err);
 
         // Call
-        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
+        bytes memory params = abi.encode(
+            BunniPrice.BunniParams({
+                bunniLens: bunniLensAddress,
+                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
+                twapObservationWindow: TWAP_OBSERVATION_WINDOW
+            })
+        );
         submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
     }
 }
