@@ -12,6 +12,11 @@ These contracts will be installed in the Olympus V3 "Bophades" system, based on 
 
 The contracts in-scope for this audit are:
 
+* [libraries/](../../src/libraries/)
+  * [Deviation.sol](../../src/libraries/Deviation.sol)
+  * [UniswapV3/](../../src/libraries/UniswapV3/)
+    * [BunniHelper.sol](../../src/libraries/UniswapV3/BunniHelper.sol)
+    * [Oracle.sol](../../src/libraries/UniswapV3/Oracle.sol)
 * [modules/](../../src/modules)
   * [SPPLY/](../../src/modules/SPPLY)
     * [submodules/](../../src/modules/SPPLY/submodules)
@@ -29,11 +34,6 @@ The contracts in-scope for this audit are:
   * [TRSRY/](../../src/modules/TRSRY)
     * [OlympusTreasury.sol](../../src/modules/TRSRY/OlympusTreasury.sol)
     * [TRSRY.v1.sol](../../src/modules/TRSRY/TRSRY.v1.sol)
-* [libraries/](../../src/libraries/)
-  * [Deviation.sol](../../src/libraries/Deviation.sol)
-  * [UniswapV3/](../../src/libraries/UniswapV3/)
-    * [BunniHelper.sol](../../src/libraries/UniswapV3/BunniHelper.sol)
-    * [Oracle.sol](../../src/libraries/UniswapV3/Oracle.sol)
 
 Tests for the in-scope contracts are contained in the following locations:
 
