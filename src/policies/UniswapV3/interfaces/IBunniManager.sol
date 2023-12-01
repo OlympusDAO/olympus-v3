@@ -40,8 +40,14 @@ interface IBunniManager {
     ///
     /// @notice         This function will register the pool token with TRSRY, PRICE and SPPLY.
     ///
-    /// @param pool_    The address of the Uniswap V3 pool
-    function activatePoolToken(address pool_) external;
+    /// @param pool_                    The address of the Uniswap V3 pool
+    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP
+    /// @param twapObservationWindow_   The TWAP observation window
+    function activatePoolToken(
+        address pool_,
+        uint16 twapMaxDeviationBps_,
+        uint32 twapObservationWindow_
+    ) external;
 
     /// @notice         Deactivates the ERC20 token for the given Uniswap V3 pool
     ///

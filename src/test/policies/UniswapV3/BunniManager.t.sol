@@ -96,6 +96,9 @@ contract BunniManagerTest is Test {
     address internal bunniLensAddress;
     address internal bunniManagerAddress;
 
+    uint16 internal constant TWAP_DEFAULT_MAX_DEVIATION_BPS = 100; // 1%
+    uint32 internal constant TWAP_DEFAULT_OBSERVATION_WINDOW = 600;
+
     uint24 private constant POOL_FEE = 500;
     uint256 private constant OHM_USDC_PRICE = 115897 * 1e14; // 11.5897 USDC per OHM in 18 decimal places
     // Current tick: -44579
@@ -294,7 +297,7 @@ contract BunniManagerTest is Test {
             // Mock observations
             _mockPoolObserve(
                 address(pool),
-                bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW(),
+                TWAP_DEFAULT_OBSERVATION_WINDOW,
                 OHM_USDC_TICK_CUMULATIVE_0,
                 OHM_USDC_TICK_CUMULATIVE_1
             );
@@ -385,14 +388,6 @@ contract BunniManagerTest is Test {
             BunniManager.BunniManager_TokenDeployed.selector,
             pool_,
             token_
-        );
-        vm.expectRevert(err);
-    }
-
-    function _expectRevert_tokenNotDeployed(address pool_) internal {
-        bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_TokenNotDeployed.selector,
-            pool_
         );
         vm.expectRevert(err);
     }
@@ -861,14 +856,6 @@ contract BunniManagerTest is Test {
         address poolOne = newBunniManager.pools(0);
         assertEq(poolOne, address(pool));
 
-        // Check that the tokens are registered
-        uint256 poolUnderlyingTokenCount = newBunniManager.poolUnderlyingTokenCount();
-        assertEq(poolUnderlyingTokenCount, 2);
-        address poolOneTokenOne = address(newBunniManager.poolUnderlyingTokens(0));
-        address poolOneTokenTwo = address(newBunniManager.poolUnderlyingTokens(1));
-        assertEq(poolOneTokenOne, ohmAddress);
-        assertEq(poolOneTokenTwo, usdcAddress);
-
         // Check that the token has NOT been added to PRICEv2
         PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(newDeployedToken));
         assertFalse(priceAsset.approved);
@@ -928,15 +915,13 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         newBunniManager.registerPool(address(newPool));
 
-        // Check that the tokens are registered
-        uint256 poolUnderlyingTokenCount = newBunniManager.poolUnderlyingTokenCount();
-        assertEq(poolUnderlyingTokenCount, 3);
-        address poolOneTokenOne = address(newBunniManager.poolUnderlyingTokens(0));
-        address poolOneTokenTwo = address(newBunniManager.poolUnderlyingTokens(1));
-        address poolOneTokenThree = address(newBunniManager.poolUnderlyingTokens(2));
-        assertEq(poolOneTokenOne, ohmAddress);
-        assertEq(poolOneTokenTwo, usdcAddress);
-        assertEq(poolOneTokenThree, address(dai));
+        // Check that the pools are registered
+        uint256 poolCount = newBunniManager.poolCount();
+        assertEq(poolCount, 2);
+        address poolOne = newBunniManager.pools(0);
+        assertEq(poolOne, address(pool));
+        address poolTwo = newBunniManager.pools(1);
+        assertEq(poolTwo, address(newPool));
     }
 
     // [X] deployPoolToken
@@ -1020,14 +1005,6 @@ contract BunniManagerTest is Test {
         address poolOne = bunniManager.pools(0);
         assertEq(poolOne, address(pool));
 
-        // Check that the tokens are registered
-        uint256 poolUnderlyingTokenCount = bunniManager.poolUnderlyingTokenCount();
-        assertEq(poolUnderlyingTokenCount, 2);
-        address poolOneTokenOne = address(bunniManager.poolUnderlyingTokens(0));
-        address poolOneTokenTwo = address(bunniManager.poolUnderlyingTokens(1));
-        assertEq(poolOneTokenOne, token0Address);
-        assertEq(poolOneTokenTwo, token1Address);
-
         // Check that the token has NOT been added to PRICEv2
         PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(deployedToken));
         assertFalse(priceAsset.approved);
@@ -1061,15 +1038,13 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.deployPoolToken(address(newPool));
 
-        // Check that the tokens are registered
-        uint256 poolUnderlyingTokenCount = bunniManager.poolUnderlyingTokenCount();
-        assertEq(poolUnderlyingTokenCount, 3);
-        address poolOneTokenOne = address(bunniManager.poolUnderlyingTokens(0));
-        address poolOneTokenTwo = address(bunniManager.poolUnderlyingTokens(1));
-        address poolOneTokenThree = address(bunniManager.poolUnderlyingTokens(2));
-        assertEq(poolOneTokenOne, token0Address);
-        assertEq(poolOneTokenTwo, token1Address);
-        assertEq(poolOneTokenThree, address(dai));
+        // Check that the pools are registered
+        uint256 poolCount = bunniManager.poolCount();
+        assertEq(poolCount, 2);
+        address poolOne = bunniManager.pools(0);
+        assertEq(poolOne, address(pool));
+        address poolTwo = bunniManager.pools(1);
+        assertEq(poolTwo, address(newPool));
     }
 
     function test_deployPoolToken_duplicateReverts() public {
@@ -1191,7 +1166,11 @@ contract BunniManagerTest is Test {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
-        bunniManager.activatePoolToken(address(pool));
+        bunniManager.activatePoolToken(
+            address(pool),
+            TWAP_DEFAULT_MAX_DEVIATION_BPS,
+            TWAP_DEFAULT_OBSERVATION_WINDOW
+        );
     }
 
     function test_activatePoolToken_inactiveReverts() public {
@@ -1201,7 +1180,11 @@ contract BunniManagerTest is Test {
         _expectRevert_inactive();
 
         vm.prank(policy);
-        newBunniManager.activatePoolToken(address(pool));
+        newBunniManager.activatePoolToken(
+            address(pool),
+            TWAP_DEFAULT_MAX_DEVIATION_BPS,
+            TWAP_DEFAULT_OBSERVATION_WINDOW
+        );
     }
 
     function test_activatePoolToken_bunniHubNotSetReverts() public {
@@ -1211,14 +1194,22 @@ contract BunniManagerTest is Test {
         _expectRevert_bunniHubNotSet();
 
         vm.prank(policy);
-        newBunniManager.activatePoolToken(address(pool));
+        newBunniManager.activatePoolToken(
+            address(pool),
+            TWAP_DEFAULT_MAX_DEVIATION_BPS,
+            TWAP_DEFAULT_OBSERVATION_WINDOW
+        );
     }
 
     function test_activatePoolToken_tokenNotDeployedReverts() public {
         _expectRevert_poolNotFound(address(pool));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(address(pool));
+        bunniManager.activatePoolToken(
+            address(pool),
+            TWAP_DEFAULT_MAX_DEVIATION_BPS,
+            TWAP_DEFAULT_OBSERVATION_WINDOW
+        );
     }
 
     function test_activatePoolToken_noLiquidityReverts() public {
@@ -1233,7 +1224,11 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(address(pool));
+        bunniManager.activatePoolToken(
+            address(pool),
+            TWAP_DEFAULT_MAX_DEVIATION_BPS,
+            TWAP_DEFAULT_OBSERVATION_WINDOW
+        );
     }
 
     function test_activatePoolToken_registeredWithTrsryLocationsReverts() public {
@@ -1269,7 +1264,11 @@ contract BunniManagerTest is Test {
         _expectRevert_tokenActivated(address(pool), toKeycode("TRSRY"));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(address(pool));
+        bunniManager.activatePoolToken(
+            address(pool),
+            TWAP_DEFAULT_MAX_DEVIATION_BPS,
+            TWAP_DEFAULT_OBSERVATION_WINDOW
+        );
     }
 
     function test_activatePoolToken_registeredWithPriceReverts() public {
@@ -1300,8 +1299,8 @@ contract BunniManagerTest is Test {
         {
             BunniPrice.BunniParams memory params = BunniPrice.BunniParams(
                 address(bunniLens),
-                bunniManager.TWAP_DEFAULT_MAX_DEVIATION_BPS(),
-                bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW()
+                TWAP_DEFAULT_MAX_DEVIATION_BPS,
+                TWAP_DEFAULT_OBSERVATION_WINDOW
             );
 
             feeds[0] = PRICEv2.Component(
@@ -1328,7 +1327,11 @@ contract BunniManagerTest is Test {
         _expectRevert_tokenActivated(address(pool), toKeycode("PRICE"));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(address(pool));
+        bunniManager.activatePoolToken(
+            address(pool),
+            TWAP_DEFAULT_MAX_DEVIATION_BPS,
+            TWAP_DEFAULT_OBSERVATION_WINDOW
+        );
     }
 
     function test_activatePoolToken_registeredWithSupplyReverts() public {
@@ -1362,7 +1365,11 @@ contract BunniManagerTest is Test {
         _expectRevert_tokenActivated(address(pool), toKeycode("SPPLY"));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(address(pool));
+        bunniManager.activatePoolToken(
+            address(pool),
+            TWAP_DEFAULT_MAX_DEVIATION_BPS,
+            TWAP_DEFAULT_OBSERVATION_WINDOW
+        );
     }
 
     function test_activatePoolToken_registeredTreasuryAsset() public {
@@ -1399,7 +1406,11 @@ contract BunniManagerTest is Test {
         emit PoolTokenActivated(address(pool), address(poolToken));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(address(pool));
+        bunniManager.activatePoolToken(
+            address(pool),
+            TWAP_DEFAULT_MAX_DEVIATION_BPS,
+            TWAP_DEFAULT_OBSERVATION_WINDOW
+        );
 
         // Check that the token has been added to TRSRY
         OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
@@ -1460,7 +1471,11 @@ contract BunniManagerTest is Test {
         emit PoolTokenActivated(address(pool), address(poolToken));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(address(pool));
+        bunniManager.activatePoolToken(
+            address(pool),
+            TWAP_DEFAULT_MAX_DEVIATION_BPS,
+            TWAP_DEFAULT_OBSERVATION_WINDOW
+        );
 
         // Check that the token has been added to TRSRY
         OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
@@ -1513,7 +1528,11 @@ contract BunniManagerTest is Test {
         emit PoolTokenActivated(address(pool), address(poolToken));
 
         vm.prank(policy);
-        bunniManager.activatePoolToken(address(pool));
+        bunniManager.activatePoolToken(
+            address(pool),
+            TWAP_DEFAULT_MAX_DEVIATION_BPS,
+            TWAP_DEFAULT_OBSERVATION_WINDOW
+        );
 
         // Check that the token has been added to TRSRY
         OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
@@ -1538,8 +1557,8 @@ contract BunniManagerTest is Test {
             (BunniPrice.BunniParams)
         );
         assertEq(bunniParams.bunniLens, address(bunniLens));
-        assertEq(bunniParams.twapMaxDeviationsBps, bunniManager.TWAP_DEFAULT_MAX_DEVIATION_BPS());
-        assertEq(bunniParams.twapObservationWindow, bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW());
+        assertEq(bunniParams.twapMaxDeviationsBps, TWAP_DEFAULT_MAX_DEVIATION_BPS);
+        assertEq(bunniParams.twapObservationWindow, TWAP_DEFAULT_OBSERVATION_WINDOW);
 
         // Check that the price is non-zero
         assertTrue(PRICE.getPrice(address(poolToken)) > 0);
@@ -1557,8 +1576,8 @@ contract BunniManagerTest is Test {
         ) = supplySubmoduleBunni.bunniTokens(0);
         assertEq(address(submoduleBunniToken_), address(poolToken));
         assertEq(address(submoduleBunniLens_), address(bunniLens));
-        assertEq(submoduleTwapMaxDeviation_, bunniManager.TWAP_DEFAULT_MAX_DEVIATION_BPS());
-        assertEq(submoduleTwapObservationWindow_, bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW());
+        assertEq(submoduleTwapMaxDeviation_, TWAP_DEFAULT_MAX_DEVIATION_BPS);
+        assertEq(submoduleTwapObservationWindow_, TWAP_DEFAULT_OBSERVATION_WINDOW);
     }
 
     function test_activatePoolToken_twapParameters() public {
@@ -1590,7 +1609,7 @@ contract BunniManagerTest is Test {
 
         // Set TWAP parameters
         uint16 twapMaxDeviationBps = 5000;
-        uint32 twapObservationWindow = bunniManager.TWAP_DEFAULT_OBSERVATION_WINDOW() + 1;
+        uint32 twapObservationWindow = TWAP_DEFAULT_OBSERVATION_WINDOW + 1;
 
         _mockPoolObserve(
             address(pool),
@@ -1749,7 +1768,11 @@ contract BunniManagerTest is Test {
 
         // Activate the token
         vm.prank(policy);
-        bunniManager.activatePoolToken(address(pool));
+        bunniManager.activatePoolToken(
+            address(pool),
+            TWAP_DEFAULT_MAX_DEVIATION_BPS,
+            TWAP_DEFAULT_OBSERVATION_WINDOW
+        );
 
         // Withdraw
         vm.prank(policy);
