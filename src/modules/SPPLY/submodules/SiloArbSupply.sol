@@ -14,13 +14,15 @@ contract SiloArbSupply is CustomSupply {
         Module parent_,
         uint256 collateralizedOhm_,
         uint256 protocolOwnedBorrowableOhm_,
-        uint256 protocolOwnedLiquidityOhm_
+        uint256 protocolOwnedLiquidityOhm_,
+        uint256 protocolOwnedTreasuryOhm_
     )
         CustomSupply(
             parent_,
             collateralizedOhm_,
             protocolOwnedBorrowableOhm_,
             protocolOwnedLiquidityOhm_,
+            protocolOwnedTreasuryOhm_,
             address(0) // No source
         )
     {}

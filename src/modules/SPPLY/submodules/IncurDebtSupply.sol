@@ -94,6 +94,12 @@ contract IncurDebtSupply is SupplySubmodule {
         return 0;
     }
 
+    /// @inheritdoc SupplySubmodule
+    /// @dev        Not applicable to IncurDebt
+    function getProtocolOwnedTreasuryOhm() external pure override returns (uint256) {
+        return 0;
+    }
+
     /// @inheritdoc     SupplySubmodule
     /// @dev            Protocol-owned liquidity OHM is always zero for lending facilities.
     /// @dev
