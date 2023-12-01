@@ -547,7 +547,7 @@ contract BunniSupplyTest is Test {
     function test_getProtocolOwnedTreasuryOhm() public {
         // Register the pool with the submodule
         vm.prank(address(moduleSupply));
-        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress);
+        submoduleBunniSupply.addBunniToken(poolTokenAddress, bunniLensAddress, TWAP_MAX_DEVIATION_BPS, TWAP_OBSERVATION_WINDOW);
 
         // Will always be zero
         assertEq(submoduleBunniSupply.getProtocolOwnedTreasuryOhm(), 0);
