@@ -17,6 +17,8 @@ import {IVault, IBasePool, IBalancerHelper} from "policies/BoostedLiquidity/inte
 // Aura
 import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
+import {OlympusAuthority} from "src/external/OlympusAuthority.sol";
+
 import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
@@ -86,6 +88,9 @@ contract OlympusDeploy is Script {
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
     LegacyBurner public legacyBurner;
+
+    /// Other Olympus contracts
+    OlympusAuthority public burnerReplacementAuthority;
 
     /// Legacy Olympus contracts
     address public inverseBondDepository;
@@ -165,6 +170,7 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
         selectorMap["LegacyBurner"] = this._deployLegacyBurner.selector;
+        selectorMap["ReplacementAuthority"] = this._deployReplacementAuthority.selector;
 
         // Load environment addresses
         env = vm.readFile("./src/scripts/env.json");
@@ -202,6 +208,9 @@ contract OlympusDeploy is Script {
         ohmWstethRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmWstethRewardsPool"));
         ohmLusdRewardsPool = IAuraRewardPool(envAddress("external.aura.OhmLusdRewardsPool"));
         inverseBondDepository = envAddress("olympus.legacy.InverseBondDepository");
+        burnerReplacementAuthority = OlympusAuthority(
+            envAddress("olympus.legacy.LegacyBurnerReplacementAuthority")
+        );
 
         // Bophades contracts
         kernel = Kernel(envAddress("olympus.Kernel"));
@@ -235,7 +244,8 @@ contract OlympusDeploy is Script {
         string memory data = vm.readFile(deployFilePath);
 
         // Parse deployment sequence and names
-        string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
+        string[] memory names = new string[](1); // abi.decode(data.parseRaw(".sequence..name"), (string[]));
+        names[0] = "LegacyBurner";
         uint256 len = names.length;
 
         // Iterate through deployment sequence and set deployment args
@@ -739,6 +749,12 @@ contract OlympusDeploy is Script {
     function _deployLegacyBurner(bytes memory args) public returns (address) {
         (uint256 reward) = abi.decode(args, (uint256));
 
+        console2.log("kernel", address(kernel));
+        console2.log("ohm", address(ohm));
+        console2.log("bondManager", address(bondManager));
+        console2.log("inverseBondDepository", inverseBondDepository);
+        console2.log("reward", reward/1e9);
+
         // Deploy LegacyBurner policy
         vm.broadcast();
         legacyBurner = new LegacyBurner(
@@ -751,6 +767,22 @@ contract OlympusDeploy is Script {
         console2.log("LegacyBurner deployed at:", address(legacyBurner));
 
         return address(legacyBurner);
+    }
+
+    function _deployReplacementAuthority(bytes memory args) public returns (address) {
+        // No additional arguments for ReplacementAuthority policy
+
+        // Deploy ReplacementAuthority policy
+        vm.broadcast();
+        burnerReplacementAuthority = new OlympusAuthority(
+            0x84C0C005cF574D0e5C602EA7b366aE9c707381E0,
+            0x84C0C005cF574D0e5C602EA7b366aE9c707381E0,
+            address(legacyBurner),
+            address(MINTR)
+        );
+        console2.log("ReplacementAuthority deployed at:", address(burnerReplacementAuthority));
+
+        return address(burnerReplacementAuthority);
     }
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment

@@ -65,9 +65,6 @@ contract LegacyBurner is Policy {
         dependencies[0] = toKeycode("MINTR");
 
         MINTR = MINTRv1(getModuleAddress(dependencies[0]));
-
-        // Approve MINTR to burn OHM
-        ohm.increaseAllowance(address(MINTR), type(uint256).max);
     }
 
     /// @inheritdoc Policy
