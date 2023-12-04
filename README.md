@@ -14,7 +14,6 @@ This requires the following to be installed:
 ### Local Dependencies
 
 -   Use `pnpm run build` to install all project dependencies
--   This will likely result in git submodules where the checked-out commit is different to what is the current commit in the repository. Make sure to discard the changes to submodules.
 
 ### Environment Variables
 
