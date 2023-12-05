@@ -10,6 +10,7 @@ This requires the following to be installed:
 
 -   jq: `brew install jq`
 -   foundry: [instructions](https://book.getfoundry.sh/getting-started/installation)
+-   lcov: `brew install lcov`
 
 ### Local Dependencies
 
