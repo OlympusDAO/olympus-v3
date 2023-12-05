@@ -18,6 +18,7 @@ contract RBSv2Install_1 is OlyBatch {
     address treasuryCustodian;
 
     // Tokens
+    address dai;
     address sdai;
     address lusd;
     address wsteth;
@@ -32,6 +33,7 @@ contract RBSv2Install_1 is OlyBatch {
         trsry = envAddress("last", "olympus.modules.OlympusTreasury");
         treasuryCustodian = envAddress("current", "olympus.policies.TreasuryCustodian");
 
+        dai = envAddress("current", "external.tokens.DAI");
         sdai = envAddress("current", "external.tokens.sDAI");
         lusd = envAddress("current", "external.tokens.LUSD");
         wsteth = envAddress("current", "external.tokens.wstETH");
@@ -47,6 +49,11 @@ contract RBSv2Install_1 is OlyBatch {
         // 2. Upgrades the OlympusTreasury contract to the new version
 
         // 1. Transfer all tokens from the old treasury to the new treasury
+        uint256 daiBalance = ERC20(dai).balanceOf(trsry);
+        addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, dai, daiBalance));
+        addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, newTrsry, dai, daiBalance));
+        console2.log("Transfered DAI: %s", daiBalance);
+
         uint256 sdaiBalance = ERC20(sdai).balanceOf(trsry);
         addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, sdai, sdaiBalance));
         addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, newTrsry, sdai, sdaiBalance));
