@@ -6,8 +6,14 @@ import {console2} from "forge-std/console2.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 import "src/Kernel.sol";
+
+// Bophades modules
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import "modules/PRICE/OlympusPrice.v2.sol";
+import {Category as SupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
+import {Category as AssetCategory} from "modules/TRSRY/TRSRY.v1.sol";
+
+// PRICE submodules
 import {BalancerPoolTokenPrice} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
@@ -15,14 +21,19 @@ import {ERC4626Price} from "modules/PRICE/submodules/feeds/ERC4626Price.sol";
 import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+
+// Bophades policies
 import {Appraiser} from "policies/OCA/Appraiser.sol";
 import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
 import {OlympusHeart} from "policies/RBS/Heart.sol";
 import {Operator} from "policies/RBS/Operator.sol";
-import {PriceConfig} from "policies/RBS/PriceConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {BondCallback} from "policies/Bonds/BondCallback.sol";
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
+
+// Libraries
+import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 contract RBSv2Install_3 is OlyBatch {
     // Existing Olympus Contracts
@@ -30,7 +41,6 @@ contract RBSv2Install_3 is OlyBatch {
     address price;
     address heart;
     address operator;
-    address priceConfig;
     address rolesAdmin;
     address bondCallback;
     address clearinghouse;
@@ -88,7 +98,6 @@ contract RBSv2Install_3 is OlyBatch {
         price = envAddress("current", "olympus.modules.OlympusPriceV1");
         heart = envAddress("last", "olympus.policies.OlympusHeart");
         operator = envAddress("last", "olympus.policies.Operator");
-        priceConfig = envAddress("current", "olympus.policies.PriceConfig");
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
         bondCallback = envAddress("current", "olympus.policies.BondCallback");
         clearinghouse = envAddress("current", "olympus.policies.Clearinghouse");
