@@ -6,12 +6,19 @@ import {console2} from "forge-std/console2.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 import "src/Kernel.sol";
+import "src/Submodules.sol";
+
+// Bophades modules
 import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
+
+// Bophades policies
+import {CrossChainBridge} from "policies/CrossChainBridge.sol";
+
+// SPPLY submodules
 import {BLVaultSupply} from "modules/SPPLY/submodules/BLVaultSupply.sol";
 import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 import {CustomSupply} from "modules/SPPLY/submodules/CustomSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
-import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 
 contract RBSv2Install_2 is OlyBatch {
     // Existing Olympus Contracts
@@ -54,16 +61,16 @@ contract RBSv2Install_2 is OlyBatch {
         // 7. Set trusted remotes on the new CrossChainBridge policy
 
         // 1. Install the OlympusSupply module
-        addToBatch(kernel, abi.ecnodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, spply));
+        addToBatch(kernel, abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, spply));
 
         // 2. Install the BLVaultSupply submodule on the OlympusSupply module
-        addToBatch(spply, abi.encodeWithSelector(OlympusSupply.installSubmodule.selector, blVaultSupply));
+        addToBatch(spply, abi.encodeWithSelector(ModuleWithSubmodules.installSubmodule.selector, BLVaultSupply(blVaultSupply)));
 
         // 3. Install the BunniSupply submodule on the OlympusSupply module
-        addToBatch(spply, abi.encodeWithSelector(OlympusSupply.installSubmodule.selector, bunniSupply));
+        addToBatch(spply, abi.encodeWithSelector(ModuleWithSubmodules.installSubmodule.selector, BunniSupply(bunniSupply)));
 
         // 4. Install the MigrationOffsetSupply submodule on the OlympusSupply module
-        addToBatch(spply, abi.encodeWithSelector(OlympusSupply.installSubmodule.selector, migrationOffsetSupply));
+        addToBatch(spply, abi.encodeWithSelector(ModuleWithSubmodules.installSubmodule.selector, MigrationOffsetSupply(migrationOffsetSupply)));
 
         // 5. Deactivate the old CrossChainBridge policy
         addToBatch(kernel, abi.encodeWithSelector(Kernel.executeAction.selector, Actions.DeactivatePolicy, crossChainBridge));
