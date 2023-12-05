@@ -18,7 +18,6 @@ import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 // SPPLY submodules
 import {BLVaultSupply} from "modules/SPPLY/submodules/BLVaultSupply.sol";
 import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
-import {CustomSupply} from "modules/SPPLY/submodules/CustomSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
 
 contract RBSv2Install_2 is OlyBatch {
@@ -34,7 +33,6 @@ contract RBSv2Install_2 is OlyBatch {
     address spply;
     address blVaultSupply;
     address bunniSupply;
-    address customSupply;
     address migrationOffsetSupply;
     address newCrossChainBridge;
 
@@ -56,7 +54,6 @@ contract RBSv2Install_2 is OlyBatch {
         spply = envAddress("current", "olympus.modules.OlympusSupply");
         blVaultSupply = envAddress("current", "olympus.submodules.SPPLY.BLVaultSupply");
         bunniSupply = envAddress("current", "olympus.submodules.SPPLY.BunniSupply");
-        customSupply = envAddress("current", "olympus.submodules.SPPLY.CustomSupply");
         migrationOffsetSupply = envAddress("current", "olympus.submodules.SPPLY.MigrationOffsetSupply");
         newCrossChainBridge = envAddress("current", "olympus.policies.CrossChainBridge");
     }
