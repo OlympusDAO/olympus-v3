@@ -482,9 +482,6 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, sdai, AssetCategory.wrap("reserves"))
         );
 
-        // 10. Categorize manual offset
-        
-
         // 11. Add and categorize WETH
         //      - liquid, volatile
         addToBatch(
@@ -537,24 +534,11 @@ contract RBSv2Install_3 is OlyBatch {
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, daoMS, SupplyCategory.wrap("protocol-owned-treasury"))
         );
-        // TODO - Manual offset??
-        // TODO - Bricked supply??
 
         // 15. Categorize dao supply
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, daoWorkingWallet, SupplyCategory.wrap("dao"))
-        );
-
-        // 16. Categorize BLV supply
-        // TODO - fix. this is wrong. i don't fully understand the supply categorization with submodules
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, blvLido, SupplyCategory.wrap("blv"))
-        );
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, blvLusd, SupplyCategory.wrap("blv"))
         );
     }
 

@@ -26,6 +26,8 @@ contract RBSv2Install_2 is OlyBatch {
     address crossChainBridge;
     address arbBridge;
     address opBridge;
+    address blVaultManagerLido;
+    address blVaultManagerLusd;
 
     // New Contracts
     address spply;
@@ -41,6 +43,9 @@ contract RBSv2Install_2 is OlyBatch {
 
         arbBridge = address(0); // TODO: Change
         opBridge = address(0); // TODO: Change
+
+        blVaultManagerLido = envAddress("current", "olympus.policies.BLVaultManagerLido");
+        blVaultManagerLusd = envAddress("current", "olympus.policies.BLVaultManagerLusd");
 
         spply = envAddress("current", "olympus.modules.OlympusSupply");
         blVaultSupply = envAddress("current", "olympus.submodules.SPPLY.BLVaultSupply");
@@ -66,10 +71,16 @@ contract RBSv2Install_2 is OlyBatch {
         // 2. Install the BLVaultSupply submodule on the OlympusSupply module
         addToBatch(spply, abi.encodeWithSelector(ModuleWithSubmodules.installSubmodule.selector, BLVaultSupply(blVaultSupply)));
 
+        // 2a. Configure the BLVaultSupply submodule with the existing BLV managers
+        addToBatch(blVaultSupply, abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLido));
+        addToBatch(blVaultSupply, abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLusd));
+
         // 3. Install the BunniSupply submodule on the OlympusSupply module
+        // No configuration needed - will be performed by BunniManager
         addToBatch(spply, abi.encodeWithSelector(ModuleWithSubmodules.installSubmodule.selector, BunniSupply(bunniSupply)));
 
         // 4. Install the MigrationOffsetSupply submodule on the OlympusSupply module
+        // No configuration needed - already done at deployment
         addToBatch(spply, abi.encodeWithSelector(ModuleWithSubmodules.installSubmodule.selector, MigrationOffsetSupply(migrationOffsetSupply)));
 
         // 5. Deactivate the old CrossChainBridge policy
