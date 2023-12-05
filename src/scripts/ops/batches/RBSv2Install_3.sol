@@ -369,7 +369,7 @@ contract RBSv2Install_3 is OlyBatch {
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
-                bookkeeper.addAssetPrice.selector,
+                Bookkeeper.addAssetPrice.selector,
                 weth,
                 true, // store moving average
                 true, // use the moving average as part of price strategy
@@ -400,7 +400,7 @@ contract RBSv2Install_3 is OlyBatch {
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
-                bookkeeper.addAssetPrice.selector,
+                Bookkeeper.addAssetPrice.selector,
                 veFXS,
                 false, // don't store moving average
                 false, // don't use the moving average as part of price strategy
@@ -427,7 +427,7 @@ contract RBSv2Install_3 is OlyBatch {
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
-                bookkeeper.addAssetPrice.selector,
+                Bookkeeper.addAssetPrice.selector,
                 fxs,
                 false, // don't store moving average
                 false, // don't use the moving average as part of price strategy
@@ -454,7 +454,7 @@ contract RBSv2Install_3 is OlyBatch {
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
-                bookkeeper.addAssetPrice.selector,
+                Bookkeeper.addAssetPrice.selector,
                 usdc,
                 true, // store moving average
                 true, // use the moving average as part of price strategy
@@ -509,7 +509,7 @@ contract RBSv2Install_3 is OlyBatch {
         // 11. Add and categorize POL
         //      - liquid, protocol-owned-liquidity
         address[] memory polLocations = new address[](1);
-        polLocations[0] = BunniManager(bunniManager).bunniHub();
+        polLocations[0] = address(BunniManager(bunniManager).bunniHub());
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, polBunni, polLocations)
