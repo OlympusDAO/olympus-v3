@@ -231,21 +231,19 @@ contract RBSv2Install_3 is OlyBatch {
         // 1. Configures OHM price feed and moving average data on PRICE
         // 2. Configures DAI price feed and moving average data on PRICE
         // 3. Configures sDAI price feed and moving average data on PRICE
-        // 4. Configures polBunni price feed and moving average data on PRICE
-        // 5. Configure WETH price feed and moving average data on PRICE
-        // 6. Configure veFXS price feed and moving average data on PRICE
-        // 7. Configure FXS price feed and moving average data on PRICE
-        // 8. Configure USDC price feed and moving average data on PRICE
-        // 9. Add and categorize DAI
-        // 10. Add and categorize sDAI
-        // 11. Add and categorize POL
-        // 12. Add and categorize OHM
-        // 13. Add and categorize WETH
-        // 14. Add and categorize veFXS
-        // 15. Add and categorize FXS
-        // 16. Categorize protocol-owned-treasury supply
-        // 17. Categorize dao supply
-        // 18. Categorize BLV supply
+        // 4. Configure WETH price feed and moving average data on PRICE
+        // 5. Configure veFXS price feed and moving average data on PRICE
+        // 6. Configure FXS price feed and moving average data on PRICE
+        // 7. Configure USDC price feed and moving average data on PRICE
+        // 8. Add and categorize DAI
+        // 9. Add and categorize sDAI
+        // 10. Add and categorize OHM
+        // 11. Add and categorize WETH
+        // 12. Add and categorize veFXS
+        // 13. Add and categorize FXS
+        // 14. Categorize protocol-owned-treasury supply
+        // 15. Categorize dao supply
+        // 16. Categorize BLV supply
 
         // 1. Configure OHM price feed and moving average data on PRICE
         PRICEv2.Component[] memory ohmFeeds = new PRICEv2.Component[](1);
@@ -327,29 +325,7 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 4. Configure polBunni price feed and moving average data on PRICE
-        PRICEv2.Component[] memory polBunniFeeds = new PRICEv2.Component[](1);
-        polBunniFeeds[0] = PRICEv2.Component(
-            toSubKeycode("PRICE.BNI"),
-            BunniPrice.getBunniTokenPrice.selector,
-            abi.encode(polBunni, ERC20(polBunni).decimals(), "") // TODO: Change bytes params?
-        );
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.addAssetPrice.selector,
-                polBunni,
-                false, // don't store moving average
-                false, // don't use the moving average as part of price strategy
-                0, // 30 day moving average
-                polBunniLastObsTime_,
-                polBunniObs_,
-                PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
-                polBunniFeeds
-            )
-        );
-
-        // 5. Configure WETH price feed and moving average data on PRICE
+        // 4. Configure WETH price feed and moving average data on PRICE
         PRICEv2.Component[] memory wethFeeds = new PRICEv2.Component[](2);
         wethFeeds[0] = PRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
@@ -385,7 +361,7 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 6. Configure veFXS price feed and moving average data on PRICE
+        // 5. Configure veFXS price feed and moving average data on PRICE
         PRICEv2.Component[] memory veFXSFeeds = new PRICEv2.Component[](1);
         veFXSFeeds[0] = PRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
@@ -412,7 +388,7 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 7. Configure FXS price feed and moving average data on PRICE
+        // 6. Configure FXS price feed and moving average data on PRICE
         PRICEv2.Component[] memory fxsFeeds = new PRICEv2.Component[](1);
         fxsFeeds[0] = PRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
@@ -439,7 +415,7 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 8. Configure USDC price feed and moving average data on PRICE
+        // 7. Configure USDC price feed and moving average data on PRICE
         PRICEv2.Component[] memory usdcFeeds = new PRICEv2.Component[](1);
         usdcFeeds[0] = PRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
@@ -466,7 +442,7 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 9. Add and categorize DAI on Bookkeeper
+        // 8. Add and categorize DAI on Bookkeeper
         //      - liquid, stable, reserves
         address[] memory locations = new address[](1);
         locations[0] = clearinghouse;
@@ -487,7 +463,7 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, dai, AssetCategory.wrap("reserves"))
         );
 
-        // 10. Add and categorize sDAI on Bookkeeper
+        // 9. Add and categorize sDAI on Bookkeeper
         //      - liquid, stable, reserves
         addToBatch(
             bookkeeper,
@@ -506,27 +482,10 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, sdai, AssetCategory.wrap("reserves"))
         );
 
-        // 11. Add and categorize POL
-        //      - liquid, protocol-owned-liquidity
-        address[] memory polLocations = new address[](1);
-        polLocations[0] = address(BunniManager(bunniManager).bunniHub());
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.addAsset.selector, polBunni, polLocations)
-        );
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, polBunni, AssetCategory.wrap("liquid"))
-        );
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, polBunni, AssetCategory.wrap("protocol-owned-liquidity"))
-        );
-
-        // 12. Categorize manual offset
+        // 10. Categorize manual offset
         
 
-        // 13. Add and categorize WETH
+        // 11. Add and categorize WETH
         //      - liquid, volatile
         addToBatch(
             bookkeeper,
@@ -541,7 +500,7 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, weth, AssetCategory.wrap("volatile"))
         );
 
-        // 14. Add and categorize veFXS
+        // 12. Add and categorize veFXS
         //      - illiquid, volatile
         address[] memory veFXSLocations = new address[](1);
         veFXSLocations[0] = veFXSAllocator;
@@ -558,7 +517,7 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, veFXS, AssetCategory.wrap("volatile"))
         );
 
-        // 15. Add and categorize FXS
+        // 13. Add and categorize FXS
         //      - illiquid, volatile
         addToBatch(
             bookkeeper,
@@ -573,7 +532,7 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, fxs, AssetCategory.wrap("volatile"))
         );
 
-        // 16. Categorize protocol-owned-treasury supply
+        // 14. Categorize protocol-owned-treasury supply
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, daoMS, SupplyCategory.wrap("protocol-owned-treasury"))
@@ -581,13 +540,13 @@ contract RBSv2Install_3 is OlyBatch {
         // TODO - Manual offset??
         // TODO - Bricked supply??
 
-        // 17. Categorize dao supply
+        // 15. Categorize dao supply
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, daoWorkingWallet, SupplyCategory.wrap("dao"))
         );
 
-        // 18. Categorize BLV supply
+        // 16. Categorize BLV supply
         // TODO - fix. this is wrong. i don't fully understand the supply categorization with submodules
         addToBatch(
             bookkeeper,
