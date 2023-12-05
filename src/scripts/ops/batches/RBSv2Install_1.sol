@@ -82,5 +82,7 @@ contract RBSv2Install_1 is OlyBatch {
         // 2. Upgrade the OlympusTreasury contract to the new version
         addToBatch(kernel, abi.encodeWithSelector(Kernel.executeAction.selector, Actions.UpgradeModule, newTrsry));
         console2.log("Upgraded OlympusTreasury to new version: %s", newTrsry);
+
+        // TODO setDebt?
     }
 }
