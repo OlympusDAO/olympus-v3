@@ -10,7 +10,6 @@ import "src/Kernel.sol";
 // Bophades modules
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import "modules/PRICE/OlympusPrice.v2.sol";
-import {Category as SupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
 import {Category as AssetCategory} from "modules/TRSRY/TRSRY.v1.sol";
 
 // PRICE submodules
@@ -49,7 +48,6 @@ contract RBSv2Install_3 is OlyBatch {
     address ohm;
     address dai;
     address sdai;
-    address polBunni;
     address weth;
     address veFXS;
     address fxs;
@@ -70,13 +68,6 @@ contract RBSv2Install_3 is OlyBatch {
 
     // Allocators
     address veFXSAllocator;
-
-    // BLV
-    address blvLido;
-    address blvLusd;
-
-    // Other
-    address daoWorkingWallet;
 
     // New Olympus Contracts
     address priceV2;
@@ -105,7 +96,6 @@ contract RBSv2Install_3 is OlyBatch {
         ohm = envAddress("current", "olympus.legacy.OHM");
         dai = envAddress("current", "external.tokens.DAI");
         sdai = envAddress("current", "external.tokens.sDAI");
-        polBunni = envAddress("current", "external.tokens.polBunni");
 
         ohmEthPriceFeed = envAddress("current", "external.chainlink.ohmEthPriceFeed");
         ethUsdPriceFeed = envAddress("current", "external.chainlink.ethUsdPriceFeed");
@@ -119,11 +109,6 @@ contract RBSv2Install_3 is OlyBatch {
         ohmDaiPool = envAddress("current", "external.uniswapV2.OhmDaiPool");
 
         veFXSAllocator = envAddress("current", "olympus.legacy.veFXSAllocator");
-
-        blvLido = envAddress("current", "olympus.policies.BLVaultManagerLido");
-        blvLusd = envAddress("current", "olympus.policies.BLVaultManagerLusd");
-
-        daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
 
         priceV2 = envAddress("current", "olympus.modules.OlympusPriceV2");
         balancerPoolTokenPrice = envAddress("current", "olympus.submodules.PRICE.BalancerPoolTokenPrice");
@@ -216,8 +201,6 @@ contract RBSv2Install_3 is OlyBatch {
         uint48 daiLastObsTime_,
         uint256[] memory sdaiObs_,
         uint48 sdaiLastObsTime_,
-        uint256[] memory polBunniObs_,
-        uint48 polBunniLastObsTime_,
         uint256[] memory wethObs_,
         uint48 wethLastObsTime_,
         uint256[] memory veFXSObs_,
@@ -527,18 +510,6 @@ contract RBSv2Install_3 is OlyBatch {
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.categorizeAsset.selector, fxs, AssetCategory.wrap("volatile"))
-        );
-
-        // 14. Categorize protocol-owned-treasury supply
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, daoMS, SupplyCategory.wrap("protocol-owned-treasury"))
-        );
-
-        // 15. Categorize dao supply
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.categorizeSupply.selector, daoWorkingWallet, SupplyCategory.wrap("dao"))
         );
     }
 

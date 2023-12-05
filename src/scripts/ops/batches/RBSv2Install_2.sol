@@ -10,6 +10,7 @@ import "src/Submodules.sol";
 
 // Bophades modules
 import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
+import {Category as SupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
 
 // Bophades policies
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
@@ -37,6 +38,9 @@ contract RBSv2Install_2 is OlyBatch {
     address migrationOffsetSupply;
     address newCrossChainBridge;
 
+    // Wallets
+    address daoWorkingWallet;
+
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
         crossChainBridge = envAddress("last", "olympus.policies.CrossChainBridge");
@@ -46,6 +50,8 @@ contract RBSv2Install_2 is OlyBatch {
 
         blVaultManagerLido = envAddress("current", "olympus.policies.BLVaultManagerLido");
         blVaultManagerLusd = envAddress("current", "olympus.policies.BLVaultManagerLusd");
+
+        daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
 
         spply = envAddress("current", "olympus.modules.OlympusSupply");
         blVaultSupply = envAddress("current", "olympus.submodules.SPPLY.BLVaultSupply");
@@ -64,6 +70,8 @@ contract RBSv2Install_2 is OlyBatch {
         // 5. Deactivates the old CrossChainBridge policy
         // 6. Activates the new CrossChainBridge policy
         // 7. Set trusted remotes on the new CrossChainBridge policy
+        // 8. Categorizes protocol-owned-treasury supply
+        // 9. Categorizes DAO supply
 
         // 1. Install the OlympusSupply module
         addToBatch(kernel, abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, spply));
@@ -92,5 +100,11 @@ contract RBSv2Install_2 is OlyBatch {
         // 7. Set trusted remotes on the new CrossChainBridge policy
         addToBatch(newCrossChainBridge, abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 110, arbBridge));
         addToBatch(newCrossChainBridge, abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 111, opBridge));
+
+        // 8. Categorize protocol-owned-treasury supply
+        addToBatch(spply, abi.encodeWithSelector(OlympusSupply.categorize.selector, daoMS, SupplyCategory.wrap("protocol-owned-treasury")));
+
+        // 9. Categorize DAO supply
+        addToBatch(spply, abi.encodeWithSelector(OlympusSupply.categorize.selector, daoWorkingWallet, SupplyCategory.wrap("dao")));
     }
 }
