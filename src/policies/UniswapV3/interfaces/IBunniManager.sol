@@ -5,7 +5,7 @@ import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 
 /// @title  IBunniManager
 /// @author 0xJem
-/// @notice Bophades policy to manage UniswapV3 positions.
+/// @notice Bophades policy to manage Uniswap V3 positions
 interface IBunniManager {
     // =========  EVENTS ========= //
 
@@ -33,25 +33,25 @@ interface IBunniManager {
     /// @return token The ERC20-compatible BunniToken
     function deployPoolToken(address pool_) external returns (IBunniToken token);
 
-    /// @notice                             Activates the ERC20 token for the given Uniswap V3 pool
+    /// @notice         Activates the ERC20 token for the given Uniswap V3 pool
     ///
-    /// @notice                             This can only be called after `deployPoolToken` or `registerPool` has been called
-    /// @notice                             to deploy the ERC20 token for this pool.
+    /// @notice         This can only be called after `deployPoolToken` or `registerPool` has been called
+    /// @notice         to deploy the ERC20 token for this pool.
     ///
-    /// @notice                             This function will register the pool token with TRSRY, PRICE and SPPLY.
+    /// @notice         This function will register the pool token with TRSRY, PRICE and SPPLY.
     ///
-    /// @param pool_                        The address of the Uniswap V3 pool
-    /// @param priceMovingAverageDuration_  The duration of the moving average for the TWAP price
-    /// @param priceObservations_           The number of price observations to use for the TWAP price
+    /// @param pool_                    The address of the Uniswap V3 pool
+    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP
+    /// @param twapObservationWindow_   The TWAP observation window
     function activatePoolToken(
         address pool_,
-        uint32 priceMovingAverageDuration_,
-        uint256[] memory priceObservations_
+        uint16 twapMaxDeviationBps_,
+        uint32 twapObservationWindow_
     ) external;
 
     /// @notice         Deactivates the ERC20 token for the given Uniswap V3 pool
     ///
-    /// @notice         This function will de-register the pool token with TRSRY, PRICE and SPPLY.
+    ///                 This function will de-register the pool token with TRSRY, PRICE and SPPLY.
     ///
     /// @param pool_    The address of the Uniswap V3 pool
     function deactivatePoolToken(address pool_) external;
@@ -69,7 +69,7 @@ interface IBunniManager {
     /// @param amountA_     The amount of tokenA to deposit
     /// @param amountB_     The amount of tokenB to deposit
     /// @param slippageBps_ Maximum percentage slippage allowed in basis points (100 = 1%)
-    /// @return shares  The amount of shares minted
+    /// @return shares      The amount of shares minted
     function deposit(
         address pool_,
         address tokenA_,
@@ -121,10 +121,13 @@ interface IBunniManager {
     // =========  ADMIN FUNCTIONS ========= //
 
     /// @notice             Sets the BunniLens and BunniHub contracts
+    ///
     /// @param newBunniLens_ The new address to use
     function setBunniLens(address newBunniLens_) external;
 
     /// @notice             Sets the owner of the BunniHub contract
+    /// @notice             This can be used when a new policy is deployed that needs to manage the
+    /// @notice             Uniswap V3 positions through the BunniHub.
     ///
     /// @param newOwner_    The address of the new owner
     function setBunniOwner(address newOwner_) external;

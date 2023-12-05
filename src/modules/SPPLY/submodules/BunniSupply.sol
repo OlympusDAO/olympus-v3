@@ -1,31 +1,85 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
+// Bophades modules
 import "modules/SPPLY/SPPLY.v1.sol";
+
+// Bunni contracts
 import {BunniLens} from "src/external/bunni/BunniLens.sol";
 import {BunniToken} from "src/external/bunni/BunniToken.sol";
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
 import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
+
+// Standard libraries
+import {ERC20} from "solmate/tokens/ERC20.sol";
+
+/// Uniswap V3
+import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
+
+// Libraries
+import {FullMath} from "libraries/FullMath.sol";
+import {Deviation} from "libraries/Deviation.sol";
+import {UniswapV3OracleHelper} from "libraries/UniswapV3/Oracle.sol";
+import {BunniHelper} from "libraries/UniswapV3/BunniHelper.sol";
 
 /// @title      BunniSupply
 /// @author     0xJem
 /// @notice     A SPPLY submodule that provides data on OHM deployed into Uniswap V3 pools that
 /// @notice     are managed by the BunniManager policy and its associated BunniHub.
 contract BunniSupply is SupplySubmodule {
+    using FullMath for uint256;
+
     // ========== ERRORS ========== //
 
     /// @notice             The specified token is not a valid BunniToken
+    ///
     /// @param token_       The address of the token
     error BunniSupply_Params_InvalidBunniToken(address token_);
 
     /// @notice             The specified lens is not a valid BunniLens
+    ///
     /// @param lens_        The address of the lens
     error BunniSupply_Params_InvalidBunniLens(address lens_);
 
     /// @notice             The token and lens do not have the same BunniHub address
+    ///
     /// @param tokenHub_    The BunniHub address of the token
     /// @param lensHub_     The BunniHub address of the lens
     error BunniSupply_Params_HubMismatch(address tokenHub_, address lensHub_);
+
+    /// @notice                     The specified maximum deviation from the TWAP is invalid
+    ///
+    /// @param token_               The address of the token
+    /// @param maximumDeviationBps_ The maximum allowed value
+    /// @param actualDeviationBps_  The maximum deviation from the TWAP in basis points
+    error BunniSupply_Params_InvalidTwapMaxDeviationBps(
+        address token_,
+        uint16 maximumDeviationBps_,
+        uint16 actualDeviationBps_
+    );
+
+    /// @notice                             The specified observation window for the TWAP is invalid
+    ///
+    /// @param token_                       The address of the token
+    /// @param minimumObservationWindow_    The minimum value of the observation window
+    /// @param actualObservationWindow_     The actual value of the observation window
+    error BunniSupply_Params_InvalidTwapObservationWindow(
+        address token_,
+        uint56 minimumObservationWindow_,
+        uint56 actualObservationWindow_
+    );
+
+    /// @notice                   The calculated pool price deviates from the TWAP by more than the maximum deviation.
+    ///
+    /// @param pool_              The address of the pool
+    /// @param baseInQuoteTWAP_   The calculated TWAP price in terms of the quote token
+    /// @param baseInQuotePrice_  The calculated current price in terms of the quote token
+    error BunniSupply_PriceMismatch(
+        address pool_,
+        uint256 baseInQuoteTWAP_,
+        uint256 baseInQuotePrice_
+    );
 
     // ========== EVENTS ========== //
 
@@ -38,24 +92,28 @@ contract BunniSupply is SupplySubmodule {
     /// @param token_       The address of the BunniToken contract
     event BunniTokenRemoved(address token_);
 
+    // ========== DATA STRUCTURES ========== //
+
+    struct TokenData {
+        BunniToken token;
+        BunniLens lens;
+        uint16 twapMaxDeviationBps;
+        uint32 twapObservationWindow;
+    }
+
     // ========== STATE VARIABLES ========== //
 
-    /// @notice     The list of BunniTokens that are being monitored
-    BunniToken[] public bunniTokens;
+    /// @notice     The BunniTokens that are being monitored
+    TokenData[] public bunniTokens;
 
     /// @notice     The number of BunniTokens that are being monitored
     uint256 public bunniTokenCount;
 
-    /// @notice     The list of BunniLenses that are being monitored
-    ///             The values are stored in the same order as the bunniTokens array
-    BunniLens[] public bunniLenses;
-
-    /// @notice     The number of BunniLenses that are being monitored
-    uint256 public bunniLensCount;
-
     /// @notice     The address of the OHM token
     /// @dev        Set at deployment-time
     address internal immutable ohm;
+
+    uint16 internal constant TWAP_MAX_DEVIATION_BASE = 10_000; // 100%
 
     // ========== CONSTRUCTOR ========== //
 
@@ -107,14 +165,25 @@ contract BunniSupply is SupplySubmodule {
     /// @dev        This function accesses the reserves of the registered
     /// @dev        Uniswap V3 pools, and can be susceptible to re-entrancy attacks.
     /// @dev        The BunniLens contract used by this Submodule performs a re-entrancy check.
+    ///
+    /// @dev        Additionally, the reserves and TWAP are compared to ensure that the reserves
+    /// @dev        have not been manipulated.
     function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
         // Iterate through tokens and total up the pool OHM reserves as the POL supply
         uint256 len = bunniTokens.length;
         uint256 total;
         for (uint256 i; i < len; ) {
-            BunniToken token = bunniTokens[i];
-            BunniLens lens = bunniLenses[i];
-            BunniKey memory key = _getBunniKey(token);
+            TokenData storage tokenData = bunniTokens[i];
+            BunniLens lens = tokenData.lens;
+            BunniKey memory key = _getBunniKey(tokenData.token);
+
+            // Validate reserves
+            _validateReserves(
+                key,
+                lens,
+                tokenData.twapMaxDeviationBps,
+                tokenData.twapObservationWindow
+            );
 
             total += _getOhmReserves(key, lens);
             unchecked {
@@ -126,11 +195,20 @@ contract BunniSupply is SupplySubmodule {
     }
 
     /// @inheritdoc SupplySubmodule
+    function getProtocolOwnedTreasuryOhm() external pure override returns (uint256) {
+        // POTO is always zero for BunniTokens
+        return 0;
+    }
+
+    /// @inheritdoc SupplySubmodule
     /// @dev        Returns the total of OHM and non-OHM reserves in the submodule
     ///
-    /// @dev        NOTE: The result of this function is susceptible to manipulation by a third-party.
-    /// @dev        Sanity-checks should be performed on the reserve values if they are to be used
-    /// @dev        for any critical calculations.
+    /// @dev        This function accesses the reserves of the registered
+    /// @dev        Uniswap V3 pools, and can be susceptible to re-entrancy attacks.
+    /// @dev        The BunniLens contract used by this Submodule performs a re-entrancy check.
+    ///
+    /// @dev        Additionally, the reserves and TWAP are compared to ensure that the reserves
+    /// @dev        have not been manipulated.
     function getProtocolOwnedLiquidityReserves()
         external
         view
@@ -141,8 +219,9 @@ contract BunniSupply is SupplySubmodule {
         uint256 len = bunniTokens.length;
         SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
         for (uint256 i; i < len; ) {
-            BunniToken token = bunniTokens[i];
-            BunniLens lens = bunniLenses[i];
+            TokenData storage tokenData = bunniTokens[i];
+            BunniToken token = tokenData.token;
+            BunniLens lens = tokenData.lens;
             BunniKey memory key = _getBunniKey(token);
             (
                 address token0,
@@ -150,6 +229,14 @@ contract BunniSupply is SupplySubmodule {
                 uint256 reserve0,
                 uint256 reserve1
             ) = _getReservesWithFees(key, lens);
+
+            // Validate reserves
+            _validateReserves(
+                key,
+                lens,
+                tokenData.twapMaxDeviationBps,
+                tokenData.twapObservationWindow
+            );
 
             address[] memory underlyingTokens = new address[](2);
             underlyingTokens[0] = token0;
@@ -184,20 +271,41 @@ contract BunniSupply is SupplySubmodule {
 
     // =========== ADMIN FUNCTIONS =========== //
 
-    /// @notice                 Adds a deployed BunniToken address to the list of monitored tokens
-    /// @dev                    Reverts if:
-    /// @dev                    - The address is the zero address
-    /// @dev                    - The address is already managed
-    /// @dev                    - The caller is not the parent module
-    /// @dev                    - `token_` does not adhere to the IBunniToken interface
-    /// @dev                    - `bunniLens_` does not adhere to the IBunniLens interface
-    /// @dev                    - `token_` and `bunniLens_` do not have the same BunniHub address
+    /// @notice                         Adds a deployed BunniToken address to the list of monitored tokens
+    /// @dev                            Reverts if:
+    /// @dev                            - The address is the zero address
+    /// @dev                            - The address is already managed
+    /// @dev                            - The caller is not the parent module
+    /// @dev                            - `token_` does not adhere to the IBunniToken interface
+    /// @dev                            - `bunniLens_` does not adhere to the IBunniLens interface
+    /// @dev                            - `token_` and `bunniLens_` do not have the same BunniHub address
     ///
-    /// @param token_           The address of the BunniToken contract
-    /// @param bunniLens_       The address of the BunniLens contract
-    function addBunniToken(address token_, address bunniLens_) external onlyParent {
+    /// @param token_                   The address of the BunniToken contract
+    /// @param bunniLens_               The address of the BunniLens contract
+    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP in basis points
+    /// @param twapObservationWindow_   The TWAP observation window in seconds
+    function addBunniToken(
+        address token_,
+        address bunniLens_,
+        uint16 twapMaxDeviationBps_,
+        uint32 twapObservationWindow_
+    ) external onlyParent {
         if (token_ == address(0) || _inTokenArray(token_))
             revert BunniSupply_Params_InvalidBunniToken(token_);
+
+        if (twapMaxDeviationBps_ > TWAP_MAX_DEVIATION_BASE)
+            revert BunniSupply_Params_InvalidTwapMaxDeviationBps(
+                token_,
+                TWAP_MAX_DEVIATION_BASE,
+                twapMaxDeviationBps_
+            );
+
+        if (twapObservationWindow_ < UniswapV3OracleHelper.TWAP_MIN_OBSERVATION_WINDOW)
+            revert BunniSupply_Params_InvalidTwapObservationWindow(
+                token_,
+                UniswapV3OracleHelper.TWAP_MIN_OBSERVATION_WINDOW,
+                twapObservationWindow_
+            );
 
         if (bunniLens_ == address(0)) revert BunniSupply_Params_InvalidBunniLens(bunniLens_);
 
@@ -222,10 +330,15 @@ contract BunniSupply is SupplySubmodule {
         // Check that the hub matches
         if (tokenHub != lensHub) revert BunniSupply_Params_HubMismatch(tokenHub, lensHub);
 
-        bunniTokens.push(token);
-        bunniLenses.push(lens);
+        bunniTokens.push(
+            TokenData({
+                token: token,
+                lens: lens,
+                twapMaxDeviationBps: twapMaxDeviationBps_,
+                twapObservationWindow: twapObservationWindow_
+            })
+        );
         bunniTokenCount++;
-        bunniLensCount++;
 
         emit BunniTokenAdded(token_, bunniLens_);
     }
@@ -245,7 +358,8 @@ contract BunniSupply is SupplySubmodule {
         uint256 bunniTokenIndex = type(uint256).max;
         // Remove the token first
         for (uint256 i; i < len; ) {
-            if (token_ == address(bunniTokens[i])) {
+            address tokenAddress = address(bunniTokens[i].token);
+            if (token_ == tokenAddress) {
                 bunniTokens[i] = bunniTokens[len - 1];
                 bunniTokens.pop();
                 bunniTokenIndex = i;
@@ -257,11 +371,7 @@ contract BunniSupply is SupplySubmodule {
             }
         }
 
-        // Remove the lens at the same index
-        bunniLenses[bunniTokenIndex] = bunniLenses[len - 1];
-        bunniLenses.pop();
         bunniTokenCount--;
-        bunniLensCount--;
 
         emit BunniTokenRemoved(token_);
     }
@@ -321,7 +431,8 @@ contract BunniSupply is SupplySubmodule {
     function _inTokenArray(address token_) internal view returns (bool) {
         uint256 len = bunniTokens.length;
         for (uint256 i; i < len; ) {
-            if (token_ == address(bunniTokens[i])) {
+            address tokenAddress = address(bunniTokens[i].token);
+            if (token_ == tokenAddress) {
                 return true;
             }
             unchecked {
@@ -329,5 +440,42 @@ contract BunniSupply is SupplySubmodule {
             }
         }
         return false;
+    }
+
+    /// @notice                         Validates that the reserves of the pool represented by `key_` are within
+    /// @notice                         the maximum deviation from the pool's TWAP.
+    ///
+    /// @param key_                     The BunniKey for the pool
+    /// @param lens_                    The BunniLens contract
+    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP in basis points
+    /// @param twapObservationWindow_   The TWAP observation window in seconds
+    function _validateReserves(
+        BunniKey memory key_,
+        BunniLens lens_,
+        uint16 twapMaxDeviationBps_,
+        uint32 twapObservationWindow_
+    ) internal view {
+        uint256 reservesTokenRatio = BunniHelper.getReservesRatio(key_, lens_);
+        uint256 twapTokenRatio = UniswapV3OracleHelper.getTWAPRatio(
+            address(key_.pool),
+            twapObservationWindow_
+        );
+
+        // Revert if the relative deviation is greater than the maximum
+        if (
+            // Not necessary to use `isDeviatingWithBpsCheck()` as the checked is already performed in `addBunniToken`
+            Deviation.isDeviating(
+                reservesTokenRatio,
+                twapTokenRatio,
+                twapMaxDeviationBps_,
+                TWAP_MAX_DEVIATION_BASE
+            )
+        ) {
+            revert BunniSupply_PriceMismatch(
+                address(key_.pool),
+                twapTokenRatio,
+                reservesTokenRatio
+            );
+        }
     }
 }

@@ -204,8 +204,6 @@ abstract contract RangeSim is Test {
     ZeroDistributor public distributor;
     Appraiser public appraiser;
 
-    uint16 internal constant APPRAISER_RESERVES_DEVIATION_BPS = 100; // 1%
-
     mapping(uint32 => SimIO.Params) internal params; // map of sim keys to sim params
     mapping(uint32 => mapping(uint32 => int256)) internal netflows; // map of sim keys to epochs to netflows
 
@@ -379,7 +377,7 @@ abstract contract RangeSim is Test {
             treasury = new OlympusTreasury(kernel);
             minter = new OlympusMinter(kernel, address(ohm));
             roles = new OlympusRoles(kernel);
-            appraiser = new Appraiser(kernel, APPRAISER_RESERVES_DEVIATION_BPS);
+            appraiser = new Appraiser(kernel);
         }
 
         {

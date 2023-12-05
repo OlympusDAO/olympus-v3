@@ -75,8 +75,6 @@ contract OperatorTest is Test {
     uint256 internal constant GOHM_INDEX = 300000000000;
     uint8 internal constant DECIMALS = 18;
 
-    uint16 internal constant APPRAISER_RESERVES_DEVIATION_BPS = 100; // 1%
-
     event Swap(
         ERC20 indexed tokenIn_,
         ERC20 indexed tokenOut_,
@@ -150,7 +148,7 @@ contract OperatorTest is Test {
             // Deploy new bookkeeper
             bookkeeper = new Bookkeeper(kernel);
             // Deploy new appraiser
-            appraiser = new Appraiser(kernel, APPRAISER_RESERVES_DEVIATION_BPS);
+            appraiser = new Appraiser(kernel);
             /// Deploy operator
             operator = new Operator(
                 kernel,

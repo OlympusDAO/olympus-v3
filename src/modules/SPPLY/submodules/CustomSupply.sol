@@ -35,6 +35,9 @@ abstract contract CustomSupply is SupplySubmodule {
     /// @notice     The custom value for protocol-owned liquidity OHM
     uint256 private _protocolOwnedLiquidityOhm;
 
+    /// @notice     The custom value for protocol-owned treasury OHM
+    uint256 private _protocolOwnedTreasuryOhm;
+
     /// @notice     The custom value for the source
     address private _source;
 
@@ -45,11 +48,13 @@ abstract contract CustomSupply is SupplySubmodule {
         uint256 collateralizedOhm_,
         uint256 protocolOwnedBorrowableOhm_,
         uint256 protocolOwnedLiquidityOhm_,
+        uint256 protocolOwnedTreasuryOhm_,
         address source_
     ) Submodule(parent_) {
         _collateralizedOhm = collateralizedOhm_;
         _protocolOwnedBorrowableOhm = protocolOwnedBorrowableOhm_;
         _protocolOwnedLiquidityOhm = protocolOwnedLiquidityOhm_;
+        _protocolOwnedTreasuryOhm = protocolOwnedTreasuryOhm_;
         _source = source_;
 
         emit CollateralizedValueUpdated(collateralizedOhm_);
@@ -73,6 +78,10 @@ abstract contract CustomSupply is SupplySubmodule {
     /// @inheritdoc SupplySubmodule
     function getProtocolOwnedLiquidityOhm() external view virtual override returns (uint256) {
         return _protocolOwnedLiquidityOhm;
+    }
+
+    function getProtocolOwnedTreasuryOhm() external view virtual override returns (uint256) {
+        return _protocolOwnedTreasuryOhm;
     }
 
     /// @inheritdoc SupplySubmodule
