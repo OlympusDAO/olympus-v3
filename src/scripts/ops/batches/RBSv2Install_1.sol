@@ -41,7 +41,7 @@ contract RBSv2Install_1 is OlyBatch {
         newTrsry = envAddress("current", "olympus.modules.OlympusTreasury");
     }
 
-    function RBSv2Install_1(bool send_) external isDaoBatch(send_) {
+    function RBSv2Install_1_1(bool send_) external isDaoBatch(send_) {
         // This DAO MS batch:
         // 1. Transfers all tokens from the old treasury to the new treasury
         // 2. Upgrades the OlympusTreasury contract to the new version

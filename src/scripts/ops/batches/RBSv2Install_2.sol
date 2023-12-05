@@ -43,7 +43,7 @@ contract RBSv2Install_2 is OlyBatch {
         newCrossChainBridge = envAddress("current", "olympus.policies.CrossChainBridge");
     }
 
-    function RBSv2Install_2(bool send_) external isDaoBatch(send_) {
+    function RBSv2Install_2_1(bool send_) external isDaoBatch(send_) {
         // This DAO MS batch:
         // 1. Installs the OlympusSupply module
         // 2. Installs the BLVaultSupply submodule on the OlympusSupply module

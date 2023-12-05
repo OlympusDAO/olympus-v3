@@ -276,7 +276,7 @@ contract RBSv2Install_3 is OlyBatch {
             toSubKeycode("PRICE.UNIV3"),
             UniswapV3Price.getTokenTWAP.selector,
             abi.encode(daiUsdcPool, 18, "")
-        )
+        );
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
