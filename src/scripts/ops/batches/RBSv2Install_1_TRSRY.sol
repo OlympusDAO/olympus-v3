@@ -57,7 +57,10 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         newTrsry = envAddress("current", "olympus.modules.OlympusTreasury");
 
         // Make sure TRSRY addresses are correct
-        assertFalse(newTrsry == trsry, "New TRSRY address should be different from old TRSRY address");
+        assertFalse(
+            newTrsry == trsry,
+            "New TRSRY address should be different from old TRSRY address"
+        );
     }
 
     function RBSv2Install_1_1(bool send_) external isDaoBatch(send_) {
