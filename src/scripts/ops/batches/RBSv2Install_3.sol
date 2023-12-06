@@ -42,8 +42,6 @@ contract RBSv2Install_3 is OlyBatch {
     address operator;
     address rolesAdmin;
     address bondCallback;
-    address clearinghouseV1;
-    address clearinghouseV1_1;
 
     // Tokens
     address ohm;
@@ -92,8 +90,6 @@ contract RBSv2Install_3 is OlyBatch {
         operator = envAddress("last", "olympus.policies.Operator");
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
         bondCallback = envAddress("current", "olympus.policies.BondCallback");
-        clearinghouseV1 = envAddress("current", "olympus.policies.ClearinghouseV1");
-        clearinghouseV1_1 = envAddress("current", "olympus.policies.ClearinghouseV1_1");
 
         ohm = envAddress("current", "olympus.legacy.OHM");
         dai = envAddress("current", "external.tokens.DAI");
@@ -440,9 +436,9 @@ contract RBSv2Install_3 is OlyBatch {
 
         // 8. Add and categorize DAI on Bookkeeper
         //      - liquid, stable, reserves
-        address[] memory locations = new address[](2);
-        locations[0] = clearinghouseV1;
-        locations[1] = clearinghouseV1_1;
+        //      - No additional locations
+        //          - Clearinghouse policies use the debt functionality, so don't need to be explicitly added
+        address[] memory locations = new address[](0);
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, dai, locations)
@@ -462,6 +458,8 @@ contract RBSv2Install_3 is OlyBatch {
 
         // 9. Add and categorize sDAI on Bookkeeper
         //      - liquid, stable, reserves
+        //      - No additional locations
+        //          - Clearinghouse policies use the debt functionality, so don't need to be explicitly added
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, sdai, locations)
