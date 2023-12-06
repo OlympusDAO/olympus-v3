@@ -34,6 +34,8 @@ import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+// TODO check for batches relying on previous state
+
 /// @notice     Activates and configures PRICE v2
 /// @notice     Configures TRSRY assets
 /// @notice     Activates RBSv2 (Appraiser, Heart, Operator)
@@ -67,7 +69,8 @@ contract RBSv2Install_3 is OlyBatch {
     // Uniswap Pools
     address daiUsdcPool;
     address wethUsdcPool;
-    address ohmDaiPool;
+    address ohmWethPool;
+    uint256 ohmWethTokenId;
 
     // Allocators
     address veFXSAllocator;
@@ -112,7 +115,8 @@ contract RBSv2Install_3 is OlyBatch {
 
         daiUsdcPool = envAddress("current", "external.uniswapV3.DaiUsdcPool");
         wethUsdcPool = envAddress("current", "external.uniswapV3.WethUsdcPool");
-        ohmDaiPool = envAddress("current", "external.uniswapV2.OhmDaiPool");
+        ohmWethPool = envAddress("current", "external.uniswapV3.OhmWethPool");
+        ohmWethTokenId = envUint("current", "external.uniswapV3.OhmWethTokenId");
 
         veFXSAllocator = envAddress("current", "olympus.legacy.veFXSAllocator");
 
@@ -142,18 +146,15 @@ contract RBSv2Install_3 is OlyBatch {
         daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
     }
 
+    /// @notice     Activates PRICEv2 module and BookKeeper policy
     function RBSv2Install_3_1(bool send_) external isDaoBatch(send_) {
         // This DAO MS batch:
         // 1. deactivates old heart + operator policies at contract level
         // 2. deactivates old heart + operator policies at kernel level
-        // 3. upgrades the price module to v2
-        // 4. activates appraiser policy
-        // 5. activates bookkeeper policy
-        // 6. activates new heart policy
-        // 7. activates new operator policy
-        // 8. sets roles for new policy access control
-        // 9. installs submodules on price v2
-        // 10. sets operator address on bond callback
+        // 3. upgrades the PRICE module to v2
+        // 4. activates bookkeeper policy
+        // 5. sets roles for new policy access control
+        // 6. installs submodules on price v2
 
         // 1. Deactivate old heart + operator policies at contract level
         addToBatch(heart, abi.encodeWithSelector(OlympusHeart.deactivate.selector));
@@ -173,16 +174,11 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 3. Upgrade the price module to v2
+        // 3. Upgrade the PRICE module to v2
+        // Requires that Operator is deactivated
         addToBatch(
             kernel,
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.UpgradeModule, priceV2)
-        );
-
-        // 4. Activate appraiser policy
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, appraiser)
         );
 
         // 5. Activate bookkeeper policy
@@ -205,29 +201,11 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 6. Activate new heart policy
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, newHeart)
-        );
-
-        // 7. Activate new operator policy
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.ActivatePolicy,
-                newOperator
-            )
-        );
-
         // 8. Set roles for new policy access control
         // Bookkeeper policy
         //     - Give DAO MS the bookkeeper_admin role
         //     - Give DAO MS the bookkeeper_policy role
         //     - Give Policy MS the bookkeeper_policy role
-        // Operator policy
-        //     - Give Heart the operator_operate role
         addToBatch(
             rolesAdmin,
             abi.encodeWithSelector(
@@ -250,14 +228,6 @@ contract RBSv2Install_3 is OlyBatch {
                 RolesAdmin.grantRole.selector,
                 bytes32("bookkeeper_policy"),
                 policyMS
-            )
-        );
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("operator_operate"),
-                newHeart
             )
         );
 
@@ -297,18 +267,11 @@ contract RBSv2Install_3 is OlyBatch {
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, simplePriceFeedStrategy)
         );
-
-        // 10. Set operator address on bond callback
-        addToBatch(
-            bondCallback,
-            abi.encodeWithSelector(BondCallback.setOperator.selector, newOperator)
-        );
     }
 
+    /// @notice     Configures PRICEv2 module and TRSRY assets
     function RBSv2Install_3_2(
         bool send_,
-        uint256[] memory ohmObs_,
-        uint48 ohmLastObsTime_,
         uint256[] memory daiObs_,
         uint48 daiLastObsTime_,
         uint256[] memory wethObs_,
@@ -317,45 +280,21 @@ contract RBSv2Install_3 is OlyBatch {
         uint48 usdcLastObsTime_
     ) public isPolicyBatch(send_) {
         // This Policy MS batch:
-        // 1. Configures OHM price feed and moving average data on PRICE
-        // 2. Configures DAI price feed and moving average data on PRICE
-        // 3. Configures sDAI price feed and moving average data on PRICE
-        // 4. Configure WETH price feed and moving average data on PRICE
-        // 5. Configure veFXS price feed and moving average data on PRICE
-        // 6. Configure FXS price feed and moving average data on PRICE
-        // 7. Configure USDC price feed and moving average data on PRICE
-        // 8. Add and categorize DAI
-        // 9. Add and categorize sDAI
-        // 10. Add and categorize OHM
-        // 11. Add and categorize WETH
-        // 12. Add and categorize veFXS
-        // 13. Add and categorize FXS
+        // 1. Configures DAI price feed and moving average data on PRICE
+        // 2. Configures sDAI price feed and moving average data on PRICE
+        // 3. Configure WETH price feed and moving average data on PRICE
+        // 4. Configure veFXS price feed and moving average data on PRICE
+        // 5. Configure FXS price feed and moving average data on PRICE
+        // 6. Configure USDC price feed and moving average data on PRICE
+        // 7. Add and categorize DAI in TRSRY
+        // 8. Add and categorize sDAI in TRSRY
+        // 9. Add and categorize WETH in TRSRY
+        // 10. Add and categorize veFXS in TRSRY
+        // 11. Add and categorize FXS in TRSRY
 
-        // 1. Configure OHM price feed and moving average data on PRICE
-        {
-            PRICEv2.Component[] memory ohmFeeds = new PRICEv2.Component[](1);
-            ohmFeeds[0] = PRICEv2.Component(
-                toSubKeycode("PRICE.UNIV3"),
-                UniswapV3Price.getTokenTWAP.selector,
-                abi.encode(ohmDaiPool, 18, "")
-            );
-            addToBatch(
-                bookkeeper,
-                abi.encodeWithSelector(
-                    Bookkeeper.addAssetPrice.selector,
-                    ohm,
-                    false, // don't store moving average
-                    false, // don't use the moving average as part of price strategy
-                    0,
-                    ohmLastObsTime_,
-                    ohmObs_,
-                    PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
-                    ohmFeeds
-                )
-            );
-        }
+        // OHM not needed - BunniManager will handle this
 
-        // 2. Configure DAI price feed and moving average data on PRICE
+        // 1. Configure DAI price feed and moving average data on PRICE
         {
             PRICEv2.Component[] memory daiFeeds = new PRICEv2.Component[](2);
             {
@@ -396,7 +335,7 @@ contract RBSv2Install_3 is OlyBatch {
             );
         }
 
-        // 3. Configure sDAI price feed and moving average data on PRICE
+        // 2. Configure sDAI price feed and moving average data on PRICE
         {
             uint256[] memory sdaiObs_ = new uint256[](0);
             PRICEv2.Component[] memory sdaiFeeds = new PRICEv2.Component[](1);
@@ -421,7 +360,7 @@ contract RBSv2Install_3 is OlyBatch {
             );
         }
 
-        // 4. Configure WETH price feed and moving average data on PRICE
+        // 3. Configure WETH price feed and moving average data on PRICE
         {
             PRICEv2.Component[] memory wethFeeds = new PRICEv2.Component[](2);
             wethFeeds[0] = PRICEv2.Component(
@@ -459,7 +398,7 @@ contract RBSv2Install_3 is OlyBatch {
             );
         }
 
-        // 5. Configure veFXS price feed and moving average data on PRICE
+        // 4. Configure veFXS price feed and moving average data on PRICE
         {
             uint256[] memory veFXSObs_ = new uint256[](0);
             PRICEv2.Component[] memory veFXSFeeds = new PRICEv2.Component[](1);
@@ -489,7 +428,7 @@ contract RBSv2Install_3 is OlyBatch {
             );
         }
 
-        // 6. Configure FXS price feed and moving average data on PRICE
+        // 5. Configure FXS price feed and moving average data on PRICE
         {
             uint256[] memory fxsObs_ = new uint256[](0);
             PRICEv2.Component[] memory fxsFeeds = new PRICEv2.Component[](1);
@@ -519,7 +458,7 @@ contract RBSv2Install_3 is OlyBatch {
             );
         }
 
-        // 7. Configure USDC price feed and moving average data on PRICE
+        // 6. Configure USDC price feed and moving average data on PRICE
         {
             PRICEv2.Component[] memory usdcFeeds = new PRICEv2.Component[](1);
             usdcFeeds[0] = PRICEv2.Component(
@@ -548,7 +487,7 @@ contract RBSv2Install_3 is OlyBatch {
             );
         }
 
-        // 8. Add and categorize DAI on Bookkeeper
+        // 7. Add and categorize DAI on Bookkeeper
         //      - liquid, stable, reserves
         //      - Clearinghouse policies use the debt functionality, so don't need to be explicitly added
         address[] memory locations = new address[](2);
@@ -583,7 +522,7 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 9. Add and categorize sDAI on Bookkeeper
+        // 8. Add and categorize sDAI on Bookkeeper
         //      - liquid, stable, reserves
         addToBatch(
             bookkeeper,
@@ -614,7 +553,7 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 11. Add and categorize WETH
+        // 9. Add and categorize WETH
         //      - liquid, volatile
         addToBatch(
             bookkeeper,
@@ -637,7 +576,7 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 12. Add and categorize veFXS
+        // 10. Add and categorize veFXS
         //      - illiquid, volatile
         address[] memory veFXSLocations = new address[](3);
         veFXSLocations[0] = veFXSAllocator;
@@ -664,7 +603,7 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 13. Add and categorize FXS
+        // 11. Add and categorize FXS
         //      - illiquid, volatile
         addToBatch(
             bookkeeper,
@@ -688,11 +627,92 @@ contract RBSv2Install_3 is OlyBatch {
         );
     }
 
-    function RBSv2Install_3_3(bool send_) public isDaoBatch(send_) {
+    /// @notice     Configures protocol owned liquidity
+    function RBSv2Install_3_3(
+        bool send_
+    ) public isDAOBatch(send_) {
         // This DAO MS batch:
-        // 1. Initializes the operator policy
+        // 1. Activates the BunniManager policy
+        // 2. Withdraws liquidity from the existing Uniswap V3 pool
+        // 3. Deploys an LP token for pool
+        // 4. Deposits liquidity into the poll
+        // 5. Activates the LP token
+        // 6. Set roles for policy access control (bunni_admin)
 
-        // 1. Initialize the operator policy
+        // 1. Activate the BunniManager policy
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, bunniManager)
+        );
+
+        // 2. Withdraw liquidity from the existing Uniswap V3 pool
+        uint256 ohmBalance;
+        uint256 wethBalance;
+        {
+            // Get the current OHM and wETH balances
+            uint256 prevOhmBalance = ERC20(ohm).balanceOf(daoMS);
+            uint256 prevWethBalance = ERC20(weth).balanceOf(daoMS);
+
+            // Collect fees
+
+            // Withdraw liquidity
+
+            // Get the new OHM and wETH balances
+            // TODO can't get these in the same function?
+        }
+    }
+
+    /// @notice     Activates RBS (Appraiser, Heart, Operator)
+    function RBSv2Install_3_4(bool send_) public isDaoBatch(send_) {
+        // This DAO MS batch:
+        // 1. Activates Appraiser policy
+        // 2. Activates Operator policy
+        // 3. Activates Heart policy
+        // 4. Sets operator address on bond callback
+        // 5. Set roles for policy access control
+        // 6. Initializes the operator policy
+
+        // 1. Activate appraiser policy
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, appraiser)
+        );
+
+        // 2. Activate new operator policy
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                newOperator
+            )
+        );
+
+        // 3. Activate new heart policy
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, newHeart)
+        );
+
+        // 4. Set operator address on bond callback
+        addToBatch(
+            bondCallback,
+            abi.encodeWithSelector(BondCallback.setOperator.selector, newOperator)
+        );
+
+        // 5. Set roles for policy access control
+        // Operator policy
+        //     - Give Heart the operator_operate role
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("operator_operate"),
+                newHeart
+            )
+        );
+
+        // 6. Initialize the operator policy
         addToBatch(newOperator, abi.encodeWithSelector(Operator.initialize.selector));
     }
 }

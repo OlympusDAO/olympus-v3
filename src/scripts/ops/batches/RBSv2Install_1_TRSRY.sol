@@ -144,6 +144,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // 2. Record the current debt of the old treasury
         OlympusTreasury trsryModule = OlympusTreasury(trsry);
 
+        // TODO check for batches relying on previous state
+
         // DAI
         // - Clearinghouse debt is denominated in DAI
         // - This currently excludes the DSRAllocator, as it is assumed that DAI in the DSR will be migrated to sDAI before activation
