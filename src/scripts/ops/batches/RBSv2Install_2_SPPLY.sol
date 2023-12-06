@@ -22,7 +22,7 @@ import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSup
 
 /// @notice     Activates and configures SPPLY v1
 /// @notice     Migrates to CrossChainBridge v1.1
-contract RBSv2Install_2 is OlyBatch {
+contract RBSv2Install_2_SPPLY is OlyBatch {
     // Existing Olympus Contracts
     address kernel;
     address crossChainBridge;

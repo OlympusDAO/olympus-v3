@@ -15,7 +15,7 @@ import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {IFXSAllocator} from "interfaces/IFXSAllocator.sol";
 
 /// @notice     Migrates to TRSRY v1.1
-contract RBSv2Install_1 is OlyBatch, StdAssertions {
+contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     // Existing Olympus contracts
     address kernel;
     address trsry;
