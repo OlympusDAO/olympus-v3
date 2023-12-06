@@ -1,24 +1,31 @@
 pragma solidity 0.8.15;
 
+import {ERC20} from "solmate/tokens/ERC20.sol";
+
 import "modules/SPPLY/SPPLY.v1.sol";
 import {CustomSupply} from "modules/SPPLY/submodules/CustomSupply.sol";
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {IgOHM} from "src/interfaces/IgOHM.sol";
 
 /// @title      BrickedSupply
 /// @notice     SPPLY submodule representing a manual adjustment for OHM stuck in the sOHM v2 contract
 contract BrickedSupply is CustomSupply {
-    /// @notice     The sOHM v2 contract (any sOHM in here is bricked)
-    address public immutable sOHMv2;
+    /// @notice     Addresses of tokens to check for bricked supply that are denominated in OHM
+    address[] public ohmDenominatedTokens;
+
+    /// @notice     Addresses of tokens to check for bricked supply that are denominated in gOHM
+    address[] public gohmDenominatedTokens;
 
     // ========= CONSTRUCTOR ========= //
 
     constructor(
         Module parent_,
         address source_,
-        address sOHMv2_
+        address[] memory ohmDenominatedTokens_,
+        address[] memory gohmDenominatedTokens_
     ) CustomSupply(parent_, 0, 0, 0, 0, source_) {
-        sOHMv2 = sOHMv2_;
+        ohmDenominatedTokens = ohmDenominatedTokens_;
+        gohmDenominatedTokens = gohmDenominatedTokens_;
     }
 
     // ========= SUBMODULE SETUP ========= //
@@ -42,7 +49,47 @@ contract BrickedSupply is CustomSupply {
     /// @inheritdoc SupplySubmodule
     /// @dev        Calculated as the quantity of sOHM v2 in the contract
     function getProtocolOwnedTreasuryOhm() external view override returns (uint256) {
-        // TODO: This can be extended to check for OHM in the OHM contract, gOHM in the gOHM contract, etc.
-        return ERC20(sOHMv2).balanceOf(sOHMv2);
+        uint256 brickedOhm;
+
+        // Check OHM denominated tokens
+        uint256 numOhmDenominatedTokens = ohmDenominatedTokens.length;
+        for (uint256 i; i < numOhmDenominatedTokens; ) {
+            address token = ohmDenominatedTokens[i];
+            brickedOhm += ERC20(token).balanceOf(token);
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Check gOHM denominated tokens
+        uint256 numGohmDenominatedTokens = gohmDenominatedTokens.length;
+        for (uint256 i; i < numGohmDenominatedTokens; ) {
+            address token = gohmDenominatedTokens[i];
+            uint256 gohmBalance = ERC20(token).balanceOf(token);
+            brickedOhm += IgOHM(token).balanceFrom(gohmBalance);
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return brickedOhm;
+    }
+
+    // ========== ADMIN FUNCTIONS ========== //
+
+    /// @notice     Set the addresses of tokens to check for bricked supply that are denominated in OHM
+    ///
+    /// @param      ohmDenominatedTokens_     The new addresses of tokens to check
+    function setOhmDenominatedTokens(address[] memory ohmDenominatedTokens_) external onlyParent {
+        ohmDenominatedTokens = ohmDenominatedTokens_;
+    }
+
+    /// @notice     Set the addresses of tokens to check for bricked supply that are denominated in gOHM
+    ///
+    /// @param      gohmDenominatedTokens_     The new addresses of tokens to check
+    function setGohmDenominatedTokens(address[] memory gohmDenominatedTokens_) external onlyParent {
+        gohmDenominatedTokens = gohmDenominatedTokens_;
     }
 }
