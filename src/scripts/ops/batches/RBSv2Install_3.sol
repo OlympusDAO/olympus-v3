@@ -34,6 +34,9 @@ import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+/// @notice     Activates and configures PRICE v2
+/// @notice     Configures TRSRY assets
+/// @notice     Activates RBSv2 (Appraiser, Heart, Operator)
 contract RBSv2Install_3 is OlyBatch {
     // Existing Olympus Contracts
     address kernel;
