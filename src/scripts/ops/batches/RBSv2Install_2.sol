@@ -20,6 +20,8 @@ import {BLVaultSupply} from "modules/SPPLY/submodules/BLVaultSupply.sol";
 import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
 
+/// @notice     Activates and configures SPPLY v1
+/// @notice     Migrates to CrossChainBridge v1.1
 contract RBSv2Install_2 is OlyBatch {
     // Existing Olympus Contracts
     address kernel;
