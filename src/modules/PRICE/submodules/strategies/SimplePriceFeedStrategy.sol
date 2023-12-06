@@ -283,7 +283,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     ///
     /// @param prices_  Array of prices
     /// @return         The resolved price
-    function getAveragePrice(uint256[] memory prices_, bytes memory params_) public pure returns (uint256) {
+    function getAveragePrice(uint256[] memory prices_, bytes memory) public pure returns (uint256) {
         // Handle misconfiguration
         if (prices_.length < 2) revert SimpleStrategy_PriceCountInvalid(prices_.length, 2);
 
