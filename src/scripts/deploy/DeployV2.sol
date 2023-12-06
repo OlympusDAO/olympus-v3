@@ -332,9 +332,7 @@ contract OlympusDeploy is Script {
         chainlinkPriceFeeds = ChainlinkPriceFeeds(
             envAddress("olympus.submodules.PRICE.ChainlinkPriceFeeds")
         );
-        erc4626Price = ERC4626Price(
-            envAddress("olympus.submodules.PRICE.ERC4626Price")
-        );
+        erc4626Price = ERC4626Price(envAddress("olympus.submodules.PRICE.ERC4626Price"));
         uniswapV2PoolTokenPrice = UniswapV2PoolTokenPrice(
             envAddress("olympus.submodules.PRICE.UniswapV2PoolTokenPrice")
         );

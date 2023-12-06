@@ -80,23 +80,23 @@ Pass `--exclude=<FILE>` to ignore specific files from the analysis. For example:
 
 Tests have been split into different scripts:
 
-- `pnpm run test:unit`
-- `pnpm run test:fork`
-- `pnpm run test:crosschainfork`
-- `pnpm run test:coverage`
+-   `pnpm run test:unit`
+-   `pnpm run test:fork`
+-   `pnpm run test:crosschainfork`
+-   `pnpm run test:coverage`
 
 If tests are failing:
 
-- Firstly, please ensure that you have read this README and have followed the instructions
-- Restrict included tests to unit tests. This can be achieved using `pnpm run test:unit`
-- If you are experiencing a unit test failure, try restricting the test run to the specific test contract. For example: `forge test -vvv --match-contract BunniPriceTest`
+-   Firstly, please ensure that you have read this README and have followed the instructions
+-   Restrict included tests to unit tests. This can be achieved using `pnpm run test:unit`
+-   If you are experiencing a unit test failure, try restricting the test run to the specific test contract. For example: `forge test -vvv --match-contract BunniPriceTest`
 
 This error may occur running test coverage, and is a known issue:
 
 ```
 [⠒] Compiling 341 files with 0.8.15
 [⠒] Solc 0.8.15 finished in 119.02s
-Error: 
+Error:
 Compiler run failed:
 Error: Yul exception:Cannot swap Slot TMP[iszero, 0] with Slot RET[abi_encode_tuple_address]: too deep in the stack by 1 slots in [ RET expr_143919_mpos expr_143878_mpos TMP[iszero, 0] _1 _20 expr_2 expr_2 expr_5 expr_11 expr_5 expr_5 expr_10 expr_143945_address expr_143964_mpos expr_5 expr_143945_functionSelector expr_12 expr_143878_mpos expr_143919_mpos RET[abi_encode_tuple_address] ]
 memoryguard was present.

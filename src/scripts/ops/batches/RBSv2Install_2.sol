@@ -54,7 +54,10 @@ contract RBSv2Install_2 is OlyBatch {
         spply = envAddress("current", "olympus.modules.OlympusSupply");
         blVaultSupply = envAddress("current", "olympus.submodules.SPPLY.BLVaultSupply");
         bunniSupply = envAddress("current", "olympus.submodules.SPPLY.BunniSupply");
-        migrationOffsetSupply = envAddress("current", "olympus.submodules.SPPLY.MigrationOffsetSupply");
+        migrationOffsetSupply = envAddress(
+            "current",
+            "olympus.submodules.SPPLY.MigrationOffsetSupply"
+        );
         newCrossChainBridge = envAddress("current", "olympus.policies.CrossChainBridge");
     }
 
@@ -71,37 +74,98 @@ contract RBSv2Install_2 is OlyBatch {
         // 9. Categorizes DAO supply
 
         // 1. Install the OlympusSupply module
-        addToBatch(kernel, abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, spply));
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, spply)
+        );
 
         // 2. Install the BLVaultSupply submodule on the OlympusSupply module
-        addToBatch(spply, abi.encodeWithSelector(ModuleWithSubmodules.installSubmodule.selector, BLVaultSupply(blVaultSupply)));
+        addToBatch(
+            spply,
+            abi.encodeWithSelector(
+                ModuleWithSubmodules.installSubmodule.selector,
+                BLVaultSupply(blVaultSupply)
+            )
+        );
 
         // 2a. Configure the BLVaultSupply submodule with the existing BLV managers
-        addToBatch(blVaultSupply, abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLido));
-        addToBatch(blVaultSupply, abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLusd));
+        addToBatch(
+            blVaultSupply,
+            abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLido)
+        );
+        addToBatch(
+            blVaultSupply,
+            abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLusd)
+        );
 
         // 3. Install the BunniSupply submodule on the OlympusSupply module
         // No configuration needed - will be performed by BunniManager
-        addToBatch(spply, abi.encodeWithSelector(ModuleWithSubmodules.installSubmodule.selector, BunniSupply(bunniSupply)));
+        addToBatch(
+            spply,
+            abi.encodeWithSelector(
+                ModuleWithSubmodules.installSubmodule.selector,
+                BunniSupply(bunniSupply)
+            )
+        );
 
         // 4. Install the MigrationOffsetSupply submodule on the OlympusSupply module
         // No configuration needed - already done at deployment
-        addToBatch(spply, abi.encodeWithSelector(ModuleWithSubmodules.installSubmodule.selector, MigrationOffsetSupply(migrationOffsetSupply)));
+        addToBatch(
+            spply,
+            abi.encodeWithSelector(
+                ModuleWithSubmodules.installSubmodule.selector,
+                MigrationOffsetSupply(migrationOffsetSupply)
+            )
+        );
 
         // 5. Deactivate the old CrossChainBridge policy
-        addToBatch(kernel, abi.encodeWithSelector(Kernel.executeAction.selector, Actions.DeactivatePolicy, crossChainBridge));
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.DeactivatePolicy,
+                crossChainBridge
+            )
+        );
 
         // 6. Activate the new CrossChainBridge policy
-        addToBatch(kernel, abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, newCrossChainBridge));
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                newCrossChainBridge
+            )
+        );
 
         // 7. Set trusted remotes on the new CrossChainBridge policy
-        addToBatch(newCrossChainBridge, abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 110, arbBridge));
-        addToBatch(newCrossChainBridge, abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 111, opBridge));
+        addToBatch(
+            newCrossChainBridge,
+            abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 110, arbBridge)
+        );
+        addToBatch(
+            newCrossChainBridge,
+            abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 111, opBridge)
+        );
 
         // 8. Categorize protocol-owned-treasury supply
-        addToBatch(spply, abi.encodeWithSelector(OlympusSupply.categorize.selector, daoMS, SupplyCategory.wrap("protocol-owned-treasury")));
+        addToBatch(
+            spply,
+            abi.encodeWithSelector(
+                OlympusSupply.categorize.selector,
+                daoMS,
+                SupplyCategory.wrap("protocol-owned-treasury")
+            )
+        );
 
         // 9. Categorize DAO supply
-        addToBatch(spply, abi.encodeWithSelector(OlympusSupply.categorize.selector, daoWorkingWallet, SupplyCategory.wrap("dao")));
+        addToBatch(
+            spply,
+            abi.encodeWithSelector(
+                OlympusSupply.categorize.selector,
+                daoWorkingWallet,
+                SupplyCategory.wrap("dao")
+            )
+        );
     }
 }

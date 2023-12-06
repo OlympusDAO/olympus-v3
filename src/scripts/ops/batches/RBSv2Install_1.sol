@@ -62,21 +62,54 @@ contract RBSv2Install_1 is OlyBatch, StdAssertions {
         // 2. Records the current debt of the old treasury
         // 3. Upgrades the OlympusTreasury contract to the new version
         // 4. Sets debt on the new treasury contract
+        // 5. Registers assets on the new treasury contract
 
         // 1. Transfer all tokens from the old treasury to the new treasury
         // DAI
         {
             uint256 daiBalance = ERC20(dai).balanceOf(trsry);
-            addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, dai, daiBalance));
-            addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, newTrsry, dai, daiBalance));
+            addToBatch(
+                treasuryCustodian,
+                abi.encodeWithSelector(
+                    TreasuryCustodian.grantWithdrawerApproval.selector,
+                    treasuryCustodian,
+                    dai,
+                    daiBalance
+                )
+            );
+            addToBatch(
+                treasuryCustodian,
+                abi.encodeWithSelector(
+                    TreasuryCustodian.withdrawReservesTo.selector,
+                    newTrsry,
+                    dai,
+                    daiBalance
+                )
+            );
             console2.log("Transfered DAI: %s", daiBalance);
         }
 
         // sDAI
         {
             uint256 sdaiBalance = ERC20(sdai).balanceOf(trsry);
-            addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, sdai, sdaiBalance));
-            addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, newTrsry, sdai, sdaiBalance));
+            addToBatch(
+                treasuryCustodian,
+                abi.encodeWithSelector(
+                    TreasuryCustodian.grantWithdrawerApproval.selector,
+                    treasuryCustodian,
+                    sdai,
+                    sdaiBalance
+                )
+            );
+            addToBatch(
+                treasuryCustodian,
+                abi.encodeWithSelector(
+                    TreasuryCustodian.withdrawReservesTo.selector,
+                    newTrsry,
+                    sdai,
+                    sdaiBalance
+                )
+            );
             console2.log("Transfered sDAI: %s", sdaiBalance);
         }
 
@@ -104,7 +137,7 @@ contract RBSv2Install_1 is OlyBatch, StdAssertions {
 
         // 2. Record the current debt of the old treasury
         OlympusTreasury trsryModule = OlympusTreasury(trsry);
-        
+
         // DAI
         // - Clearinghouse debt is denominated in DAI
         uint256 daiClearinghouseV1Debt;
@@ -114,7 +147,11 @@ contract RBSv2Install_1 is OlyBatch, StdAssertions {
             uint256 daiTotalDebt = trsryModule.totalDebt(daiToken);
             daiClearinghouseV1Debt = trsryModule.reserveDebt(daiToken, clearinghouseV1);
             daiClearinghouseV1_1Debt = trsryModule.reserveDebt(daiToken, clearinghouseV1_1);
-            assertEq(daiTotalDebt, daiClearinghouseV1Debt + daiClearinghouseV1_1Debt, "Clearinghouse debt should equal total debt");
+            assertEq(
+                daiTotalDebt,
+                daiClearinghouseV1Debt + daiClearinghouseV1_1Debt,
+                "Clearinghouse debt should equal total debt"
+            );
         }
 
         // sDAI
@@ -144,7 +181,14 @@ contract RBSv2Install_1 is OlyBatch, StdAssertions {
 
         // 3. Upgrade the OlympusTreasury contract to the new version
         {
-            addToBatch(kernel, abi.encodeWithSelector(Kernel.executeAction.selector, Actions.UpgradeModule, newTrsry));
+            addToBatch(
+                kernel,
+                abi.encodeWithSelector(
+                    Kernel.executeAction.selector,
+                    Actions.UpgradeModule,
+                    newTrsry
+                )
+            );
             console2.log("Upgraded OlympusTreasury to new version: %s", newTrsry);
         }
 
@@ -154,8 +198,24 @@ contract RBSv2Install_1 is OlyBatch, StdAssertions {
         // DAI
         {
             ERC20 daiToken = ERC20(dai);
-            addToBatch(newTrsry, abi.encodeWithSelector(OlympusTreasury.setDebt.selector, clearinghouseV1, daiToken, daiClearinghouseV1Debt));
-            addToBatch(newTrsry, abi.encodeWithSelector(OlympusTreasury.setDebt.selector, clearinghouseV1_1, daiToken, daiClearinghouseV1_1Debt));
+            addToBatch(
+                newTrsry,
+                abi.encodeWithSelector(
+                    OlympusTreasury.setDebt.selector,
+                    clearinghouseV1,
+                    daiToken,
+                    daiClearinghouseV1Debt
+                )
+            );
+            addToBatch(
+                newTrsry,
+                abi.encodeWithSelector(
+                    OlympusTreasury.setDebt.selector,
+                    clearinghouseV1_1,
+                    daiToken,
+                    daiClearinghouseV1_1Debt
+                )
+            );
         }
 
         // sDAI: no debt
@@ -165,7 +225,15 @@ contract RBSv2Install_1 is OlyBatch, StdAssertions {
         // veFXS
         {
             ERC20 vefxsToken = ERC20(vefxs);
-            addToBatch(newTrsry, abi.encodeWithSelector(OlympusTreasury.setDebt.selector, vefxsallocator, vefxsToken, vefxsBalance));
+            addToBatch(
+                newTrsry,
+                abi.encodeWithSelector(
+                    OlympusTreasury.setDebt.selector,
+                    vefxsallocator,
+                    vefxsToken,
+                    vefxsBalance
+                )
+            );
         }
 
         // TODO 5. Register TRSRY assets
