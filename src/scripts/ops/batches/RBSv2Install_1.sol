@@ -14,6 +14,7 @@ import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 
 import {IFXSAllocator} from "interfaces/IFXSAllocator.sol";
 
+/// @notice     Migrates to TRSRY v1.1
 contract RBSv2Install_1 is OlyBatch, StdAssertions {
     // Existing Olympus contracts
     address kernel;
@@ -54,6 +55,9 @@ contract RBSv2Install_1 is OlyBatch, StdAssertions {
         vefxs = envAddress("current", "external.tokens.veFXS");
 
         newTrsry = envAddress("current", "olympus.modules.OlympusTreasury");
+
+        // Make sure TRSRY addresses are correct
+        assertFalse(newTrsry == trsry, "New TRSRY address should be different from old TRSRY address");
     }
 
     function RBSv2Install_1_1(bool send_) external isDaoBatch(send_) {
@@ -62,7 +66,6 @@ contract RBSv2Install_1 is OlyBatch, StdAssertions {
         // 2. Records the current debt of the old treasury
         // 3. Upgrades the OlympusTreasury contract to the new version
         // 4. Sets debt on the new treasury contract
-        // 5. Registers assets on the new treasury contract
 
         // 1. Transfer all tokens from the old treasury to the new treasury
         // DAI
@@ -140,6 +143,7 @@ contract RBSv2Install_1 is OlyBatch, StdAssertions {
 
         // DAI
         // - Clearinghouse debt is denominated in DAI
+        // - This currently excludes the DSRAllocator, as it is assumed that DAI in the DSR will be migrated to sDAI before activation
         uint256 daiClearinghouseV1Debt;
         uint256 daiClearinghouseV1_1Debt;
         {
@@ -193,26 +197,27 @@ contract RBSv2Install_1 is OlyBatch, StdAssertions {
         }
 
         // 4. Transfer debt over to the new treasury
+        // TreasuryCustodian.increaseDebt can be used as the existing debt is 0
         OlympusTreasury newTrsryModule = OlympusTreasury(newTrsry);
 
         // DAI
         {
             ERC20 daiToken = ERC20(dai);
             addToBatch(
-                newTrsry,
+                treasuryCustodian,
                 abi.encodeWithSelector(
-                    OlympusTreasury.setDebt.selector,
-                    clearinghouseV1,
+                    TreasuryCustodian.increaseDebt.selector,
                     daiToken,
+                    clearinghouseV1,
                     daiClearinghouseV1Debt
                 )
             );
             addToBatch(
-                newTrsry,
+                treasuryCustodian,
                 abi.encodeWithSelector(
-                    OlympusTreasury.setDebt.selector,
-                    clearinghouseV1_1,
+                    TreasuryCustodian.increaseDebt.selector,
                     daiToken,
+                    clearinghouseV1_1,
                     daiClearinghouseV1_1Debt
                 )
             );
@@ -226,16 +231,16 @@ contract RBSv2Install_1 is OlyBatch, StdAssertions {
         {
             ERC20 vefxsToken = ERC20(vefxs);
             addToBatch(
-                newTrsry,
+                treasuryCustodian,
                 abi.encodeWithSelector(
-                    OlympusTreasury.setDebt.selector,
-                    vefxsallocator,
+                    TreasuryCustodian.increaseDebt.selector,
                     vefxsToken,
+                    vefxsallocator,
                     vefxsBalance
                 )
             );
         }
 
-        // TODO 5. Register TRSRY assets
+        // It would be ideal to register TRSRY assets here, however the BookKeeper policy is required for that
     }
 }

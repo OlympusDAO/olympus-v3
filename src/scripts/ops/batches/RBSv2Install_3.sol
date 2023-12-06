@@ -42,6 +42,7 @@ contract RBSv2Install_3 is OlyBatch {
     address operator;
     address rolesAdmin;
     address bondCallback;
+    address treasuryCustodian;
 
     // Tokens
     address ohm;
@@ -83,6 +84,9 @@ contract RBSv2Install_3 is OlyBatch {
     address newOperator;
     address bunniManager;
 
+    // Wallets
+    address daoWorkingWallet;
+
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
         price = envAddress("current", "olympus.modules.OlympusPriceV1");
@@ -90,6 +94,7 @@ contract RBSv2Install_3 is OlyBatch {
         operator = envAddress("last", "olympus.policies.Operator");
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
         bondCallback = envAddress("current", "olympus.policies.BondCallback");
+        treasuryCustodian = envAddress("current", "olympus.policies.TreasuryCustodian");
 
         ohm = envAddress("current", "olympus.legacy.OHM");
         dai = envAddress("current", "external.tokens.DAI");
@@ -130,6 +135,8 @@ contract RBSv2Install_3 is OlyBatch {
         newHeart = envAddress("current", "olympus.policies.OlympusHeart");
         newOperator = envAddress("current", "olympus.policies.Operator");
         bunniManager = envAddress("current", "olympus.policies.BunniManager");
+
+        daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
     }
 
     function RBSv2Install_3_1(bool send_) external isDaoBatch(send_) {
@@ -182,6 +189,16 @@ contract RBSv2Install_3 is OlyBatch {
                 Kernel.executeAction.selector,
                 Actions.ActivatePolicy,
                 bookkeeper
+            )
+        );
+
+        // 5a. Disable TreasuryCustodian policy (superseded by BookKeeper)
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.DeactivatePolicy,
+                treasuryCustodian
             )
         );
 
@@ -530,9 +547,10 @@ contract RBSv2Install_3 is OlyBatch {
 
         // 8. Add and categorize DAI on Bookkeeper
         //      - liquid, stable, reserves
-        //      - No additional locations
-        //          - Clearinghouse policies use the debt functionality, so don't need to be explicitly added
-        address[] memory locations = new address[](0);
+        //      - Clearinghouse policies use the debt functionality, so don't need to be explicitly added
+        address[] memory locations = new address[](2);
+        locations[0] = daoWorkingWallet;
+        locations[1] = daoMS;
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, dai, locations)
@@ -564,8 +582,6 @@ contract RBSv2Install_3 is OlyBatch {
 
         // 9. Add and categorize sDAI on Bookkeeper
         //      - liquid, stable, reserves
-        //      - No additional locations
-        //          - Clearinghouse policies use the debt functionality, so don't need to be explicitly added
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, sdai, locations)
@@ -599,7 +615,7 @@ contract RBSv2Install_3 is OlyBatch {
         //      - liquid, volatile
         addToBatch(
             bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.addAsset.selector, weth, new address[](0))
+            abi.encodeWithSelector(Bookkeeper.addAsset.selector, weth, locations)
         );
         addToBatch(
             bookkeeper,
@@ -620,8 +636,10 @@ contract RBSv2Install_3 is OlyBatch {
 
         // 12. Add and categorize veFXS
         //      - illiquid, volatile
-        address[] memory veFXSLocations = new address[](1);
+        address[] memory veFXSLocations = new address[](3);
         veFXSLocations[0] = veFXSAllocator;
+        veFXSLocations[1] = daoMS;
+        veFXSLocations[2] = daoWorkingWallet;
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, veFXS, veFXSLocations)
