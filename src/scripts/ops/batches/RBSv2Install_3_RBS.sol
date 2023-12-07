@@ -107,6 +107,8 @@ contract RBSv2Install_3 is OlyBatch {
     // Wallets
     address daoWorkingWallet;
 
+    uint32 internal constant DEFAULT_TWAP_OBSERVATION_WINDOW = 7 days;
+
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
         price = envAddress("current", "olympus.modules.OlympusPriceV1");
@@ -303,23 +305,24 @@ contract RBSv2Install_3 is OlyBatch {
         uint48 usdcLastObsTime_
     ) public isPolicyBatch(send_) {
         // This Policy MS batch:
-        // 1. Configures DAI price feed and moving average data on PRICE
-        // 2. Configures sDAI price feed and moving average data on PRICE
-        // 3. Configure WETH price feed and moving average data on PRICE
-        // 4. Configure veFXS price feed and moving average data on PRICE
-        // 5. Configure FXS price feed and moving average data on PRICE
-        // 6. Configure USDC price feed and moving average data on PRICE
+        // 1. Configures DAI on PRICE
+        // 2. Configures sDAI on PRICE
+        // 3. Configure WETH on PRICE
+        // 4. Configure veFXS on PRICE
+        // 5. Configure FXS on PRICE
+        // 6. Configure USDC on PRICE
+        // 7. Configure OHM on PRICE
         // 7. Add and categorize DAI in TRSRY
         // 8. Add and categorize sDAI in TRSRY
         // 9. Add and categorize WETH in TRSRY
         // 10. Add and categorize veFXS in TRSRY
         // 11. Add and categorize FXS in TRSRY
 
-        // OHM not needed - BunniManager will handle this
-
-        // TODO twap check configuration parameters
-
         // 1. Configure DAI price feed and moving average data on PRICE
+        // - Uses the Chainlink price feed with the standard observation window
+        // - Uses the Uniswap V3 pool TWAP with the configured observation window
+        // - Configures PRICE to track a moving average
+        // - The price will be the average of the above three
         {
             PRICEv2.Component[] memory daiFeeds = new PRICEv2.Component[](2);
             {
@@ -329,14 +332,20 @@ contract RBSv2Install_3 is OlyBatch {
                     abi.encode(
                         ChainlinkPriceFeeds.OneFeedParams(
                             AggregatorV2V3Interface(daiUsdPriceFeed),
-                            uint48(24 hours)
+                            DEFAULT_TWAP_OBSERVATION_WINDOW
                         )
                     )
                 );
                 daiFeeds[1] = PRICEv2.Component(
                     toSubKeycode("PRICE.UNIV3"),
                     UniswapV3Price.getTokenTWAP.selector,
-                    abi.encode(daiUsdcUniV3Pool, 18, "")
+                    abi.encode(
+                        UniswapV3Price.UniswapV3Params({
+                            pool: IUniswapV3Pool(daiUsdcUniV3Pool),
+                            observationWindowSeconds: twapObservationWindow, // This is shorter, as it is compared against reserves
+                            maxDeviationBps: twapMaxDeviationBps
+                        })
+                    )
                 );
             }
 
@@ -347,7 +356,7 @@ contract RBSv2Install_3 is OlyBatch {
                     dai,
                     true, // store moving average
                     true, // use the moving average as part of price strategy
-                    uint32(30 days), // 30 day moving average
+                    DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average window
                     daiLastObsTime_,
                     daiObs_,
                     PRICEv2.Component(
@@ -361,13 +370,14 @@ contract RBSv2Install_3 is OlyBatch {
         }
 
         // 2. Configure sDAI price feed and moving average data on PRICE
+        // - Uses the DAI price to determine the sDAI price
         {
             uint256[] memory sdaiObs_ = new uint256[](0);
             PRICEv2.Component[] memory sdaiFeeds = new PRICEv2.Component[](1);
             sdaiFeeds[0] = PRICEv2.Component(
                 toSubKeycode("PRICE.ERC4626"),
                 ERC4626Price.getPriceFromUnderlying.selector,
-                abi.encode(sdai, ERC20(sdai).decimals(), "")
+                abi.encode(0)
             );
             addToBatch(
                 bookkeeper,
@@ -376,7 +386,7 @@ contract RBSv2Install_3 is OlyBatch {
                     sdai,
                     false, // don't store moving average
                     false, // don't use the moving average as part of price strategy
-                    0, // 30 day moving average
+                    0, // 0 day moving average
                     0,
                     sdaiObs_,
                     PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
@@ -386,6 +396,10 @@ contract RBSv2Install_3 is OlyBatch {
         }
 
         // 3. Configure WETH price feed and moving average data on PRICE
+        // - Uses the Chainlink price feed with the standard observation window
+        // - Uses the Uniswap V3 pool TWAP with the configured observation window
+        // - Configures PRICE to track a moving average
+        // - The price will be the average of the above three
         {
             PRICEv2.Component[] memory wethFeeds = new PRICEv2.Component[](2);
             wethFeeds[0] = PRICEv2.Component(
@@ -394,14 +408,20 @@ contract RBSv2Install_3 is OlyBatch {
                 abi.encode(
                     ChainlinkPriceFeeds.OneFeedParams(
                         AggregatorV2V3Interface(ethUsdPriceFeed),
-                        uint48(24 hours)
+                        DEFAULT_TWAP_OBSERVATION_WINDOW
                     )
                 )
             );
             wethFeeds[1] = PRICEv2.Component(
                 toSubKeycode("PRICE.UNIV3"),
                 UniswapV3Price.getTokenTWAP.selector,
-                abi.encode(wethUsdcUniV3Pool, 18, "")
+                abi.encode(
+                    UniswapV3Price.UniswapV3Params({
+                        pool: IUniswapV3Pool(wethUsdcUniV3Pool),
+                        observationWindowSeconds: twapObservationWindow, // This is shorter, as it is compared against reserves
+                        maxDeviationBps: twapMaxDeviationBps
+                    })
+                )
             );
             addToBatch(
                 bookkeeper,
@@ -410,7 +430,7 @@ contract RBSv2Install_3 is OlyBatch {
                     weth,
                     true, // store moving average
                     true, // use the moving average as part of price strategy
-                    uint32(30 days), // 30 day moving average
+                    DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average
                     wethLastObsTime_,
                     wethObs_,
                     PRICEv2.Component(
@@ -424,6 +444,7 @@ contract RBSv2Install_3 is OlyBatch {
         }
 
         // 4. Configure veFXS price feed and moving average data on PRICE
+        // - Uses the Chainlink price feed with the standard observation window
         {
             uint256[] memory veFXSObs_ = new uint256[](0);
             PRICEv2.Component[] memory veFXSFeeds = new PRICEv2.Component[](1);
@@ -433,7 +454,7 @@ contract RBSv2Install_3 is OlyBatch {
                 abi.encode(
                     ChainlinkPriceFeeds.OneFeedParams(
                         AggregatorV2V3Interface(fxsUsdPriceFeed),
-                        uint48(24 hours)
+                        DEFAULT_TWAP_OBSERVATION_WINDOW
                     )
                 )
             );
@@ -444,7 +465,7 @@ contract RBSv2Install_3 is OlyBatch {
                     veFXS,
                     false, // don't store moving average
                     false, // don't use the moving average as part of price strategy
-                    0, // 30 day moving average
+                    0, // moving average
                     0,
                     veFXSObs_,
                     PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
@@ -454,6 +475,7 @@ contract RBSv2Install_3 is OlyBatch {
         }
 
         // 5. Configure FXS price feed and moving average data on PRICE
+        // - Uses the Chainlink price feed with the standard observation window
         {
             uint256[] memory fxsObs_ = new uint256[](0);
             PRICEv2.Component[] memory fxsFeeds = new PRICEv2.Component[](1);
@@ -463,7 +485,7 @@ contract RBSv2Install_3 is OlyBatch {
                 abi.encode(
                     ChainlinkPriceFeeds.OneFeedParams(
                         AggregatorV2V3Interface(fxsUsdPriceFeed),
-                        uint48(24 hours)
+                        DEFAULT_TWAP_OBSERVATION_WINDOW
                     )
                 )
             );
@@ -474,7 +496,7 @@ contract RBSv2Install_3 is OlyBatch {
                     fxs,
                     false, // don't store moving average
                     false, // don't use the moving average as part of price strategy
-                    0, // 30 day moving average
+                    0, // moving average
                     0,
                     fxsObs_,
                     PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
@@ -484,6 +506,9 @@ contract RBSv2Install_3 is OlyBatch {
         }
 
         // 6. Configure USDC price feed and moving average data on PRICE
+        // - Uses the Chainlink price feed with the standard observation window
+        // - Configures PRICE to track a moving average
+        // - The price will be the average of the above two
         {
             PRICEv2.Component[] memory usdcFeeds = new PRICEv2.Component[](1);
             usdcFeeds[0] = PRICEv2.Component(
@@ -492,7 +517,7 @@ contract RBSv2Install_3 is OlyBatch {
                 abi.encode(
                     ChainlinkPriceFeeds.OneFeedParams(
                         AggregatorV2V3Interface(usdcUsdPriceFeed),
-                        uint48(24 hours)
+                        DEFAULT_TWAP_OBSERVATION_WINDOW
                     )
                 )
             );
@@ -503,11 +528,43 @@ contract RBSv2Install_3 is OlyBatch {
                     usdc,
                     true, // store moving average
                     true, // use the moving average as part of price strategy
-                    uint32(30 days), // 30 day moving average
+                    DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average
                     usdcLastObsTime_,
                     usdcObs_,
                     PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
                     usdcFeeds
+                )
+            );
+        }
+
+        // 7. Configure OHM on PRICE
+        // - Uses a TWAP from the Uniswap V3 pool with the configured observation window
+        {
+            PRICEv2.Component[] memory ohmFeeds = new PRICEv2.Component[](1);
+            ohmFeeds[1] = PRICEv2.Component(
+                toSubKeycode("PRICE.UNIV3"),
+                UniswapV3Price.getTokenTWAP.selector,
+                abi.encode(
+                    UniswapV3Price.UniswapV3Params({
+                        pool: IUniswapV3Pool(ohmWethUniV3Pool),
+                        observationWindowSeconds: twapObservationWindow, // This is shorter, as it is compared against reserves
+                        maxDeviationBps: twapMaxDeviationBps
+                    })
+                )
+            );
+
+            addToBatch(
+                bookkeeper,
+                abi.encodeWithSelector(
+                    Bookkeeper.addAssetPrice.selector,
+                    ohm,
+                    false, // store moving average
+                    false, // use the moving average as part of price strategy
+                    0, // moving average
+                    0,
+                    0,
+                    PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
+                    ohmFeeds
                 )
             );
         }
