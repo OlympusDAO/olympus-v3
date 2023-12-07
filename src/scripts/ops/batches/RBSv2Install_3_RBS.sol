@@ -636,7 +636,7 @@ contract RBSv2Install_3 is OlyBatch {
         );
 
         // 9. Add and categorize WETH
-        //      - liquid, volatile
+        //      - liquid, volatile, strategic
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, weth, locations)
@@ -657,9 +657,17 @@ contract RBSv2Install_3 is OlyBatch {
                 AssetCategory.wrap("volatile")
             )
         );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(
+                Bookkeeper.categorizeAsset.selector,
+                weth,
+                AssetCategory.wrap("strategic")
+            )
+        );
 
         // 10. Add and categorize veFXS
-        //      - illiquid, volatile
+        //      - illiquid, volatile, strategic
         address[] memory veFXSLocations = new address[](3);
         veFXSLocations[0] = veFXSAllocator;
         veFXSLocations[1] = daoMS;
@@ -684,9 +692,17 @@ contract RBSv2Install_3 is OlyBatch {
                 AssetCategory.wrap("volatile")
             )
         );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(
+                Bookkeeper.categorizeAsset.selector,
+                veFXS,
+                AssetCategory.wrap("strategic")
+            )
+        );
 
         // 11. Add and categorize FXS
-        //      - illiquid, volatile
+        //      - illiquid, volatile, strategic
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, fxs, veFXSLocations)
@@ -705,6 +721,14 @@ contract RBSv2Install_3 is OlyBatch {
                 Bookkeeper.categorizeAsset.selector,
                 fxs,
                 AssetCategory.wrap("volatile")
+            )
+        );
+        addToBatch(
+            bookkeeper,
+            abi.encodeWithSelector(
+                Bookkeeper.categorizeAsset.selector,
+                fxs,
+                AssetCategory.wrap("strategic")
             )
         );
     }
