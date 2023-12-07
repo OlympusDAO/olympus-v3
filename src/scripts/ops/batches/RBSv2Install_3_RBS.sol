@@ -34,7 +34,11 @@ import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-// TODO check for batches relying on previous state
+// UniswapV3
+import {INonfungiblePositionManager} from "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
+import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
+import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
 /// @notice     Activates and configures PRICE v2
 /// @notice     Configures TRSRY assets
@@ -66,11 +70,20 @@ contract RBSv2Install_3 is OlyBatch {
     address fxsUsdPriceFeed;
     address usdcUsdPriceFeed;
 
-    // Uniswap Pools
+    // Uniswap V3 Pools
     address daiUsdcPool;
     address wethUsdcPool;
+
+    // Uniswap V3 POL
     address ohmWethPool;
     uint256 ohmWethTokenId;
+    int24 ohmWethTickLower;
+    int24 ohmWethTickUpper;
+    address positionManager;
+
+    // BunniManager configuration
+    uint16 twapMaxDeviationBps;
+    uint32 twapObservationWindow;
 
     // Allocators
     address veFXSAllocator;
@@ -89,6 +102,7 @@ contract RBSv2Install_3 is OlyBatch {
     address newHeart;
     address newOperator;
     address bunniManager;
+    address bunniLens;
 
     // Wallets
     address daoWorkingWallet;
@@ -116,7 +130,16 @@ contract RBSv2Install_3 is OlyBatch {
         daiUsdcPool = envAddress("current", "external.uniswapV3.DaiUsdcPool");
         wethUsdcPool = envAddress("current", "external.uniswapV3.WethUsdcPool");
         ohmWethPool = envAddress("current", "external.uniswapV3.OhmWethPool");
-        ohmWethTokenId = envUint("current", "external.uniswapV3.OhmWethTokenId");
+        ohmWethTokenId = envUint("current", "external.UniswapV3LegacyPOL.OhmWethTokenId");
+        ohmWethTickLower = int24(envInt("current", "external.UniswapV3LegacyPOL.OhmWethTickLower"));
+        ohmWethTickUpper = int24(envInt("current", "external.UniswapV3LegacyPOL.OhmWethTickUpper"));
+        positionManager = envAddress(
+            "current",
+            "external.UniswapV3LegacyPOL.NonfungiblePositionManager"
+        );
+
+        twapMaxDeviationBps = uint16(envUint("current", "external.Bunni.TwapMaxDeviationBps"));
+        twapObservationWindow = uint32(envUint("current", "external.Bunni.TwapObservationWindow"));
 
         veFXSAllocator = envAddress("current", "olympus.legacy.veFXSAllocator");
 
@@ -293,6 +316,8 @@ contract RBSv2Install_3 is OlyBatch {
         // 11. Add and categorize FXS in TRSRY
 
         // OHM not needed - BunniManager will handle this
+
+        // TODO twap check configuration parameters
 
         // 1. Configure DAI price feed and moving average data on PRICE
         {
@@ -628,9 +653,7 @@ contract RBSv2Install_3 is OlyBatch {
     }
 
     /// @notice     Configures protocol owned liquidity
-    function RBSv2Install_3_3(
-        bool send_
-    ) public isDAOBatch(send_) {
+    function RBSv2Install_3_3(bool send_) public isDaoBatch(send_) {
         // This DAO MS batch:
         // 1. Activates the BunniManager policy
         // 2. Withdraws liquidity from the existing Uniswap V3 pool
@@ -642,24 +665,133 @@ contract RBSv2Install_3 is OlyBatch {
         // 1. Activate the BunniManager policy
         addToBatch(
             kernel,
-            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, bunniManager)
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                bunniManager
+            )
         );
 
         // 2. Withdraw liquidity from the existing Uniswap V3 pool
         uint256 ohmBalance;
         uint256 wethBalance;
         {
-            // Get the current OHM and wETH balances
-            uint256 prevOhmBalance = ERC20(ohm).balanceOf(daoMS);
-            uint256 prevWethBalance = ERC20(weth).balanceOf(daoMS);
+            // Determine token ordering
+            uint8 ohmIndex;
+            {
+                address token0 = IUniswapV3Pool(ohmWethPool).token0();
 
-            // Collect fees
+                if (token0 == ohm) {
+                    ohmIndex = 0;
+                } else if (token0 == weth) {
+                    ohmIndex = 1;
+                } else {
+                    revert("Invalid token0");
+                }
+            }
 
-            // Withdraw liquidity
+            // Determine the liquidity and token amounts
+            uint128 liquidity;
+            uint256 token0AmountMin;
+            uint256 token1AmountMin;
+            {
+                (, , , , , , , uint128 _liquidity, , , , ) = INonfungiblePositionManager(
+                    positionManager
+                ).positions(ohmWethTokenId);
+                liquidity = _liquidity;
 
-            // Get the new OHM and wETH balances
-            // TODO can't get these in the same function?
+                (uint160 sqrtPriceX96, , , , , , ) = IUniswapV3Pool(ohmWethPool).slot0();
+                (uint256 token0Amount, uint256 token1Amount) = LiquidityAmounts
+                    .getAmountsForLiquidity(
+                        sqrtPriceX96,
+                        TickMath.getSqrtRatioAtTick(ohmWethTickLower),
+                        TickMath.getSqrtRatioAtTick(ohmWethTickUpper),
+                        liquidity
+                    );
+
+                // Account for slippage
+                token0AmountMin = (token0Amount * (10000 - 100)) / 10000;
+                token1AmountMin = (token1Amount * (10000 - 100)) / 10000;
+            }
+
+            // Withdraw liquidity (which should also collect fees)
+            {
+                INonfungiblePositionManager.DecreaseLiquidityParams
+                    memory decreaseLiquidityParams = INonfungiblePositionManager
+                        .DecreaseLiquidityParams(
+                            ohmWethTokenId,
+                            liquidity,
+                            token0AmountMin,
+                            token1AmountMin,
+                            block.timestamp
+                        );
+
+                (uint256 amount0, uint256 amount1) = abi.decode(
+                    addToBatch(
+                        positionManager,
+                        abi.encodeWithSelector(
+                            INonfungiblePositionManager.decreaseLiquidity.selector,
+                            decreaseLiquidityParams
+                        )
+                    ),
+                    (uint256, uint256)
+                );
+                ohmBalance += ohmIndex == 0 ? amount0 : amount1;
+                wethBalance += ohmIndex == 0 ? amount1 : amount0;
+            }
+
+            console2.log("Withdrawn OHM balance (9dp) is", ohmBalance);
+            console2.log("Withdrawn WETH balance (18dp) is", wethBalance);
         }
+
+        // 3. Deploy an LP token for the pool using BunniManager
+        {
+            addToBatch(
+                bunniManager,
+                abi.encodeWithSelector(BunniManager.deployPoolToken.selector, ohmWethPool)
+            );
+        }
+
+        // 4. Deposit liquidity into the pool using BunniManager
+        {
+            uint256 poolTokenAmount = abi.decode(
+                addToBatch(
+                    bunniManager,
+                    abi.encodeWithSelector(
+                        BunniManager.deposit.selector,
+                        ohmWethPool,
+                        ohm,
+                        ohmBalance,
+                        wethBalance,
+                        100 // 1%
+                    )
+                ),
+                (uint256)
+            );
+
+            console2.log("Pool token amount is", poolTokenAmount);
+        }
+
+        // 5. Activate the LP token
+        {
+            addToBatch(
+                bunniManager,
+                abi.encodeWithSelector(
+                    BunniManager.activatePoolToken.selector,
+                    ohmWethPool,
+                    twapMaxDeviationBps,
+                    twapObservationWindow
+                )
+            );
+        }
+
+        // 6. Set roles for policy access control
+        // BunniManager policy
+        //     - Give DAO MS the bunni_admin role
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("bunni_admin"), daoMS)
+        );
     }
 
     /// @notice     Activates RBS (Appraiser, Heart, Operator)
