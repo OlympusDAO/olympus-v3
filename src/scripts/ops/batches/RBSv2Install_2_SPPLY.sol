@@ -36,6 +36,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
     address blVaultSupply;
     address bunniSupply;
     address migrationOffsetSupply;
+    address brickedSupply;
     address newCrossChainBridge;
 
     // Wallets
@@ -60,6 +61,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             "current",
             "olympus.submodules.SPPLY.MigrationOffsetSupply"
         );
+        brickedSupply = envAddress("current", "olympus.submodules.SPPLY.BrickedSupply");
         newCrossChainBridge = envAddress("current", "olympus.policies.CrossChainBridge");
     }
 
@@ -69,11 +71,12 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         // 2. Installs the BLVaultSupply submodule on the OlympusSupply module
         // 3. Installs the BunniSupply submodule on the OlympusSupply module
         // 4. Installs the MigrationOffsetSupply submodule on the OlympusSupply module
-        // 5. Deactivates the old CrossChainBridge policy
-        // 6. Activates the new CrossChainBridge policy
-        // 7. Set trusted remotes on the new CrossChainBridge policy
-        // 8. Categorizes protocol-owned-treasury supply
-        // 9. Categorizes DAO supply
+        // 5. Installs the BrickedSupply submodule on the OlympusSupply module
+        // 6. Deactivates the old CrossChainBridge policy
+        // 7. Activates the new CrossChainBridge policy
+        // 8. Set trusted remotes on the new CrossChainBridge policy
+        // 9. Categorizes protocol-owned-treasury supply
+        // 10. Categorizes DAO supply
 
         // 1. Install the OlympusSupply module
         addToBatch(
@@ -120,7 +123,18 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 5. Deactivate the old CrossChainBridge policy
+        // 5. Install the BrickedSupply submodule on the OlympusSupply module
+        // No configuration needed - already done at deployment
+        // TODO enable
+        // addToBatch(
+        //     spply,
+        //     abi.encodeWithSelector(
+        //         ModuleWithSubmodules.installSubmodule.selector,
+        //         BrickedSupply(brickedSupply)
+        //     )
+        // );
+
+        // 6. Deactivate the old CrossChainBridge policy
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -130,7 +144,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 6. Activate the new CrossChainBridge policy
+        // 7. Activate the new CrossChainBridge policy
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -140,7 +154,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 7. Set trusted remotes on the new CrossChainBridge policy
+        // 8. Set trusted remotes on the new CrossChainBridge policy
         addToBatch(
             newCrossChainBridge,
             abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 110, arbBridge)
@@ -150,7 +164,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 111, opBridge)
         );
 
-        // 8. Categorize protocol-owned-treasury supply
+        // 9. Categorize protocol-owned-treasury supply
         addToBatch(
             spply,
             abi.encodeWithSelector(
@@ -160,7 +174,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 9. Categorize DAO supply
+        // 10. Categorize DAO supply
         addToBatch(
             spply,
             abi.encodeWithSelector(
