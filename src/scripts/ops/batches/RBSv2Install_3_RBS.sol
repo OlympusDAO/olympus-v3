@@ -71,11 +71,11 @@ contract RBSv2Install_3 is OlyBatch {
     address usdcUsdPriceFeed;
 
     // Uniswap V3 Pools
-    address daiUsdcPool;
-    address wethUsdcPool;
+    address daiUsdcUniV3Pool;
+    address wethUsdcUniV3Pool;
 
     // Uniswap V3 POL
-    address ohmWethPool;
+    address ohmWethUniV3Pool;
     uint256 ohmWethTokenId;
     int24 ohmWethTickLower;
     int24 ohmWethTickUpper;
@@ -127,9 +127,9 @@ contract RBSv2Install_3 is OlyBatch {
         fxsUsdPriceFeed = envAddress("current", "external.chainlink.fxsUsdPriceFeed");
         usdcUsdPriceFeed = envAddress("current", "external.chainlink.usdcUsdPriceFeed");
 
-        daiUsdcPool = envAddress("current", "external.uniswapV3.DaiUsdcPool");
-        wethUsdcPool = envAddress("current", "external.uniswapV3.WethUsdcPool");
-        ohmWethPool = envAddress("current", "external.uniswapV3.OhmWethPool");
+        daiUsdcUniV3Pool = envAddress("current", "external.uniswapV3.DaiUsdcPool");
+        wethUsdcUniV3Pool = envAddress("current", "external.uniswapV3.WethUsdcPool");
+        ohmWethUniV3Pool = envAddress("current", "external.uniswapV3.OhmWethPool");
         ohmWethTokenId = envUint("current", "external.UniswapV3LegacyPOL.OhmWethTokenId");
         ohmWethTickLower = int24(envInt("current", "external.UniswapV3LegacyPOL.OhmWethTickLower"));
         ohmWethTickUpper = int24(envInt("current", "external.UniswapV3LegacyPOL.OhmWethTickUpper"));
@@ -336,7 +336,7 @@ contract RBSv2Install_3 is OlyBatch {
                 daiFeeds[1] = PRICEv2.Component(
                     toSubKeycode("PRICE.UNIV3"),
                     UniswapV3Price.getTokenTWAP.selector,
-                    abi.encode(daiUsdcPool, 18, "")
+                    abi.encode(daiUsdcUniV3Pool, 18, "")
                 );
             }
 
@@ -401,7 +401,7 @@ contract RBSv2Install_3 is OlyBatch {
             wethFeeds[1] = PRICEv2.Component(
                 toSubKeycode("PRICE.UNIV3"),
                 UniswapV3Price.getTokenTWAP.selector,
-                abi.encode(wethUsdcPool, 18, "")
+                abi.encode(wethUsdcUniV3Pool, 18, "")
             );
             addToBatch(
                 bookkeeper,
@@ -679,7 +679,7 @@ contract RBSv2Install_3 is OlyBatch {
             // Determine token ordering
             uint8 ohmIndex;
             {
-                address token0 = IUniswapV3Pool(ohmWethPool).token0();
+                address token0 = IUniswapV3Pool(ohmWethUniV3Pool).token0();
 
                 if (token0 == ohm) {
                     ohmIndex = 0;
@@ -700,7 +700,7 @@ contract RBSv2Install_3 is OlyBatch {
                 ).positions(ohmWethTokenId);
                 liquidity = _liquidity;
 
-                (uint160 sqrtPriceX96, , , , , , ) = IUniswapV3Pool(ohmWethPool).slot0();
+                (uint160 sqrtPriceX96, , , , , , ) = IUniswapV3Pool(ohmWethUniV3Pool).slot0();
                 (uint256 token0Amount, uint256 token1Amount) = LiquidityAmounts
                     .getAmountsForLiquidity(
                         sqrtPriceX96,
@@ -748,7 +748,7 @@ contract RBSv2Install_3 is OlyBatch {
         {
             addToBatch(
                 bunniManager,
-                abi.encodeWithSelector(BunniManager.deployPoolToken.selector, ohmWethPool)
+                abi.encodeWithSelector(BunniManager.deployPoolToken.selector, ohmWethUniV3Pool)
             );
         }
 
@@ -759,7 +759,7 @@ contract RBSv2Install_3 is OlyBatch {
                     bunniManager,
                     abi.encodeWithSelector(
                         BunniManager.deposit.selector,
-                        ohmWethPool,
+                        ohmWethUniV3Pool,
                         ohm,
                         ohmBalance,
                         wethBalance,
@@ -773,12 +773,13 @@ contract RBSv2Install_3 is OlyBatch {
         }
 
         // 5. Activate the LP token
+        // This will also register the LP token with TRSRY, PRICE and SPPLY
         {
             addToBatch(
                 bunniManager,
                 abi.encodeWithSelector(
                     BunniManager.activatePoolToken.selector,
-                    ohmWethPool,
+                    ohmWethUniV3Pool,
                     twapMaxDeviationBps,
                     twapObservationWindow
                 )
