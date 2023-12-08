@@ -290,9 +290,9 @@ contract OlympusDeploy is Script {
         kernel = Kernel(envAddress("olympus.Kernel"));
 
         // Bophades Modules
-        PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPrice"));
-        PRICEv2 = OlympusPricev2(envAddress("olympus.modules.OlympusPricev2"));
-        RANGE = OlympusRange(envAddress("olympus.modules.OlympusRange"));
+        PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPriceV1"));
+        PRICEv2 = OlympusPricev2(envAddress("olympus.modules.OlympusPriceV2"));
+        RANGE = OlympusRange(envAddress("olympus.modules.OlympusRangeV2"));
         TRSRY = OlympusTreasury(envAddress("olympus.modules.OlympusTreasuryV1_1"));
         MINTR = OlympusMinter(envAddress("olympus.modules.OlympusMinter"));
         INSTR = OlympusInstructions(envAddress("olympus.modules.OlympusInstructions"));
@@ -350,8 +350,8 @@ contract OlympusDeploy is Script {
         );
 
         // External contracts
-        bunniHub = BunniHub(envAddress("external.UniswapV3.BunniHub"));
-        bunniLens = BunniLens(envAddress("external.UniswapV3.BunniLens"));
+        bunniHub = BunniHub(envAddress("external.Bunni.BunniHub"));
+        bunniLens = BunniLens(envAddress("external.Bunni.BunniLens"));
 
         // Load deployment data
         string memory data = vm.readFile(deployFilePath);

@@ -131,6 +131,16 @@ Copy the `.env.deploy.example` file into one file per chain, e.g. `.env_deploy_g
 6. After a successful deployment, update `src/scripts/env.json` with the new contract addresses.
 7. Finally, use [olymsig](https://github.com/OlympusDAO/olymsig) (or [olymsig-testnet](https://github.com/OlympusDAO/olymsig-testnet) if testing the deployment) to plug the newly deployed contracts into `olympus-v3`.
 
+### Fork Testing
+
+If you would like to deploy (or activate) against a persistent fork, you can use the `anvil` tool:
+
+```shell
+anvil --block-time 12 --fork-url <RPL URL> --chain-id 1
+```
+
+Following that, set the `RPC_URL` variable (or variants) to `http://127.0.0.1:8545`
+
 ## How To Verify
 
 Sometimes the automatic etherscan verification fails when deploying a contract. If that's the case, follow the these steps to verify existing contracts:
