@@ -171,3 +171,14 @@ Sometimes the automatic etherscan verification fails when deploying a contract. 
 -   Deploy any dependencies (if on testnet)
 -   Deploy BLV contracts
 -   Activate BLV contracts with the BLV registry (using an olymsig script)
+
+## Activation
+
+The `src/scripts/ops/` directory contains "OlyBatch" scripts used for queueing contract calls into the multi-sig.
+
+To run:
+
+1. Ensure that all of the variables specified in `.env.deploy.example` are filled and exist in your `.env`
+2. Run the script in the format: `src/scripts/ops/batch.sh <script name> <function name> <broadcast>`
+    - e.g.: `src/scripts/ops/batch.sh RBSv2Install_1_TRSRY RBSv2Install_1_1 false` to simulate
+    - e.g.: `src/scripts/ops/batch.sh RBSv2Install_1_TRSRY RBSv2Install_1_1 true` to broadcast
