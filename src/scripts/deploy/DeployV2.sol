@@ -293,7 +293,7 @@ contract OlympusDeploy is Script {
         PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPrice"));
         PRICEv2 = OlympusPricev2(envAddress("olympus.modules.OlympusPricev2"));
         RANGE = OlympusRange(envAddress("olympus.modules.OlympusRange"));
-        TRSRY = OlympusTreasury(envAddress("olympus.modules.OlympusTreasury"));
+        TRSRY = OlympusTreasury(envAddress("olympus.modules.OlympusTreasuryV1_1"));
         MINTR = OlympusMinter(envAddress("olympus.modules.OlympusMinter"));
         INSTR = OlympusInstructions(envAddress("olympus.modules.OlympusInstructions"));
         ROLES = OlympusRoles(envAddress("olympus.modules.OlympusRoles"));

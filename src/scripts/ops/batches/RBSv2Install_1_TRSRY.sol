@@ -23,6 +23,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     address clearinghouseV1;
     address clearinghouseV1_1;
     address vefxsallocator;
+    address dsrAllocator;
 
     // Tokens
     address dai;
@@ -39,22 +40,23 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
-        trsry = envAddress("last", "olympus.modules.OlympusTreasury");
+        trsry = envAddress("current", "olympus.modules.OlympusTreasuryV1");
         treasuryCustodian = envAddress("current", "olympus.policies.TreasuryCustodian");
         clearinghouseV1 = envAddress("current", "olympus.policies.ClearinghouseV1");
         clearinghouseV1_1 = envAddress("current", "olympus.policies.ClearinghouseV1_1");
         vefxsallocator = envAddress("current", "olympus.legacy.veFXSAllocator");
+        dsrAllocator = envAddress("current", "olympus.legacy.dsrAllocator");
 
         dai = envAddress("current", "external.tokens.DAI");
         sdai = envAddress("current", "external.tokens.sDAI");
         lusd = envAddress("current", "external.tokens.LUSD");
-        wsteth = envAddress("current", "external.tokens.wstETH");
+        wsteth = envAddress("current", "external.tokens.WSTETH");
         bal = envAddress("current", "external.tokens.BAL");
         aura = envAddress("current", "external.tokens.AURA");
         fxs = envAddress("current", "external.tokens.FXS");
         vefxs = envAddress("current", "external.tokens.veFXS");
 
-        newTrsry = envAddress("current", "olympus.modules.OlympusTreasury");
+        newTrsry = envAddress("current", "olympus.modules.OlympusTreasuryV1_1");
 
         // Make sure TRSRY addresses are correct
         assertFalse(
@@ -144,8 +146,6 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // 2. Record the current debt of the old treasury
         OlympusTreasury trsryModule = OlympusTreasury(trsry);
 
-        // TODO check for batches relying on previous state
-
         // DAI
         // - Clearinghouse debt is denominated in DAI
         // - This currently excludes the DSRAllocator, as it is assumed that DAI in the DSR will be migrated to sDAI before activation
@@ -154,12 +154,22 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         {
             ERC20 daiToken = ERC20(dai);
             uint256 daiTotalDebt = trsryModule.totalDebt(daiToken);
+            console2.log("Total DAI debt: %s", daiTotalDebt);
+
             daiClearinghouseV1Debt = trsryModule.reserveDebt(daiToken, clearinghouseV1);
+            console2.log("ClearinghouseV1 DAI debt: %s", daiClearinghouseV1Debt);
+
             daiClearinghouseV1_1Debt = trsryModule.reserveDebt(daiToken, clearinghouseV1_1);
+            console2.log("ClearinghouseV1_1 DAI debt: %s", daiClearinghouseV1_1Debt);
+
+            uint256 dsrAllocatorDebt = trsryModule.reserveDebt(daiToken, dsrAllocator);
+            // TODO add assertion that this is 0, post-sDAI migration
+            console2.log("DSRAllocator DAI debt: %s", dsrAllocatorDebt);
+
             assertEq(
                 daiTotalDebt,
-                daiClearinghouseV1Debt + daiClearinghouseV1_1Debt,
-                "Clearinghouse debt should equal total debt"
+                daiClearinghouseV1Debt + daiClearinghouseV1_1Debt + dsrAllocatorDebt,
+                "Clearinghouse DAI debt should equal total debt"
             );
         }
 
@@ -203,7 +213,6 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         // 4. Transfer debt over to the new treasury
         // TreasuryCustodian.increaseDebt can be used as the existing debt is 0
-        OlympusTreasury newTrsryModule = OlympusTreasury(newTrsry);
 
         // DAI
         {
