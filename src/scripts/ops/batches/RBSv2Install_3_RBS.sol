@@ -52,6 +52,7 @@ contract RBSv2Install_3 is OlyBatch {
     address rolesAdmin;
     address bondCallback;
     address treasuryCustodian;
+    address priceConfig;
 
     // Tokens
     address ohm;
@@ -117,6 +118,7 @@ contract RBSv2Install_3 is OlyBatch {
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
         bondCallback = envAddress("current", "olympus.policies.BondCallback");
         treasuryCustodian = envAddress("current", "olympus.policies.TreasuryCustodian");
+        priceConfig = envAddress("current", "olympus.policies.OlympusPriceConfig");
 
         ohm = envAddress("current", "olympus.legacy.OHM");
         dai = envAddress("current", "external.tokens.DAI");
@@ -223,6 +225,16 @@ contract RBSv2Install_3 is OlyBatch {
                 Kernel.executeAction.selector,
                 Actions.DeactivatePolicy,
                 treasuryCustodian
+            )
+        );
+
+        // 5b. Disable PriceConfig policy (superseded by BookKeeper)
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.DeactivatePolicy,
+                priceConfig
             )
         );
 
