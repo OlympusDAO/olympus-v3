@@ -21,6 +21,7 @@ cd lib/solidity-examples/ && git checkout a4954e5747baca5e7fd2b62c639e7600ad388a
 cd lib/solmate/ && git checkout fadb2e2778adbf01c80275bfb99e5c14969d964b && cd ../..
 cd lib/uniswap-v3-core/ && git checkout 6562c52e8f75f0c10f9deaf44861847585fc8129 && cd ../..
 cd lib/uniswap-v3-periphery/ && git checkout b325bb0905d922ae61fcc7df85ee802e8df5e96c && cd ../..
+cd lib/Cooler/ && git checkout a899201f503d74a956028ee4d8b7bc3ef71f55fa && cd ../..
 
 echo "*** Running forge build"
 forge build

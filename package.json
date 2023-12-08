@@ -13,7 +13,7 @@
         "yarn": "use-pnpm"
     },
     "scripts": {
-        "build": "chmod +x shell/* && ./shell/full_install.sh",
+        "build": "chmod +x shell/*.sh && ./shell/full_install.sh",
         "prettier": "prettier --write 'src/**/*.sol' '**/*.html' '**/*.md'",
         "prettier:list": "prettier --list-different 'src/**/*.sol' '**/*.html' '**/*.md'",
         "prettier:check": "prettier --check 'src/**/*.sol' '**/*.html' '**/*.md'",
