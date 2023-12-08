@@ -38,10 +38,10 @@
         {
             "name": "BunniManager",
             "args": {
-                "harvestRewardMax": 0,
-                "harvestRewardFee": 0,
-                "harvestFrequency": 0,
-                "uniswapFactory": "0x000.000"
+                "harvestFrequency": 86400,
+                "harvestRewardFee": 1000,
+                "harvestRewardMax": 10000000000,
+                "uniswapFactory": "0x1F98431c8aD98523631AE4a59f267346ea31F984"
             }
         },
         {
@@ -55,23 +55,21 @@
         {
             "name": "OlympusHeart",
             "args": {
-                "auctionDuration": 0,
-                "maxReward": 0
+                "auctionDuration": 1200,
+                "maxReward": 40000000000
             }
         },
         {
             "name": "Operator",
             "args": {
-                "configParams": [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ]
+                "cushionDebtBuffer": 100000,
+                "cushionDepositInterval": 14400,
+                "cushionDuration": 259200,
+                "cushionFactor": 3000,
+                "regenObserve": 21,
+                "regenThreshold": 18,
+                "regenWait": 518400,
+                "reserveFactor": 1000
             }
         }
     ]

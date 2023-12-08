@@ -963,21 +963,6 @@ contract OlympusDeploy is Script {
         return address(bookkeeper);
     }
 
-    function _deployPricev2(bytes memory args) public returns (address) {
-        // Decode arguments for PRICEv2 module
-        (uint8 decimals, uint32 observationFrequency) = abi.decode(args, (uint8, uint32));
-
-        console2.log("decimals", decimals);
-        console2.log("observationFrequency", observationFrequency);
-
-        // Deploy V2 Price module
-        vm.broadcast();
-        PRICEv2 = new OlympusPricev2(kernel, decimals, observationFrequency);
-        console2.log("OlympusPricev2 deployed at:", address(PRICEv2));
-
-        return address(PRICEv2);
-    }
-
     function _deployBunniManagerPolicy(bytes memory args) public returns (address) {
         // Arguments
         // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
@@ -1024,38 +1009,28 @@ contract OlympusDeploy is Script {
         // - Call BunniManager.setBunniLens
         // - Create the "bunni_admin" role and assign it
         // - Activate the BunniManager policy
+
+        return address(bunniManager);
     }
 
-    function _deploySupply(bytes memory args) public returns (address) {
-        // Arguments
-        // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
-        uint256 initialCrossChainSupply = abi.decode(args, (uint256));
+    // ========== PRICE AND SUBMODULES ========== //
 
-        // TODO fill in the initialCrossChainSupply value
+    function _deployPricev2(bytes memory args) public returns (address) {
+        // Decode arguments for PRICEv2 module
+        (uint8 decimals, uint32 observationFrequency) = abi.decode(args, (uint8, uint32));
 
-        console2.log("initialCrossChainSupply", initialCrossChainSupply);
+        console2.log("decimals", decimals);
+        console2.log("observationFrequency", observationFrequency);
 
-        // Check that environment variables are loaded
-        if (address(kernel) == address(0)) revert("Kernel address not set");
-        if (address(ohm) == address(0)) revert("OHM address not set");
-        if (address(gOHM) == address(0)) revert("gOHM address not set");
-
-        address[2] memory tokens = [address(ohm), address(gOHM)];
-
-        // Deployment steps
+        // Deploy V2 Price module
         vm.broadcast();
+        PRICEv2 = new OlympusPricev2(kernel, decimals, observationFrequency);
+        console2.log("OlympusPricev2 deployed at:", address(PRICEv2));
 
-        // Deploy the module
-        SPPLY = new OlympusSupply(kernel, tokens, initialCrossChainSupply);
-
-        console2.log("SPPLY deployed at:", address(SPPLY));
-
-        return address(SPPLY);
+        return address(PRICEv2);
     }
 
-    // ========== PRICE SUBMODULES ========== //
-
-    function _deploySimplePriceFeedStrategy(bytes memory args) public returns (address) {
+    function _deploySimplePriceFeedStrategy(bytes memory) public returns (address) {
         // No additional arguments for SimplePriceFeedStrategy submodule
 
         // Check that environment variables are loaded
@@ -1157,7 +1132,34 @@ contract OlympusDeploy is Script {
         return address(bunniPrice);
     }
 
-    // ========== SPPLY SUBMODULES ========== //
+    // ========== SPPLY AND SUBMODULES ========== //
+
+    function _deploySupply(bytes memory args) public returns (address) {
+        // Arguments
+        // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
+        uint256 initialCrossChainSupply = abi.decode(args, (uint256));
+
+        // TODO fill in the initialCrossChainSupply value
+
+        console2.log("initialCrossChainSupply", initialCrossChainSupply);
+
+        // Check that environment variables are loaded
+        if (address(kernel) == address(0)) revert("Kernel address not set");
+        if (address(ohm) == address(0)) revert("OHM address not set");
+        if (address(gOHM) == address(0)) revert("gOHM address not set");
+
+        address[2] memory tokens = [address(ohm), address(gOHM)];
+
+        // Deployment steps
+        vm.broadcast();
+
+        // Deploy the module
+        SPPLY = new OlympusSupply(kernel, tokens, initialCrossChainSupply);
+
+        console2.log("SPPLY deployed at:", address(SPPLY));
+
+        return address(SPPLY);
+    }
 
     function _deployAuraBalancerSupply(bytes memory) public returns (address) {
         // No additional arguments for AuraBalancerSupply submodule
@@ -1237,6 +1239,8 @@ contract OlympusDeploy is Script {
 
         return address(migrationOffsetSupply);
     }
+
+    // TODO deploy BrickedSupply
 
     // ========== VERIFICATION ========== //
 
