@@ -373,7 +373,7 @@ contract OlympusDeploy is Script {
         string memory data = vm.readFile(deployFilePath_);
 
         // Parse deployment sequence and names
-        bytes[] memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes[]));
+        bytes memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes));
         uint256 len = sequence.length;
         console2.log("Contracts to be deployed:", len);
 
