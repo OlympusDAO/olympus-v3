@@ -498,7 +498,7 @@ contract OlympusDeploy is Script {
         return address(RANGE);
     }
 
-    function _deployTreasury(bytes memory args) public returns (address) {
+    function _deployTreasury(bytes memory) public returns (address) {
         // No additional arguments for Treasury module
 
         // Deploy Treasury module
@@ -509,7 +509,7 @@ contract OlympusDeploy is Script {
         return address(TRSRY);
     }
 
-    function _deployMinter(bytes memory args) public returns (address) {
+    function _deployMinter(bytes memory) public returns (address) {
         // Only args are contracts in the environment
 
         // Deploy Minter module
@@ -520,7 +520,7 @@ contract OlympusDeploy is Script {
         return address(MINTR);
     }
 
-    function _deployRoles(bytes memory args) public returns (address) {
+    function _deployRoles(bytes memory) public returns (address) {
         // No additional arguments for Roles module
 
         // Deploy Roles module
@@ -531,7 +531,7 @@ contract OlympusDeploy is Script {
         return address(ROLES);
     }
 
-    function _deployBoostedLiquidityRegistry(bytes memory args) public returns (address) {
+    function _deployBoostedLiquidityRegistry(bytes memory) public returns (address) {
         // No additional arguments for OlympusBoostedLiquidityRegistry module
 
         // Deploy OlympusBoostedLiquidityRegistry module
@@ -622,7 +622,7 @@ contract OlympusDeploy is Script {
         return address(operator);
     }
 
-    function _deployBondCallback(bytes memory args) public returns (address) {
+    function _deployBondCallback(bytes memory) public returns (address) {
         // No additional arguments for BondCallback policy
 
         // Deploy BondCallback policy
@@ -658,7 +658,7 @@ contract OlympusDeploy is Script {
         return address(heart);
     }
 
-    function _deployPriceConfig(bytes memory args) public returns (address) {
+    function _deployPriceConfig(bytes memory) public returns (address) {
         // No additional arguments for PriceConfig policy
 
         // Deploy PriceConfig policy
@@ -669,7 +669,7 @@ contract OlympusDeploy is Script {
         return address(priceConfig);
     }
 
-    function _deployRolesAdmin(bytes memory args) public returns (address) {
+    function _deployRolesAdmin(bytes memory) public returns (address) {
         // No additional arguments for RolesAdmin policy
 
         // Deploy RolesAdmin policy
@@ -680,7 +680,7 @@ contract OlympusDeploy is Script {
         return address(rolesAdmin);
     }
 
-    function _deployTreasuryCustodian(bytes memory args) public returns (address) {
+    function _deployTreasuryCustodian(bytes memory) public returns (address) {
         // No additional arguments for TreasuryCustodian policy
 
         // Deploy TreasuryCustodian policy
@@ -703,7 +703,7 @@ contract OlympusDeploy is Script {
         return address(distributor);
     }
 
-    function _deployZeroDistributor(bytes memory args) public returns (address) {
+    function _deployZeroDistributor(bytes memory) public returns (address) {
         // Deploy ZeroDistributor policy
         vm.broadcast();
         zeroDistributor = new ZeroDistributor(staking);
@@ -712,7 +712,7 @@ contract OlympusDeploy is Script {
         return address(distributor);
     }
 
-    function _deployEmergency(bytes memory args) public returns (address) {
+    function _deployEmergency(bytes memory) public returns (address) {
         // No additional arguments for Emergency policy
 
         // Deploy Emergency policy
@@ -723,7 +723,7 @@ contract OlympusDeploy is Script {
         return address(emergency);
     }
 
-    function _deployBondManager(bytes memory args) public returns (address) {
+    function _deployBondManager(bytes memory) public returns (address) {
         // Deploy BondManager policy
         vm.broadcast();
         bondManager = new BondManager(
@@ -738,7 +738,7 @@ contract OlympusDeploy is Script {
         return address(bondManager);
     }
 
-    function _deployBurner(bytes memory args) public returns (address) {
+    function _deployBurner(bytes memory) public returns (address) {
         // No additional arguments for Burner policy
 
         // Deploy Burner policy
@@ -749,7 +749,7 @@ contract OlympusDeploy is Script {
         return address(burner);
     }
 
-    function _deployBLVaultLido(bytes memory args) public returns (address) {
+    function _deployBLVaultLido(bytes memory) public returns (address) {
         // No additional arguments for BLVaultLido policy
 
         // Deploy BLVaultLido policy
@@ -761,7 +761,7 @@ contract OlympusDeploy is Script {
     }
 
     // deploy.json was not being parsed correctly, so I had to hardcode most of the deployment arguments
-    function _deployBLVaultManagerLido(bytes memory args) public returns (address) {
+    function _deployBLVaultManagerLido(bytes memory) public returns (address) {
         console2.log("ohm", address(ohm));
         console2.log("wsteth", address(wsteth));
         console2.log("aura", address(aura));
@@ -841,7 +841,7 @@ contract OlympusDeploy is Script {
         return address(lidoVaultManager);
     }
 
-    function _deployBLVaultLusd(bytes memory args) public returns (address) {
+    function _deployBLVaultLusd(bytes memory) public returns (address) {
         // No additional arguments for BLVaultLusd policy
 
         // Deploy BLVaultLusd policy
@@ -952,7 +952,7 @@ contract OlympusDeploy is Script {
         return address(bridge);
     }
 
-    function _deployBookkeeper(bytes memory args) public returns (address) {
+    function _deployBookkeeper(bytes memory) public returns (address) {
         // No additional arguments for Bookkeeper policy
 
         // Deploy Bookkeeper policy
@@ -1044,7 +1044,7 @@ contract OlympusDeploy is Script {
         return address(simplePriceFeedStrategy);
     }
 
-    function _deployBalancerPoolTokenPrice(bytes memory args) public returns (address) {
+    function _deployBalancerPoolTokenPrice(bytes memory) public returns (address) {
         // No additional arguments for BalancerPoolTokenPrice submodule
 
         // Check that environment variables are loaded
@@ -1062,7 +1062,7 @@ contract OlympusDeploy is Script {
         return address(balancerPoolTokenPrice);
     }
 
-    function _deployChainlinkPriceFeeds(bytes memory args) public returns (address) {
+    function _deployChainlinkPriceFeeds(bytes memory) public returns (address) {
         // No additional arguments for ChainlinkPriceFeeds submodule
 
         // Check that environment variables are loaded
@@ -1076,7 +1076,7 @@ contract OlympusDeploy is Script {
         return address(chainlinkPriceFeeds);
     }
 
-    function _deployERC4626Price(bytes memory args) public returns (address) {
+    function _deployERC4626Price(bytes memory) public returns (address) {
         // No additional arguments for ERC4626Price submodules
 
         // Check that environment variables are loaded
@@ -1090,7 +1090,7 @@ contract OlympusDeploy is Script {
         return address(erc4626Price);
     }
 
-    function _deployUniswapV2PoolTokenPrice(bytes memory args) public returns (address) {
+    function _deployUniswapV2PoolTokenPrice(bytes memory) public returns (address) {
         // No additional arguments for UniswapV2PoolTokenPrice submodule
 
         // Check that environment variables are loaded
@@ -1104,7 +1104,7 @@ contract OlympusDeploy is Script {
         return address(uniswapV2PoolTokenPrice);
     }
 
-    function _deployUniswapV3Price(bytes memory args) public returns (address) {
+    function _deployUniswapV3Price(bytes memory) public returns (address) {
         // No additional arguments for UniswapV3Price submodule
 
         // Check that environment variables are loaded
