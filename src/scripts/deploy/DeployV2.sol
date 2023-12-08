@@ -359,6 +359,7 @@ contract OlympusDeploy is Script {
         // Parse deployment sequence and names
         string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
         uint256 len = names.length;
+        console2.log("Found %s deployments", len);
 
         // Iterate through deployment sequence and set deployment args
         for (uint256 i = 0; i < len; i++) {
