@@ -28,10 +28,6 @@ import "src/Kernel.sol";
 contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     using TransferHelper for ERC20;
 
-    // =========  ERRORS ========= //
-
-    error Heart_WrongModuleVersion(uint8[3] expectedMajors);
-
     // =========  STATE ========= //
 
     /// @notice Timestamp of the last beat (UTC, in seconds)

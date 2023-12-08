@@ -180,7 +180,7 @@ contract CrossChainBridgeTest is Test {
 
         // Send ohm to user2 on L2
         vm.startPrank(user);
-        ohm.approve(address(bridge), amount_);
+        ohm.approve(address(MINTR), amount_);
         bridge.sendOhm{value: fee}(L2_CHAIN_ID, user2, amount_);
 
         // Verify ohm balance is correct

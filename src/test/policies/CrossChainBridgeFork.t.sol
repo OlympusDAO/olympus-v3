@@ -167,7 +167,7 @@ contract CrossChainBridgeForkTest is Test {
 
         // Send ohm to user2 on L2
         vm.startPrank(user1);
-        ohm1.approve(address(bridge), amount_);
+        ohm1.approve(address(MINTR), amount_);
         bridge.sendOhm{value: fee}(L2_ID, user2, amount_);
         vm.stopPrank();
 
@@ -189,7 +189,7 @@ contract CrossChainBridgeForkTest is Test {
         endpoint_l2.blockNextMsg();
 
         vm.startPrank(user);
-        ohm.approve(address(bridge), amount);
+        ohm.approve(address(MINTR), amount);
         bridge.sendOhm{value: 1e17}(L2_ID, user2, amount);
 
         assertEq(ohm.balanceOf(user2), 0);
