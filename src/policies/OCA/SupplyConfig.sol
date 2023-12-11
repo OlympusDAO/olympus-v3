@@ -81,7 +81,9 @@ contract SupplyConfig is Policy, RolesConsumer {
 
     /// @notice Remove a category from the supply tracking system
     /// @param category_ The category to remove
-    function removeSupplyCategory(SupplyCategory category_) external onlyRole("supplyconfig_policy") {
+    function removeSupplyCategory(
+        SupplyCategory category_
+    ) external onlyRole("supplyconfig_policy") {
         SPPLY.removeCategory(category_);
     }
 
@@ -120,7 +122,8 @@ contract SupplyConfig is Policy, RolesConsumer {
     ) external onlyRole("supplyconfig_policy") {
         bytes20 subKeycode = fromSubKeycode(subKeycode_);
         bytes5 moduleKeycode = bytes5(subKeycode >> (15 * 8));
-        if (moduleKeycode != bytes5("SPPLY")) revert SupplyConfig_InvalidModule(toKeycode(moduleKeycode));
+        if (moduleKeycode != bytes5("SPPLY"))
+            revert SupplyConfig_InvalidModule(toKeycode(moduleKeycode));
 
         SPPLY.execOnSubmodule(subKeycode_, data_);
     }
