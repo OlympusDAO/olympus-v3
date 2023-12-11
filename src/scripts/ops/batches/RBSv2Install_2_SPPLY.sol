@@ -46,8 +46,8 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         kernel = envAddress("current", "olympus.Kernel");
         crossChainBridge = envAddress("last", "olympus.policies.CrossChainBridge");
 
-        arbBridge = address(0); // TODO: Change
-        opBridge = address(0); // TODO: Change
+        arbBridge = envAddressWithChain("arbitrum", "current", "olympus.policies.CrossChainBridge");
+        opBridge = envAddressWithChain("optimism", "current", "olympus.policies.CrossChainBridge");
 
         blVaultManagerLido = envAddress("current", "olympus.policies.BLVaultManagerLido");
         blVaultManagerLusd = envAddress("current", "olympus.policies.BLVaultManagerLusd");
