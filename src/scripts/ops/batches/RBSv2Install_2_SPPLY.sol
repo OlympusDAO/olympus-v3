@@ -75,16 +75,16 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         // This DAO MS batch:
         // 1. Installs the OlympusSupply module
         // 2. Installs the SupplyConfig policy
-        // 3. Installs the BLVaultSupply submodule on the OlympusSupply module
-        // 4. Installs the BunniSupply submodule on the OlympusSupply module
-        // 5. Installs the MigrationOffsetSupply submodule on the OlympusSupply module
-        // 6. Installs the BrickedSupply submodule on the OlympusSupply module
-        // 7. Deactivates the old CrossChainBridge policy
-        // 8. Activates the new CrossChainBridge policy
-        // 9. Set trusted remotes on the new CrossChainBridge policy
-        // 10. Categorizes protocol-owned-treasury supply
-        // 11. Categorizes DAO supply
-        // 12. Set roles for policy access control
+        // 3. Set roles for policy access control
+        // 4. Installs the BLVaultSupply submodule on the OlympusSupply module
+        // 5. Installs the BunniSupply submodule on the OlympusSupply module
+        // 6. Installs the MigrationOffsetSupply submodule on the OlympusSupply module
+        // 7. Installs the BrickedSupply submodule on the OlympusSupply module
+        // 8. Deactivates the old CrossChainBridge policy
+        // 9. Activates the new CrossChainBridge policy
+        // 10. Set trusted remotes on the new CrossChainBridge policy
+        // 11. Categorizes protocol-owned-treasury supply
+        // 12. Categorizes DAO supply
 
         // 1. Install the OlympusSupply module
         console2.log("Installing OlympusSupply module");
@@ -104,122 +104,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 3. Install the BLVaultSupply submodule on the OlympusSupply module
-        console2.log("Installing BLVaultSupply submodule");
-        addToBatch(
-            supplyConfig,
-            abi.encodeWithSelector(
-                SupplyConfig.installSubmodule.selector,
-                BLVaultSupply(blVaultSupply)
-            )
-        );
-
-        // 3a. Configure the BLVaultSupply submodule with the existing BLV managers
-        console2.log("Adding BLVLidoManager to BLVaultSupply");
-        addToBatch(
-            supplyConfig,
-            abi.encodeWithSelector(
-                SupplyConfig.execOnSubmodule.selector,
-                abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLido)
-            )
-        );
-        console2.log("Adding BLVLusdManager to BLVaultSupply");
-        addToBatch(
-            supplyConfig,
-            abi.encodeWithSelector(
-                SupplyConfig.execOnSubmodule.selector,
-                abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLusd)
-            )
-        );
-
-        // 4. Install the BunniSupply submodule on the OlympusSupply module
-        // No configuration needed - will be performed by BunniManager
-        console2.log("Installing BunniSupply submodule");
-        addToBatch(
-            supplyConfig,
-            abi.encodeWithSelector(SupplyConfig.installSubmodule.selector, BunniSupply(bunniSupply))
-        );
-
-        // 5. Install the MigrationOffsetSupply submodule on the OlympusSupply module
-        // No configuration needed - already done at deployment
-        console2.log("Installing MigrationOffsetSupply submodule");
-        addToBatch(
-            supplyConfig,
-            abi.encodeWithSelector(
-                SupplyConfig.installSubmodule.selector,
-                MigrationOffsetSupply(migrationOffsetSupply)
-            )
-        );
-
-        // 6. Install the BrickedSupply submodule on the OlympusSupply module
-        // No configuration needed - already done at deployment
-        // TODO enable
-        // console2.log("Installing BrickedSupply submodule");
-        // addToBatch(
-        //     supplyConfig,
-        //     abi.encodeWithSelector(
-        //         SupplyConfig.installSubmodule.selector,
-        //         BrickedSupply(brickedSupply)
-        //     )
-        // );
-
-        // 7. Deactivate the old CrossChainBridge policy
-        console2.log("Deactivating old CrossChainBridge policy");
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.DeactivatePolicy,
-                crossChainBridge
-            )
-        );
-
-        // 8. Activate the new CrossChainBridge policy
-        console2.log("Activating new CrossChainBridge policy");
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.ActivatePolicy,
-                newCrossChainBridge
-            )
-        );
-
-        // 9. Set trusted remotes on the new CrossChainBridge policy
-        console2.log("Setting Arbitrum bridge as trusted remote on new CrossChainBridge policy");
-        addToBatch(
-            newCrossChainBridge,
-            abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 110, arbBridge)
-        );
-        console2.log("Setting Optimism bridge as trusted remote on new CrossChainBridge policy");
-        addToBatch(
-            newCrossChainBridge,
-            abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 111, opBridge)
-        );
-
-        // 10. Categorize protocol-owned-treasury supply
-        console2.log("Categorizing DAO MS as protocol-owned-treasury supply");
-        addToBatch(
-            supplyConfig,
-            abi.encodeWithSelector(
-                SupplyConfig.categorizeSupply.selector,
-                daoMS,
-                SupplyCategory.wrap("protocol-owned-treasury")
-            )
-        );
-
-        // 11. Categorize DAO supply
-        console2.log("Categorizing DAO working wallet as DAO supply");
-        addToBatch(
-            supplyConfig,
-            abi.encodeWithSelector(
-                SupplyConfig.categorizeSupply.selector,
-                daoWorkingWallet,
-                SupplyCategory.wrap("dao")
-            )
-        );
-
-        // 12. Set roles for policy access control
+        // 3. Set roles for policy access control
         //  - Give DAO MS the supplyconfig_admin role
         //  - Give policy MS and DAO MS the supplyconfig_policy role
         console2.log("Granting admin role for SupplyConfig policy");
@@ -247,6 +132,123 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
                 RolesAdmin.grantRole.selector,
                 bytes32("supplyconfig_policy"),
                 policyMS
+            )
+        );
+
+        // 4. Install the BLVaultSupply submodule on the OlympusSupply module
+        console2.log("Installing BLVaultSupply submodule");
+        addToBatch(
+            supplyConfig,
+            abi.encodeWithSelector(
+                SupplyConfig.installSubmodule.selector,
+                BLVaultSupply(blVaultSupply)
+            )
+        );
+
+        // 4a. Configure the BLVaultSupply submodule with the existing BLV managers
+        console2.log("Adding BLVLidoManager to BLVaultSupply");
+        addToBatch(
+            supplyConfig,
+            abi.encodeWithSelector(
+                SupplyConfig.execOnSubmodule.selector,
+                toSubKeycode("SPPLY.BLV"),
+                abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLido)
+            )
+        );
+        console2.log("Adding BLVLusdManager to BLVaultSupply");
+        addToBatch(
+            supplyConfig,
+            abi.encodeWithSelector(
+                SupplyConfig.execOnSubmodule.selector,
+                toSubKeycode("SPPLY.BLV"),
+                abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLusd)
+            )
+        );
+
+        // 5. Install the BunniSupply submodule on the OlympusSupply module
+        // No configuration needed - will be performed by BunniManager
+        console2.log("Installing BunniSupply submodule");
+        addToBatch(
+            supplyConfig,
+            abi.encodeWithSelector(SupplyConfig.installSubmodule.selector, BunniSupply(bunniSupply))
+        );
+
+        // 6. Install the MigrationOffsetSupply submodule on the OlympusSupply module
+        // No configuration needed - already done at deployment
+        console2.log("Installing MigrationOffsetSupply submodule");
+        addToBatch(
+            supplyConfig,
+            abi.encodeWithSelector(
+                SupplyConfig.installSubmodule.selector,
+                MigrationOffsetSupply(migrationOffsetSupply)
+            )
+        );
+
+        // 7. Install the BrickedSupply submodule on the OlympusSupply module
+        // No configuration needed - already done at deployment
+        // TODO enable
+        // console2.log("Installing BrickedSupply submodule");
+        // addToBatch(
+        //     supplyConfig,
+        //     abi.encodeWithSelector(
+        //         SupplyConfig.installSubmodule.selector,
+        //         BrickedSupply(brickedSupply)
+        //     )
+        // );
+
+        // 8. Deactivate the old CrossChainBridge policy
+        console2.log("Deactivating old CrossChainBridge policy");
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.DeactivatePolicy,
+                crossChainBridge
+            )
+        );
+
+        // 9. Activate the new CrossChainBridge policy
+        console2.log("Activating new CrossChainBridge policy");
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                newCrossChainBridge
+            )
+        );
+
+        // 10. Set trusted remotes on the new CrossChainBridge policy
+        console2.log("Setting Arbitrum bridge as trusted remote on new CrossChainBridge policy");
+        addToBatch(
+            newCrossChainBridge,
+            abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 110, arbBridge)
+        );
+        console2.log("Setting Optimism bridge as trusted remote on new CrossChainBridge policy");
+        addToBatch(
+            newCrossChainBridge,
+            abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 111, opBridge)
+        );
+
+        // 11. Categorize protocol-owned-treasury supply
+        console2.log("Categorizing DAO MS as protocol-owned-treasury supply");
+        addToBatch(
+            supplyConfig,
+            abi.encodeWithSelector(
+                SupplyConfig.categorizeSupply.selector,
+                daoMS,
+                SupplyCategory.wrap("protocol-owned-treasury")
+            )
+        );
+
+        // 12. Categorize DAO supply
+        console2.log("Categorizing DAO working wallet as DAO supply");
+        addToBatch(
+            supplyConfig,
+            abi.encodeWithSelector(
+                SupplyConfig.categorizeSupply.selector,
+                daoWorkingWallet,
+                SupplyCategory.wrap("dao")
             )
         );
     }

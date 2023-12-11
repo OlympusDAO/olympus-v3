@@ -49,14 +49,14 @@ contract SupplyConfig is Policy, RolesConsumer {
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode SPPLY_KEYCODE = toKeycode("SPPLY");
 
-        requests = new Permissions[](5);
+        requests = new Permissions[](6);
         // SPPLY Permissions
         requests[0] = Permissions(SPPLY_KEYCODE, SPPLY.addCategory.selector);
         requests[1] = Permissions(SPPLY_KEYCODE, SPPLY.removeCategory.selector);
         requests[2] = Permissions(SPPLY_KEYCODE, SPPLY.categorize.selector);
         requests[3] = Permissions(SPPLY_KEYCODE, SPPLY.installSubmodule.selector);
         requests[4] = Permissions(SPPLY_KEYCODE, SPPLY.upgradeSubmodule.selector);
-        // TODO does this need execOnSubmodule?
+        requests[5] = Permissions(SPPLY_KEYCODE, SPPLY.execOnSubmodule.selector);
     }
 
     //==================================================================================================//

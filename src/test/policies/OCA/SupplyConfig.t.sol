@@ -159,7 +159,7 @@ contract SupplyConfigTest is Test {
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](5);
+        Permissions[] memory expectedPerms = new Permissions[](6);
         Keycode SPPLY_KEYCODE = toKeycode("SPPLY");
         // SPPLY Permissions
         expectedPerms[0] = Permissions(SPPLY_KEYCODE, SPPLY.addCategory.selector);
@@ -167,6 +167,7 @@ contract SupplyConfigTest is Test {
         expectedPerms[2] = Permissions(SPPLY_KEYCODE, SPPLY.categorize.selector);
         expectedPerms[3] = Permissions(SPPLY_KEYCODE, SPPLY.installSubmodule.selector);
         expectedPerms[4] = Permissions(SPPLY_KEYCODE, SPPLY.upgradeSubmodule.selector);
+        expectedPerms[5] = Permissions(SPPLY_KEYCODE, SPPLY.execOnSubmodule.selector);
 
         Permissions[] memory perms = supplyConfig.requestPermissions();
         assertEq(perms.length, expectedPerms.length);
