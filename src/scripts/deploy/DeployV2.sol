@@ -989,10 +989,10 @@ contract OlympusDeploy is Script {
             address uniswapFactory
         ) = abi.decode(args, (uint48, uint16, uint256, address));
 
-        console2.log("harvestFrequency", harvestFrequency);
-        console2.log("harvestRewardFee", harvestRewardFee);
-        console2.log("harvestRewardMax", harvestRewardMax);
-        console2.log("uniswapFactory", uniswapFactory);
+        console2.log("    harvestFrequency", harvestFrequency);
+        console2.log("    harvestRewardFee", harvestRewardFee);
+        console2.log("    harvestRewardMax", harvestRewardMax);
+        console2.log("    uniswapFactory", uniswapFactory);
 
         // Check that the environment variables are loaded
         if (address(kernel) == address(0)) revert("Kernel address not set");
@@ -1035,8 +1035,8 @@ contract OlympusDeploy is Script {
         // Decode arguments for PRICEv2 module
         (uint8 decimals, uint32 observationFrequency) = abi.decode(args, (uint8, uint32));
 
-        console2.log("decimals", decimals);
-        console2.log("observationFrequency", observationFrequency);
+        console2.log("    decimals", decimals);
+        console2.log("    observationFrequency", observationFrequency);
 
         // Deploy V2 Price module
         vm.broadcast();
@@ -1157,7 +1157,7 @@ contract OlympusDeploy is Script {
 
         // TODO fill in the initialCrossChainSupply value
 
-        console2.log("initialCrossChainSupply", initialCrossChainSupply);
+        console2.log("    initialCrossChainSupply", initialCrossChainSupply);
 
         // Check that environment variables are loaded
         if (address(kernel) == address(0)) revert("Kernel address not set");
@@ -1238,7 +1238,7 @@ contract OlympusDeploy is Script {
         // Decode arguments for MigrationOffsetSupply submodule
         uint256 migrationOffset = abi.decode(args, (uint256));
 
-        console2.log("migrationOffset", migrationOffset);
+        console2.log("    migrationOffset", migrationOffset);
 
         // Check that the environment variables are loaded
         if (address(SPPLY) == address(0)) revert("SPPLY address not set");
