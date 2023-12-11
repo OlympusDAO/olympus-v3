@@ -3,9 +3,13 @@ pragma solidity 0.8.15;
 
 import "src/Kernel.sol";
 
+import "src/Submodules.sol";
+
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {SPPLYv1, Category as SupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
 
+/// @notice Activates and configures the SPPLY module
+/// @dev    Some functions in this policy are gated to addresses with the "supplyconfig_policy" or "supplyconfig_admin" roles
 contract SupplyConfig is Policy, RolesConsumer {
     // ========== ERRORS ========== //
     error SupplyConfig_InvalidModule(Keycode module_);
@@ -66,7 +70,7 @@ contract SupplyConfig is Policy, RolesConsumer {
         bool useSubmodules_,
         bytes4 submoduleSelector_,
         bytes4 submoduleReservesSelector_
-    ) external onlyRole("bookkeeper_policy") {
+    ) external onlyRole("supplyconfig_policy") {
         SPPLY.addCategory(
             category_,
             useSubmodules_,
@@ -77,7 +81,7 @@ contract SupplyConfig is Policy, RolesConsumer {
 
     /// @notice Remove a category from the supply tracking system
     /// @param category_ The category to remove
-    function removeSupplyCategory(SupplyCategory category_) external onlyRole("bookkeeper_policy") {
+    function removeSupplyCategory(SupplyCategory category_) external onlyRole("supplyconfig_policy") {
         SPPLY.removeCategory(category_);
     }
 
@@ -87,7 +91,7 @@ contract SupplyConfig is Policy, RolesConsumer {
     function categorizeSupply(
         address location_,
         SupplyCategory category_
-    ) external onlyRole("bookkeeper_policy") {
+    ) external onlyRole("supplyconfig_policy") {
         SPPLY.categorize(location_, category_);
     }
 
@@ -96,14 +100,14 @@ contract SupplyConfig is Policy, RolesConsumer {
     //==================================================================================================//
 
     /// @notice Install a new submodule
-    function installSubmodule(Submodule submodule_) external onlyRole("bookkeeper_admin") {
+    function installSubmodule(Submodule submodule_) external onlyRole("supplyconfig_admin") {
         SPPLY.installSubmodule(submodule_);
     }
 
     /// @notice Upgrade a submodule
     /// @dev    The upgraded submodule must have the same SubKeycode as an existing submodule that it is replacing,
     /// @dev    otherwise use installSubmodule
-    function upgradeSubmodule(Submodule submodule_) external onlyRole("bookkeeper_admin") {
+    function upgradeSubmodule(Submodule submodule_) external onlyRole("supplyconfig_admin") {
         SPPLY.upgradeSubmodule(submodule_);
     }
 
@@ -113,10 +117,10 @@ contract SupplyConfig is Policy, RolesConsumer {
     function execOnSubmodule(
         SubKeycode subKeycode_,
         bytes calldata data_
-    ) external onlyRole("bookkeeper_policy") {
+    ) external onlyRole("supplyconfig_policy") {
         bytes20 subKeycode = fromSubKeycode(subKeycode_);
         bytes5 moduleKeycode = bytes5(subKeycode >> (15 * 8));
-        if (moduleKeycode != bytes5("SPPLY")) revert SupplyConfig_InvalidModule(moduleKeycode);
+        if (moduleKeycode != bytes5("SPPLY")) revert SupplyConfig_InvalidModule(toKeycode(moduleKeycode));
 
         SPPLY.execOnSubmodule(subKeycode_, data_);
     }
