@@ -144,7 +144,8 @@ contract OlympusDeploy is Script {
     BLVaultManagerLusd public lusdVaultManager;
     BLVaultLusd public lusdVault;
     Clearinghouse public clearinghouse;
-    CrossChainBridge public bridge;
+    CrossChainBridge public crossChainBridgeV1;
+    CrossChainBridge public crossChainBridgeV1_1;
     Bookkeeper public bookkeeper;
     BunniManager public bunniManager;
     Appraiser public appraiser;
@@ -239,6 +240,7 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultLido"] = this._deployBLVaultLido.selector;
         selectorMap["BLVaultManagerLido"] = this._deployBLVaultManagerLido.selector;
         selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
+        selectorMap["CrossChainBridgeV1_1"] = this._deployCrossChainBridgeV1_1.selector;
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
@@ -332,7 +334,8 @@ contract OlympusDeploy is Script {
         lidoVaultManager = BLVaultManagerLido(envAddress("olympus.policies.BLVaultManagerLido"));
         lidoVault = BLVaultLido(envAddress("olympus.policies.BLVaultLido"));
         bookkeeper = Bookkeeper(envAddress("olympus.policies.Bookkeeper"));
-        bridge = CrossChainBridge(envAddress("olympus.policies.CrossChainBridge"));
+        crossChainBridgeV1 = CrossChainBridge(envAddress("olympus.policies.CrossChainBridgeV1"));
+        crossChainBridgeV1_1 = CrossChainBridge(envAddress("olympus.policies.CrossChainBridgeV1_1"));
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
@@ -962,10 +965,21 @@ contract OlympusDeploy is Script {
 
         // Deploy CrossChainBridge policy
         vm.broadcast();
-        bridge = new CrossChainBridge(kernel, lzEndpoint);
-        console2.log("Bridge deployed at:", address(bridge));
+        crossChainBridgeV1 = new CrossChainBridge(kernel, lzEndpoint);
+        console2.log("Bridge deployed at:", address(crossChainBridgeV1));
 
-        return address(bridge);
+        return address(crossChainBridgeV1);
+    }
+
+    function _deployCrossChainBridgeV1_1(bytes memory args) public returns (address) {
+        address lzEndpoint = abi.decode(args, (address));
+
+        // Deploy CrossChainBridge policy
+        vm.broadcast();
+        crossChainBridgeV1_1 = new CrossChainBridge(kernel, lzEndpoint);
+        console2.log("Bridge deployed at:", address(crossChainBridgeV1_1));
+
+        return address(crossChainBridgeV1_1);
     }
 
     function _deployBookkeeper(bytes memory) public returns (address) {
