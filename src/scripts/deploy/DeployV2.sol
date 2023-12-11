@@ -970,7 +970,7 @@ contract OlympusDeploy is Script {
         // Deploy CrossChainBridge policy
         vm.broadcast();
         crossChainBridgeV1 = new CrossChainBridge(kernel, lzEndpoint);
-        console2.log("Bridge deployed at:", address(crossChainBridgeV1));
+        console2.log("Cross-Chain Bridge deployed at:", address(crossChainBridgeV1));
 
         return address(crossChainBridgeV1);
     }
@@ -981,7 +981,7 @@ contract OlympusDeploy is Script {
         // Deploy CrossChainBridge policy
         vm.broadcast();
         crossChainBridgeV1_1 = new CrossChainBridge(kernel, lzEndpoint);
-        console2.log("Bridge deployed at:", address(crossChainBridgeV1_1));
+        console2.log("Cross-Chain Bridge deployed at:", address(crossChainBridgeV1_1));
 
         return address(crossChainBridgeV1_1);
     }
