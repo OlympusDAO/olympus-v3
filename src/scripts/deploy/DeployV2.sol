@@ -47,6 +47,7 @@ import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultMana
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {Appraiser} from "policies/OCA/Appraiser.sol";
+import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 
 // Bophades Modules
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
@@ -148,6 +149,7 @@ contract OlympusDeploy is Script {
     Bookkeeper public bookkeeper;
     BunniManager public bunniManager;
     Appraiser public appraiser;
+    SupplyConfig public supplyConfig;
 
     // External contracts
     BunniHub public bunniHub;
@@ -245,6 +247,7 @@ contract OlympusDeploy is Script {
         selectorMap["Bookkeeper"] = this._deployBookkeeper.selector;
         selectorMap["BunniManager"] = this._deployBunniManagerPolicy.selector;
         selectorMap["Appraiser"] = this._deployAppraiser.selector;
+        selectorMap["SupplyConfig"] = this._deploySupplyConfig.selector;
 
         // PRICE Submodules
         selectorMap["SimplePriceFeedStrategy"] = this._deploySimplePriceFeedStrategy.selector;
@@ -337,6 +340,7 @@ contract OlympusDeploy is Script {
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
         appraiser = Appraiser(envAddress("olympus.policies.Appraiser"));
+        supplyConfig = SupplyConfig(envAddress("olympus.policies.SupplyConfig"));
 
         // PRICE submodules
         simplePriceFeedStrategy = SimplePriceFeedStrategy(
@@ -1175,6 +1179,20 @@ contract OlympusDeploy is Script {
         console2.log("SPPLY deployed at:", address(SPPLY));
 
         return address(SPPLY);
+    }
+
+    function _deploySupplyConfig(bytes memory) public returns (address) {
+        // No additional arguments for SupplyConfig submodule
+
+        // Check that environment variables are loaded
+        if (address(kernel) == address(0)) revert("Kernel address not set");
+
+        // Deploy SupplyConfig submodule
+        vm.broadcast();
+        supplyConfig = new SupplyConfig(kernel);
+        console2.log("SupplyConfig deployed at:", address(supplyConfig));
+
+        return address(supplyConfig);
     }
 
     function _deployAuraBalancerSupply(bytes memory) public returns (address) {
