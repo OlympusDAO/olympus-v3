@@ -80,11 +80,8 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         // 5. Installs the BunniSupply submodule on the OlympusSupply module
         // 6. Installs the MigrationOffsetSupply submodule on the OlympusSupply module
         // 7. Installs the BrickedSupply submodule on the OlympusSupply module
-        // 8. Deactivates the old CrossChainBridge policy
-        // 9. Activates the new CrossChainBridge policy
-        // 10. Set trusted remotes on the new CrossChainBridge policy
-        // 11. Categorizes protocol-owned-treasury supply
-        // 12. Categorizes DAO supply
+        // 8. Categorizes protocol-owned-treasury supply
+        // 9. Categorizes DAO supply
 
         // 1. Install the OlympusSupply module
         console2.log("Installing OlympusSupply module");
@@ -196,41 +193,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         //     )
         // );
 
-        // 8. Deactivate the old CrossChainBridge policy
-        console2.log("Deactivating old CrossChainBridge policy");
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.DeactivatePolicy,
-                crossChainBridgeV1
-            )
-        );
-
-        // 9. Activate the new CrossChainBridge policy
-        console2.log("Activating new CrossChainBridge policy");
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.ActivatePolicy,
-                crossChainBridgeV1_1
-            )
-        );
-
-        // 10. Set trusted remotes on the new CrossChainBridge policy
-        console2.log("Setting Arbitrum bridge as trusted remote on new CrossChainBridge policy");
-        addToBatch(
-            crossChainBridgeV1_1,
-            abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 110, arbBridge)
-        );
-        console2.log("Setting Optimism bridge as trusted remote on new CrossChainBridge policy");
-        addToBatch(
-            crossChainBridgeV1_1,
-            abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 111, opBridge)
-        );
-
-        // 11. Categorize protocol-owned-treasury supply
+        // 8. Categorize protocol-owned-treasury supply
         console2.log("Categorizing DAO MS as protocol-owned-treasury supply");
         addToBatch(
             supplyConfig,
@@ -241,7 +204,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 12. Categorize DAO supply
+        // 9. Categorize DAO supply
         console2.log("Categorizing DAO working wallet as DAO supply");
         addToBatch(
             supplyConfig,
@@ -250,6 +213,59 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
                 daoWorkingWallet,
                 SupplyCategory.wrap("dao")
             )
+        );
+    }
+
+    function RBSv2Install_2_2(bool send_) external isDaoBatch(send_) {
+        // This DAO MS batch:
+        // 1. Deactivates the old CrossChainBridge policy
+        // 2. Activates the new CrossChainBridge policy
+        // 3. Set admin role for new CrossChainBridge policy
+        // 4. Set trusted remotes on the new CrossChainBridge policy
+
+        // 1. Deactivate the old CrossChainBridge policy
+        console2.log("Deactivating old CrossChainBridge policy");
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.DeactivatePolicy,
+                crossChainBridgeV1
+            )
+        );
+
+        // 2. Activate the new CrossChainBridge policy
+        console2.log("Activating new CrossChainBridge policy");
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                crossChainBridgeV1_1
+            )
+        );
+
+        // 3. Set admin role for new CrossChainBridge policy
+        console2.log("Granting admin role for new CrossChainBridge policy");
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("bridge_admin"),
+                daoMS
+            )
+        );
+
+        // 4. Set trusted remotes on the new CrossChainBridge policy
+        console2.log("Setting Arbitrum bridge as trusted remote on new CrossChainBridge policy");
+        addToBatch(
+            crossChainBridgeV1_1,
+            abi.encodeWithSelector(CrossChainBridge.setTrustedRemoteAddress.selector, 110, arbBridge)
+        );
+        console2.log("Setting Optimism bridge as trusted remote on new CrossChainBridge policy");
+        addToBatch(
+            crossChainBridgeV1_1,
+            abi.encodeWithSelector(CrossChainBridge.setTrustedRemoteAddress.selector, 111, opBridge)
         );
     }
 }
