@@ -25,7 +25,7 @@
             }
         },
         {
-            "name": "CrossChainBridge",
+            "name": "CrossChainBridgeV1_1",
             "args": {
                 "lzEndpoint": "0x66A71Dcef29A0fFBDBE3c6a460a3B5BC225Cd675"
             }

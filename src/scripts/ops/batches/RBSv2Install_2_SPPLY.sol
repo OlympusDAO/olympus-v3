@@ -27,7 +27,7 @@ import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSup
 contract RBSv2Install_2_SPPLY is OlyBatch {
     // Existing Olympus Contracts
     address kernel;
-    address crossChainBridge;
+    address crossChainBridgeV1;
     address rolesAdmin;
     address arbBridge;
     address opBridge;
@@ -41,14 +41,15 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
     address bunniSupply;
     address migrationOffsetSupply;
     address brickedSupply;
-    address newCrossChainBridge;
+    address crossChainBridgeV1_1;
 
     // Wallets
     address daoWorkingWallet;
 
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
-        crossChainBridge = envAddress("last", "olympus.policies.CrossChainBridge");
+        crossChainBridgeV1 = envAddress("current", "olympus.policies.CrossChainBridgeV1");
+        crossChainBridgeV1_1 = envAddress("current", "olympus.policies.CrossChainBridgeV1_1");
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
 
         arbBridge = envAddressWithChain("arbitrum", "current", "olympus.policies.CrossChainBridge");
@@ -68,7 +69,6 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             "olympus.submodules.SPPLY.MigrationOffsetSupply"
         );
         brickedSupply = envAddress("current", "olympus.submodules.SPPLY.BrickedSupply");
-        newCrossChainBridge = envAddress("current", "olympus.policies.CrossChainBridge");
     }
 
     function RBSv2Install_2_1(bool send_) external isDaoBatch(send_) {
@@ -203,7 +203,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             abi.encodeWithSelector(
                 Kernel.executeAction.selector,
                 Actions.DeactivatePolicy,
-                crossChainBridge
+                crossChainBridgeV1
             )
         );
 
@@ -214,19 +214,19 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             abi.encodeWithSelector(
                 Kernel.executeAction.selector,
                 Actions.ActivatePolicy,
-                newCrossChainBridge
+                crossChainBridgeV1_1
             )
         );
 
         // 10. Set trusted remotes on the new CrossChainBridge policy
         console2.log("Setting Arbitrum bridge as trusted remote on new CrossChainBridge policy");
         addToBatch(
-            newCrossChainBridge,
+            crossChainBridgeV1_1,
             abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 110, arbBridge)
         );
         console2.log("Setting Optimism bridge as trusted remote on new CrossChainBridge policy");
         addToBatch(
-            newCrossChainBridge,
+            crossChainBridgeV1_1,
             abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 111, opBridge)
         );
 
