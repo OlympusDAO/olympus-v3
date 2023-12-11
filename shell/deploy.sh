@@ -27,6 +27,8 @@ then
   exit 1
 fi
 
+echo "Using RPC at URL: $RPC_URL"
+
 # Set BROADCAST_FLAG based on BROADCAST
 BROADCAST_FLAG=""
 if [ "$BROADCAST" = "true" ] || [ "$BROADCAST" = "TRUE" ]; then
