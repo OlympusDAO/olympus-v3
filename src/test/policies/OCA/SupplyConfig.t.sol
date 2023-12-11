@@ -210,7 +210,7 @@ contract SupplyConfigTest is Test {
         assertEq(submodule, address(0));
     }
 
-    function test_installSubmodule_SPPLY() public {
+    function test_installSubmodule() public {
         // Create vault managers
         MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
         MockVaultManager[] memory vaultManagers = new MockVaultManager[](1);
@@ -278,7 +278,7 @@ contract SupplyConfigTest is Test {
         assertEq(minor, 0);
     }
 
-    function test_upgradeSubmodule_SPPLY() public {
+    function test_upgradeSubmodule() public {
         // Create vault managers
         MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
         MockVaultManager[] memory vaultManagers = new MockVaultManager[](1);
@@ -313,6 +313,74 @@ contract SupplyConfigTest is Test {
         (major, minor) = Submodule(submodule).VERSION();
         assertEq(major, 2);
         assertEq(minor, 0);
+    }
+
+    function test_execOnSubmodule() public {
+        // Create vault managers
+        MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
+
+        MockVaultManager[] memory vaultManagers = new MockVaultManager[](0);
+        address[] memory vaultManagerAddresses = new address[](0);
+
+        // Create new submodule to install
+        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
+
+        // Confirm submodule is not installed on SPPLY
+        address submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
+        assertEq(submodule, address(0));
+
+        // Install new submodule with admin account
+        vm.prank(admin);
+        supplyConfig.installSubmodule(supplyBLV);
+
+        // Perform an action on the submodule
+        vm.prank(policy);
+        supplyConfig.execOnSubmodule(
+            toSubKeycode("SPPLY.BLV"),
+            abi.encodeWithSelector(
+                BLVaultSupply.addVaultManager.selector,
+                vaultManager1
+            )
+        );
+
+        // Confirm that the action was performed
+        assertEq(address(supplyBLV.vaultManagers(0)), address(vaultManager1));
+    }
+
+    function test_execOnSubmodule_onlyPolicy(address user_) public {
+        vm.assume(user_ != admin);
+
+        // Create vault managers
+        MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
+
+        MockVaultManager[] memory vaultManagers = new MockVaultManager[](0);
+        address[] memory vaultManagerAddresses = new address[](0);
+
+        // Create new submodule to install
+        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
+
+        // Confirm submodule is not installed on SPPLY
+        address submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
+        assertEq(submodule, address(0));
+
+        // Install new submodule with admin account
+        vm.prank(admin);
+        supplyConfig.installSubmodule(supplyBLV);
+
+        // Try to perform an action on the submodule with non-admin account, expect revert
+        bytes memory err = abi.encodeWithSignature(
+            "ROLES_RequireRole(bytes32)",
+            bytes32("supplyconfig_policy")
+        );
+        vm.expectRevert(err);
+        vm.prank(user_);
+        supplyConfig.execOnSubmodule(
+            toSubKeycode("SPPLY.BLV"),
+            abi.encodeWithSelector(
+                BLVaultSupply.addVaultManager.selector,
+                vaultManager1
+            )
+        );
     }
 
     /* ========== SPPLYv1 Configuration ========== */

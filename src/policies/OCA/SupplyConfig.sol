@@ -121,7 +121,9 @@ contract SupplyConfig is Policy, RolesConsumer {
         bytes calldata data_
     ) external onlyRole("supplyconfig_policy") {
         bytes20 subKeycode = fromSubKeycode(subKeycode_);
-        bytes5 moduleKeycode = bytes5(subKeycode >> (15 * 8));
+
+        // Checks the first 5 bytes, which corresponds to the module keycode
+        bytes5 moduleKeycode = bytes5(subKeycode);
         if (moduleKeycode != bytes5("SPPLY"))
             revert SupplyConfig_InvalidModule(toKeycode(moduleKeycode));
 

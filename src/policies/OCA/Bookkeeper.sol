@@ -331,6 +331,8 @@ contract Bookkeeper is Policy, RolesConsumer {
         SubKeycode subKeycode_,
         bytes calldata data_
     ) external onlyRole("bookkeeper_policy") {
+        // TODO add test
+        // TODO fix bit shifting
         bytes20 subKeycode = fromSubKeycode(subKeycode_);
         bytes5 moduleKeycode = bytes5(subKeycode >> (15 * 8));
         if (moduleKeycode == bytes5("PRICE")) {
