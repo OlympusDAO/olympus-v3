@@ -79,12 +79,14 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         // 10. Categorizes DAO supply
 
         // 1. Install the OlympusSupply module
+        console2.log("Installing OlympusSupply module");
         addToBatch(
             kernel,
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, spply)
         );
 
         // 2. Install the BLVaultSupply submodule on the OlympusSupply module
+        console2.log("Installing BLVaultSupply submodule");
         addToBatch(
             spply,
             abi.encodeWithSelector(
@@ -94,10 +96,12 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         );
 
         // 2a. Configure the BLVaultSupply submodule with the existing BLV managers
+        console2.log("Adding BLVLidoManager to BLVaultSupply");
         addToBatch(
             blVaultSupply,
             abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLido)
         );
+        console2.log("Adding BLVLusdManager to BLVaultSupply");
         addToBatch(
             blVaultSupply,
             abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLusd)
@@ -105,6 +109,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
 
         // 3. Install the BunniSupply submodule on the OlympusSupply module
         // No configuration needed - will be performed by BunniManager
+        console2.log("Installing BunniSupply submodule");
         addToBatch(
             spply,
             abi.encodeWithSelector(
@@ -115,6 +120,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
 
         // 4. Install the MigrationOffsetSupply submodule on the OlympusSupply module
         // No configuration needed - already done at deployment
+        console2.log("Installing MigrationOffsetSupply submodule");
         addToBatch(
             spply,
             abi.encodeWithSelector(
@@ -126,6 +132,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         // 5. Install the BrickedSupply submodule on the OlympusSupply module
         // No configuration needed - already done at deployment
         // TODO enable
+        // console2.log("Installing BrickedSupply submodule");
         // addToBatch(
         //     spply,
         //     abi.encodeWithSelector(
@@ -135,6 +142,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         // );
 
         // 6. Deactivate the old CrossChainBridge policy
+        console2.log("Deactivating old CrossChainBridge policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -145,6 +153,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         );
 
         // 7. Activate the new CrossChainBridge policy
+        console2.log("Activating new CrossChainBridge policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -155,16 +164,19 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         );
 
         // 8. Set trusted remotes on the new CrossChainBridge policy
+        console2.log("Setting Arbitrum bridge as trusted remote on new CrossChainBridge policy");
         addToBatch(
             newCrossChainBridge,
             abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 110, arbBridge)
         );
+        console2.log("Setting Optimism bridge as trusted remote on new CrossChainBridge policy");
         addToBatch(
             newCrossChainBridge,
             abi.encodeWithSelector(CrossChainBridge.setTrustedRemote.selector, 111, opBridge)
         );
 
         // 9. Categorize protocol-owned-treasury supply
+        console2.log("Categorizing DAO MS as protocol-owned-treasury supply");
         addToBatch(
             spply,
             abi.encodeWithSelector(
@@ -175,6 +187,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         );
 
         // 10. Categorize DAO supply
+        console2.log("Categorizing DAO working wallet as DAO supply");
         addToBatch(
             spply,
             abi.encodeWithSelector(

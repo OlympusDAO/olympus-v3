@@ -184,14 +184,18 @@ contract RBSv2Install_3 is OlyBatch {
         // 6. installs submodules on price v2
 
         // 1. Deactivate old heart + operator policies at contract level
+        console2.log("Deactivating existing Heart contract");
         addToBatch(heart, abi.encodeWithSelector(OlympusHeart.deactivate.selector));
+        console2.log("Deactivating existing Operator contract");
         addToBatch(operator, abi.encodeWithSelector(Operator.deactivate.selector));
 
         // 2. Deactivate old heart + operator policies at kernel level
+        console2.log("Deactivating existing Heart policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.DeactivatePolicy, heart)
         );
+        console2.log("Deactivating existing Operator policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -203,12 +207,14 @@ contract RBSv2Install_3 is OlyBatch {
 
         // 3. Upgrade the PRICE module to v2
         // Requires that Operator is deactivated
+        console2.log("Upgrading PRICE module to v2");
         addToBatch(
             kernel,
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.UpgradeModule, priceV2)
         );
 
         // 5. Activate bookkeeper policy
+        console2.log("Activating Bookkeeper policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -219,6 +225,7 @@ contract RBSv2Install_3 is OlyBatch {
         );
 
         // 5a. Disable TreasuryCustodian policy (superseded by BookKeeper)
+        console2.log("Deactivating TreasuryCustodian policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -229,6 +236,7 @@ contract RBSv2Install_3 is OlyBatch {
         );
 
         // 5b. Disable PriceConfig policy (superseded by BookKeeper)
+        console2.log("Deactivating PriceConfig policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -243,6 +251,7 @@ contract RBSv2Install_3 is OlyBatch {
         //     - Give DAO MS the bookkeeper_admin role
         //     - Give DAO MS the bookkeeper_policy role
         //     - Give Policy MS the bookkeeper_policy role
+        console2.log("Granting admin role for Bookkeeper policy");
         addToBatch(
             rolesAdmin,
             abi.encodeWithSelector(
@@ -251,6 +260,7 @@ contract RBSv2Install_3 is OlyBatch {
                 daoMS
             )
         );
+        console2.log("Granting policy role for Bookkeeper policy");
         addToBatch(
             rolesAdmin,
             abi.encodeWithSelector(
@@ -259,6 +269,7 @@ contract RBSv2Install_3 is OlyBatch {
                 daoMS
             )
         );
+        console2.log("Granting policy role for Bookkeeper policy");
         addToBatch(
             rolesAdmin,
             abi.encodeWithSelector(
@@ -276,30 +287,37 @@ contract RBSv2Install_3 is OlyBatch {
         //     - Install UniswapV2PoolTokenPrice submodule
         //     - Install UniswapV3Price submodule
         //     - Install SimplePriceFeedStrategy submodule
+        console2.log("Installing BalancerPoolTokenPrice submodule");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, balancerPoolTokenPrice)
         );
+        console2.log("Installing BunniPrice submodule");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, bunniPrice)
         );
+        console2.log("Installing ChainlinkPriceFeeds submodule");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, chainlinkPriceFeeds)
         );
+        console2.log("Installing ERC4626Price submodule");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, erc4626Price)
         );
+        console2.log("Installing UniswapV2PoolTokenPrice submodule");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, uniswapV2PoolTokenPrice)
         );
+        console2.log("Installing UniswapV3Price submodule");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, uniswapV3Price)
         );
+        console2.log("Installing SimplePriceFeedStrategy submodule");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, simplePriceFeedStrategy)
@@ -361,6 +379,7 @@ contract RBSv2Install_3 is OlyBatch {
                 );
             }
 
+            console2.log("Adding DAI price feed to PRICE");
             addToBatch(
                 bookkeeper,
                 abi.encodeWithSelector(
@@ -391,6 +410,7 @@ contract RBSv2Install_3 is OlyBatch {
                 ERC4626Price.getPriceFromUnderlying.selector,
                 abi.encode(0)
             );
+            console2.log("Adding sDAI price feed to PRICE");
             addToBatch(
                 bookkeeper,
                 abi.encodeWithSelector(
@@ -435,6 +455,7 @@ contract RBSv2Install_3 is OlyBatch {
                     })
                 )
             );
+            console2.log("Adding WETH price feed to PRICE");
             addToBatch(
                 bookkeeper,
                 abi.encodeWithSelector(
@@ -470,6 +491,7 @@ contract RBSv2Install_3 is OlyBatch {
                     )
                 )
             );
+            console2.log("Adding veFXS price feed to PRICE");
             addToBatch(
                 bookkeeper,
                 abi.encodeWithSelector(
@@ -501,6 +523,7 @@ contract RBSv2Install_3 is OlyBatch {
                     )
                 )
             );
+            console2.log("Adding FXS price feed to PRICE");
             addToBatch(
                 bookkeeper,
                 abi.encodeWithSelector(
@@ -533,6 +556,7 @@ contract RBSv2Install_3 is OlyBatch {
                     )
                 )
             );
+            console2.log("Adding USDC price feed to PRICE");
             addToBatch(
                 bookkeeper,
                 abi.encodeWithSelector(
@@ -565,6 +589,7 @@ contract RBSv2Install_3 is OlyBatch {
                 )
             );
 
+            console2.log("Adding OHM price feed to PRICE");
             addToBatch(
                 bookkeeper,
                 abi.encodeWithSelector(
@@ -587,10 +612,12 @@ contract RBSv2Install_3 is OlyBatch {
         address[] memory locations = new address[](2);
         locations[0] = daoWorkingWallet;
         locations[1] = daoMS;
+        console2.log("Adding DAI to TRSRY");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, dai, locations)
         );
+        console2.log("Categorizing DAI as liquid");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -599,6 +626,7 @@ contract RBSv2Install_3 is OlyBatch {
                 AssetCategory.wrap("liquid")
             )
         );
+        console2.log("Categorizing DAI as stable");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -607,6 +635,7 @@ contract RBSv2Install_3 is OlyBatch {
                 AssetCategory.wrap("stable")
             )
         );
+        console2.log("Categorizing DAI as reserves");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -618,10 +647,12 @@ contract RBSv2Install_3 is OlyBatch {
 
         // 8. Add and categorize sDAI on Bookkeeper
         //      - liquid, stable, reserves
+        console2.log("Adding sDAI to TRSRY");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, sdai, locations)
         );
+        console2.log("Categorizing sDAI as liquid");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -630,6 +661,7 @@ contract RBSv2Install_3 is OlyBatch {
                 AssetCategory.wrap("liquid")
             )
         );
+        console2.log("Categorizing sDAI as stable");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -638,6 +670,7 @@ contract RBSv2Install_3 is OlyBatch {
                 AssetCategory.wrap("stable")
             )
         );
+        console2.log("Categorizing sDAI as reserves");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -649,10 +682,12 @@ contract RBSv2Install_3 is OlyBatch {
 
         // 9. Add and categorize WETH
         //      - liquid, volatile, strategic
+        console2.log("Adding WETH to TRSRY");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, weth, locations)
         );
+        console2.log("Categorizing WETH as liquid");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -661,6 +696,7 @@ contract RBSv2Install_3 is OlyBatch {
                 AssetCategory.wrap("liquid")
             )
         );
+        console2.log("Categorizing WETH as volatile");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -669,6 +705,7 @@ contract RBSv2Install_3 is OlyBatch {
                 AssetCategory.wrap("volatile")
             )
         );
+        console2.log("Categorizing WETH as strategic");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -684,10 +721,12 @@ contract RBSv2Install_3 is OlyBatch {
         veFXSLocations[0] = veFXSAllocator;
         veFXSLocations[1] = daoMS;
         veFXSLocations[2] = daoWorkingWallet;
+        console2.log("Adding veFXS to TRSRY");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, veFXS, veFXSLocations)
         );
+        console2.log("Categorizing veFXS as illiquid");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -696,6 +735,7 @@ contract RBSv2Install_3 is OlyBatch {
                 AssetCategory.wrap("illiquid")
             )
         );
+        console2.log("Categorizing veFXS as volatile");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -704,6 +744,7 @@ contract RBSv2Install_3 is OlyBatch {
                 AssetCategory.wrap("volatile")
             )
         );
+        console2.log("Categorizing veFXS as strategic");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -715,10 +756,12 @@ contract RBSv2Install_3 is OlyBatch {
 
         // 11. Add and categorize FXS
         //      - illiquid, volatile, strategic
+        console2.log("Adding FXS to TRSRY");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(Bookkeeper.addAsset.selector, fxs, veFXSLocations)
         );
+        console2.log("Categorizing FXS as liquid");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -727,6 +770,7 @@ contract RBSv2Install_3 is OlyBatch {
                 AssetCategory.wrap("liquid")
             )
         );
+        console2.log("Categorizing FXS as volatile");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -735,6 +779,7 @@ contract RBSv2Install_3 is OlyBatch {
                 AssetCategory.wrap("volatile")
             )
         );
+        console2.log("Categorizing FXS as strategic");
         addToBatch(
             bookkeeper,
             abi.encodeWithSelector(
@@ -758,12 +803,14 @@ contract RBSv2Install_3 is OlyBatch {
 
         // 1. Sets the BunniLens variable on the BunniManager policy
         // This cannot be performed at deployment-time
+        console2.log("Setting BunniLens variable on BunniManager policy");
         addToBatch(
             bunniManager,
             abi.encodeWithSelector(BunniManager.setBunniLens.selector, bunniLens)
         );
 
         // 2. Activate the BunniManager policy
+        console2.log("Activating BunniManager policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -827,6 +874,7 @@ contract RBSv2Install_3 is OlyBatch {
                             block.timestamp
                         );
 
+                console2.log("Withdrawing liquidity from existing Uniswap V3 OHM-wETH pool");
                 (uint256 amount0, uint256 amount1) = abi.decode(
                     addToBatch(
                         positionManager,
@@ -841,12 +889,13 @@ contract RBSv2Install_3 is OlyBatch {
                 wethBalance += ohmIndex == 0 ? amount1 : amount0;
             }
 
-            console2.log("Withdrawn OHM balance (9dp) is", ohmBalance);
-            console2.log("Withdrawn WETH balance (18dp) is", wethBalance);
+            console2.log("    Withdrawn OHM balance (9dp) is", ohmBalance);
+            console2.log("    Withdrawn WETH balance (18dp) is", wethBalance);
         }
 
         // 4. Deploy an LP token for the pool using BunniManager
         {
+            console2.log("Deploying LP token for Uniswap V3 OHM-wETH pool");
             addToBatch(
                 bunniManager,
                 abi.encodeWithSelector(BunniManager.deployPoolToken.selector, ohmWethUniV3Pool)
@@ -855,6 +904,7 @@ contract RBSv2Install_3 is OlyBatch {
 
         // 5. Deposit liquidity into the pool using BunniManager
         {
+            console2.log("Depositing liquidity into Uniswap V3 OHM-wETH pool");
             uint256 poolTokenAmount = abi.decode(
                 addToBatch(
                     bunniManager,
@@ -870,12 +920,13 @@ contract RBSv2Install_3 is OlyBatch {
                 (uint256)
             );
 
-            console2.log("Pool token amount is", poolTokenAmount);
+            console2.log("    Pool token amount is", poolTokenAmount);
         }
 
         // 6. Activate the LP token
         // This will also register the LP token with TRSRY, PRICE and SPPLY
         {
+            console2.log("Activating LP token for Uniswap V3 OHM-wETH pool");
             addToBatch(
                 bunniManager,
                 abi.encodeWithSelector(
@@ -890,6 +941,7 @@ contract RBSv2Install_3 is OlyBatch {
         // 7. Set roles for policy access control
         // BunniManager policy
         //     - Give DAO MS the bunni_admin role
+        console2.log("Granting admin role for BunniManager policy");
         addToBatch(
             rolesAdmin,
             abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("bunni_admin"), daoMS)
@@ -907,12 +959,14 @@ contract RBSv2Install_3 is OlyBatch {
         // 6. Initializes the operator policy
 
         // 1. Activate appraiser policy
+        console2.log("Activating Appraiser policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, appraiser)
         );
 
         // 2. Activate new operator policy
+        console2.log("Activating Operator policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
@@ -923,12 +977,14 @@ contract RBSv2Install_3 is OlyBatch {
         );
 
         // 3. Activate new heart policy
+        console2.log("Activating Heart policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, newHeart)
         );
 
         // 4. Set operator address on bond callback
+        console2.log("Setting operator address on bond callback");
         addToBatch(
             bondCallback,
             abi.encodeWithSelector(BondCallback.setOperator.selector, newOperator)
@@ -937,6 +993,7 @@ contract RBSv2Install_3 is OlyBatch {
         // 5. Set roles for policy access control
         // Operator policy
         //     - Give Heart the operator_operate role
+        console2.log("Granting operator_operate role for Operator policy");
         addToBatch(
             rolesAdmin,
             abi.encodeWithSelector(
@@ -947,6 +1004,7 @@ contract RBSv2Install_3 is OlyBatch {
         );
 
         // 6. Initialize the operator policy
+        console2.log("Initializing Operator policy");
         addToBatch(newOperator, abi.encodeWithSelector(Operator.initialize.selector));
     }
 }

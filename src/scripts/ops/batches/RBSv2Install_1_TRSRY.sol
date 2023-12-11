@@ -152,29 +152,34 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         uint256 daiClearinghouseV1Debt;
         uint256 daiClearinghouseV1_1Debt;
         {
+            console2.log("Getting DAI debt");
+
             ERC20 daiToken = ERC20(dai);
             uint256 daiTotalDebt = trsryModule.totalDebt(daiToken);
-            console2.log("Total DAI debt: %s", daiTotalDebt);
+            console2.log("    Total DAI debt: %s", daiTotalDebt);
 
             daiClearinghouseV1Debt = trsryModule.reserveDebt(daiToken, clearinghouseV1);
-            console2.log("ClearinghouseV1 DAI debt: %s", daiClearinghouseV1Debt);
+            console2.log("    ClearinghouseV1 DAI debt: %s", daiClearinghouseV1Debt);
 
             daiClearinghouseV1_1Debt = trsryModule.reserveDebt(daiToken, clearinghouseV1_1);
-            console2.log("ClearinghouseV1_1 DAI debt: %s", daiClearinghouseV1_1Debt);
+            console2.log("    ClearinghouseV1_1 DAI debt: %s", daiClearinghouseV1_1Debt);
 
             uint256 dsrAllocatorDebt = trsryModule.reserveDebt(daiToken, dsrAllocator);
             // TODO add assertion that this is 0, post-sDAI migration
-            console2.log("DSRAllocator DAI debt: %s", dsrAllocatorDebt);
+            console2.log("    DSRAllocator DAI debt: %s", dsrAllocatorDebt);
 
             assertEq(
                 daiTotalDebt,
                 daiClearinghouseV1Debt + daiClearinghouseV1_1Debt + dsrAllocatorDebt,
                 "Clearinghouse DAI debt should equal total debt"
             );
+            console2.log("    Total DAI debt matches clearinghouse + DSR allocator debt");
         }
 
         // sDAI
         {
+            console2.log("Getting sDAI debt");
+
             ERC20 sdaiToken = ERC20(sdai);
             uint256 sdaiTotalDebt = trsryModule.totalDebt(sdaiToken);
             assertEq(sdaiTotalDebt, 0, "sDAI debt should be 0");
@@ -182,6 +187,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         // FXS
         {
+            console2.log("Getting FXS debt");
+
             ERC20 fxsToken = ERC20(fxs);
             uint256 fxsTotalDebt = trsryModule.totalDebt(fxsToken);
             assertEq(fxsTotalDebt, 0, "FXS debt should be 0");
@@ -190,6 +197,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // veFXS is in an allocator, have no balance in the current treasury, but also don't have any debt value set
         uint256 vefxsBalance;
         {
+            console2.log("Getting veFXS debt");
+
             IFXSAllocator vefxsAllocatorContract = IFXSAllocator(vefxsallocator);
             ERC20 vefxsToken = ERC20(vefxs);
             vefxsBalance = vefxsAllocatorContract.totalAmountDeployed();
@@ -200,6 +209,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         // 3. Upgrade the OlympusTreasury contract to the new version
         {
+            console2.log("Upgrading TRSRY module to new version at %s", newTrsry);
+
             addToBatch(
                 kernel,
                 abi.encodeWithSelector(
@@ -208,7 +219,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                     newTrsry
                 )
             );
-            console2.log("Upgraded OlympusTreasury to new version: %s", newTrsry);
+            console2.log("    Upgraded OlympusTreasury to new version");
         }
 
         // 4. Transfer debt over to the new treasury
@@ -216,6 +227,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         // DAI
         {
+            console2.log("Setting DAI debt on new TRSRY");
+
             ERC20 daiToken = ERC20(dai);
             addToBatch(
                 treasuryCustodian,
@@ -243,6 +256,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         // veFXS
         {
+            console2.log("Setting veFXS debt on new TRSRY");
+
             ERC20 vefxsToken = ERC20(vefxs);
             addToBatch(
                 treasuryCustodian,
