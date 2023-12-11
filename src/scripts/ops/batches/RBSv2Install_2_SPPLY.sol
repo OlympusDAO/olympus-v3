@@ -133,32 +133,13 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         );
 
         // 4. Install the BLVaultSupply submodule on the OlympusSupply module
+        //  - The Lido and LUSD BLVaultManagers were already added as managers at deployment-time
         console2.log("Installing BLVaultSupply submodule");
         addToBatch(
             supplyConfig,
             abi.encodeWithSelector(
                 SupplyConfig.installSubmodule.selector,
                 BLVaultSupply(blVaultSupply)
-            )
-        );
-
-        // 4a. Configure the BLVaultSupply submodule with the existing BLV managers
-        console2.log("Adding BLVLidoManager to BLVaultSupply");
-        addToBatch(
-            supplyConfig,
-            abi.encodeWithSelector(
-                SupplyConfig.execOnSubmodule.selector,
-                toSubKeycode("SPPLY.BLV"),
-                abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLido)
-            )
-        );
-        console2.log("Adding BLVLusdManager to BLVaultSupply");
-        addToBatch(
-            supplyConfig,
-            abi.encodeWithSelector(
-                SupplyConfig.execOnSubmodule.selector,
-                toSubKeycode("SPPLY.BLV"),
-                abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, blVaultManagerLusd)
             )
         );
 
