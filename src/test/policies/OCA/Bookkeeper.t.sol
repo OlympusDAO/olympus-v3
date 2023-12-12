@@ -13,13 +13,10 @@ import {MockVaultManager} from "test/mocks/MockBLVaultManager.sol";
 import "src/Submodules.sol";
 import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
 import {OlympusPricev2, PRICEv2, PriceSubmodule} from "modules/PRICE/OlympusPrice.v2.sol";
-import {OlympusSupply, SPPLYv1, Category as SupplyCategory, SupplySubmodule} from "modules/SPPLY/OlympusSupply.sol";
-import {OlympusTreasury, TRSRYv1_1, CategoryGroup as AssetCategoryGroup, Category as AssetCategory} from "modules/TRSRY/OlympusTreasury.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
-import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 
 // Tests for Bookkeeper v1.0.0
 //
@@ -48,42 +45,9 @@ import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 // [X] installSubmodule
 //     [X] only "bookkeeper_admin" role can call
 //     [X] inputs to PRICEv2.installSubmodule are correct
-//     [X] inputs to SPPLYv1.installSubmodule are correct
 // [X] upgradeSubmodule
 //     [X] only "bookkeeper_admin" role can call
 //     [X] inputs to PRICEv2.upgradeSubmodule are correct
-//     [X] inputs to SPPLYv1.upgradeSubmodule are correct
-//
-// SPPLYv1 Configuration
-// [X] addAsset
-//     [X] only "bookkeeper_policy" role can call
-//     [X] inputs to TRSRY.addAsset are correct
-// [X] addAssetLocation
-//     [X] only "bookkeeper_policy" role can call
-//     [X] inputs to TRSRY.addAssetLocation are correct
-// [X] removeAssetLocation
-//     [X] only "bookkeeper_policy" role can call
-//     [X] inputs to TRSRY.removeAssetLocation are correct
-// [X] addAssetCategoryGroup
-//     [X] only "bookkeeper_policy" role can call
-//     [X] inputs to TRSRY.addAssetCategoryGroup are correct
-// [X] addAssetCategory
-//     [X] only "bookkeeper_policy" role can call
-//     [X] inputs to TRSRY.addAssetCategory are correct
-// [X] categorize
-//     [X] only "bookkeeper_policy" role can call
-//     [X] inputs to TRSRY.categorize are correct
-//
-// TRSRYv1.1 Configuration
-// [X] addSupplyCategory
-//     [X] only "bookkeeper_policy" role can call
-//     [X] inputs to SPPLY.addCategory are correct
-// [X] removeSupplyCategory
-//     [X] only "bookkeeper_policy" role can call
-//     [X] inputs to SPPLY.removeCategory are correct
-// [X] categorizeSupply
-//     [X] only "bookkeeper_policy" role can call
-//     [X] inputs to SPPLY.categorize are correct
 
 type Category is bytes32;
 type CategoryGroup is bytes32;
@@ -118,48 +82,6 @@ contract MockUpgradedSubmodulePrice is PriceSubmodule {
     }
 }
 
-contract MockUpgradedSubmoduleSupply is SupplySubmodule {
-    constructor(Module parent_) Submodule(parent_) {}
-
-    function SUBKEYCODE() public pure override returns (SubKeycode) {
-        return toSubKeycode("SPPLY.BLV");
-    }
-
-    function VERSION() public pure override returns (uint8 major, uint8 minor) {
-        major = 2;
-        minor = 0;
-    }
-
-    function getCollateralizedOhm() external view override returns (uint256) {
-        return 0;
-    }
-
-    function getProtocolOwnedBorrowableOhm() external view override returns (uint256) {
-        return 0;
-    }
-
-    function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
-        return 0;
-    }
-
-    function getProtocolOwnedTreasuryOhm() external view override returns (uint256) {
-        return 0;
-    }
-
-    function getSourceCount() external view override returns (uint256) {
-        return 0;
-    }
-
-    function getProtocolOwnedLiquidityReserves()
-        external
-        view
-        override
-        returns (SPPLYv1.Reserves[] memory)
-    {
-        return new SPPLYv1.Reserves[](0);
-    }
-}
-
 contract BookkeeperTest is Test {
     MockPriceFeed internal ohmUsdPriceFeed;
     MockPriceFeed internal ohmEthPriceFeed;
@@ -175,8 +97,6 @@ contract BookkeeperTest is Test {
     Kernel internal kernel;
     Bookkeeper internal bookkeeper;
     OlympusPricev2 internal PRICE;
-    OlympusSupply internal SPPLY;
-    OlympusTreasury internal TRSRY;
     RolesAdmin internal rolesAdmin;
     OlympusRoles internal ROLES;
     ChainlinkPriceFeeds internal chainlinkPrice;
@@ -232,8 +152,6 @@ contract BookkeeperTest is Test {
         kernel = new Kernel();
         PRICE = new OlympusPricev2(kernel, DECIMALS, OBSERVATION_FREQUENCY);
         ROLES = new OlympusRoles(kernel);
-        SPPLY = new OlympusSupply(kernel, olympusTokens, 0);
-        TRSRY = new OlympusTreasury(kernel);
         bookkeeper = new Bookkeeper(kernel);
         rolesAdmin = new RolesAdmin(kernel);
 
@@ -244,8 +162,6 @@ contract BookkeeperTest is Test {
         // Install contracts on kernel
         kernel.executeAction(Actions.InstallModule, address(ROLES));
         kernel.executeAction(Actions.InstallModule, address(PRICE));
-        kernel.executeAction(Actions.InstallModule, address(SPPLY));
-        kernel.executeAction(Actions.InstallModule, address(TRSRY));
         kernel.executeAction(Actions.ActivatePolicy, address(bookkeeper));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
@@ -255,8 +171,8 @@ contract BookkeeperTest is Test {
 
         // Install base submodules on PRICE
         vm.startPrank(admin);
-        bookkeeper.installSubmodule(toKeycode("PRICE"), chainlinkPrice);
-        bookkeeper.installSubmodule(toKeycode("PRICE"), strategy);
+        bookkeeper.installSubmodule(chainlinkPrice);
+        bookkeeper.installSubmodule(strategy);
         vm.stopPrank();
     }
 
@@ -336,26 +252,22 @@ contract BookkeeperTest is Test {
     }
 
     /* ========== Bookkeeper Setup and Permissions ========== */
+
     function test_configureDependencies() public {
-        Keycode[] memory expectedDeps = new Keycode[](4);
+        Keycode[] memory expectedDeps = new Keycode[](2);
         expectedDeps[0] = toKeycode("ROLES");
         expectedDeps[1] = toKeycode("PRICE");
-        expectedDeps[2] = toKeycode("SPPLY");
-        expectedDeps[3] = toKeycode("TRSRY");
 
         Keycode[] memory deps = bookkeeper.configureDependencies();
         assertEq(deps.length, expectedDeps.length);
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
-        assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
-        assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](18);
+        Permissions[] memory expectedPerms = new Permissions[](8);
         Keycode PRICE_KEYCODE = toKeycode("PRICE");
-        Keycode SPPLY_KEYCODE = toKeycode("SPPLY");
-        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+
         // PRICE Permissions
         expectedPerms[0] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
         expectedPerms[1] = Permissions(PRICE_KEYCODE, PRICE.removeAsset.selector);
@@ -364,19 +276,7 @@ contract BookkeeperTest is Test {
         expectedPerms[4] = Permissions(PRICE_KEYCODE, PRICE.updateAssetMovingAverage.selector);
         expectedPerms[5] = Permissions(PRICE_KEYCODE, PRICE.installSubmodule.selector);
         expectedPerms[6] = Permissions(PRICE_KEYCODE, PRICE.upgradeSubmodule.selector);
-        // SPPLY Permissions
-        expectedPerms[7] = Permissions(SPPLY_KEYCODE, SPPLY.addCategory.selector);
-        expectedPerms[8] = Permissions(SPPLY_KEYCODE, SPPLY.removeCategory.selector);
-        expectedPerms[9] = Permissions(SPPLY_KEYCODE, SPPLY.categorize.selector);
-        expectedPerms[10] = Permissions(SPPLY_KEYCODE, SPPLY.installSubmodule.selector);
-        expectedPerms[11] = Permissions(SPPLY_KEYCODE, SPPLY.upgradeSubmodule.selector);
-        // TRSRY Permissions
-        expectedPerms[12] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
-        expectedPerms[13] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
-        expectedPerms[14] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
-        expectedPerms[15] = Permissions(TRSRY_KEYCODE, TRSRY.addCategoryGroup.selector);
-        expectedPerms[16] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
-        expectedPerms[17] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+        expectedPerms[7] = Permissions(PRICE_KEYCODE, PRICE.execOnSubmodule.selector);
 
         Permissions[] memory perms = bookkeeper.requestPermissions();
         assertEq(perms.length, expectedPerms.length);
@@ -387,6 +287,7 @@ contract BookkeeperTest is Test {
     }
 
     /* ========== PRICEv2 Configuration ========== */
+
     function testRevert_addAssetPrice_onlyPolicy(address user_) public {
         vm.assume(user_ != policy);
 
@@ -676,7 +577,7 @@ contract BookkeeperTest is Test {
             abi.encode(1)
         );
         vm.prank(admin);
-        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
+        bookkeeper.installSubmodule(newStrategy);
 
         // Try to update strategy for asset on PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
@@ -728,7 +629,7 @@ contract BookkeeperTest is Test {
             abi.encode(1)
         );
         vm.prank(admin);
-        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
+        bookkeeper.installSubmodule(newStrategy);
 
         // Update strategy for asset on PRICEv2 with policy account
         vm.prank(policy);
@@ -883,7 +784,7 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
+        bookkeeper.installSubmodule(newStrategy);
 
         // Confirm submodule was not installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -891,14 +792,14 @@ contract BookkeeperTest is Test {
 
         // Try to install submodule with admin account, expect success
         vm.prank(admin);
-        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
+        bookkeeper.installSubmodule(newStrategy);
 
         // Confirm submodule was installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
         assertEq(submodule, address(newStrategy));
     }
 
-    function test_installSubmodule_PRICE() public {
+    function test_installSubmodule() public {
         // Create new submodule to install
         MockStrategy newStrategy = new MockStrategy(PRICE);
 
@@ -908,35 +809,11 @@ contract BookkeeperTest is Test {
 
         // Install new submodule with admin account
         vm.prank(admin);
-        bookkeeper.installSubmodule(toKeycode("PRICE"), newStrategy);
+        bookkeeper.installSubmodule(newStrategy);
 
         // Confirm submodule was installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
         assertEq(submodule, address(newStrategy));
-    }
-
-    function test_installSubmodule_SPPLY() public {
-        // Create vault managers
-        MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
-        MockVaultManager[] memory vaultManagers = new MockVaultManager[](1);
-        address[] memory vaultManagerAddresses = new address[](1);
-        vaultManagers[0] = vaultManager1;
-        vaultManagerAddresses[0] = address(vaultManager1);
-
-        // Create new submodule to install
-        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
-
-        // Confirm submodule is not installed on SPPLY
-        address submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
-        assertEq(submodule, address(0));
-
-        // Install new submodule with admin account
-        vm.prank(admin);
-        bookkeeper.installSubmodule(toKeycode("SPPLY"), supplyBLV);
-
-        // Confirm submodule was installed
-        submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
-        assertEq(submodule, address(supplyBLV));
     }
 
     function testRevert_upgradeSubmodule_onlyAdmin(address user_) public {
@@ -959,7 +836,7 @@ contract BookkeeperTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.upgradeSubmodule(toKeycode("PRICE"), newChainlink);
+        bookkeeper.upgradeSubmodule(newChainlink);
 
         // Confirm chainlink submodule was not upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -970,7 +847,7 @@ contract BookkeeperTest is Test {
 
         // Try to upgrade chainlink submodule with admin account, expect success
         vm.prank(admin);
-        bookkeeper.upgradeSubmodule(toKeycode("PRICE"), newChainlink);
+        bookkeeper.upgradeSubmodule(newChainlink);
 
         // Confirm chainlink submodule was upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -980,7 +857,7 @@ contract BookkeeperTest is Test {
         assertEq(minor, 0);
     }
 
-    function test_upgradeSubmodule_PRICE() public {
+    function test_upgradeSubmodule() public {
         // Create mock upgrade for chainlink submodule
         MockUpgradedSubmodulePrice newChainlink = new MockUpgradedSubmodulePrice(PRICE);
 
@@ -993,7 +870,7 @@ contract BookkeeperTest is Test {
 
         // Upgrade chainlink submodule with admin account, expect success
         vm.prank(admin);
-        bookkeeper.upgradeSubmodule(toKeycode("PRICE"), newChainlink);
+        bookkeeper.upgradeSubmodule(newChainlink);
 
         // Confirm chainlink submodule was upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -1003,337 +880,45 @@ contract BookkeeperTest is Test {
         assertEq(minor, 0);
     }
 
-    function test_upgradeSubmodule_SPPLY() public {
-        // Create vault managers
-        MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
-        MockVaultManager[] memory vaultManagers = new MockVaultManager[](1);
-        address[] memory vaultManagerAddresses = new address[](1);
-        vaultManagers[0] = vaultManager1;
-        vaultManagerAddresses[0] = address(vaultManager1);
-
-        // Create new submodule to install
-        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
-
-        // Install new submodule with admin account
-        vm.prank(admin);
-        bookkeeper.installSubmodule(toKeycode("SPPLY"), supplyBLV);
-
-        // Confirm BLV submodule is installed on SPPLY and the version is 1.0
-        address submodule = address(SPPLY.getSubmoduleForKeycode(toSubKeycode("SPPLY.BLV")));
-        assertEq(submodule, address(supplyBLV));
-        (uint8 major, uint8 minor) = Submodule(submodule).VERSION();
-        assertEq(major, 1);
-        assertEq(minor, 0);
-
-        // Create mock upgrade for BLV submodule
-        MockUpgradedSubmoduleSupply newBLV = new MockUpgradedSubmoduleSupply(SPPLY);
-
-        // Upgrade BLV submodule with admin account, expect success
-        vm.prank(admin);
-        bookkeeper.upgradeSubmodule(toKeycode("SPPLY"), newBLV);
-
-        // Confirm BLV submodule was upgraded
-        submodule = address(SPPLY.getSubmoduleForKeycode(toSubKeycode("SPPLY.BLV")));
-        assertEq(submodule, address(newBLV));
-        (major, minor) = Submodule(submodule).VERSION();
-        assertEq(major, 2);
-        assertEq(minor, 0);
-    }
-
-    /* ========== SPPLYv1 Configuration ========== */
-
-    function testRevert_addSupplyCategory_onlyPolicy(address user_) public {
-        vm.assume(user_ != policy);
-
-        // Try to add category to SPPLYv1 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
-        );
-        vm.expectRevert(err);
-        vm.prank(user_);
-        bookkeeper.addSupplyCategory(
-            SupplyCategory.wrap("test_supply_category"),
-            false,
-            bytes4(0),
-            bytes4(0)
-        );
-    }
-
-    function test_addSupplyCategory() public {
-        SupplyCategory[] memory initCategories = SPPLY.getCategories();
+    function test_execOnSubmodule() public {
+        // Perform an action on the submodule
+        uint256[] memory samplePrices = new uint256[](1);
+        samplePrices[0] = 11e18;
 
         vm.prank(policy);
-        bookkeeper.addSupplyCategory(
-            SupplyCategory.wrap("test_supply_category"),
-            false,
-            bytes4(0),
-            bytes4(0)
+        bookkeeper.execOnSubmodule(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            abi.encodeWithSelector(
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                samplePrices,
+                bytes("")
+            )
         );
 
-        // Check SPPLY categories
-        SupplyCategory[] memory postCategories = SPPLY.getCategories();
-        assertEq(initCategories.length + 1, postCategories.length);
-        assertEq(
-            SupplyCategory.unwrap(postCategories[postCategories.length - 1]),
-            bytes32("test_supply_category")
-        );
+        // No error
     }
 
-    function testRevert_removeSupplyCategory_onlyPolicy(address user_) public {
+    function test_execOnSubmodule_onlyPolicy(address user_) public {
         vm.assume(user_ != policy);
 
-        // Try to remove category from SPPLYv1 with non-policy account, expect revert
+        // Perform an action on the submodule
+        uint256[] memory samplePrices = new uint256[](1);
+        samplePrices[0] = 11e18;
+
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
             bytes32("bookkeeper_policy")
         );
         vm.expectRevert(err);
+
         vm.prank(user_);
-        bookkeeper.removeSupplyCategory(SupplyCategory.wrap("test_supply_category"));
-    }
-
-    function test_removeSupplyCategory(address user_) public {
-        SupplyCategory[] memory initCategories = SPPLY.getCategories();
-
-        vm.startPrank(policy);
-        bookkeeper.addSupplyCategory(
-            SupplyCategory.wrap("test_supply_category"),
-            false,
-            bytes4(0),
-            bytes4(0)
+        bookkeeper.execOnSubmodule(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            abi.encodeWithSelector(
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                samplePrices,
+                bytes("")
+            )
         );
-        bookkeeper.removeSupplyCategory(SupplyCategory.wrap("test_supply_category"));
-
-        // Check SPPLY categories
-        SupplyCategory[] memory postCategories = SPPLY.getCategories();
-        assertEq(initCategories.length, postCategories.length);
-    }
-
-    function testRevert_categorizeSupply_onlyPolicy(address user_) public {
-        vm.assume(user_ != policy);
-
-        // Try to remove category from SPPLYv1 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
-        );
-        vm.expectRevert(err);
-        vm.prank(user_);
-        bookkeeper.categorizeSupply(address(0), SupplyCategory.wrap("test_supply_category"));
-    }
-
-    function test_categorizeSupply(address user_) public {
-        vm.startPrank(policy);
-        bookkeeper.addSupplyCategory(
-            SupplyCategory.wrap("test_supply_category"),
-            false,
-            bytes4(0),
-            bytes4(0)
-        );
-        bookkeeper.categorizeSupply(address(1), SupplyCategory.wrap("test_supply_category"));
-
-        // Check SPPLY category locations
-        address[] memory locations = SPPLY.getLocationsByCategory(
-            SupplyCategory.wrap("test_supply_category")
-        );
-        assertEq(locations.length, 1);
-        assertEq(locations[0], address(1));
-    }
-
-    /* ========== TRSRYv1.1 Configuration ========== */
-
-    function testRevert_addAsset_onlyPolicy(address user_) public {
-        vm.assume(user_ != policy);
-        address[] memory locations = new address[](2);
-        locations[0] = address(1);
-        locations[1] = address(2);
-
-        // Try to add category to SPPLYv1 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
-        );
-        vm.expectRevert(err);
-        vm.prank(user_);
-        bookkeeper.addAsset(address(reserve), locations);
-    }
-
-    function test_addAsset() public {
-        address[] memory locations = new address[](2);
-        locations[0] = address(1);
-        locations[1] = address(2);
-
-        vm.prank(policy);
-        bookkeeper.addAsset(address(reserve), locations);
-
-        // Check TRSRY assets
-        address[] memory assets = TRSRY.getAssets();
-        assertEq(assets.length, 1);
-        assertEq(assets[0], address(reserve));
-
-        // Check TRSRY asset locations
-        TRSRYv1_1.Asset memory assetData = TRSRY.getAssetData(address(reserve));
-        assertEq(assetData.locations.length, 2);
-        assertEq(assetData.locations[0], address(1));
-        assertEq(assetData.locations[1], address(2));
-        assertEq(assetData.approved, true);
-        assertEq(assetData.updatedAt, uint48(block.timestamp));
-    }
-
-    function testRevert_addAssetLocation_onlyPolicy(address user_) public {
-        vm.assume(user_ != policy);
-
-        // Try to remove category from SPPLYv1 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
-        );
-        vm.expectRevert(err);
-        vm.prank(user_);
-        bookkeeper.addAssetLocation(address(reserve), address(2));
-    }
-
-    function test_addAssetLocation() public {
-        address[] memory locations = new address[](1);
-        locations[0] = address(1);
-
-        vm.prank(policy);
-        bookkeeper.addAsset(address(reserve), locations);
-
-        // Cache TRSRY asset locations
-        TRSRYv1_1.Asset memory initAssetData = TRSRY.getAssetData(address(reserve));
-
-        vm.prank(policy);
-        bookkeeper.addAssetLocation(address(reserve), address(2));
-
-        // Check TRSRY asset locations
-        TRSRYv1_1.Asset memory postAssetData = TRSRY.getAssetData(address(reserve));
-        assertEq(initAssetData.locations.length + 1, postAssetData.locations.length);
-        assertEq(postAssetData.locations[1], address(2));
-    }
-
-    function testRevert_removeAssetLocation_onlyPolicy(address user_) public {
-        vm.assume(user_ != policy);
-
-        // Try to remove category from SPPLYv1 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
-        );
-        vm.expectRevert(err);
-        vm.prank(user_);
-        bookkeeper.removeAssetLocation(address(reserve), address(0));
-    }
-
-    function test_removeAssetLocation() public {
-        address[] memory locations = new address[](2);
-        locations[0] = address(1);
-        locations[1] = address(2);
-
-        vm.prank(policy);
-        bookkeeper.addAsset(address(reserve), locations);
-
-        // Cache TRSRY asset locations
-        TRSRYv1_1.Asset memory initAssetData = TRSRY.getAssetData(address(reserve));
-
-        vm.prank(policy);
-        bookkeeper.removeAssetLocation(address(reserve), address(2));
-
-        // Check TRSRY asset locations
-        TRSRYv1_1.Asset memory postAssetData = TRSRY.getAssetData(address(reserve));
-        assertEq(initAssetData.locations.length - 1, postAssetData.locations.length);
-    }
-
-    function testRevert_addAssetCategoryGroup_onlyPolicy(address user_) public {
-        vm.assume(user_ != policy);
-
-        // Try to remove category from SPPLYv1 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
-        );
-        vm.expectRevert(err);
-        vm.prank(user_);
-        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
-    }
-
-    function test_addAssetCategoryGroup(address user_) public {
-        vm.prank(policy);
-        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
-
-        // Check TRSRY asset category groups
-        AssetCategoryGroup group0 = TRSRY.categoryGroups(0);
-        assertEq(AssetCategoryGroup.unwrap(group0), bytes32("liquidity-preference"));
-        AssetCategoryGroup group1 = TRSRY.categoryGroups(1);
-        assertEq(AssetCategoryGroup.unwrap(group1), bytes32("value-baskets"));
-        AssetCategoryGroup group2 = TRSRY.categoryGroups(2);
-        assertEq(AssetCategoryGroup.unwrap(group2), bytes32("market-sensitivity"));
-        AssetCategoryGroup group3 = TRSRY.categoryGroups(3);
-        assertEq(AssetCategoryGroup.unwrap(group3), bytes32("test-asset-category-group"));
-    }
-
-    function testRevert_addAssetCategory_onlyPolicy(address user_) public {
-        vm.assume(user_ != policy);
-
-        // Try to remove category from SPPLYv1 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
-        );
-        vm.expectRevert(err);
-        vm.prank(user_);
-        bookkeeper.addAssetCategory(
-            AssetCategory.wrap("test-asset-category"),
-            AssetCategoryGroup.wrap("test-asset-category-group")
-        );
-    }
-
-    function test_addAssetCategory(address user_) public {
-        vm.startPrank(policy);
-        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
-        bookkeeper.addAssetCategory(
-            AssetCategory.wrap("test-asset-category"),
-            AssetCategoryGroup.wrap("test-asset-category-group")
-        );
-
-        // Check TRSRY asset category for a given category group
-        AssetCategoryGroup group = TRSRY.categoryToGroup(AssetCategory.wrap("test-asset-category"));
-        assertEq(AssetCategoryGroup.unwrap(group), bytes32("test-asset-category-group"));
-    }
-
-    function testRevert_categorizeAsset_onlyPolicy(address user_) public {
-        vm.assume(user_ != policy);
-
-        // Try to remove category from SPPLYv1 with non-policy account, expect revert
-        bytes memory err = abi.encodeWithSignature(
-            "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
-        );
-        vm.expectRevert(err);
-        vm.prank(user_);
-        bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("test-asset-category"));
-    }
-
-    function test_categorizeAsset() public {
-        address[] memory locations = new address[](2);
-        locations[0] = address(1);
-        locations[1] = address(2);
-
-        vm.startPrank(policy);
-        bookkeeper.addAssetCategoryGroup(AssetCategoryGroup.wrap("test-asset-category-group"));
-        bookkeeper.addAssetCategory(
-            AssetCategory.wrap("test-asset-category"),
-            AssetCategoryGroup.wrap("test-asset-category-group")
-        );
-        bookkeeper.addAsset(address(reserve), locations);
-        bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("test-asset-category"));
-
-        // Check TRSRY asset by category
-        address[] memory assets = TRSRY.getAssetsByCategory(
-            AssetCategory.wrap("test-asset-category")
-        );
-        assertEq(assets.length, 1);
-        assertEq(assets[0], address(reserve));
     }
 }

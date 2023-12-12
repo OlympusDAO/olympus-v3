@@ -24,13 +24,13 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import "src/Kernel.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
-import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusTreasury, Category as AssetCategory} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {Operator} from "policies/RBS/Operator.sol";
-import {Bookkeeper, AssetCategory} from "policies/OCA/Bookkeeper.sol";
+import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Appraiser, IAppraiser as IAppraiserMetric} from "policies/OCA/Appraiser.sol";
 import {BondCallback} from "policies/Bonds/BondCallback.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -67,7 +67,7 @@ contract OperatorTest is Test {
     Operator internal operator;
     BondCallback internal callback;
     RolesAdmin internal rolesAdmin;
-    Bookkeeper internal bookkeeper;
+    TreasuryCustodian internal treasuryCustodian;
     Appraiser internal appraiser;
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
@@ -145,8 +145,8 @@ contract OperatorTest is Test {
             rolesAdmin = new RolesAdmin(kernel);
             /// Deploy bond callback
             callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
-            // Deploy new bookkeeper
-            bookkeeper = new Bookkeeper(kernel);
+            // Deploy new TreasuryCustodian
+            treasuryCustodian = new TreasuryCustodian(kernel);
             // Deploy new appraiser
             appraiser = new Appraiser(kernel);
             /// Deploy operator
@@ -188,15 +188,15 @@ contract OperatorTest is Test {
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
             kernel.executeAction(Actions.ActivatePolicy, address(appraiser));
-            kernel.executeAction(Actions.ActivatePolicy, address(bookkeeper));
+            kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
             /// Configure access control
 
-            /// Bookkeeper roles
-            rolesAdmin.grantRole("bookkeeper_policy", policy);
-            rolesAdmin.grantRole("bookkeeper_admin", guardian);
+            /// TreasuryCustodian roles
+            rolesAdmin.grantRole("custodian", policy);
+            rolesAdmin.grantRole("custodian", guardian);
 
             /// Operator roles
             rolesAdmin.grantRole("operator_operate", address(heart));
@@ -214,11 +214,11 @@ contract OperatorTest is Test {
         address[] memory locations = new address[](1);
         locations[0] = address(clearinghouse);
         vm.startPrank(policy);
-        bookkeeper.addAsset(address(reserve), locations);
-        bookkeeper.addAsset(address(wrappedReserve), locations);
-        bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("liquid"));
-        bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("stable"));
-        bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("reserves"));
+        treasuryCustodian.addAsset(address(reserve), locations);
+        treasuryCustodian.addAsset(address(wrappedReserve), locations);
+        treasuryCustodian.categorizeAsset(address(reserve), AssetCategory.wrap("liquid"));
+        treasuryCustodian.categorizeAsset(address(reserve), AssetCategory.wrap("stable"));
+        treasuryCustodian.categorizeAsset(address(reserve), AssetCategory.wrap("reserves"));
         vm.stopPrank();
 
         /// Set operator on the callback
