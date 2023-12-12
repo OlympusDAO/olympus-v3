@@ -188,11 +188,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
         console2.log("Granting operator_policy role to DAO MS");
         addToBatch(
             rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("operator_policy"),
-                daoMS
-            )
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("operator_policy"), daoMS)
         );
 
         // 1b. Actual deactivation
@@ -326,9 +322,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
     }
 
     /// @notice     Configures PRICEv2 module
-    function RBSv2Install_3_2(
-        bool send_
-    ) public isPolicyBatch(send_) {
+    function RBSv2Install_3_2(bool send_) public isPolicyBatch(send_) {
         // This Policy MS batch:
         // 1. Configures DAI on PRICE
         // 2. Configures sDAI on PRICE
