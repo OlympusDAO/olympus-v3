@@ -1322,6 +1322,10 @@ contract OlympusDeploy is Script {
         if (address(TRSRY) == address(0)) revert("TRSRY address not set");
         if (address(balancerVault) == address(0)) revert("balancerVault address not set");
 
+        // Verify that the TRSRY version () is correct
+        (uint8 treasuryMajor, uint8 treasuryMinor) = TRSRY.VERSION();
+        if (treasuryMajor != 1 && treasuryMinor != 1) revert("TRSRY is not v1.1");
+
         AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](0);
 
         // Deploy AuraBalancerSupply submodule
