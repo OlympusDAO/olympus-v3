@@ -10,7 +10,6 @@ import "src/Kernel.sol";
 // Bophades modules
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import "modules/PRICE/OlympusPrice.v2.sol";
-import {Category as AssetCategory} from "modules/TRSRY/TRSRY.v1.sol";
 
 // PRICE submodules
 import {BalancerPoolTokenPrice} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
@@ -51,7 +50,6 @@ contract RBSv2Install_3 is OlyBatch {
     address operator;
     address rolesAdmin;
     address bondCallback;
-    address treasuryCustodian;
     address priceConfig;
 
     // Tokens
@@ -117,7 +115,6 @@ contract RBSv2Install_3 is OlyBatch {
         operator = envAddress("last", "olympus.policies.Operator");
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
         bondCallback = envAddress("current", "olympus.policies.BondCallback");
-        treasuryCustodian = envAddress("current", "olympus.policies.TreasuryCustodian");
         priceConfig = envAddress("current", "olympus.policies.OlympusPriceConfig");
 
         ohm = envAddress("current", "olympus.legacy.OHM");
@@ -224,18 +221,7 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 5a. Disable TreasuryCustodian policy (superseded by BookKeeper)
-        console2.log("Deactivating TreasuryCustodian policy");
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.DeactivatePolicy,
-                treasuryCustodian
-            )
-        );
-
-        // 5b. Disable PriceConfig policy (superseded by BookKeeper)
+        // 5a. Disable PriceConfig policy (superseded by BookKeeper)
         console2.log("Deactivating PriceConfig policy");
         addToBatch(
             kernel,
@@ -342,11 +328,6 @@ contract RBSv2Install_3 is OlyBatch {
         // 5. Configure FXS on PRICE
         // 6. Configure USDC on PRICE
         // 7. Configure OHM on PRICE
-        // 7. Add and categorize DAI in TRSRY
-        // 8. Add and categorize sDAI in TRSRY
-        // 9. Add and categorize WETH in TRSRY
-        // 10. Add and categorize veFXS in TRSRY
-        // 11. Add and categorize FXS in TRSRY
 
         // 1. Configure DAI price feed and moving average data on PRICE
         // - Uses the Chainlink price feed with the standard observation window
@@ -605,189 +586,6 @@ contract RBSv2Install_3 is OlyBatch {
                 )
             );
         }
-
-        // 7. Add and categorize DAI on Bookkeeper
-        //      - liquid, stable, reserves
-        //      - Clearinghouse policies use the debt functionality, so don't need to be explicitly added
-        address[] memory locations = new address[](2);
-        locations[0] = daoWorkingWallet;
-        locations[1] = daoMS;
-        console2.log("Adding DAI to TRSRY");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.addAsset.selector, dai, locations)
-        );
-        console2.log("Categorizing DAI as liquid");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                dai,
-                AssetCategory.wrap("liquid")
-            )
-        );
-        console2.log("Categorizing DAI as stable");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                dai,
-                AssetCategory.wrap("stable")
-            )
-        );
-        console2.log("Categorizing DAI as reserves");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                dai,
-                AssetCategory.wrap("reserves")
-            )
-        );
-
-        // 8. Add and categorize sDAI on Bookkeeper
-        //      - liquid, stable, reserves
-        console2.log("Adding sDAI to TRSRY");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.addAsset.selector, sdai, locations)
-        );
-        console2.log("Categorizing sDAI as liquid");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                sdai,
-                AssetCategory.wrap("liquid")
-            )
-        );
-        console2.log("Categorizing sDAI as stable");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                sdai,
-                AssetCategory.wrap("stable")
-            )
-        );
-        console2.log("Categorizing sDAI as reserves");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                sdai,
-                AssetCategory.wrap("reserves")
-            )
-        );
-
-        // 9. Add and categorize WETH
-        //      - liquid, volatile, strategic
-        console2.log("Adding WETH to TRSRY");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.addAsset.selector, weth, locations)
-        );
-        console2.log("Categorizing WETH as liquid");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                weth,
-                AssetCategory.wrap("liquid")
-            )
-        );
-        console2.log("Categorizing WETH as volatile");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                weth,
-                AssetCategory.wrap("volatile")
-            )
-        );
-        console2.log("Categorizing WETH as strategic");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                weth,
-                AssetCategory.wrap("strategic")
-            )
-        );
-
-        // 10. Add and categorize veFXS
-        //      - illiquid, volatile, strategic
-        address[] memory veFXSLocations = new address[](3);
-        veFXSLocations[0] = veFXSAllocator;
-        veFXSLocations[1] = daoMS;
-        veFXSLocations[2] = daoWorkingWallet;
-        console2.log("Adding veFXS to TRSRY");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.addAsset.selector, veFXS, veFXSLocations)
-        );
-        console2.log("Categorizing veFXS as illiquid");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                veFXS,
-                AssetCategory.wrap("illiquid")
-            )
-        );
-        console2.log("Categorizing veFXS as volatile");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                veFXS,
-                AssetCategory.wrap("volatile")
-            )
-        );
-        console2.log("Categorizing veFXS as strategic");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                veFXS,
-                AssetCategory.wrap("strategic")
-            )
-        );
-
-        // 11. Add and categorize FXS
-        //      - illiquid, volatile, strategic
-        console2.log("Adding FXS to TRSRY");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.addAsset.selector, fxs, veFXSLocations)
-        );
-        console2.log("Categorizing FXS as liquid");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                fxs,
-                AssetCategory.wrap("liquid")
-            )
-        );
-        console2.log("Categorizing FXS as volatile");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                fxs,
-                AssetCategory.wrap("volatile")
-            )
-        );
-        console2.log("Categorizing FXS as strategic");
-        addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(
-                Bookkeeper.categorizeAsset.selector,
-                fxs,
-                AssetCategory.wrap("strategic")
-            )
-        );
     }
 
     /// @notice     Configures protocol owned liquidity
