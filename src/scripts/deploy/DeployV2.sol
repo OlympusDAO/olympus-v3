@@ -767,6 +767,10 @@ contract OlympusDeploy is Script {
         if (address(appraiser) == address(0)) revert("Appraiser address not set");
         if (address(zeroDistributor) == address(0)) revert("ZeroDistributor address not set");
 
+        // Check the version of Operator
+        (uint8 operatorMajor, uint8 operatorMinor) = operatorV2.VERSION();
+        if (operatorMajor != 2) revert("OperatorV2 is not version 2");
+
         // Deploy OlympusHeart policy
         vm.broadcast();
         heartV2 = new OlympusHeart(
