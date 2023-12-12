@@ -9,42 +9,42 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
 import "src/Submodules.sol";
-import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
+import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
 import {OlympusPricev2, PRICEv2, PriceSubmodule} from "modules/PRICE/OlympusPrice.v2.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 
-// Tests for Bookkeeper v1.0.0
+// Tests for PriceConfig v1.0.0
 //
-// Bookkeeper Setup and Permissions
+// PriceConfig Setup and Permissions
 // [X] configureDependencies
 // [X] requestPermissions
 //
 // PRICEv2 Configuration
 // [X] addAssetPrice
-//     [X] only "bookkeeper_policy" role can call
+//     [X] only "priceconfig_policy" role can call
 //     [X] inputs to PRICEv2.addAsset are correct
 // [X] removeAssetPrice
-//     [X] only "bookkeeper_policy" role can call
+//     [X] only "priceconfig_policy" role can call
 //     [X] inputs to PRICEv2.removeAsset are correct
 // [X] updateAssetPriceFeeds
-//     [X] only "bookkeeper_policy" role can call
+//     [X] only "priceconfig_policy" role can call
 //     [X] inputs to PRICEv2.updateAssetPriceFeeds are correct
 // [X] updateAssetPriceStrategy
-//     [X] only "bookkeeper_policy" role can call
+//     [X] only "priceconfig_policy" role can call
 //     [X] inputs to PRICEv2.updateAssetPriceStrategy are correct
 // [X] updateAssetMovingAverage
-//     [X] only "bookkeeper_policy" role can call
+//     [X] only "priceconfig_policy" role can call
 //     [X] inputs to PRICEv2.updateAssetMovingAverage are correct
 //
 // PRICEv2 Submodule Installation/Upgrade
 // [X] installSubmodule
-//     [X] only "bookkeeper_admin" role can call
+//     [X] only "priceconfig_admin" role can call
 //     [X] inputs to PRICEv2.installSubmodule are correct
 // [X] upgradeSubmodule
-//     [X] only "bookkeeper_admin" role can call
+//     [X] only "priceconfig_admin" role can call
 //     [X] inputs to PRICEv2.upgradeSubmodule are correct
 
 type Category is bytes32;
@@ -80,7 +80,7 @@ contract MockUpgradedSubmodulePrice is PriceSubmodule {
     }
 }
 
-contract BookkeeperTest is Test {
+contract PriceConfigTest is Test {
     MockPriceFeed internal ohmUsdPriceFeed;
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal reserveUsdPriceFeed;
@@ -90,7 +90,7 @@ contract BookkeeperTest is Test {
     MockERC20 internal ohm;
 
     Kernel internal kernel;
-    Bookkeeper internal bookkeeper;
+    PriceConfigV2 internal priceConfig;
     OlympusPricev2 internal PRICE;
     RolesAdmin internal rolesAdmin;
     OlympusRoles internal ROLES;
@@ -142,7 +142,7 @@ contract BookkeeperTest is Test {
         kernel = new Kernel();
         PRICE = new OlympusPricev2(kernel, DECIMALS, OBSERVATION_FREQUENCY);
         ROLES = new OlympusRoles(kernel);
-        bookkeeper = new Bookkeeper(kernel);
+        priceConfig = new PriceConfigV2(kernel);
         rolesAdmin = new RolesAdmin(kernel);
 
         // Deploy submodules for PRICE
@@ -152,17 +152,17 @@ contract BookkeeperTest is Test {
         // Install contracts on kernel
         kernel.executeAction(Actions.InstallModule, address(ROLES));
         kernel.executeAction(Actions.InstallModule, address(PRICE));
-        kernel.executeAction(Actions.ActivatePolicy, address(bookkeeper));
+        kernel.executeAction(Actions.ActivatePolicy, address(priceConfig));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
 
         // Configure permissioned roles
-        rolesAdmin.grantRole("bookkeeper_admin", admin);
-        rolesAdmin.grantRole("bookkeeper_policy", policy);
+        rolesAdmin.grantRole("priceconfig_admin", admin);
+        rolesAdmin.grantRole("priceconfig_policy", policy);
 
         // Install base submodules on PRICE
         vm.startPrank(admin);
-        bookkeeper.installSubmodule(chainlinkPrice);
-        bookkeeper.installSubmodule(strategy);
+        priceConfig.installSubmodule(chainlinkPrice);
+        priceConfig.installSubmodule(strategy);
         vm.stopPrank();
     }
 
@@ -229,7 +229,7 @@ contract BookkeeperTest is Test {
         uint256[] memory obs = _makeObservations(ohm, feeds[0], 15);
 
         vm.prank(policy);
-        bookkeeper.addAssetPrice(
+        priceConfig.addAssetPrice(
             address(ohm),
             true,
             true,
@@ -241,14 +241,14 @@ contract BookkeeperTest is Test {
         );
     }
 
-    /* ========== Bookkeeper Setup and Permissions ========== */
+    /* ========== PriceConfig Setup and Permissions ========== */
 
     function test_configureDependencies() public {
         Keycode[] memory expectedDeps = new Keycode[](2);
         expectedDeps[0] = toKeycode("ROLES");
         expectedDeps[1] = toKeycode("PRICE");
 
-        Keycode[] memory deps = bookkeeper.configureDependencies();
+        Keycode[] memory deps = priceConfig.configureDependencies();
         assertEq(deps.length, expectedDeps.length);
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
@@ -268,7 +268,7 @@ contract BookkeeperTest is Test {
         expectedPerms[6] = Permissions(PRICE_KEYCODE, PRICE.upgradeSubmodule.selector);
         expectedPerms[7] = Permissions(PRICE_KEYCODE, PRICE.execOnSubmodule.selector);
 
-        Permissions[] memory perms = bookkeeper.requestPermissions();
+        Permissions[] memory perms = priceConfig.requestPermissions();
         assertEq(perms.length, expectedPerms.length);
         for (uint256 i = 0; i < perms.length; i++) {
             assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
@@ -313,11 +313,11 @@ contract BookkeeperTest is Test {
         // Try to add asset to PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
+            bytes32("priceconfig_policy")
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.addAssetPrice(
+        priceConfig.addAssetPrice(
             address(ohm),
             true,
             true,
@@ -334,7 +334,7 @@ contract BookkeeperTest is Test {
 
         // Try to add asset to PRICEv2 with policy account, expect success
         vm.prank(policy);
-        bookkeeper.addAssetPrice(
+        priceConfig.addAssetPrice(
             address(ohm),
             true,
             true,
@@ -392,7 +392,7 @@ contract BookkeeperTest is Test {
 
         // Add asset to PRICEv2 using policy account
         vm.prank(policy);
-        bookkeeper.addAssetPrice(
+        priceConfig.addAssetPrice(
             address(ohm),
             true,
             true,
@@ -435,11 +435,11 @@ contract BookkeeperTest is Test {
         // Try to remove asset from PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
+            bytes32("priceconfig_policy")
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.removeAssetPrice(address(ohm));
+        priceConfig.removeAssetPrice(address(ohm));
 
         // Confirm asset was not removed
         asset = PRICE.getAssetData(address(ohm));
@@ -447,7 +447,7 @@ contract BookkeeperTest is Test {
 
         // Try to remove asset from PRICEv2 with policy account, expect success
         vm.prank(policy);
-        bookkeeper.removeAssetPrice(address(ohm));
+        priceConfig.removeAssetPrice(address(ohm));
 
         // Confirm asset was removed
         asset = PRICE.getAssetData(address(ohm));
@@ -464,7 +464,7 @@ contract BookkeeperTest is Test {
 
         // Remove asset from PRICEv2 using policy account
         vm.prank(policy);
-        bookkeeper.removeAssetPrice(address(ohm));
+        priceConfig.removeAssetPrice(address(ohm));
 
         // Confirm asset is not approved and all data deleted
         asset = PRICE.getAssetData(address(ohm));
@@ -499,11 +499,11 @@ contract BookkeeperTest is Test {
         // Try to update feeds for asset on PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
+            bytes32("priceconfig_policy")
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.updateAssetPriceFeeds(address(ohm), newFeeds);
+        priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
 
         // Confirm feeds were not updated
         asset = PRICE.getAssetData(address(ohm));
@@ -512,7 +512,7 @@ contract BookkeeperTest is Test {
 
         // Try to update feeds for asset on PRICEv2 with policy account, expect success
         vm.prank(policy);
-        bookkeeper.updateAssetPriceFeeds(address(ohm), newFeeds);
+        priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
 
         // Confirm feeds were updated
         asset = PRICE.getAssetData(address(ohm));
@@ -535,7 +535,7 @@ contract BookkeeperTest is Test {
 
         // Update feeds
         vm.prank(policy);
-        bookkeeper.updateAssetPriceFeeds(address(ohm), newFeeds);
+        priceConfig.updateAssetPriceFeeds(address(ohm), newFeeds);
 
         // Confirm feeds were updated
         asset = PRICE.getAssetData(address(ohm));
@@ -567,16 +567,16 @@ contract BookkeeperTest is Test {
             abi.encode(1)
         );
         vm.prank(admin);
-        bookkeeper.installSubmodule(newStrategy);
+        priceConfig.installSubmodule(newStrategy);
 
         // Try to update strategy for asset on PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
+            bytes32("priceconfig_policy")
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.updateAssetPriceStrategy(address(ohm), newStrat, false);
+        priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
 
         // Confirm strategy was not updated
         asset = PRICE.getAssetData(address(ohm));
@@ -588,7 +588,7 @@ contract BookkeeperTest is Test {
 
         // Try to update strategy for asset on PRICEv2 with policy account, expect success
         vm.prank(policy);
-        bookkeeper.updateAssetPriceStrategy(address(ohm), newStrat, false);
+        priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
 
         // Confirm feeds were updated
         asset = PRICE.getAssetData(address(ohm));
@@ -619,11 +619,11 @@ contract BookkeeperTest is Test {
             abi.encode(1)
         );
         vm.prank(admin);
-        bookkeeper.installSubmodule(newStrategy);
+        priceConfig.installSubmodule(newStrategy);
 
         // Update strategy for asset on PRICEv2 with policy account
         vm.prank(policy);
-        bookkeeper.updateAssetPriceStrategy(address(ohm), newStrat, false);
+        priceConfig.updateAssetPriceStrategy(address(ohm), newStrat, false);
 
         // Confirm strategy was updated
         asset = PRICE.getAssetData(address(ohm));
@@ -642,7 +642,7 @@ contract BookkeeperTest is Test {
 
         // Update ohm strategy to not use a moving average so we can remove it later
         vm.prank(policy);
-        bookkeeper.updateAssetPriceStrategy(
+        priceConfig.updateAssetPriceStrategy(
             address(ohm),
             PRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
@@ -659,11 +659,11 @@ contract BookkeeperTest is Test {
         // Try to update moving average for asset on PRICEv2 with non-policy account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
+            bytes32("priceconfig_policy")
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.updateAssetMovingAverage(
+        priceConfig.updateAssetMovingAverage(
             address(ohm),
             false,
             uint32(0),
@@ -677,7 +677,7 @@ contract BookkeeperTest is Test {
 
         // Try to update moving average for asset on PRICEv2 with policy account, expect success
         vm.prank(policy);
-        bookkeeper.updateAssetMovingAverage(
+        priceConfig.updateAssetMovingAverage(
             address(ohm),
             false,
             uint32(0),
@@ -708,7 +708,7 @@ contract BookkeeperTest is Test {
         );
 
         vm.prank(policy);
-        bookkeeper.addAssetPrice(
+        priceConfig.addAssetPrice(
             address(fohm),
             false,
             false,
@@ -732,7 +732,7 @@ contract BookkeeperTest is Test {
         // Update moving average with policy account
         uint256[] memory obs = _makeObservations(fohm, feedComponents[0], 15);
         vm.prank(policy);
-        bookkeeper.updateAssetMovingAverage(
+        priceConfig.updateAssetMovingAverage(
             address(fohm),
             true,
             uint32(5 days),
@@ -770,11 +770,11 @@ contract BookkeeperTest is Test {
         // Try to install submodule with non-admin account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_admin")
+            bytes32("priceconfig_admin")
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.installSubmodule(newStrategy);
+        priceConfig.installSubmodule(newStrategy);
 
         // Confirm submodule was not installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -782,7 +782,7 @@ contract BookkeeperTest is Test {
 
         // Try to install submodule with admin account, expect success
         vm.prank(admin);
-        bookkeeper.installSubmodule(newStrategy);
+        priceConfig.installSubmodule(newStrategy);
 
         // Confirm submodule was installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -799,7 +799,7 @@ contract BookkeeperTest is Test {
 
         // Install new submodule with admin account
         vm.prank(admin);
-        bookkeeper.installSubmodule(newStrategy);
+        priceConfig.installSubmodule(newStrategy);
 
         // Confirm submodule was installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
@@ -822,11 +822,11 @@ contract BookkeeperTest is Test {
         // Try to upgrade chainlink submodule with non-admin account, expect revert
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_admin")
+            bytes32("priceconfig_admin")
         );
         vm.expectRevert(err);
         vm.prank(user_);
-        bookkeeper.upgradeSubmodule(newChainlink);
+        priceConfig.upgradeSubmodule(newChainlink);
 
         // Confirm chainlink submodule was not upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -837,7 +837,7 @@ contract BookkeeperTest is Test {
 
         // Try to upgrade chainlink submodule with admin account, expect success
         vm.prank(admin);
-        bookkeeper.upgradeSubmodule(newChainlink);
+        priceConfig.upgradeSubmodule(newChainlink);
 
         // Confirm chainlink submodule was upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -860,7 +860,7 @@ contract BookkeeperTest is Test {
 
         // Upgrade chainlink submodule with admin account, expect success
         vm.prank(admin);
-        bookkeeper.upgradeSubmodule(newChainlink);
+        priceConfig.upgradeSubmodule(newChainlink);
 
         // Confirm chainlink submodule was upgraded
         chainlink = address(PRICE.getSubmoduleForKeycode(toSubKeycode("PRICE.CHAINLINK")));
@@ -876,7 +876,7 @@ contract BookkeeperTest is Test {
         samplePrices[0] = 11e18;
 
         vm.prank(policy);
-        bookkeeper.execOnSubmodule(
+        priceConfig.execOnSubmodule(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
             abi.encodeWithSelector(
                 SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
@@ -897,12 +897,12 @@ contract BookkeeperTest is Test {
 
         bytes memory err = abi.encodeWithSignature(
             "ROLES_RequireRole(bytes32)",
-            bytes32("bookkeeper_policy")
+            bytes32("priceconfig_policy")
         );
         vm.expectRevert(err);
 
         vm.prank(user_);
-        bookkeeper.execOnSubmodule(
+        priceConfig.execOnSubmodule(
             toSubKeycode("PRICE.SIMPLESTRATEGY"),
             abi.encodeWithSelector(
                 SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,

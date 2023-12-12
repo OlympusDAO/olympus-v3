@@ -22,7 +22,7 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 
 // Bophades policies
 import {Appraiser} from "policies/OCA/Appraiser.sol";
-import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
+import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
 import {OlympusHeart} from "policies/RBS/Heart.sol";
 import {Operator} from "policies/RBS/Operator.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -50,7 +50,7 @@ contract RBSv2Install_3 is OlyBatch {
     address operator;
     address rolesAdmin;
     address bondCallback;
-    address priceConfig;
+    address priceConfigV1;
 
     // Tokens
     address ohm;
@@ -97,7 +97,7 @@ contract RBSv2Install_3 is OlyBatch {
     address uniswapV3Price;
     address simplePriceFeedStrategy;
     address appraiser;
-    address bookkeeper;
+    address priceConfigV2;
     address newHeart;
     address newOperator;
     address bunniManager;
@@ -115,7 +115,7 @@ contract RBSv2Install_3 is OlyBatch {
         operator = envAddress("last", "olympus.policies.Operator");
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
         bondCallback = envAddress("current", "olympus.policies.BondCallback");
-        priceConfig = envAddress("current", "olympus.policies.OlympusPriceConfig");
+        priceConfigV1 = envAddress("current", "olympus.policies.PriceConfigV1");
 
         ohm = envAddress("current", "olympus.legacy.OHM");
         dai = envAddress("current", "external.tokens.DAI");
@@ -162,7 +162,7 @@ contract RBSv2Install_3 is OlyBatch {
             "olympus.submodules.PRICE.SimplePriceFeedStrategy"
         );
         appraiser = envAddress("current", "olympus.policies.Appraiser");
-        bookkeeper = envAddress("current", "olympus.policies.Bookkeeper");
+        priceConfigV2 = envAddress("current", "olympus.policies.PriceConfigV2");
         newHeart = envAddress("current", "olympus.policies.OlympusHeart");
         newOperator = envAddress("current", "olympus.policies.Operator");
         bunniManager = envAddress("current", "olympus.policies.BunniManager");
@@ -170,13 +170,13 @@ contract RBSv2Install_3 is OlyBatch {
         daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
     }
 
-    /// @notice     Activates PRICEv2 module and BookKeeper policy
+    /// @notice     Activates PRICEv2 module and PriceConfigV2 policy
     function RBSv2Install_3_1(bool send_) external isDaoBatch(send_) {
         // This DAO MS batch:
         // 1. deactivates old heart + operator policies at contract level
         // 2. deactivates old heart + operator policies at kernel level
         // 3. upgrades the PRICE module to v2
-        // 4. activates bookkeeper policy
+        // 4. activates priceConfigV2 policy
         // 5. sets roles for new policy access control
         // 6. installs submodules on price v2
 
@@ -210,57 +210,57 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.UpgradeModule, priceV2)
         );
 
-        // 5. Activate bookkeeper policy
-        console2.log("Activating Bookkeeper policy");
+        // 5. Activate priceConfigV2 policy
+        console2.log("Activating PriceConfigV2 policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
                 Kernel.executeAction.selector,
                 Actions.ActivatePolicy,
-                bookkeeper
+                priceConfigV2
             )
         );
 
-        // 5a. Disable PriceConfig policy (superseded by BookKeeper)
-        console2.log("Deactivating PriceConfig policy");
+        // 5a. Disable PriceConfigV1 policy (superseded by PriceConfigV2)
+        console2.log("Deactivating PriceConfigV1 policy");
         addToBatch(
             kernel,
             abi.encodeWithSelector(
                 Kernel.executeAction.selector,
                 Actions.DeactivatePolicy,
-                priceConfig
+                priceConfigV1
             )
         );
 
         // 8. Set roles for new policy access control
-        // Bookkeeper policy
+        // PriceConfigV2 policy
         //     - Give DAO MS the bookkeeper_admin role
         //     - Give DAO MS the bookkeeper_policy role
         //     - Give Policy MS the bookkeeper_policy role
-        console2.log("Granting admin role for Bookkeeper policy");
+        console2.log("Granting admin role for PriceConfigV2 policy");
         addToBatch(
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
-                bytes32("bookkeeper_admin"),
+                bytes32("priceconfig_admin"),
                 daoMS
             )
         );
-        console2.log("Granting policy role for Bookkeeper policy");
+        console2.log("Granting policy role for PriceConfigV2 policy");
         addToBatch(
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
-                bytes32("bookkeeper_policy"),
+                bytes32("priceconfig_policy"),
                 daoMS
             )
         );
-        console2.log("Granting policy role for Bookkeeper policy");
+        console2.log("Granting policy role for PriceConfigV2 policy");
         addToBatch(
             rolesAdmin,
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
-                bytes32("bookkeeper_policy"),
+                bytes32("priceconfig_policy"),
                 policyMS
             )
         );
@@ -275,38 +275,38 @@ contract RBSv2Install_3 is OlyBatch {
         //     - Install SimplePriceFeedStrategy submodule
         console2.log("Installing BalancerPoolTokenPrice submodule");
         addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, balancerPoolTokenPrice)
+            priceConfigV2,
+            abi.encodeWithSelector(PriceConfigV2.installSubmodule.selector, balancerPoolTokenPrice)
         );
         console2.log("Installing BunniPrice submodule");
         addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, bunniPrice)
+            priceConfigV2,
+            abi.encodeWithSelector(PriceConfigV2.installSubmodule.selector, bunniPrice)
         );
         console2.log("Installing ChainlinkPriceFeeds submodule");
         addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, chainlinkPriceFeeds)
+            priceConfigV2,
+            abi.encodeWithSelector(PriceConfigV2.installSubmodule.selector, chainlinkPriceFeeds)
         );
         console2.log("Installing ERC4626Price submodule");
         addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, erc4626Price)
+            priceConfigV2,
+            abi.encodeWithSelector(PriceConfigV2.installSubmodule.selector, erc4626Price)
         );
         console2.log("Installing UniswapV2PoolTokenPrice submodule");
         addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, uniswapV2PoolTokenPrice)
+            priceConfigV2,
+            abi.encodeWithSelector(PriceConfigV2.installSubmodule.selector, uniswapV2PoolTokenPrice)
         );
         console2.log("Installing UniswapV3Price submodule");
         addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, uniswapV3Price)
+            priceConfigV2,
+            abi.encodeWithSelector(PriceConfigV2.installSubmodule.selector, uniswapV3Price)
         );
         console2.log("Installing SimplePriceFeedStrategy submodule");
         addToBatch(
-            bookkeeper,
-            abi.encodeWithSelector(Bookkeeper.installSubmodule.selector, simplePriceFeedStrategy)
+            priceConfigV2,
+            abi.encodeWithSelector(PriceConfigV2.installSubmodule.selector, simplePriceFeedStrategy)
         );
     }
 
@@ -362,9 +362,9 @@ contract RBSv2Install_3 is OlyBatch {
 
             console2.log("Adding DAI price feed to PRICE");
             addToBatch(
-                bookkeeper,
+                priceConfigV2,
                 abi.encodeWithSelector(
-                    Bookkeeper.addAssetPrice.selector,
+                    PriceConfigV2.addAssetPrice.selector,
                     dai,
                     true, // store moving average
                     true, // use the moving average as part of price strategy
@@ -393,9 +393,9 @@ contract RBSv2Install_3 is OlyBatch {
             );
             console2.log("Adding sDAI price feed to PRICE");
             addToBatch(
-                bookkeeper,
+                priceConfigV2,
                 abi.encodeWithSelector(
-                    Bookkeeper.addAssetPrice.selector,
+                    PriceConfigV2.addAssetPrice.selector,
                     sdai,
                     false, // don't store moving average
                     false, // don't use the moving average as part of price strategy
@@ -438,9 +438,9 @@ contract RBSv2Install_3 is OlyBatch {
             );
             console2.log("Adding WETH price feed to PRICE");
             addToBatch(
-                bookkeeper,
+                priceConfigV2,
                 abi.encodeWithSelector(
-                    Bookkeeper.addAssetPrice.selector,
+                    PriceConfigV2.addAssetPrice.selector,
                     weth,
                     true, // store moving average
                     true, // use the moving average as part of price strategy
@@ -474,9 +474,9 @@ contract RBSv2Install_3 is OlyBatch {
             );
             console2.log("Adding veFXS price feed to PRICE");
             addToBatch(
-                bookkeeper,
+                priceConfigV2,
                 abi.encodeWithSelector(
-                    Bookkeeper.addAssetPrice.selector,
+                    PriceConfigV2.addAssetPrice.selector,
                     veFXS,
                     false, // don't store moving average
                     false, // don't use the moving average as part of price strategy
@@ -506,9 +506,9 @@ contract RBSv2Install_3 is OlyBatch {
             );
             console2.log("Adding FXS price feed to PRICE");
             addToBatch(
-                bookkeeper,
+                priceConfigV2,
                 abi.encodeWithSelector(
-                    Bookkeeper.addAssetPrice.selector,
+                    PriceConfigV2.addAssetPrice.selector,
                     fxs,
                     false, // don't store moving average
                     false, // don't use the moving average as part of price strategy
@@ -539,9 +539,9 @@ contract RBSv2Install_3 is OlyBatch {
             );
             console2.log("Adding USDC price feed to PRICE");
             addToBatch(
-                bookkeeper,
+                priceConfigV2,
                 abi.encodeWithSelector(
-                    Bookkeeper.addAssetPrice.selector,
+                    PriceConfigV2.addAssetPrice.selector,
                     usdc,
                     true, // store moving average
                     true, // use the moving average as part of price strategy
@@ -572,9 +572,9 @@ contract RBSv2Install_3 is OlyBatch {
 
             console2.log("Adding OHM price feed to PRICE");
             addToBatch(
-                bookkeeper,
+                priceConfigV2,
                 abi.encodeWithSelector(
-                    Bookkeeper.addAssetPrice.selector,
+                    PriceConfigV2.addAssetPrice.selector,
                     ohm,
                     false, // store moving average
                     false, // use the moving average as part of price strategy

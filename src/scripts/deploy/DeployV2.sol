@@ -29,7 +29,7 @@ import "src/Kernel.sol";
 import {Operator} from "policies/RBS/Operator.sol";
 import {OlympusHeart} from "policies/RBS/Heart.sol";
 import {BondCallback} from "policies/Bonds/BondCallback.sol";
-import {OlympusPriceConfig} from "policies/RBS/PriceConfig.sol";
+import {OlympusPriceConfig} from "policies/RBS/PriceConfig.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Distributor} from "policies/Distributor/Distributor.sol";
@@ -42,7 +42,7 @@ import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
 import {BLVaultManagerLusd} from "policies/BoostedLiquidity/BLVaultManagerLusd.sol";
 import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
-import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
+import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
@@ -132,7 +132,7 @@ contract OlympusDeploy is Script {
     Operator public operator;
     OlympusHeart public heart;
     BondCallback public callback;
-    OlympusPriceConfig public priceConfig;
+    OlympusPriceConfig public priceConfigV1;
     RolesAdmin public rolesAdmin;
     TreasuryCustodian public treasuryCustodian;
     Distributor public distributor;
@@ -147,7 +147,7 @@ contract OlympusDeploy is Script {
     Clearinghouse public clearinghouse;
     CrossChainBridge public crossChainBridgeV1;
     CrossChainBridge public crossChainBridgeV1_1;
-    Bookkeeper public bookkeeper;
+    PriceConfigV2 public priceConfigV2;
     BunniManager public bunniManager;
     Appraiser public appraiser;
     SupplyConfig public supplyConfig;
@@ -246,7 +246,7 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
-        selectorMap["Bookkeeper"] = this._deployBookkeeper.selector;
+        selectorMap["PriceConfigV2"] = this._deployPriceConfigV2.selector;
         selectorMap["BunniManager"] = this._deployBunniManagerPolicy.selector;
         selectorMap["Appraiser"] = this._deployAppraiser.selector;
         selectorMap["SupplyConfig"] = this._deploySupplyConfig.selector;
@@ -326,7 +326,8 @@ contract OlympusDeploy is Script {
         operator = Operator(envAddress("olympus.policies.Operator"));
         heart = OlympusHeart(envAddress("olympus.policies.OlympusHeart"));
         callback = BondCallback(envAddress("olympus.policies.BondCallback"));
-        priceConfig = OlympusPriceConfig(envAddress("olympus.policies.OlympusPriceConfig"));
+        priceConfigV1 = OlympusPriceConfig(envAddress("olympus.policies.PriceConfigV1"));
+        priceConfigV2 = PriceConfigV2(envAddress("olympus.policies.PriceConfigV2"));
         rolesAdmin = RolesAdmin(envAddress("olympus.policies.RolesAdmin"));
         treasuryCustodian = TreasuryCustodian(envAddress("olympus.policies.TreasuryCustodianV1_1"));
         distributor = Distributor(envAddress("olympus.policies.Distributor"));
@@ -336,7 +337,6 @@ contract OlympusDeploy is Script {
         burner = Burner(envAddress("olympus.policies.Burner"));
         lidoVaultManager = BLVaultManagerLido(envAddress("olympus.policies.BLVaultManagerLido"));
         lidoVault = BLVaultLido(envAddress("olympus.policies.BLVaultLido"));
-        bookkeeper = Bookkeeper(envAddress("olympus.policies.Bookkeeper"));
         crossChainBridgeV1 = CrossChainBridge(envAddress("olympus.policies.CrossChainBridgeV1"));
         crossChainBridgeV1_1 = CrossChainBridge(
             envAddress("olympus.policies.CrossChainBridgeV1_1")
@@ -688,10 +688,10 @@ contract OlympusDeploy is Script {
 
         // Deploy PriceConfig policy
         vm.broadcast();
-        priceConfig = new OlympusPriceConfig(kernel);
-        console2.log("PriceConfig deployed at:", address(priceConfig));
+        priceConfigV1 = new OlympusPriceConfig(kernel);
+        console2.log("PriceConfig deployed at:", address(priceConfigV1));
 
-        return address(priceConfig);
+        return address(priceConfigV1);
     }
 
     function _deployRolesAdmin(bytes memory) public returns (address) {
@@ -988,15 +988,15 @@ contract OlympusDeploy is Script {
         return address(crossChainBridgeV1_1);
     }
 
-    function _deployBookkeeper(bytes memory) public returns (address) {
-        // No additional arguments for Bookkeeper policy
+    function _deployPriceConfigV2(bytes memory) public returns (address) {
+        // No additional arguments for PriceConfigV2 policy
 
-        // Deploy Bookkeeper policy
+        // Deploy PriceConfigV2 policy
         vm.broadcast();
-        bookkeeper = new Bookkeeper(kernel);
-        console2.log("Bookkeeper deployed at:", address(bookkeeper));
+        priceConfigV2 = new PriceConfigV2(kernel);
+        console2.log("PriceConfigV2 deployed at:", address(priceConfigV2));
 
-        return address(bookkeeper);
+        return address(priceConfigV2);
     }
 
     function _deployBunniManagerPolicy(bytes memory args) public returns (address) {
@@ -1350,7 +1350,7 @@ contract OlympusDeploy is Script {
         operator = Operator(vm.envAddress("OPERATOR"));
         heart = OlympusHeart(vm.envAddress("HEART"));
         callback = BondCallback(vm.envAddress("CALLBACK"));
-        priceConfig = OlympusPriceConfig(vm.envAddress("PRICECONFIG"));
+        priceConfigV1 = OlympusPriceConfig(vm.envAddress("PRICECONFIG"));
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
         treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
         distributor = Distributor(vm.envAddress("DISTRIBUTOR"));
@@ -1391,7 +1391,7 @@ contract OlympusDeploy is Script {
         require(kernel.isPolicyActive(operator));
         require(kernel.isPolicyActive(heart));
         require(kernel.isPolicyActive(callback));
-        require(kernel.isPolicyActive(priceConfig));
+        require(kernel.isPolicyActive(priceConfigV1));
         require(kernel.isPolicyActive(rolesAdmin));
         require(kernel.isPolicyActive(treasuryCustodian));
         require(kernel.isPolicyActive(distributor));

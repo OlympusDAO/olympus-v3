@@ -7,8 +7,8 @@ import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import "modules/PRICE/PRICE.v2.sol";
 
 /// @notice     Policy to configure PRICEv2
-/// @dev        Some functions in this policy are gated to addresses with the "bookkeeper_policy" or "bookkeeper_admin" roles
-contract Bookkeeper is Policy, RolesConsumer {
+/// @dev        Some functions in this policy are gated to addresses with the "priceconfig_policy" or "priceconfig_admin" roles
+contract PriceConfigV2 is Policy, RolesConsumer {
     // DONE
     // [X] Policy setup
     // [X] Install/upgrade submodules
@@ -20,7 +20,7 @@ contract Bookkeeper is Policy, RolesConsumer {
 
     // ========== ERRORS ========== //
 
-    error Bookkeeper_InvalidModule(Keycode module_);
+    error PriceConfigV2_InvalidModule(Keycode module_);
 
     // ========== EVENTS ========== //
 
@@ -72,7 +72,7 @@ contract Bookkeeper is Policy, RolesConsumer {
     /// @notice     Returns the current version of the policy
     /// @dev        This is useful for distinguishing between different versions of the policy
     function VERSION() external pure returns (uint8 major, uint8 minor) {
-        major = 1;
+        major = 2;
         minor = 0;
     }
 
@@ -99,7 +99,7 @@ contract Bookkeeper is Policy, RolesConsumer {
         uint256[] memory observations_,
         PRICEv2.Component memory strategy_,
         PRICEv2.Component[] memory feeds_
-    ) external onlyRole("bookkeeper_policy") {
+    ) external onlyRole("priceconfig_policy") {
         PRICE.addAsset(
             asset_,
             storeMovingAverage_,
@@ -114,7 +114,7 @@ contract Bookkeeper is Policy, RolesConsumer {
 
     /// @notice Remove an asset from the PRICE module
     /// @dev After removal, calls to PRICEv2 for the asset's price will revert
-    function removeAssetPrice(address asset_) external onlyRole("bookkeeper_policy") {
+    function removeAssetPrice(address asset_) external onlyRole("priceconfig_policy") {
         PRICE.removeAsset(asset_);
     }
 
@@ -125,7 +125,7 @@ contract Bookkeeper is Policy, RolesConsumer {
     function updateAssetPriceFeeds(
         address asset_,
         PRICEv2.Component[] memory feeds_
-    ) external onlyRole("bookkeeper_policy") {
+    ) external onlyRole("priceconfig_policy") {
         PRICE.updateAssetPriceFeeds(asset_, feeds_);
     }
 
@@ -138,7 +138,7 @@ contract Bookkeeper is Policy, RolesConsumer {
         address asset_,
         PRICEv2.Component memory strategy_,
         bool useMovingAverage_
-    ) external onlyRole("bookkeeper_policy") {
+    ) external onlyRole("priceconfig_policy") {
         PRICE.updateAssetPriceStrategy(asset_, strategy_, useMovingAverage_);
     }
 
@@ -155,7 +155,7 @@ contract Bookkeeper is Policy, RolesConsumer {
         uint32 movingAverageDuration_,
         uint48 lastObservationTime_,
         uint256[] memory observations_
-    ) external onlyRole("bookkeeper_policy") {
+    ) external onlyRole("priceconfig_policy") {
         PRICE.updateAssetMovingAverage(
             asset_,
             storeMovingAverage_,
@@ -170,27 +170,27 @@ contract Bookkeeper is Policy, RolesConsumer {
     //==================================================================================================//
 
     /// @notice Install a new submodule on the designated module
-    function installSubmodule(Submodule submodule_) external onlyRole("bookkeeper_admin") {
+    function installSubmodule(Submodule submodule_) external onlyRole("priceconfig_admin") {
         PRICE.installSubmodule(submodule_);
     }
 
     /// @notice Upgrade a submodule on the PRICE module
     /// @dev The upgraded submodule must have the same SubKeycode as an existing submodule that it is replacing,
     /// otherwise use installSubmodule
-    function upgradeSubmodule(Submodule submodule_) external onlyRole("bookkeeper_admin") {
+    function upgradeSubmodule(Submodule submodule_) external onlyRole("priceconfig_admin") {
         PRICE.upgradeSubmodule(submodule_);
     }
 
     function execOnSubmodule(
         SubKeycode subKeycode_,
         bytes calldata data_
-    ) external onlyRole("bookkeeper_policy") {
+    ) external onlyRole("priceconfig_policy") {
         bytes20 subKeycode = fromSubKeycode(subKeycode_);
 
         // Checks the first 5 bytes, which corresponds to the module keycode
         bytes5 moduleKeycode = bytes5(subKeycode);
         if (moduleKeycode != bytes5("PRICE"))
-            revert Bookkeeper_InvalidModule(toKeycode(moduleKeycode));
+            revert PriceConfigV2_InvalidModule(toKeycode(moduleKeycode));
 
         PRICE.execOnSubmodule(subKeycode_, data_);
     }
