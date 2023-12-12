@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";
-
+import {stdJson} from "forge-std/StdJson.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 import "src/Kernel.sol";
@@ -43,6 +43,8 @@ import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 /// @notice     Configures TRSRY assets
 /// @notice     Activates RBSv2 (Appraiser, Heart, Operator)
 contract RBSv2Install_3_RBS is OlyBatch {
+    using stdJson for string;
+
     // Existing Olympus Contracts
     address kernel;
     address price;
@@ -325,13 +327,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
 
     /// @notice     Configures PRICEv2 module
     function RBSv2Install_3_2(
-        bool send_,
-        uint256[] memory daiObs_,
-        uint48 daiLastObsTime_,
-        uint256[] memory wethObs_,
-        uint48 wethLastObsTime_,
-        uint256[] memory usdcObs_,
-        uint48 usdcLastObsTime_
+        bool send_
     ) public isPolicyBatch(send_) {
         // This Policy MS batch:
         // 1. Configures DAI on PRICE
@@ -341,6 +337,16 @@ contract RBSv2Install_3_RBS is OlyBatch {
         // 5. Configure FXS on PRICE
         // 6. Configure USDC on PRICE
         // 7. Configure OHM on PRICE
+
+        // 0. Load variables from the JSON file
+        // TODO final values need to be added
+        string memory argData = vm.readFile("./src/scripts/ops/batches/RBSv2Install_3_RBS.json");
+        uint256 daiLastObsTime_ = argData.readUint(".daiLastObsTime");
+        uint256[] memory daiObs_ = argData.readUintArray(".daiObs");
+        uint256 usdcLastObsTime_ = argData.readUint(".usdcLastObsTime");
+        uint256[] memory usdcObs_ = argData.readUintArray(".usdcObs");
+        uint256 wethLastObsTime_ = argData.readUint(".wethLastObsTime");
+        uint256[] memory wethObs_ = argData.readUintArray(".wethObs");
 
         // 1. Configure DAI price feed and moving average data on PRICE
         // - Uses the Chainlink price feed with the standard observation window
