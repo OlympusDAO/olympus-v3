@@ -3,14 +3,14 @@ pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
-import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
+import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
+import {TRSRYv1_1, CategoryGroup as AssetCategoryGroup, Category as AssetCategory} from "modules/TRSRY/TRSRY.v1.sol";
 
 import "src/Kernel.sol";
 
-// Generic contract to allow authorized contracts to interact with treasury
-// Use cases include setting and removing approvals, as well as allocating assets for yield
+/// @notice     Allows authorized callers to interact with the TRSRY module
+/// @notice     This can be used to set and remove approvals, allocate assets for yield and define assets, categories and locations
+/// @dev        Callers must have the "custodian" role in order to interact with this policy
 contract TreasuryCustodian is Policy, RolesConsumer {
     // =========  EVENTS ========= //
 
@@ -20,9 +20,11 @@ contract TreasuryCustodian is Policy, RolesConsumer {
 
     error Custodian_PolicyStillActive();
 
+    error TreasuryCustodian_InvalidModule(Keycode module_);
+
     // =========  STATE ========= //
 
-    TRSRYv1 public TRSRY;
+    TRSRYv1_1 public TRSRY;
 
     //============================================================================================//
     //                                      POLICY SETUP                                          //
@@ -36,29 +38,45 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         dependencies[0] = toKeycode("TRSRY");
         dependencies[1] = toKeycode("ROLES");
 
-        TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
+        TRSRY = TRSRYv1_1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
 
-        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
+        (uint8 TRSRY_MAJOR, uint8 TRSRY_MINOR) = TRSRY.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 1]);
         if (ROLES_MAJOR != 1 || TRSRY_MAJOR != 1) revert Policy_WrongModuleVersion(expected);
+
+        // Check TRSRY minor version
+        if (TRSRY_MINOR < 1) revert Policy_WrongModuleVersion(expected);
     }
 
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
 
-        requests = new Permissions[](6);
+        requests = new Permissions[](12);
         requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
         requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.increaseDebtorApproval.selector);
         requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseDebtorApproval.selector);
         requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
+        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
+        requests[7] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
+        requests[8] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
+        requests[9] = Permissions(TRSRY_KEYCODE, TRSRY.addCategoryGroup.selector);
+        requests[10] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
+        requests[11] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+    }
+
+    /// @notice     Returns the current version of the policy
+    /// @dev        This is useful for distinguishing between different versions of the policy
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 1;
     }
 
     //============================================================================================//
@@ -152,5 +170,71 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         }
 
         emit ApprovalRevoked(policy_, tokens_);
+    }
+
+    //==================================================================================================//
+    //                                      TREASURY MANAGEMENT                                         //
+    //==================================================================================================//
+
+    /// @notice Add a new asset to the treasury for tracking
+    /// @param asset_ The address of the asset to add
+    /// @param locations_ Array of locations other than TRSRY to get balance from
+    function addAsset(
+        address asset_,
+        address[] calldata locations_
+    ) external onlyRole("custodian") {
+        TRSRY.addAsset(asset_, locations_);
+    }
+
+    /// @notice Add a new location to a specific asset on the treasury for tracking
+    /// @param asset_ The address of the asset to add the location to
+    /// @param location_ The address of the location to add
+    function addAssetLocation(
+        address asset_,
+        address location_
+    ) external onlyRole("custodian") {
+        TRSRY.addAssetLocation(asset_, location_);
+    }
+
+    /// @notice Remove a location from a specific asset on the treasury for tracking
+    /// @param asset_ The address of the asset to remove the location from
+    /// @param location_ The address of the location to remove
+    function removeAssetLocation(
+        address asset_,
+        address location_
+    ) external onlyRole("custodian") {
+        TRSRY.removeAssetLocation(asset_, location_);
+    }
+
+    /// @notice Add a new category group to the treasury for tracking
+    /// @param categoryGroup_ The category group to add
+    function addAssetCategoryGroup(
+        AssetCategoryGroup categoryGroup_
+    ) external onlyRole("custodian") {
+        TRSRY.addCategoryGroup(categoryGroup_);
+    }
+
+    /// @notice Add a new category to a specific category group on the treasury for tracking
+    /// @param category_ The category to add
+    /// @param categoryGroup_ The category group to add the category to
+    function addAssetCategory(
+        AssetCategory category_,
+        AssetCategoryGroup categoryGroup_
+    ) external onlyRole("custodian") {
+        TRSRY.addCategory(category_, categoryGroup_);
+    }
+
+    /// @notice Categorize a location in a category
+    /// @param asset_ The address of the asset to categorize
+    /// @param category_ The category to add the asset to
+    /// @dev This categorization is done within a category group. So for example if an asset is categorized
+    ///      as 'liquid' which is part of the 'liquidity-preference' group, but then is changed to 'illiquid'
+    ///      which falls under the same 'liquidity-preference' group, the asset will lose its 'liquid' categorization
+    ///      and gain the 'illiquid' categorization (all under the 'liquidity-preference' group).
+    function categorizeAsset(
+        address asset_,
+        AssetCategory category_
+    ) external onlyRole("custodian") {
+        TRSRY.categorize(asset_, category_);
     }
 }
