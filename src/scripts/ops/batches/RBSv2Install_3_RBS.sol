@@ -181,6 +181,18 @@ contract RBSv2Install_3_RBS is OlyBatch {
         // 6. installs submodules on price v2
 
         // 1. Deactivate old heart + operator policies at contract level
+        // 1a. Grant operator_policy role to the DAO MS
+        console2.log("Granting operator_policy role to DAO MS");
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(
+                RolesAdmin.grantRole.selector,
+                bytes32("operator_policy"),
+                daoMS
+            )
+        );
+
+        // 1b. Actual deactivation
         console2.log("Deactivating existing Heart contract");
         addToBatch(heart, abi.encodeWithSelector(OlympusHeart.deactivate.selector));
         console2.log("Deactivating existing Operator contract");
