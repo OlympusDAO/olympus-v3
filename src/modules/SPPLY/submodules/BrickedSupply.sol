@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -8,7 +9,7 @@ import {CustomSupply} from "modules/SPPLY/submodules/CustomSupply.sol";
 import {IgOHM} from "src/interfaces/IgOHM.sol";
 
 /// @title      BrickedSupply
-/// @notice     SPPLY submodule representing a manual adjustment for OHM stuck in the sOHM v2 contract
+/// @notice     SPPLY submodule representing a manual adjustment for bricked token balances
 contract BrickedSupply is CustomSupply {
     /// @notice     Addresses of tokens to check for bricked supply that are denominated in OHM
     address[] public ohmDenominatedTokens;

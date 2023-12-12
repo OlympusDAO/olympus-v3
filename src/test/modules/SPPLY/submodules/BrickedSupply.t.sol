@@ -7,7 +7,7 @@ import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockGohm} from "test/mocks/OlympusMocks.sol";
+import {MockSohm, MockGohm, MockGohmWithSohmDep} from "test/mocks/OlympusMocks.sol";
 
 import "src/modules/SPPLY/OlympusSupply.sol";
 import {BrickedSupply} from "src/modules/SPPLY/submodules/BrickedSupply.sol";
@@ -16,8 +16,9 @@ contract BrickedSupplyTest is Test {
     using ModuleTestFixtureGenerator for OlympusSupply;
 
     MockERC20 internal ohm;
-    MockERC20 internal sohm;
+    MockSohm internal sohm;
     MockGohm internal gOhm;
+    MockGohmWithSohmDep internal gOhmWithSohmDep;
 
     Kernel internal kernel;
 
@@ -33,8 +34,9 @@ contract BrickedSupplyTest is Test {
         // Create tokens
         {
             ohm = new MockERC20("OHM", "OHM", 9);
-            sohm = new MockERC20("sOHM", "sOHM", 9);
+            sohm = new MockSohm(GOHM_INDEX);
             gOhm = new MockGohm(GOHM_INDEX);
+            gOhmWithSohmDep = new MockGohmWithSohmDep(address(sohm));
         }
 
         // Create kernel and modules
@@ -107,11 +109,30 @@ contract BrickedSupplyTest is Test {
     // ========= getProtocolOwnedTreasuryOhm ========= //
 
     // [X]   Tracks bricked supply in base sOHM case
+    // [X]   Tracks bricked suppply in the case of gOHM's reliance on sOHM index
     // [X]   Tracks bricked supply in multiple OHM denominated tokens case
     // [X]   Tracks bricked supply in multiple OHM denominated tokens + gOHM denominated token case
 
     function test_getProtocolOwnedTreasuryOhm_base() public {
         assertEq(submoduleBrickedSupply.getProtocolOwnedTreasuryOhm(), 4106e9);
+    }
+
+    function test_getProtocolOwnedTreasuryOhm_gohmSohmReliannce() public {
+        // Mint gOHM to gOHM
+        gOhmWithSohmDep.mint(address(gOhmWithSohmDep), 100e18);
+
+        // Set gOHM as only token to check
+        address[] memory gohmDenominatedTokens = new address[](1);
+        gohmDenominatedTokens[0] = address(gOhmWithSohmDep);
+
+        vm.startPrank(address(spply));
+        submoduleBrickedSupply.setOhmDenominatedTokens(new address[](0));
+        submoduleBrickedSupply.setGohmDenominatedTokens(gohmDenominatedTokens);
+        vm.stopPrank();
+
+        // Check bricked supply
+        uint256 gohmAsOhm = gOhmWithSohmDep.balanceFrom(100e18);
+        assertEq(submoduleBrickedSupply.getProtocolOwnedTreasuryOhm(), gohmAsOhm);
     }
 
     function test_getProtocolOwnedTreasuryOhm_ohmDenominatedTokens() public {
