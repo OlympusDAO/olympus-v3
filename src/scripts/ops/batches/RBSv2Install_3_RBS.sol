@@ -336,11 +336,11 @@ contract RBSv2Install_3_RBS is OlyBatch {
         // TODO final values need to be added
         string memory argData = vm.readFile("./src/scripts/ops/batches/RBSv2Install_3_RBS.json");
         uint256 daiLastObsTime_ = argData.readUint(".daiLastObsTime");
-        uint256[] memory daiObs_ = argData.readUintArray(".daiObs");
+        uint256[] memory daiObs_ = argData.readUintArray(".daiObs"); // 7 days * 24 hours / 8 hours = 21 observations
         uint256 usdcLastObsTime_ = argData.readUint(".usdcLastObsTime");
-        uint256[] memory usdcObs_ = argData.readUintArray(".usdcObs");
+        uint256[] memory usdcObs_ = argData.readUintArray(".usdcObs"); // 7 days * 24 hours / 8 hours = 21 observations
         uint256 wethLastObsTime_ = argData.readUint(".wethLastObsTime");
-        uint256[] memory wethObs_ = argData.readUintArray(".wethObs");
+        uint256[] memory wethObs_ = argData.readUintArray(".wethObs"); // 7 days * 24 hours / 8 hours = 21 observations
 
         // 1. Configure DAI price feed and moving average data on PRICE
         // - Uses the Chainlink price feed with the standard observation window
@@ -561,7 +561,11 @@ contract RBSv2Install_3_RBS is OlyBatch {
                     DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average
                     usdcLastObsTime_,
                     usdcObs_,
-                    PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
+                    PRICEv2.Component(
+                        toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                        SimplePriceFeedStrategy.getAveragePrice.selector,
+                        abi.encode(0)
+                    ),
                     usdcFeeds
                 )
             );
