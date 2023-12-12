@@ -6,6 +6,8 @@ import "src/Kernel.sol";
 import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import "modules/PRICE/PRICE.v2.sol";
 
+/// @notice     Policy to configure PRICEv2
+/// @dev        Some functions in this policy are gated to addresses with the "bookkeeper_policy" or "bookkeeper_admin" roles
 contract Bookkeeper is Policy, RolesConsumer {
     // DONE
     // [X] Policy setup

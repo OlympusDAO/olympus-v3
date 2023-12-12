@@ -7,8 +7,6 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockGohm} from "test/mocks/OlympusMocks.sol";
-import {MockVaultManager} from "test/mocks/MockBLVaultManager.sol";
 
 import "src/Submodules.sol";
 import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
@@ -90,9 +88,6 @@ contract BookkeeperTest is Test {
     MockPriceFeed internal ethUsdPriceFeed;
 
     MockERC20 internal ohm;
-    MockGohm internal gohm;
-    MockERC20 internal reserve;
-    MockERC20 internal weth;
 
     Kernel internal kernel;
     Bookkeeper internal bookkeeper;
@@ -107,7 +102,6 @@ contract BookkeeperTest is Test {
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
-    uint256 internal constant GOHM_INDEX = 300000000000;
     uint8 internal constant DECIMALS = 18;
 
     function setUp() public {
@@ -120,11 +114,7 @@ contract BookkeeperTest is Test {
         policy = users[1];
 
         // Tokens
-        gohm = new MockGohm(GOHM_INDEX);
         ohm = new MockERC20("Olympus", "OHM", 9);
-        reserve = new MockERC20("Reserve", "RSV", 18);
-        weth = new MockERC20("Wrapped ETH", "WETH", 18);
-        address[2] memory olympusTokens = [address(ohm), address(gohm)];
 
         // Price Feeds
         ethUsdPriceFeed = new MockPriceFeed();
