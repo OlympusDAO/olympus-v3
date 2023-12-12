@@ -59,6 +59,13 @@ contract SupplyConfig is Policy, RolesConsumer {
         requests[5] = Permissions(SPPLY_KEYCODE, SPPLY.execOnSubmodule.selector);
     }
 
+    /// @notice     Returns the current version of the policy
+    /// @dev        This is useful for distinguishing between different versions of the policy
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+    }
+
     //==================================================================================================//
     //                                      SUPPLY MANAGEMENT                                           //
     //==================================================================================================//
