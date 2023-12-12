@@ -138,6 +138,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             "current",
             "external.UniswapV3LegacyPOL.NonfungiblePositionManager"
         );
+        bunniLens = envAddress("current", "external.Bunni.BunniLens");
 
         twapMaxDeviationBps = uint16(envUint("current", "external.Bunni.TwapMaxDeviationBps"));
         twapObservationWindow = uint32(envUint("current", "external.Bunni.TwapObservationWindow"));
