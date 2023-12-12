@@ -226,12 +226,20 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         console2.log("Setting Arbitrum bridge as trusted remote on new CrossChainBridge policy");
         addToBatch(
             crossChainBridgeV1_1,
-            abi.encodeWithSelector(CrossChainBridge.setTrustedRemoteAddress.selector, 110, abi.encode(arbBridge))
+            abi.encodeWithSelector(
+                CrossChainBridge.setTrustedRemoteAddress.selector,
+                110,
+                abi.encode(arbBridge)
+            )
         );
         console2.log("Setting Optimism bridge as trusted remote on new CrossChainBridge policy");
         addToBatch(
             crossChainBridgeV1_1,
-            abi.encodeWithSelector(CrossChainBridge.setTrustedRemoteAddress.selector, 111, abi.encode(opBridge))
+            abi.encodeWithSelector(
+                CrossChainBridge.setTrustedRemoteAddress.selector,
+                111,
+                abi.encode(opBridge)
+            )
         );
     }
 }

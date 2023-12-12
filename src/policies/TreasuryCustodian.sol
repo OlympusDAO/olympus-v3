@@ -189,20 +189,14 @@ contract TreasuryCustodian is Policy, RolesConsumer {
     /// @notice Add a new location to a specific asset on the treasury for tracking
     /// @param asset_ The address of the asset to add the location to
     /// @param location_ The address of the location to add
-    function addAssetLocation(
-        address asset_,
-        address location_
-    ) external onlyRole("custodian") {
+    function addAssetLocation(address asset_, address location_) external onlyRole("custodian") {
         TRSRY.addAssetLocation(asset_, location_);
     }
 
     /// @notice Remove a location from a specific asset on the treasury for tracking
     /// @param asset_ The address of the asset to remove the location from
     /// @param location_ The address of the location to remove
-    function removeAssetLocation(
-        address asset_,
-        address location_
-    ) external onlyRole("custodian") {
+    function removeAssetLocation(address asset_, address location_) external onlyRole("custodian") {
         TRSRY.removeAssetLocation(asset_, location_);
     }
 

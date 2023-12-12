@@ -329,7 +329,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             treasuryCustodianV1_1,
             abi.encodeWithSelector(TreasuryCustodian.addAsset.selector, dai, locations)
         );
-        console2.log("Categorizing DAI as liquid");
+        console2.log("    Categorizing DAI as liquid");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -338,7 +338,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 AssetCategory.wrap("liquid")
             )
         );
-        console2.log("Categorizing DAI as stable");
+        console2.log("    Categorizing DAI as stable");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -347,7 +347,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 AssetCategory.wrap("stable")
             )
         );
-        console2.log("Categorizing DAI as reserves");
+        console2.log("    Categorizing DAI as reserves");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -364,7 +364,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             treasuryCustodianV1_1,
             abi.encodeWithSelector(TreasuryCustodian.addAsset.selector, sdai, locations)
         );
-        console2.log("Categorizing sDAI as liquid");
+        console2.log("    Categorizing sDAI as liquid");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -373,7 +373,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 AssetCategory.wrap("liquid")
             )
         );
-        console2.log("Categorizing sDAI as stable");
+        console2.log("    Categorizing sDAI as stable");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -382,7 +382,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 AssetCategory.wrap("stable")
             )
         );
-        console2.log("Categorizing sDAI as reserves");
+        console2.log("    Categorizing sDAI as reserves");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -399,7 +399,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             treasuryCustodianV1_1,
             abi.encodeWithSelector(TreasuryCustodian.addAsset.selector, weth, locations)
         );
-        console2.log("Categorizing WETH as liquid");
+        console2.log("    Categorizing WETH as liquid");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -408,7 +408,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 AssetCategory.wrap("liquid")
             )
         );
-        console2.log("Categorizing WETH as volatile");
+        console2.log("    Categorizing WETH as volatile");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -417,7 +417,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 AssetCategory.wrap("volatile")
             )
         );
-        console2.log("Categorizing WETH as strategic");
+        console2.log("    Categorizing WETH as strategic");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -438,7 +438,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             treasuryCustodianV1_1,
             abi.encodeWithSelector(TreasuryCustodian.addAsset.selector, veFXS, veFXSLocations)
         );
-        console2.log("Categorizing veFXS as illiquid");
+        console2.log("    Categorizing veFXS as illiquid");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -447,7 +447,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 AssetCategory.wrap("illiquid")
             )
         );
-        console2.log("Categorizing veFXS as volatile");
+        console2.log("    Categorizing veFXS as volatile");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -456,7 +456,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 AssetCategory.wrap("volatile")
             )
         );
-        console2.log("Categorizing veFXS as strategic");
+        console2.log("    Categorizing veFXS as strategic");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -473,7 +473,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             treasuryCustodianV1_1,
             abi.encodeWithSelector(TreasuryCustodian.addAsset.selector, fxs, veFXSLocations)
         );
-        console2.log("Categorizing FXS as liquid");
+        console2.log("    Categorizing FXS as liquid");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -482,7 +482,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 AssetCategory.wrap("liquid")
             )
         );
-        console2.log("Categorizing FXS as volatile");
+        console2.log("    Categorizing FXS as volatile");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(
@@ -491,7 +491,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 AssetCategory.wrap("volatile")
             )
         );
-        console2.log("Categorizing FXS as strategic");
+        console2.log("    Categorizing FXS as strategic");
         addToBatch(
             treasuryCustodianV1_1,
             abi.encodeWithSelector(

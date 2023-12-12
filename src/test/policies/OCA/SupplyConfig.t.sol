@@ -337,10 +337,7 @@ contract SupplyConfigTest is Test {
         vm.prank(policy);
         supplyConfig.execOnSubmodule(
             toSubKeycode("SPPLY.BLV"),
-            abi.encodeWithSelector(
-                BLVaultSupply.addVaultManager.selector,
-                vaultManager1
-            )
+            abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, vaultManager1)
         );
 
         // Confirm that the action was performed
@@ -376,10 +373,7 @@ contract SupplyConfigTest is Test {
         vm.prank(user_);
         supplyConfig.execOnSubmodule(
             toSubKeycode("SPPLY.BLV"),
-            abi.encodeWithSelector(
-                BLVaultSupply.addVaultManager.selector,
-                vaultManager1
-            )
+            abi.encodeWithSelector(BLVaultSupply.addVaultManager.selector, vaultManager1)
         );
     }
 

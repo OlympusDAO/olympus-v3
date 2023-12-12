@@ -338,7 +338,9 @@ contract OlympusDeploy is Script {
         lidoVault = BLVaultLido(envAddress("olympus.policies.BLVaultLido"));
         bookkeeper = Bookkeeper(envAddress("olympus.policies.Bookkeeper"));
         crossChainBridgeV1 = CrossChainBridge(envAddress("olympus.policies.CrossChainBridgeV1"));
-        crossChainBridgeV1_1 = CrossChainBridge(envAddress("olympus.policies.CrossChainBridgeV1_1"));
+        crossChainBridgeV1_1 = CrossChainBridge(
+            envAddress("olympus.policies.CrossChainBridgeV1_1")
+        );
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
