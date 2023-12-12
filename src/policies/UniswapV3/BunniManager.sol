@@ -288,6 +288,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         // Check TRSRY minor version
         if (TRSRY_MINOR < 1) revert Policy_WrongModuleVersion(expected);
+
+        // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
+        ERC20(ohm).approve(address(MINTR), type(uint256).max);
     }
 
     /// @inheritdoc Policy

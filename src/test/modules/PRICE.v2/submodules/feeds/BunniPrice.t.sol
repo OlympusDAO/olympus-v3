@@ -75,7 +75,7 @@ contract BunniPriceTest is Test {
 
     // DO NOT change these salt values, as they are used to ensure that the addresses are deterministic, and the SQRTPRICEX96 values depend on the ordering
     bytes32 private constant OHM_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000001;
+        0x0000000000000000000000000000000000000000000000000000000000000003;
     bytes32 private constant USDC_SALT =
         0x0000000000000000000000000000000000000000000000000000000000000002;
 
