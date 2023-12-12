@@ -42,7 +42,7 @@ import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 /// @notice     Activates and configures PRICE v2
 /// @notice     Configures TRSRY assets
 /// @notice     Activates RBSv2 (Appraiser, Heart, Operator)
-contract RBSv2Install_3 is OlyBatch {
+contract RBSv2Install_3_RBS is OlyBatch {
     // Existing Olympus Contracts
     address kernel;
     address price;
@@ -132,8 +132,8 @@ contract RBSv2Install_3 is OlyBatch {
         wethUsdcUniV3Pool = envAddress("current", "external.uniswapV3.WethUsdcPool");
         ohmWethUniV3Pool = envAddress("current", "external.uniswapV3.OhmWethPool");
         ohmWethTokenId = envUint("current", "external.UniswapV3LegacyPOL.OhmWethTokenId");
-        ohmWethTickLower = int24(envInt("current", "external.UniswapV3LegacyPOL.OhmWethTickLower"));
-        ohmWethTickUpper = int24(envInt("current", "external.UniswapV3LegacyPOL.OhmWethTickUpper"));
+        ohmWethTickLower = int24(envInt("current", "external.UniswapV3LegacyPOL.OhmWethMinTick"));
+        ohmWethTickUpper = int24(envInt("current", "external.UniswapV3LegacyPOL.OhmWethMaxTick"));
         positionManager = envAddress(
             "current",
             "external.UniswapV3LegacyPOL.NonfungiblePositionManager"
@@ -210,7 +210,7 @@ contract RBSv2Install_3 is OlyBatch {
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.UpgradeModule, priceV2)
         );
 
-        // 5. Activate priceConfigV2 policy
+        // 5. Activate PriceConfigV2 policy
         console2.log("Activating PriceConfigV2 policy");
         addToBatch(
             kernel,
@@ -234,9 +234,9 @@ contract RBSv2Install_3 is OlyBatch {
 
         // 8. Set roles for new policy access control
         // PriceConfigV2 policy
-        //     - Give DAO MS the bookkeeper_admin role
-        //     - Give DAO MS the bookkeeper_policy role
-        //     - Give Policy MS the bookkeeper_policy role
+        //     - Give DAO MS the priceconfig_admin role
+        //     - Give DAO MS the priceconfig_policy role
+        //     - Give Policy MS the priceconfig_policy role
         console2.log("Granting admin role for PriceConfigV2 policy");
         addToBatch(
             rolesAdmin,
@@ -265,7 +265,7 @@ contract RBSv2Install_3 is OlyBatch {
             )
         );
 
-        // 9. Install submodules on price v2
+        // 9. Install submodules on PRICEv2
         //     - Install BalancerPoolTokenPrice submodule
         //     - Install BunniPrice submodule
         //     - Install ChainlinkPriceFeeds submodule
@@ -310,7 +310,7 @@ contract RBSv2Install_3 is OlyBatch {
         );
     }
 
-    /// @notice     Configures PRICEv2 module and TRSRY assets
+    /// @notice     Configures PRICEv2 module
     function RBSv2Install_3_2(
         bool send_,
         uint256[] memory daiObs_,
