@@ -98,8 +98,8 @@ contract RBSv2Install_3_RBS is OlyBatch {
     address simplePriceFeedStrategy;
     address appraiser;
     address priceConfigV2;
-    address newHeart;
-    address newOperator;
+    address heartV2;
+    address operatorV2;
     address bunniManager;
     address bunniLens;
 
@@ -111,8 +111,8 @@ contract RBSv2Install_3_RBS is OlyBatch {
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
         price = envAddress("current", "olympus.modules.OlympusPriceV1");
-        heart = envAddress("last", "olympus.policies.OlympusHeart");
-        operator = envAddress("last", "olympus.policies.Operator");
+        heart = envAddress("current", "olympus.policies.OlympusHeart");
+        operator = envAddress("current", "olympus.policies.Operator");
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
         bondCallback = envAddress("current", "olympus.policies.BondCallback");
         priceConfigV1 = envAddress("current", "olympus.policies.PriceConfigV1");
@@ -163,8 +163,8 @@ contract RBSv2Install_3_RBS is OlyBatch {
         );
         appraiser = envAddress("current", "olympus.policies.Appraiser");
         priceConfigV2 = envAddress("current", "olympus.policies.PriceConfigV2");
-        newHeart = envAddress("current", "olympus.policies.OlympusHeart");
-        newOperator = envAddress("current", "olympus.policies.Operator");
+        heartV2 = envAddress("current", "olympus.policies.OlympusHeartV2");
+        operatorV2 = envAddress("current", "olympus.policies.OperatorV2");
         bunniManager = envAddress("current", "olympus.policies.BunniManager");
 
         daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
@@ -782,7 +782,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             abi.encodeWithSelector(
                 Kernel.executeAction.selector,
                 Actions.ActivatePolicy,
-                newOperator
+                operatorV2
             )
         );
 
@@ -790,14 +790,14 @@ contract RBSv2Install_3_RBS is OlyBatch {
         console2.log("Activating Heart policy");
         addToBatch(
             kernel,
-            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, newHeart)
+            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, heartV2)
         );
 
         // 4. Set operator address on bond callback
         console2.log("Setting operator address on bond callback");
         addToBatch(
             bondCallback,
-            abi.encodeWithSelector(BondCallback.setOperator.selector, newOperator)
+            abi.encodeWithSelector(BondCallback.setOperator.selector, operatorV2)
         );
 
         // 5. Set roles for policy access control
@@ -809,12 +809,12 @@ contract RBSv2Install_3_RBS is OlyBatch {
             abi.encodeWithSelector(
                 RolesAdmin.grantRole.selector,
                 bytes32("operator_operate"),
-                newHeart
+                heartV2
             )
         );
 
         // 6. Initialize the operator policy
         console2.log("Initializing Operator policy");
-        addToBatch(newOperator, abi.encodeWithSelector(Operator.initialize.selector));
+        addToBatch(operatorV2, abi.encodeWithSelector(Operator.initialize.selector));
     }
 }

@@ -130,7 +130,9 @@ contract OlympusDeploy is Script {
 
     // Policies
     Operator public operator;
+    Operator public operatorV2;
     OlympusHeart public heart;
+    OlympusHeart public heartV2;
     BondCallback public callback;
     OlympusPriceConfig public priceConfigV1;
     RolesAdmin public rolesAdmin;
@@ -229,7 +231,9 @@ contract OlympusDeploy is Script {
             .selector;
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["Operator"] = this._deployOperator.selector;
+        selectorMap["OperatorV2"] = this._deployOperatorV2.selector;
         selectorMap["OlympusHeart"] = this._deployHeart.selector;
+        selectorMap["OlympusHeartV2"] = this._deployHeartV2.selector;
         selectorMap["BondCallback"] = this._deployBondCallback.selector;
         selectorMap["OlympusPriceConfig"] = this._deployPriceConfig.selector;
         selectorMap["RolesAdmin"] = this._deployRolesAdmin.selector;
@@ -324,7 +328,9 @@ contract OlympusDeploy is Script {
 
         // Bophades Policies
         operator = Operator(envAddress("olympus.policies.Operator"));
+        operatorV2 = Operator(envAddress("olympus.policies.OperatorV2"));
         heart = OlympusHeart(envAddress("olympus.policies.OlympusHeart"));
+        heartV2 = OlympusHeart(envAddress("olympus.policies.OlympusHeartV2"));
         callback = BondCallback(envAddress("olympus.policies.BondCallback"));
         priceConfigV1 = OlympusPriceConfig(envAddress("olympus.policies.PriceConfigV1"));
         priceConfigV2 = PriceConfigV2(envAddress("olympus.policies.PriceConfigV2"));
@@ -647,6 +653,74 @@ contract OlympusDeploy is Script {
         return address(operator);
     }
 
+    function _deployOperatorV2(bytes memory args) public returns (address) {
+        // Decode arguments for Operator policy
+        (
+            uint256 cushionDebtBuffer,
+            uint256 cushionDepositInterval,
+            uint256 cushionDuration,
+            uint256 cushionFactor,
+            uint256 regenObserve,
+            uint256 regenThreshold,
+            uint256 regenWait,
+            uint256 reserveFactor
+        ) = abi.decode(
+                args,
+                (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256)
+            );
+
+        // Create config params array
+        // Order is not alphabetical. Copied from the constructor.
+        uint32[8] memory configParams = [
+            uint32(cushionFactor),
+            uint32(cushionDuration),
+            uint32(cushionDebtBuffer),
+            uint32(cushionDepositInterval),
+            uint32(reserveFactor),
+            uint32(regenWait),
+            uint32(regenThreshold),
+            uint32(regenObserve)
+        ];
+
+        // Check that the environment variables are loaded
+        if (address(kernel) == address(0)) revert("Kernel address not set");
+        if (address(appraiser) == address(0)) revert("Appraiser address not set");
+        if (address(bondAuctioneer) == address(0)) revert("BondAuctioneer address not set");
+        if (address(callback) == address(0)) revert("Callback address not set");
+        if (address(ohm) == address(0)) revert("OHM address not set");
+        if (address(reserve) == address(0)) revert("Reserve address not set");
+
+        console2.log("   kernel", address(kernel));
+        console2.log("   appraiser", address(appraiser));
+        console2.log("   bondAuctioneer", address(bondAuctioneer));
+        console2.log("   callback", address(callback));
+        console2.log("   ohm", address(ohm));
+        console2.log("   reserve", address(reserve));
+        console2.log("   wrappedReserve", address(wrappedReserve));
+        console2.log("   cushionDebtBuffer", cushionDebtBuffer);
+        console2.log("   cushionDepositInterval", cushionDepositInterval);
+        console2.log("   cushionDuration", cushionDuration);
+        console2.log("   cushionFactor", cushionFactor);
+        console2.log("   regenObserve", regenObserve);
+        console2.log("   regenThreshold", regenThreshold);
+        console2.log("   regenWait", regenWait);
+        console2.log("   reserveFactor", reserveFactor);
+
+        // Deploy Operator policy
+        vm.broadcast();
+        operatorV2 = new Operator(
+            kernel,
+            appraiser,
+            bondAuctioneer,
+            callback,
+            [address(ohm), address(reserve), address(wrappedReserve)],
+            configParams
+        );
+        console2.log("Operator V2 deployed at:", address(operatorV2));
+
+        return address(operatorV2);
+    }
+
     function _deployBondCallback(bytes memory) public returns (address) {
         // No additional arguments for BondCallback policy
 
@@ -678,9 +752,34 @@ contract OlympusDeploy is Script {
             maxReward,
             auctionDuration
         );
-        console2.log("OlympusHeart deployed at:", address(heart));
+        console2.log("OlympusHeart V1 deployed at:", address(heart));
 
         return address(heart);
+    }
+
+    function _deployHeartV2(bytes memory args) public returns (address) {
+        // Decode arguments for OlympusHeart policy
+        (uint48 auctionDuration, uint256 maxReward) = abi.decode(args, (uint48, uint256));
+
+        // Check that the environment variables are loaded
+        if (address(kernel) == address(0)) revert("Kernel address not set");
+        if (address(operatorV2) == address(0)) revert("OperatorV2 address not set");
+        if (address(appraiser) == address(0)) revert("Appraiser address not set");
+        if (address(zeroDistributor) == address(0)) revert("ZeroDistributor address not set");
+
+        // Deploy OlympusHeart policy
+        vm.broadcast();
+        heartV2 = new OlympusHeart(
+            kernel,
+            operatorV2,
+            appraiser,
+            zeroDistributor,
+            maxReward,
+            auctionDuration
+        );
+        console2.log("OlympusHeart V2 deployed at:", address(heartV2));
+
+        return address(heartV2);
     }
 
     function _deployPriceConfig(bytes memory) public returns (address) {
