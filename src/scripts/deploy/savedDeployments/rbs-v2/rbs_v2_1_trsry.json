@@ -3,6 +3,10 @@
         {
             "name": "OlympusTreasury",
             "args": {}
+        },
+        {
+            "name": "TreasuryCustodian",
+            "args": {}
         }
     ]
 }

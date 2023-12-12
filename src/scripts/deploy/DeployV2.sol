@@ -328,7 +328,7 @@ contract OlympusDeploy is Script {
         callback = BondCallback(envAddress("olympus.policies.BondCallback"));
         priceConfig = OlympusPriceConfig(envAddress("olympus.policies.OlympusPriceConfig"));
         rolesAdmin = RolesAdmin(envAddress("olympus.policies.RolesAdmin"));
-        treasuryCustodian = TreasuryCustodian(envAddress("olympus.policies.TreasuryCustodian"));
+        treasuryCustodian = TreasuryCustodian(envAddress("olympus.policies.TreasuryCustodianV1_1"));
         distributor = Distributor(envAddress("olympus.policies.Distributor"));
         zeroDistributor = ZeroDistributor(envAddress("olympus.policies.ZeroDistributor"));
         emergency = Emergency(envAddress("olympus.policies.Emergency"));
