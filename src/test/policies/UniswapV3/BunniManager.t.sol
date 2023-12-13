@@ -42,6 +42,8 @@ import {BunniKey} from "src/external/bunni/base/Structs.sol";
 
 import {UniswapV3PoolLibrary} from "libraries/UniswapV3/PoolLibrary.sol";
 
+import {ComputeAddress} from "test/libraries/ComputeAddress.sol";
+
 import {toSubKeycode} from "src/Submodules.sol";
 
 import "src/Kernel.sol";
@@ -62,6 +64,7 @@ contract BunniManagerTest is Test {
     MockOhm internal ohm;
     MockERC20 internal usdc;
     MockERC20 internal wETH;
+    MockERC20 internal dai;
     address internal usdcAddress;
     address internal ohmAddress;
     address internal token0Address;
@@ -130,16 +133,6 @@ contract BunniManagerTest is Test {
     uint16 private constant HARVEST_REWARD_FEE = 1000; // 10%
     uint48 private constant HARVEST_FREQUENCY = uint48(24 hours);
 
-    // DO NOT change these salt values, as they are used to ensure that the addresses are deterministic, and the SQRTPRICEX96 values depend on the ordering
-    bytes32 private constant OHM_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000008;
-    bytes32 private constant USDC_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000000;
-    bytes32 private constant WETH_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000002;
-    bytes32 private constant DAI_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000004;
-
     mapping(address => mapping(address => uint256)) private tokenBalances;
 
     // Reproduce events
@@ -179,11 +172,37 @@ contract BunniManagerTest is Test {
         }
 
         {
-            // Use salt to ensure that the addresses are deterministic, otherwise changing variables above will change the addresses and mess with the UniV3 pool
-            // Source: https://docs.soliditylang.org/en/v0.8.19/control-structures.html#salted-contract-creations-create2
-            ohm = new MockOhm{salt: OHM_SALT}("Olympus", "OHM", 9);
-            usdc = new MockERC20{salt: USDC_SALT}("USDC", "USDC", 6);
-            wETH = new MockERC20{salt: WETH_SALT}("Wrapped Ether", "wETH", 18);
+            ohm = new MockOhm("Olympus", "OHM", 9);
+
+            // The USDC address needs to be higher than ohm, so generate a salt to ensure that
+            bytes32 usdcSalt = ComputeAddress.generateSalt(
+                address(ohm),
+                true,
+                type(MockERC20).creationCode,
+                abi.encode("USDC", "USDC", 6),
+                address(this)
+            );
+            usdc = new MockERC20{salt: usdcSalt}("USDC", "USDC", 6);
+
+            // The WETH address needs to be higher than ohm, so generate a salt to ensure that
+            bytes32 wethSalt = ComputeAddress.generateSalt(
+                address(ohm),
+                true,
+                type(MockERC20).creationCode,
+                abi.encode("Wrapped Ether", "wETH", 18),
+                address(this)
+            );
+            wETH = new MockERC20{salt: wethSalt}("Wrapped Ether", "wETH", 18);
+
+            // The DAI address needs to be lesser than usdc, so generate a salt to ensure that
+            bytes32 daiSalt = ComputeAddress.generateSalt(
+                address(usdc),
+                false,
+                type(MockERC20).creationCode,
+                abi.encode("DAI", "DAI", 18),
+                address(this)
+            );
+            dai = new MockERC20{salt: daiSalt}("DAI", "DAI", 18);
 
             ohmAddress = address(ohm);
             usdcAddress = address(usdc);
@@ -881,7 +900,6 @@ contract BunniManagerTest is Test {
         IBunniToken deployedToken = bunniManager.deployPoolToken(address(pool));
 
         // Create a new pool with an overlapping underlying token
-        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
         _mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
@@ -1029,7 +1047,6 @@ contract BunniManagerTest is Test {
         bunniManager.deployPoolToken(address(pool));
 
         // Create a new pool with an overlapping underlying token
-        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
         _mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
@@ -1891,7 +1908,6 @@ contract BunniManagerTest is Test {
 
     function test_deposit_token0InsufficientBalanceReverts(uint256 token0Amount_) public {
         // Create a pool with non-OHM tokens
-        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
         _mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
@@ -1927,7 +1943,6 @@ contract BunniManagerTest is Test {
 
     function test_deposit_token1InsufficientBalanceReverts(uint256 token1Amount_) public {
         // Create a pool with non-OHM tokens
-        MockERC20 dai = new MockERC20("DAI", "DAI", 18);
         _mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
@@ -1966,7 +1981,6 @@ contract BunniManagerTest is Test {
         uint256 daiAmount = usdcAmount.mulDiv(1e18, 1e6); // Same price, different decimal scale
 
         // Create a pool with non-OHM tokens
-        MockERC20 dai = new MockERC20{salt: DAI_SALT}("DAI", "DAI", 18);
         _mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
@@ -2225,7 +2239,6 @@ contract BunniManagerTest is Test {
 
     function test_withdraw_nonOhmTokens(uint256 shareToWithdraw_) public {
         // Create a pool with non-OHM tokens
-        MockERC20 dai = new MockERC20{salt: DAI_SALT}("DAI", "DAI", 18);
         _mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
