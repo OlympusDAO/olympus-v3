@@ -21,6 +21,7 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {BLVaultSupply} from "modules/SPPLY/submodules/BLVaultSupply.sol";
 import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
+import {BrickedSupply} from "modules/SPPLY/submodules/BrickedSupply.sol";
 
 /// @notice     Activates and configures SPPLY v1
 /// @notice     Migrates to CrossChainBridge v1.1
