@@ -10,14 +10,12 @@ library ComputeAddress {
         bytes32 salt,
         address deployer
     ) internal pure returns (address) {
-        return Create2.computeAddress(
-            bytes32(salt), 
-            keccak256(abi.encodePacked(
-                creationCode,
-                creationParams
-            )), 
-            deployer
-        );
+        return
+            Create2.computeAddress(
+                bytes32(salt),
+                keccak256(abi.encodePacked(creationCode, creationParams)),
+                deployer
+            );
     }
 
     function generateSalt(
@@ -36,12 +34,7 @@ library ComputeAddress {
             salt = bytes32(uint256(salt) + 1);
 
             // Derive the address from the salt
-            address derivedAddress = computeAddress(
-                creationCode,
-                creationParams,
-                salt,
-                deployer
-            );
+            address derivedAddress = computeAddress(creationCode, creationParams, salt, deployer);
 
             // If the derived address is higher than the comparison address, we're done
             if (higher && derivedAddress > comparisonAddress) {
