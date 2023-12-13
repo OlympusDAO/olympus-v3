@@ -18,7 +18,7 @@ import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 // Policies
 import {Appraiser} from "policies/OCA/Appraiser.sol";
-import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
+import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
 import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
@@ -49,7 +49,7 @@ contract AppraiserTest is Test {
     OlympusRoles internal ROLES;
 
     Appraiser internal appraiser;
-    TreasuryCustodian internal treasuryCustodian;
+    TreasuryConfig internal treasuryConfig;
     SupplyConfig internal supplyConfig;
     RolesAdmin internal rolesAdmin;
 
@@ -110,7 +110,7 @@ contract AppraiserTest is Test {
         // Policies
         {
             appraiser = new Appraiser(kernel);
-            treasuryCustodian = new TreasuryCustodian(kernel);
+            treasuryConfig = new TreasuryConfig(kernel);
             supplyConfig = new SupplyConfig(kernel);
             rolesAdmin = new RolesAdmin(kernel);
         }
@@ -135,15 +135,15 @@ contract AppraiserTest is Test {
 
             // Activate policies
             kernel.executeAction(Actions.ActivatePolicy, address(appraiser));
-            kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
+            kernel.executeAction(Actions.ActivatePolicy, address(treasuryConfig));
             kernel.executeAction(Actions.ActivatePolicy, address(supplyConfig));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
 
         // Roles management
         {
-            // TreasuryCustodian roles
-            rolesAdmin.grantRole("custodian", address(this));
+            // TreasuryConfig roles
+            rolesAdmin.grantRole("treasuryconfig_policy", address(this));
 
             // SupplyConfig roles
             rolesAdmin.grantRole("supplyconfig_admin", address(this));
@@ -154,20 +154,20 @@ contract AppraiserTest is Test {
         {
             // Add assets to Treasury
             address[] memory locations = new address[](0);
-            treasuryCustodian.addAsset(address(reserve), locations);
-            treasuryCustodian.addAsset(address(weth), locations);
+            treasuryConfig.addAsset(address(reserve), locations);
+            treasuryConfig.addAsset(address(weth), locations);
 
             locations = new address[](1);
             locations[0] = address(bytes20("POL"));
-            treasuryCustodian.addAsset(balancerPool, locations);
+            treasuryConfig.addAsset(balancerPool, locations);
 
             // Categorize assets
-            treasuryCustodian.categorizeAsset(address(reserve), AssetCategory.wrap("liquid"));
-            treasuryCustodian.categorizeAsset(address(reserve), AssetCategory.wrap("stable"));
-            treasuryCustodian.categorizeAsset(address(reserve), AssetCategory.wrap("reserves"));
-            treasuryCustodian.categorizeAsset(address(weth), AssetCategory.wrap("liquid"));
-            treasuryCustodian.categorizeAsset(address(weth), AssetCategory.wrap("volatile"));
-            treasuryCustodian.categorizeAsset(
+            treasuryConfig.categorizeAsset(address(reserve), AssetCategory.wrap("liquid"));
+            treasuryConfig.categorizeAsset(address(reserve), AssetCategory.wrap("stable"));
+            treasuryConfig.categorizeAsset(address(reserve), AssetCategory.wrap("reserves"));
+            treasuryConfig.categorizeAsset(address(weth), AssetCategory.wrap("liquid"));
+            treasuryConfig.categorizeAsset(address(weth), AssetCategory.wrap("volatile"));
+            treasuryConfig.categorizeAsset(
                 balancerPool,
                 AssetCategory.wrap("protocol-owned-liquidity")
             );
@@ -1015,7 +1015,7 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getMetricCurrentForAllMetrics() public {
         // Categorize assets
-        treasuryCustodian.categorizeAsset(address(weth), AssetCategory.wrap("illiquid"));
+        treasuryConfig.categorizeAsset(address(weth), AssetCategory.wrap("illiquid"));
 
         // Set OHM observations to be all 10
         uint256[] memory ohmObservations = new uint256[](90);

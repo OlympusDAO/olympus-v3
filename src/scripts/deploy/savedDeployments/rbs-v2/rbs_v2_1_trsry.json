@@ -5,7 +5,7 @@
             "args": {}
         },
         {
-            "name": "TreasuryCustodian",
+            "name": "TreasuryConfig",
             "args": {}
         }
     ]

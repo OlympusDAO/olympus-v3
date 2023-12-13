@@ -48,6 +48,7 @@ import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {Appraiser} from "policies/OCA/Appraiser.sol";
 import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
+import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
 
 // Bophades Modules
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
@@ -155,6 +156,7 @@ contract OlympusDeploy is Script {
     BunniManager public bunniManager;
     Appraiser public appraiser;
     SupplyConfig public supplyConfig;
+    TreasuryConfig public treasuryConfig;
 
     // External contracts
     BunniHub public bunniHub;
@@ -257,6 +259,7 @@ contract OlympusDeploy is Script {
         selectorMap["BunniManager"] = this._deployBunniManagerPolicy.selector;
         selectorMap["Appraiser"] = this._deployAppraiser.selector;
         selectorMap["SupplyConfig"] = this._deploySupplyConfig.selector;
+        selectorMap["TreasuryConfig"] = this._deployTreasuryConfig.selector;
 
         // PRICE Submodules
         selectorMap["SimplePriceFeedStrategy"] = this._deploySimplePriceFeedStrategy.selector;
@@ -340,7 +343,7 @@ contract OlympusDeploy is Script {
         priceConfigV1 = OlympusPriceConfig(envAddress("olympus.policies.PriceConfigV1"));
         priceConfigV2 = PriceConfigV2(envAddress("olympus.policies.PriceConfigV2"));
         rolesAdmin = RolesAdmin(envAddress("olympus.policies.RolesAdmin"));
-        treasuryCustodian = TreasuryCustodian(envAddress("olympus.policies.TreasuryCustodianV1_1"));
+        treasuryCustodian = TreasuryCustodian(envAddress("olympus.policies.TreasuryCustodian"));
         distributor = Distributor(envAddress("olympus.policies.Distributor"));
         zeroDistributor = ZeroDistributor(envAddress("olympus.policies.ZeroDistributor"));
         emergency = Emergency(envAddress("olympus.policies.Emergency"));
@@ -357,6 +360,7 @@ contract OlympusDeploy is Script {
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
         appraiser = Appraiser(envAddress("olympus.policies.Appraiser"));
         supplyConfig = SupplyConfig(envAddress("olympus.policies.SupplyConfig"));
+        treasuryConfig = TreasuryConfig(envAddress("olympus.policies.TreasuryConfig"));
 
         // PRICE submodules
         simplePriceFeedStrategy = SimplePriceFeedStrategy(
@@ -1106,6 +1110,17 @@ contract OlympusDeploy is Script {
         console2.log("PriceConfigV2 deployed at:", address(priceConfigV2));
 
         return address(priceConfigV2);
+    }
+
+    function _deployTreasuryConfig(bytes memory) public returns (address) {
+        // No additional arguments for TreasuryConfig policy
+
+        // Deploy TreasuryConfig policy
+        vm.broadcast();
+        treasuryConfig = new TreasuryConfig(kernel);
+        console2.log("TreasuryConfig deployed at:", address(treasuryConfig));
+
+        return address(treasuryConfig);
     }
 
     function _deployBunniManagerPolicy(bytes memory args) public returns (address) {

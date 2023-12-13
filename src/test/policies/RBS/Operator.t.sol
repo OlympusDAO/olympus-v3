@@ -30,7 +30,7 @@ import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {Operator} from "policies/RBS/Operator.sol";
-import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
+import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
 import {Appraiser, IAppraiser as IAppraiserMetric} from "policies/OCA/Appraiser.sol";
 import {BondCallback} from "policies/Bonds/BondCallback.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
@@ -67,7 +67,7 @@ contract OperatorTest is Test {
     Operator internal operator;
     BondCallback internal callback;
     RolesAdmin internal rolesAdmin;
-    TreasuryCustodian internal treasuryCustodian;
+    TreasuryConfig internal treasuryConfig;
     Appraiser internal appraiser;
 
     int256 internal constant CHANGE_DECIMALS = 1e4;
@@ -145,8 +145,8 @@ contract OperatorTest is Test {
             rolesAdmin = new RolesAdmin(kernel);
             /// Deploy bond callback
             callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
-            // Deploy new TreasuryCustodian
-            treasuryCustodian = new TreasuryCustodian(kernel);
+            // Deploy new TreasuryConfig
+            treasuryConfig = new TreasuryConfig(kernel);
             // Deploy new appraiser
             appraiser = new Appraiser(kernel);
             /// Deploy operator
@@ -188,15 +188,15 @@ contract OperatorTest is Test {
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
             kernel.executeAction(Actions.ActivatePolicy, address(appraiser));
-            kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
+            kernel.executeAction(Actions.ActivatePolicy, address(treasuryConfig));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
         {
             /// Configure access control
 
-            /// TreasuryCustodian roles
-            rolesAdmin.grantRole("custodian", policy);
-            rolesAdmin.grantRole("custodian", guardian);
+            /// TreasuryConfig roles
+            rolesAdmin.grantRole("treasuryconfig_policy", policy);
+            rolesAdmin.grantRole("treasuryconfig_policy", guardian);
 
             /// Operator roles
             rolesAdmin.grantRole("operator_operate", address(heart));
@@ -214,11 +214,11 @@ contract OperatorTest is Test {
         address[] memory locations = new address[](1);
         locations[0] = address(clearinghouse);
         vm.startPrank(policy);
-        treasuryCustodian.addAsset(address(reserve), locations);
-        treasuryCustodian.addAsset(address(wrappedReserve), locations);
-        treasuryCustodian.categorizeAsset(address(reserve), AssetCategory.wrap("liquid"));
-        treasuryCustodian.categorizeAsset(address(reserve), AssetCategory.wrap("stable"));
-        treasuryCustodian.categorizeAsset(address(reserve), AssetCategory.wrap("reserves"));
+        treasuryConfig.addAsset(address(reserve), locations);
+        treasuryConfig.addAsset(address(wrappedReserve), locations);
+        treasuryConfig.categorizeAsset(address(reserve), AssetCategory.wrap("liquid"));
+        treasuryConfig.categorizeAsset(address(reserve), AssetCategory.wrap("stable"));
+        treasuryConfig.categorizeAsset(address(reserve), AssetCategory.wrap("reserves"));
         vm.stopPrank();
 
         /// Set operator on the callback

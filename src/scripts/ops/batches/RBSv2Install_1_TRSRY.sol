@@ -12,6 +12,7 @@ import "src/Kernel.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {Category as AssetCategory} from "modules/TRSRY/TRSRY.v1.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
+import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
 
 import {IFXSAllocator} from "interfaces/IFXSAllocator.sol";
 
@@ -20,8 +21,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     // Existing Olympus contracts
     address kernel;
     address treasuryV1;
-    address treasuryCustodianV1;
-    address treasuryCustodianV1_1;
+    address treasuryCustodian;
+    address treasuryConfig;
     address clearinghouseV1;
     address clearinghouseV1_1;
     address veFXSAllocator;
@@ -48,8 +49,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         kernel = envAddress("current", "olympus.Kernel");
         treasuryV1 = envAddress("current", "olympus.modules.OlympusTreasuryV1");
         treasuryV1_1 = envAddress("current", "olympus.modules.OlympusTreasuryV1_1");
-        treasuryCustodianV1 = envAddress("current", "olympus.policies.TreasuryCustodianV1");
-        treasuryCustodianV1_1 = envAddress("current", "olympus.policies.TreasuryCustodianV1_1");
+        treasuryCustodian = envAddress("current", "olympus.policies.TreasuryCustodian");
+        treasuryConfig = envAddress("current", "olympus.policies.TreasuryConfig");
         clearinghouseV1 = envAddress("current", "olympus.policies.ClearinghouseV1");
         clearinghouseV1_1 = envAddress("current", "olympus.policies.ClearinghouseV1_1");
         veFXSAllocator = envAddress("current", "olympus.legacy.veFXSAllocator");
@@ -94,16 +95,16 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             uint256 daiBalance = ERC20(dai).balanceOf(treasuryV1);
             console2.log("Transferring DAI from TRSRY v1 to v1.1");
             addToBatch(
-                treasuryCustodianV1,
+                treasuryCustodian,
                 abi.encodeWithSelector(
                     TreasuryCustodian.grantWithdrawerApproval.selector,
-                    treasuryCustodianV1,
+                    treasuryCustodian,
                     dai,
                     daiBalance
                 )
             );
             addToBatch(
-                treasuryCustodianV1,
+                treasuryCustodian,
                 abi.encodeWithSelector(
                     TreasuryCustodian.withdrawReservesTo.selector,
                     treasuryV1_1,
@@ -119,16 +120,16 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             uint256 sdaiBalance = ERC20(sdai).balanceOf(treasuryV1);
             console2.log("Transferring sDAI from TRSRY v1 to v1.1");
             addToBatch(
-                treasuryCustodianV1,
+                treasuryCustodian,
                 abi.encodeWithSelector(
                     TreasuryCustodian.grantWithdrawerApproval.selector,
-                    treasuryCustodianV1,
+                    treasuryCustodian,
                     sdai,
                     sdaiBalance
                 )
             );
             addToBatch(
-                treasuryCustodianV1,
+                treasuryCustodian,
                 abi.encodeWithSelector(
                     TreasuryCustodian.withdrawReservesTo.selector,
                     treasuryV1_1,
@@ -142,23 +143,23 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // The following assets exist in TRSRY, but will be swapped for DAI
 
         // uint256 lusdBalance = ERC20(lusd).balanceOf(treasuryV1);
-        // addToBatch(treasuryCustodianV1, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodianV1, lusd, lusdBalance));
-        // addToBatch(treasuryCustodianV1, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, treasuryV1_1, lusd, lusdBalance));
+        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, lusd, lusdBalance));
+        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, treasuryV1_1, lusd, lusdBalance));
         // console2.log("Transfered LUSD: %s", lusdBalance);
 
         // uint256 wstethBalance = ERC20(wsteth).balanceOf(treasuryV1);
-        // addToBatch(treasuryCustodianV1, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodianV1, wsteth, wstethBalance));
-        // addToBatch(treasuryCustodianV1, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, treasuryV1_1, wsteth, wstethBalance));
+        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, wsteth, wstethBalance));
+        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, treasuryV1_1, wsteth, wstethBalance));
         // console2.log("Transfered wstETH: %s", wstethBalance);
 
         // uint256 balBalance = ERC20(bal).balanceOf(treasuryV1);
-        // addToBatch(treasuryCustodianV1, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodianV1, bal, balBalance));
-        // addToBatch(treasuryCustodianV1, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, treasuryV1_1, bal, balBalance));
+        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, bal, balBalance));
+        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, treasuryV1_1, bal, balBalance));
         // console2.log("Transfered BAL: %s", balBalance);
 
         // uint256 auraBalance = ERC20(aura).balanceOf(treasuryV1);
-        // addToBatch(treasuryCustodianV1, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodianV1, aura, auraBalance));
-        // addToBatch(treasuryCustodianV1, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, treasuryV1_1, aura, auraBalance));
+        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, aura, auraBalance));
+        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, treasuryV1_1, aura, auraBalance));
         // console2.log("Transfered AURA: %s", auraBalance);
 
         // 2. Record the current debt of the old treasury
@@ -225,21 +226,6 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             assertEq(vefxsTotalDebt, 0, "FXS debt should be 0");
         }
 
-        // 3. Disable the old TreasuryCustodian
-        {
-            console2.log("Disabling old TreasuryCustodian");
-
-            addToBatch(
-                kernel,
-                abi.encodeWithSelector(
-                    Kernel.executeAction.selector,
-                    Actions.DeactivatePolicy,
-                    treasuryCustodianV1
-                )
-            );
-            console2.log("    Deactivated old TreasuryCustodian");
-        }
-
         // 4. Upgrade the OlympusTreasury contract to the new version
         {
             console2.log("Upgrading TRSRY module to new version at %s", treasuryV1_1);
@@ -255,19 +241,19 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             console2.log("    Upgraded OlympusTreasury to new version");
         }
 
-        // 5. Install the new TreasuryCustodian
+        // 5. Install the new TreasuryConfig
         {
-            console2.log("Installing new TreasuryCustodian");
+            console2.log("Installing new TreasuryConfig");
 
             addToBatch(
                 kernel,
                 abi.encodeWithSelector(
                     Kernel.executeAction.selector,
                     Actions.ActivatePolicy,
-                    treasuryCustodianV1_1
+                    treasuryConfig
                 )
             );
-            console2.log("    Installed new TreasuryCustodian");
+            console2.log("    Installed new TreasuryConfig");
         }
 
         // 6. Transfer debt over to the new treasury
@@ -279,7 +265,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
             ERC20 daiToken = ERC20(dai);
             addToBatch(
-                treasuryCustodianV1_1,
+                treasuryCustodian,
                 abi.encodeWithSelector(
                     TreasuryCustodian.increaseDebt.selector,
                     daiToken,
@@ -288,7 +274,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 )
             );
             addToBatch(
-                treasuryCustodianV1_1,
+                treasuryCustodian,
                 abi.encodeWithSelector(
                     TreasuryCustodian.increaseDebt.selector,
                     daiToken,
@@ -308,7 +294,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
             ERC20 vefxsToken = ERC20(veFXS);
             addToBatch(
-                treasuryCustodianV1_1,
+                treasuryCustodian,
                 abi.encodeWithSelector(
                     TreasuryCustodian.increaseDebt.selector,
                     vefxsToken,
@@ -326,32 +312,32 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         locations[1] = daoMS;
         console2.log("Adding DAI to TRSRY");
         addToBatch(
-            treasuryCustodianV1_1,
-            abi.encodeWithSelector(TreasuryCustodian.addAsset.selector, dai, locations)
+            treasuryConfig,
+            abi.encodeWithSelector(TreasuryConfig.addAsset.selector, dai, locations)
         );
         console2.log("    Categorizing DAI as liquid");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 dai,
                 AssetCategory.wrap("liquid")
             )
         );
         console2.log("    Categorizing DAI as stable");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 dai,
                 AssetCategory.wrap("stable")
             )
         );
         console2.log("    Categorizing DAI as reserves");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 dai,
                 AssetCategory.wrap("reserves")
             )
@@ -361,32 +347,32 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         //      - liquid, stable, reserves
         console2.log("Adding sDAI to TRSRY");
         addToBatch(
-            treasuryCustodianV1_1,
-            abi.encodeWithSelector(TreasuryCustodian.addAsset.selector, sdai, locations)
+            treasuryConfig,
+            abi.encodeWithSelector(TreasuryConfig.addAsset.selector, sdai, locations)
         );
         console2.log("    Categorizing sDAI as liquid");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 sdai,
                 AssetCategory.wrap("liquid")
             )
         );
         console2.log("    Categorizing sDAI as stable");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 sdai,
                 AssetCategory.wrap("stable")
             )
         );
         console2.log("    Categorizing sDAI as reserves");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 sdai,
                 AssetCategory.wrap("reserves")
             )
@@ -396,32 +382,32 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         //      - liquid, volatile, strategic
         console2.log("Adding WETH to TRSRY");
         addToBatch(
-            treasuryCustodianV1_1,
-            abi.encodeWithSelector(TreasuryCustodian.addAsset.selector, weth, locations)
+            treasuryConfig,
+            abi.encodeWithSelector(TreasuryConfig.addAsset.selector, weth, locations)
         );
         console2.log("    Categorizing WETH as liquid");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 weth,
                 AssetCategory.wrap("liquid")
             )
         );
         console2.log("    Categorizing WETH as volatile");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 weth,
                 AssetCategory.wrap("volatile")
             )
         );
         console2.log("    Categorizing WETH as strategic");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 weth,
                 AssetCategory.wrap("strategic")
             )
@@ -435,32 +421,32 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         veFXSLocations[2] = daoWorkingWallet;
         console2.log("Adding veFXS to TRSRY");
         addToBatch(
-            treasuryCustodianV1_1,
-            abi.encodeWithSelector(TreasuryCustodian.addAsset.selector, veFXS, veFXSLocations)
+            treasuryConfig,
+            abi.encodeWithSelector(TreasuryConfig.addAsset.selector, veFXS, veFXSLocations)
         );
         console2.log("    Categorizing veFXS as illiquid");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 veFXS,
                 AssetCategory.wrap("illiquid")
             )
         );
         console2.log("    Categorizing veFXS as volatile");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 veFXS,
                 AssetCategory.wrap("volatile")
             )
         );
         console2.log("    Categorizing veFXS as strategic");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 veFXS,
                 AssetCategory.wrap("strategic")
             )
@@ -470,32 +456,32 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         //      - illiquid, volatile, strategic
         console2.log("Adding FXS to TRSRY");
         addToBatch(
-            treasuryCustodianV1_1,
-            abi.encodeWithSelector(TreasuryCustodian.addAsset.selector, fxs, veFXSLocations)
+            treasuryConfig,
+            abi.encodeWithSelector(TreasuryConfig.addAsset.selector, fxs, veFXSLocations)
         );
         console2.log("    Categorizing FXS as liquid");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 fxs,
                 AssetCategory.wrap("liquid")
             )
         );
         console2.log("    Categorizing FXS as volatile");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 fxs,
                 AssetCategory.wrap("volatile")
             )
         );
         console2.log("    Categorizing FXS as strategic");
         addToBatch(
-            treasuryCustodianV1_1,
+            treasuryConfig,
             abi.encodeWithSelector(
-                TreasuryCustodian.categorizeAsset.selector,
+                TreasuryConfig.categorizeAsset.selector,
                 fxs,
                 AssetCategory.wrap("strategic")
             )
