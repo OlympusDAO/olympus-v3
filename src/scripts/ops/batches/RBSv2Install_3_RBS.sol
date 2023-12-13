@@ -122,6 +122,10 @@ contract RBSv2Install_3_RBS is OlyBatch {
         ohm = envAddress("current", "olympus.legacy.OHM");
         dai = envAddress("current", "external.tokens.DAI");
         sdai = envAddress("current", "external.tokens.sDAI");
+        weth = envAddress("current", "external.tokens.WETH");
+        veFXS = envAddress("current", "external.tokens.veFXS");
+        fxs = envAddress("current", "external.tokens.FXS");
+        usdc = envAddress("current", "external.tokens.USDC");
 
         ohmEthPriceFeed = envAddress("current", "external.chainlink.ohmEthPriceFeed");
         ethUsdPriceFeed = envAddress("current", "external.chainlink.ethUsdPriceFeed");
@@ -575,7 +579,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
         // - Uses a TWAP from the Uniswap V3 pool with the configured observation window
         {
             PRICEv2.Component[] memory ohmFeeds = new PRICEv2.Component[](1);
-            ohmFeeds[1] = PRICEv2.Component(
+            ohmFeeds[0] = PRICEv2.Component(
                 toSubKeycode("PRICE.UNIV3"),
                 UniswapV3Price.getTokenTWAP.selector,
                 abi.encode(
@@ -597,7 +601,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
                     false, // use the moving average as part of price strategy
                     0, // moving average
                     0,
-                    0,
+                    new uint256[](0),
                     PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
                     ohmFeeds
                 )
