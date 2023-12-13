@@ -9,8 +9,16 @@ interface IDistributor {
     function retrieveBounty() external returns (uint256);
 }
 
+contract MockSohm is MockERC20 {
+    uint256 public index;
+
+    constructor(uint256 index_) MockERC20("sOHM", "sOHM", 9) {
+        index = index_;
+    }
+}
+
 contract MockGohm is MockERC20 {
-    uint256 index;
+    uint256 public index;
 
     constructor(uint256 index_) MockERC20("gOHM", "gOHM", 18) {
         index = index_;
@@ -22,6 +30,22 @@ contract MockGohm is MockERC20 {
 
     function balanceTo(uint256 amount_) public view returns (uint256) {
         return (amount_ * 10 ** decimals) / index;
+    }
+}
+
+contract MockGohmWithSohmDep is MockERC20 {
+    MockSohm public sohm;
+
+    constructor(address sohm_) MockERC20("gOHM", "gOHM", 18) {
+        sohm = MockSohm(sohm_);
+    }
+
+    function balanceFrom(uint256 amount_) public view returns (uint256) {
+        return (amount_ * sohm.index()) / 10 ** decimals;
+    }
+
+    function balanceTo(uint256 amount_) public view returns (uint256) {
+        return (amount_ * 10 ** decimals) / sohm.index();
     }
 }
 
