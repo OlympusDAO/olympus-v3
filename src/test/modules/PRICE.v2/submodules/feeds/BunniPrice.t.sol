@@ -30,6 +30,7 @@ import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Po
 import {FullMath} from "libraries/FullMath.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
+import {ComputeAddress} from "test/libraries/ComputeAddress.sol";
 
 contract BunniPriceTest is Test {
     using FullMath for uint256;
@@ -73,12 +74,6 @@ contract BunniPriceTest is Test {
     uint256 internal constant USDC_PRICE = 1 * 10 ** PRICE_DECIMALS;
     uint256 internal constant OHM_PRICE = 11 * 10 ** PRICE_DECIMALS;
 
-    // DO NOT change these salt values, as they are used to ensure that the addresses are deterministic, and the SQRTPRICEX96 values depend on the ordering
-    bytes32 private constant OHM_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000003;
-    bytes32 private constant USDC_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000002;
-
     uint16 internal constant TWAP_MAX_DEVIATION_BPS = 100; // 1%
     uint32 internal constant TWAP_OBSERVATION_WINDOW = 600;
 
@@ -87,8 +82,17 @@ contract BunniPriceTest is Test {
 
         // Tokens
         {
-            ohmToken = new MockERC20{salt: OHM_SALT}("OHM", "OHM", OHM_DECIMALS);
-            usdcToken = new MockERC20{salt: USDC_SALT}("USDC", "USDC", USDC_DECIMALS);
+            ohmToken = new MockERC20("OHM", "OHM", OHM_DECIMALS);
+
+            // The USDC address needs to be higher than ohm, so generate a salt to ensure that
+            bytes32 usdcSalt = ComputeAddress.generateSalt(
+                address(ohmToken),
+                true,
+                type(MockERC20).creationCode,
+                abi.encode("USDC", "USDC", USDC_DECIMALS),
+                address(this)
+            );
+            usdcToken = new MockERC20{salt: usdcSalt}("USDC", "USDC", USDC_DECIMALS);
 
             OHM = address(ohmToken);
             USDC = address(usdcToken);

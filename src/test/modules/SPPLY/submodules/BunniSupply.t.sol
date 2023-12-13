@@ -16,6 +16,7 @@ import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 import {FullMath} from "libraries/FullMath.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
+import {ComputeAddress} from "test/libraries/ComputeAddress.sol";
 
 // Uniswap V3
 import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
@@ -77,20 +78,13 @@ contract BunniSupplyTest is Test {
     int56 internal constant OHM_USDC_TICK_CUMULATIVE_0 = -2463052984970;
     int56 internal constant OHM_USDC_TICK_CUMULATIVE_1 = -2463079732370;
 
+    // OHM-wETH Uni V3 pool, based on: 0x88051b0eea095007d3bef21ab287be961f3d8598
     uint128 internal constant OHM_WETH_POOL_LIQUIDITY = 602219599341335870;
     // Current tick: 156194
     uint160 internal constant OHM_WETH_SQRTPRICEX96 = 195181081174522229204497247535278;
     // NOTE: these numbers are fudged to match the current tick and default observation window from BunniManager
     int56 internal constant OHM_WETH_TICK_CUMULATIVE_0 = -2463078395000;
     int56 internal constant OHM_WETH_TICK_CUMULATIVE_1 = -2462984678600;
-
-    // DO NOT change these salt values, as they are used to ensure that the addresses are deterministic, and the SQRTPRICEX96 values depend on the ordering
-    bytes32 private constant OHM_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000010;
-    bytes32 private constant USDC_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000020;
-    bytes32 private constant WETH_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000002;
 
     uint16 internal constant TWAP_MAX_DEVIATION_BPS = 100; // 1%
     uint32 internal constant TWAP_OBSERVATION_WINDOW = 600; // 10 minutes
@@ -104,11 +98,29 @@ contract BunniSupplyTest is Test {
 
         // Tokens
         {
-            // Use salt to ensure that the addresses are deterministic, otherwise changing variables above will change the addresses and mess with the UniV3 pool
-            // Source: https://docs.soliditylang.org/en/v0.8.19/control-structures.html#salted-contract-creations-create2
-            ohm = new MockERC20{salt: OHM_SALT}("Olympus", "OHM", 9);
-            usdc = new MockERC20{salt: USDC_SALT}("USDC", "USDC", 6);
-            wETH = new MockERC20{salt: WETH_SALT}("Wrapped Ether", "wETH", 18);
+            ohm = new MockERC20("Olympus", "OHM", 9);
+
+            // The USDC address needs to be higher than ohm, so generate a salt to ensure that
+            bytes32 usdcSalt = ComputeAddress.generateSalt(
+                address(ohm),
+                true,
+                type(MockERC20).creationCode,
+                abi.encode("USDC", "USDC", 6),
+                address(this)
+            );
+            usdc = new MockERC20{salt: usdcSalt}("USDC", "USDC", 6);
+
+            // The WETH address needs to be higher than ohm, so generate a salt to ensure that
+            bytes32 wethSalt = ComputeAddress.generateSalt(
+                address(ohm),
+                true,
+                type(MockERC20).creationCode,
+                abi.encode("Wrapped Ether", "wETH", 18),
+                address(this)
+            );
+            wETH = new MockERC20{salt: wethSalt}("Wrapped Ether", "wETH", 18);
+
+            // The address of gOHM does not need to be deterministic
             gOhm = new MockGohm(GOHM_INDEX);
 
             ohmAddress = address(ohm);
