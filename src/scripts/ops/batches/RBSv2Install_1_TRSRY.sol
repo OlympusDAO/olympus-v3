@@ -3,23 +3,29 @@ pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";
 import {StdAssertions} from "forge-std/StdAssertions.sol";
-
-import {ERC20} from "solmate/tokens/ERC20.sol";
-
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
+// Libraries
+import {ERC20} from "solmate/tokens/ERC20.sol";
+import {IFXSAllocator} from "interfaces/IFXSAllocator.sol";
+
+// Bophades
 import "src/Kernel.sol";
+
+// Bophades modules
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {Category as AssetCategory} from "modules/TRSRY/TRSRY.v1.sol";
+
+// Bophades policies
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
-
-import {IFXSAllocator} from "interfaces/IFXSAllocator.sol";
+import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 /// @notice     Migrates to TRSRY v1.1
 contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     // Existing Olympus contracts
     address kernel;
+    address rolesAdmin;
     address treasuryV1;
     address treasuryCustodian;
     address treasuryConfig;
@@ -47,6 +53,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
+        rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
+
         treasuryV1 = envAddress("current", "olympus.modules.OlympusTreasuryV1");
         treasuryV1_1 = envAddress("current", "olympus.modules.OlympusTreasuryV1_1");
         treasuryCustodian = envAddress("current", "olympus.policies.TreasuryCustodian");
@@ -79,10 +87,10 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // This DAO MS batch:
         // 1. Transfers all tokens from the old treasury to the new treasury
         // 2. Records the current debt of the old treasury
-        // 3. Disable the old TreasuryCustodian
-        // 4. Upgrades the OlympusTreasury contract to the new version
+        // 3. Upgrades the OlympusTreasury contract to the new version
+        // 4. Sets debt on the new treasury contract
         // 5. Installs the new TreasuryCustodian
-        // 6. Sets debt on the new treasury contract
+        // 6. Set roles for policy access control
         // 7. Add and categorize DAI in TRSRY
         // 8. Add and categorize sDAI in TRSRY
         // 9. Add and categorize WETH in TRSRY
@@ -226,7 +234,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             assertEq(vefxsTotalDebt, 0, "FXS debt should be 0");
         }
 
-        // 4. Upgrade the OlympusTreasury contract to the new version
+        // 3. Upgrade the OlympusTreasury contract to the new version
         {
             console2.log("Upgrading TRSRY module to new version at %s", treasuryV1_1);
 
@@ -241,22 +249,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             console2.log("    Upgraded OlympusTreasury to new version");
         }
 
-        // 5. Install the new TreasuryConfig
-        {
-            console2.log("Installing new TreasuryConfig");
-
-            addToBatch(
-                kernel,
-                abi.encodeWithSelector(
-                    Kernel.executeAction.selector,
-                    Actions.ActivatePolicy,
-                    treasuryConfig
-                )
-            );
-            console2.log("    Installed new TreasuryConfig");
-        }
-
-        // 6. Transfer debt over to the new treasury
+        // 4. Transfer debt over to the new treasury
         // TreasuryCustodian.increaseDebt can be used as the existing debt is 0
 
         // DAI
@@ -300,6 +293,35 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                     vefxsToken,
                     veFXSAllocator,
                     vefxsBalance
+                )
+            );
+        }
+
+        // 5. Install the new TreasuryConfig
+        {
+            console2.log("Installing new TreasuryConfig");
+
+            addToBatch(
+                kernel,
+                abi.encodeWithSelector(
+                    Kernel.executeAction.selector,
+                    Actions.ActivatePolicy,
+                    treasuryConfig
+                )
+            );
+            console2.log("    Installed new TreasuryConfig");
+        }
+
+        // 6. Set roles for policy access control
+        //  - Give DAO MS the treasuryconfig_policy role
+        {
+            console2.log("Granting policy role for TreasuryConfig policy");
+            addToBatch(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    bytes32("treasuryconfig_policy"),
+                    daoMS
                 )
             );
         }
