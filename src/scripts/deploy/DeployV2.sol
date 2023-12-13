@@ -1403,14 +1403,23 @@ contract OlympusDeploy is Script {
         return address(migrationOffsetSupply);
     }
 
-    function _deployBrickedSupply(bytes memory args) public returns (address) {
+    function _deployBrickedSupply(bytes calldata args) public returns (address) {
         // Decode arguments for BrickedSupply submodule
-        (address[] memory ohmDenominatedTokens, address[] memory gohmDenominatedTokens) = abi
-            .decode(args, (address[], address[]));
+        // Necessary to truncate the first word (32 bytes) of args due to a potential bug in the JSON parser.
+        (address[] memory gohmDenominatedTokens, address[] memory ohmDenominatedTokens) = abi
+            .decode(args[32:], (address[], address[]));
 
         // Check that the environment variables are loaded
         if (address(SPPLY) == address(0)) revert("SPPLY address not set");
         if (address(sOHM) == address(0)) revert("sOHM address not set");
+
+        // Print out all gohmDenominatedTokens and ohmDenominatedTokens
+        for (uint256 i = 0; i < gohmDenominatedTokens.length; i++) {
+            console2.log("    gohmDenominatedToken", gohmDenominatedTokens[i]);
+        }
+        for (uint256 i = 0; i < ohmDenominatedTokens.length; i++) {
+            console2.log("    ohmDenominatedToken", ohmDenominatedTokens[i]);
+        }
 
         // Deploy BrickedSupply submodule
         vm.broadcast();
