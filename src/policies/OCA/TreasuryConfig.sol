@@ -51,12 +51,12 @@ contract TreasuryConfig is Policy, RolesConsumer {
         Keycode TRSRY_KEYCODE = TRSRY.KEYCODE();
 
         requests = new Permissions[](6);
-        requests[6] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
-        requests[7] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
-        requests[8] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
-        requests[9] = Permissions(TRSRY_KEYCODE, TRSRY.addCategoryGroup.selector);
-        requests[10] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
-        requests[11] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+        requests[0] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
+        requests[1] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
+        requests[2] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
+        requests[3] = Permissions(TRSRY_KEYCODE, TRSRY.addCategoryGroup.selector);
+        requests[4] = Permissions(TRSRY_KEYCODE, TRSRY.addCategory.selector);
+        requests[5] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
     }
 
     /// @notice     Returns the current version of the policy
