@@ -183,6 +183,8 @@ contract BrickedSupplyTest is Test {
     }
 
     function test_setOhmDenominatedTokens(address token0_) public {
+        vm.assume(token0_ != address(0));
+
         assertEq(submoduleBrickedSupply.ohmDenominatedTokens(0), address(ohm));
         assertEq(submoduleBrickedSupply.ohmDenominatedTokens(1), address(sohm));
 
@@ -193,6 +195,34 @@ contract BrickedSupplyTest is Test {
         submoduleBrickedSupply.setOhmDenominatedTokens(ohmDenominatedTokens);
 
         assertEq(submoduleBrickedSupply.ohmDenominatedTokens(0), token0_);
+    }
+
+    function test_setOhmDenominatedTokens_zeroAddress(uint8 index_) public {
+        uint8 zeroAddressIndex = uint8(bound(index_, 0, 1));
+
+        address[] memory ohmDenominatedTokens = new address[](2);
+        ohmDenominatedTokens[0] = zeroAddressIndex == 0 ? address(0) : address(ohm);
+        ohmDenominatedTokens[1] = zeroAddressIndex == 1 ? address(0) : address(ohm);
+
+        // Expect the ZeroToken error
+        bytes memory err = abi.encodeWithSelector(BrickedSupply.BrickedSupply_ZeroToken.selector, address(0));
+        vm.expectRevert(err);
+
+        vm.prank(address(spply));
+        submoduleBrickedSupply.setOhmDenominatedTokens(ohmDenominatedTokens);
+    }
+
+    function test_setOhmDenominatedTokens_exists() public {
+        address[] memory ohmDenominatedTokens = new address[](2);
+        ohmDenominatedTokens[0] = address(ohm);
+        ohmDenominatedTokens[1] = address(gOhm); // Already exists in gOhmDenominatedTokens
+
+        // Expect the TokenExists error
+        bytes memory err = abi.encodeWithSelector(BrickedSupply.BrickedSupply_TokenExists.selector, address(gOhm));
+        vm.expectRevert(err);
+
+        vm.prank(address(spply));
+        submoduleBrickedSupply.setOhmDenominatedTokens(ohmDenominatedTokens);
     }
 
     // ========= setGohmDenominatedTokens ========= //
@@ -211,6 +241,8 @@ contract BrickedSupplyTest is Test {
     }
 
     function test_setGohmDenominatedTokens(address token0_) public {
+        vm.assume(token0_ != address(0));
+
         assertEq(submoduleBrickedSupply.gohmDenominatedTokens(0), address(gOhm));
 
         address[] memory gohmDenominatedTokens = new address[](1);
@@ -220,5 +252,33 @@ contract BrickedSupplyTest is Test {
         submoduleBrickedSupply.setGohmDenominatedTokens(gohmDenominatedTokens);
 
         assertEq(submoduleBrickedSupply.gohmDenominatedTokens(0), token0_);
+    }
+
+    function test_setGohmDenominatedTokens_zeroAddress(uint8 index_) public {
+        uint8 zeroAddressIndex = uint8(bound(index_, 0, 1));
+
+        address[] memory gohmDenominatedTokens = new address[](2);
+        gohmDenominatedTokens[0] = zeroAddressIndex == 0 ? address(0) : address(gOhm);
+        gohmDenominatedTokens[1] = zeroAddressIndex == 1 ? address(0) : address(gOhm);
+
+        // Expect the ZeroToken error
+        bytes memory err = abi.encodeWithSelector(BrickedSupply.BrickedSupply_ZeroToken.selector, address(0));
+        vm.expectRevert(err);
+
+        vm.prank(address(spply));
+        submoduleBrickedSupply.setGohmDenominatedTokens(gohmDenominatedTokens);
+    }
+
+    function test_setGohmDenominatedTokens_exists() public {
+        address[] memory gohmDenominatedTokens = new address[](2);
+        gohmDenominatedTokens[0] = address(ohm); // Already exists in ohmDenominatedTokens
+        gohmDenominatedTokens[1] = address(gOhm);
+
+        // Expect the TokenExists error
+        bytes memory err = abi.encodeWithSelector(BrickedSupply.BrickedSupply_TokenExists.selector, address(ohm));
+        vm.expectRevert(err);
+
+        vm.prank(address(spply));
+        submoduleBrickedSupply.setGohmDenominatedTokens(gohmDenominatedTokens);
     }
 }
