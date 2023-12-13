@@ -73,6 +73,7 @@ import {AuraBalancerSupply} from "modules/SPPLY/submodules/AuraBalancerSupply.so
 import {BLVaultSupply} from "modules/SPPLY/submodules/BLVaultSupply.sol";
 import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
+import {BrickedSupply} from "modules/SPPLY/submodules/BrickedSupply.sol";
 
 // Cooler
 import {Clearinghouse} from "policies/Clearinghouse.sol";
@@ -126,6 +127,7 @@ contract OlympusDeploy is Script {
     BLVaultSupply public blVaultSupply;
     BunniSupply public bunniSupply;
     MigrationOffsetSupply public migrationOffsetSupply;
+    BrickedSupply public brickedSupply;
 
     // Policies
     Operator public operator;
@@ -159,6 +161,7 @@ contract OlympusDeploy is Script {
     // Token addresses
     ERC20 public ohm;
     ERC20 public gOHM;
+    ERC20 public sOHM;
     ERC20 public reserve;
     ERC4626 public wrappedReserve;
     ERC20 public wsteth;
@@ -262,12 +265,14 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultSupply"] = this._deployBLVaultSupply.selector;
         selectorMap["BunniSupply"] = this._deployBunniSupply.selector;
         selectorMap["MigrationOffsetSupply"] = this._deployMigrationOffsetSupply.selector;
+        selectorMap["BrickedSupply"] = this._deployBrickedSupply.selector;
 
         // Load environment addresses
         env = vm.readFile("./src/scripts/env.json");
 
         // Non-bophades contracts
         ohm = ERC20(envAddress("olympus.legacy.OHM"));
+        sOHM = ERC20(envAddress("olympus.legacy.sOHM"));
         gOHM = ERC20(envAddress("olympus.legacy.gOHM"));
         reserve = ERC20(envAddress("external.tokens.DAI"));
         wrappedReserve = ERC4626(envAddress("external.tokens.sDAI"));
@@ -367,6 +372,7 @@ contract OlympusDeploy is Script {
         migrationOffsetSupply = MigrationOffsetSupply(
             envAddress("olympus.submodules.SPPLY.MigrationOffsetSupply")
         );
+        brickedSupply = BrickedSupply(envAddress("olympus.submodules.SPPLY.BrickedSupply"));
 
         // External contracts
         bunniHub = BunniHub(envAddress("external.Bunni.BunniHub"));
@@ -1270,7 +1276,27 @@ contract OlympusDeploy is Script {
         return address(migrationOffsetSupply);
     }
 
-    // TODO deploy BrickedSupply
+    function _deployBrickedSupply(bytes memory args) public returns (address) {
+        // Decode arguments for BrickedSupply submodule
+        (address[] memory ohmDenominatedTokens, address[] memory gohmDenominatedTokens) = abi
+            .decode(args, (address[], address[]));
+
+        // Check that the environment variables are loaded
+        if (address(SPPLY) == address(0)) revert("SPPLY address not set");
+        if (address(sOHM) == address(0)) revert("sOHM address not set");
+
+        // Deploy BrickedSupply submodule
+        vm.broadcast();
+        brickedSupply = new BrickedSupply(
+            SPPLY,
+            address(sOHM),
+            ohmDenominatedTokens,
+            gohmDenominatedTokens
+        );
+        console2.log("BrickedSupply deployed at:", address(brickedSupply));
+
+        return address(brickedSupply);
+    }
 
     // ========== COOLER LOANS ========== //
 
