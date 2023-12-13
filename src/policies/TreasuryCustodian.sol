@@ -39,7 +39,7 @@ contract TreasuryCustodian is Policy, RolesConsumer {
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
 
-        (uint8 TRSRY_MAJOR, uint8 TRSRY_MINOR) = TRSRY.VERSION();
+        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
