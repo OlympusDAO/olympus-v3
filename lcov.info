@@ -2872,7 +2872,7 @@ LF:250
 LH:214
 end_of_record
 TN:
-SF:src/policies/RBS/PriceConfig.sol
+SF:src/policies/RBS/PriceConfig.v1.sol
 FN:21,OlympusPriceConfig.configureDependencies
 FN:30,OlympusPriceConfig.requestPermissions
 FN:56,OlympusPriceConfig.initialize

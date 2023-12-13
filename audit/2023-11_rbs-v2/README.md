@@ -30,7 +30,9 @@ The contracts in-scope for this audit are:
         -   [interfaces/](../../src/policies/OCA/interfaces)
             -   [IAppraiser.sol](../../src/policies/OCA/interfaces/IAppraiser.sol)
         -   [Appraiser.sol](../../src/policies/OCA/Appraiser.sol)
-        -   [Bookkeeper.sol](../../src/policies/OCA/Bookkeeper.sol)
+        -   [PriceConfig.v2.sol](../../src/policies/OCA/PriceConfig.v2.sol)
+        -   [SupplyConfig.sol](../../src/policies/OCA/SupplyConfig.sol)
+        -   [TreasuryConfig.sol](../../src/policies/OCA/TreasuryConfig.sol)
     -   [RBS/](../../src/policies/RBS)
         -   [interfaces/](../../src/policies/RBS/interfaces)
             -   [IHeart.sol](../../src/policies/RBS/interfaces/IHeart.sol)
@@ -60,7 +62,9 @@ Tests for the in-scope contracts are contained in the following locations:
             -   [BondManager.t.sol](../../src/test/policies/Bonds/BondManager.t.sol)
         -   [OCA/](../../src/test/policies/OCA)
             -   [Appraiser.t.sol](../../src/test/policies/OCA/Appraiser.t.sol)
-            -   [Bookkeeper.t.sol](../../src/test/policies/OCA/Bookkeeper.t.sol)
+            -   [PriceConfig.v2.t.sol](../../src/test/policies/OCA/PriceConfig.v2.t.sol)
+            -   [SupplyConfig.t.sol](../../src/test/policies/OCA/SupplyConfig.t.sol)
+            -   [TreasuryConfig.t.sol](../../src/test/policies/OCA/TreasuryConfig.t.sol)
         -   [RBS/](../../src/test/policies/RBS)
             -   [Heart.t.sol](../../src/test/policies/RBS/Heart.t.sol)
             -   [Operator.t.sol](../../src/test/policies/RBS/Operator.t.sol)
@@ -151,10 +155,14 @@ flowchart TD
   Appraiser --> SPPLY[(SPPLY)]
   Appraiser --> PRICE[(PRICE)]
 
-  BookKeeper((BookKeeper))
-  BookKeeper --> TRSRY
-  BookKeeper --> SPPLY
-  BookKeeper --> PRICE
+  TreasuryConfig((TreasuryConfig))
+  TreasuryConfig --> TRSRY
+
+  PriceConfig((PriceConfig))
+  PriceConfig --> PRICE
+
+  SupplyConfig((SupplyConfig))
+  SupplyConfig --> SPPLY
 
   SPPLY --> AuraBalancerSupply
   SPPLY --> BLVaultSupply
@@ -298,9 +306,17 @@ Features:
 -   Calculate the value of asset holdings in a category
 -   Calculate metrics (e.g. liquid backing per backed OHM)
 
-### BookKeeper (Policy)
+### TreasuryConfig (Policy)
 
-A new policy to provide convenient configuration of TRSRY, PRICE and SPPLY.
+A new policy to provide convenient configuration of TRSRY.
+
+### PriceConfig (Policy)
+
+A new policy to provide convenient configuration of PRICE.
+
+### SupplyConfig (Policy)
+
+A new policy to provide convenient configuration of SPPLY.
 
 ### BunniManager (Policy)
 

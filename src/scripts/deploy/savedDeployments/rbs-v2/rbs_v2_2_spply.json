@@ -7,6 +7,10 @@
             }
         },
         {
+            "name": "SupplyConfig",
+            "args": {}
+        },
+        {
             "name": "BLVaultSupply",
             "args": {}
         },
@@ -18,6 +22,19 @@
             "name": "MigrationOffsetSupply",
             "args": {
                 "gOhmOffset": 2013
+            }
+        },
+        {
+            "name": "BrickedSupply",
+            "args": {
+                "gohmDenominatedTokens": [
+                    "0x0ab87046fBb341D058F17CBC4c1133F25a20a52f"
+                ],
+                "ohmDenominatedTokens": [
+                    "0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5",
+                    "0x04906695D6D12CF5459975d7C3C03356E4Ccd460",
+                    "0x04F2694C8fcee23e8Fd0dfEA1d4f5Bb8c352111F"
+                ]
             }
         },
         {

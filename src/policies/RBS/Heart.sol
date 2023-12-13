@@ -114,6 +114,13 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
     }
 
+    /// @notice     Returns the current version of the policy
+    /// @dev        This is useful for distinguishing between different versions of the policy
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        major = 2;
+        minor = 0;
+    }
+
     //============================================================================================//
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
