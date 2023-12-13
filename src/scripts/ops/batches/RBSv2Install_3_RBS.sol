@@ -612,15 +612,24 @@ contract RBSv2Install_3_RBS is OlyBatch {
     /// @notice     Configures protocol owned liquidity
     function RBSv2Install_3_3(bool send_) public isDaoBatch(send_) {
         // This DAO MS batch:
-        // 1. Sets the BunniLens variable on the BunniManager policy
-        // 2. Activates the BunniManager policy
-        // 3. Withdraws liquidity from the existing Uniswap V3 pool
-        // 4. Deploys an LP token for pool
-        // 5. Deposits liquidity into the poll
-        // 6. Activates the LP token
-        // 7. Set roles for policy access control (bunni_admin)
+        // 1. Set roles for policy access control (bunni_admin)
+        // 2. Sets the BunniLens variable on the BunniManager policy
+        // 3. Activates the BunniManager policy
+        // 4. Withdraws liquidity from the existing Uniswap V3 pool
+        // 5. Deploys an LP token for pool
+        // 6. Deposits liquidity into the poll
+        // 7. Activates the LP token
 
-        // 1. Sets the BunniLens variable on the BunniManager policy
+        // 1. Set roles for policy access control
+        // BunniManager policy
+        //     - Give DAO MS the bunni_admin role
+        console2.log("Granting admin role for BunniManager policy");
+        addToBatch(
+            rolesAdmin,
+            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("bunni_admin"), daoMS)
+        );
+
+        // 2. Sets the BunniLens variable on the BunniManager policy
         // This cannot be performed at deployment-time
         console2.log("Setting BunniLens variable on BunniManager policy");
         addToBatch(
@@ -628,7 +637,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             abi.encodeWithSelector(BunniManager.setBunniLens.selector, bunniLens)
         );
 
-        // 2. Activate the BunniManager policy
+        // 3. Activate the BunniManager policy
         console2.log("Activating BunniManager policy");
         addToBatch(
             kernel,
@@ -639,7 +648,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             )
         );
 
-        // 3. Withdraw liquidity from the existing Uniswap V3 pool
+        // 4. Withdraw liquidity from the existing Uniswap V3 pool
         uint256 ohmBalance;
         uint256 wethBalance;
         {
@@ -712,7 +721,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             console2.log("    Withdrawn WETH balance (18dp) is", wethBalance);
         }
 
-        // 4. Deploy an LP token for the pool using BunniManager
+        // 5. Deploy an LP token for the pool using BunniManager
         {
             console2.log("Deploying LP token for Uniswap V3 OHM-wETH pool");
             addToBatch(
@@ -721,7 +730,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             );
         }
 
-        // 5. Deposit liquidity into the pool using BunniManager
+        // 6. Deposit liquidity into the pool using BunniManager
         {
             console2.log("Depositing liquidity into Uniswap V3 OHM-wETH pool");
             uint256 poolTokenAmount = abi.decode(
@@ -742,7 +751,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             console2.log("    Pool token amount is", poolTokenAmount);
         }
 
-        // 6. Activate the LP token
+        // 7. Activate the LP token
         // This will also register the LP token with TRSRY, PRICE and SPPLY
         {
             console2.log("Activating LP token for Uniswap V3 OHM-wETH pool");
@@ -756,15 +765,6 @@ contract RBSv2Install_3_RBS is OlyBatch {
                 )
             );
         }
-
-        // 7. Set roles for policy access control
-        // BunniManager policy
-        //     - Give DAO MS the bunni_admin role
-        console2.log("Granting admin role for BunniManager policy");
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(RolesAdmin.grantRole.selector, bytes32("bunni_admin"), daoMS)
-        );
     }
 
     /// @notice     Activates RBS (Appraiser, Heart, Operator)
