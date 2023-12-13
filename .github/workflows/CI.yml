@@ -22,7 +22,7 @@ jobs:
 
             - uses: pnpm/action-setup@v2
               with:
-                version: 8
+                  version: 8
 
             - name: Install Node dependencies
               run: pnpm install
@@ -44,7 +44,7 @@ jobs:
             - name: Run fork tests
               run: pnpm run test:fork
               env:
-                FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
+                  FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
 
             - name: Run cross-chain fork tests
               run: pnpm run test:crosschainfork
@@ -59,12 +59,12 @@ jobs:
             - name: Add Artifacts
               uses: actions/upload-artifact@v3
               with:
-                name: lcov.info
-                path: lcov.info
-              
+                  name: lcov.info
+                  path: lcov.info
+
             - name: Report Code Coverage
               uses: zgosalvez/github-actions-report-lcov@v3
               with:
-                coverage-files: lcov.info
-                github-token: ${{ secrets.GITHUB_TOKEN }}
-                update-comment: true
+                  coverage-files: lcov.info
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  update-comment: true

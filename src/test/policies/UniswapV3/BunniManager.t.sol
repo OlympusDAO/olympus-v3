@@ -132,7 +132,7 @@ contract BunniManagerTest is Test {
 
     // DO NOT change these salt values, as they are used to ensure that the addresses are deterministic, and the SQRTPRICEX96 values depend on the ordering
     bytes32 private constant OHM_SALT =
-        0x0000000000000000000000000000000000000000000000000000000000000001;
+        0x0000000000000000000000000000000000000000000000000000000000000008;
     bytes32 private constant USDC_SALT =
         0x0000000000000000000000000000000000000000000000000000000000000000;
     bytes32 private constant WETH_SALT =
@@ -289,7 +289,9 @@ contract BunniManagerTest is Test {
 
         {
             // Create a Uniswap V3 pool
-            pool = IUniswapV3Pool(uniswapFactory.createPool(ohmAddress, usdcAddress, POOL_FEE));
+            pool = IUniswapV3Pool(
+                uniswapFactory.createPool(token1Address, token0Address, POOL_FEE)
+            );
 
             // Initialize it
             pool.initialize(OHM_USDC_SQRTPRICEX96);
@@ -1162,7 +1164,7 @@ contract BunniManagerTest is Test {
     //  [X] reverts if already registered with SPPLY
     //  [X] success - registers with TRSRY, PRICE, SPPLY
 
-    function test_activatePoolToken_unauthorizedReverts() public {
+    function testRevert_activatePoolToken_unauthorized() public {
         _expectRevert_unauthorized();
 
         vm.prank(alice);
@@ -1173,7 +1175,7 @@ contract BunniManagerTest is Test {
         );
     }
 
-    function test_activatePoolToken_inactiveReverts() public {
+    function testRevert_activatePoolToken_inactive() public {
         // Create a new BunniManager policy, but don't install/activate it
         BunniManager newBunniManager = _createNewBunniManager();
 
@@ -1187,7 +1189,7 @@ contract BunniManagerTest is Test {
         );
     }
 
-    function test_activatePoolToken_bunniHubNotSetReverts() public {
+    function testRevert_activatePoolToken_bunniHubNotSet() public {
         // Create a new BunniManager policy, without the BunniHub set
         BunniManager newBunniManager = _setUpNewBunniManager();
 
@@ -1201,7 +1203,7 @@ contract BunniManagerTest is Test {
         );
     }
 
-    function test_activatePoolToken_tokenNotDeployedReverts() public {
+    function testRevert_activatePoolToken_tokenNotDeployed() public {
         _expectRevert_poolNotFound(address(pool));
 
         vm.prank(policy);
@@ -1212,7 +1214,7 @@ contract BunniManagerTest is Test {
         );
     }
 
-    function test_activatePoolToken_noLiquidityReverts() public {
+    function testRevert_activatePoolToken_noLiquidity() public {
         // Deploy a token so that the ERC20 exists
         vm.prank(policy);
         bunniManager.deployPoolToken(address(pool));
@@ -1231,7 +1233,7 @@ contract BunniManagerTest is Test {
         );
     }
 
-    function test_activatePoolToken_registeredWithTrsryLocationsReverts() public {
+    function testRevert_activatePoolToken_registeredWithTrsryLocationsReverts() public {
         uint256 amount = 100e6;
         uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
         uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
@@ -1271,7 +1273,7 @@ contract BunniManagerTest is Test {
         );
     }
 
-    function test_activatePoolToken_registeredWithPriceReverts() public {
+    function testRevert_activatePoolToken_registeredWithPriceReverts() public {
         uint256 amount = 100e6;
         uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
         uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
@@ -1334,7 +1336,7 @@ contract BunniManagerTest is Test {
         );
     }
 
-    function test_activatePoolToken_registeredWithSupplyReverts() public {
+    function testRevert_activatePoolToken_registeredWithSupplyReverts() public {
         uint256 amount = 100e6;
         uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
         uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale

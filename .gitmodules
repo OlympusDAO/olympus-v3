@@ -26,3 +26,6 @@
 	path = lib/uniswap-v3-periphery
 	url = https://github.com/uniswap/v3-periphery
 	branch = 0.8
+[submodule "lib/Cooler"]
+	path = lib/Cooler
+	url = https://github.com/ohmzeus/Cooler
