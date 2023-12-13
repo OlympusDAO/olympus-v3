@@ -167,15 +167,14 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
 
         // 7. Install the BrickedSupply submodule on the OlympusSupply module
         // No configuration needed - already done at deployment
-        // TODO enable
-        // console2.log("Installing BrickedSupply submodule");
-        // addToBatch(
-        //     supplyConfig,
-        //     abi.encodeWithSelector(
-        //         SupplyConfig.installSubmodule.selector,
-        //         BrickedSupply(brickedSupply)
-        //     )
-        // );
+        console2.log("Installing BrickedSupply submodule");
+        addToBatch(
+            supplyConfig,
+            abi.encodeWithSelector(
+                SupplyConfig.installSubmodule.selector,
+                BrickedSupply(brickedSupply)
+            )
+        );
 
         // 8. Categorize protocol-owned-treasury supply
         console2.log("Categorizing DAO MS as protocol-owned-treasury supply");
