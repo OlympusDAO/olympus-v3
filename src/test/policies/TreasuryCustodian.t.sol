@@ -7,7 +7,7 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {OlympusTreasury, TRSRYv1} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {ROLESv1, OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
