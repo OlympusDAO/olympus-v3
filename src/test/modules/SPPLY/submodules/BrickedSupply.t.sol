@@ -175,7 +175,10 @@ contract BrickedSupplyTest is Test {
     function test_setOhmDenominatedTokens_notParent(address caller_) public {
         vm.assume(caller_ != address(spply));
 
-        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(caller_));
+        bytes memory err = abi.encodeWithSignature(
+            "Submodule_OnlyParent(address)",
+            address(caller_)
+        );
         vm.expectRevert(err);
 
         vm.prank(caller_);
@@ -205,7 +208,10 @@ contract BrickedSupplyTest is Test {
         ohmDenominatedTokens[1] = zeroAddressIndex == 1 ? address(0) : address(ohm);
 
         // Expect the ZeroToken error
-        bytes memory err = abi.encodeWithSelector(BrickedSupply.BrickedSupply_ZeroToken.selector, address(0));
+        bytes memory err = abi.encodeWithSelector(
+            BrickedSupply.BrickedSupply_ZeroToken.selector,
+            address(0)
+        );
         vm.expectRevert(err);
 
         vm.prank(address(spply));
@@ -218,7 +224,10 @@ contract BrickedSupplyTest is Test {
         ohmDenominatedTokens[1] = address(gOhm); // Already exists in gOhmDenominatedTokens
 
         // Expect the TokenExists error
-        bytes memory err = abi.encodeWithSelector(BrickedSupply.BrickedSupply_TokenExists.selector, address(gOhm));
+        bytes memory err = abi.encodeWithSelector(
+            BrickedSupply.BrickedSupply_TokenExists.selector,
+            address(gOhm)
+        );
         vm.expectRevert(err);
 
         vm.prank(address(spply));
@@ -233,7 +242,10 @@ contract BrickedSupplyTest is Test {
     function test_setGohmDenominatedTokens_notParent(address caller_) public {
         vm.assume(caller_ != address(spply));
 
-        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(caller_));
+        bytes memory err = abi.encodeWithSignature(
+            "Submodule_OnlyParent(address)",
+            address(caller_)
+        );
         vm.expectRevert(err);
 
         vm.prank(caller_);
@@ -262,7 +274,10 @@ contract BrickedSupplyTest is Test {
         gohmDenominatedTokens[1] = zeroAddressIndex == 1 ? address(0) : address(gOhm);
 
         // Expect the ZeroToken error
-        bytes memory err = abi.encodeWithSelector(BrickedSupply.BrickedSupply_ZeroToken.selector, address(0));
+        bytes memory err = abi.encodeWithSelector(
+            BrickedSupply.BrickedSupply_ZeroToken.selector,
+            address(0)
+        );
         vm.expectRevert(err);
 
         vm.prank(address(spply));
@@ -275,7 +290,10 @@ contract BrickedSupplyTest is Test {
         gohmDenominatedTokens[1] = address(gOhm);
 
         // Expect the TokenExists error
-        bytes memory err = abi.encodeWithSelector(BrickedSupply.BrickedSupply_TokenExists.selector, address(ohm));
+        bytes memory err = abi.encodeWithSelector(
+            BrickedSupply.BrickedSupply_TokenExists.selector,
+            address(ohm)
+        );
         vm.expectRevert(err);
 
         vm.prank(address(spply));

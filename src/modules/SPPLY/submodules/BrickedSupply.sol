@@ -11,7 +11,6 @@ import {IgOHM} from "src/interfaces/IgOHM.sol";
 /// @title      BrickedSupply
 /// @notice     SPPLY submodule representing a manual adjustment for bricked token balances
 contract BrickedSupply is CustomSupply {
-
     // ========= ERRORS ========= //
 
     /// @notice     Error emitted if a token is already registered
