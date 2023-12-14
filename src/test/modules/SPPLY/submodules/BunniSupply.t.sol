@@ -247,6 +247,14 @@ contract BunniSupplyTest is Test {
         return (reserve0, reserve1);
     }
 
+    function _getUncollectedFees(
+        BunniKey memory key_,
+        BunniLens lens_
+    ) internal view returns (uint256, uint256) {
+        (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
+        return (fee0, fee1);
+    }
+
     function _expectRevert_invalidBunniToken(address token_) internal {
         bytes memory err = abi.encodeWithSelector(
             BunniSupply.BunniSupply_Params_InvalidBunniToken.selector,
@@ -616,6 +624,27 @@ contract BunniSupplyTest is Test {
         assertEq(reserves[0].balances[0], ohmReserves_);
         assertEq(reserves[0].balances[1], usdcReserves_);
     }
+
+    // function test_getProtocolOwnedLiquidityUncollectedFees_singleToken() public {
+    //     // Register one token
+    //     vm.prank(address(moduleSupply));
+    //     submoduleBunniSupply.addBunniToken(
+    //         poolTokenAddress,
+    //         bunniLensAddress,
+    //         TWAP_MAX_DEVIATION_BPS,
+    //         TWAP_OBSERVATION_WINDOW
+    //     );
+
+    //     address trader = vm.addr(0xA);
+    //     deal(address(ohm), trader, 10000 * 1e9);
+    //     vm.prank(trader);
+    //     uniswapPool.swap
+
+    //     // Determine the amount of reserves in the pool, which should be consistent with the lens value
+    //     (uint256 ohmFee_, uint256 usdcFee_) = _getUncollectedFees(poolTokenKey, bunniLens);
+    //     console2.log("ohmFee_", ohmFee_);
+    //     console2.log("usdcFee_", usdcFee_);
+    // }
 
     function test_getProtocolOwnedLiquidityReserves_singleToken_observationWindow() public {
         uint32 observationWindow = 60;
