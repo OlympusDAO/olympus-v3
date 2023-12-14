@@ -818,9 +818,14 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     ),
                     (uint256, uint256)
                 );
+                console2.log("    Collected OHM balance (9dp) is", collectAmount0);
+                console2.log("    Collected WETH balance (18dp) is", collectAmount1);
 
-                assertEq(collectAmount0, decreaseAmount0, "Incorrect amount0 collected");
-                assertEq(collectAmount1, decreaseAmount1, "Incorrect amount1 collected");
+                (, , , , , , , uint128 remainingLiquidity, , , , ) = INonfungiblePositionManager(
+                    positionManager
+                ).positions(ohmWethTokenId);
+                console2.log("    Remaining liquidity is", remainingLiquidity);
+                assertEq(remainingLiquidity, 0, "Remaining liquidity should be 0");
 
                 ohmBalanceWithdrawn += ohmIndex == 0 ? collectAmount0 : collectAmount1;
                 wethBalanceWithdrawn += ohmIndex == 0 ? collectAmount1 : collectAmount0;
@@ -865,6 +870,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         }
 
         // 7. Deposit liquidity into the pool using BunniManager
+        //  The pool token shares are deposited into TRSRY
         {
             console2.log("Depositing liquidity into Uniswap V3 OHM-wETH pool");
             uint256 poolTokenAmount = abi.decode(
