@@ -731,8 +731,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         );
 
         // 4. Withdraw liquidity from the existing Uniswap V3 pool into the DAO MS
-        uint256 ohmBalance;
-        uint256 wethBalance;
+        uint256 ohmBalanceWithdrawn;
+        uint256 wethBalanceWithdrawn;
         {
             // Determine token ordering
             uint8 ohmIndex;
@@ -787,8 +787,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                             block.timestamp
                         );
 
-                console2.log("Withdrawing liquidity from existing Uniswap V3 OHM-wETH pool");
-                (uint256 amount0, uint256 amount1) = abi.decode(
+                console2.log("Decreasing liquidity for existing Uniswap V3 OHM-wETH pool");
+                (uint256 decreaseAmount0, uint256 decreaseAmount1) = abi.decode(
                     addToBatch(
                         positionManager,
                         abi.encodeWithSelector(
@@ -798,12 +798,36 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     ),
                     (uint256, uint256)
                 );
-                ohmBalance += ohmIndex == 0 ? amount0 : amount1;
-                wethBalance += ohmIndex == 0 ? amount1 : amount0;
+
+                INonfungiblePositionManager.CollectParams memory collectParams = INonfungiblePositionManager
+                    .CollectParams(
+                        ohmWethTokenId,
+                        address(daoMS),
+                        type(uint128).max,
+                        type(uint128).max
+                    );
+
+                console2.log("Collecting liquidity for existing Uniswap V3 OHM-wETH pool");
+                (uint256 collectAmount0, uint256 collectAmount1) = abi.decode(
+                    addToBatch(
+                        positionManager,
+                        abi.encodeWithSelector(
+                            INonfungiblePositionManager.collect.selector,
+                            collectParams
+                        )
+                    ),
+                    (uint256, uint256)
+                );
+
+                assertEq(collectAmount0, decreaseAmount0, "Incorrect amount0 collected");
+                assertEq(collectAmount1, decreaseAmount1, "Incorrect amount1 collected");
+
+                ohmBalanceWithdrawn += ohmIndex == 0 ? collectAmount0 : collectAmount1;
+                wethBalanceWithdrawn += ohmIndex == 0 ? collectAmount1 : collectAmount0;
             }
 
-            console2.log("    Withdrawn OHM balance (9dp) is", ohmBalance);
-            console2.log("    Withdrawn WETH balance (18dp) is", wethBalance);
+            console2.log("    Withdrawn OHM balance (9dp) is", ohmBalanceWithdrawn);
+            console2.log("    Withdrawn WETH balance (18dp) is", wethBalanceWithdrawn);
             console2.log("    NOTE: Withdrawn OHM needs to be burnt manually");
 
             console2.log(
@@ -821,18 +845,14 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             console2.log("Approving withdrawn WETH for transfer to TRSRY v1.1");
             addToBatch(
                 weth,
-                abi.encodeWithSelector(ERC20.approve.selector, treasuryV1_1, wethBalance)
+                abi.encodeWithSelector(ERC20.approve.selector, treasuryV1_1, wethBalanceWithdrawn)
             );
 
             console2.log("Transferring withdrawn WETH to TRSRY v1.1");
             addToBatch(
                 weth,
-                abi.encodeWithSelector(ERC20.transfer.selector, treasuryV1_1, wethBalance)
+                abi.encodeWithSelector(ERC20.transfer.selector, treasuryV1_1, wethBalanceWithdrawn)
             );
-
-            uint256 residualWethBalance = ERC20(weth).balanceOf(address(daoMS));
-            console2.log("    Residual wETH balance (18dp) is", residualWethBalance);
-            assertEq(residualWethBalance, 0, "wETH balance in DAO MS should be 0");
         }
 
         // 6. Deploy an LP token for the pool using BunniManager
@@ -854,8 +874,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                         BunniManager.deposit.selector,
                         ohmWethUniV3Pool,
                         ohm,
-                        ohmBalance,
-                        wethBalance,
+                        ohmBalanceWithdrawn,
+                        wethBalanceWithdrawn,
                         100 // 1%
                     )
                 ),
