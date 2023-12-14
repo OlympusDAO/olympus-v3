@@ -79,7 +79,8 @@ contract BunniLens is IBunniLens {
         (uint128 liquidity, uint256 feeGrowthInside0Last, uint256 feeGrowthInside1Last, , ) = key
             .pool
             .positions(keccak256(abi.encodePacked(address(hub), key.tickLower, key.tickUpper)));
-        uint256 feeGrowthGlobal = key.pool.feeGrowthGlobal0X128();
+        uint256 feeGrowthGlobal0 = key.pool.feeGrowthGlobal0X128();
+        uint256 feeGrowthGlobal1 = key.pool.feeGrowthGlobal1X128();
 
         fee0 = _computeFeesEarned(
             key,
@@ -88,7 +89,7 @@ contract BunniLens is IBunniLens {
             feeGrowthInside0Last,
             feeGrowthOutside0Lower,
             feeGrowthOutside0Upper,
-            feeGrowthGlobal
+            feeGrowthGlobal0
         );
         fee1 = _computeFeesEarned(
             key,
@@ -97,7 +98,7 @@ contract BunniLens is IBunniLens {
             feeGrowthInside1Last,
             feeGrowthOutside1Lower,
             feeGrowthOutside1Upper,
-            feeGrowthGlobal
+            feeGrowthGlobal1
         );
     }
 
