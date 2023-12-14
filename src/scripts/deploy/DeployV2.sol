@@ -1137,11 +1137,10 @@ contract OlympusDeploy is Script {
     function _deployBunniManagerPolicy(bytes memory args) public returns (address) {
         // Arguments
         // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
-        (
-            uint48 harvestFrequency,
-            uint16 harvestRewardFee,
-            uint256 harvestRewardMax
-        ) = abi.decode(args, (uint48, uint16, uint256));
+        (uint48 harvestFrequency, uint16 harvestRewardFee, uint256 harvestRewardMax) = abi.decode(
+            args,
+            (uint48, uint16, uint256)
+        );
 
         console2.log("    harvestFrequency", harvestFrequency);
         console2.log("    harvestRewardFee", harvestRewardFee);
@@ -1170,9 +1169,7 @@ contract OlympusDeploy is Script {
 
     function _deployBunniHub(bytes memory args) public returns (address) {
         // Arguments
-        (
-            address uniswapFactory
-        ) = abi.decode(args, (address));
+        address uniswapFactory = abi.decode(args, (address));
 
         console2.log("    uniswapFactory", uniswapFactory);
 
