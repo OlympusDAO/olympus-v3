@@ -826,11 +826,28 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 console2.log("    Collected OHM balance (9dp) is", collectAmount0);
                 console2.log("    Collected WETH balance (18dp) is", collectAmount1);
 
-                (, , , , , , , uint128 remainingLiquidity, , , , ) = INonfungiblePositionManager(
-                    positionManager
-                ).positions(ohmWethTokenId);
-                console2.log("    Remaining liquidity is", remainingLiquidity);
-                assertEq(remainingLiquidity, 0, "Remaining liquidity should be 0");
+                {
+                    (
+                        ,
+                        ,
+                        ,
+                        ,
+                        ,
+                        ,
+                        ,
+                        uint128 remainingLiquidity,
+                        ,
+                        ,
+                        uint128 tokensOwed0,
+                        uint128 tokensOwed1
+                    ) = INonfungiblePositionManager(positionManager).positions(ohmWethTokenId);
+                    console2.log("    Remaining liquidity is", remainingLiquidity);
+                    console2.log("    tokensOwed0 is", tokensOwed0);
+                    console2.log("    tokensOwed1 is", tokensOwed1);
+                    assertEq(remainingLiquidity, 0, "Remaining liquidity should be 0");
+                    assertEq(tokensOwed0, 0, "tokensOwed0 should be 0");
+                    assertEq(tokensOwed1, 0, "tokensOwed1 should be 0");
+                }
 
                 ohmBalanceWithdrawn += ohmIndex == 0 ? collectAmount0 : collectAmount1;
                 wethBalanceWithdrawn += ohmIndex == 0 ? collectAmount1 : collectAmount0;
