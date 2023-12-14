@@ -804,8 +804,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     (uint256, uint256)
                 );
 
-                INonfungiblePositionManager.CollectParams memory collectParams = INonfungiblePositionManager
-                    .CollectParams(
+                INonfungiblePositionManager.CollectParams
+                    memory collectParams = INonfungiblePositionManager.CollectParams(
                         ohmWethTokenId,
                         address(daoMS),
                         type(uint128).max,
@@ -896,18 +896,28 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             console2.log("    Pool token amount is", poolTokenAmount);
 
             // TEMP
-            (uint112 reserve0, uint112 reserve1) = BunniLens(bunniLens).getReserves(BunniHelper.getFullRangeBunniKey(ohmWethUniV3Pool));
+            (uint112 reserve0, uint112 reserve1) = BunniLens(bunniLens).getReserves(
+                BunniHelper.getFullRangeBunniKey(ohmWethUniV3Pool)
+            );
             console2.log("reserve0", reserve0);
             console2.log("reserve1", reserve1);
 
-            (uint256 fee0, uint256 fee1) = BunniLens(bunniLens).getUncollectedFees(BunniHelper.getFullRangeBunniKey(ohmWethUniV3Pool));
+            (uint256 fee0, uint256 fee1) = BunniLens(bunniLens).getUncollectedFees(
+                BunniHelper.getFullRangeBunniKey(ohmWethUniV3Pool)
+            );
             console2.log("fee0", fee0);
             console2.log("fee1", fee1);
 
-            uint256 reservesTokenRatio = BunniHelper.getReservesRatio(BunniHelper.getFullRangeBunniKey(ohmWethUniV3Pool), BunniLens(bunniLens));
+            uint256 reservesTokenRatio = BunniHelper.getReservesRatio(
+                BunniHelper.getFullRangeBunniKey(ohmWethUniV3Pool),
+                BunniLens(bunniLens)
+            );
             console2.log("reservesTokenRatio", reservesTokenRatio);
 
-            uint256 twapTokenRatio = UniswapV3OracleHelper.getTWAPRatio(ohmWethUniV3Pool, twapObservationWindow);
+            uint256 twapTokenRatio = UniswapV3OracleHelper.getTWAPRatio(
+                ohmWethUniV3Pool,
+                twapObservationWindow
+            );
             console2.log("twapTokenRatio", twapTokenRatio);
         }
 
