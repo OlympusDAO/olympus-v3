@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import {console2} from "forge-std/console2.sol";
+import {StdAssertions} from "forge-std/StdAssertions.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
@@ -28,6 +29,7 @@ import {Operator} from "policies/RBS/Operator.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {BondCallback} from "policies/Bonds/BondCallback.sol";
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
+import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
 
 // Libraries
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
@@ -42,7 +44,7 @@ import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 /// @notice     Activates and configures PRICE v2
 /// @notice     Configures TRSRY assets
 /// @notice     Activates RBSv2 (Appraiser, Heart, Operator)
-contract RBSv2Install_3_RBS is OlyBatch {
+contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     using stdJson for string;
 
     // Existing Olympus Contracts
@@ -53,6 +55,10 @@ contract RBSv2Install_3_RBS is OlyBatch {
     address rolesAdmin;
     address bondCallback;
     address priceConfigV1;
+
+    // TEMP
+    address treasuryConfig;
+    address treasuryV1_1;
 
     // Tokens
     address ohm;
@@ -119,6 +125,10 @@ contract RBSv2Install_3_RBS is OlyBatch {
         bondCallback = envAddress("current", "olympus.policies.BondCallback");
         priceConfigV1 = envAddress("current", "olympus.policies.PriceConfigV1");
 
+        // TEMP
+        treasuryConfig = envAddress("current", "olympus.policies.TreasuryConfig");
+        treasuryV1_1 = envAddress("current", "olympus.modules.OlympusTreasuryV1_1");
+
         ohm = envAddress("current", "olympus.legacy.OHM");
         dai = envAddress("current", "external.tokens.DAI");
         sdai = envAddress("current", "external.tokens.sDAI");
@@ -177,8 +187,77 @@ contract RBSv2Install_3_RBS is OlyBatch {
         daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
     }
 
+    function _bunniManagerTestSetup() internal {
+        // The following are needed when simulating on a fork, as batches cannot be signed
+        // Install TRSRY v1.1
+        {
+            address treasuryV1_1 = envAddress("current", "olympus.modules.OlympusTreasuryV1_1");
+            console2.log("Upgrading TRSRY module to new version at %s", treasuryV1_1);
+
+            addToBatch(
+                kernel,
+                abi.encodeWithSelector(
+                    Kernel.executeAction.selector,
+                    Actions.UpgradeModule,
+                    treasuryV1_1
+                )
+            );
+            console2.log("    Upgraded OlympusTreasury to new version");
+        }
+
+        // Activate TreasuryConfig
+        {
+            address treasuryConfig = envAddress("current", "olympus.policies.TreasuryConfig");
+            console2.log("Activating TreasuryConfig policy");
+
+            addToBatch(
+                kernel,
+                abi.encodeWithSelector(
+                    Kernel.executeAction.selector,
+                    Actions.ActivatePolicy,
+                    treasuryConfig
+                )
+            );
+
+            console2.log("Granting policy role for TreasuryConfig policy");
+            addToBatch(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    bytes32("treasuryconfig_policy"),
+                    daoMS
+                )
+            );
+        }
+
+        // Configure TRSRY v1.1 to track wETH
+        {
+            console2.log("Adding WETH to TRSRY");
+            addToBatch(
+                treasuryConfig,
+                abi.encodeWithSelector(TreasuryConfig.addAsset.selector, weth, new address[](0))
+            );
+        }
+
+        // Install SPPLY
+        {
+            address spply = envAddress("current", "olympus.modules.OlympusSupply");
+            console2.log("Installing OlympusSupply module");
+
+            addToBatch(
+                kernel,
+                abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, spply)
+            );
+        }
+    }
+
     /// @notice     Activates PRICEv2 module and PriceConfigV2 policy
+    /// @dev        This is a very long, very ugly function as all of the components
+    /// @dev        need to be completed in a single transaction/batch in order for
+    /// @dev        RBS to upgrade and operate successfully.
     function RBSv2Install_3_1(bool send_) external isDaoBatch(send_) {
+        // ==================== SECTION 1: PRICE v2 Installation ==================== //
+
         // This DAO MS batch:
         // 1. deactivates old heart + operator policies at contract level
         // 2. deactivates old heart + operator policies at kernel level
@@ -225,7 +304,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.UpgradeModule, priceV2)
         );
 
-        // 5. Activate PriceConfigV2 policy
+        // 4. Activate PriceConfigV2 policy
         console2.log("Activating PriceConfigV2 policy");
         addToBatch(
             kernel,
@@ -236,7 +315,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             )
         );
 
-        // 5a. Disable PriceConfigV1 policy (superseded by PriceConfigV2)
+        // 4a. Disable PriceConfigV1 policy (superseded by PriceConfigV2)
         console2.log("Deactivating PriceConfigV1 policy");
         addToBatch(
             kernel,
@@ -247,7 +326,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             )
         );
 
-        // 8. Set roles for new policy access control
+        // 5. Set roles for new policy access control
         // PriceConfigV2 policy
         //     - Give DAO MS the priceconfig_admin role
         //     - Give DAO MS the priceconfig_policy role
@@ -280,7 +359,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             )
         );
 
-        // 9. Install submodules on PRICEv2
+        // 6. Install submodules on PRICEv2
         //     - Install BalancerPoolTokenPrice submodule
         //     - Install BunniPrice submodule
         //     - Install ChainlinkPriceFeeds submodule
@@ -323,10 +402,9 @@ contract RBSv2Install_3_RBS is OlyBatch {
             priceConfigV2,
             abi.encodeWithSelector(PriceConfigV2.installSubmodule.selector, simplePriceFeedStrategy)
         );
-    }
 
-    /// @notice     Configures PRICEv2 module
-    function RBSv2Install_3_2(bool send_) public isPolicyBatch(send_) {
+        // ==================== SECTION 2: PRICE v2 Configuration ==================== //
+
         // This Policy MS batch:
         // 1. Configures DAI on PRICE
         // 2. Configures sDAI on PRICE
@@ -607,18 +685,21 @@ contract RBSv2Install_3_RBS is OlyBatch {
                 )
             );
         }
-    }
 
-    /// @notice     Configures protocol owned liquidity
-    function RBSv2Install_3_3(bool send_) public isDaoBatch(send_) {
+        // ==================== SECTION 3: BunniManager Migration ==================== //
+
+        // NOTE: Only enable during fork testing
+        // _bunniManagerTestSetup();
+
         // This DAO MS batch:
         // 1. Set roles for policy access control (bunni_admin)
         // 2. Activates the BunniManager policy
         // 3. Sets the BunniLens variable on the BunniManager policy
         // 4. Withdraws liquidity from the existing Uniswap V3 pool
-        // 5. Deploys an LP token for pool
-        // 6. Deposits liquidity into the poll
-        // 7. Activates the LP token
+        // 5. Transfers withdrawn wETH to TRSRY v1.1
+        // 6. Deploys an LP token for pool
+        // 7. Deposits liquidity into the poll
+        // 8. Activates the LP token
 
         // 1. Set roles for policy access control
         // BunniManager policy
@@ -649,7 +730,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             abi.encodeWithSelector(BunniManager.setBunniLens.selector, bunniLens)
         );
 
-        // 4. Withdraw liquidity from the existing Uniswap V3 pool
+        // 4. Withdraw liquidity from the existing Uniswap V3 pool into the DAO MS
         uint256 ohmBalance;
         uint256 wethBalance;
         {
@@ -691,6 +772,9 @@ contract RBSv2Install_3_RBS is OlyBatch {
                 token1AmountMin = (token1Amount * (10000 - 100)) / 10000;
             }
 
+            uint256 ohmBalanceBefore = ERC20(ohm).balanceOf(address(daoMS));
+            uint256 wethBalanceBefore = ERC20(weth).balanceOf(address(daoMS));
+
             // Withdraw liquidity (which should also collect fees)
             {
                 INonfungiblePositionManager.DecreaseLiquidityParams
@@ -720,9 +804,38 @@ contract RBSv2Install_3_RBS is OlyBatch {
 
             console2.log("    Withdrawn OHM balance (9dp) is", ohmBalance);
             console2.log("    Withdrawn WETH balance (18dp) is", wethBalance);
+            console2.log("    NOTE: Withdrawn OHM needs to be burnt manually");
+
+            console2.log(
+                "    Actual change in OHM balance (9dp) is",
+                ERC20(ohm).balanceOf(address(daoMS)) - ohmBalanceBefore
+            );
+            console2.log(
+                "    Actual change in WETH balance (18dp) is",
+                ERC20(weth).balanceOf(address(daoMS)) - wethBalanceBefore
+            );
         }
 
-        // 5. Deploy an LP token for the pool using BunniManager
+        // 5. Transfer the withdrawn wETH to TRSRY v1.1
+        {
+            console2.log("Approving withdrawn WETH for transfer to TRSRY v1.1");
+            addToBatch(
+                weth,
+                abi.encodeWithSelector(ERC20.approve.selector, treasuryV1_1, wethBalance)
+            );
+
+            console2.log("Transferring withdrawn WETH to TRSRY v1.1");
+            addToBatch(
+                weth,
+                abi.encodeWithSelector(ERC20.transfer.selector, treasuryV1_1, wethBalance)
+            );
+
+            uint256 residualWethBalance = ERC20(weth).balanceOf(address(daoMS));
+            console2.log("    Residual wETH balance (18dp) is", residualWethBalance);
+            assertEq(residualWethBalance, 0, "wETH balance in DAO MS should be 0");
+        }
+
+        // 6. Deploy an LP token for the pool using BunniManager
         {
             console2.log("Deploying LP token for Uniswap V3 OHM-wETH pool");
             addToBatch(
@@ -731,7 +844,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             );
         }
 
-        // 6. Deposit liquidity into the pool using BunniManager
+        // 7. Deposit liquidity into the pool using BunniManager
         {
             console2.log("Depositing liquidity into Uniswap V3 OHM-wETH pool");
             uint256 poolTokenAmount = abi.decode(
@@ -752,7 +865,7 @@ contract RBSv2Install_3_RBS is OlyBatch {
             console2.log("    Pool token amount is", poolTokenAmount);
         }
 
-        // 7. Activate the LP token
+        // 8. Activate the LP token
         // This will also register the LP token with TRSRY, PRICE and SPPLY
         {
             console2.log("Activating LP token for Uniswap V3 OHM-wETH pool");
@@ -766,10 +879,9 @@ contract RBSv2Install_3_RBS is OlyBatch {
                 )
             );
         }
-    }
 
-    /// @notice     Activates RBS (Appraiser, Heart, Operator)
-    function RBSv2Install_3_4(bool send_) public isDaoBatch(send_) {
+        // ==================== SECTION 4: RBS v2 Activation ==================== //
+
         // This DAO MS batch:
         // 1. Activates Appraiser policy
         // 2. Activates Operator policy
