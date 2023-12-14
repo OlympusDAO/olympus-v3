@@ -261,6 +261,10 @@ contract OlympusDeploy is Script {
         selectorMap["SupplyConfig"] = this._deploySupplyConfig.selector;
         selectorMap["TreasuryConfig"] = this._deployTreasuryConfig.selector;
 
+        // Bunni
+        selectorMap["BunniHub"] = this._deployBunniHub.selector;
+        selectorMap["BunniLens"] = this._deployBunniLens.selector;
+
         // PRICE Submodules
         selectorMap["SimplePriceFeedStrategy"] = this._deploySimplePriceFeedStrategy.selector;
         selectorMap["BalancerPoolTokenPrice"] = this._deployBalancerPoolTokenPrice.selector;
@@ -361,6 +365,11 @@ contract OlympusDeploy is Script {
         appraiser = Appraiser(envAddress("olympus.policies.Appraiser"));
         supplyConfig = SupplyConfig(envAddress("olympus.policies.SupplyConfig"));
         treasuryConfig = TreasuryConfig(envAddress("olympus.policies.TreasuryConfig"));
+        bunniManager = BunniManager(envAddress("olympus.policies.BunniManager"));
+
+        // Bunni
+        bunniHub = BunniHub(envAddress("external.Bunni.BunniHub"));
+        bunniLens = BunniLens(envAddress("external.Bunni.BunniLens"));
 
         // PRICE submodules
         simplePriceFeedStrategy = SimplePriceFeedStrategy(
@@ -1123,28 +1132,26 @@ contract OlympusDeploy is Script {
         return address(treasuryConfig);
     }
 
+    // ========== BUNNI MANAGER POLICY ========== //
+
     function _deployBunniManagerPolicy(bytes memory args) public returns (address) {
         // Arguments
         // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
         (
             uint48 harvestFrequency,
             uint16 harvestRewardFee,
-            uint256 harvestRewardMax,
-            address uniswapFactory
-        ) = abi.decode(args, (uint48, uint16, uint256, address));
+            uint256 harvestRewardMax
+        ) = abi.decode(args, (uint48, uint16, uint256));
 
         console2.log("    harvestFrequency", harvestFrequency);
         console2.log("    harvestRewardFee", harvestRewardFee);
         console2.log("    harvestRewardMax", harvestRewardMax);
-        console2.log("    uniswapFactory", uniswapFactory);
 
         // Check that the environment variables are loaded
         if (address(kernel) == address(0)) revert("Kernel address not set");
 
-        // Deployment steps
-        vm.broadcast();
-
         // Deploy the policy
+        vm.broadcast();
         bunniManager = new BunniManager(
             kernel,
             harvestRewardMax,
@@ -1153,7 +1160,28 @@ contract OlympusDeploy is Script {
         );
         console2.log("BunniManager deployed at:", address(bunniManager));
 
+        // BunniManager/Hub/Lens post-deployment steps (requiring permissions):
+        // - Call BunniManager.setBunniLens
+        // - Create the "bunni_admin" role and assign it
+        // - Activate the BunniManager policy
+
+        return address(bunniManager);
+    }
+
+    function _deployBunniHub(bytes memory args) public returns (address) {
+        // Arguments
+        (
+            address uniswapFactory
+        ) = abi.decode(args, (address));
+
+        console2.log("    uniswapFactory", uniswapFactory);
+
+        // Check that the environment variables are loaded
+        if (address(bunniManager) == address(0)) revert("BunniManager address not set");
+        if (address(uniswapFactory) == address(0)) revert("UniswapFactory address not set");
+
         // Deploy the BunniHub
+        vm.broadcast();
         bunniHub = new BunniHub(
             IUniswapV3Factory(uniswapFactory),
             address(bunniManager),
@@ -1161,16 +1189,21 @@ contract OlympusDeploy is Script {
         );
         console2.log("BunniHub deployed at:", address(bunniHub));
 
+        return address(bunniHub);
+    }
+
+    function _deployBunniLens(bytes memory) public returns (address) {
+        // No additional arguments for BunniLens policy
+
+        // Check that the environment variables are loaded
+        if (address(bunniHub) == address(0)) revert("BunniHub address not set");
+
         // Deploy the BunniLens
+        vm.broadcast();
         bunniLens = new BunniLens(bunniHub);
         console2.log("BunniLens deployed at:", address(bunniLens));
 
-        // Post-deployment steps (requiring permissions):
-        // - Call BunniManager.setBunniLens
-        // - Create the "bunni_admin" role and assign it
-        // - Activate the BunniManager policy
-
-        return address(bunniManager);
+        return address(bunniLens);
     }
 
     // ========== PRICE AND SUBMODULES ========== //
