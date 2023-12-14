@@ -41,6 +41,11 @@ import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Po
 import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
+// TEMP
+import {BunniLens} from "src/external/bunni/BunniLens.sol";
+import {BunniHelper} from "src/libraries/UniswapV3/BunniHelper.sol";
+import {UniswapV3OracleHelper} from "libraries/UniswapV3/Oracle.sol";
+
 /// @notice     Activates and configures PRICE v2
 /// @notice     Configures TRSRY assets
 /// @notice     Activates RBSv2 (Appraiser, Heart, Operator)
@@ -689,7 +694,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // ==================== SECTION 3: BunniManager Migration ==================== //
 
         // NOTE: Only enable during fork testing
-        // _bunniManagerTestSetup();
+        _bunniManagerTestSetup();
 
         // This DAO MS batch:
         // 1. Set roles for policy access control (bunni_admin)
@@ -889,6 +894,21 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             );
 
             console2.log("    Pool token amount is", poolTokenAmount);
+
+            // TEMP
+            (uint112 reserve0, uint112 reserve1) = BunniLens(bunniLens).getReserves(BunniHelper.getFullRangeBunniKey(ohmWethUniV3Pool));
+            console2.log("reserve0", reserve0);
+            console2.log("reserve1", reserve1);
+
+            (uint256 fee0, uint256 fee1) = BunniLens(bunniLens).getUncollectedFees(BunniHelper.getFullRangeBunniKey(ohmWethUniV3Pool));
+            console2.log("fee0", fee0);
+            console2.log("fee1", fee1);
+
+            uint256 reservesTokenRatio = BunniHelper.getReservesRatio(BunniHelper.getFullRangeBunniKey(ohmWethUniV3Pool), BunniLens(bunniLens));
+            console2.log("reservesTokenRatio", reservesTokenRatio);
+
+            uint256 twapTokenRatio = UniswapV3OracleHelper.getTWAPRatio(ohmWethUniV3Pool, twapObservationWindow);
+            console2.log("twapTokenRatio", twapTokenRatio);
         }
 
         // 8. Activate the LP token
