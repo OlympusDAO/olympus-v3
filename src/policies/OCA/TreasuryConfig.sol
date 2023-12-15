@@ -70,9 +70,10 @@ contract TreasuryConfig is Policy, RolesConsumer {
     //                                      TREASURY MANAGEMENT                                         //
     //==================================================================================================//
 
-    /// @notice Add a new asset to the treasury for tracking
-    /// @param asset_ The address of the asset to add
-    /// @param locations_ Array of locations other than TRSRY to get balance from
+    /// @notice             Add a new asset to the treasury for tracking
+    ///
+    /// @param asset_       The address of the asset to add
+    /// @param locations_   Array of locations other than TRSRY to get balance from
     function addAsset(
         address asset_,
         address[] calldata locations_
@@ -80,9 +81,10 @@ contract TreasuryConfig is Policy, RolesConsumer {
         TRSRY.addAsset(asset_, locations_);
     }
 
-    /// @notice Add a new location to a specific asset on the treasury for tracking
-    /// @param asset_ The address of the asset to add the location to
-    /// @param location_ The address of the location to add
+    /// @notice             Add a new location to a specific asset on the treasury for tracking
+    ///
+    /// @param asset_       The address of the asset to add the location to
+    /// @param location_    The address of the location to add
     function addAssetLocation(
         address asset_,
         address location_
@@ -90,9 +92,10 @@ contract TreasuryConfig is Policy, RolesConsumer {
         TRSRY.addAssetLocation(asset_, location_);
     }
 
-    /// @notice Remove a location from a specific asset on the treasury for tracking
-    /// @param asset_ The address of the asset to remove the location from
-    /// @param location_ The address of the location to remove
+    /// @notice             Remove a location from a specific asset on the treasury for tracking
+    ///
+    /// @param asset_       The address of the asset to remove the location from
+    /// @param location_    The address of the location to remove
     function removeAssetLocation(
         address asset_,
         address location_
@@ -100,17 +103,19 @@ contract TreasuryConfig is Policy, RolesConsumer {
         TRSRY.removeAssetLocation(asset_, location_);
     }
 
-    /// @notice Add a new category group to the treasury for tracking
-    /// @param categoryGroup_ The category group to add
+    /// @notice                 Add a new category group to the treasury for tracking
+    ///
+    /// @param categoryGroup_   The category group to add
     function addAssetCategoryGroup(
         AssetCategoryGroup categoryGroup_
     ) external onlyRole("treasuryconfig_policy") {
         TRSRY.addCategoryGroup(categoryGroup_);
     }
 
-    /// @notice Add a new category to a specific category group on the treasury for tracking
-    /// @param category_ The category to add
-    /// @param categoryGroup_ The category group to add the category to
+    /// @notice                 Add a new category to a specific category group on the treasury for tracking
+    ///
+    /// @param category_        The category to add
+    /// @param categoryGroup_   The category group to add the category to
     function addAssetCategory(
         AssetCategory category_,
         AssetCategoryGroup categoryGroup_
@@ -118,13 +123,14 @@ contract TreasuryConfig is Policy, RolesConsumer {
         TRSRY.addCategory(category_, categoryGroup_);
     }
 
-    /// @notice Categorize a location in a category
-    /// @param asset_ The address of the asset to categorize
-    /// @param category_ The category to add the asset to
-    /// @dev This categorization is done within a category group. So for example if an asset is categorized
-    ///      as 'liquid' which is part of the 'liquidity-preference' group, but then is changed to 'illiquid'
-    ///      which falls under the same 'liquidity-preference' group, the asset will lose its 'liquid' categorization
-    ///      and gain the 'illiquid' categorization (all under the 'liquidity-preference' group).
+    /// @notice             Categorize a location in a category
+    /// @dev                This categorization is done within a category group. So for example if an asset is categorized
+    /// @dev                as 'liquid' which is part of the 'liquidity-preference' group, but then is changed to 'illiquid'
+    /// @dev                which falls under the same 'liquidity-preference' group, the asset will lose its 'liquid' categorization
+    /// @dev                and gain the 'illiquid' categorization (all under the 'liquidity-preference' group).
+    ///
+    /// @param asset_       The address of the asset to categorize
+    /// @param category_    The category to add the asset to
     function categorizeAsset(
         address asset_,
         AssetCategory category_

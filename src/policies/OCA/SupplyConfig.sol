@@ -70,8 +70,9 @@ contract SupplyConfig is Policy, RolesConsumer {
     //                                      SUPPLY MANAGEMENT                                           //
     //==================================================================================================//
 
-    /// @notice Add a new category to the supply tracking system
-    /// @param category_ The category to add
+    /// @notice             Add a new category to the supply tracking system
+    ///
+    /// @param category_    The category to add
     function addSupplyCategory(
         SupplyCategory category_,
         bool useSubmodules_,
@@ -86,17 +87,19 @@ contract SupplyConfig is Policy, RolesConsumer {
         );
     }
 
-    /// @notice Remove a category from the supply tracking system
-    /// @param category_ The category to remove
+    /// @notice             Remove a category from the supply tracking system
+    ///
+    /// @param category_    The category to remove
     function removeSupplyCategory(
         SupplyCategory category_
     ) external onlyRole("supplyconfig_policy") {
         SPPLY.removeCategory(category_);
     }
 
-    /// @notice Categorize an address in a supply category
-    /// @param location_ The address to categorize
-    /// @param category_ The category to add the address to
+    /// @notice             Categorize an address in a supply category
+    ///
+    /// @param location_    The address to categorize
+    /// @param category_    The category to add the address to
     function categorizeSupply(
         address location_,
         SupplyCategory category_
