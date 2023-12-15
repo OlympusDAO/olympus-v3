@@ -11,15 +11,15 @@ TreasuryConfig (not in scope in this audit, and not in the current repository) i
 For example:
 
 ```solidity
-    /// @notice Add a new asset to the treasury for tracking
-    /// @param asset_ The address of the asset to add
-    /// @param locations_ Array of locations other than TRSRY to get balance from
-    function addAsset(
-        address asset_,
-        address[] calldata locations_
-    ) external onlyRole("treasuryconfig_policy") {
-        TRSRY.addAsset(asset_, locations_);
-    }
+/// @notice Add a new asset to the treasury for tracking
+/// @param asset_ The address of the asset to add
+/// @param locations_ Array of locations other than TRSRY to get balance from
+function addAsset(
+    address asset_,
+    address[] calldata locations_
+) external onlyRole("treasuryconfig_policy") {
+    TRSRY.addAsset(asset_, locations_);
+}
 ```
 
 Here is how TRSRY will be configured:
@@ -245,21 +245,16 @@ SupplyConfig (not in scope in this audit, and not in the current repository) is 
 For example:
 
 ```solidity
-    /// @notice Add a new category to the supply tracking system
-    /// @param category_ The category to add
-    function addSupplyCategory(
-        SupplyCategory category_,
-        bool useSubmodules_,
-        bytes4 submoduleSelector_,
-        bytes4 submoduleReservesSelector_
-    ) external onlyRole("supplyconfig_policy") {
-        SPPLY.addCategory(
-            category_,
-            useSubmodules_,
-            submoduleSelector_,
-            submoduleReservesSelector_
-        );
-    }
+/// @notice Add a new category to the supply tracking system
+/// @param category_ The category to add
+function addSupplyCategory(
+    SupplyCategory category_,
+    bool useSubmodules_,
+    bytes4 submoduleSelector_,
+    bytes4 submoduleReservesSelector_
+) external onlyRole("supplyconfig_policy") {
+    SPPLY.addCategory(category_, useSubmodules_, submoduleSelector_, submoduleReservesSelector_);
+}
 ```
 
 Here is how SPPLY will be configured:

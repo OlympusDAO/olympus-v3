@@ -11,37 +11,37 @@ PriceConfig v2 (not in scope in this audit, and not in the current repository) i
 For example:
 
 ```solidity
-    /// @notice Configure a new asset on the PRICE module
-    /// @dev see PRICEv2 for more details on caching behavior when no moving average is stored and component interface
-    /// @param asset_ The address of the asset to add
-    /// @param storeMovingAverage_ Whether to store the moving average for this asset
-    /// @param useMovingAverage_ Whether to use the moving average as part of the price resolution strategy for this asset
-    /// @param movingAverageDuration_ The duration of the moving average in seconds, only used if `storeMovingAverage_` is true
-    /// @param lastObservationTime_ The timestamp of the last observation
-    /// @param observations_ The array of observations to add - the number of observations must match the moving average duration divided by the PRICEv2 observation frequency
-    /// @param strategy_ The price resolution strategy to use for this asset
-    /// @param feeds_ The array of price feeds to use for this asset
-    function addAssetPrice(
-        address asset_,
-        bool storeMovingAverage_,
-        bool useMovingAverage_,
-        uint32 movingAverageDuration_,
-        uint48 lastObservationTime_,
-        uint256[] memory observations_,
-        PRICEv2.Component memory strategy_,
-        PRICEv2.Component[] memory feeds_
-    ) external onlyRole("priceconfig_policy") {
-        PRICE.addAsset(
-            asset_,
-            storeMovingAverage_,
-            useMovingAverage_,
-            movingAverageDuration_,
-            lastObservationTime_,
-            observations_,
-            strategy_,
-            feeds_
-        );
-    }
+/// @notice Configure a new asset on the PRICE module
+/// @dev see PRICEv2 for more details on caching behavior when no moving average is stored and component interface
+/// @param asset_ The address of the asset to add
+/// @param storeMovingAverage_ Whether to store the moving average for this asset
+/// @param useMovingAverage_ Whether to use the moving average as part of the price resolution strategy for this asset
+/// @param movingAverageDuration_ The duration of the moving average in seconds, only used if `storeMovingAverage_` is true
+/// @param lastObservationTime_ The timestamp of the last observation
+/// @param observations_ The array of observations to add - the number of observations must match the moving average duration divided by the PRICEv2 observation frequency
+/// @param strategy_ The price resolution strategy to use for this asset
+/// @param feeds_ The array of price feeds to use for this asset
+function addAssetPrice(
+    address asset_,
+    bool storeMovingAverage_,
+    bool useMovingAverage_,
+    uint32 movingAverageDuration_,
+    uint48 lastObservationTime_,
+    uint256[] memory observations_,
+    PRICEv2.Component memory strategy_,
+    PRICEv2.Component[] memory feeds_
+) external onlyRole("priceconfig_policy") {
+    PRICE.addAsset(
+        asset_,
+        storeMovingAverage_,
+        useMovingAverage_,
+        movingAverageDuration_,
+        lastObservationTime_,
+        observations_,
+        strategy_,
+        feeds_
+    );
+}
 ```
 
 Here is how PRICE v2 will be configured:
