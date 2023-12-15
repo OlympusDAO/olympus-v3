@@ -345,7 +345,7 @@ contract SupplyConfigTest is Test {
     }
 
     function test_execOnSubmodule_onlyPolicy(address user_) public {
-        vm.assume(user_ != admin);
+        vm.assume(user_ != policy);
 
         // Create vault managers
         MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
