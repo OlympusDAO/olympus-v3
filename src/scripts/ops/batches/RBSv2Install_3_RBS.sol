@@ -419,6 +419,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         string memory argData = vm.readFile("./src/scripts/ops/batches/RBSv2Install_3_RBS.json");
         uint256 daiLastObsTime_ = argData.readUint(".daiLastObsTime");
         uint256[] memory daiObs_ = argData.readUintArray(".daiObs"); // 7 days * 24 hours / 8 hours = 21 observations
+        uint256 ohmLastObsTime_ = argData.readUint(".ohmLastObsTime");
+        uint256[] memory ohmObs_ = argData.readUintArray(".ohmObs"); // 7 days * 24 hours / 8 hours = 21 observations
         uint256 usdcLastObsTime_ = argData.readUint(".usdcLastObsTime");
         uint256[] memory usdcObs_ = argData.readUintArray(".usdcObs"); // 7 days * 24 hours / 8 hours = 21 observations
         uint256 wethLastObsTime_ = argData.readUint(".wethLastObsTime");
@@ -429,6 +431,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // - Uses the Uniswap V3 pool TWAP with the configured observation window
         // - Configures PRICE to track a moving average
         // - The price will be the average of the above three
+        // - Operator requires DAI to store the moving average
         {
             PRICEv2.Component[] memory daiFeeds = new PRICEv2.Component[](2);
             {
@@ -655,6 +658,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
         // 7. Configure OHM on PRICE
         // - Uses a TWAP from the Uniswap V3 pool with the configured observation window
+        // - Store the MA as it is required by Operator
         {
             PRICEv2.Component[] memory ohmFeeds = new PRICEv2.Component[](1);
             ohmFeeds[0] = PRICEv2.Component(
@@ -675,11 +679,11 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 abi.encodeWithSelector(
                     PriceConfigV2.addAssetPrice.selector,
                     ohm,
-                    false, // store moving average
+                    true, // store moving average
                     false, // use the moving average as part of price strategy
-                    0, // moving average
-                    0,
-                    new uint256[](0),
+                    DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average
+                    ohmLastObsTime_,
+                    ohmObs_,
                     PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
                     ohmFeeds
                 )
