@@ -295,7 +295,10 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             console2.log("Installing BunniSupply submodule");
             addToBatch(
                 supplyConfig,
-                abi.encodeWithSelector(SupplyConfig.installSubmodule.selector, BunniSupply(bunniSupply))
+                abi.encodeWithSelector(
+                    SupplyConfig.installSubmodule.selector,
+                    BunniSupply(bunniSupply)
+                )
             );
         }
 
@@ -1025,7 +1028,10 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
         // 7. Test the output
         {
-            console2.log("    LBBO (18dp)", Appraiser(appraiser).getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM));
+            console2.log(
+                "    LBBO (18dp)",
+                Appraiser(appraiser).getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM)
+            );
             console2.log("    Operator target price (18dp):", Operator(operatorV2).targetPrice());
         }
     }
