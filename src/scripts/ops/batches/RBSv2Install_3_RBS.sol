@@ -21,6 +21,9 @@ import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2P
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 
+// SPPLY submodules
+import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
+
 // Bophades policies
 import {Appraiser} from "policies/OCA/Appraiser.sol";
 import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
@@ -30,6 +33,7 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {BondCallback} from "policies/Bonds/BondCallback.sol";
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
+import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 
 // Libraries
 import {AggregatorV2V3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
@@ -55,9 +59,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     address rolesAdmin;
     address bondCallback;
     address priceConfigV1;
-
-    // TEMP
-    address treasuryConfig;
     address treasuryV1_1;
 
     // Tokens
@@ -110,6 +111,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     address operatorV2;
     address bunniManager;
     address bunniLens;
+    address treasuryConfig;
+    address supplyConfig;
 
     // Wallets
     address daoWorkingWallet;
@@ -118,16 +121,17 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
+
         price = envAddress("current", "olympus.modules.OlympusPriceV1");
+        treasuryV1_1 = envAddress("current", "olympus.modules.OlympusTreasuryV1_1");
+
         heart = envAddress("current", "olympus.policies.OlympusHeart");
         operator = envAddress("current", "olympus.policies.Operator");
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
         bondCallback = envAddress("current", "olympus.policies.BondCallback");
         priceConfigV1 = envAddress("current", "olympus.policies.PriceConfigV1");
-
-        // TEMP
         treasuryConfig = envAddress("current", "olympus.policies.TreasuryConfig");
-        treasuryV1_1 = envAddress("current", "olympus.modules.OlympusTreasuryV1_1");
+        supplyConfig = envAddress("current", "olympus.policies.SupplyConfig");
 
         ohm = envAddress("current", "olympus.legacy.OHM");
         dai = envAddress("current", "external.tokens.DAI");
@@ -191,7 +195,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // The following are needed when simulating on a fork, as batches cannot be signed
         // Install TRSRY v1.1
         {
-            address treasuryV1_1 = envAddress("current", "olympus.modules.OlympusTreasuryV1_1");
             console2.log("Upgrading TRSRY module to new version at %s", treasuryV1_1);
 
             addToBatch(
@@ -207,7 +210,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
         // Activate TreasuryConfig
         {
-            address treasuryConfig = envAddress("current", "olympus.policies.TreasuryConfig");
             console2.log("Activating TreasuryConfig policy");
 
             addToBatch(
@@ -247,6 +249,49 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             addToBatch(
                 kernel,
                 abi.encodeWithSelector(Kernel.executeAction.selector, Actions.InstallModule, spply)
+            );
+        }
+
+        // Activate SupplyConfig
+        {
+            console2.log("Installing SupplyConfig policy");
+            addToBatch(
+                kernel,
+                abi.encodeWithSelector(
+                    Kernel.executeAction.selector,
+                    Actions.ActivatePolicy,
+                    supplyConfig
+                )
+            );
+
+            console2.log("Granting admin role for SupplyConfig policy");
+            addToBatch(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    bytes32("supplyconfig_admin"),
+                    daoMS
+                )
+            );
+            console2.log("Granting policy role for SupplyConfig policy");
+            addToBatch(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    bytes32("supplyconfig_policy"),
+                    daoMS
+                )
+            );
+        }
+
+        // Install BunniSupply
+        {
+            address bunniSupply = envAddress("current", "olympus.submodules.SPPLY.BunniSupply");
+
+            console2.log("Installing BunniSupply submodule");
+            addToBatch(
+                supplyConfig,
+                abi.encodeWithSelector(SupplyConfig.installSubmodule.selector, BunniSupply(bunniSupply))
             );
         }
     }
