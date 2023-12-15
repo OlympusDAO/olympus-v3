@@ -748,7 +748,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // ==================== SECTION 3: BunniManager Migration ==================== //
 
         // NOTE: Only enable during fork testing
-        _bunniManagerTestSetup();
+        // _bunniManagerTestSetup();
 
         // This DAO MS batch:
         // 1. Set roles for policy access control (bunni_admin)
