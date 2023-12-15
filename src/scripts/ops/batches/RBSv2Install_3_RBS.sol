@@ -26,6 +26,7 @@ import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 
 // Bophades policies
 import {Appraiser} from "policies/OCA/Appraiser.sol";
+import {IAppraiser} from "policies/OCA/interfaces/IAppraiser.sol";
 import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
 import {OlympusHeart} from "policies/RBS/Heart.sol";
 import {Operator} from "policies/RBS/Operator.sol";
@@ -192,6 +193,9 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     }
 
     function _bunniManagerTestSetup() internal {
+        console2.log("\n");
+        console2.log("*** SIMULATION SETUP (NOT FOR PRODUCTION) ***");
+
         // The following are needed when simulating on a fork, as batches cannot be signed
         // Install TRSRY v1.1
         {
@@ -294,6 +298,9 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 abi.encodeWithSelector(SupplyConfig.installSubmodule.selector, BunniSupply(bunniSupply))
             );
         }
+
+        console2.log("*** END SIMULATION SETUP ***");
+        console2.log("\n");
     }
 
     /// @notice     Activates PRICEv2 module and PriceConfigV2 policy
@@ -821,10 +828,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 token1AmountMin = (token1Amount * (10000 - 100)) / 10000;
             }
 
-            uint256 ohmBalanceBefore = ERC20(ohm).balanceOf(address(daoMS));
-            uint256 wethBalanceBefore = ERC20(weth).balanceOf(address(daoMS));
-
-            // Withdraw liquidity (which should also collect fees)
+            // Decrease liquidity (which should also collect fees)
             {
                 INonfungiblePositionManager.DecreaseLiquidityParams
                     memory decreaseLiquidityParams = INonfungiblePositionManager
@@ -837,17 +841,19 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                         );
 
                 console2.log("Decreasing liquidity for existing Uniswap V3 OHM-wETH pool");
-                (uint256 decreaseAmount0, uint256 decreaseAmount1) = abi.decode(
-                    addToBatch(
-                        positionManager,
-                        abi.encodeWithSelector(
-                            INonfungiblePositionManager.decreaseLiquidity.selector,
-                            decreaseLiquidityParams
-                        )
-                    ),
-                    (uint256, uint256)
-                );
+                console2.log("    Liquidity is", liquidity);
 
+                addToBatch(
+                    positionManager,
+                    abi.encodeWithSelector(
+                        INonfungiblePositionManager.decreaseLiquidity.selector,
+                        decreaseLiquidityParams
+                    )
+                );
+            }
+
+            // Collect liquidity
+            {
                 INonfungiblePositionManager.CollectParams
                     memory collectParams = INonfungiblePositionManager.CollectParams(
                         ohmWethTokenId,
@@ -867,8 +873,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     ),
                     (uint256, uint256)
                 );
-                console2.log("    Collected OHM balance (9dp) is", collectAmount0);
-                console2.log("    Collected WETH balance (18dp) is", collectAmount1);
 
                 {
                     (
@@ -885,9 +889,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                         uint128 tokensOwed0,
                         uint128 tokensOwed1
                     ) = INonfungiblePositionManager(positionManager).positions(ohmWethTokenId);
-                    console2.log("    Remaining liquidity is", remainingLiquidity);
-                    console2.log("    tokensOwed0 is", tokensOwed0);
-                    console2.log("    tokensOwed1 is", tokensOwed1);
                     assertEq(remainingLiquidity, 0, "Remaining liquidity should be 0");
                     assertEq(tokensOwed0, 0, "tokensOwed0 should be 0");
                     assertEq(tokensOwed1, 0, "tokensOwed1 should be 0");
@@ -900,15 +901,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             console2.log("    Withdrawn OHM balance (9dp) is", ohmBalanceWithdrawn);
             console2.log("    Withdrawn WETH balance (18dp) is", wethBalanceWithdrawn);
             console2.log("    NOTE: Withdrawn OHM needs to be burnt manually");
-
-            console2.log(
-                "    Actual change in OHM balance (9dp) is",
-                ERC20(ohm).balanceOf(address(daoMS)) - ohmBalanceBefore
-            );
-            console2.log(
-                "    Actual change in WETH balance (18dp) is",
-                ERC20(weth).balanceOf(address(daoMS)) - wethBalanceBefore
-            );
         }
 
         // 5. Transfer the withdrawn wETH to TRSRY v1.1
@@ -954,7 +946,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 (uint256)
             );
 
-            console2.log("    Pool token amount is", poolTokenAmount);
+            console2.log("    Pool token amount/liquidity is", poolTokenAmount);
         }
 
         // 8. Activate the LP token
@@ -1030,5 +1022,11 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 6. Initialize the operator policy
         console2.log("Initializing Operator policy");
         addToBatch(operatorV2, abi.encodeWithSelector(Operator.initialize.selector));
+
+        // 7. Test the output
+        {
+            console2.log("    LBBO (18dp)", Appraiser(appraiser).getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM));
+            console2.log("    Operator target price (18dp):", Operator(operatorV2).targetPrice());
+        }
     }
 }
