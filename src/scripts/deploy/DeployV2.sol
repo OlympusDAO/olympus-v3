@@ -709,21 +709,22 @@ contract OlympusDeploy is Script {
         if (address(ohm) == address(0)) revert("OHM address not set");
         if (address(reserve) == address(0)) revert("Reserve address not set");
 
-        console2.log("   kernel", address(kernel));
-        console2.log("   appraiser", address(appraiser));
-        console2.log("   bondAuctioneer", address(bondAuctioneer));
-        console2.log("   callback", address(callback));
-        console2.log("   ohm", address(ohm));
-        console2.log("   reserve", address(reserve));
-        console2.log("   wrappedReserve", address(wrappedReserve));
-        console2.log("   cushionDebtBuffer", cushionDebtBuffer);
-        console2.log("   cushionDepositInterval", cushionDepositInterval);
-        console2.log("   cushionDuration", cushionDuration);
-        console2.log("   cushionFactor", cushionFactor);
-        console2.log("   regenObserve", regenObserve);
-        console2.log("   regenThreshold", regenThreshold);
-        console2.log("   regenWait", regenWait);
-        console2.log("   reserveFactor", reserveFactor);
+        console2.log("Deploying Operator V2 policy");
+        console2.log("    kernel", address(kernel));
+        console2.log("    appraiser", address(appraiser));
+        console2.log("    bondAuctioneer", address(bondAuctioneer));
+        console2.log("    callback", address(callback));
+        console2.log("    ohm", address(ohm));
+        console2.log("    reserve", address(reserve));
+        console2.log("    wrappedReserve", address(wrappedReserve));
+        console2.log("    cushionDebtBuffer", cushionDebtBuffer);
+        console2.log("    cushionDepositInterval", cushionDepositInterval);
+        console2.log("    cushionDuration", cushionDuration);
+        console2.log("    cushionFactor", cushionFactor);
+        console2.log("    regenObserve", regenObserve);
+        console2.log("    regenThreshold", regenThreshold);
+        console2.log("    regenWait", regenWait);
+        console2.log("    reserveFactor", reserveFactor);
 
         // Deploy Operator policy
         vm.broadcast();
@@ -735,7 +736,7 @@ contract OlympusDeploy is Script {
             [address(ohm), address(reserve), address(wrappedReserve)],
             configParams
         );
-        console2.log("Operator V2 deployed at:", address(operatorV2));
+        console2.log("    Operator V2 deployed at:", address(operatorV2));
 
         return address(operatorV2);
     }
@@ -790,6 +791,14 @@ contract OlympusDeploy is Script {
         (uint8 operatorMajor, uint8 operatorMinor) = operatorV2.VERSION();
         if (operatorMajor != 2) revert("OperatorV2 is not version 2");
 
+        console2.log("Deploying Heart V2 policy");
+        console2.log("    kernel", address(kernel));
+        console2.log("    operatorV2", address(operatorV2));
+        console2.log("    appraiser", address(appraiser));
+        console2.log("    zeroDistributor", address(zeroDistributor));
+        console2.log("    maxReward", maxReward);
+        console2.log("    auctionDuration", auctionDuration);
+
         // Deploy OlympusHeart policy
         vm.broadcast();
         heartV2 = new OlympusHeart(
@@ -800,7 +809,7 @@ contract OlympusDeploy is Script {
             maxReward,
             auctionDuration
         );
-        console2.log("OlympusHeart V2 deployed at:", address(heartV2));
+        console2.log("    Heart V2 deployed at:", address(heartV2));
 
         return address(heartV2);
     }
@@ -808,10 +817,12 @@ contract OlympusDeploy is Script {
     function _deployPriceConfig(bytes memory) public returns (address) {
         // No additional arguments for PriceConfig policy
 
+        console2.log("Deploying PriceConfig policy");
+
         // Deploy PriceConfig policy
         vm.broadcast();
         priceConfigV1 = new OlympusPriceConfig(kernel);
-        console2.log("PriceConfig deployed at:", address(priceConfigV1));
+        console2.log("    PriceConfig deployed at:", address(priceConfigV1));
 
         return address(priceConfigV1);
     }
