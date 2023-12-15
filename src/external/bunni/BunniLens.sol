@@ -68,7 +68,6 @@ contract BunniLens is IBunniLens {
     function getUncollectedFees(
         BunniKey calldata key
     ) external view override returns (uint256 fee0, uint256 fee1) {
-        // TODO write tests
         (, int24 tick, , , , , ) = key.pool.slot0();
         (, , uint256 feeGrowthOutside0Lower, uint256 feeGrowthOutside1Lower, , , , ) = key
             .pool
