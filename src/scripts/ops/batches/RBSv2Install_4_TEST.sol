@@ -14,7 +14,7 @@ import {RBSv2Install_3_RBS} from "src/scripts/ops/batches/RBSv2Install_3_RBS.sol
 /// @notice     into one batch script for testing purposes.
 contract RBSv2Install_4_TEST is OlyBatch {
     function loadEnv() internal override {
-        // 
+        //
     }
 
     function RBSv2Install_4(bool send_) external isDaoBatch(send_) {
