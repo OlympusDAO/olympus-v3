@@ -10,6 +10,7 @@ import "src/Submodules.sol";
 
 // Bophades modules
 import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
+import {SPPLYv1} from "modules/SPPLY/SPPLY.v1.sol";
 import {Category as SupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
 
 // Bophades policies
@@ -47,6 +48,22 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
     // Wallets
     address daoWorkingWallet;
 
+    /// @notice     For testing purposes only, when calling from another script
+    function initTestBatch() public {
+        // Load environment addresses for chain
+        chain = vm.envString("CHAIN");
+        env = vm.readFile("./src/scripts/env.json");
+
+        // Set safe addresses
+        daoMS = vm.envAddress("DAO_MS"); // DAO MS address
+        policyMS = vm.envAddress("POLICY_MS"); // Policy MS address
+        emergencyMS = vm.envAddress("EMERGENCY_MS"); // Emergency MS address
+        safe = daoMS;
+
+        // Load addresses from env (as defined in batch script)
+        loadEnv();
+    }
+
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
         crossChainBridgeV1 = envAddress("current", "olympus.policies.CrossChainBridgeV1");
@@ -72,7 +89,8 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         brickedSupply = envAddress("current", "olympus.submodules.SPPLY.BrickedSupply");
     }
 
-    function RBSv2Install_2_1(bool send_) external isDaoBatch(send_) {
+    /// @notice     This function is separate from the DAO batch, so it can be called externally while testing
+    function install() public {
         // This DAO MS batch:
         // 1. Installs the OlympusSupply module
         // 2. Installs the SupplyConfig policy
@@ -241,5 +259,16 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
                 abi.encode(opBridge)
             )
         );
+
+        // Do test of supply metrics
+        console2.log("Testing supply metrics");
+        console2.log("    Total supply", OlympusSupply(spply).getMetric(SPPLYv1.Metric.TOTAL_SUPPLY));
+        console2.log("    Circulating supply", OlympusSupply(spply).getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY));
+        console2.log("    Floating supply", OlympusSupply(spply).getMetric(SPPLYv1.Metric.FLOATING_SUPPLY));
+        console2.log("    Backed supply", OlympusSupply(spply).getMetric(SPPLYv1.Metric.BACKED_SUPPLY));
+    }
+
+    function RBSv2Install_2_1(bool send_) external isDaoBatch(send_) {
+        install();
     }
 }

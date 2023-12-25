@@ -3,6 +3,7 @@ pragma solidity 0.8.15;
 
 import {BatchScript} from "./lib/BatchScript.sol";
 import {stdJson} from "forge-std/StdJson.sol";
+import {console2} from "forge-std/console2.sol";
 
 abstract contract OlyBatch is BatchScript {
     using stdJson for string;
@@ -16,6 +17,7 @@ abstract contract OlyBatch is BatchScript {
 
     modifier isDaoBatch(bool send_) {
         // Load environment addresses for chain
+        console2.log("\n\n*** Loading environment");
         chain = vm.envString("CHAIN");
         env = vm.readFile("./src/scripts/env.json");
 
@@ -26,17 +28,20 @@ abstract contract OlyBatch is BatchScript {
         safe = daoMS;
 
         // Load addresses from env (as defined in batch script)
+        console2.log("\n\n*** Compiling batch");
         loadEnv();
 
         // Compile batch
         _;
 
         // Execute batch
+        console2.log("\n\n*** Executing batch");
         executeBatch(daoMS, send_);
     }
 
     modifier isPolicyBatch(bool send_) {
         // Load environment addresses for chain
+        console2.log("\n\n*** Loading environment");
         chain = vm.envString("CHAIN");
         env = vm.readFile("./src/scripts/env.json");
 
@@ -50,14 +55,17 @@ abstract contract OlyBatch is BatchScript {
         loadEnv();
 
         // Compile batch
+        console2.log("\n\n*** Compiling batch");
         _;
 
         // Execute batch
+        console2.log("\n\n*** Executing batch");
         executeBatch(policyMS, send_);
     }
 
     modifier isEmergencyBatch(bool send_) {
         // Load environment addresses for chain
+        console2.log("\n\n*** Loading environment");
         chain = vm.envString("CHAIN");
         env = vm.readFile("./src/scripts/env.json");
 
@@ -71,9 +79,11 @@ abstract contract OlyBatch is BatchScript {
         loadEnv();
 
         // Compile batch
+        console2.log("\n\n*** Compiling batch");
         _;
 
         // Execute batch
+        console2.log("\n\n*** Executing batch");
         executeBatch(emergencyMS, send_);
     }
 

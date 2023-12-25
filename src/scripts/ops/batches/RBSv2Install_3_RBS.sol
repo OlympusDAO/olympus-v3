@@ -120,6 +120,22 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
     uint32 internal constant DEFAULT_TWAP_OBSERVATION_WINDOW = 7 days;
 
+    /// @notice     For testing purposes only, when calling from another script
+    function initTestBatch() public {
+        // Load environment addresses for chain
+        chain = vm.envString("CHAIN");
+        env = vm.readFile("./src/scripts/env.json");
+
+        // Set safe addresses
+        daoMS = vm.envAddress("DAO_MS"); // DAO MS address
+        policyMS = vm.envAddress("POLICY_MS"); // Policy MS address
+        emergencyMS = vm.envAddress("EMERGENCY_MS"); // Emergency MS address
+        safe = daoMS;
+
+        // Load addresses from env (as defined in batch script)
+        loadEnv();
+    }
+
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
 
@@ -306,11 +322,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         console2.log("\n");
     }
 
-    /// @notice     Activates PRICEv2 module and PriceConfigV2 policy
-    /// @dev        This is a very long, very ugly function as all of the components
-    /// @dev        need to be completed in a single transaction/batch in order for
-    /// @dev        RBS to upgrade and operate successfully.
-    function RBSv2Install_3_1(bool send_) external isDaoBatch(send_) {
+    function install() public {
         // ==================== SECTION 1: PRICE v2 Installation ==================== //
 
         // This DAO MS batch:
@@ -1034,5 +1046,13 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             );
             console2.log("    Operator target price (18dp):", Operator(operatorV2).targetPrice());
         }
+    }
+
+    /// @notice     Activates PRICEv2 module and PriceConfigV2 policy
+    /// @dev        This is a very long, very ugly function as all of the components
+    /// @dev        need to be completed in a single transaction/batch in order for
+    /// @dev        RBS to upgrade and operate successfully.
+    function RBSv2Install_3_1(bool send_) external isDaoBatch(send_) {
+        install();
     }
 }
