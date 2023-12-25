@@ -11,7 +11,7 @@ import "src/Submodules.sol";
 // Bophades modules
 import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
 import {SPPLYv1} from "modules/SPPLY/SPPLY.v1.sol";
-import {Category as SupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
+import {Category as SupplyCategory, toCategory as toSupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
 
 // Bophades policies
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
@@ -263,7 +263,13 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         // Do test of supply metrics
         console2.log("Testing supply metrics");
         console2.log("    Total supply", OlympusSupply(spply).getMetric(SPPLYv1.Metric.TOTAL_SUPPLY));
+        console2.log("    Migration offset", MigrationOffsetSupply(migrationOffsetSupply).getProtocolOwnedTreasuryOhm());
+        console2.log("    Bricked OHM", BrickedSupply(brickedSupply).getProtocolOwnedTreasuryOhm());
+        console2.log("    Minus: protocol-owned-treasury", OlympusSupply(spply).getSupplyByCategory(toSupplyCategory("protocol-owned-treasury")));
+        console2.log("    Minus: dao", OlympusSupply(spply).getSupplyByCategory(toSupplyCategory("dao")));
         console2.log("    Circulating supply", OlympusSupply(spply).getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY));
+        console2.log("    Minus: protocol-owned-liquidity", OlympusSupply(spply).getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity")));
+        console2.log("    Minus: protocol-owned-borrowable", OlympusSupply(spply).getSupplyByCategory(toSupplyCategory("protocol-owned-borrowable")));
         console2.log("    Floating supply", OlympusSupply(spply).getMetric(SPPLYv1.Metric.FLOATING_SUPPLY));
         console2.log("    Backed supply", OlympusSupply(spply).getMetric(SPPLYv1.Metric.BACKED_SUPPLY));
     }
