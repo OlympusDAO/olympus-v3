@@ -295,6 +295,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             "    Floating supply",
             OlympusSupply(spply).getMetric(SPPLYv1.Metric.FLOATING_SUPPLY)
         );
+        console2.log("    BL OHM", BLVaultSupply(blVaultSupply).getCollateralizedOhm());
         console2.log(
             "    Backed supply",
             OlympusSupply(spply).getMetric(SPPLYv1.Metric.BACKED_SUPPLY)

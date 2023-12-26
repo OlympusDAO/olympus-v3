@@ -14,6 +14,7 @@ import "src/Kernel.sol";
 
 // Bophades modules
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
+import {TRSRYv1_1} from "modules/TRSRY/TRSRY.v1.sol";
 import {Category as AssetCategory} from "modules/TRSRY/TRSRY.v1.sol";
 
 // Bophades policies
@@ -236,19 +237,24 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             ERC20 fxsToken = ERC20(fxs);
             uint256 fxsTotalDebt = trsryModule.totalDebt(fxsToken);
             assertEq(fxsTotalDebt, 0, "FXS debt should be 0");
+
+            assertEq(fxsToken.balanceOf(treasuryV1), 0, "FXS balance in treasury v1.0 should be 0");
         }
 
         // veFXS is in an allocator, have no balance in the current treasury, but also don't have any debt value set
-        uint256 vefxsBalance;
+        uint256 vefxsAllocatorBalance;
         {
             console2.log("Getting veFXS debt");
 
             IFXSAllocator vefxsAllocatorContract = IFXSAllocator(veFXSAllocator);
             ERC20 vefxsToken = ERC20(veFXS);
-            vefxsBalance = vefxsAllocatorContract.totalAmountDeployed();
+            vefxsAllocatorBalance = vefxsAllocatorContract.totalAmountDeployed();
+            console2.log("    veFXS allocator balance: %s", vefxsAllocatorBalance);
 
             uint256 vefxsTotalDebt = trsryModule.totalDebt(vefxsToken);
-            assertEq(vefxsTotalDebt, 0, "FXS debt should be 0");
+            assertEq(vefxsTotalDebt, 0, "veFXS debt should be 0");
+
+            assertEq(vefxsToken.balanceOf(treasuryV1), 0, "veFXS balance in treasury v1.0 should be 0");
         }
 
         // 3. Upgrade the OlympusTreasury contract to the new version
@@ -309,7 +315,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                     TreasuryCustodian.increaseDebt.selector,
                     vefxsToken,
                     veFXSAllocator,
-                    vefxsBalance
+                    vefxsAllocatorBalance
                 )
             );
         }
@@ -454,10 +460,10 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         // 10. Add and categorize veFXS
         //      - illiquid, volatile, strategic
-        address[] memory veFXSLocations = new address[](3);
-        veFXSLocations[0] = veFXSAllocator;
-        veFXSLocations[1] = daoMS;
-        veFXSLocations[2] = daoWorkingWallet;
+        //      - excludes the veFXS allocator balance, since the deployed amount is accounted for in debt
+        address[] memory veFXSLocations = new address[](2);
+        veFXSLocations[0] = daoMS;
+        veFXSLocations[1] = daoWorkingWallet;
         console2.log("Adding veFXS to TRSRY");
         addToBatch(
             treasuryConfig,
@@ -525,6 +531,20 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 AssetCategory.wrap("strategic")
             )
         );
+
+        // Reporting
+        console2.log("Testing TRSRY");
+        OlympusTreasury trsry = OlympusTreasury(treasuryV1_1);
+        address[] memory assets = trsry.getAssets();
+        for (uint256 i = 0; i < assets.length; i++) {
+            address asset = assets[i];
+            console2.log("    Asset: %s", asset);
+            (uint256 totalBalance, ) = trsry.getAssetBalance(asset, TRSRYv1_1.Variant.CURRENT);
+            uint256 debt = trsry.totalDebt(ERC20(asset));
+            console2.log("        Total balance: %s", totalBalance);
+            console2.log("        Balance: %s", totalBalance - debt);
+            console2.log("        Debt: %s", debt);
+        }
     }
 
     function RBSv2Install_1_1(bool send_) external isDaoBatch(send_) {
