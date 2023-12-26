@@ -254,7 +254,11 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             uint256 vefxsTotalDebt = trsryModule.totalDebt(vefxsToken);
             assertEq(vefxsTotalDebt, 0, "veFXS debt should be 0");
 
-            assertEq(vefxsToken.balanceOf(treasuryV1), 0, "veFXS balance in treasury v1.0 should be 0");
+            assertEq(
+                vefxsToken.balanceOf(treasuryV1),
+                0,
+                "veFXS balance in treasury v1.0 should be 0"
+            );
         }
 
         // 3. Upgrade the OlympusTreasury contract to the new version
