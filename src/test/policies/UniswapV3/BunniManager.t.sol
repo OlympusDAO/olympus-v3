@@ -1544,10 +1544,6 @@ contract BunniManagerTest is Test {
             SLIPPAGE_DEFAULT
         );
 
-        // Recognise the emitted event
-        vm.expectEmit(true, true, false, true);
-        emit PoolTokenActivated(address(pool), address(poolToken));
-
         // Set TWAP parameters
         uint16 twapMaxDeviationBps = 5000;
         uint32 twapObservationWindow = TWAP_DEFAULT_OBSERVATION_WINDOW + 1;
@@ -1558,6 +1554,10 @@ contract BunniManagerTest is Test {
             OHM_USDC_TICK_CUMULATIVE_0,
             OHM_USDC_TICK_CUMULATIVE_1
         );
+
+        // Recognise the emitted event
+        vm.expectEmit(true, true, false, true);
+        emit PoolTokenActivated(address(pool), address(poolToken));
 
         vm.prank(policy);
         bunniManager.activatePoolToken(address(pool), twapMaxDeviationBps, twapObservationWindow);
