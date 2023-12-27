@@ -134,8 +134,7 @@ contract BunniPriceTest is Test {
 
         // Deploy writer policies
         {
-            (address writePRICE_, address writeSPPLY_, ) = bunniSetup
-                .createWriterPolicies();
+            (address writePRICE_, address writeSPPLY_, ) = bunniSetup.createWriterPolicies();
 
             writePRICE = writePRICE_;
             writeSPPLY = writeSPPLY_;
@@ -150,12 +149,7 @@ contract BunniPriceTest is Test {
 
         // Set up the UniV3 pool
         {
-            address pool_ = bunniSetup.setUpPool(
-                OHM,
-                USDC,
-                POOL_FEE,
-                POOL_SQRTPRICEX96
-            );
+            address pool_ = bunniSetup.setUpPool(OHM, USDC, POOL_FEE, POOL_SQRTPRICEX96);
 
             uniswapPool = IUniswapV3Pool(pool_);
         }
@@ -231,7 +225,15 @@ contract BunniPriceTest is Test {
         // Get the current values for slot0
         UniswapV3Pool.Slot0 memory slot0;
         {
-            (uint160 sqrtPriceX96, int24 tick, uint16 obsIndex, uint16 obsCard, uint16 obsCardNext, uint8 feeProtocol, ) = uniswapPool.slot0();
+            (
+                uint160 sqrtPriceX96,
+                int24 tick,
+                uint16 obsIndex,
+                uint16 obsCard,
+                uint16 obsCardNext,
+                uint8 feeProtocol,
+
+            ) = uniswapPool.slot0();
 
             slot0 = UniswapV3Pool.Slot0({
                 sqrtPriceX96: sqrtPriceX96,
@@ -247,9 +249,7 @@ contract BunniPriceTest is Test {
         vm.mockCall(
             address(uniswapPool),
             abi.encodeWithSelector(IUniswapV3PoolState.slot0.selector),
-            abi.encode(
-                slot0
-            )
+            abi.encode(slot0)
         );
     }
 
@@ -442,7 +442,10 @@ contract BunniPriceTest is Test {
         uint256 ohmReserve = ohmReserve_.mulDiv(outputScale, 10 ** OHM_DECIMALS);
         uint256 usdcReserve = usdcReserve_.mulDiv(outputScale, 10 ** USDC_DECIMALS);
         uint256 expectedPrice = (ohmReserve.mulDiv(OHM_PRICE, outputScale) +
-            usdcReserve.mulDiv(USDC_PRICE, outputScale)).mulDiv(10 ** POOL_TOKEN_DECIMALS, poolToken.totalSupply()); // Scale: PRICE_DECIMALS
+            usdcReserve.mulDiv(USDC_PRICE, outputScale)).mulDiv(
+                10 ** POOL_TOKEN_DECIMALS,
+                poolToken.totalSupply()
+            ); // Scale: PRICE_DECIMALS
 
         // Call
         bytes memory params = abi.encode(
@@ -465,12 +468,7 @@ contract BunniPriceTest is Test {
 
     function test_getBunniTokenPrice_noLiquidity() public {
         // Create another pool
-        address pool_ = bunniSetup.setUpPool(
-            OHM,
-            USDC,
-            3000,
-            POOL_SQRTPRICEX96
-        );
+        address pool_ = bunniSetup.setUpPool(OHM, USDC, 3000, POOL_SQRTPRICEX96);
 
         // Deploy a token for the pool, but don't deposit liquidity
         vm.startPrank(policy);
@@ -494,11 +492,7 @@ contract BunniPriceTest is Test {
         vm.expectRevert(err);
 
         // Call
-        submoduleBunniPrice.getBunniTokenPrice(
-            address(poolToken_),
-            PRICE_DECIMALS,
-            params
-        );
+        submoduleBunniPrice.getBunniTokenPrice(address(poolToken_), PRICE_DECIMALS, params);
     }
 
     function test_getBunniTokenPrice_twapDeviationReverts() public {
@@ -567,7 +561,10 @@ contract BunniPriceTest is Test {
         uint256 ohmReserve = ohmReserve_.mulDiv(outputScale, 10 ** OHM_DECIMALS);
         uint256 usdcReserve = usdcReserve_.mulDiv(outputScale, 10 ** USDC_DECIMALS);
         uint256 expectedPrice = (ohmReserve.mulDiv(ohmPrice, outputScale) +
-            usdcReserve.mulDiv(usdcPrice, outputScale)).mulDiv(10 ** POOL_TOKEN_DECIMALS, poolToken.totalSupply()); // Scale: outputDecimals
+            usdcReserve.mulDiv(usdcPrice, outputScale)).mulDiv(
+                10 ** POOL_TOKEN_DECIMALS,
+                poolToken.totalSupply()
+            ); // Scale: outputDecimals
 
         // Call
         bytes memory params = abi.encode(

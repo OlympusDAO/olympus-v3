@@ -157,7 +157,10 @@ contract BunniSetup is Test {
         return (writePRICE, writeSPPLY, writeTRSRY);
     }
 
-    function createSubmodules(address writePRICE, address writeSPPLY) public returns (address, address) {
+    function createSubmodules(
+        address writePRICE,
+        address writeSPPLY
+    ) public returns (address, address) {
         // PRICE Submodule
         BunniPrice priceSubmoduleBunni = new BunniPrice(PRICE);
 
@@ -189,9 +192,7 @@ contract BunniSetup is Test {
         uint160 sqrtPriceX96
     ) public returns (address) {
         // Create the Uniswap V3 pool
-        IUniswapV3Pool pool = IUniswapV3Pool(
-            uniswapFactory.createPool(token0, token1, fee)
-        );
+        IUniswapV3Pool pool = IUniswapV3Pool(uniswapFactory.createPool(token0, token1, fee));
 
         // Initialize it
         pool.initialize(sqrtPriceX96);

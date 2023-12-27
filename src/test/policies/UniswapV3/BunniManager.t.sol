@@ -613,7 +613,10 @@ contract BunniManagerTest is Test {
         Keycode SPPLY_KEYCODE = toKeycode("SPPLY");
 
         Permissions[] memory expectedPermissions = new Permissions[](14);
-        expectedPermissions[0] = Permissions(TRSRY_KEYCODE, OlympusTreasury.withdrawReserves.selector);
+        expectedPermissions[0] = Permissions(
+            TRSRY_KEYCODE,
+            OlympusTreasury.withdrawReserves.selector
+        );
         expectedPermissions[1] = Permissions(
             TRSRY_KEYCODE,
             OlympusTreasury.increaseWithdrawApproval.selector
@@ -623,15 +626,27 @@ contract BunniManagerTest is Test {
             OlympusTreasury.decreaseWithdrawApproval.selector
         );
         expectedPermissions[3] = Permissions(TRSRY_KEYCODE, OlympusTreasury.addAsset.selector);
-        expectedPermissions[4] = Permissions(TRSRY_KEYCODE, OlympusTreasury.addAssetLocation.selector);
-        expectedPermissions[5] = Permissions(TRSRY_KEYCODE, OlympusTreasury.removeAssetLocation.selector);
+        expectedPermissions[4] = Permissions(
+            TRSRY_KEYCODE,
+            OlympusTreasury.addAssetLocation.selector
+        );
+        expectedPermissions[5] = Permissions(
+            TRSRY_KEYCODE,
+            OlympusTreasury.removeAssetLocation.selector
+        );
         expectedPermissions[6] = Permissions(TRSRY_KEYCODE, OlympusTreasury.categorize.selector);
         expectedPermissions[7] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
         expectedPermissions[8] = Permissions(PRICE_KEYCODE, PRICE.removeAsset.selector);
         expectedPermissions[9] = Permissions(MINTR_KEYCODE, OlympusMinter.mintOhm.selector);
         expectedPermissions[10] = Permissions(MINTR_KEYCODE, OlympusMinter.burnOhm.selector);
-        expectedPermissions[11] = Permissions(MINTR_KEYCODE, OlympusMinter.increaseMintApproval.selector);
-        expectedPermissions[12] = Permissions(MINTR_KEYCODE, OlympusMinter.decreaseMintApproval.selector);
+        expectedPermissions[11] = Permissions(
+            MINTR_KEYCODE,
+            OlympusMinter.increaseMintApproval.selector
+        );
+        expectedPermissions[12] = Permissions(
+            MINTR_KEYCODE,
+            OlympusMinter.decreaseMintApproval.selector
+        );
         expectedPermissions[13] = Permissions(SPPLY_KEYCODE, SPPLY.execOnSubmodule.selector);
 
         Permissions[] memory perms = bunniManager.requestPermissions();
