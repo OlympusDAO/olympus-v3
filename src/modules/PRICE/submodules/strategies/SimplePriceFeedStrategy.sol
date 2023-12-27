@@ -3,6 +3,7 @@ pragma solidity 0.8.15;
 
 import "modules/PRICE/PRICE.v2.sol";
 import {QuickSort} from "libraries/QuickSort.sol";
+import {Deviation} from "libraries/Deviation.sol";
 
 /// @title      SimplePriceFeedStrategy
 /// @author     0xJem
@@ -191,16 +192,17 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         if (params_.length != DEVIATION_PARAMS_LENGTH) revert SimpleStrategy_ParamsInvalid(params_);
         uint256 deviationBps = abi.decode(params_, (uint256));
+        // Not necessary to use `Deviation.isDeviatingWithBpsCheck()` thanks to this check
         if (deviationBps <= DEVIATION_MIN || deviationBps >= DEVIATION_MAX)
             revert SimpleStrategy_ParamsInvalid(params_);
 
         // Check the deviation of the minimum from the average
         uint256 minPrice = sortedPrices[0];
-        if (((averagePrice - minPrice) * 10000) / averagePrice > deviationBps) return averagePrice;
+        if (Deviation.isDeviating(minPrice, averagePrice, deviationBps, DEVIATION_MAX)) return averagePrice;
 
         // Check the deviation of the maximum from the average
         uint256 maxPrice = sortedPrices[sortedPrices.length - 1];
-        if (((maxPrice - averagePrice) * 10000) / averagePrice > deviationBps) return averagePrice;
+        if (Deviation.isDeviating(maxPrice, averagePrice, deviationBps, DEVIATION_MAX)) return averagePrice;
 
         // Otherwise, return the first non-zero value
         return firstNonZeroPrice;
