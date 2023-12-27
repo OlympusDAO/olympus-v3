@@ -84,7 +84,7 @@ contract BunniPrice is PriceSubmodule {
 
     // ========== TOKEN PRICE FUNCTIONS ========== //
 
-    /// @notice                 Determines the price of `bunniToken_` (representing a Uniswap V3 pool) in USD
+    /// @notice                 Determines the price of a single `bunniToken_` (representing a Uniswap V3 pool) in USD
     /// @dev                    This function performs the following:
     /// @dev                    - Decodes the parameters
     /// @dev                    - Check that the token is a valid BunniToken
@@ -107,6 +107,7 @@ contract BunniPrice is PriceSubmodule {
     /// @param bunniToken_      The address of the BunniToken contract
     /// @param outputDecimals_  The number of decimals to use for the output price
     /// @param params_          The encoded parameters for the function call
+    /// @return                 The price of a single `bunniToken_` in USD in the scale of `outputDecimals_`
     function getBunniTokenPrice(
         address bunniToken_,
         uint8 outputDecimals_,
