@@ -153,8 +153,9 @@ contract BunniPrice is PriceSubmodule {
         }
 
         // Validate reserves
+        BunniKey memory tokenKey = _getBunniKey(token);
         _validateReserves(
-            _getBunniKey(token),
+            tokenKey,
             lens,
             params.twapMaxDeviationsBps,
             params.twapObservationWindow
@@ -162,13 +163,31 @@ contract BunniPrice is PriceSubmodule {
 
         uint256 pricePerShare; // Scale: outputDecimals
         {
-            uint256 totalValue = _getTotalValue(token, lens, outputDecimals_);
+            (uint160 liquidity, uint256 amount0, uint256 amount1) = lens.pricePerFullShare(
+                tokenKey
+            );
 
-            // Only set pricePerShare if there is token supply (otherwise it will be 0)
-            uint256 totalSupply = token.totalSupply();
-            if (totalSupply > 0) {
-                // BunniToken has a decimal scale of 18, so we need to adjust to the output decimals only
-                pricePerShare = totalValue.mulDiv(10 ** token.decimals(), token.totalSupply());
+            // Only set pricePerShare if there is liquidity (otherwise it will be 0)
+            if (liquidity > 0) {
+                uint256 outputScale = 10 ** outputDecimals_;
+                {
+                    address token0 = tokenKey.pool.token0();
+                    uint8 token0Decimals = ERC20(token0).decimals();
+                    pricePerShare += amount0.mulDiv(outputScale, 10 ** token0Decimals).mulDiv(
+                        _PRICE().getPrice(token0),
+                        outputScale
+                    );
+                }
+
+                {
+                    address token1 = tokenKey.pool.token1();
+                    uint8 token1Decimals = ERC20(token1).decimals();
+
+                    pricePerShare += amount1.mulDiv(outputScale, 10 ** token1Decimals).mulDiv(
+                        _PRICE().getPrice(token1),
+                        outputScale
+                    );
+                }
             }
         }
 
@@ -188,58 +207,6 @@ contract BunniPrice is PriceSubmodule {
                 tickLower: token_.tickLower(),
                 tickUpper: token_.tickUpper()
             });
-    }
-
-    /// @notice                 Fetches the reserves of a Uniswap V3 position
-    ///
-    /// @param token_           The address of the BunniToken contract
-    /// @param lens_            The address of the BunniLens contract
-    /// @param outputDecimals_  The number of decimals to use for the output price
-    /// @return token0          The address of the first reserve token
-    /// @return reserve0        The amount of the first reserve token (in `outputDecimals_`)
-    /// @return token1          The address of the second reserve token
-    /// @return reserve1        The amount of the second reserve token (in `outputDecimals_`)
-    function _getBunniReserves(
-        BunniToken token_,
-        BunniLens lens_,
-        uint8 outputDecimals_
-    ) internal view returns (address token0, uint256 reserve0, address token1, uint256 reserve1) {
-        BunniKey memory key = _getBunniKey(token_);
-        (uint112 reserve0_, uint112 reserve1_) = lens_.getReserves(key);
-
-        // Get the token addresses
-        token0 = key.pool.token0();
-        token1 = key.pool.token1();
-        uint8 token0Decimals = ERC20(token0).decimals();
-        uint8 token1Decimals = ERC20(token1).decimals();
-        reserve0 = uint256(reserve0_).mulDiv(10 ** outputDecimals_, 10 ** token0Decimals);
-        reserve1 = uint256(reserve1_).mulDiv(10 ** outputDecimals_, 10 ** token1Decimals);
-    }
-
-    /// @notice                 Determines the total value of the Uniswap V3 position represented by `token_`
-    ///
-    /// @param token_           The BunniToken representing the Uniswap V3 position
-    /// @param lens_            The BunniLens to use for determining reserves
-    /// @param outputDecimals_  The decimal scale to use
-    /// @return                 The total value of the position in USD in the scale of `outputDecimals_`
-    function _getTotalValue(
-        BunniToken token_,
-        BunniLens lens_,
-        uint8 outputDecimals_
-    ) internal view returns (uint256) {
-        (address token0, uint256 reserve0, address token1, uint256 reserve1) = _getBunniReserves(
-            token_,
-            lens_,
-            outputDecimals_
-        );
-        uint256 outputScale = 10 ** outputDecimals_;
-
-        // Determine the value of each reserve token in USD
-        uint256 totalValue;
-        totalValue += _PRICE().getPrice(token0).mulDiv(reserve0, outputScale);
-        totalValue += _PRICE().getPrice(token1).mulDiv(reserve1, outputScale);
-
-        return totalValue;
     }
 
     /// @notice                         Validates that the reserves of the pool represented by `key_` are within
