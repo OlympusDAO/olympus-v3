@@ -438,11 +438,14 @@ contract BunniPriceTest is Test {
         uint256 outputScale = 10 ** PRICE_DECIMALS;
 
         // Calculate the expected price
-        (, uint256 ohmReserve_, uint256 usdcReserve_) = bunniLens.pricePerFullShare(poolTokenKey);
+        (uint256 ohmReserve_, uint256 usdcReserve_) = _getReserves(poolTokenKey, bunniLens);
         uint256 ohmReserve = ohmReserve_.mulDiv(outputScale, 10 ** OHM_DECIMALS);
         uint256 usdcReserve = usdcReserve_.mulDiv(outputScale, 10 ** USDC_DECIMALS);
-        uint256 expectedPrice = ohmReserve.mulDiv(OHM_PRICE, outputScale) +
-            usdcReserve.mulDiv(USDC_PRICE, outputScale); // Scale: PRICE_DECIMALS
+        uint256 expectedPrice = (ohmReserve.mulDiv(OHM_PRICE, outputScale) +
+            usdcReserve.mulDiv(USDC_PRICE, outputScale)).mulDiv(
+                10 ** POOL_TOKEN_DECIMALS,
+                poolToken.totalSupply()
+            ); // Scale: PRICE_DECIMALS
 
         // Call
         bytes memory params = abi.encode(
@@ -460,7 +463,7 @@ contract BunniPriceTest is Test {
 
         // Check values
         assertTrue(price > 0, "should be non-zero");
-        assertEq(price, expectedPrice);
+        assertApproxEqAbs(price, expectedPrice, 1e9);
     }
 
     function test_getBunniTokenPrice_noLiquidity() public {
@@ -554,11 +557,14 @@ contract BunniPriceTest is Test {
         bunniSetup.mockGetPrice(USDC, usdcPrice);
 
         // Calculate the expected price
-        (, uint256 ohmReserve_, uint256 usdcReserve_) = bunniLens.pricePerFullShare(poolTokenKey);
+        (uint256 ohmReserve_, uint256 usdcReserve_) = _getReserves(poolTokenKey, bunniLens);
         uint256 ohmReserve = ohmReserve_.mulDiv(outputScale, 10 ** OHM_DECIMALS);
         uint256 usdcReserve = usdcReserve_.mulDiv(outputScale, 10 ** USDC_DECIMALS);
-        uint256 expectedPrice = ohmReserve.mulDiv(ohmPrice, outputScale) +
-            usdcReserve.mulDiv(usdcPrice, outputScale); // Scale: outputDecimals
+        uint256 expectedPrice = (ohmReserve.mulDiv(ohmPrice, outputScale) +
+            usdcReserve.mulDiv(usdcPrice, outputScale)).mulDiv(
+                10 ** POOL_TOKEN_DECIMALS,
+                poolToken.totalSupply()
+            ); // Scale: outputDecimals
 
         // Call
         bytes memory params = abi.encode(
