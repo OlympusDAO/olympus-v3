@@ -42,7 +42,6 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         int256 priceInt;
         uint256 startedAt;
         uint256 updatedAt;
-        uint80 answeredInRound;
     }
 
     // ========== ERRORS ========== //
@@ -61,15 +60,6 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @param feed_            The address of the price feed
     /// @param price_           The price returned by the price feed
     error Chainlink_FeedPriceInvalid(address feed_, int256 price_);
-
-    /// @notice                 The round returned by the price feed is invalid
-    /// @dev                    This could be because:
-    /// @dev                    - The round ID is different to the round it was answered in
-    ///
-    /// @param feed_            The address of the price feed
-    /// @param roundId_         The round ID returned by the price feed
-    /// @param answeredInRound_ The round ID the price was answered in
-    error Chainlink_FeedRoundMismatch(address feed_, uint80 roundId_, uint80 answeredInRound_);
 
     /// @notice                     The data returned by the price feed is stale
     /// @dev                        This could be because:
@@ -154,13 +144,6 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
                 roundData.updatedAt,
                 blockTimestamp - paramsUpdateThreshold
             );
-
-        if (roundData.answeredInRound != roundData.roundId)
-            revert Chainlink_FeedRoundMismatch(
-                address(feed_),
-                roundData.roundId,
-                roundData.answeredInRound
-            );
     }
 
     /// @notice                         Retrieves the latest price returned by the specified Chainlink price feed.
@@ -184,9 +167,9 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
                 int256 priceInt,
                 uint256 startedAt,
                 uint256 updatedAt,
-                uint80 answeredInRound
+                uint80 answeredInRound // deprecated
             ) {
-                roundData = FeedRoundData(roundId, priceInt, startedAt, updatedAt, answeredInRound);
+                roundData = FeedRoundData(roundId, priceInt, startedAt, updatedAt);
             } catch (bytes memory) {
                 revert Chainlink_FeedInvalid(address(feed_));
             }
