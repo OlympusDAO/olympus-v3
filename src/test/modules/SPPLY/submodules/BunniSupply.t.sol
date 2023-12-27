@@ -378,8 +378,8 @@ contract BunniSupplyTest is Test {
         assertEq(submoduleBunniSupply.getProtocolOwnedLiquidityOhm(), ohmReserves);
     }
 
-    function test_getProtocolOwnedLiquidityOhm_singleToken_observationWindow() public {
-        uint32 observationWindow = 60;
+    function testRevert_getProtocolOwnedLiquidityOhm_singleToken_deviationTWAP() public {
+        uint32 observationWindow = 500;
 
         // Register one token
         vm.prank(address(moduleSupply));
@@ -396,11 +396,8 @@ contract BunniSupplyTest is Test {
         uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // USDC decimals: 6
 
         // Calculate the expected TWAP price
-        int56 tickCumulative0_ = -2416639538393;
-        int56 tickCumulative1_ = -2416640880953;
         int56 timeWeightedTick = (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) /
             int32(observationWindow);
-        console2.log("     TWAP tick: %s", timeWeightedTick);
 
         uint256 twapRatio = OracleLibrary.getQuoteAtTick(
             int24(timeWeightedTick),
@@ -408,22 +405,6 @@ contract BunniSupplyTest is Test {
             ohmAddress,
             usdcAddress
         ); // USDC decimals: 6
-
-        console2.log("    TWAP ratio: %s", twapRatio);
-
-        timeWeightedTick = (tickCumulative1_ - tickCumulative0_) /
-            int32(observationWindow);
-        console2.log("     TWAP tick: %s", timeWeightedTick);
-        twapRatio = OracleLibrary.getQuoteAtTick(
-            int24(timeWeightedTick),
-            uint128(10 ** 9), // token0 (OHM) decimals
-            ohmAddress,
-            usdcAddress
-        ); // USDC decimals: 6
-
-        console2.log("    TWAP ratio: %s", twapRatio);
-        console2.log("Reserves ratio: %s", reservesRatio);
-        console2.log("          diff: %s", twapRatio - reservesRatio);
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
@@ -637,8 +618,8 @@ contract BunniSupplyTest is Test {
         assertEq(reserves[0].balances[1], usdcReserves_);
     }
 
-    function test_getProtocolOwnedLiquidityReserves_singleToken_observationWindow() public {
-        uint32 observationWindow = 60;
+    function testRevert_getProtocolOwnedLiquidityReserves_singleToken_deviationTWAP() public {
+        uint32 observationWindow = 500;
 
         // Register one token
         vm.prank(address(moduleSupply));
@@ -655,7 +636,7 @@ contract BunniSupplyTest is Test {
         uint256 reservesRatio = usdcReserves_.mulDiv(1e9, ohmReserves_); // USDC decimals: 6
 
         // Calculate the expected TWAP price
-        int56 timeWeightedTick = (OHM_USDC_TICK_CUMULATIVE_1 - (-2463052904970)) /
+        int56 timeWeightedTick = (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) /
             int32(observationWindow);
         uint256 twapRatio = OracleLibrary.getQuoteAtTick(
             int24(timeWeightedTick),
