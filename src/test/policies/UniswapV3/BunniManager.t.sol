@@ -4,13 +4,10 @@ pragma solidity >=0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
-
-import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {TRSRYv1_1, toCategory as toTreasuryCategory} from "modules/TRSRY/TRSRY.v1.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
@@ -20,9 +17,11 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
-import {SPPLYv1, Category as SupplyCategory, fromCategory as fromSupplyCategory, toCategory as toSupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
+import {toCategory as toSupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
 import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
 import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
+
+import {BunniSetup} from "test/policies/UniswapV3/BunniSetup.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
@@ -30,7 +29,6 @@ import {SqrtPriceMath} from "@uniswap/v3-core/contracts/libraries/SqrtPriceMath.
 
 import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
-import {UniswapV3Pool} from "test/lib/UniswapV3/UniswapV3Pool.sol";
 import {SwapRouter} from "test/lib/UniswapV3/SwapRouter.sol";
 import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
@@ -50,9 +48,6 @@ import "src/Kernel.sol";
 
 contract BunniManagerTest is Test {
     using FullMath for uint256;
-    using ModuleTestFixtureGenerator for OlympusPricev2;
-    using ModuleTestFixtureGenerator for OlympusSupply;
-    using ModuleTestFixtureGenerator for OlympusTreasury;
 
     UserFactory public userCreator;
     address internal alice;
@@ -70,12 +65,12 @@ contract BunniManagerTest is Test {
     address internal token0Address;
     address internal token1Address;
 
+    BunniSetup internal bunniSetup;
+
     Kernel internal kernel;
 
     // Modules
-    OlympusRoles internal ROLES;
     OlympusTreasury internal TRSRY;
-    OlympusMinter internal MINTR;
     OlympusPricev2 internal PRICE;
     OlympusSupply internal SPPLY;
     address internal treasuryAddress;
@@ -88,8 +83,6 @@ contract BunniManagerTest is Test {
 
     UniswapV3Factory internal uniswapFactory;
     SwapRouter internal swapRouter;
-
-    RolesAdmin internal rolesAdmin;
 
     BunniManager internal bunniManager;
     BunniHub internal bunniHub;
@@ -128,10 +121,9 @@ contract BunniManagerTest is Test {
     uint256 private constant USDC_PRICE = 1e18;
     uint256 private constant OHM_PRICE = OHM_USDC_PRICE;
 
-    // Keep the max reward low and fee high, so that the capped reward is low
-    uint256 private constant HARVEST_REWARD = 1e9;
-    uint16 private constant HARVEST_REWARD_FEE = 1000; // 10%
-    uint48 private constant HARVEST_FREQUENCY = uint48(24 hours);
+    uint256 private HARVEST_REWARD;
+    uint16 private HARVEST_REWARD_FEE; // 10%
+    uint48 private HARVEST_FREQUENCY;
 
     mapping(address => mapping(address => uint256)) private tokenBalances;
 
@@ -210,113 +202,67 @@ contract BunniManagerTest is Test {
             token1Address = address(ohm) > address(usdc) ? address(ohm) : address(usdc);
         }
 
-        // Deploy Bophades modules
+        // Deploy BunniSetup
         {
-            address[2] memory tokens = [ohmAddress, usdcAddress];
+            bunniSetup = new BunniSetup(ohmAddress, usdcAddress, address(this), policy);
 
-            // Deploy kernel
-            kernel = new Kernel(); // this contract will be the executor
+            kernel = bunniSetup.kernel();
+            TRSRY = bunniSetup.TRSRY();
+            PRICE = bunniSetup.PRICE();
+            SPPLY = bunniSetup.SPPLY();
+            uniswapFactory = bunniSetup.uniswapFactory();
+            bunniHub = bunniSetup.bunniHub();
+            bunniLens = bunniSetup.bunniLens();
+            bunniManager = bunniSetup.bunniManager();
 
-            // Deploy modules
-            ROLES = new OlympusRoles(kernel);
-            TRSRY = new OlympusTreasury(kernel);
-            MINTR = new OlympusMinter(kernel, ohmAddress);
-            PRICE = new OlympusPricev2(kernel, uint8(18), uint32(8 hours));
-            SPPLY = new OlympusSupply(kernel, tokens, 0);
-
-            // Deploy mock module writer
-            writePRICE = PRICE.generateGodmodeFixture(type(OlympusPricev2).name);
-            writeSPPLY = SPPLY.generateGodmodeFixture(type(OlympusSupply).name);
-            writeTRSRY = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
-
-            treasuryAddress = address(TRSRY);
-        }
-
-        {
-            // Deploy BunniManager policy
-            bunniManager = new BunniManager(
-                kernel,
-                HARVEST_REWARD,
-                HARVEST_REWARD_FEE,
-                HARVEST_FREQUENCY
-            );
+            treasuryAddress = address(bunniSetup.TRSRY());
+            bunniHubAddress = address(bunniSetup.bunniHub());
+            bunniLensAddress = address(bunniSetup.bunniLens());
             bunniManagerAddress = address(bunniManager);
 
-            // Deploy Uniswap V3 factory
-            uniswapFactory = new UniswapV3Factory();
+            HARVEST_REWARD = bunniSetup.HARVEST_REWARD();
+            HARVEST_REWARD_FEE = bunniSetup.HARVEST_REWARD_FEE();
+            HARVEST_FREQUENCY = bunniSetup.HARVEST_FREQUENCY();
+        }
 
+        // Deploy pool
+        {
+            address pool_ = bunniSetup.setUpPool(
+                token0Address,
+                token1Address,
+                POOL_FEE,
+                OHM_USDC_SQRTPRICEX96
+            );
+
+            pool = IUniswapV3Pool(pool_);
+        }
+
+        // Deploy writer policies
+        {
+            (address writePRICE_, address writeSPPLY_, address writeTRSRY_) = bunniSetup
+                .createWriterPolicies();
+
+            writePRICE = writePRICE_;
+            writeSPPLY = writeSPPLY_;
+            writeTRSRY = writeTRSRY_;
+        }
+
+        {
             // Deploy Uniswap V3 SwapRouter
             swapRouter = new SwapRouter(address(uniswapFactory), address(wETH));
-
-            // Deploy BunniHub
-            bunniHub = new BunniHub(
-                uniswapFactory,
-                bunniManagerAddress,
-                0 // No protocol fee
-            );
-            bunniHubAddress = address(bunniHub);
-
-            // Deploy BunniLens
-            bunniLens = new BunniLens(bunniHub);
-            bunniLensAddress = address(bunniLens);
-
-            rolesAdmin = new RolesAdmin(kernel);
         }
 
+        // Submodule
         {
-            // Initialize system and kernel
+            (address price_, address supply_) = bunniSetup.createSubmodules(writePRICE, writeSPPLY);
 
-            // Install modules
-            kernel.executeAction(Actions.InstallModule, address(ROLES));
-            kernel.executeAction(Actions.InstallModule, treasuryAddress);
-            kernel.executeAction(Actions.InstallModule, address(MINTR));
-            kernel.executeAction(Actions.InstallModule, address(PRICE));
-            kernel.executeAction(Actions.InstallModule, address(SPPLY));
-
-            // Approve policies
-            kernel.executeAction(Actions.ActivatePolicy, bunniManagerAddress);
-            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-            kernel.executeAction(Actions.ActivatePolicy, address(writePRICE));
-            kernel.executeAction(Actions.ActivatePolicy, address(writeSPPLY));
-            kernel.executeAction(Actions.ActivatePolicy, address(writeTRSRY));
+            priceSubmoduleBunni = BunniPrice(price_);
+            supplySubmoduleBunni = BunniSupply(supply_);
         }
 
-        // PRICE Submodule
+        // Mock observations for the Uniswap V3 pool
         {
-            priceSubmoduleBunni = new BunniPrice(PRICE);
-
-            vm.startPrank(writePRICE);
-            PRICE.installSubmodule(priceSubmoduleBunni);
-            vm.stopPrank();
-        }
-
-        // SPPLY Submodule
-        {
-            supplySubmoduleBunni = new BunniSupply(SPPLY);
-
-            vm.startPrank(writeSPPLY);
-            SPPLY.installSubmodule(supplySubmoduleBunni);
-            vm.stopPrank();
-        }
-
-        {
-            // Configure access control
-
-            // BunniManager roles
-            rolesAdmin.grantRole("bunni_admin", policy);
-        }
-
-        {
-            // Create a Uniswap V3 pool
-            pool = IUniswapV3Pool(
-                uniswapFactory.createPool(token1Address, token0Address, POOL_FEE)
-            );
-
-            // Initialize it
-            pool.initialize(OHM_USDC_SQRTPRICEX96);
-
-            // Mock observations
-            _mockPoolObserve(
+            bunniSetup.mockPoolObservations(
                 address(pool),
                 TWAP_DEFAULT_OBSERVATION_WINDOW,
                 OHM_USDC_TICK_CUMULATIVE_0,
@@ -324,16 +270,10 @@ contract BunniManagerTest is Test {
             );
         }
 
+        // Mock values, to avoid having to set up all of PRICEv2 and submodules
         {
-            // Mock values, to avoid having to set up all of PRICEv2 and submodules
-            _mockGetPrice(ohmAddress, OHM_PRICE);
-            _mockGetPrice(usdcAddress, USDC_PRICE);
-        }
-
-        {
-            vm.prank(policy);
-            // Set the BunniHub on the manager policy
-            bunniManager.setBunniLens(bunniLensAddress);
+            bunniSetup.mockGetPrice(ohmAddress, OHM_USDC_PRICE);
+            bunniSetup.mockGetPrice(usdcAddress, USDC_PRICE);
         }
     }
 
@@ -435,14 +375,6 @@ contract BunniManagerTest is Test {
         vm.expectRevert(err);
     }
 
-    function _mockGetPrice(address asset_, uint256 price_) internal {
-        vm.mockCall(
-            address(PRICE),
-            abi.encodeWithSignature("getPrice(address)", address(asset_)),
-            abi.encode(price_)
-        );
-    }
-
     function _mockGetPriceReverts(address asset_) internal {
         bytes memory err = abi.encodeWithSelector(PRICEv2.PRICE_AssetNotApproved.selector, asset_);
 
@@ -450,31 +382,6 @@ contract BunniManagerTest is Test {
             address(PRICE),
             abi.encodeWithSignature("getPrice(address)", asset_),
             err
-        );
-    }
-
-    function _mockPoolObserve(
-        address pool_,
-        uint32 period_,
-        int56 tickCumulative0_,
-        int56 tickCumulative1_
-    ) internal {
-        // Input
-        uint32[] memory observationWindow = new uint32[](2);
-        observationWindow[0] = period_;
-        observationWindow[1] = 0;
-
-        // Output
-        int56[] memory tickCumulatives = new int56[](2);
-        tickCumulatives[0] = tickCumulative0_;
-        tickCumulatives[1] = tickCumulative1_;
-
-        uint160[] memory secondsPerLiquidityCumulativeX128s = new uint160[](2);
-
-        vm.mockCall(
-            address(pool_),
-            abi.encodeWithSelector(UniswapV3Pool.observe.selector, observationWindow),
-            abi.encode(tickCumulatives, secondsPerLiquidityCumulativeX128s)
         );
     }
 
@@ -646,7 +553,7 @@ contract BunniManagerTest is Test {
 
         // Mock an incompatibility with the module
         vm.mockCall(
-            address(ROLES),
+            address(bunniSetup.ROLES()),
             abi.encodeWithSelector(OlympusRoles.VERSION.selector),
             abi.encode(version_, 0)
         );
@@ -667,7 +574,7 @@ contract BunniManagerTest is Test {
 
         // Mock an incompatibility with the module
         vm.mockCall(
-            address(MINTR),
+            address(bunniSetup.MINTR()),
             abi.encodeWithSelector(OlympusMinter.VERSION.selector),
             abi.encode(version_, 0)
         );
@@ -706,25 +613,25 @@ contract BunniManagerTest is Test {
         Keycode SPPLY_KEYCODE = toKeycode("SPPLY");
 
         Permissions[] memory expectedPermissions = new Permissions[](14);
-        expectedPermissions[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        expectedPermissions[0] = Permissions(TRSRY_KEYCODE, OlympusTreasury.withdrawReserves.selector);
         expectedPermissions[1] = Permissions(
             TRSRY_KEYCODE,
-            TRSRY.increaseWithdrawApproval.selector
+            OlympusTreasury.increaseWithdrawApproval.selector
         );
         expectedPermissions[2] = Permissions(
             TRSRY_KEYCODE,
-            TRSRY.decreaseWithdrawApproval.selector
+            OlympusTreasury.decreaseWithdrawApproval.selector
         );
-        expectedPermissions[3] = Permissions(TRSRY_KEYCODE, TRSRY.addAsset.selector);
-        expectedPermissions[4] = Permissions(TRSRY_KEYCODE, TRSRY.addAssetLocation.selector);
-        expectedPermissions[5] = Permissions(TRSRY_KEYCODE, TRSRY.removeAssetLocation.selector);
-        expectedPermissions[6] = Permissions(TRSRY_KEYCODE, TRSRY.categorize.selector);
+        expectedPermissions[3] = Permissions(TRSRY_KEYCODE, OlympusTreasury.addAsset.selector);
+        expectedPermissions[4] = Permissions(TRSRY_KEYCODE, OlympusTreasury.addAssetLocation.selector);
+        expectedPermissions[5] = Permissions(TRSRY_KEYCODE, OlympusTreasury.removeAssetLocation.selector);
+        expectedPermissions[6] = Permissions(TRSRY_KEYCODE, OlympusTreasury.categorize.selector);
         expectedPermissions[7] = Permissions(PRICE_KEYCODE, PRICE.addAsset.selector);
         expectedPermissions[8] = Permissions(PRICE_KEYCODE, PRICE.removeAsset.selector);
-        expectedPermissions[9] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        expectedPermissions[10] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        expectedPermissions[11] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
-        expectedPermissions[12] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
+        expectedPermissions[9] = Permissions(MINTR_KEYCODE, OlympusMinter.mintOhm.selector);
+        expectedPermissions[10] = Permissions(MINTR_KEYCODE, OlympusMinter.burnOhm.selector);
+        expectedPermissions[11] = Permissions(MINTR_KEYCODE, OlympusMinter.increaseMintApproval.selector);
+        expectedPermissions[12] = Permissions(MINTR_KEYCODE, OlympusMinter.decreaseMintApproval.selector);
         expectedPermissions[13] = Permissions(SPPLY_KEYCODE, SPPLY.execOnSubmodule.selector);
 
         Permissions[] memory perms = bunniManager.requestPermissions();
@@ -900,7 +807,7 @@ contract BunniManagerTest is Test {
         IBunniToken deployedToken = bunniManager.deployPoolToken(address(pool));
 
         // Create a new pool with an overlapping underlying token
-        _mockGetPrice(address(dai), 1e18);
+        bunniSetup.mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
         );
@@ -1047,7 +954,7 @@ contract BunniManagerTest is Test {
         bunniManager.deployPoolToken(address(pool));
 
         // Create a new pool with an overlapping underlying token
-        _mockGetPrice(address(dai), 1e18);
+        bunniSetup.mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
         );
@@ -1630,7 +1537,7 @@ contract BunniManagerTest is Test {
         uint16 twapMaxDeviationBps = 5000;
         uint32 twapObservationWindow = TWAP_DEFAULT_OBSERVATION_WINDOW + 1;
 
-        _mockPoolObserve(
+        bunniSetup.mockPoolObservations(
             address(pool),
             twapObservationWindow,
             OHM_USDC_TICK_CUMULATIVE_0,
@@ -1908,7 +1815,7 @@ contract BunniManagerTest is Test {
 
     function test_deposit_token0InsufficientBalanceReverts(uint256 token0Amount_) public {
         // Create a pool with non-OHM tokens
-        _mockGetPrice(address(dai), 1e18);
+        bunniSetup.mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
         );
@@ -1943,7 +1850,7 @@ contract BunniManagerTest is Test {
 
     function test_deposit_token1InsufficientBalanceReverts(uint256 token1Amount_) public {
         // Create a pool with non-OHM tokens
-        _mockGetPrice(address(dai), 1e18);
+        bunniSetup.mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
         );
@@ -1981,7 +1888,7 @@ contract BunniManagerTest is Test {
         uint256 daiAmount = usdcAmount.mulDiv(1e18, 1e6); // Same price, different decimal scale
 
         // Create a pool with non-OHM tokens
-        _mockGetPrice(address(dai), 1e18);
+        bunniSetup.mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
         );
@@ -2239,7 +2146,7 @@ contract BunniManagerTest is Test {
 
     function test_withdraw_nonOhmTokens(uint256 shareToWithdraw_) public {
         // Create a pool with non-OHM tokens
-        _mockGetPrice(address(dai), 1e18);
+        bunniSetup.mockGetPrice(address(dai), 1e18);
         IUniswapV3Pool newPool = IUniswapV3Pool(
             uniswapFactory.createPool(usdcAddress, address(dai), POOL_FEE)
         );
