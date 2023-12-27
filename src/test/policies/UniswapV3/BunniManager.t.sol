@@ -40,6 +40,8 @@ import {BunniKey} from "src/external/bunni/base/Structs.sol";
 
 import {UniswapV3PoolLibrary} from "libraries/UniswapV3/PoolLibrary.sol";
 
+import {PoolHelper} from "test/policies/UniswapV3/PoolHelper.sol";
+
 import {ComputeAddress} from "test/libraries/ComputeAddress.sol";
 
 import {toSubKeycode} from "src/Submodules.sol";
@@ -2735,19 +2737,11 @@ contract BunniManagerTest is Test {
             // Mint USDC into another wallet
             usdc.mint(alice, swapAmountUsdcIn);
 
-            uint256 swapOneOhmMinimum = swapAmountUsdcIn
-                .mulDiv(1e18, 1e6)
-                .mulDiv(1e18, OHM_USDC_PRICE)
-                .mulDiv(1e9, 1e18)
-                .mulDiv(95, 100);
+            uint256 swapOneOhmMinimum = PoolHelper.getAmountOutMinimum(pool, usdcAddress, ohmAddress, swapAmountUsdcIn, OHM_USDC_PRICE, 500);
             _swap(usdcAddress, ohmAddress, alice, swapAmountUsdcIn, swapOneOhmMinimum, POOL_FEE);
 
             // And reverse
-            uint256 swapTwoUsdcMinimum = swapOneOhmMinimum
-                .mulDiv(1e18, 1e9)
-                .mulDiv(OHM_USDC_PRICE, 1e18)
-                .mulDiv(1e6, 1e18)
-                .mulDiv(95, 100);
+            uint256 swapTwoUsdcMinimum = PoolHelper.getAmountOutMinimum(pool, ohmAddress, usdcAddress, swapOneOhmMinimum, OHM_USDC_PRICE, 500);
             _swap(ohmAddress, usdcAddress, alice, swapOneOhmMinimum, swapTwoUsdcMinimum, POOL_FEE);
         }
 
