@@ -51,6 +51,11 @@ library BunniHelper {
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
         (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
 
+        // If the denominator is 0
+        if (reserve0 + fee0 == 0) {
+            return 0;
+        }
+
         return (reserve1 + fee1).mulDiv(10 ** token0Decimals, reserve0 + fee0);
     }
 }

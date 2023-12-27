@@ -11,6 +11,7 @@ import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
+import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
 
 // Submodules
@@ -228,6 +229,16 @@ contract BunniSetup is Test {
             address(PRICE),
             abi.encodeWithSignature("getPrice(address)", address(asset_)),
             abi.encode(price_)
+        );
+    }
+
+    function mockGetPriceZero(address asset_) public {
+        bytes memory err = abi.encodeWithSelector(PRICEv2.PRICE_PriceZero.selector, asset_);
+
+        vm.mockCallRevert(
+            address(PRICE),
+            abi.encodeWithSignature("getPrice(address)", asset_),
+            err
         );
     }
 }

@@ -160,10 +160,19 @@ contract BunniPrice is PriceSubmodule {
             params.twapObservationWindow
         );
 
-        // Fetch the reserves
-        uint256 totalValue = _getTotalValue(token, lens, outputDecimals_);
+        uint256 pricePerShare; // Scale: outputDecimals
+        {
+            uint256 totalValue = _getTotalValue(token, lens, outputDecimals_);
 
-        return totalValue;
+            // Only set pricePerShare if there is token supply (otherwise it will be 0)
+            uint256 totalSupply = token.totalSupply();
+            if (totalSupply > 0) {
+                // BunniToken has a decimal scale of 18, so we need to adjust to the output decimals only
+                pricePerShare = totalValue.mulDiv(10 ** token.decimals(), token.totalSupply());
+            }
+        }
+
+        return pricePerShare;
     }
 
     // ========== INTERNAL FUNCTIONS ========== //
