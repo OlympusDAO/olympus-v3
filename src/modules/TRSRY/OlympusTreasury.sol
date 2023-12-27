@@ -466,16 +466,6 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
             }
         }
 
-        // Remove locations
-        len = asset.locations.length;
-        for (uint256 i; i < len; ) {
-            asset.locations[i] = asset.locations[len - 1];
-            asset.locations.pop();
-            unchecked {
-                ++i;
-            }
-        }
-
         // Remove categorization
         len = categoryGroups.length;
         for (uint256 i; i < len; ) {

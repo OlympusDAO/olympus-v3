@@ -906,6 +906,30 @@ contract TRSRYv1_1Test is Test {
         assertEq(assets.length, 0);
     }
 
+    function testCorrectness_removeAsset_multipleLocations() public {
+        address[] memory locations = new address[](2);
+        locations[0] = address(1);
+        locations[1] = address(2);
+
+        // Add an asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(reserve), locations);
+
+        // Remove the asset
+        vm.prank(godmode);
+        TRSRY.removeAsset(address(reserve));
+
+        // Verify asset data
+        TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, false);
+        assertEq(asset.lastBalance, 0);
+        assertEq(asset.locations.length, 0);
+
+        // Verify asset list
+        address[] memory assets = TRSRY.getAssets();
+        assertEq(assets.length, 0);
+    }
+
     // -- Test: addAssetLocation -------------------------------
 
     function testFuzz_addAssetLocation(address allocator_) public {
