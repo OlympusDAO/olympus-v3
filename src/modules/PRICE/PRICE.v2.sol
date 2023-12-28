@@ -59,6 +59,11 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param asset_   The address of the asset
     error PRICE_AssetAlreadyApproved(address asset_);
 
+    /// @notice         A price feed call failed when initially configuring an asset
+    ///
+    /// @param asset_   The address of the asset that triggered the submodule call
+    error PRICE_PriceFeedCallFailed(address asset_);
+
     /// @notice         The moving average for an asset was requested when it is not stored
     ///
     /// @param asset_   The address of the asset
