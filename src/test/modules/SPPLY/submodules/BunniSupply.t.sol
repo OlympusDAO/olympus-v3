@@ -919,7 +919,7 @@ contract BunniSupplyTest is Test {
         }
 
         // There should now be uncollected fees
-        (uint112 reserve0_c2, uint112 reserve1_c2) = bunniLens.getReserves(poolTokenKey);
+        // (uint112 reserve0_c2, uint112 reserve1_c2) = bunniLens.getReserves(poolTokenKey);
         (uint256 uncollected0_c2, uint256 uncollected1_c2) = bunniLens.getUncollectedFees(
             poolTokenKey
         );
@@ -933,19 +933,15 @@ contract BunniSupplyTest is Test {
         assertEq(cached0_c2, 0, "cached0_c2");
         assertEq(cached1_c2, 0, "cached1_c2");
 
-        uint256 cachedTotal0 = uncollected0_c2 + reserve0_c2 + cached0_c2;
-        uint256 cachedTotal1 = uncollected1_c2 + reserve1_c2 + cached1_c2;
+        // uint256 cachedTotal0 = uncollected0_c2 + reserve0_c2 + cached0_c2;
+        // uint256 cachedTotal1 = uncollected1_c2 + reserve1_c2 + cached1_c2;
 
         (uint256 collected0, uint256 collected1) = bunniHub.updateSwapFees(poolTokenKey);
-        console2.log("uncollected0_c2", uncollected0_c2);
-        console2.log("     collected0", collected0);
-        console2.log("uncollected1_c2", uncollected1_c2);
-        console2.log("     collected1", collected1);
         assertEq(collected0, uncollected0_c2, "updateSwapFees0");
         assertEq(collected1, uncollected1_c2, "updateSwapFees1");
 
         // There shouldn't be uncollected fees anymore
-        (uint112 reserve0_c3, uint112 reserve1_c3) = bunniLens.getReserves(poolTokenKey);
+        // (uint112 reserve0_c3, uint112 reserve1_c3) = bunniLens.getReserves(poolTokenKey);
         (uint256 uncollected0_c3, uint256 uncollected1_c3) = bunniLens.getUncollectedFees(
             poolTokenKey
         );
