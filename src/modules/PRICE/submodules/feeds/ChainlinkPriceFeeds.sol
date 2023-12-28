@@ -123,7 +123,6 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @dev                            This function will revert if:
     /// @dev                            - Answer <= 0
     /// @dev                            - Updated at timestamp before the update threshold from the current time
-    /// @dev                            - Answered in round ID different to the round ID
     ///
     /// @param feed_                    Chainlink price feed
     /// @param roundData                The round data returned by the price feed
@@ -167,7 +166,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
                 int256 priceInt,
                 uint256 startedAt,
                 uint256 updatedAt,
-                uint80 answeredInRound // deprecated
+                uint80
             ) {
                 roundData = FeedRoundData(roundId, priceInt, startedAt, updatedAt);
             } catch (bytes memory) {
