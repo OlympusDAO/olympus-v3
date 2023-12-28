@@ -15,7 +15,7 @@ library Deviation {
     /// @dev                    This function will revert if:
     ///                         - `deviationBps_` is greater than `deviationMax_`
     ///
-    /// @param value_           The value to checked for deviation
+    /// @param value_           The value to be checked for deviation
     /// @param benchmark_       The reference value to check against
     /// @param deviationBps_    The accepted deviation in basis points (e.g. 100 = 1%)
     /// @param deviationMax_    The maximum deviation in basis points (e.g. 10000 = 100%)
@@ -34,7 +34,7 @@ library Deviation {
 
     /// @notice                 Checks if the deviation between two values is greater than the given deviation
     ///
-    /// @param value_           The value to checked for deviation
+    /// @param value_           The value to be checked for deviation
     /// @param benchmark_       The reference value to check against
     /// @param deviationBps_    The accepted deviation in basis points (e.g. 100 = 1%)
     /// @param deviationMax_    The maximum deviation in basis points (e.g. 10000 = 100%)
