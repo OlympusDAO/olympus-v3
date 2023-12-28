@@ -5,25 +5,29 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 // Mocks
+import {MockOhm} from "test/mocks/MockOhm.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockGohm} from "test/mocks/OlympusMocks.sol";
-import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 
 // Libraries
 import {FullMath} from "libraries/FullMath.sol";
 import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {ComputeAddress} from "test/libraries/ComputeAddress.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // Uniswap V3
 import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {IUniswapV3PoolState} from "@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolState.sol";
+import {UniswapV3Pool} from "test/lib/UniswapV3/UniswapV3Pool.sol";
+import {SwapRouter} from "test/lib/UniswapV3/SwapRouter.sol";
+import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import {PoolHelper} from "test/policies/UniswapV3/PoolHelper.sol";
 
 // Bophades Modules
-import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 import "src/modules/SPPLY/OlympusSupply.sol";
 
 // SPPLY Submodules
@@ -35,33 +39,39 @@ import {BunniLens} from "src/external/bunni/BunniLens.sol";
 import {BunniToken} from "src/external/bunni/BunniToken.sol";
 import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
+import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
+
+import {BunniSetup} from "test/policies/UniswapV3/BunniSetup.sol";
 
 contract BunniSupplyTest is Test {
     using FullMath for uint256;
-    using ModuleTestFixtureGenerator for OlympusSupply;
 
-    MockERC20 internal ohm;
-    MockERC20 internal usdc;
-    MockERC20 internal wETH;
-    MockGohm internal gOhm;
+    MockOhm internal ohmToken;
+    MockERC20 internal usdcToken;
+    MockERC20 internal wethToken;
+    MockGohm internal gohmToken;
     address internal ohmAddress;
     address internal usdcAddress;
 
-    Kernel internal kernel;
-
-    OlympusSupply internal moduleSupply;
-
     BunniSupply internal submoduleBunniSupply;
 
-    MockUniV3Pair internal uniswapPool;
+    BunniSetup internal bunniSetup;
+    BunniManager internal bunniManager;
+    IUniswapV3Pool internal uniswapPool;
     BunniHub internal bunniHub;
     BunniLens internal bunniLens;
     IBunniToken internal poolToken;
     BunniKey internal poolTokenKey;
+    UniswapV3Factory internal uniswapFactory;
+    SwapRouter internal swapRouter;
     address internal bunniLensAddress;
     address internal poolTokenAddress;
 
-    address internal writer;
+    address writePRICE;
+    address writeSPPLY;
+
+    address moduleSPPLY;
+
     address internal policy;
 
     UserFactory public userFactory;
@@ -71,7 +81,6 @@ contract BunniSupplyTest is Test {
 
     // OHM-USDC Uni V3 pool, based on: 0x893f503fac2ee1e5b78665db23f9c94017aae97d
     // token0: OHM, token1: USDC
-    uint128 internal constant OHM_USDC_POOL_LIQUIDITY = 349484367626548;
     // Current tick: -44579
     uint160 internal constant OHM_USDC_SQRTPRICEX96 = 8529245188595251053303005012; // From OHM-USDC, 1 OHM = 11.5897 USDC
     // NOTE: these numbers are fudged to match the current tick and default observation window from BunniManager
@@ -79,15 +88,30 @@ contract BunniSupplyTest is Test {
     int56 internal constant OHM_USDC_TICK_CUMULATIVE_1 = -2463079732370;
 
     // OHM-wETH Uni V3 pool, based on: 0x88051b0eea095007d3bef21ab287be961f3d8598
-    uint128 internal constant OHM_WETH_POOL_LIQUIDITY = 602219599341335870;
     // Current tick: 156194
     uint160 internal constant OHM_WETH_SQRTPRICEX96 = 195181081174522229204497247535278;
     // NOTE: these numbers are fudged to match the current tick and default observation window from BunniManager
     int56 internal constant OHM_WETH_TICK_CUMULATIVE_0 = -2463078395000;
     int56 internal constant OHM_WETH_TICK_CUMULATIVE_1 = -2462984678600;
+    uint256 internal constant OHM_WETH_RATIO = 164785850452; // OHM per ETH
 
     uint16 internal constant TWAP_MAX_DEVIATION_BPS = 100; // 1%
     uint32 internal constant TWAP_OBSERVATION_WINDOW = 600; // 10 minutes
+
+    uint8 internal constant PRICE_DECIMALS = 18;
+
+    uint256 internal constant USDC_PRICE = 1 * 10 ** PRICE_DECIMALS;
+    uint256 internal constant OHM_PRICE = 115897 * 1e14; // 11.5897 USDC per OHM in 18 decimal places
+    uint256 internal constant WETH_PRICE = 2000 * 1e18; // 2000 USDC per WETH in 18 decimal places
+
+    uint256 internal constant OHM_AMOUNT = 100_000e9;
+    uint256 internal USDC_AMOUNT = OHM_AMOUNT.mulDiv(OHM_PRICE, 1e18).mulDiv(1e6, 1e9);
+
+    int24 private constant TICK = 887270; // (887272/(500/50))*(500/50)
+
+    uint16 private constant SLIPPAGE_DEFAULT = 100; // 1%
+
+    uint24 private constant POOL_FEE = 500;
 
     // Events
     event BunniTokenAdded(address token_, address bunniLens_);
@@ -98,33 +122,33 @@ contract BunniSupplyTest is Test {
 
         // Tokens
         {
-            ohm = new MockERC20("Olympus", "OHM", 9);
+            ohmToken = new MockOhm("Olympus", "OHM", 9);
 
             // The USDC address needs to be higher than ohm, so generate a salt to ensure that
             bytes32 usdcSalt = ComputeAddress.generateSalt(
-                address(ohm),
+                address(ohmToken),
                 true,
                 type(MockERC20).creationCode,
                 abi.encode("USDC", "USDC", 6),
                 address(this)
             );
-            usdc = new MockERC20{salt: usdcSalt}("USDC", "USDC", 6);
+            usdcToken = new MockERC20{salt: usdcSalt}("USDC", "USDC", 6);
 
             // The WETH address needs to be higher than ohm, so generate a salt to ensure that
             bytes32 wethSalt = ComputeAddress.generateSalt(
-                address(ohm),
+                address(ohmToken),
                 true,
                 type(MockERC20).creationCode,
                 abi.encode("Wrapped Ether", "wETH", 18),
                 address(this)
             );
-            wETH = new MockERC20{salt: wethSalt}("Wrapped Ether", "wETH", 18);
+            wethToken = new MockERC20{salt: wethSalt}("Wrapped Ether", "wETH", 18);
 
             // The address of gOHM does not need to be deterministic
-            gOhm = new MockGohm(GOHM_INDEX);
+            gohmToken = new MockGohm(GOHM_INDEX);
 
-            ohmAddress = address(ohm);
-            usdcAddress = address(usdc);
+            ohmAddress = address(ohmToken);
+            usdcAddress = address(usdcToken);
         }
 
         // Locations
@@ -134,97 +158,73 @@ contract BunniSupplyTest is Test {
             policy = users[0];
         }
 
-        // Bophades
+        // Deploy BunniSetup
         {
-            // Deploy kernel
-            kernel = new Kernel(); // this contract will be the executor
+            bunniSetup = new BunniSetup(ohmAddress, address(gohmToken), address(this), policy);
 
-            // Deploy SPPLY module
-            address[2] memory tokens = [address(ohm), address(gOhm)];
-            moduleSupply = new OlympusSupply(kernel, tokens, INITIAL_CROSS_CHAIN_SUPPLY);
-
-            // Deploy mock module writer
-            writer = moduleSupply.generateGodmodeFixture(type(OlympusSupply).name);
-        }
-
-        // Deploy BunniHub/BunniLens
-        {
-            UniswapV3Factory uniswapFactory = new UniswapV3Factory();
-            bunniHub = new BunniHub(
-                uniswapFactory,
-                policy,
-                0 // No protocol fee
-            );
-            bunniLens = new BunniLens(bunniHub);
+            bunniManager = bunniSetup.bunniManager();
+            bunniHub = bunniSetup.bunniHub();
+            bunniLens = bunniSetup.bunniLens();
             bunniLensAddress = address(bunniLens);
+            uniswapFactory = bunniSetup.uniswapFactory();
+            swapRouter = new SwapRouter(address(uniswapFactory), address(wethToken));
+            moduleSPPLY = address(bunniSetup.SPPLY());
         }
 
-        // Deploy Bunni submodule
+        // Deploy writer policies
         {
-            submoduleBunniSupply = new BunniSupply(moduleSupply);
+            (address writePRICE_, address writeSPPLY_, ) = bunniSetup.createWriterPolicies();
+
+            writePRICE = writePRICE_;
+            writeSPPLY = writeSPPLY_;
         }
 
-        // Initialize
+        // Set up the submodule(s)
         {
-            /// Initialize system and kernel
-            kernel.executeAction(Actions.InstallModule, address(moduleSupply));
-            kernel.executeAction(Actions.ActivatePolicy, address(writer));
+            (, address supply_) = bunniSetup.createSubmodules(writePRICE, writeSPPLY);
 
-            // Install submodules on SPPLY module
-            vm.prank(writer);
-            moduleSupply.installSubmodule(submoduleBunniSupply);
+            submoduleBunniSupply = BunniSupply(supply_);
         }
 
-        // Deploy Uniswap V3 pool and tokens
+        // Mock values, to avoid having to set up all of PRICEv2 and submodules
         {
-            (
-                MockUniV3Pair uniswapPool_,
-                BunniKey memory poolTokenKey_,
-                BunniToken poolToken_
-            ) = _setUpPool(
-                    ohmAddress,
-                    usdcAddress,
-                    OHM_USDC_POOL_LIQUIDITY,
-                    OHM_USDC_SQRTPRICEX96,
-                    OHM_USDC_TICK_CUMULATIVE_0,
-                    OHM_USDC_TICK_CUMULATIVE_1
-                );
+            bunniSetup.mockGetPrice(ohmAddress, OHM_PRICE);
+            bunniSetup.mockGetPrice(usdcAddress, USDC_PRICE);
+            bunniSetup.mockGetPrice(address(wethToken), WETH_PRICE);
+        }
 
-            uniswapPool = uniswapPool_;
-            poolTokenKey = poolTokenKey_;
+        // Set up the UniV3 pool
+        {
+            (IUniswapV3Pool pool_, BunniKey memory key_, IBunniToken poolToken_) = _setUpPool(
+                ohmAddress,
+                usdcAddress,
+                OHM_USDC_SQRTPRICEX96,
+                OHM_USDC_TICK_CUMULATIVE_0,
+                OHM_USDC_TICK_CUMULATIVE_1
+            );
+
+            uniswapPool = pool_;
             poolToken = poolToken_;
-            poolTokenAddress = address(poolToken);
+            poolTokenAddress = address(poolToken_);
+            poolTokenKey = key_;
         }
-    }
 
-    function _setUpPool(
-        address token0_,
-        address token1_,
-        uint128 liquidity_,
-        uint160 sqrtPriceX96_,
-        int56 sqrtPriceX96Cumulative0_,
-        int56 sqrtPriceX96Cumulative1_
-    ) internal returns (MockUniV3Pair, BunniKey memory, BunniToken) {
-        MockUniV3Pair pool = new MockUniV3Pair();
-        pool.setToken0(token0_);
-        pool.setToken1(token1_);
-        pool.setLiquidity(liquidity_);
-        pool.setSqrtPrice(sqrtPriceX96_);
+        // Deposit into the pool
+        {
+            // Mint USDC
+            usdcToken.mint(address(bunniSetup.TRSRY()), USDC_AMOUNT);
 
-        int56[] memory tickCumulatives = new int56[](2);
-        tickCumulatives[0] = sqrtPriceX96Cumulative0_;
-        tickCumulatives[1] = sqrtPriceX96Cumulative1_;
-        pool.setTickCumulatives(tickCumulatives);
-
-        BunniKey memory key = BunniKey({
-            pool: IUniswapV3Pool(address(pool)),
-            tickLower: -887272,
-            tickUpper: 887272
-        });
-
-        BunniToken token = new BunniToken(bunniHub, key);
-
-        return (pool, key, token);
+            // Deposit
+            vm.startPrank(policy);
+            bunniManager.deposit(
+                address(uniswapPool),
+                ohmAddress,
+                OHM_AMOUNT,
+                USDC_AMOUNT,
+                SLIPPAGE_DEFAULT
+            );
+            vm.stopPrank();
+        }
     }
 
     function _getOhmReserves(
@@ -261,6 +261,124 @@ contract BunniSupplyTest is Test {
             lens_
         );
         vm.expectRevert(err);
+    }
+
+    function _getBunniKey(
+        IUniswapV3Pool pool_,
+        IBunniToken token_
+    ) internal view returns (BunniKey memory) {
+        return
+            BunniKey({pool: pool_, tickLower: token_.tickLower(), tickUpper: token_.tickUpper()});
+    }
+
+    function _setUpPool(
+        address token0_,
+        address token1_,
+        uint160 sqrtPriceX96_,
+        int56 sqrtPriceX96Cumulative0_,
+        int56 sqrtPriceX96Cumulative1_
+    ) internal returns (IUniswapV3Pool, BunniKey memory, IBunniToken) {
+        address poolAddress_ = bunniSetup.setUpPool(token0_, token1_, POOL_FEE, sqrtPriceX96_);
+
+        IUniswapV3Pool pool = IUniswapV3Pool(poolAddress_);
+
+        // Mock observations for the Uniswap V3 pool
+        bunniSetup.mockPoolObservations(
+            address(pool),
+            TWAP_OBSERVATION_WINDOW,
+            sqrtPriceX96Cumulative0_,
+            sqrtPriceX96Cumulative1_
+        );
+
+        // Deploy a pool token
+        vm.prank(policy);
+        IBunniToken poolToken_ = bunniManager.deployPoolToken(address(pool));
+
+        return (pool, _getBunniKey(pool, poolToken_), poolToken_);
+    }
+
+    function _depositIntoPool(
+        IUniswapV3Pool uniswapPool_,
+        MockERC20 otherToken_,
+        uint256 otherAmount_,
+        uint256 ohmAmount_
+    ) internal {
+        // Mint USDC
+        otherToken_.mint(address(bunniSetup.TRSRY()), otherAmount_);
+
+        // Deposit
+        vm.startPrank(policy);
+        bunniManager.deposit(
+            address(uniswapPool_),
+            ohmAddress,
+            ohmAmount_,
+            otherAmount_,
+            SLIPPAGE_DEFAULT
+        );
+        vm.stopPrank();
+    }
+
+    function _swap(
+        IUniswapV3Pool pool_,
+        address tokenIn_,
+        address tokenOut_,
+        address recipient_,
+        uint256 amountIn_,
+        uint256 token1Token0Price
+    ) internal returns (uint256) {
+        // Approve transfer
+        vm.prank(recipient_);
+        IERC20(tokenIn_).approve(address(swapRouter), amountIn_);
+
+        // Get the parameters
+        ISwapRouter.ExactInputSingleParams memory params = PoolHelper.getSwapParams(
+            pool_,
+            tokenIn_,
+            tokenOut_,
+            amountIn_,
+            recipient_,
+            token1Token0Price,
+            500,
+            TICK
+        );
+
+        // Perform the swap
+        vm.prank(recipient_);
+        swapRouter.exactInputSingle(params);
+
+        return params.amountOutMinimum;
+    }
+
+    function _mockPoolUnlocked(IUniswapV3Pool pool_, bool unlocked_) internal {
+        // Get the current values for slot0
+        UniswapV3Pool.Slot0 memory slot0;
+        {
+            (
+                uint160 sqrtPriceX96,
+                int24 tick,
+                uint16 obsIndex,
+                uint16 obsCard,
+                uint16 obsCardNext,
+                uint8 feeProtocol,
+
+            ) = pool_.slot0();
+
+            slot0 = UniswapV3Pool.Slot0({
+                sqrtPriceX96: sqrtPriceX96,
+                tick: tick,
+                observationIndex: obsIndex,
+                observationCardinality: obsCard,
+                observationCardinalityNext: obsCardNext,
+                feeProtocol: feeProtocol,
+                unlocked: unlocked_
+            });
+        }
+
+        vm.mockCall(
+            address(pool_),
+            abi.encodeWithSelector(IUniswapV3PoolState.slot0.selector),
+            abi.encode(slot0)
+        );
     }
 
     // =========  TESTS ========= //
@@ -302,7 +420,7 @@ contract BunniSupplyTest is Test {
 
     function test_submodule_parent_notSpply_reverts() public {
         // Pass the PRICEv2 module as the parent
-        OlympusPricev2 modulePrice = new OlympusPricev2(kernel, 18, 8 hours);
+        Module modulePrice = bunniSetup.PRICE();
 
         bytes memory err = abi.encodeWithSignature("Submodule_InvalidParent()");
         vm.expectRevert(err);
@@ -316,7 +434,7 @@ contract BunniSupplyTest is Test {
 
     function test_getCollateralizedOhm() public {
         // Register the pool with the submodule
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -334,7 +452,7 @@ contract BunniSupplyTest is Test {
 
     function test_getProtocolOwnedBorrowableOhm() public {
         // Register the pool with the submodule
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -363,8 +481,13 @@ contract BunniSupplyTest is Test {
     }
 
     function test_getProtocolOwnedLiquidityOhm_singleToken() public {
+        // There should not be any uncollected fees
+        (uint256 fee0, uint256 fee1) = bunniLens.getUncollectedFees(poolTokenKey);
+        assertEq(fee0, 0);
+        assertEq(fee1, 0);
+
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -378,11 +501,68 @@ contract BunniSupplyTest is Test {
         assertEq(submoduleBunniSupply.getProtocolOwnedLiquidityOhm(), ohmReserves);
     }
 
+    function test_getProtocolOwnedLiquidityOhm_singleToken_uncollectedFeesFuzz(
+        uint256 usdcSwapAmount_
+    ) public {
+        // Swap enough to generate fees, but not enough to trigger a TWAP deviation
+        uint256 usdcSwapAmount = uint256(bound(usdcSwapAmount_, 1_000e6, 10_000e6));
+
+        // Swap USDC for OHM
+        uint256 swapOneAmountOut;
+        {
+            // Mint the USDC
+            usdcToken.mint(address(this), usdcSwapAmount);
+
+            // Swap
+            swapOneAmountOut = _swap(
+                uniswapPool,
+                usdcAddress,
+                ohmAddress,
+                address(this),
+                usdcSwapAmount,
+                OHM_PRICE
+            );
+        }
+
+        // Swap OHM for USDC
+        {
+            // Swap
+            _swap(uniswapPool, ohmAddress, usdcAddress, address(this), swapOneAmountOut, OHM_PRICE);
+        }
+
+        // There should now be uncollected fees
+        (uint256 fee0, uint256 fee1) = bunniLens.getUncollectedFees(poolTokenKey);
+        assertGt(fee0, 0);
+        assertGt(fee1, 0);
+
+        // Register one token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            TWAP_MAX_DEVIATION_BPS,
+            TWAP_OBSERVATION_WINDOW
+        );
+
+        // Determine the amount of reserves in the pool, which should be consistent with the lens value
+        (uint256 ohmReserves_, ) = _getReserves(poolTokenKey, bunniLens);
+
+        assertEq(submoduleBunniSupply.getProtocolOwnedLiquidityOhm(), ohmReserves_ + fee0);
+    }
+
     function test_getProtocolOwnedLiquidityOhm_singleToken_observationWindow() public {
         uint32 observationWindow = 60;
 
+        // Update the pool observations
+        bunniSetup.mockPoolObservations(
+            address(uniswapPool),
+            observationWindow,
+            OHM_USDC_TICK_CUMULATIVE_0,
+            OHM_USDC_TICK_CUMULATIVE_1
+        );
+
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -423,7 +603,7 @@ contract BunniSupplyTest is Test {
         uint16 deviationBps = 1000; // 10%
 
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -434,10 +614,12 @@ contract BunniSupplyTest is Test {
         // Mock the pool returning a TWAP that would normally deviate enough to revert
         int56 tickCumulative0_ = -2463052904970;
         int56 tickCumulative1_ = OHM_USDC_TICK_CUMULATIVE_1;
-        int56[] memory tickCumulatives = new int56[](2);
-        tickCumulatives[0] = tickCumulative0_;
-        tickCumulatives[1] = tickCumulative1_;
-        uniswapPool.setTickCumulatives(tickCumulatives);
+        bunniSetup.mockPoolObservations(
+            address(uniswapPool),
+            TWAP_OBSERVATION_WINDOW,
+            tickCumulative0_,
+            tickCumulative1_
+        );
 
         // Determine the amount of OHM in the pool, which should be consistent with the lens value
         uint256 ohmReserves = _getOhmReserves(poolTokenKey, bunniLens);
@@ -447,7 +629,7 @@ contract BunniSupplyTest is Test {
 
     function test_getProtocolOwnedLiquidityOhm_multipleToken() public {
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -456,15 +638,19 @@ contract BunniSupplyTest is Test {
         );
 
         // Set up a second pool and token
-        (, BunniKey memory poolTokenKeyTwo, BunniToken poolTokenTwo) = _setUpPool(
-            ohmAddress,
-            address(wETH),
-            OHM_WETH_POOL_LIQUIDITY,
-            OHM_WETH_SQRTPRICEX96,
-            OHM_WETH_TICK_CUMULATIVE_0,
-            OHM_WETH_TICK_CUMULATIVE_1
-        );
-        vm.prank(address(moduleSupply));
+        (
+            IUniswapV3Pool poolTwo,
+            BunniKey memory poolTokenKeyTwo,
+            IBunniToken poolTokenTwo
+        ) = _setUpPool(
+                ohmAddress,
+                address(wethToken),
+                OHM_WETH_SQRTPRICEX96,
+                OHM_WETH_TICK_CUMULATIVE_0,
+                OHM_WETH_TICK_CUMULATIVE_1
+            );
+        _depositIntoPool(poolTwo, wethToken, 10e18, (10e18 * OHM_WETH_RATIO) / 1e18);
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             address(poolTokenTwo),
             bunniLensAddress,
@@ -485,7 +671,7 @@ contract BunniSupplyTest is Test {
 
     function test_getProtocolOwnedLiquidityOhm_reentrancyReverts() public {
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -494,7 +680,7 @@ contract BunniSupplyTest is Test {
         );
 
         // Set the UniV3 pair to be locked, which indicates re-entrancy
-        uniswapPool.setUnlocked(false);
+        _mockPoolUnlocked(uniswapPool, false);
 
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
@@ -509,7 +695,7 @@ contract BunniSupplyTest is Test {
 
     function test_getProtocolOwnedLiquidityOhm_twapDeviationReverts() public {
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -525,10 +711,12 @@ contract BunniSupplyTest is Test {
         // Mock the pool returning a TWAP that deviates enough to revert
         int56 tickCumulative0_ = -2463052904970;
         int56 tickCumulative1_ = OHM_USDC_TICK_CUMULATIVE_1;
-        int56[] memory tickCumulatives = new int56[](2);
-        tickCumulatives[0] = tickCumulative0_;
-        tickCumulatives[1] = tickCumulative1_;
-        uniswapPool.setTickCumulatives(tickCumulatives);
+        bunniSetup.mockPoolObservations(
+            address(uniswapPool),
+            TWAP_OBSERVATION_WINDOW,
+            tickCumulative0_,
+            tickCumulative1_
+        );
 
         // Calculate the expected TWAP price
         // 11436143
@@ -559,7 +747,7 @@ contract BunniSupplyTest is Test {
 
     function test_getProtocolOwnedTreasuryOhm() public {
         // Register the pool with the submodule
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -591,8 +779,13 @@ contract BunniSupplyTest is Test {
     }
 
     function test_getProtocolOwnedLiquidityReserves_singleToken() public {
+        // There should not be any uncollected fees
+        (uint256 fee0, uint256 fee1) = bunniLens.getUncollectedFees(poolTokenKey);
+        assertEq(fee0, 0);
+        assertEq(fee1, 0);
+
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -617,11 +810,82 @@ contract BunniSupplyTest is Test {
         assertEq(reserves[0].balances[1], usdcReserves_);
     }
 
+    function test_getProtocolOwnedLiquidityReserves_singleToken_uncollectedFeesFuzz(
+        uint256 usdcSwapAmount_
+    ) public {
+        // Swap enough to generate fees, but not enough to trigger a TWAP deviation
+        uint256 usdcSwapAmount = uint256(bound(usdcSwapAmount_, 1_000e6, 10_000e6));
+
+        // Swap USDC for OHM
+        uint256 swapOneAmountOut;
+        {
+            // Mint the USDC
+            usdcToken.mint(address(this), usdcSwapAmount);
+
+            // Swap
+            swapOneAmountOut = _swap(
+                uniswapPool,
+                usdcAddress,
+                ohmAddress,
+                address(this),
+                usdcSwapAmount,
+                OHM_PRICE
+            );
+        }
+
+        // Swap OHM for USDC
+        {
+            // Swap
+            _swap(uniswapPool, ohmAddress, usdcAddress, address(this), swapOneAmountOut, OHM_PRICE);
+        }
+
+        // There should now be uncollected fees
+        (uint256 fee0, uint256 fee1) = bunniLens.getUncollectedFees(poolTokenKey);
+        assertGt(fee0, 0);
+        assertGt(fee1, 0);
+
+        // Register one token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            TWAP_MAX_DEVIATION_BPS,
+            TWAP_OBSERVATION_WINDOW
+        );
+
+        // Determine the amount of reserves in the pool, which should be consistent with the lens value
+        (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleBunniSupply
+            .getProtocolOwnedLiquidityReserves();
+
+        assertEq(reserves.length, 1);
+
+        assertEq(reserves[0].source, poolTokenAddress);
+        assertEq(reserves[0].tokens.length, 2);
+        assertEq(reserves[0].tokens[0], ohmAddress);
+        assertEq(reserves[0].tokens[1], usdcAddress);
+        assertEq(reserves[0].balances.length, 2);
+        assertEq(reserves[0].balances[0], ohmReserves_ + fee0);
+        assertEq(reserves[0].balances[1], usdcReserves_ + fee1);
+
+        // Check that the reserves and OHM values are consistent
+        assertEq(reserves[0].balances[0], submoduleBunniSupply.getProtocolOwnedLiquidityOhm());
+    }
+
     function test_getProtocolOwnedLiquidityReserves_singleToken_observationWindow() public {
         uint32 observationWindow = 60;
 
+        // Update the pool observations
+        bunniSetup.mockPoolObservations(
+            address(uniswapPool),
+            observationWindow,
+            OHM_USDC_TICK_CUMULATIVE_0,
+            OHM_USDC_TICK_CUMULATIVE_1
+        );
+
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -662,7 +926,7 @@ contract BunniSupplyTest is Test {
         uint16 deviationBps = 1000; // 10%
 
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -674,10 +938,12 @@ contract BunniSupplyTest is Test {
         // 11436143
         int56 tickCumulative0_ = -2463052904970;
         int56 tickCumulative1_ = OHM_USDC_TICK_CUMULATIVE_1;
-        int56[] memory tickCumulatives = new int56[](2);
-        tickCumulatives[0] = tickCumulative0_;
-        tickCumulatives[1] = tickCumulative1_;
-        uniswapPool.setTickCumulatives(tickCumulatives);
+        bunniSetup.mockPoolObservations(
+            address(uniswapPool),
+            TWAP_OBSERVATION_WINDOW,
+            tickCumulative0_,
+            tickCumulative1_
+        );
 
         // Determine the amount of reserves in the pool, which should be consistent with the lens value
         (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
@@ -698,7 +964,7 @@ contract BunniSupplyTest is Test {
 
     function test_getProtocolOwnedLiquidityReserves_multipleToken() public {
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -707,15 +973,19 @@ contract BunniSupplyTest is Test {
         );
 
         // Set up a second pool and token
-        (, BunniKey memory poolTokenKeyTwo, BunniToken poolTokenTwo) = _setUpPool(
-            ohmAddress,
-            address(wETH),
-            OHM_WETH_POOL_LIQUIDITY,
-            OHM_WETH_SQRTPRICEX96,
-            OHM_WETH_TICK_CUMULATIVE_0,
-            OHM_WETH_TICK_CUMULATIVE_1
-        );
-        vm.prank(address(moduleSupply));
+        (
+            IUniswapV3Pool poolTwo,
+            BunniKey memory poolTokenKeyTwo,
+            IBunniToken poolTokenTwo
+        ) = _setUpPool(
+                ohmAddress,
+                address(wethToken),
+                OHM_WETH_SQRTPRICEX96,
+                OHM_WETH_TICK_CUMULATIVE_0,
+                OHM_WETH_TICK_CUMULATIVE_1
+            );
+        _depositIntoPool(poolTwo, wethToken, 10e18, (10e18 * OHM_WETH_RATIO) / 1e18);
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             address(poolTokenTwo),
             bunniLensAddress,
@@ -746,7 +1016,7 @@ contract BunniSupplyTest is Test {
         assertEq(reserves[1].source, address(poolTokenTwo));
         assertEq(reserves[1].tokens.length, 2);
         assertEq(reserves[1].tokens[0], ohmAddress);
-        assertEq(reserves[1].tokens[1], address(wETH));
+        assertEq(reserves[1].tokens[1], address(wethToken));
         assertEq(reserves[1].balances.length, 2);
         assertEq(reserves[1].balances[0], ohmReservesTwo_);
         assertEq(reserves[1].balances[1], wethReservesTwo_);
@@ -754,7 +1024,7 @@ contract BunniSupplyTest is Test {
 
     function test_getProtocolOwnedLiquidityReserves_reentrancyReverts() public {
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -763,7 +1033,7 @@ contract BunniSupplyTest is Test {
         );
 
         // Set the UniV3 pair to be locked, which indicates re-entrancy
-        uniswapPool.setUnlocked(false);
+        _mockPoolUnlocked(uniswapPool, false);
 
         // Expect revert
         bytes memory err = abi.encodeWithSelector(
@@ -778,7 +1048,7 @@ contract BunniSupplyTest is Test {
 
     function test_getProtocolOwnedLiquidityReserves_twapDeviationReverts() public {
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -794,10 +1064,12 @@ contract BunniSupplyTest is Test {
         // Mock the pool returning a TWAP that deviates enough to revert
         int56 tickCumulative0_ = -2416639538393;
         int56 tickCumulative1_ = -2416640880953;
-        int56[] memory tickCumulatives = new int56[](2);
-        tickCumulatives[0] = tickCumulative0_;
-        tickCumulatives[1] = tickCumulative1_;
-        uniswapPool.setTickCumulatives(tickCumulatives);
+        bunniSetup.mockPoolObservations(
+            address(uniswapPool),
+            TWAP_OBSERVATION_WINDOW,
+            tickCumulative0_,
+            tickCumulative1_
+        );
 
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) /
@@ -854,11 +1126,11 @@ contract BunniSupplyTest is Test {
     function test_addBunniToken_notParent_writer_reverts() public {
         bytes memory err = abi.encodeWithSignature(
             "Submodule_OnlyParent(address)",
-            address(writer)
+            address(writeSPPLY)
         );
         vm.expectRevert(err);
 
-        vm.prank(writer);
+        vm.prank(writeSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -870,7 +1142,7 @@ contract BunniSupplyTest is Test {
     function test_addBunniToken_tokenAddressZero_reverts() public {
         _expectRevert_invalidBunniToken(address(0));
 
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             address(0),
             bunniLensAddress,
@@ -882,7 +1154,7 @@ contract BunniSupplyTest is Test {
     function test_addBunniToken_lensAddressZero_reverts() public {
         _expectRevert_invalidBunniLens(address(0));
 
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             address(0),
@@ -893,7 +1165,7 @@ contract BunniSupplyTest is Test {
 
     function test_addBunniToken_alreadyAdded_reverts() public {
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -903,7 +1175,7 @@ contract BunniSupplyTest is Test {
 
         _expectRevert_invalidBunniToken(poolTokenAddress);
 
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -915,7 +1187,7 @@ contract BunniSupplyTest is Test {
     function test_addBunniToken_invalidTokenReverts() public {
         _expectRevert_invalidBunniToken(ohmAddress);
 
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             ohmAddress,
             bunniLensAddress,
@@ -927,7 +1199,7 @@ contract BunniSupplyTest is Test {
     function test_addBunniToken_invalidLensReverts() public {
         _expectRevert_invalidBunniLens(ohmAddress);
 
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             ohmAddress,
@@ -938,7 +1210,6 @@ contract BunniSupplyTest is Test {
 
     function test_addBunniToken_hubMismatchReverts() public {
         // Deploy a new hub
-        UniswapV3Factory uniswapFactory = new UniswapV3Factory();
         BunniHub newBunniHub = new BunniHub(
             uniswapFactory,
             policy,
@@ -955,7 +1226,7 @@ contract BunniSupplyTest is Test {
         );
         vm.expectRevert(err);
 
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             address(newBunniLens),
@@ -978,7 +1249,7 @@ contract BunniSupplyTest is Test {
         );
         vm.expectRevert(err);
 
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -1001,7 +1272,7 @@ contract BunniSupplyTest is Test {
         );
         vm.expectRevert(err);
 
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -1016,7 +1287,7 @@ contract BunniSupplyTest is Test {
         emit BunniTokenAdded(poolTokenAddress, bunniLensAddress);
 
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -1047,7 +1318,7 @@ contract BunniSupplyTest is Test {
         uint32 twapObservationWindow = uint32(bound(twapObservationWindow_, 19, type(uint32).max));
 
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -1072,7 +1343,7 @@ contract BunniSupplyTest is Test {
 
     function test_addBunniToken_multipleTokens_singleLens() public {
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -1081,10 +1352,9 @@ contract BunniSupplyTest is Test {
         );
 
         // Set up a second pool and token
-        (, , BunniToken poolTokenTwo) = _setUpPool(
+        (, , IBunniToken poolTokenTwo) = _setUpPool(
             ohmAddress,
-            address(wETH),
-            OHM_WETH_POOL_LIQUIDITY,
+            address(wethToken),
             OHM_WETH_SQRTPRICEX96,
             OHM_WETH_TICK_CUMULATIVE_0,
             OHM_WETH_TICK_CUMULATIVE_1
@@ -1096,7 +1366,7 @@ contract BunniSupplyTest is Test {
         emit BunniTokenAdded(poolTokenTwoAddress, bunniLensAddress);
 
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenTwoAddress,
             bunniLensAddress,
@@ -1132,7 +1402,7 @@ contract BunniSupplyTest is Test {
 
     function test_addBunniToken_multipleTokens_multipleLenses() public {
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -1141,10 +1411,9 @@ contract BunniSupplyTest is Test {
         );
 
         // Set up a second pool and token
-        (, , BunniToken poolTokenTwo) = _setUpPool(
+        (, , IBunniToken poolTokenTwo) = _setUpPool(
             ohmAddress,
-            address(wETH),
-            OHM_WETH_POOL_LIQUIDITY,
+            address(wethToken),
             OHM_WETH_SQRTPRICEX96,
             OHM_WETH_TICK_CUMULATIVE_0,
             OHM_WETH_TICK_CUMULATIVE_1
@@ -1160,7 +1429,7 @@ contract BunniSupplyTest is Test {
         emit BunniTokenAdded(poolTokenTwoAddress, bunniLensTwoAddress);
 
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenTwoAddress,
             bunniLensTwoAddress,
@@ -1214,11 +1483,11 @@ contract BunniSupplyTest is Test {
     function test_removeBunniToken_notParent_writer_reverts() public {
         bytes memory err = abi.encodeWithSignature(
             "Submodule_OnlyParent(address)",
-            address(writer)
+            address(writeSPPLY)
         );
         vm.expectRevert(err);
 
-        vm.prank(writer);
+        vm.prank(writeSPPLY);
         submoduleBunniSupply.removeBunniToken(poolTokenAddress);
     }
 
@@ -1229,7 +1498,7 @@ contract BunniSupplyTest is Test {
         );
         vm.expectRevert(err);
 
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.removeBunniToken(address(0));
     }
 
@@ -1240,13 +1509,13 @@ contract BunniSupplyTest is Test {
         );
         vm.expectRevert(err);
 
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.removeBunniToken(poolTokenAddress);
     }
 
     function test_removeBunniToken() public {
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -1258,7 +1527,7 @@ contract BunniSupplyTest is Test {
         emit BunniTokenRemoved(poolTokenAddress);
 
         // Remove token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.removeBunniToken(poolTokenAddress);
 
         // Check that the token was removed
@@ -1268,7 +1537,7 @@ contract BunniSupplyTest is Test {
 
     function test_removeBunniToken_multipleTokens_singleLens() public {
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -1277,10 +1546,9 @@ contract BunniSupplyTest is Test {
         );
 
         // Set up a second pool and token
-        (, , BunniToken poolTokenTwo) = _setUpPool(
+        (, , IBunniToken poolTokenTwo) = _setUpPool(
             ohmAddress,
-            address(wETH),
-            OHM_WETH_POOL_LIQUIDITY,
+            address(wethToken),
             OHM_WETH_SQRTPRICEX96,
             OHM_WETH_TICK_CUMULATIVE_0,
             OHM_WETH_TICK_CUMULATIVE_1
@@ -1288,7 +1556,7 @@ contract BunniSupplyTest is Test {
         address poolTokenTwoAddress = address(poolTokenTwo);
 
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenTwoAddress,
             bunniLensAddress,
@@ -1301,7 +1569,7 @@ contract BunniSupplyTest is Test {
         emit BunniTokenRemoved(poolTokenAddress);
 
         // Remove one of the tokens
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.removeBunniToken(poolTokenAddress);
 
         // Check that the token was removed
@@ -1321,7 +1589,7 @@ contract BunniSupplyTest is Test {
 
     function test_removeBunniToken_multipleTokens_multipleLenses() public {
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -1330,10 +1598,9 @@ contract BunniSupplyTest is Test {
         );
 
         // Set up a second pool and token
-        (, , BunniToken poolTokenTwo) = _setUpPool(
+        (, , IBunniToken poolTokenTwo) = _setUpPool(
             ohmAddress,
-            address(wETH),
-            OHM_WETH_POOL_LIQUIDITY,
+            address(wethToken),
             OHM_WETH_SQRTPRICEX96,
             OHM_WETH_TICK_CUMULATIVE_0,
             OHM_WETH_TICK_CUMULATIVE_1
@@ -1345,7 +1612,7 @@ contract BunniSupplyTest is Test {
         address bunniLensTwoAddress = address(bunniLensTwo);
 
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenTwoAddress,
             bunniLensTwoAddress,
@@ -1358,7 +1625,7 @@ contract BunniSupplyTest is Test {
         emit BunniTokenRemoved(poolTokenAddress);
 
         // Remove one of the tokens
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.removeBunniToken(poolTokenAddress);
 
         // Check that the token was removed
@@ -1385,7 +1652,7 @@ contract BunniSupplyTest is Test {
 
     function test_hasBunniToken_addressZero() public {
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,
@@ -1412,7 +1679,7 @@ contract BunniSupplyTest is Test {
 
     function test_hasBunniToken() public {
         // Add bunni token to BunniSupply
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,

@@ -52,6 +52,11 @@ library BunniHelper {
 
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
 
+        // If the denominator is 0
+        if (reserve0 == 0) {
+            return 0;
+        }
+
         return uint256(reserve1).mulDiv(10 ** token0Decimals, reserve0);
     }
 }
