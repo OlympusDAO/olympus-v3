@@ -878,7 +878,8 @@ contract BunniSupplyTest is Test {
     function test_getProtocolOwnedLiquidityReserves_singleToken_uncollectedFeesInvariant(
         uint256 usdcSwapAmount_
     ) public {
-        // There should not be any uncollected fees in the first case
+        // CASE 1: BEFORE SWAP
+        // No fees have been earned, so there shouldn't be any uncollected or cached fees.
         (uint256 uncollected0_c1, uint256 uncollected1_c1) = bunniLens.getUncollectedFees(
             poolTokenKey
         );
@@ -886,7 +887,7 @@ contract BunniSupplyTest is Test {
         assertEq(uncollected1_c1, 0, "uncollected1_c1");
         (, , , uint128 cached0_c1, uint128 cached1_c1) = poolTokenKey.pool.positions(
             keccak256(
-                abi.encodePacked(address(this), poolTokenKey.tickLower, poolTokenKey.tickUpper)
+                abi.encodePacked(address(bunniHub), poolTokenKey.tickLower, poolTokenKey.tickUpper)
             )
         );
         assertEq(cached0_c1, 0, "cached0_c1");
@@ -918,8 +919,8 @@ contract BunniSupplyTest is Test {
             _swap(uniswapPool, ohmAddress, usdcAddress, address(this), swapOneAmountOut, OHM_PRICE);
         }
 
-        // There should now be uncollected fees
-        // (uint112 reserve0_c2, uint112 reserve1_c2) = bunniLens.getReserves(poolTokenKey);
+        // CASE 2: AFTER THE SWAP + BEFORE THE FEE UPDATE
+        // Fees have been earned, but not yet updated. There should be uncollected fees, but no cached fees.
         (uint256 uncollected0_c2, uint256 uncollected1_c2) = bunniLens.getUncollectedFees(
             poolTokenKey
         );
@@ -927,21 +928,18 @@ contract BunniSupplyTest is Test {
         assertGt(uncollected1_c2, 0, "uncollected1_c2");
         (, , , uint128 cached0_c2, uint128 cached1_c2) = poolTokenKey.pool.positions(
             keccak256(
-                abi.encodePacked(address(this), poolTokenKey.tickLower, poolTokenKey.tickUpper)
+                abi.encodePacked(address(bunniHub), poolTokenKey.tickLower, poolTokenKey.tickUpper)
             )
         );
         assertEq(cached0_c2, 0, "cached0_c2");
         assertEq(cached1_c2, 0, "cached1_c2");
 
-        // uint256 cachedTotal0 = uncollected0_c2 + reserve0_c2 + cached0_c2;
-        // uint256 cachedTotal1 = uncollected1_c2 + reserve1_c2 + cached1_c2;
-
         (uint256 collected0, uint256 collected1) = bunniHub.updateSwapFees(poolTokenKey);
         assertEq(collected0, uncollected0_c2, "updateSwapFees0");
         assertEq(collected1, uncollected1_c2, "updateSwapFees1");
 
-        // There shouldn't be uncollected fees anymore
-        // (uint112 reserve0_c3, uint112 reserve1_c3) = bunniLens.getReserves(poolTokenKey);
+        // CASE 3: AFTER THE SWAP + AFTER THE FEE UPDATE
+        // Fees have been earned and updated. There should be cached fees, but no uncollected fees.
         (uint256 uncollected0_c3, uint256 uncollected1_c3) = bunniLens.getUncollectedFees(
             poolTokenKey
         );
@@ -949,15 +947,12 @@ contract BunniSupplyTest is Test {
         assertEq(uncollected1_c3, 0, "uncollected1_c3");
         (, , , uint128 cached0_c3, uint128 cached1_c3) = poolTokenKey.pool.positions(
             keccak256(
-                abi.encodePacked(address(this), poolTokenKey.tickLower, poolTokenKey.tickUpper)
+                abi.encodePacked(address(bunniHub), poolTokenKey.tickLower, poolTokenKey.tickUpper)
             )
         );
-        assertEq(cached0_c3, 0, "cached0_c3");
-        assertEq(cached0_c3, 0, "cached0_c3");
-
-        // This invariant is not true due to the swap changing the pool composition
-        // assertEq(cachedTotal0, uncollected0_c3 + reserve0_c3 + cached0_c3, "invariant0");
-        // assertEq(cachedTotal1, uncollected1_c3 + reserve1_c3 + cached1_c3, "invariant1");
+        // Check fee invariant between CASE 2 and CASE 3.
+        assertEq(cached0_c3, uncollected0_c2, "cached0_c3");
+        assertEq(cached1_c3, uncollected1_c2, "cached1_c3");
     }
 
     function test_getProtocolOwnedLiquidityReserves_singleToken_observationWindow() public {
