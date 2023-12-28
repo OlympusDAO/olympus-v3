@@ -517,8 +517,9 @@ contract BunniPriceTest is Test {
     }
 
     function test_getBunniTokenPrice_uncollectedFeesFuzz(uint256 ohmSwapAmount_, uint256 usdcSwapAmount_) public {
-        uint256 ohmSwapAmount = uint256(bound(ohmSwapAmount_, 1000e9, OHM_AMOUNT));
-        uint256 usdcSwapAmount = uint256(bound(usdcSwapAmount_, 1000e6, USDC_AMOUNT));
+        // Swap enough to generate fees, but not enough to trigger a TWAP deviation
+        uint256 ohmSwapAmount = uint256(bound(ohmSwapAmount_, 100e9, 1_000e9));
+        uint256 usdcSwapAmount = uint256(bound(usdcSwapAmount_, 1_000e6, 10_000e6));
 
         // Swap USDC for OHM
         {
@@ -666,6 +667,8 @@ contract BunniPriceTest is Test {
         );
         submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
     }
+
+    // TODO twap deviation check ignores uncollected fees
 
     function test_getBunniTokenPrice_outputDecimalsFuzz(uint256 outputDecimals_) public {
         uint8 outputDecimals = uint8(bound(outputDecimals_, 6, 30));
