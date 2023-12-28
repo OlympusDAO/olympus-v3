@@ -540,14 +540,7 @@ contract BunniPriceTest is Test {
         // Swap OHM for USDC
         {
             // Swap
-            _swap(
-                uniswapPool,
-                OHM,
-                USDC,
-                address(this),
-                swapOneAmountOut,
-                OHM_PRICE
-            );
+            _swap(uniswapPool, OHM, USDC, address(this), swapOneAmountOut, OHM_PRICE);
         }
 
         // There should now be uncollected fees

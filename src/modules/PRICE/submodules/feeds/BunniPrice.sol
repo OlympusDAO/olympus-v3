@@ -206,7 +206,18 @@ contract BunniPrice is PriceSubmodule {
         BunniToken token_,
         BunniLens lens_,
         uint8 outputDecimals_
-    ) internal view returns (address token0, uint256 reserve0, uint256 fee0, address token1, uint256 reserve1, uint256 fee1) {
+    )
+        internal
+        view
+        returns (
+            address token0,
+            uint256 reserve0,
+            uint256 fee0,
+            address token1,
+            uint256 reserve1,
+            uint256 fee1
+        )
+    {
         BunniKey memory key = _getBunniKey(token_);
         (uint112 reserve0_, uint112 reserve1_) = lens_.getReserves(key);
         (uint256 fee0_, uint256 fee1_) = lens_.getUncollectedFees(key);
@@ -234,11 +245,14 @@ contract BunniPrice is PriceSubmodule {
         BunniLens lens_,
         uint8 outputDecimals_
     ) internal view returns (uint256) {
-        (address token0, uint256 reserve0, uint256 fee0, address token1, uint256 reserve1, uint256 fee1) = _getBunniReserves(
-            token_,
-            lens_,
-            outputDecimals_
-        );
+        (
+            address token0,
+            uint256 reserve0,
+            uint256 fee0,
+            address token1,
+            uint256 reserve1,
+            uint256 fee1
+        ) = _getBunniReserves(token_, lens_, outputDecimals_);
         uint256 outputScale = 10 ** outputDecimals_;
 
         // Determine the value of each reserve token in USD
