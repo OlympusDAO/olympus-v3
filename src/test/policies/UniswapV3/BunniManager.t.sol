@@ -417,36 +417,34 @@ contract BunniManagerTest is Test {
     }
 
     function _swap(
+        IUniswapV3Pool pool_,
         address tokenIn_,
         address tokenOut_,
         address recipient_,
         uint256 amountIn_,
-        uint256 amountOutMinimum_,
-        uint24 poolFee_
+        uint256 token1Token0Price
     ) internal returns (uint256) {
-        // Approve token transfer
+        // Approve transfer
         vm.prank(recipient_);
         IERC20(tokenIn_).approve(address(swapRouter), amountIn_);
 
-        bool zeroForOne = pool.token0() == tokenIn_ ? true : false;
-        // NOTE: The docs say that a value of 0 should work in testing, but it reverts due to a check. This value seems to work, after days of testing.
-        uint160 sqrtPriceLimitX96 = TickMath.getSqrtRatioAtTick(zeroForOne ? -TICK : TICK);
+        // Get the parameters
+        ISwapRouter.ExactInputSingleParams memory params = PoolHelper.getSwapParams(
+            pool_,
+            tokenIn_,
+            tokenOut_,
+            amountIn_,
+            recipient_,
+            token1Token0Price,
+            500,
+            TICK
+        );
 
         // Perform the swap
         vm.prank(recipient_);
-        return
-            swapRouter.exactInputSingle(
-                ISwapRouter.ExactInputSingleParams({
-                    tokenIn: tokenIn_,
-                    tokenOut: tokenOut_,
-                    fee: poolFee_,
-                    recipient: recipient_,
-                    deadline: block.timestamp,
-                    amountIn: amountIn_,
-                    amountOutMinimum: amountOutMinimum_,
-                    sqrtPriceLimitX96: sqrtPriceLimitX96
-                })
-            );
+        swapRouter.exactInputSingle(params);
+
+        return params.amountOutMinimum;
     }
 
     function _recalculateFees(IUniswapV3Pool pool_) internal {
@@ -2737,12 +2735,18 @@ contract BunniManagerTest is Test {
             // Mint USDC into another wallet
             usdc.mint(alice, swapAmountUsdcIn);
 
-            uint256 swapOneOhmMinimum = PoolHelper.getAmountOutMinimum(pool, usdcAddress, ohmAddress, swapAmountUsdcIn, OHM_USDC_PRICE, 500);
-            _swap(usdcAddress, ohmAddress, alice, swapAmountUsdcIn, swapOneOhmMinimum, POOL_FEE);
+            // Swap USDC for OHM
+            uint256 ohmAmountOut = _swap(
+                pool,
+                usdcAddress,
+                ohmAddress,
+                alice,
+                swapAmountUsdcIn,
+                OHM_USDC_PRICE
+            );
 
-            // And reverse
-            uint256 swapTwoUsdcMinimum = PoolHelper.getAmountOutMinimum(pool, ohmAddress, usdcAddress, swapOneOhmMinimum, OHM_USDC_PRICE, 500);
-            _swap(ohmAddress, usdcAddress, alice, swapOneOhmMinimum, swapTwoUsdcMinimum, POOL_FEE);
+            // Swap OHM for USDC
+            _swap(pool, ohmAddress, usdcAddress, alice, ohmAmountOut, OHM_USDC_PRICE);
         }
 
         // Store balances for comparison
@@ -2899,44 +2903,39 @@ contract BunniManagerTest is Test {
             // Mint USDC into another wallet
             usdc.mint(alice, swapAmountUsdcIn);
 
-            uint256 swapOneOhmMinimum = swapAmountUsdcIn
-                .mulDiv(1e18, 1e6)
-                .mulDiv(1e18, OHM_USDC_PRICE)
-                .mulDiv(1e9, 1e18)
-                .mulDiv(95, 100);
-            _swap(usdcAddress, ohmAddress, alice, swapAmountUsdcIn, swapOneOhmMinimum, POOL_FEE);
+            // Swap USDC for OHM
+            uint256 ohmAmountOut = _swap(
+                pool,
+                usdcAddress,
+                ohmAddress,
+                alice,
+                swapAmountUsdcIn,
+                OHM_USDC_PRICE
+            );
 
-            // And reverse
-            uint256 swapTwoUsdcMinimum = swapOneOhmMinimum
-                .mulDiv(1e18, 1e9)
-                .mulDiv(OHM_USDC_PRICE, 1e18)
-                .mulDiv(1e6, 1e18)
-                .mulDiv(95, 100);
-            _swap(ohmAddress, usdcAddress, alice, swapOneOhmMinimum, swapTwoUsdcMinimum, POOL_FEE);
+            // Swap OHM for USDC
+            _swap(pool, ohmAddress, usdcAddress, alice, ohmAmountOut, OHM_USDC_PRICE);
         }
 
         // Perform the swap on the second pool
         {
             uint256 swapAmountUsdcIn = 1_000_000e6;
-            uint24 poolFee = 3000;
 
             // Mint USDC into another wallet
             usdc.mint(alice, swapAmountUsdcIn);
 
-            uint256 swapOneOhmMinimum = swapAmountUsdcIn
-                .mulDiv(1e18, 1e6)
-                .mulDiv(1e18, OHM_USDC_PRICE)
-                .mulDiv(1e9, 1e18)
-                .mulDiv(95, 100);
-            _swap(usdcAddress, ohmAddress, alice, swapAmountUsdcIn, swapOneOhmMinimum, poolFee);
+            // Swap USDC for OHM
+            uint256 ohmAmountOut = _swap(
+                poolTwo,
+                usdcAddress,
+                ohmAddress,
+                alice,
+                swapAmountUsdcIn,
+                OHM_USDC_PRICE
+            );
 
-            // And reverse
-            uint256 swapTwoUsdcMinimum = swapOneOhmMinimum
-                .mulDiv(1e18, 1e9)
-                .mulDiv(OHM_USDC_PRICE, 1e18)
-                .mulDiv(1e6, 1e18)
-                .mulDiv(95, 100);
-            _swap(ohmAddress, usdcAddress, alice, swapOneOhmMinimum, swapTwoUsdcMinimum, poolFee);
+            // Swap OHM for USDC
+            _swap(poolTwo, ohmAddress, usdcAddress, alice, ohmAmountOut, OHM_USDC_PRICE);
         }
 
         // Store balances for comparison
@@ -3109,20 +3108,18 @@ contract BunniManagerTest is Test {
             // Mint USDC into another wallet
             usdc.mint(alice, swapAmountUsdcIn);
 
-            uint256 swapOneOhmMinimum = swapAmountUsdcIn
-                .mulDiv(1e18, 1e6)
-                .mulDiv(1e18, OHM_USDC_PRICE)
-                .mulDiv(1e9, 1e18)
-                .mulDiv(95, 100);
-            _swap(usdcAddress, ohmAddress, alice, swapAmountUsdcIn, swapOneOhmMinimum, POOL_FEE);
+            // Swap USDC for OHM
+            uint256 ohmAmountOut = _swap(
+                pool,
+                usdcAddress,
+                ohmAddress,
+                alice,
+                swapAmountUsdcIn,
+                OHM_USDC_PRICE
+            );
 
-            // And reverse
-            uint256 swapTwoUsdcMinimum = swapOneOhmMinimum
-                .mulDiv(1e18, 1e9)
-                .mulDiv(OHM_USDC_PRICE, 1e18)
-                .mulDiv(1e6, 1e18)
-                .mulDiv(95, 100);
-            _swap(ohmAddress, usdcAddress, alice, swapOneOhmMinimum, swapTwoUsdcMinimum, POOL_FEE);
+            // Swap OHM for USDC
+            _swap(pool, ohmAddress, usdcAddress, alice, ohmAmountOut, OHM_USDC_PRICE);
         }
 
         // DO NOT recalculate fees, as we want to test if harvest() does it
@@ -3197,25 +3194,22 @@ contract BunniManagerTest is Test {
             usdc.mint(alice, swapAmountUsdcIn);
         }
 
-        // Perform the swap
+        // Swap USDC for OHM
         uint256 swapOneOhmMinimum;
         {
-            swapOneOhmMinimum = swapAmountUsdcIn
-                .mulDiv(1e18, 1e6)
-                .mulDiv(1e18, OHM_USDC_PRICE)
-                .mulDiv(1e9, 1e18)
-                .mulDiv(95, 100);
-            _swap(usdcAddress, ohmAddress, alice, swapAmountUsdcIn, swapOneOhmMinimum, POOL_FEE);
+            swapOneOhmMinimum = _swap(
+                pool,
+                usdcAddress,
+                ohmAddress,
+                alice,
+                swapAmountUsdcIn,
+                OHM_USDC_PRICE
+            );
         }
 
-        // And reverse
+        // Swap OHM for USDC
         {
-            uint256 swapTwoUsdcMinimum = swapOneOhmMinimum
-                .mulDiv(1e18, 1e9)
-                .mulDiv(OHM_USDC_PRICE, 1e18)
-                .mulDiv(1e6, 1e18)
-                .mulDiv(95, 100);
-            _swap(ohmAddress, usdcAddress, alice, swapOneOhmMinimum, swapTwoUsdcMinimum, POOL_FEE);
+            _swap(pool, ohmAddress, usdcAddress, alice, swapOneOhmMinimum, OHM_USDC_PRICE);
         }
 
         _recalculateFees(pool);
@@ -3556,44 +3550,39 @@ contract BunniManagerTest is Test {
             // Mint USDC into another wallet
             usdc.mint(alice, swapAmountUsdcIn);
 
-            uint256 swapOneOhmMinimum = swapAmountUsdcIn
-                .mulDiv(1e18, 1e6)
-                .mulDiv(1e18, OHM_USDC_PRICE)
-                .mulDiv(1e9, 1e18)
-                .mulDiv(95, 100);
-            _swap(usdcAddress, ohmAddress, alice, swapAmountUsdcIn, swapOneOhmMinimum, POOL_FEE);
+            // Swap USDC for OHM
+            uint256 swapOneOhmMinimum = _swap(
+                pool,
+                usdcAddress,
+                ohmAddress,
+                alice,
+                swapAmountUsdcIn,
+                OHM_USDC_PRICE
+            );
 
-            // And reverse
-            uint256 swapTwoUsdcMinimum = swapOneOhmMinimum
-                .mulDiv(1e18, 1e9)
-                .mulDiv(OHM_USDC_PRICE, 1e18)
-                .mulDiv(1e6, 1e18)
-                .mulDiv(95, 100);
-            _swap(ohmAddress, usdcAddress, alice, swapOneOhmMinimum, swapTwoUsdcMinimum, POOL_FEE);
+            // Swap OHM for USDC
+            _swap(pool, ohmAddress, usdcAddress, alice, swapOneOhmMinimum, OHM_USDC_PRICE);
         }
 
         // Perform the swap on the second pool
         {
             uint256 swapAmountUsdcIn = 1_000_000e6;
-            uint24 poolFee = 3000;
 
             // Mint USDC into another wallet
             usdc.mint(alice, swapAmountUsdcIn);
 
-            uint256 swapOneOhmMinimum = swapAmountUsdcIn
-                .mulDiv(1e18, 1e6)
-                .mulDiv(1e18, OHM_USDC_PRICE)
-                .mulDiv(1e9, 1e18)
-                .mulDiv(95, 100);
-            _swap(usdcAddress, ohmAddress, alice, swapAmountUsdcIn, swapOneOhmMinimum, poolFee);
+            // Swap USDC for OHM
+            uint256 swapOneOhmMinimum = _swap(
+                poolTwo,
+                usdcAddress,
+                ohmAddress,
+                alice,
+                swapAmountUsdcIn,
+                OHM_USDC_PRICE
+            );
 
-            // And reverse
-            uint256 swapTwoUsdcMinimum = swapOneOhmMinimum
-                .mulDiv(1e18, 1e9)
-                .mulDiv(OHM_USDC_PRICE, 1e18)
-                .mulDiv(1e6, 1e18)
-                .mulDiv(95, 100);
-            _swap(ohmAddress, usdcAddress, alice, swapOneOhmMinimum, swapTwoUsdcMinimum, poolFee);
+            // Swap OHM for USDC
+            _swap(poolTwo, ohmAddress, usdcAddress, alice, swapOneOhmMinimum, OHM_USDC_PRICE);
         }
 
         uint256 poolOneUsdcFeeAmountBefore;
