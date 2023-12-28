@@ -585,6 +585,7 @@ contract BunniSupplyTest is Test {
             ohmAddress,
             usdcAddress
         ); // USDC decimals: 6
+        assertGt(twapRatio, 0); // Sanity check
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
@@ -908,6 +909,7 @@ contract BunniSupplyTest is Test {
             ohmAddress,
             usdcAddress
         ); // USDC decimals: 6
+        assertGt(twapRatio, 0); // Sanity check
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
