@@ -39,7 +39,9 @@ library BunniHelper {
     }
 
     /// @notice         Returns the ratio of token1 to token0 based on the position reserves
-    /// @dev            Includes uncollected fees
+    /// @dev            This function checks only for the reserves in the position, and excludes
+    /// @dev            any uncollected fees. This is to mitigate an attack vector where an attacker
+    /// @dev            performs swaps to adjust the reserves ratio.
     ///
     /// @param key_     The BunniKey for the pool
     /// @param lens_    The BunniLens contract
@@ -49,8 +51,7 @@ library BunniHelper {
         uint8 token0Decimals = ERC20(pool.token0()).decimals();
 
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
-        (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
 
-        return (reserve1 + fee1).mulDiv(10 ** token0Decimals, reserve0 + fee0);
+        return uint256(reserve1).mulDiv(10 ** token0Decimals, reserve0);
     }
 }
