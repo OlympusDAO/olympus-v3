@@ -482,6 +482,11 @@ contract BunniSupplyTest is Test {
     }
 
     function test_getProtocolOwnedLiquidityOhm_singleToken() public {
+        // There should not be any uncollected fees
+        (uint256 fee0, uint256 fee1) = bunniLens.getUncollectedFees(poolTokenKey);
+        assertEq(fee0, 0);
+        assertEq(fee1, 0);
+
         // Register one token
         vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
@@ -722,6 +727,11 @@ contract BunniSupplyTest is Test {
     }
 
     function test_getProtocolOwnedLiquidityReserves_singleToken() public {
+        // There should not be any uncollected fees
+        (uint256 fee0, uint256 fee1) = bunniLens.getUncollectedFees(poolTokenKey);
+        assertEq(fee0, 0);
+        assertEq(fee1, 0);
+
         // Register one token
         vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
@@ -748,11 +758,77 @@ contract BunniSupplyTest is Test {
         assertEq(reserves[0].balances[1], usdcReserves_);
     }
 
+    function test_getProtocolOwnedLiquidityReserves_singleToken_uncollectedFeesFuzz(uint256 usdcSwapAmount_) public {
+        // Swap enough to generate fees, but not enough to trigger a TWAP deviation
+        uint256 usdcSwapAmount = uint256(bound(usdcSwapAmount_, 1_000e6, 10_000e6));
+
+        // Swap USDC for OHM
+        uint256 swapOneAmountOut;
+        {
+            // Mint the USDC
+            usdcToken.mint(address(this), usdcSwapAmount);
+
+            // Swap
+            swapOneAmountOut = _swap(
+                uniswapPool,
+                usdcAddress,
+                ohmAddress,
+                address(this),
+                usdcSwapAmount,
+                OHM_PRICE
+            );
+        }
+
+        // Swap OHM for USDC
+        {
+            // Swap
+            _swap(uniswapPool, ohmAddress, usdcAddress, address(this), swapOneAmountOut, OHM_PRICE);
+        }
+
+        // There should now be uncollected fees
+        (uint256 fee0, uint256 fee1) = bunniLens.getUncollectedFees(poolTokenKey);
+        assertGt(fee0, 0);
+        assertGt(fee1, 0);
+
+        // Register one token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            TWAP_MAX_DEVIATION_BPS,
+            TWAP_OBSERVATION_WINDOW
+        );
+
+        // Determine the amount of reserves in the pool, which should be consistent with the lens value
+        (uint256 ohmReserves_, uint256 usdcReserves_) = _getReserves(poolTokenKey, bunniLens);
+
+        SPPLYv1.Reserves[] memory reserves = submoduleBunniSupply
+            .getProtocolOwnedLiquidityReserves();
+
+        assertEq(reserves.length, 1);
+
+        assertEq(reserves[0].source, poolTokenAddress);
+        assertEq(reserves[0].tokens.length, 2);
+        assertEq(reserves[0].tokens[0], ohmAddress);
+        assertEq(reserves[0].tokens[1], usdcAddress);
+        assertEq(reserves[0].balances.length, 2);
+        assertEq(reserves[0].balances[0], ohmReserves_ + fee0);
+        assertEq(reserves[0].balances[1], usdcReserves_ + fee1);
+    }
+
     function test_getProtocolOwnedLiquidityReserves_singleToken_observationWindow() public {
         uint32 observationWindow = 60;
 
+        // Update the pool observations
+        bunniSetup.mockPoolObservations(
+            address(uniswapPool),
+            observationWindow,
+            OHM_USDC_TICK_CUMULATIVE_0,
+            OHM_USDC_TICK_CUMULATIVE_1
+        );
+
         // Register one token
-        vm.prank(address(moduleSupply));
+        vm.prank(moduleSPPLY);
         submoduleBunniSupply.addBunniToken(
             poolTokenAddress,
             bunniLensAddress,

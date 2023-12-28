@@ -202,6 +202,7 @@ contract BunniSupply is SupplySubmodule {
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Returns the total of OHM and non-OHM reserves in the submodule
+    /// @dev        This includes both the reserves and uncollected fees belonging to the position.
     ///
     /// @dev        This function accesses the reserves of the registered
     /// @dev        Uniswap V3 pools, and can be susceptible to re-entrancy attacks.
