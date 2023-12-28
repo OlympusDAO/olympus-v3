@@ -551,7 +551,7 @@ contract BunniSupplyTest is Test {
     }
 
     function test_getProtocolOwnedLiquidityOhm_singleToken_observationWindow() public {
-        uint32 observationWindow = 60;
+        uint32 observationWindow = 500;
 
         // Update the pool observations
         bunniSetup.mockPoolObservations(
@@ -578,12 +578,14 @@ contract BunniSupplyTest is Test {
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) /
             int32(observationWindow);
+
         uint256 twapRatio = OracleLibrary.getQuoteAtTick(
             int24(timeWeightedTick),
             uint128(10 ** 9), // token0 (OHM) decimals
             ohmAddress,
             usdcAddress
         ); // USDC decimals: 6
+        assertGt(twapRatio, 0); // Sanity check
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
@@ -874,7 +876,7 @@ contract BunniSupplyTest is Test {
     }
 
     function test_getProtocolOwnedLiquidityReserves_singleToken_observationWindow() public {
-        uint32 observationWindow = 60;
+        uint32 observationWindow = 500;
 
         // Update the pool observations
         bunniSetup.mockPoolObservations(
@@ -907,6 +909,7 @@ contract BunniSupplyTest is Test {
             ohmAddress,
             usdcAddress
         ); // USDC decimals: 6
+        assertGt(twapRatio, 0); // Sanity check
 
         // Set up revert
         // Will revert as the TWAP deviates from the reserves ratio
