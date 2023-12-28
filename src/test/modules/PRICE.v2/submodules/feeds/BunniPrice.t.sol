@@ -27,6 +27,8 @@ import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {IUniswapV3PoolState} from "@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolState.sol";
 import {UniswapV3Pool} from "test/lib/UniswapV3/UniswapV3Pool.sol";
+import {SwapRouter} from "test/lib/UniswapV3/SwapRouter.sol";
+import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 
 import {BunniSetup} from "test/policies/UniswapV3/BunniSetup.sol";
 
@@ -36,6 +38,8 @@ import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLib
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 import {ComputeAddress} from "test/libraries/ComputeAddress.sol";
 import {UniswapV3OracleHelper} from "libraries/UniswapV3/Oracle.sol";
+import {PoolHelper} from "test/policies/UniswapV3/PoolHelper.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract BunniPriceTest is Test {
     using FullMath for uint256;
@@ -46,6 +50,7 @@ contract BunniPriceTest is Test {
 
     MockOhm internal ohmToken;
     MockERC20 internal usdcToken;
+    MockERC20 internal wethToken;
     address internal OHM;
     address internal USDC;
     uint8 internal constant OHM_DECIMALS = 9;
@@ -58,6 +63,7 @@ contract BunniPriceTest is Test {
     IBunniToken internal poolToken;
     BunniKey internal poolTokenKey;
     UniswapV3Factory internal uniswapFactory;
+    SwapRouter internal swapRouter;
     address internal bunniLensAddress;
     address internal poolTokenAddress;
 
@@ -88,6 +94,8 @@ contract BunniPriceTest is Test {
     uint16 internal constant TWAP_MAX_DEVIATION_BPS = 100; // 1%
     uint32 internal constant TWAP_OBSERVATION_WINDOW = 600;
 
+    int24 private constant TICK = 887270; // (887272/(500/50))*(500/50)
+
     uint16 private constant SLIPPAGE_DEFAULT = 100; // 1%
 
     uint256 internal constant OHM_AMOUNT = 100_000e9;
@@ -110,6 +118,16 @@ contract BunniPriceTest is Test {
             );
             usdcToken = new MockERC20{salt: usdcSalt}("USDC", "USDC", USDC_DECIMALS);
 
+            // The WETH address needs to be higher than ohm, so generate a salt to ensure that
+            bytes32 wethSalt = ComputeAddress.generateSalt(
+                address(ohmToken),
+                true,
+                type(MockERC20).creationCode,
+                abi.encode("Wrapped Ether", "wETH", 18),
+                address(this)
+            );
+            wethToken = new MockERC20{salt: wethSalt}("Wrapped Ether", "wETH", 18);
+
             OHM = address(ohmToken);
             USDC = address(usdcToken);
         }
@@ -130,6 +148,7 @@ contract BunniPriceTest is Test {
             bunniLens = bunniSetup.bunniLens();
             bunniLensAddress = address(bunniLens);
             uniswapFactory = bunniSetup.uniswapFactory();
+            swapRouter = new SwapRouter(address(uniswapFactory), address(wethToken));
         }
 
         // Deploy writer policies
@@ -267,6 +286,37 @@ contract BunniPriceTest is Test {
     ) internal view returns (uint256, uint256) {
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
         return (reserve0, reserve1);
+    }
+
+    function _swap(
+        IUniswapV3Pool pool_,
+        address tokenIn_,
+        address tokenOut_,
+        address recipient_,
+        uint256 amountIn_,
+        uint256 token1Token0Price
+    ) internal returns (uint256) {
+        // Approve transfer
+        vm.prank(recipient_);
+        IERC20(tokenIn_).approve(address(swapRouter), amountIn_);
+
+        // Get the parameters
+        ISwapRouter.ExactInputSingleParams memory params = PoolHelper.getSwapParams(
+            pool_,
+            tokenIn_,
+            tokenOut_,
+            amountIn_,
+            recipient_,
+            token1Token0Price,
+            500,
+            TICK
+        );
+
+        // Perform the swap
+        vm.prank(recipient_);
+        swapRouter.exactInputSingle(params);
+
+        return params.amountOutMinimum;
     }
 
     // ========= TESTS ========= //
@@ -441,6 +491,78 @@ contract BunniPriceTest is Test {
         (uint256 ohmReserve_, uint256 usdcReserve_) = _getReserves(poolTokenKey, bunniLens);
         uint256 ohmReserve = ohmReserve_.mulDiv(outputScale, 10 ** OHM_DECIMALS);
         uint256 usdcReserve = usdcReserve_.mulDiv(outputScale, 10 ** USDC_DECIMALS);
+        uint256 expectedPrice = (ohmReserve.mulDiv(OHM_PRICE, outputScale) +
+            usdcReserve.mulDiv(USDC_PRICE, outputScale)).mulDiv(
+                10 ** POOL_TOKEN_DECIMALS,
+                poolToken.totalSupply()
+            ); // Scale: PRICE_DECIMALS
+
+        // Call
+        bytes memory params = abi.encode(
+            BunniPrice.BunniParams({
+                bunniLens: bunniLensAddress,
+                twapMaxDeviationsBps: TWAP_MAX_DEVIATION_BPS,
+                twapObservationWindow: TWAP_OBSERVATION_WINDOW
+            })
+        );
+        uint256 price = submoduleBunniPrice.getBunniTokenPrice(
+            poolTokenAddress,
+            PRICE_DECIMALS,
+            params
+        );
+
+        // Check values
+        assertTrue(price > 0, "should be non-zero");
+        assertApproxEqAbs(price, expectedPrice, 1e9);
+    }
+
+    function test_getBunniTokenPrice_uncollectedFeesFuzz(uint256 ohmSwapAmount_, uint256 usdcSwapAmount_) public {
+        uint256 ohmSwapAmount = uint256(bound(ohmSwapAmount_, 1000e9, OHM_AMOUNT));
+        uint256 usdcSwapAmount = uint256(bound(usdcSwapAmount_, 1000e6, USDC_AMOUNT));
+
+        // Swap USDC for OHM
+        {
+            // Mint the USDC
+            usdcToken.mint(address(this), usdcSwapAmount);
+
+            // Swap
+            _swap(
+                uniswapPool,
+                USDC,
+                OHM,
+                address(this),
+                usdcSwapAmount,
+                OHM_PRICE
+            );
+        }
+
+        // Swap OHM for USDC
+        {
+            // Mint the OHM
+            ohmToken.mint(address(this), ohmSwapAmount);
+
+            // Swap
+            _swap(
+                uniswapPool,
+                OHM,
+                USDC,
+                address(this),
+                ohmSwapAmount,
+                OHM_PRICE
+            );
+        }
+
+        // There should now be uncollected fees
+        (uint256 fee0, uint256 fee1) = bunniLens.getUncollectedFees(poolTokenKey);
+        assertGt(fee0, 0);
+        assertGt(fee1, 0);
+
+        uint256 outputScale = 10 ** PRICE_DECIMALS;
+
+        // Calculate the expected price (which includes fees)
+        (uint256 ohmReserve_, uint256 usdcReserve_) = _getReserves(poolTokenKey, bunniLens);
+        uint256 ohmReserve = (ohmReserve_ + fee0).mulDiv(outputScale, 10 ** OHM_DECIMALS);
+        uint256 usdcReserve = (usdcReserve_ + fee1).mulDiv(outputScale, 10 ** USDC_DECIMALS);
         uint256 expectedPrice = (ohmReserve.mulDiv(OHM_PRICE, outputScale) +
             usdcReserve.mulDiv(USDC_PRICE, outputScale)).mulDiv(
                 10 ** POOL_TOKEN_DECIMALS,
