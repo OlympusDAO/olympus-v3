@@ -191,21 +191,25 @@ contract BunniPrice is PriceSubmodule {
     }
 
     /// @notice                 Fetches the reserves of a Uniswap V3 position
+    /// @dev                    This includes both the reserves and uncollected fees belonging to the position
     ///
     /// @param token_           The address of the BunniToken contract
     /// @param lens_            The address of the BunniLens contract
     /// @param outputDecimals_  The number of decimals to use for the output price
     /// @return token0          The address of the first reserve token
     /// @return reserve0        The amount of the first reserve token (in `outputDecimals_`)
+    /// @return fee0            The amount of uncollected fees for the first reserve token (in `outputDecimals_`)
     /// @return token1          The address of the second reserve token
     /// @return reserve1        The amount of the second reserve token (in `outputDecimals_`)
+    /// @return fee1            The amount of uncollected fees for the second reserve token (in `outputDecimals_`)
     function _getBunniReserves(
         BunniToken token_,
         BunniLens lens_,
         uint8 outputDecimals_
-    ) internal view returns (address token0, uint256 reserve0, address token1, uint256 reserve1) {
+    ) internal view returns (address token0, uint256 reserve0, uint256 fee0, address token1, uint256 reserve1, uint256 fee1) {
         BunniKey memory key = _getBunniKey(token_);
         (uint112 reserve0_, uint112 reserve1_) = lens_.getReserves(key);
+        (uint256 fee0_, uint256 fee1_) = lens_.getUncollectedFees(key);
 
         // Get the token addresses
         token0 = key.pool.token0();
@@ -214,9 +218,12 @@ contract BunniPrice is PriceSubmodule {
         uint8 token1Decimals = ERC20(token1).decimals();
         reserve0 = uint256(reserve0_).mulDiv(10 ** outputDecimals_, 10 ** token0Decimals);
         reserve1 = uint256(reserve1_).mulDiv(10 ** outputDecimals_, 10 ** token1Decimals);
+        fee0 = fee0_.mulDiv(10 ** outputDecimals_, 10 ** token0Decimals);
+        fee1 = fee1_.mulDiv(10 ** outputDecimals_, 10 ** token1Decimals);
     }
 
     /// @notice                 Determines the total value of the Uniswap V3 position represented by `token_`
+    /// @dev                    This includes both the reserves and uncollected fees belonging to the position
     ///
     /// @param token_           The BunniToken representing the Uniswap V3 position
     /// @param lens_            The BunniLens to use for determining reserves
@@ -227,7 +234,7 @@ contract BunniPrice is PriceSubmodule {
         BunniLens lens_,
         uint8 outputDecimals_
     ) internal view returns (uint256) {
-        (address token0, uint256 reserve0, address token1, uint256 reserve1) = _getBunniReserves(
+        (address token0, uint256 reserve0, uint256 fee0, address token1, uint256 reserve1, uint256 fee1) = _getBunniReserves(
             token_,
             lens_,
             outputDecimals_
@@ -236,8 +243,8 @@ contract BunniPrice is PriceSubmodule {
 
         // Determine the value of each reserve token in USD
         uint256 totalValue;
-        totalValue += _PRICE().getPrice(token0).mulDiv(reserve0, outputScale);
-        totalValue += _PRICE().getPrice(token1).mulDiv(reserve1, outputScale);
+        totalValue += _PRICE().getPrice(token0).mulDiv(reserve0 + fee0, outputScale);
+        totalValue += _PRICE().getPrice(token1).mulDiv(reserve1 + fee1, outputScale);
 
         return totalValue;
     }
