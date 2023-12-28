@@ -2378,7 +2378,7 @@ contract PriceV2Test is Test {
         assertEq(price_, 10e18);
     }
 
-    function testFail_addAsset_multiplePriceFeeds_oneSubmoduleCallFails(uint256 nonce_) public {
+    function testRevert_addAsset_multiplePriceFeeds_oneSubmoduleCallFails(uint256 nonce_) public {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
             .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 
@@ -2396,16 +2396,17 @@ contract PriceV2Test is Test {
             bytes4(0), // incorrect bytes4 selector
             abi.encode(ohmFeedTwoParams) // bytes memory params
         );
-
+        uint256[] memory obs = _makeRandomObservations(weth, feeds[0], nonce_, uint256(1));
+        
         // Try and add the asset
         vm.startPrank(writer);
 
         // Reverts as one price feed call will fail due to invalid selector
-        // bytes memory err = abi.encodeWithSignature(
-        //     "PRICE_PriceFeedCallFailed(address)",
-        //     address(weth)
-        // );
-        // vm.expectRevert(err);
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_PriceFeedCallFailed(address)",
+            address(weth)
+        );
+        vm.expectRevert(err);
 
         price.addAsset(
             address(weth), // address asset_
@@ -2413,7 +2414,7 @@ contract PriceV2Test is Test {
             true, // bool useMovingAverage_
             uint32(8 hours), // uint32 movingAverageDuration_
             uint48(block.timestamp), // uint48 lastObservationTime_
-            _makeRandomObservations(weth, feeds[0], nonce_, uint256(1)), // uint256[] memory observations_
+            obs, // uint256[] memory observations_
             PRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
                 SimplePriceFeedStrategy.getAveragePrice.selector,
