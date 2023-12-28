@@ -108,7 +108,8 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Route to correct price function based on requested variant
         if (variant_ == Variant.CURRENT) {
-            (_price, _timestamp, ) = _getCurrentPrice(asset_);
+            (uint256 price_, uint48 timestamp_, ) = _getCurrentPrice(asset_);
+            return (price_, timestamp_);
         } else if (variant_ == Variant.LAST) {
             return _getLastPrice(asset_);
         } else if (variant_ == Variant.MOVINGAVERAGE) {
@@ -128,7 +129,9 @@ contract OlympusPricev2 is PRICEv2 {
     /// @dev            - The configured strategy cannot aggregate the prices
     ///
     /// @param asset_   Asset to get the price of
-    /// @return         The price of the asset and the current block timestamp
+    /// @return         The price of the asset
+    /// @return         The current block timestamp
+    /// @return         Flag to indicate if all feeds were successful
     function _getCurrentPrice(address asset_) internal view returns (uint256, uint48, bool) {
         Asset storage asset = _assetData[asset_];
 
