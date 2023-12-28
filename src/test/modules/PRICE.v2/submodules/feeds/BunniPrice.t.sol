@@ -14,6 +14,7 @@ import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 // Mocks
 import {MockOhm} from "test/mocks/MockOhm.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockGohm} from "test/mocks/OlympusMocks.sol";
 
 // Bunni contracts
 import {BunniPrice} from "src/modules/PRICE/submodules/feeds/BunniPrice.sol";
@@ -51,6 +52,7 @@ contract BunniPriceTest is Test {
     MockOhm internal ohmToken;
     MockERC20 internal usdcToken;
     MockERC20 internal wethToken;
+    MockGohm internal gohmToken;
     address internal OHM;
     address internal USDC;
     uint8 internal constant OHM_DECIMALS = 9;
@@ -75,6 +77,8 @@ contract BunniPriceTest is Test {
     address writeSPPLY;
 
     uint24 private constant POOL_FEE = 500;
+
+    uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
 
     // OHM-USDC Uni V3 pool, based on: 0x893f503fac2ee1e5b78665db23f9c94017aae97d
     // token0: OHM, token1: USDC
@@ -128,6 +132,8 @@ contract BunniPriceTest is Test {
             );
             wethToken = new MockERC20{salt: wethSalt}("Wrapped Ether", "wETH", 18);
 
+            gohmToken = new MockGohm(GOHM_INDEX);
+
             OHM = address(ohmToken);
             USDC = address(usdcToken);
         }
@@ -141,7 +147,7 @@ contract BunniPriceTest is Test {
 
         // Deploy BunniSetup
         {
-            bunniSetup = new BunniSetup(OHM, USDC, address(this), policy);
+            bunniSetup = new BunniSetup(OHM, address(gohmToken), address(this), policy);
 
             bunniManager = bunniSetup.bunniManager();
             bunniHub = bunniSetup.bunniHub();

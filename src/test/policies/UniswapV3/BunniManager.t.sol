@@ -7,6 +7,7 @@ import {console2} from "forge-std/console2.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
+import {MockGohm} from "test/mocks/OlympusMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 import {TRSRYv1_1, toCategory as toTreasuryCategory} from "modules/TRSRY/TRSRY.v1.sol";
@@ -62,6 +63,7 @@ contract BunniManagerTest is Test {
     MockERC20 internal usdc;
     MockERC20 internal wETH;
     MockERC20 internal dai;
+    MockGohm internal gohm;
     address internal usdcAddress;
     address internal ohmAddress;
     address internal token0Address;
@@ -96,6 +98,8 @@ contract BunniManagerTest is Test {
 
     uint16 internal constant TWAP_DEFAULT_MAX_DEVIATION_BPS = 100; // 1%
     uint32 internal constant TWAP_DEFAULT_OBSERVATION_WINDOW = 600;
+
+    uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
 
     uint24 private constant POOL_FEE = 500;
     uint256 private constant OHM_USDC_PRICE = 115897 * 1e14; // 11.5897 USDC per OHM in 18 decimal places
@@ -198,6 +202,8 @@ contract BunniManagerTest is Test {
             );
             dai = new MockERC20{salt: daiSalt}("DAI", "DAI", 18);
 
+            gohm = new MockGohm(GOHM_INDEX);
+
             ohmAddress = address(ohm);
             usdcAddress = address(usdc);
             token0Address = address(ohm) > address(usdc) ? address(usdc) : address(ohm);
@@ -206,7 +212,7 @@ contract BunniManagerTest is Test {
 
         // Deploy BunniSetup
         {
-            bunniSetup = new BunniSetup(ohmAddress, usdcAddress, address(this), policy);
+            bunniSetup = new BunniSetup(ohmAddress, address(gohm), address(this), policy);
 
             kernel = bunniSetup.kernel();
             TRSRY = bunniSetup.TRSRY();
