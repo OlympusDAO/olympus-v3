@@ -2397,7 +2397,7 @@ contract PriceV2Test is Test {
             abi.encode(ohmFeedTwoParams) // bytes memory params
         );
         uint256[] memory obs = _makeRandomObservations(weth, feeds[0], nonce_, uint256(1));
-        
+
         // Try and add the asset
         vm.startPrank(writer);
 
