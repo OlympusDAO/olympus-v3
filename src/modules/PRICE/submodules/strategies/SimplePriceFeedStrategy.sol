@@ -198,11 +198,13 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
 
         // Check the deviation of the minimum from the average
         uint256 minPrice = sortedPrices[0];
-        if (Deviation.isDeviating(minPrice, averagePrice, deviationBps, DEVIATION_MAX)) return averagePrice;
+        if (Deviation.isDeviating(minPrice, averagePrice, deviationBps, DEVIATION_MAX))
+            return averagePrice;
 
         // Check the deviation of the maximum from the average
         uint256 maxPrice = sortedPrices[sortedPrices.length - 1];
-        if (Deviation.isDeviating(maxPrice, averagePrice, deviationBps, DEVIATION_MAX)) return averagePrice;
+        if (Deviation.isDeviating(maxPrice, averagePrice, deviationBps, DEVIATION_MAX))
+            return averagePrice;
 
         // Otherwise, return the first non-zero value
         return firstNonZeroPrice;

@@ -45,9 +45,7 @@ library Deviation {
         uint256 deviationBps_,
         uint256 deviationMax_
     ) internal pure returns (bool) {
-        uint256 diff = (value_ > benchmark_)
-            ? value_ - benchmark_
-            : benchmark_ - value_;
+        uint256 diff = (value_ > benchmark_) ? value_ - benchmark_ : benchmark_ - value_;
         return _isDeviating(diff, benchmark_, deviationBps_, deviationMax_);
     }
 
