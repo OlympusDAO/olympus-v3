@@ -875,7 +875,7 @@ contract BunniSupplyTest is Test {
         assertEq(reserves[0].balances[0], submoduleBunniSupply.getProtocolOwnedLiquidityOhm());
     }
 
-    function test_getProtocolOwnedLiquidityReserves_singleToken_TotalReserveInvariantFuzz(
+    function test_getProtocolOwnedLiquidityReserves_singleToken_uncollectedFeesInvariant(
         uint256 usdcSwapAmount_
     ) public {
         // There should not be any uncollected fees in the first case
