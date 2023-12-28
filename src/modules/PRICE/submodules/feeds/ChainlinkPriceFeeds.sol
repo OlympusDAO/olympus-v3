@@ -185,12 +185,11 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @dev                    - PRICE's priceDecimals or the feed's decimals are out of bounds and would lead to an overflow
     /// @dev                    - The price feed's results are invalid
     ///
-    /// @param asset_           Unused
     /// @param outputDecimals_  The number of decimals to return the price in
     /// @param params_          Chainlink pool parameters of type `OneFeedParams`
     /// @return                 Price in the scale of `outputDecimals_`
     function getOneFeedPrice(
-        address asset_,
+        address,
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
