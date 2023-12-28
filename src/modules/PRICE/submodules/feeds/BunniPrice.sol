@@ -90,7 +90,7 @@ contract BunniPrice is PriceSubmodule {
     /// @dev                    - Check that the token is a valid BunniToken
     /// @dev                    - Check that the lens is a valid BunniLens
     /// @dev                    - Check that the token and lens have the same BunniHub address
-    /// @dev                    - Fetches the reserves contained in the Uniswap V3 position
+    /// @dev                    - Fetches the reserves and uncollected fees contained in the Uniswap V3 position
     /// @dev                    - Determines the value of each reserve token in USD
     ///
     /// @dev                    This function accesses the reserves of the registered
@@ -191,7 +191,7 @@ contract BunniPrice is PriceSubmodule {
     }
 
     /// @notice                 Fetches the reserves of a Uniswap V3 position
-    /// @dev                    This includes both the reserves and uncollected fees belonging to the position
+    /// @dev                    This includes both the reserves and uncollected fees belonging to the position.
     ///
     /// @param token_           The address of the BunniToken contract
     /// @param lens_            The address of the BunniLens contract
