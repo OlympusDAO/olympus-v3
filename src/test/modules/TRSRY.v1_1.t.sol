@@ -61,6 +61,8 @@ import "src/Kernel.sol";
 // [X] addAsset - adds an asset configuration to the treasury
 //      [X] reverts if asset is already configured
 //      [X] reverts if asset is not a contract
+//      [X] reverts if location is address(0)
+//      [X] reverts if locations are not unique
 //      [X] asset data stored correctly
 //      [X] zero locations prior
 //      [X] one location prior
