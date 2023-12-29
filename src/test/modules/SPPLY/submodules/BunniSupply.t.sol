@@ -939,20 +939,21 @@ contract BunniSupplyTest is Test {
         assertEq(collected1, uncollected1_c2, "updateSwapFees1");
 
         // CASE 3: AFTER THE SWAP + AFTER THE FEE UPDATE
-        // Fees have been earned and updated. There should be cached fees, but no uncollected fees.
+        // Fees have been earned and updated. Cached fees should now be equal to uncollected fees.
         (uint256 uncollected0_c3, uint256 uncollected1_c3) = bunniLens.getUncollectedFees(
             poolTokenKey
         );
-        assertEq(uncollected0_c3, 0, "uncollected0_c3");
-        assertEq(uncollected1_c3, 0, "uncollected1_c3");
+        // Check fee invariant between CASE 2 and CASE 3.
+        assertEq(uncollected0_c3, uncollected0_c2, "uncollected0_c3");
+        assertEq(uncollected1_c3, uncollected1_c2, "uncollected1_c3");
         (, , , uint128 cached0_c3, uint128 cached1_c3) = poolTokenKey.pool.positions(
             keccak256(
                 abi.encodePacked(address(bunniHub), poolTokenKey.tickLower, poolTokenKey.tickUpper)
             )
         );
-        // Check fee invariant between CASE 2 and CASE 3.
-        assertEq(cached0_c3, uncollected0_c2, "cached0_c3");
-        assertEq(cached1_c3, uncollected1_c2, "cached1_c3");
+        // Check fee invariant between cached fees and uncollected fees.
+        assertEq(cached0_c3, uncollected0_c3, "cached0_c3");
+        assertEq(cached1_c3, uncollected1_c3, "cached1_c3");
     }
 
     function test_getProtocolOwnedLiquidityReserves_singleToken_observationWindow() public {

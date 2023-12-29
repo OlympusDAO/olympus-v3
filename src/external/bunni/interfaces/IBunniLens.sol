@@ -31,6 +31,7 @@ interface IBunniLens {
     ) external view returns (uint112 reserve0, uint112 reserve1);
 
     /// @notice Returns the uncollected fees for the position.
+    /// @dev    Includes cached fees that have not yet been withdrawn or compounded.
     /// @param key The Bunni position's key
     /// @return fee0 The amount of token0 in uncollected fees
     /// @return fee1 The amount of token1 in uncollected fees
