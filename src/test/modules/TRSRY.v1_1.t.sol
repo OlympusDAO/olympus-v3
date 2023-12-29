@@ -84,7 +84,7 @@ import "src/Kernel.sol";
 // [X] addCategoryGroup - adds an asset category group to the treasury
 //      [X] reverts if category group is already configured
 //      [X] category group data stored correctly
-// [X] removeCategoryGroup - removes an asset category group from the treasury
+// [X] removeCategoryGroup - removes an asset category group from the treasury, along with all categories within it
 //      [X] reverts if category group is not configured
 //      [X] category group data removed correctly
 // [X] addCategory - adds an asset category to the treasury
@@ -1165,22 +1165,55 @@ contract TRSRYv1_1Test is Test {
 
     function testCorrectness_removeCategoryGroupRemovesGroup(bytes32 groupName_) public {
         vm.assume(
-            groupName_ != bytes32("liquidity-preference") &&
+            groupName_ != bytes32(0) &&
+                groupName_ != bytes32("liquidity-preference") &&
                 groupName_ != bytes32("value-baskets") &&
                 groupName_ != bytes32("market-sensitivity")
         );
 
+        vm.startPrank(godmode);
+
         // Add category group
-        vm.prank(godmode);
         TRSRY.addCategoryGroup(toCategoryGroup(groupName_));
+        TRSRY.addCategory(toCategory("test-1"), toCategoryGroup(groupName_));
+        TRSRY.addCategory(toCategory("test-2"), toCategoryGroup(groupName_));
+
+        // Assert that the category group and its categories were added
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup(groupName_), 0)), "test-1");
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup(groupName_), 1)), "test-2");
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-1"))), groupName_);
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-2"))), groupName_);
+
+        // Add and categorize asset
+        TRSRY.addAsset(address(reserve), new address[](0));
+        TRSRY.categorize(address(reserve), toCategory("test-1"));
+
+        // Assert that the asset was categorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup(groupName_))),
+            "test-1"
+        );
 
         // Remove category group
-        vm.prank(godmode);
         TRSRY.removeCategoryGroup(toCategoryGroup(groupName_));
+
+        // Check that the asset was uncategorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup(groupName_))),
+            bytes32(0)
+        );
+
+        // Check that the categories were removed
+        // categoryToGroup should be bytes32(0)
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-1"))), bytes32(0));
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-2"))), bytes32(0));
+        // Check that groupToCategories was removed
+        vm.expectRevert();
+        TRSRY.groupToCategories(toCategoryGroup(groupName_), 0);
 
         // Check that the category group was removed
         vm.expectRevert();
-        CategoryGroup removedGroup = TRSRY.categoryGroups(3);
+        TRSRY.categoryGroups(3);
     }
 
     // ========= addCategory ========= //
@@ -1400,21 +1433,44 @@ contract TRSRYv1_1Test is Test {
     }
 
     function testCorrectness_removeCategoryRemovesCategoryInfo() public {
-        // Add category group and category
         vm.startPrank(godmode);
+
+        // Add category group
         TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test-1"), toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test-2"), toCategoryGroup("test-group"));
+
+        // Assert that the category group and its categories were added
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 0)), "test-1");
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 1)), "test-2");
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-1"))), "test-group");
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-2"))), "test-group");
+
+        // Add and categorize asset
+        TRSRY.addAsset(address(reserve), new address[](0));
+        TRSRY.categorize(address(reserve), toCategory("test-1"));
+
+        // Assert that the asset was categorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup("test-group"))),
+            "test-1"
+        );
 
         // Remove category
-        TRSRY.removeCategory(toCategory("test"));
+        TRSRY.removeCategory(toCategory("test-1"));
 
-        // Assert that the category was removed
-        // categoryToGroup should be bytes32(0)
-        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test"))), bytes32(0));
+        // Check that the asset was uncategorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup("test-group"))),
+            bytes32(0)
+        );
 
-        // groupToCategories should be empty
+        // Check that the category was removed
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-1"))), bytes32(0));
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-2"))), "test-group");
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 0)), "test-2");
         vm.expectRevert();
-        TRSRY.groupToCategories(toCategoryGroup("test-group"), 0);
+        fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 1));
     }
 
     // ========= categorize ========= //
