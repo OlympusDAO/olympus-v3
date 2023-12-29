@@ -872,6 +872,38 @@ contract TRSRYv1_1Test is Test {
         TRSRY.addAsset(alice, new address[](0));
     }
 
+    function testRevert_addAsset_LocationZero() public {
+        address[] memory locations = new address[](2);
+        locations[0] = address(0);
+        locations[1] = address(1);
+
+        /// Try to add an address which is not a contract
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_InvalidParams(uint256,bytes)",
+            1,
+            abi.encode(address(0))
+        );
+        vm.expectRevert(err);
+        vm.prank(godmode);
+        TRSRY.addAsset(address(reserve), locations);
+    }
+
+    function testRevert_addAsset_DuplicatedLocation() public {
+        address[] memory locations = new address[](2);
+        locations[0] = address(1);
+        locations[1] = address(1);
+
+        /// Try to add an address which is not a contract
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_InvalidParams(uint256,bytes)",
+            1,
+            abi.encode(address(1))
+        );
+        vm.expectRevert(err);
+        vm.prank(godmode);
+        TRSRY.addAsset(address(reserve), locations);
+    }
+
     // -- Test: removeAsset
 
     function testCorrectness_removeAsset_AssetNotConfigured() public {
