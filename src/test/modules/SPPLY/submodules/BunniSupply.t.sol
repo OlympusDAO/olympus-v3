@@ -835,13 +835,20 @@ contract BunniSupplyTest is Test {
             );
         }
 
+        // Update the swap fees, so that fees are re-calculated
+        vm.prank(policy);
+        bunniManager.updateSwapFees();
+
         // Swap OHM for USDC
         {
             // Swap
             _swap(uniswapPool, ohmAddress, usdcAddress, address(this), swapOneAmountOut, OHM_PRICE);
         }
 
+        // There should now be fees that are not yet calculated
+
         // There should now be uncollected fees
+        // If getUncollectedFees() does not include the calculated fees, then this will fail
         (uint256 fee0, uint256 fee1) = bunniLens.getUncollectedFees(poolTokenKey);
         assertGt(fee0, 0);
         assertGt(fee1, 0);
@@ -873,6 +880,87 @@ contract BunniSupplyTest is Test {
 
         // Check that the reserves and OHM values are consistent
         assertEq(reserves[0].balances[0], submoduleBunniSupply.getProtocolOwnedLiquidityOhm());
+    }
+
+    function test_getProtocolOwnedLiquidityReserves_singleToken_uncollectedFeesInvariant(
+        uint256 usdcSwapAmount_
+    ) public {
+        // CASE 1: BEFORE SWAP
+        // No fees have been earned, so there shouldn't be any uncollected or cached fees.
+        (uint256 uncollected0_c1, uint256 uncollected1_c1) = bunniLens.getUncollectedFees(
+            poolTokenKey
+        );
+        assertEq(uncollected0_c1, 0, "uncollected0_c1");
+        assertEq(uncollected1_c1, 0, "uncollected1_c1");
+        (, , , uint128 cached0_c1, uint128 cached1_c1) = poolTokenKey.pool.positions(
+            keccak256(
+                abi.encodePacked(address(bunniHub), poolTokenKey.tickLower, poolTokenKey.tickUpper)
+            )
+        );
+        assertEq(cached0_c1, 0, "cached0_c1");
+        assertEq(cached1_c1, 0, "cached1_c1");
+
+        // Swap enough to generate fees, but not enough to trigger a TWAP deviation
+        uint256 usdcSwapAmount = uint256(bound(usdcSwapAmount_, 1_000e6, 10_000e6));
+
+        // Swap USDC for OHM
+        uint256 swapOneAmountOut;
+        {
+            // Mint the USDC
+            usdcToken.mint(address(this), usdcSwapAmount);
+
+            // Swap
+            swapOneAmountOut = _swap(
+                uniswapPool,
+                usdcAddress,
+                ohmAddress,
+                address(this),
+                usdcSwapAmount,
+                OHM_PRICE
+            );
+        }
+
+        // Swap OHM for USDC
+        {
+            // Swap
+            _swap(uniswapPool, ohmAddress, usdcAddress, address(this), swapOneAmountOut, OHM_PRICE);
+        }
+
+        // CASE 2: AFTER THE SWAP + BEFORE THE FEE UPDATE
+        // Fees have been earned, but not yet updated. There should be uncollected fees, but no cached fees.
+        (uint256 uncollected0_c2, uint256 uncollected1_c2) = bunniLens.getUncollectedFees(
+            poolTokenKey
+        );
+        assertGt(uncollected0_c2, 0, "uncollected0_c2");
+        assertGt(uncollected1_c2, 0, "uncollected1_c2");
+        (, , , uint128 cached0_c2, uint128 cached1_c2) = poolTokenKey.pool.positions(
+            keccak256(
+                abi.encodePacked(address(bunniHub), poolTokenKey.tickLower, poolTokenKey.tickUpper)
+            )
+        );
+        assertEq(cached0_c2, 0, "cached0_c2");
+        assertEq(cached1_c2, 0, "cached1_c2");
+
+        (uint256 collected0, uint256 collected1) = bunniHub.updateSwapFees(poolTokenKey);
+        assertEq(collected0, uncollected0_c2, "updateSwapFees0");
+        assertEq(collected1, uncollected1_c2, "updateSwapFees1");
+
+        // CASE 3: AFTER THE SWAP + AFTER THE FEE UPDATE
+        // Fees have been earned and updated. Cached fees should now be equal to uncollected fees.
+        (uint256 uncollected0_c3, uint256 uncollected1_c3) = bunniLens.getUncollectedFees(
+            poolTokenKey
+        );
+        // Check fee invariant between CASE 2 and CASE 3.
+        assertEq(uncollected0_c3, uncollected0_c2, "uncollected0_c3");
+        assertEq(uncollected1_c3, uncollected1_c2, "uncollected1_c3");
+        (, , , uint128 cached0_c3, uint128 cached1_c3) = poolTokenKey.pool.positions(
+            keccak256(
+                abi.encodePacked(address(bunniHub), poolTokenKey.tickLower, poolTokenKey.tickUpper)
+            )
+        );
+        // Check fee invariant between cached fees and uncollected fees.
+        assertEq(cached0_c3, uncollected0_c3, "cached0_c3");
+        assertEq(cached1_c3, uncollected1_c3, "cached1_c3");
     }
 
     function test_getProtocolOwnedLiquidityReserves_singleToken_observationWindow() public {
