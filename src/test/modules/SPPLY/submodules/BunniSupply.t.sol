@@ -835,13 +835,20 @@ contract BunniSupplyTest is Test {
             );
         }
 
+        // Update the swap fees, so that fees are re-calculated
+        vm.prank(policy);
+        bunniManager.updateSwapFees();
+
         // Swap OHM for USDC
         {
             // Swap
             _swap(uniswapPool, ohmAddress, usdcAddress, address(this), swapOneAmountOut, OHM_PRICE);
         }
 
+        // There should now be fees that are not yet calculated
+
         // There should now be uncollected fees
+        // If getUncollectedFees() does not include the calculated fees, then this will fail
         (uint256 fee0, uint256 fee1) = bunniLens.getUncollectedFees(poolTokenKey);
         assertGt(fee0, 0);
         assertGt(fee1, 0);
