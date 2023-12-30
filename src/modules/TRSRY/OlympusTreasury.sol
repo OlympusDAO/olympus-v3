@@ -431,8 +431,17 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         // Validate balance locations and store
         uint256 len = locations_.length;
         for (uint256 i; i < len; ) {
+            // Check that the location is not the zero address
             if (locations_[i] == address(0))
                 revert TRSRY_InvalidParams(1, abi.encode(locations_[i]));
+            // Check that the location is unique
+            for (uint256 j = i + 1; j < len; ) {
+                if (locations_[i] == locations_[j])
+                    revert TRSRY_InvalidParams(1, abi.encode(locations_[i]));
+                unchecked {
+                    ++j;
+                }
+            }
             asset.locations.push(locations_[i]);
             unchecked {
                 ++i;
