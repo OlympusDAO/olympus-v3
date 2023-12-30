@@ -32,12 +32,14 @@ import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {SwapRouter} from "test/lib/UniswapV3/SwapRouter.sol";
 import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import {IBunniHub} from "src/external/bunni/interfaces/IBunniHub.sol";
 
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {BunniHub} from "src/external/bunni/BunniHub.sol";
 import {BunniLens} from "src/external/bunni/BunniLens.sol";
 import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 import {BunniKey} from "src/external/bunni/base/Structs.sol";
+import {BunniHelper} from "libraries/UniswapV3/BunniHelper.sol";
 
 import {UniswapV3PoolLibrary} from "libraries/UniswapV3/PoolLibrary.sol";
 
@@ -3653,5 +3655,93 @@ contract BunniManagerTest is Test {
                 "post-harvest OHM fees  for pool two should be greater"
             );
         }
+    }
+
+    // ---------------------------------
+    // BunniHub Access Control Tests
+    // ---------------------------------
+
+    //  [X] onlyOwner can call
+    //      [X] bunniHub.deposit()
+    //      [X] bunniHub.withdraw()
+    //      [X] bunniHub.updateSwapFees()
+    //      [X] bunniHub.compound()
+    //      [X] bunniHub.deployBunniToken()
+
+    function testRevert_bunniHub_deposit_onlyOwner() public {
+        // Deploy the token
+        vm.prank(policy);
+        IBunniToken bunniToken = bunniManager.deployPoolToken(address(pool));
+
+        // Construct the parameters
+        IBunniHub.DepositParams memory params = IBunniHub.DepositParams({
+            key: _getBunniKey(pool, bunniToken),
+            amount0Desired: 0,
+            amount1Desired: 0,
+            amount0Min: 0,
+            amount1Min: 0,
+            deadline: block.timestamp,
+            recipient: address(TRSRY)
+        });
+
+        // Call as an unauthorized user
+        vm.prank(alice);
+        vm.expectRevert("UNAUTHORIZED");
+        bunniHub.deposit(params);
+    }
+
+    function testRevert_bunniHub_withdraw_onlyOwner() public {
+        // Deploy the token
+        vm.prank(policy);
+        IBunniToken bunniToken = bunniManager.deployPoolToken(address(pool));
+
+        // Construct the parameters
+        IBunniHub.WithdrawParams memory params = IBunniHub.WithdrawParams({
+            key: _getBunniKey(pool, bunniToken),
+            recipient: address(TRSRY),
+            shares: 0,
+            amount0Min: 0,
+            amount1Min: 0,
+            deadline: block.timestamp
+        });
+
+        // Call as an unauthorized user
+        vm.prank(alice);
+        vm.expectRevert("UNAUTHORIZED");
+        bunniHub.withdraw(params);
+    }
+
+    function testRevert_bunniHub_updateSwapFees_onlyOwner() public {
+        // Deploy the token
+        vm.prank(policy);
+        IBunniToken bunniToken = bunniManager.deployPoolToken(address(pool));
+        BunniKey memory key = _getBunniKey(pool, bunniToken);
+
+        // Call as an unauthorized user
+        vm.prank(alice);
+        vm.expectRevert("UNAUTHORIZED");
+        bunniHub.updateSwapFees(key);
+    }
+
+    function testRevert_bunniHub_compound_onlyOwner() public {
+        // Deploy the token
+        vm.prank(policy);
+        IBunniToken bunniToken = bunniManager.deployPoolToken(address(pool));
+        BunniKey memory key = _getBunniKey(pool, bunniToken);
+
+        // Call as an unauthorized user
+        vm.prank(alice);
+        vm.expectRevert("UNAUTHORIZED");
+        bunniHub.compound(key);
+    }
+
+    function testRevert_bunniHub_deployBunniToken_onlyOwner() public {
+        // Get the appropriate BunniKey representing the position
+        BunniKey memory key = BunniHelper.getFullRangeBunniKey(address(pool));
+
+        // Call as an unauthorized user
+        vm.prank(alice);
+        vm.expectRevert("UNAUTHORIZED");
+        bunniHub.deployBunniToken(key);
     }
 }
