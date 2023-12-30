@@ -27,8 +27,9 @@ contract OracleTest is Test {
         uint32 period = 20;
 
         // tickCumulative1 - tickCumulative0 should be < 0
-        int56 tickCumulative0 = int56(bound(tickCumulative0_, MIN_TICK, MAX_TICK));
-        int56 tickCumulative1 = int56(bound(tickCumulative1_, MIN_TICK, MAX_TICK));
+        // Also sufficiently negative to cause the time-weighted tick to be very negative
+        int56 tickCumulative0 = int56(bound(tickCumulative0_, type(int56).max / 4, type(int56).max / 2));
+        int56 tickCumulative1 = int56(bound(tickCumulative1_, type(int56).min / 2, type(int56).min / 4));
         vm.assume(
             tickCumulative1 < tickCumulative0 &&
                 (tickCumulative1 - tickCumulative0) % int56(int32(period)) != 0
@@ -42,9 +43,14 @@ contract OracleTest is Test {
         // Get the time-weighted tick
         int56 expectedTick = (tickCumulative1 - tickCumulative0) / int56(int32(period));
 
-        assertEq(
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3OracleHelper.UniswapV3OracleHelper_TickOutOfBounds.selector,
+            address(uniswapPool),
             expectedTick,
-            UniswapV3OracleHelper.getTimeWeightedTick(address(uniswapPool), period)
+            MIN_TICK,
+            MAX_TICK
         );
+        vm.expectRevert(err);
+        UniswapV3OracleHelper.getTimeWeightedTick(poolAddress, period);
     }
 }
