@@ -96,6 +96,7 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [X] reverts if caller is not permissioned
 //      [X] reverts if moving average is used, but not stored
 //      [X] reverts if a non-functioning configuration is provided
+//      [X] reverts if a submodule call fails when attempting to get the price feeds
 //      [X] all asset data is stored correctly
 //      [X] asset added to assets array
 //      [X] asset added with no strategy, moving average disabled, single feed
@@ -2416,6 +2417,52 @@ contract PriceV2Test is Test {
         // Should have a cached result
         (uint256 price_, ) = price.getPrice(address(weth), PRICEv2.Variant.LAST);
         assertEq(price_, 10e18);
+    }
+
+    function testRevert_addAsset_multiplePriceFeeds_oneSubmoduleCallFails(uint256 nonce_) public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
+            .TwoFeedParams(ohmEthPriceFeed, uint48(24 hours), ethUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](2);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+        feeds[1] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            bytes4(0), // incorrect bytes4 selector
+            abi.encode(ohmFeedTwoParams) // bytes memory params
+        );
+        uint256[] memory obs = _makeRandomObservations(weth, feeds[0], nonce_, uint256(1));
+
+        // Try and add the asset
+        vm.startPrank(writer);
+
+        // Reverts as one price feed call will fail due to invalid selector
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_PriceFeedCallFailed(address)",
+            address(weth)
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(weth), // address asset_
+            true, // bool storeMovingAverage_
+            true, // bool useMovingAverage_
+            uint32(8 hours), // uint32 movingAverageDuration_
+            uint48(block.timestamp), // uint48 lastObservationTime_
+            obs, // uint256[] memory observations_
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getAveragePrice.selector,
+                abi.encode(0) // no params required
+            ), // Component memory strategy_
+            feeds //
+        );
     }
 
     function test_addAsset_strategy_movingAverage_singlePriceFeed(uint256 nonce_) public {

@@ -223,25 +223,6 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(daiEthPrice, priceInt);
     }
 
-    function test_getOneFeedPrice_revertsOnRoundIdMismatchFuzz(uint80 roundId_) public {
-        uint80 roundId = uint80(bound(roundId_, 0, type(uint80).max));
-        vm.assume(roundId != PRICE_FEED_ROUND_ID);
-
-        // Mock answeredInRound > roundId
-        daiEthPriceFeed.setRoundId(roundId);
-
-        bytes memory err = abi.encodeWithSelector(
-            ChainlinkPriceFeeds.Chainlink_FeedRoundMismatch.selector,
-            address(daiEthPriceFeed),
-            roundId,
-            PRICE_FEED_ROUND_ID
-        );
-        vm.expectRevert(err);
-
-        bytes memory params = encodeOneFeedParams(daiEthPriceFeed, UPDATE_THRESHOLD);
-        chainlinkSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
-    }
-
     function test_getOneFeedPrice_priceDecimalsFuzz(uint8 priceDecimals_) public {
         uint8 priceDecimals = uint8(bound(priceDecimals_, MIN_DECIMALS, MAX_DECIMALS));
 
@@ -601,30 +582,6 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, ohmDaiPrice);
     }
 
-    function test_getTwoFeedPriceDiv_revertsOnFirstRoundIdMismatchFuzz(uint80 roundId_) public {
-        uint80 roundId = uint80(bound(roundId_, 0, type(uint80).max));
-        vm.assume(roundId != PRICE_FEED_ROUND_ID);
-
-        // Mock answeredInRound > roundId
-        ohmEthPriceFeed.setRoundId(roundId);
-
-        bytes memory err = abi.encodeWithSelector(
-            ChainlinkPriceFeeds.Chainlink_FeedRoundMismatch.selector,
-            address(ohmEthPriceFeed),
-            roundId,
-            PRICE_FEED_ROUND_ID
-        );
-        vm.expectRevert(err);
-
-        bytes memory params = encodeTwoFeedParams(
-            ohmEthPriceFeed,
-            UPDATE_THRESHOLD,
-            daiEthPriceFeed,
-            UPDATE_THRESHOLD
-        );
-        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
-    }
-
     function test_getTwoFeedPriceDiv_secondRoundIdValid() public {
         // Mock answeredInRound = roundId
         daiEthPriceFeed.setRoundId(PRICE_FEED_ROUND_ID);
@@ -643,30 +600,6 @@ contract ChainlinkPriceFeedsTest is Test {
         );
 
         assertEq(priceInt, ohmDaiPrice);
-    }
-
-    function test_getTwoFeedPriceDiv_revertsOnSecondRoundIdMismatchFuzz(uint80 roundId_) public {
-        uint80 roundId = uint80(bound(roundId_, 0, type(uint80).max));
-        vm.assume(roundId != PRICE_FEED_ROUND_ID);
-
-        // Mock answeredInRound > roundId
-        daiEthPriceFeed.setRoundId(roundId);
-
-        bytes memory err = abi.encodeWithSelector(
-            ChainlinkPriceFeeds.Chainlink_FeedRoundMismatch.selector,
-            address(daiEthPriceFeed),
-            roundId,
-            PRICE_FEED_ROUND_ID
-        );
-        vm.expectRevert(err);
-
-        bytes memory params = encodeTwoFeedParams(
-            ohmEthPriceFeed,
-            UPDATE_THRESHOLD,
-            daiEthPriceFeed,
-            UPDATE_THRESHOLD
-        );
-        chainlinkSubmodule.getTwoFeedPriceDiv(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getTwoFeedPriceDiv_fuzz(
@@ -1112,30 +1045,6 @@ contract ChainlinkPriceFeedsTest is Test {
         assertEq(priceInt, ohmDaiPrice);
     }
 
-    function test_getTwoFeedPriceMul_revertsOnFirstRoundIdMismatchFuzz(uint80 roundId_) public {
-        uint80 roundId = uint80(bound(roundId_, 0, type(uint80).max));
-        vm.assume(roundId != PRICE_FEED_ROUND_ID);
-
-        // Mock answeredInRound > roundId
-        ohmEthPriceFeed.setRoundId(roundId);
-
-        bytes memory err = abi.encodeWithSelector(
-            ChainlinkPriceFeeds.Chainlink_FeedRoundMismatch.selector,
-            address(ohmEthPriceFeed),
-            roundId,
-            PRICE_FEED_ROUND_ID
-        );
-        vm.expectRevert(err);
-
-        bytes memory params = encodeTwoFeedParams(
-            ohmEthPriceFeed,
-            UPDATE_THRESHOLD,
-            ethDaiPriceFeed,
-            UPDATE_THRESHOLD
-        );
-        chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
-    }
-
     function test_getTwoFeedPriceMul_secondRoundIdValid() public {
         // Mock answeredInRound = roundId
         ethDaiPriceFeed.setRoundId(PRICE_FEED_ROUND_ID);
@@ -1154,30 +1063,6 @@ contract ChainlinkPriceFeedsTest is Test {
         );
 
         assertEq(priceInt, ohmDaiPrice);
-    }
-
-    function test_getTwoFeedPriceMul_revertsOnSecondRoundIdMismatchFuzz(uint80 roundId_) public {
-        uint80 roundId = uint80(bound(roundId_, 0, type(uint80).max));
-        vm.assume(roundId != PRICE_FEED_ROUND_ID);
-
-        // Mock answeredInRound > roundId
-        ethDaiPriceFeed.setRoundId(roundId);
-
-        bytes memory err = abi.encodeWithSelector(
-            ChainlinkPriceFeeds.Chainlink_FeedRoundMismatch.selector,
-            address(ethDaiPriceFeed),
-            roundId,
-            PRICE_FEED_ROUND_ID
-        );
-        vm.expectRevert(err);
-
-        bytes memory params = encodeTwoFeedParams(
-            ohmEthPriceFeed,
-            UPDATE_THRESHOLD,
-            ethDaiPriceFeed,
-            UPDATE_THRESHOLD
-        );
-        chainlinkSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
     function test_getTwoFeedPriceMul_priceDecimalsFuzz(uint8 priceDecimals_) public {

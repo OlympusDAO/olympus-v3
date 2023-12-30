@@ -67,38 +67,43 @@ contract BunniLens is IBunniLens {
     /// @inheritdoc IBunniLens
     function getUncollectedFees(
         BunniKey calldata key
-    ) external view override returns (uint256 fee0, uint256 fee1) {
-        // TODO write tests
+    ) external view override returns (uint256, uint256) {
         (, int24 tick, , , , , ) = key.pool.slot0();
+        (
+            uint128 liquidity,
+            uint256 feeGrowthInside0Last,
+            uint256 feeGrowthInside1Last,
+            uint128 cached0,
+            uint128 cached1
+        ) = key.pool.positions(
+                keccak256(abi.encodePacked(address(hub), key.tickLower, key.tickUpper))
+            );
         (, , uint256 feeGrowthOutside0Lower, uint256 feeGrowthOutside1Lower, , , , ) = key
             .pool
             .ticks(key.tickLower);
         (, , uint256 feeGrowthOutside0Upper, uint256 feeGrowthOutside1Upper, , , , ) = key
             .pool
             .ticks(key.tickUpper);
-        (uint128 liquidity, uint256 feeGrowthInside0Last, uint256 feeGrowthInside1Last, , ) = key
-            .pool
-            .positions(keccak256(abi.encodePacked(address(hub), key.tickLower, key.tickUpper)));
-        uint256 feeGrowthGlobal = key.pool.feeGrowthGlobal0X128();
 
-        fee0 = _computeFeesEarned(
+        uint256 uncollected0 = _computeFeesEarned(
             key,
             tick,
             liquidity,
             feeGrowthInside0Last,
             feeGrowthOutside0Lower,
             feeGrowthOutside0Upper,
-            feeGrowthGlobal
+            true
         );
-        fee1 = _computeFeesEarned(
+        uint256 uncollected1 = _computeFeesEarned(
             key,
             tick,
             liquidity,
             feeGrowthInside1Last,
             feeGrowthOutside1Lower,
             feeGrowthOutside1Upper,
-            feeGrowthGlobal
+            false
         );
+        return (uncollected0 + cached0, uncollected1 + cached1);
     }
 
     /// @notice Cast a uint256 to a uint112, revert on overflow
@@ -140,8 +145,11 @@ contract BunniLens is IBunniLens {
         uint256 feeGrowthInsideLast,
         uint256 feeGrowthOutsideLower,
         uint256 feeGrowthOutsideUpper,
-        uint256 feeGrowthGlobal
-    ) internal pure returns (uint256 fee) {
+        bool computeFee0
+    ) internal view returns (uint256 fee) {
+        uint256 feeGrowthGlobal = computeFee0
+            ? key.pool.feeGrowthGlobal0X128()
+            : key.pool.feeGrowthGlobal1X128();
         unchecked {
             // Calculate fee growth below
             uint256 feeGrowthBelow;

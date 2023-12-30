@@ -22,6 +22,7 @@ abstract contract CustomSupply is SupplySubmodule {
     event CollateralizedValueUpdated(uint256 value);
     event ProtocolOwnedBorrowableValueUpdated(uint256 value);
     event ProtocolOwnedLiquidityValueUpdated(uint256 value);
+    event ProtocolOwnedTreasuryValueUpdated(uint256 value);
     event SourceValueUpdated(address value);
 
     // ========== STATE VARIABLES ========== //
@@ -126,6 +127,12 @@ abstract contract CustomSupply is SupplySubmodule {
         _protocolOwnedLiquidityOhm = value_;
 
         emit ProtocolOwnedLiquidityValueUpdated(value_);
+    }
+
+    function setProtocolOwnedTreasuryOhm(uint256 value_) external onlyParent {
+        _protocolOwnedTreasuryOhm = value_;
+
+        emit ProtocolOwnedTreasuryValueUpdated(value_);
     }
 
     function setSource(address source_) external onlyParent {

@@ -431,8 +431,17 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         // Validate balance locations and store
         uint256 len = locations_.length;
         for (uint256 i; i < len; ) {
+            // Check that the location is not the zero address
             if (locations_[i] == address(0))
                 revert TRSRY_InvalidParams(1, abi.encode(locations_[i]));
+            // Check that the location is unique
+            for (uint256 j = i + 1; j < len; ) {
+                if (locations_[i] == locations_[j])
+                    revert TRSRY_InvalidParams(1, abi.encode(locations_[i]));
+                unchecked {
+                    ++j;
+                }
+            }
             asset.locations.push(locations_[i]);
             unchecked {
                 ++i;
@@ -461,16 +470,6 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
                 assets.pop();
                 break;
             }
-            unchecked {
-                ++i;
-            }
-        }
-
-        // Remove locations
-        len = asset.locations.length;
-        for (uint256 i; i < len; ) {
-            asset.locations[i] = asset.locations[len - 1];
-            asset.locations.pop();
             unchecked {
                 ++i;
             }
@@ -568,8 +567,28 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         // Check if the category group exists
         if (!_categoryGroupExists(group_)) revert TRSRY_CategoryGroupDoesNotExist(group_);
 
+        // Remove categories within group
+        Category[] memory categories = groupToCategories[group_];
+        uint256 len = categories.length;
+        for (uint256 i; i < len; ) {
+            // Remove asset categorization
+            address[] memory categoryAssets = getAssetsByCategory(categories[i]);
+            uint256 assetLen = categoryAssets.length;
+            for (uint256 j; j < assetLen; ) {
+                categorization[categoryAssets[j]][group_] = toCategory(bytes32(0));
+                unchecked {
+                    ++j;
+                }
+            }
+            // Remove category
+            categoryToGroup[categories[i]] = toCategoryGroup(bytes32(0));
+            unchecked {
+                ++i;
+            }
+        }
+
         // Remove category group
-        uint256 len = categoryGroups.length;
+        len = categoryGroups.length;
         for (uint256 i; i < len; ) {
             if (fromCategoryGroup(categoryGroups[i]) == fromCategoryGroup(group_)) {
                 categoryGroups[i] = categoryGroups[len - 1];
@@ -580,6 +599,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
                 ++i;
             }
         }
+        delete groupToCategories[group_];
     }
 
     /// @inheritdoc TRSRYv1_1
@@ -613,6 +633,16 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         // Check if the category exists by seeing if it has a non-zero category group
         CategoryGroup group = categoryToGroup[category_];
         if (fromCategoryGroup(group) == bytes32(0)) revert TRSRY_CategoryDoesNotExist(category_);
+
+        // Remove asset categorization
+        address[] memory categoryAssets = getAssetsByCategory(category_);
+        uint256 assetLen = categoryAssets.length;
+        for (uint256 i; i < assetLen; ) {
+            categorization[categoryAssets[i]][group] = toCategory(bytes32(0));
+            unchecked {
+                ++i;
+            }
+        }
 
         // Remove category data
         categoryToGroup[category_] = toCategoryGroup(bytes32(0));

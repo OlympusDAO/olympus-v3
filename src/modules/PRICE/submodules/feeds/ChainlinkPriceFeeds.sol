@@ -42,7 +42,6 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
         int256 priceInt;
         uint256 startedAt;
         uint256 updatedAt;
-        uint80 answeredInRound;
     }
 
     // ========== ERRORS ========== //
@@ -61,15 +60,6 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @param feed_            The address of the price feed
     /// @param price_           The price returned by the price feed
     error Chainlink_FeedPriceInvalid(address feed_, int256 price_);
-
-    /// @notice                 The round returned by the price feed is invalid
-    /// @dev                    This could be because:
-    /// @dev                    - The round ID is different to the round it was answered in
-    ///
-    /// @param feed_            The address of the price feed
-    /// @param roundId_         The round ID returned by the price feed
-    /// @param answeredInRound_ The round ID the price was answered in
-    error Chainlink_FeedRoundMismatch(address feed_, uint80 roundId_, uint80 answeredInRound_);
 
     /// @notice                     The data returned by the price feed is stale
     /// @dev                        This could be because:
@@ -133,7 +123,6 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @dev                            This function will revert if:
     /// @dev                            - Answer <= 0
     /// @dev                            - Updated at timestamp before the update threshold from the current time
-    /// @dev                            - Answered in round ID different to the round ID
     ///
     /// @param feed_                    Chainlink price feed
     /// @param roundData                The round data returned by the price feed
@@ -153,13 +142,6 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
                 address(feed_),
                 roundData.updatedAt,
                 blockTimestamp - paramsUpdateThreshold
-            );
-
-        if (roundData.answeredInRound != roundData.roundId)
-            revert Chainlink_FeedRoundMismatch(
-                address(feed_),
-                roundData.roundId,
-                roundData.answeredInRound
             );
     }
 
@@ -184,9 +166,9 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
                 int256 priceInt,
                 uint256 startedAt,
                 uint256 updatedAt,
-                uint80 answeredInRound
+                uint80
             ) {
-                roundData = FeedRoundData(roundId, priceInt, startedAt, updatedAt, answeredInRound);
+                roundData = FeedRoundData(roundId, priceInt, startedAt, updatedAt);
             } catch (bytes memory) {
                 revert Chainlink_FeedInvalid(address(feed_));
             }
@@ -203,12 +185,11 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @dev                    - PRICE's priceDecimals or the feed's decimals are out of bounds and would lead to an overflow
     /// @dev                    - The price feed's results are invalid
     ///
-    /// @param asset_           Unused
     /// @param outputDecimals_  The number of decimals to return the price in
     /// @param params_          Chainlink pool parameters of type `OneFeedParams`
     /// @return                 Price in the scale of `outputDecimals_`
     function getOneFeedPrice(
-        address asset_,
+        address,
         uint8 outputDecimals_,
         bytes calldata params_
     ) external view returns (uint256) {
