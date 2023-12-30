@@ -1194,7 +1194,8 @@ contract TRSRYv1_1Test is Test {
 
     function testCorrectness_addCategoryGroupAddsGroup(bytes32 groupName_) public {
         vm.assume(
-            groupName_ != bytes32("liquidity-preference") &&
+            groupName_ != bytes32(0) &&
+                groupName_ != bytes32("liquidity-preference") &&
                 groupName_ != bytes32("value-baskets") &&
                 groupName_ != bytes32("market-sensitivity")
         );
@@ -1326,7 +1327,8 @@ contract TRSRYv1_1Test is Test {
 
     function testCorrectness_addCategoryStoresCorrectlyZeroPrior(bytes32 category_) public {
         vm.assume(
-            category_ != bytes32("liquid") &&
+            category_ != bytes32(0) &&
+                category_ != bytes32("liquid") &&
                 category_ != bytes32("illiquid") &&
                 category_ != bytes32("reserves") &&
                 category_ != bytes32("strategic") &&
@@ -1356,7 +1358,8 @@ contract TRSRYv1_1Test is Test {
 
     function testCorrectness_addCategoryStoresCorrectlyOnePrior(bytes32 category_) public {
         vm.assume(
-            category_ != bytes32("test") &&
+            category_ != bytes32(0) &&
+                category_ != bytes32("test") &&
                 category_ != bytes32("liquid") &&
                 category_ != bytes32("illiquid") &&
                 category_ != bytes32("reserves") &&
@@ -1389,7 +1392,8 @@ contract TRSRYv1_1Test is Test {
 
     function testCorrectness_addCategoryStoresCorrectlyManyPrior(bytes32 category_) public {
         vm.assume(
-            category_ != bytes32("test1") &&
+            category_ != bytes32(0) &&
+                category_ != bytes32("test1") &&
                 category_ != bytes32("test2") &&
                 category_ != bytes32("test3") &&
                 category_ != bytes32("liquid") &&
