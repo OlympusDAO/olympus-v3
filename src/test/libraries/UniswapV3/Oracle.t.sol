@@ -23,17 +23,11 @@ contract OracleTest is Test {
         int56 tickCumulative0_,
         int56 tickCumulative1_
     ) public {
-        // See: https://github.com/Uniswap/v3-periphery/blob/697c2474757ea89fec12a4e6db16a574fe259610/contracts/libraries/OracleLibrary.sol#L35
         uint32 period = 20;
 
         // tickCumulative1 - tickCumulative0 should be < 0
-        // Also sufficiently negative to cause the time-weighted tick to be very negative
-        int56 tickCumulative0 = int56(
-            bound(tickCumulative0_, type(int56).max / 4, type(int56).max / 2)
-        );
-        int56 tickCumulative1 = int56(
-            bound(tickCumulative1_, type(int56).min / 2, type(int56).min / 4)
-        );
+        int56 tickCumulative0 = int56(bound(tickCumulative0_, MIN_TICK, MAX_TICK));
+        int56 tickCumulative1 = int56(bound(tickCumulative1_, MIN_TICK, MAX_TICK));
         vm.assume(
             tickCumulative1 < tickCumulative0 &&
                 (tickCumulative1 - tickCumulative0) % int56(int32(period)) != 0
@@ -44,17 +38,36 @@ contract OracleTest is Test {
         tickCumulatives[1] = tickCumulative1;
         uniswapPool.setTickCumulatives(tickCumulatives);
 
+        // Round down towards negative infinity
+        // See: https://github.com/Uniswap/v3-periphery/blob/697c2474757ea89fec12a4e6db16a574fe259610/contracts/libraries/OracleLibrary.sol#L35
+        int56 expectedTick = (tickCumulative1 - tickCumulative0) / int56(int32(period)) - 1;
+
         // Get the time-weighted tick
+        assertEq(
+            expectedTick,
+            UniswapV3OracleHelper.getTimeWeightedTick(address(uniswapPool), period)
+        );
+    }
+
+    function test_getTimeWeightedTick(int56 tickCumulative0_, int56 tickCumulative1_) public {
+        uint32 period = 20;
+
+        int56 tickCumulative0 = int56(bound(tickCumulative0_, MIN_TICK, MAX_TICK));
+        int56 tickCumulative1 = int56(bound(tickCumulative1_, MIN_TICK, MAX_TICK));
+        vm.assume(tickCumulative1 > tickCumulative0);
+
+        int56[] memory tickCumulatives = new int56[](2);
+        tickCumulatives[0] = tickCumulative0;
+        tickCumulatives[1] = tickCumulative1;
+        uniswapPool.setTickCumulatives(tickCumulatives);
+
+        // Round down towards negative infinity
         int56 expectedTick = (tickCumulative1 - tickCumulative0) / int56(int32(period));
 
-        bytes memory err = abi.encodeWithSelector(
-            UniswapV3OracleHelper.UniswapV3OracleHelper_TickOutOfBounds.selector,
-            address(uniswapPool),
+        // Get the time-weighted tick
+        assertEq(
             expectedTick,
-            MIN_TICK,
-            MAX_TICK
+            UniswapV3OracleHelper.getTimeWeightedTick(address(uniswapPool), period)
         );
-        vm.expectRevert(err);
-        UniswapV3OracleHelper.getTimeWeightedTick(poolAddress, period);
     }
 }
