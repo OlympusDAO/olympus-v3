@@ -31,7 +31,7 @@ import {LiquidityManagement} from "./uniswap/LiquidityManagement.sol";
 /// @dev    The following changes were made from the original source code:
 /// @dev    - Use solmate ERC20 and SafeTransferLib instead of the local IERC20 and SafeTransferLib
 /// @dev    - updateSwapFees() function added
-/// @dev    - added onlyOwner modifier to all state-changing functions to ensure they are called from BunniManager
+/// @dev    - added onlyOwner to all state-changing functions to ensure they are only called by BunniManager
 contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagement {
     uint256 internal constant WAD = 1e18;
     uint256 internal constant MAX_PROTOCOL_FEE = 5e17;
