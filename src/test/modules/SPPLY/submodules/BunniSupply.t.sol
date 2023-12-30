@@ -958,6 +958,7 @@ contract BunniSupplyTest is Test {
         assertEq(cached0_c2, 0, "cached0_c2");
         assertEq(cached1_c2, 0, "cached1_c2");
 
+        vm.prank(address(bunniManager));
         (uint256 collected0, uint256 collected1) = bunniHub.updateSwapFees(poolTokenKey);
         assertEq(collected0, uncollected0_c2, "updateSwapFees0");
         assertEq(collected1, uncollected1_c2, "updateSwapFees1");
