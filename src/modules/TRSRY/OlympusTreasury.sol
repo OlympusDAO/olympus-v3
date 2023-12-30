@@ -365,45 +365,6 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
         return balance;
     }
 
-    /// @inheritdoc TRSRYv1_1
-    /// @dev        This function reverts if:
-    /// @dev        - `category_` is invalid
-    /// @dev        - `getAssetsByCategory()` reverts
-    function getCategoryBalance(
-        Category category_,
-        Variant variant_
-    ) external view override returns (uint256, uint48) {
-        // Get category group and check that it is valid
-        CategoryGroup group = categoryToGroup[category_];
-        if (fromCategoryGroup(group) == bytes32(0))
-            revert TRSRY_InvalidParams(0, abi.encode(category_));
-
-        // Get category assets
-        address[] memory categoryAssets = getAssetsByCategory(category_);
-
-        // Get balance for each asset in the category and add to total
-        uint256 len = categoryAssets.length;
-        uint256 balance;
-        uint48 time;
-        for (uint256 i; i < len; ) {
-            (uint256 assetBalance, uint48 assetTime) = getAssetBalance(categoryAssets[i], variant_);
-            balance += assetBalance;
-
-            // Get the most outdated time
-            if (i == 0) {
-                time = assetTime;
-            } else if (assetTime < time) {
-                time = assetTime;
-            }
-
-            unchecked {
-                ++i;
-            }
-        }
-
-        return (balance, time);
-    }
-
     // ========== DATA MANAGEMENT ========== //
 
     /// @inheritdoc TRSRYv1_1
