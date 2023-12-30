@@ -1938,7 +1938,7 @@ contract PriceV2Test is Test {
         observations[1] = 5e18;
 
         // Add an asset that uses the moving average
-        // The strategy is the average price of the price feeds
+        // The strategy is the average price of the single price feed
         // 2 observations are stored at any time
         vm.startPrank(writer);
         ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
@@ -1975,15 +1975,20 @@ contract PriceV2Test is Test {
         price.storePrice(address(onema));
 
         // Check the last price - what was returned by the price feed
+        uint256 t1_expectedPrice = (5e18 + 5e18) / 2;
         (uint256 t1_lastPrice, ) = price.getPrice(address(onema), PRICEv2.Variant.LAST);
-        assertEq(t1_lastPrice, 5e18, "t1: last price did not match");
+        assertEq(t1_lastPrice, t1_expectedPrice, "t1: last price did not match");
 
         // Check MA
         (uint256 t1_movingAverage, ) = price.getPrice(
             address(onema),
             PRICEv2.Variant.MOVINGAVERAGE
         );
-        assertEq(t1_movingAverage, (5e18 + 5e18) / 2, "t1: moving average did not match");
+        assertEq(
+            t1_movingAverage,
+            (5e18 + t1_expectedPrice) / 2,
+            "t1: moving average did not match"
+        );
 
         // Warp forward in time and store a different price (10e8)
         vm.warp(uint256(start) + 2);
@@ -1992,6 +1997,7 @@ contract PriceV2Test is Test {
         price.storePrice(address(onema));
 
         // Check the last price - what was returned by the price feed
+        uint256 t2_expectedPrice = (10e18 + 10e18) / 2;
         (uint256 t2_lastPrice, ) = price.getPrice(address(onema), PRICEv2.Variant.LAST);
         assertEq(t2_lastPrice, 10e18, "t2: last price did not match");
 
@@ -2000,7 +2006,100 @@ contract PriceV2Test is Test {
             address(onema),
             PRICEv2.Variant.MOVINGAVERAGE
         );
-        assertEq(t2_movingAverage, (5e18 + 10e18) / 2, "t2: moving average did not match");
+        assertEq(
+            t2_movingAverage,
+            (t1_expectedPrice + t2_expectedPrice) / 2,
+            "t2: moving average did not match"
+        );
+    }
+
+    function test_storePrice_twoPriceFeeds_excludesMovingAverage() public {
+        // Initial observations that return the same value as the Chainlink price feeds
+        uint256[] memory observations = new uint256[](2);
+        observations[0] = 5e18;
+        observations[1] = 5e18;
+
+        // Add an asset that uses the moving average
+        // The strategy is the average price of the two price feeds
+        // 2 observations are stored at any time
+        vm.startPrank(writer);
+        ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
+            .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
+        ChainlinkPriceFeeds.OneFeedParams memory ohmUsdFeedParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](2);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(onemaFeedParams) // bytes memory params_
+        );
+        feeds[1] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(ohmUsdFeedParams) // bytes memory params_
+        );
+
+        price.addAsset(
+            address(onema), // address asset_
+            true, // bool storeMovingAverage_ // track ONEMA MA
+            true, // bool useMovingAverage_ // use MA in strategy
+            uint32(observations.length) * OBSERVATION_FREQUENCY, // uint32 movingAverageDuration_
+            uint48(block.timestamp), // uint48 lastObservationTime_
+            observations, // uint256[] memory observations_
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getAveragePrice.selector,
+                abi.encode(0) // no params required
+            ), // Component memory strategy_
+            feeds // Component[] feeds_
+        );
+
+        vm.stopPrank();
+
+        // Warp forward in time and store a new price
+        uint48 start = uint48(block.timestamp);
+        vm.warp(uint256(start) + 1);
+        vm.prank(writer);
+        price.storePrice(address(onema));
+
+        // Check the last price - what was returned by the two price feeds
+        uint256 t1_expectedPrice = (5e18 + 10e18) / 2;
+        (uint256 t1_lastPrice, ) = price.getPrice(address(onema), PRICEv2.Variant.LAST);
+        assertEq(t1_lastPrice, t1_expectedPrice, "t1: last price did not match");
+
+        // Check MA
+        (uint256 t1_movingAverage, ) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.MOVINGAVERAGE
+        );
+        assertEq(
+            t1_movingAverage,
+            (5e18 + t1_expectedPrice) / 2,
+            "t1: moving average did not match"
+        );
+
+        // Warp forward in time and store a new price
+        vm.warp(uint256(start) + 2);
+        onemaUsdPriceFeed.setLatestAnswer(int256(20e8));
+        vm.prank(writer);
+        price.storePrice(address(onema));
+
+        // Check the last price - what was returned by the price feed
+        uint256 t2_expectedPrice = (10e18 + 20e18) / 2;
+        (uint256 t2_lastPrice, ) = price.getPrice(address(onema), PRICEv2.Variant.LAST);
+        assertEq(t2_lastPrice, t2_expectedPrice, "t2: last price did not match");
+
+        // Check MA
+        (uint256 t2_movingAverage, ) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.MOVINGAVERAGE
+        );
+        assertEq(
+            t2_movingAverage,
+            (t1_expectedPrice + t2_expectedPrice) / 2,
+            "t2: moving average did not match"
+        );
     }
 
     // ========== addAsset ========== //

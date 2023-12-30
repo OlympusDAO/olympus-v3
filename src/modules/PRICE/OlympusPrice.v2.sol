@@ -142,7 +142,7 @@ contract OlympusPricev2 is PRICEv2 {
         // Iterate through feeds to get prices to aggregate with strategy
         Component[] memory feeds = abi.decode(asset.feeds, (Component[]));
         uint256 numFeeds = feeds.length;
-        uint256[] memory prices = asset.useMovingAverage
+        uint256[] memory prices = asset.useMovingAverage && includeMovingAverage_
             ? new uint256[](numFeeds + 1)
             : new uint256[](numFeeds);
         uint8 _decimals = decimals; // cache in memory to save gas
