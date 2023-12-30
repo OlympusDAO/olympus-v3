@@ -1100,6 +1100,47 @@ contract PriceV2Test is Test {
 
     // =========  getPrice (with moving average variant) ========= //
 
+    function test_getPrice_movingAverage_singleObservation() public {
+        ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
+            .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(onemaFeedParams) // bytes memory params_
+        );
+
+        uint256[] memory observations = new uint256[](1);
+        observations[0] = 5e18;
+
+        // Expect an error
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_ParamsInvalidObservationCount.selector,
+            address(onema),
+            1,
+            1,
+            1
+        );
+        vm.expectRevert(err);
+
+        vm.prank(writer);
+        price.addAsset(
+            address(onema), // address asset_
+            true, // bool storeMovingAverage_ // track ONEMA MA
+            true, // bool useMovingAverage_ // use MA in strategy
+            uint32(observations.length) * OBSERVATION_FREQUENCY, // uint32 movingAverageDuration_
+            uint48(block.timestamp), // uint48 lastObservationTime_
+            observations, // uint256[] memory observations_
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                abi.encode(0) // no params required
+            ), // Component memory strategy_
+            feeds // Component[] feeds_
+        );
+    }
+
     function test_getPrice_movingAverage_minimumObservations(uint256 nonce_) public {
         // Add base asset with only 2 observations stored
         _addOneMAAsset(nonce_, 2);
