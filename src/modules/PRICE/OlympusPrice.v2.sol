@@ -679,7 +679,7 @@ contract OlympusPricev2 is PRICEv2 {
                 );
 
             uint16 numObservations = uint16(movingAverageDuration_ / observationFrequency);
-            if (observations_.length != numObservations)
+            if (observations_.length != numObservations || numObservations < 2)
                 revert PRICE_ParamsInvalidObservationCount(
                     asset_,
                     observations_.length,
