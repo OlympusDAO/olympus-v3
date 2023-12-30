@@ -1036,7 +1036,7 @@ contract TRSRYv1_1Test is Test {
         TRSRY.addAssetLocation(address(reserve), address(1));
     }
 
-    function testRevert_addAssetLocation_AddresZero() public {
+    function testRevert_addAssetLocation_AddressZero() public {
         // Add an asset
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), new address[](0));
@@ -1045,6 +1045,30 @@ contract TRSRYv1_1Test is Test {
         vm.expectRevert();
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), address(0));
+    }
+
+    function testRevert_addAssetLocation_AddressExists() public {
+        address reserveAddress = address(reserve);
+        address addressOne = address(1);
+
+        address[] memory locations = new address[](2);
+        locations[0] = addressOne;
+        locations[1] = address(2);
+
+        // Add an asset
+        vm.prank(godmode);
+        TRSRY.addAsset(reserveAddress, locations);
+
+        /// Try to add addressOne as the location
+        bytes memory err = abi.encodeWithSelector(
+            TRSRYv1_1.TRSRY_InvalidParams.selector,
+            1,
+            abi.encode(addressOne)
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.addAssetLocation(reserveAddress, addressOne);
     }
 
     // -- Test: removeAssetLocation -------------------------------
