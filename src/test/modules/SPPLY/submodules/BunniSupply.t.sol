@@ -578,6 +578,15 @@ contract BunniSupplyTest is Test {
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) /
             int32(observationWindow);
+        // Adjust for negative rounding
+        if (
+            OHM_USDC_TICK_CUMULATIVE_1 < OHM_USDC_TICK_CUMULATIVE_0 &&
+            (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) %
+                int56(int32(observationWindow)) !=
+            0
+        ) {
+            timeWeightedTick -= 1;
+        }
 
         uint256 twapRatio = OracleLibrary.getQuoteAtTick(
             int24(timeWeightedTick),
@@ -724,6 +733,14 @@ contract BunniSupplyTest is Test {
         // 11436143
         int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) /
             int32(TWAP_OBSERVATION_WINDOW);
+        // Adjust for negative rounding
+        if (
+            tickCumulative1_ < tickCumulative0_ &&
+            (tickCumulative1_ - tickCumulative0_) % int56(int32(TWAP_OBSERVATION_WINDOW)) != 0
+        ) {
+            timeWeightedTick -= 1;
+        }
+
         uint256 twapRatio = OracleLibrary.getQuoteAtTick(
             int24(timeWeightedTick),
             uint128(10 ** 9), // token0 (OHM) decimals
@@ -941,6 +958,7 @@ contract BunniSupplyTest is Test {
         assertEq(cached0_c2, 0, "cached0_c2");
         assertEq(cached1_c2, 0, "cached1_c2");
 
+        vm.prank(address(bunniManager));
         (uint256 collected0, uint256 collected1) = bunniHub.updateSwapFees(poolTokenKey);
         assertEq(collected0, uncollected0_c2, "updateSwapFees0");
         assertEq(collected1, uncollected1_c2, "updateSwapFees1");
@@ -991,6 +1009,16 @@ contract BunniSupplyTest is Test {
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) /
             int32(observationWindow);
+        // Adjust for negative rounding
+        if (
+            OHM_USDC_TICK_CUMULATIVE_1 < OHM_USDC_TICK_CUMULATIVE_0 &&
+            (OHM_USDC_TICK_CUMULATIVE_1 - OHM_USDC_TICK_CUMULATIVE_0) %
+                int56(int32(observationWindow)) !=
+            0
+        ) {
+            timeWeightedTick -= 1;
+        }
+
         uint256 twapRatio = OracleLibrary.getQuoteAtTick(
             int24(timeWeightedTick),
             uint128(10 ** 9), // token0 (OHM) decimals
@@ -1165,6 +1193,14 @@ contract BunniSupplyTest is Test {
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) /
             int32(TWAP_OBSERVATION_WINDOW);
+        // Adjust for negative rounding
+        if (
+            tickCumulative1_ < tickCumulative0_ &&
+            (tickCumulative1_ - tickCumulative0_) % int56(int32(TWAP_OBSERVATION_WINDOW)) != 0
+        ) {
+            timeWeightedTick -= 1;
+        }
+
         uint256 twapRatio = OracleLibrary.getQuoteAtTick(
             int24(timeWeightedTick),
             uint128(10 ** 9), // token0 (OHM) decimals

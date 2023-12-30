@@ -643,6 +643,14 @@ contract BunniPriceTest is Test {
         // Calculate the expected TWAP price
         int56 timeWeightedTick = (tickCumulative1_ - tickCumulative0_) /
             int32(TWAP_OBSERVATION_WINDOW);
+        // Adjust for negative rounding
+        if (
+            tickCumulative1_ < tickCumulative0_ &&
+            (tickCumulative1_ - tickCumulative0_) % int56(int32(TWAP_OBSERVATION_WINDOW)) != 0
+        ) {
+            timeWeightedTick -= 1;
+        }
+
         uint256 twapRatio = OracleLibrary.getQuoteAtTick(
             int24(timeWeightedTick),
             uint128(10 ** 9), // token0 (OHM) decimals

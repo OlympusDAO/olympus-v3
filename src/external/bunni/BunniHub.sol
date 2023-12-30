@@ -31,6 +31,7 @@ import {LiquidityManagement} from "./uniswap/LiquidityManagement.sol";
 /// @dev    The following changes were made from the original source code:
 /// @dev    - Use solmate ERC20 and SafeTransferLib instead of the local IERC20 and SafeTransferLib
 /// @dev    - updateSwapFees() function added
+/// @dev    - added onlyOwner to all state-changing functions to ensure they are only called by BunniManager
 contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagement {
     uint256 internal constant WAD = 1e18;
     uint256 internal constant MAX_PROTOCOL_FEE = 5e17;
@@ -75,6 +76,7 @@ contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagemen
         payable
         virtual
         override
+        onlyOwner
         checkDeadline(params.deadline)
         returns (uint256 shares, uint128 addedLiquidity, uint256 amount0, uint256 amount1)
     {
@@ -112,6 +114,7 @@ contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagemen
         external
         virtual
         override
+        onlyOwner
         checkDeadline(params.deadline)
         returns (uint128 removedLiquidity, uint256 amount0, uint256 amount1)
     {
@@ -165,7 +168,7 @@ contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagemen
     /// @inheritdoc IBunniHub
     function updateSwapFees(
         BunniKey calldata key
-    ) external virtual override returns (uint256 swapFee0, uint256 swapFee1) {
+    ) external virtual override onlyOwner returns (uint256 swapFee0, uint256 swapFee1) {
         key.pool.burn(key.tickLower, key.tickUpper, 0);
         (, , , uint128 cachedFeesOwed0, uint128 cachedFeesOwed1) = key.pool.positions(
             keccak256(abi.encodePacked(address(this), key.tickLower, key.tickUpper))
@@ -177,7 +180,13 @@ contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagemen
     /// @inheritdoc IBunniHub
     function compound(
         BunniKey calldata key
-    ) external virtual override returns (uint128 addedLiquidity, uint256 amount0, uint256 amount1) {
+    )
+        external
+        virtual
+        override
+        onlyOwner
+        returns (uint128 addedLiquidity, uint256 amount0, uint256 amount1)
+    {
         uint256 protocolFee_ = protocolFee;
 
         // trigger an update of the position fees owed snapshots if it has any liquidity
@@ -289,7 +298,9 @@ contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagemen
     }
 
     /// @inheritdoc IBunniHub
-    function deployBunniToken(BunniKey calldata key) public override returns (IBunniToken token) {
+    function deployBunniToken(
+        BunniKey calldata key
+    ) public override onlyOwner returns (IBunniToken token) {
         bytes32 bunniKeyHash = keccak256(abi.encode(key));
 
         token = IBunniToken(
