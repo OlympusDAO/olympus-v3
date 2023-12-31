@@ -461,6 +461,7 @@ contract OlympusSupply is SPPLYv1 {
         // If category requires data from submodules, it must be calculated and added
         if (data.useSubmodules) {
             // Iterate through submodules and add their value to the total
+            // The submodule selector is mandatory if submodules are enabled, so no selector check is needed
             // Should not include any supply that is retrievable via a simple balance lookup, which is handled by locations above
             len = submodules.length;
             for (uint256 i; i < len; ) {
@@ -509,7 +510,9 @@ contract OlympusSupply is SPPLYv1 {
         CategoryData memory data = categoryData[category_];
         uint256 categorySubmodSources;
         // If category requires data from submodules, count all submodules and their sources.
-        len = (data.useSubmodules) ? submodules.length : 0;
+        len = (data.useSubmodules && data.submoduleReservesSelector != bytes4(0))
+            ? submodules.length
+            : 0;
         for (uint256 i; i < len; ) {
             address submodule = address(_getSubmoduleIfInstalled(submodules[i]));
             (bool success, bytes memory returnData) = submodule.staticcall(
