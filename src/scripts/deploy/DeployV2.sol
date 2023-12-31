@@ -309,7 +309,7 @@ contract OlympusDeploy is Script {
         // Bophades Modules
         PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPrice"));
         PRICEv2 = OlympusPricev2(envAddress("olympus.modules.OlympusPricev2"));
-        RANGE = OlympusRange(envAddress("olympus.modules.OlympusRange"));
+        RANGE = OlympusRange(envAddress("olympus.modules.OlympusRangeV2"));
         TRSRY = OlympusTreasury(envAddress("olympus.modules.OlympusTreasury"));
         MINTR = OlympusMinter(envAddress("olympus.modules.OlympusMinter"));
         INSTR = OlympusInstructions(envAddress("olympus.modules.OlympusInstructions"));
