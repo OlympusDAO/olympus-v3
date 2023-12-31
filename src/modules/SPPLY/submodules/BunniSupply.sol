@@ -52,7 +52,7 @@ contract BunniSupply is SupplySubmodule {
     ///
     /// @param token_               The address of the token
     /// @param maximumDeviationBps_ The maximum allowed value
-    /// @param actualDeviationBps_  The maximum deviation from the TWAP in basis points
+    /// @param actualDeviationBps_  The actual deviation from the TWAP in basis points
     error BunniSupply_Params_InvalidTwapMaxDeviationBps(
         address token_,
         uint16 maximumDeviationBps_,
