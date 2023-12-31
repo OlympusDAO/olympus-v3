@@ -127,6 +127,7 @@ contract OlympusPricev2 is PRICEv2 {
     /// @dev                            Will revert if:
     /// @dev                            - The resulting price is zero
     /// @dev                            - The configured strategy cannot aggregate the prices
+    /// @dev                            - The moving average is used, but is stale
     ///
     /// @param asset_                   Asset to get the price of
     /// @param includeMovingAverage_    Flag to indicate if the moving average should be included in the price calculation
@@ -169,8 +170,13 @@ contract OlympusPricev2 is PRICEv2 {
         }
 
         // If moving average is used and it is meant to be included, add to end of prices array
-        if (asset.useMovingAverage && includeMovingAverage_)
+        if (asset.useMovingAverage && includeMovingAverage_) {
+            // Check if the moving average is stale
+            if (asset.lastObservationTime + observationFrequency <= block.timestamp)
+                revert PRICE_MovingAverageStale(asset_, asset.lastObservationTime);
+
             prices[numFeeds] = asset.cumulativeObs / asset.numObservations;
+        }
 
         // If there is only one price, ensure it is not zero and return
         // Otherwise, send to strategy to aggregate

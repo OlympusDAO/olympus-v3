@@ -69,6 +69,12 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param asset_   The address of the asset
     error PRICE_MovingAverageNotStored(address asset_);
 
+    /// @notice                         The moving average for an asset was used, but is stale
+    ///
+    /// @param asset_                   The address of the asset
+    /// @param lastObservationTime_     The timestamp of the last observation
+    error PRICE_MovingAverageStale(address asset_, uint48 lastObservationTime_);
+
     /// @notice                     The last observation time is invalid
     /// @dev                        The last observation time must be less than the latest timestamp
     ///
