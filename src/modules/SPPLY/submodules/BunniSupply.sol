@@ -52,7 +52,7 @@ contract BunniSupply is SupplySubmodule {
     ///
     /// @param token_               The address of the token
     /// @param maximumDeviationBps_ The maximum allowed value
-    /// @param actualDeviationBps_  The maximum deviation from the TWAP in basis points
+    /// @param actualDeviationBps_  The actual deviation from the TWAP in basis points
     error BunniSupply_Params_InvalidTwapMaxDeviationBps(
         address token_,
         uint16 maximumDeviationBps_,
@@ -401,15 +401,19 @@ contract BunniSupply is SupplySubmodule {
         BunniKey memory key_,
         BunniLens lens_
     ) internal view returns (uint256) {
-        (address token0_, , uint256 reserve0_, uint256 reserve1_) = _getReservesWithFees(
-            key_,
-            lens_
-        );
+        (
+            address token0_,
+            address token1_,
+            uint256 reserve0_,
+            uint256 reserve1_
+        ) = _getReservesWithFees(key_, lens_);
 
         if (token0_ == ohm) {
             return reserve0_;
-        } else {
+        } else if (token1_ == ohm) {
             return reserve1_;
+        } else {
+            return 0;
         }
     }
 
