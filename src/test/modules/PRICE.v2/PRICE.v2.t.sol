@@ -2608,7 +2608,7 @@ contract PriceV2Test is Test {
             bytes4(0), // incorrect bytes4 selector
             abi.encode(ohmFeedTwoParams) // bytes memory params
         );
-        uint256[] memory obs = _makeRandomObservations(weth, feeds[0], nonce_, uint256(1));
+        uint256[] memory obs = _makeRandomObservations(weth, feeds[0], nonce_, uint256(2));
 
         // Try and add the asset
         vm.startPrank(writer);
@@ -2624,7 +2624,7 @@ contract PriceV2Test is Test {
             address(weth), // address asset_
             true, // bool storeMovingAverage_
             true, // bool useMovingAverage_
-            uint32(8 hours), // uint32 movingAverageDuration_
+            uint32(16 hours), // uint32 movingAverageDuration_
             uint48(block.timestamp), // uint48 lastObservationTime_
             obs, // uint256[] memory observations_
             PRICEv2.Component(
