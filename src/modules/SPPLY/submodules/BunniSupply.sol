@@ -408,8 +408,10 @@ contract BunniSupply is SupplySubmodule {
 
         if (token0_ == ohm) {
             return reserve0_;
-        } else {
+        } else if (token1_ == ohm) {
             return reserve1_;
+        } else {
+            return 0;
         }
     }
 
