@@ -1008,11 +1008,11 @@ contract PriceV2Test is Test {
 
     function test_getPrice_last_singleObservation(uint256 nonce_) public {
         // Add base asset with only 1 observation stored
-        _addOneMAAsset(nonce_, 1);
+        _addOneMAAsset(nonce_, 2);
 
         // Get the stored observation
         PRICEv2.Asset memory asset = price.getAssetData(address(onema));
-        uint256 storedObservation = asset.obs[0];
+        uint256 storedObservation = asset.obs[1];
         uint48 start = uint48(block.timestamp);
 
         // Get last price, expect the only observation to be returned
@@ -1101,15 +1101,56 @@ contract PriceV2Test is Test {
 
     // =========  getPrice (with moving average variant) ========= //
 
-    function test_getPrice_movingAverage_singleObservation(uint256 nonce_) public {
-        // Add base asset with only 1 observation stored
-        _addOneMAAsset(nonce_, 1);
+    function test_getPrice_movingAverage_singleObservation() public {
+        ChainlinkPriceFeeds.OneFeedParams memory onemaFeedParams = ChainlinkPriceFeeds
+            .OneFeedParams(onemaUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(onemaFeedParams) // bytes memory params_
+        );
+
+        uint256[] memory observations = new uint256[](1);
+        observations[0] = 5e18;
+
+        // Expect an error
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_ParamsInvalidObservationCount.selector,
+            address(onema),
+            1,
+            1,
+            1
+        );
+        vm.expectRevert(err);
+
+        vm.prank(writer);
+        price.addAsset(
+            address(onema), // address asset_
+            true, // bool storeMovingAverage_ // track ONEMA MA
+            true, // bool useMovingAverage_ // use MA in strategy
+            uint32(observations.length) * OBSERVATION_FREQUENCY, // uint32 movingAverageDuration_
+            uint48(block.timestamp), // uint48 lastObservationTime_
+            observations, // uint256[] memory observations_
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector,
+                abi.encode(0) // no params required
+            ), // Component memory strategy_
+            feeds // Component[] feeds_
+        );
+    }
+
+    function test_getPrice_movingAverage_minimumObservations(uint256 nonce_) public {
+        // Add base asset with only 2 observations stored
+        _addOneMAAsset(nonce_, 2);
 
         // Get the stored observation
         PRICEv2.Asset memory asset = price.getAssetData(address(onema));
-        uint256 storedObservation = asset.obs[0];
+        uint256 storedObservation = (asset.obs[0] + asset.obs[1]) / 2;
 
-        // Get moving average price, expect the only observation to be returned
+        // Get moving average price
         (uint256 price_, ) = price.getPrice(address(onema), PRICEv2.Variant.MOVINGAVERAGE);
 
         assertEq(price_, storedObservation);
@@ -2533,9 +2574,9 @@ contract PriceV2Test is Test {
             address(weth), // address asset_
             true, // bool storeMovingAverage_
             true, // bool useMovingAverage_
-            uint32(8 hours), // uint32 movingAverageDuration_
+            uint32(16 hours), // uint32 movingAverageDuration_
             uint48(block.timestamp), // uint48 lastObservationTime_
-            _makeRandomObservations(weth, feeds[0], nonce_, uint256(1)), // uint256[] memory observations_
+            _makeRandomObservations(weth, feeds[0], nonce_, uint256(2)), // uint256[] memory observations_
             PRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
                 SimplePriceFeedStrategy.getAveragePrice.selector,
@@ -2567,7 +2608,7 @@ contract PriceV2Test is Test {
             bytes4(0), // incorrect bytes4 selector
             abi.encode(ohmFeedTwoParams) // bytes memory params
         );
-        uint256[] memory obs = _makeRandomObservations(weth, feeds[0], nonce_, uint256(1));
+        uint256[] memory obs = _makeRandomObservations(weth, feeds[0], nonce_, uint256(2));
 
         // Try and add the asset
         vm.startPrank(writer);
@@ -2583,7 +2624,7 @@ contract PriceV2Test is Test {
             address(weth), // address asset_
             true, // bool storeMovingAverage_
             true, // bool useMovingAverage_
-            uint32(8 hours), // uint32 movingAverageDuration_
+            uint32(16 hours), // uint32 movingAverageDuration_
             uint48(block.timestamp), // uint48 lastObservationTime_
             obs, // uint256[] memory observations_
             PRICEv2.Component(
@@ -2612,8 +2653,8 @@ contract PriceV2Test is Test {
             abi.encode(0) // no params required
         );
 
-        uint256[] memory observations = _makeRandomObservations(weth, feeds[0], nonce_, uint256(1));
-        uint256 expectedCumulativeObservations = observations[0];
+        uint256[] memory observations = _makeRandomObservations(weth, feeds[0], nonce_, uint256(2));
+        uint256 expectedCumulativeObservations = observations[0] + observations[1];
 
         // Try and add the asset
         vm.startPrank(writer);
@@ -2626,7 +2667,7 @@ contract PriceV2Test is Test {
             address(weth), // address asset_
             true, // bool storeMovingAverage_
             true, // bool useMovingAverage_
-            uint32(8 hours), // uint32 movingAverageDuration_
+            uint32(16 hours), // uint32 movingAverageDuration_
             uint48(block.timestamp), // uint48 lastObservationTime_
             observations, // uint256[] memory observations_
             averageStrategy, // Component memory strategy_
@@ -2645,9 +2686,9 @@ contract PriceV2Test is Test {
         assertEq(asset.approved, true);
         assertEq(asset.storeMovingAverage, true);
         assertEq(asset.useMovingAverage, true);
-        assertEq(asset.movingAverageDuration, uint32(8 hours));
+        assertEq(asset.movingAverageDuration, uint32(16 hours));
         assertEq(asset.nextObsIndex, uint16(0));
-        assertEq(asset.numObservations, uint16(1)); // movingAverageDuration / observation frequency
+        assertEq(asset.numObservations, uint16(2)); // movingAverageDuration / observation frequency
         assertEq(asset.lastObservationTime, priceTimestamp_);
         assertEq(asset.cumulativeObs, expectedCumulativeObservations);
         assertEq(asset.obs, observations);
