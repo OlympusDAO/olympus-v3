@@ -450,6 +450,8 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1_1
+    /// @dev        Updates the cached balance of `asset_`
+    ///
     /// @dev        This function reverts if:
     /// @dev        - The caller is not permissioned
     /// @dev        - `asset_` is not approved
@@ -476,9 +478,15 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
 
         // Add location to array
         asset.locations.push(location_);
+
+        // Update cache with current value
+        (asset.lastBalance, asset.updatedAt) = _getCurrentBalance(asset_);
+        emit BalanceStored(asset_, asset.lastBalance, asset.updatedAt);
     }
 
     /// @inheritdoc TRSRYv1_1
+    /// @dev        Updates the cached balance of `asset_`
+    ///
     /// @dev        This function reverts if:
     /// @dev        - The caller is not permissioned
     /// @dev        - `asset_` is not approved
@@ -501,6 +509,10 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
                 ++i;
             }
         }
+
+        // Update cache with current value
+        (asset.lastBalance, asset.updatedAt) = _getCurrentBalance(asset_);
+        emit BalanceStored(asset_, asset.lastBalance, asset.updatedAt);
     }
 
     /// @inheritdoc TRSRYv1_1
