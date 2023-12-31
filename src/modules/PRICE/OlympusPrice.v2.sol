@@ -465,12 +465,30 @@ contract OlympusPricev2 is PRICEv2 {
     /// @dev        - The caller is not permissioned
     /// @dev        - `_updateAssetPriceFeeds()` reverts
     /// @dev        - `_getCurrentPrice()` reverts
+    /// @dev        - The asset strategy is not compatible with the number of feeds
     function updateAssetPriceFeeds(
         address asset_,
         Component[] memory feeds_
     ) external override permissioned {
         // Ensure asset is already added
-        if (!_assetData[asset_].approved) revert PRICE_AssetNotApproved(asset_);
+        Asset storage assetData = _assetData[asset_];
+        if (!assetData.approved) revert PRICE_AssetNotApproved(asset_);
+
+        // Check if the strategy and price feeds are still compatible
+        {
+            Component memory strategy = abi.decode(assetData.strategy, (Component));
+
+            if (
+                (feeds_.length + (assetData.useMovingAverage ? 1 : 0)) > 1 &&
+                fromSubKeycode(strategy.target) == bytes20(0)
+            )
+                revert PRICE_ParamsStrategyInsufficient(
+                    asset_,
+                    assetData.strategy,
+                    feeds_.length,
+                    assetData.useMovingAverage
+                );
+        }
 
         _updateAssetPriceFeeds(asset_, feeds_);
 

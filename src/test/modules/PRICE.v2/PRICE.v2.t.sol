@@ -2831,6 +2831,56 @@ contract PriceV2Test is Test {
         assertEq(receivedFeeds.length, 1);
     }
 
+    function test_updateAssetPriceFeeds_multipleFeeds_noStrategy(uint256 nonce_) public {
+        _addBaseAssets(nonce_);
+
+        // Configure the asset to use 2 price feeds
+        ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
+            ethUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        ChainlinkPriceFeeds.OneFeedParams memory alphaParams = ChainlinkPriceFeeds.OneFeedParams(
+            alphaUsdPriceFeed,
+            uint48(24 hours)
+        );
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](2);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(ethParams) // bytes memory params_
+        );
+        feeds[1] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode subKeycode_
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 functionSelector_
+            abi.encode(alphaParams) // bytes memory params_
+        );
+
+        PRICEv2.Component memory strategyEmpty = PRICEv2.Component(
+            toSubKeycode(bytes20(0)),
+            bytes4(0),
+            abi.encode(0)
+        );
+
+        // Update the asset's price feeds
+        vm.startPrank(writer);
+
+        // Expect a revert as the new price feeds length is incompatible with the strategy configuration
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_ParamsStrategyInsufficient.selector,
+            address(weth),
+            abi.encode(strategyEmpty),
+            2,
+            false
+        );
+        vm.expectRevert(err);
+
+        price.updateAssetPriceFeeds(address(weth), feeds);
+
+        vm.stopPrank();
+    }
+
     function testRevert_updateAssetPriceFeeds_notPermissioned(uint256 nonce_) public {
         _addBaseAssets(nonce_);
 
@@ -2957,6 +3007,17 @@ contract PriceV2Test is Test {
 
     function testRevert_updateAssetPriceFeeds_duplicatePriceFeeds(uint256 nonce_) public {
         _addBaseAssets(nonce_);
+
+        // Set up the asset strategy to get the average (so it supports two feeds)
+        PRICEv2.Component memory averageStrategy = PRICEv2.Component(
+            toSubKeycode("PRICE.SIMPLESTRATEGY"),
+            SimplePriceFeedStrategy.getAveragePrice.selector,
+            abi.encode(0) // no params required
+        );
+
+        // Update the asset's strategy
+        vm.startPrank(writer);
+        price.updateAssetPriceStrategy(address(weth), averageStrategy, false);
 
         // Set up a new feed
         ChainlinkPriceFeeds.OneFeedParams memory ethParams = ChainlinkPriceFeeds.OneFeedParams(
