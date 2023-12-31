@@ -401,10 +401,12 @@ contract BunniSupply is SupplySubmodule {
         BunniKey memory key_,
         BunniLens lens_
     ) internal view returns (uint256) {
-        (address token0_, , uint256 reserve0_, uint256 reserve1_) = _getReservesWithFees(
-            key_,
-            lens_
-        );
+        (
+            address token0_,
+            address token1_,
+            uint256 reserve0_,
+            uint256 reserve1_
+        ) = _getReservesWithFees(key_, lens_);
 
         if (token0_ == ohm) {
             return reserve0_;
