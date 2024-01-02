@@ -397,7 +397,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // PriceConfigV2 policy
         //     - Give DAO MS the priceconfig_admin role
         //     - Give DAO MS the priceconfig_policy role
-        //     - Give Policy MS the priceconfig_policy role
         console2.log("Granting admin role for PriceConfigV2 policy");
         addToBatch(
             rolesAdmin,
@@ -414,15 +413,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 RolesAdmin.grantRole.selector,
                 bytes32("priceconfig_policy"),
                 daoMS
-            )
-        );
-        console2.log("Granting policy role for PriceConfigV2 policy");
-        addToBatch(
-            rolesAdmin,
-            abi.encodeWithSelector(
-                RolesAdmin.grantRole.selector,
-                bytes32("priceconfig_policy"),
-                policyMS
             )
         );
 
@@ -499,6 +489,15 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // - Configures PRICE to track a moving average
         // - The price will be the average of the above three
         // - Operator requires DAI to store the moving average
+
+        // Feedback:
+        // 7-day average of Chainlink feed
+        // Need to track MA for Operator
+        // Needs a backup, so Chainlink + UniV3
+        // OK to resolve to USDC Chainlink feed, as it's unlikely that both the DAI and USDC feeds will break
+        // Want the valuation of DAI to be as accurate as possible, so that the treasury value is timely and accurate
+        // Don't use MA as input, but store it
+        /// UniV3 should be a TWAP, but have a shorter (e.g. 10 minute) observation window
         {
             PRICEv2.Component[] memory daiFeeds = new PRICEv2.Component[](2);
             {
@@ -573,11 +572,27 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             );
         }
 
+        /**
+
+            DAI:
+            - DAI-USD Chainlink Feed
+            - DAI-ETH / ETH-USD Chainlink Feeds
+            - DAI-wETH UniV3 pool
+
+            wETH:
+            - ETH-USD Chainlink Feed
+            - ETH-BTC / BTC-USD Chainlink Feeds
+
+            Avoid having to configure USDC as an asset
+         */
+
         // 3. Configure WETH price feed and moving average data on PRICE
         // - Uses the Chainlink price feed with the standard observation window
         // - Uses the Uniswap V3 pool TWAP with the configured observation window
         // - Configures PRICE to track a moving average
         // - The price will be the average of the above three
+
+        // Don't track or use MA
         {
             PRICEv2.Component[] memory wethFeeds = new PRICEv2.Component[](2);
             wethFeeds[0] = PRICEv2.Component(
@@ -621,6 +636,9 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
         }
+
+        // For a smaller asset, we don't want a broken price feed to brick the rest of the system
+        // Track and use MA
 
         // 4. Configure veFXS price feed and moving average data on PRICE
         // - Uses the Chainlink price feed with the standard observation window
