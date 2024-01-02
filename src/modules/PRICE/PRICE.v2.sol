@@ -184,6 +184,12 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param index_   The index of the price feed that is a duplicate
     error PRICE_DuplicatePriceFeed(address asset_, uint256 index_);
 
+    /// @notice                     An insufficient amount of time has passed since the last stored observation
+    ///
+    /// @param asset_               The address of the asset
+    /// @param lastObservationTime_ The timestamp of the last observation
+    error PRICE_InsufficientTimeElapsed(address asset_, uint48 lastObservationTime_);
+
     // ========== STATE ========== //
 
     /// @notice         Struct to hold the configuration for calling a function on a contract

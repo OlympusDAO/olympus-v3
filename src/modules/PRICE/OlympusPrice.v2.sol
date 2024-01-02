@@ -316,22 +316,28 @@ contract OlympusPricev2 is PRICEv2 {
 
     /// @inheritdoc PRICEv2
     /// @dev        Implements the following logic:
-    ///             - Get the current price using `_getCurrentPrice()`
-    ///             - Store the price in the asset's observation array at the index corresponding to the asset's value of `nextObsIndex`
-    ///             - Updates the asset's `lastObservationTime` to the current block timestamp
-    ///             - Increments the asset's `nextObsIndex` by 1, wrapping around to 0 if necessary
-    ///             - If the asset is configured to store the moving average, update the `cumulativeObs` value subtracting the previous value and adding the new one
-    ///             - Emit a `PriceStored` event
+    /// @dev        - Get the current price using `_getCurrentPrice()`
+    /// @dev        - Store the price in the asset's observation array at the index corresponding to the asset's value of `nextObsIndex`
+    /// @dev        - Updates the asset's `lastObservationTime` to the current block timestamp
+    /// @dev        - Increments the asset's `nextObsIndex` by 1, wrapping around to 0 if necessary
+    /// @dev        - If the asset is configured to store the moving average, update the `cumulativeObs` value subtracting the previous value and adding the new one
+    /// @dev        - Emit a `PriceStored` event
     ///
-    ///             Will revert if:
-    ///             - The asset is not approved
-    ///             - The caller is not permissioned
-    ///             - The price was not able to be determined
+    /// @dev        Will revert if:
+    /// @dev        - The asset is not approved
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The price was not able to be determined
+    /// @dev        - The time elapsed since the last observation is less than the configured observation frequency
     function storePrice(address asset_) public override permissioned {
         Asset storage asset = _assetData[asset_];
 
         // Check if asset is approved
         if (!asset.approved) revert PRICE_AssetNotApproved(asset_);
+
+        // Check that sufficient time has passed to record a new observation
+        uint48 lastObservationTime = asset.lastObservationTime;
+        if (lastObservationTime + observationFrequency > block.timestamp)
+            revert PRICE_InsufficientTimeElapsed(asset_, lastObservationTime);
 
         // Get the current price for the asset
         (uint256 price, uint48 currentTime, ) = _getCurrentPrice(asset_, false);
