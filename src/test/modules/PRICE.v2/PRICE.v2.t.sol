@@ -82,7 +82,7 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 //      [X] reverts if asset not configured on PRICE module (not approved)
 //      [X] reverts if price is zero
 //      [X] reverts if caller is not permissioned
-//      [] reverts if observationFrequency has not elapsed since last observation
+//      [X] reverts if observationFrequency has not elapsed since last observation
 //      [X] updates stored observations
 //           [X] single observation stored (no moving average)
 //           [X] multiple observations stored (moving average configured)
@@ -2068,7 +2068,7 @@ contract PriceV2Test is Test {
 
         // Warp forward in time and store a new price (5e8)
         uint48 start = uint48(block.timestamp);
-        vm.warp(uint256(start) + 1);
+        vm.warp(uint256(start) + OBSERVATION_FREQUENCY);
         vm.prank(writer);
         price.storePrice(address(onema));
 
@@ -2089,7 +2089,7 @@ contract PriceV2Test is Test {
         );
 
         // Warp forward in time and store a different price (10e8)
-        vm.warp(uint256(start) + 2);
+        vm.warp(uint256(start) + OBSERVATION_FREQUENCY + OBSERVATION_FREQUENCY);
         onemaUsdPriceFeed.setLatestAnswer(int256(10e8));
         vm.prank(writer);
         price.storePrice(address(onema));
@@ -2157,7 +2157,7 @@ contract PriceV2Test is Test {
 
         // Warp forward in time and store a new price
         uint48 start = uint48(block.timestamp);
-        vm.warp(uint256(start) + 1);
+        vm.warp(uint256(start) + OBSERVATION_FREQUENCY);
         vm.prank(writer);
         price.storePrice(address(onema));
 
@@ -2178,7 +2178,7 @@ contract PriceV2Test is Test {
         );
 
         // Warp forward in time and store a new price
-        vm.warp(uint256(start) + 2);
+        vm.warp(uint256(start) + OBSERVATION_FREQUENCY + OBSERVATION_FREQUENCY);
         onemaUsdPriceFeed.setLatestAnswer(int256(20e8));
         vm.prank(writer);
         price.storePrice(address(onema));
