@@ -638,6 +638,10 @@ contract TRSRYv1_1Test is Test {
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), new address[](0));
 
+        // Mint tokens to the allocator
+        uint256 allocatorReserveBalance = 1e18;
+        reserve.mint(allocator_, allocatorReserveBalance);
+
         // Add a location
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), allocator_);
@@ -646,7 +650,7 @@ contract TRSRYv1_1Test is Test {
         TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
         assertEq(asset.approved, true);
         assertEq(asset.updatedAt, block.timestamp);
-        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT);
+        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT + allocatorReserveBalance);
         assertEq(asset.locations.length, 1);
         assertEq(asset.locations[0], allocator_);
     }
@@ -661,12 +665,19 @@ contract TRSRYv1_1Test is Test {
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), locations);
 
+        // Mint tokens to the allocator
+        uint256 allocatorReserveBalance = 1e18;
+        reserve.mint(allocator_, allocatorReserveBalance);
+
         // Add a location
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), allocator_);
 
         // Verify asset list
         TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, true);
+        assertEq(asset.updatedAt, block.timestamp);
+        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT + allocatorReserveBalance);
         assertEq(asset.locations.length, 2);
         assertEq(asset.locations[1], allocator_);
     }
@@ -683,12 +694,19 @@ contract TRSRYv1_1Test is Test {
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), locations);
 
+        // Mint tokens to the allocator
+        uint256 allocatorReserveBalance = 1e18;
+        reserve.mint(allocator_, allocatorReserveBalance);
+
         // Add a location
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), allocator_);
 
         // Verify asset list
         TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, true);
+        assertEq(asset.updatedAt, block.timestamp);
+        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT + allocatorReserveBalance);
         assertEq(asset.locations.length, 3);
         assertEq(asset.locations[2], allocator_);
     }
@@ -745,6 +763,10 @@ contract TRSRYv1_1Test is Test {
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), new address[](0));
 
+        // Mint tokens to the allocator
+        uint256 allocatorReserveBalance = 1e18;
+        reserve.mint(allocator_, allocatorReserveBalance);
+
         // Add a location
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), allocator_);
@@ -755,6 +777,9 @@ contract TRSRYv1_1Test is Test {
 
         // Verify asset data
         TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, true);
+        assertEq(asset.updatedAt, block.timestamp);
+        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT);
         assertEq(asset.locations.length, 0);
     }
 
@@ -768,6 +793,10 @@ contract TRSRYv1_1Test is Test {
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), locations);
 
+        // Mint tokens to the allocator
+        uint256 allocatorReserveBalance = 1e18;
+        reserve.mint(allocator_, allocatorReserveBalance);
+
         // Add a location
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), allocator_);
@@ -778,6 +807,9 @@ contract TRSRYv1_1Test is Test {
 
         // Verify asset data
         TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, true);
+        assertEq(asset.updatedAt, block.timestamp);
+        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT);
         assertEq(asset.locations.length, 1);
         assertEq(asset.locations[0], address(1));
     }
@@ -794,6 +826,10 @@ contract TRSRYv1_1Test is Test {
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), locations);
 
+        // Mint tokens to the allocator
+        uint256 allocatorReserveBalance = 1e18;
+        reserve.mint(allocator_, allocatorReserveBalance);
+
         // Add a location
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), allocator_);
@@ -804,6 +840,9 @@ contract TRSRYv1_1Test is Test {
 
         // Verify asset data
         TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, true);
+        assertEq(asset.updatedAt, block.timestamp);
+        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT);
         assertEq(asset.locations.length, 2);
         assertEq(asset.locations[0], address(1));
         assertEq(asset.locations[1], address(2));
