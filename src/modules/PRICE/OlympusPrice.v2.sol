@@ -20,6 +20,8 @@ contract OlympusPricev2 is PRICEv2 {
     // ========== CONSTRUCTOR ========== //
 
     /// @notice                         Constructor to create OlympusPrice V2
+    /// @dev                            The constructor reverts if:
+    /// @dev                            - `observationFrequency_` is invalid (zero)
     ///
     /// @param kernel_                  Kernel address
     /// @param decimals_                Decimals that all prices will be returned with
