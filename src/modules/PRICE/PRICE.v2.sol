@@ -42,6 +42,11 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
 
     // ========== ERRORS ========== //
 
+    /// @notice             Passed observation frequency is invalid
+    ///
+    /// @param frequency_   The observation frequency that was provided
+    error PRICE_ObservationFrequencyInvalid(uint32 frequency_);
+
     /// @notice         The asset is not approved for use
     ///
     /// @param asset_   The address of the asset

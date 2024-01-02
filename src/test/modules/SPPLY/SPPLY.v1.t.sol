@@ -2440,6 +2440,28 @@ contract SupplyTest is Test {
         // Treasury OHM/gOHM not included in the category
     }
 
+    function test_getReservesByCategory_includesSubmodules_withoutReservesSelector() public {
+        _setUpSubmodules();
+
+        // Add OHM in the treasury
+        ohm.mint(address(treasuryAddress), 100e9);
+
+        // Categories already defined
+
+        // Check reserves
+        SPPLYv1.Reserves[] memory reserves = moduleSupply.getReservesByCategory(
+            toCategory("protocol-owned-treasury")
+        );
+
+        // Only raw OHM is included in the category
+        // The reserves selector is not defined for this category, so they are not included
+        assertEq(reserves.length, 1, "reserves length mismatch");
+        assertEq(reserves[0].tokens.length, 1, "tokens length mismatch");
+        assertEq(reserves[0].tokens[0], address(ohm), "token address mismatch");
+        assertEq(reserves[0].balances.length, 1, "balances length mismatch");
+        assertEq(reserves[0].balances[0], 100e9, "balance mismatch");
+    }
+
     function test_getReservesByCategory_includesSubmodulesAndOhm() public {
         _setUpSubmodules();
 

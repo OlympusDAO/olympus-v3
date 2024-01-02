@@ -8,30 +8,15 @@ import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.so
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockGohm} from "test/mocks/OlympusMocks.sol";
+import {MockIncurDebt} from "test/mocks/MockIncurDebt.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 import {Math as OZMath} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "src/modules/SPPLY/OlympusSupply.sol";
-import {IncurDebtSupply, IIncurDebt} from "src/modules/SPPLY/submodules/IncurDebtSupply.sol";
+import {IncurDebtSupply} from "src/modules/SPPLY/submodules/IncurDebtSupply.sol";
 
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
-
-contract MockIncurDebt is IIncurDebt {
-    uint256 public totalDebt;
-
-    constructor(uint256 totalDebt_) {
-        totalDebt = totalDebt_;
-    }
-
-    function totalOutstandingGlobalDebt() external view override returns (uint256) {
-        return totalDebt;
-    }
-
-    function setTotalDebt(uint256 totalDebt_) external {
-        totalDebt = totalDebt_;
-    }
-}
 
 contract IncurDebtSupplyTest is Test {
     using FullMath for uint256;
