@@ -917,6 +917,78 @@ contract PriceV2Test is Test {
         assertEq(price_, movingAverage);
     }
 
+    function test_getPrice_current_strat_oneFeedPlusMA_staleMA(uint256 nonce_) public {
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        uint32 startTimestamp = uint32(block.timestamp);
+
+        // Warp forward to just before the end of the observation frequency
+        vm.warp(startTimestamp + OBSERVATION_FREQUENCY - 1);
+
+        // Update the Chainlink price feed
+        onemaUsdPriceFeed.setLatestAnswer(int256(5e8));
+        onemaUsdPriceFeed.setTimestamp(block.timestamp);
+
+        // Value is as expected
+        (uint256 t1_price, uint48 t1_timestamp) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.CURRENT
+        );
+        assertEq(t1_price, uint256(5e18));
+        assertEq(t1_timestamp, uint48(block.timestamp));
+
+        // Get the moving average
+        (, uint48 t1_movingAverageTimestamp) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.MOVINGAVERAGE
+        );
+
+        // Warp forward to the observation frequency
+        vm.warp(startTimestamp + OBSERVATION_FREQUENCY);
+
+        // Update the Chainlink price feed
+        onemaUsdPriceFeed.setLatestAnswer(int256(5e8));
+        onemaUsdPriceFeed.setTimestamp(block.timestamp);
+
+        // As useMovingAverage is enabled, calling the current price will
+        // use the MA, which is now stale, and revert
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_MovingAverageStale.selector,
+            address(onema),
+            startTimestamp
+        );
+        vm.expectRevert(err);
+        price.getPrice(address(onema), PRICEv2.Variant.CURRENT);
+
+        // Get the moving average, which is stale
+        (, uint48 t2_movingAverageTimestamp) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.MOVINGAVERAGE
+        );
+        assertEq(t2_movingAverageTimestamp, t1_movingAverageTimestamp);
+
+        // Store the MA price
+        vm.prank(writer);
+        price.storePrice(address(onema));
+
+        // Get the current price again
+        // Will have been updated
+        (uint256 t2_price, uint48 t2_timestamp) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.CURRENT
+        );
+        assertEq(t2_price, uint256(5e18));
+        assertEq(t2_timestamp, uint48(block.timestamp));
+
+        // Moving average is now updated
+        (, uint48 t3_movingAverageTimestamp) = price.getPrice(
+            address(onema),
+            PRICEv2.Variant.MOVINGAVERAGE
+        );
+        assertEq(t3_movingAverageTimestamp, t2_timestamp);
+    }
+
     // MA cannot be zero so we cannot test PriceZero error on assets that use MA in a fallback strategy
 
     function test_getPrice_current_strat_threeFeed(uint256 nonce_) public {
