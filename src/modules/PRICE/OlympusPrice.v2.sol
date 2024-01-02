@@ -328,7 +328,8 @@ contract OlympusPricev2 is PRICEv2 {
 
         // Check that sufficient time has passed to record a new observation
         uint48 lastObservationtime = asset.lastObservationTime;
-        if (currentTime < lastObservationtime + observationFrequency) revert PRICE_InsufficientTimeElapsed(asset_, lastObservationtime);
+        if (currentTime < lastObservationtime + observationFrequency)
+            revert PRICE_InsufficientTimeElapsed(asset_, lastObservationtime);
 
         // Store the data in the obs index
         uint256 oldestPrice = asset.obs[asset.nextObsIndex];
