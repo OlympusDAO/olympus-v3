@@ -20,11 +20,16 @@ contract OlympusPricev2 is PRICEv2 {
     // ========== CONSTRUCTOR ========== //
 
     /// @notice                         Constructor to create OlympusPrice V2
+    /// @dev                            The constructor reverts if:
+    /// @dev                            - `observationFrequency_` is invalid (zero)
     ///
     /// @param kernel_                  Kernel address
     /// @param decimals_                Decimals that all prices will be returned with
     /// @param observationFrequency_    Frequency at which prices are stored for moving average
     constructor(Kernel kernel_, uint8 decimals_, uint32 observationFrequency_) Module(kernel_) {
+        if (observationFrequency_ == 0)
+            revert PRICE_ObservationFrequencyInvalid(observationFrequency_);
+
         decimals = decimals_;
         observationFrequency = observationFrequency_;
     }

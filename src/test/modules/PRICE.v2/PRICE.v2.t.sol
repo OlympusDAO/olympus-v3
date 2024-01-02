@@ -684,6 +684,17 @@ contract PriceV2Test is Test {
 
     // =========  TESTS ========= //
 
+    function test_constructor_observationFrequency_zero_reverts() public {
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_ObservationFrequencyInvalid.selector,
+            0
+        );
+        vm.expectRevert(err);
+
+        // Create a new module
+        new OlympusPricev2(kernel, 18, 0);
+    }
+
     // =========  getAssets  ========= //
 
     function test_getAssets_zero() public {
