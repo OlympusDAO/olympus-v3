@@ -48,22 +48,6 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
     // Wallets
     address daoWorkingWallet;
 
-    /// @notice     For testing purposes only, when calling from another script
-    function initTestBatch() public {
-        // Load environment addresses for chain
-        chain = vm.envString("CHAIN");
-        env = vm.readFile("./src/scripts/env.json");
-
-        // Set safe addresses
-        daoMS = vm.envAddress("DAO_MS"); // DAO MS address
-        policyMS = vm.envAddress("POLICY_MS"); // Policy MS address
-        emergencyMS = vm.envAddress("EMERGENCY_MS"); // Emergency MS address
-        safe = daoMS;
-
-        // Load addresses from env (as defined in batch script)
-        loadEnv();
-    }
-
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
         crossChainBridgeV1 = envAddress("current", "olympus.policies.CrossChainBridgeV1");

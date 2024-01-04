@@ -87,6 +87,25 @@ abstract contract OlyBatch is BatchScript {
         executeBatch(emergencyMS, send_);
     }
 
+    /// @notice     For testing purposes only, when calling from another script
+    /// @dev        This is necessary as a parent script may want to combine the results of multiple functions into a single batch, whereas the modifiers above will execute each function in a separate batch
+    function initTestBatch() public {
+        // Load environment addresses for chain
+        console2.log("\n\n*** Loading environment");
+        chain = vm.envString("CHAIN");
+        env = vm.readFile("./src/scripts/env.json");
+
+        // Set safe addresses
+        daoMS = vm.envAddress("DAO_MS"); // DAO MS address
+        policyMS = vm.envAddress("POLICY_MS"); // Policy MS address
+        emergencyMS = vm.envAddress("EMERGENCY_MS"); // Emergency MS address
+        safe = daoMS;
+
+        // Load addresses from env
+        console2.log("\n\n*** Compiling batch");
+        loadEnv();
+    }
+
     function envAddress(string memory version, string memory key) internal view returns (address) {
         return env.readAddress(string.concat(".", version, ".", chain, ".", key));
     }

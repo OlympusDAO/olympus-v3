@@ -118,22 +118,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     uint32 internal constant DEFAULT_TWAP_OBSERVATION_WINDOW = 7 days;
     uint32 internal constant DEFAULT_CHAINLINK_UPDATE_THRESHOLD = 24 hours;
 
-    /// @notice     For testing purposes only, when calling from another script
-    function initTestBatch() public {
-        // Load environment addresses for chain
-        chain = vm.envString("CHAIN");
-        env = vm.readFile("./src/scripts/env.json");
-
-        // Set safe addresses
-        daoMS = vm.envAddress("DAO_MS"); // DAO MS address
-        policyMS = vm.envAddress("POLICY_MS"); // Policy MS address
-        emergencyMS = vm.envAddress("EMERGENCY_MS"); // Emergency MS address
-        safe = daoMS;
-
-        // Load addresses from env (as defined in batch script)
-        loadEnv();
-    }
-
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
 
