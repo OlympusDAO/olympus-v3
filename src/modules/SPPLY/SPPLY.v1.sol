@@ -328,22 +328,24 @@ abstract contract SupplySubmodule is Submodule {
     /// @notice     Quantity of collateralized OHM
     /// @notice     Definition: The quantity of OHM minted against collateral provided by borrowers or liquidity stakers and not backed by treasury assets.
     ///
-    /// @return     Quantity in the configured decimals
+    /// @return     Quantity in the scale of OHM native decimals (9)
     function getCollateralizedOhm() external view virtual returns (uint256);
 
     /// @notice     Quantity for protocol owned borrowable OHM
     /// @notice     Definition: The quantity of OHM minted against treasury assets and not backed by collateral provided by borrowers or liquidity stakers.
     ///
-    /// @return     Quantity in the configured decimals
+    /// @return     Quantity in the scale of OHM native decimals (9)
     function getProtocolOwnedBorrowableOhm() external view virtual returns (uint256);
 
     /// @notice     Quantity for protocol owned liquidity OHM
     /// @notice     Definition: The quantity of OHM minted against treasury assets and present in liquidity pools.
     ///
-    /// @return     Quantity in the configured decimals
+    /// @return     Quantity in the scale of OHM native decimals (9)
     function getProtocolOwnedLiquidityOhm() external view virtual returns (uint256);
 
     /// @notice     OHM in arbitrary locations that is owned by the protocol
+    ///
+    /// @return     Quantity in the scale of OHM native decimals (9)
     function getProtocolOwnedTreasuryOhm() external view virtual returns (uint256);
 
     /// @notice     Details of Protocol-Owned Liquidity Reserves in the assets monitored by the submodule
