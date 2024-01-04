@@ -20,7 +20,7 @@ contract ZeroDistributor is IDistributor {
     function triggerRebase() external {
         unlockRebase = true;
         staking.unstake(address(this), 0, true, true);
-        if (unlockRebase) revert Distributor_NoRebaseOccurred();
+        if (unlockRebase) unlockRebase = false;
     }
 
     /// @notice Endpoint must be available for Staking to call. Zero emission.
