@@ -63,7 +63,6 @@ import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
 
 // PRICE Submodules
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
-import {BalancerPoolTokenPrice} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {ERC4626Price} from "modules/PRICE/submodules/feeds/ERC4626Price.sol";
 import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
@@ -71,7 +70,6 @@ import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol"
 import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
 
 // SPPLY Submodules
-import {AuraBalancerSupply} from "modules/SPPLY/submodules/AuraBalancerSupply.sol";
 import {BLVaultSupply} from "modules/SPPLY/submodules/BLVaultSupply.sol";
 import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
@@ -89,7 +87,6 @@ import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV
 // Mocks
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
-import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
 
@@ -117,7 +114,6 @@ contract OlympusDeploy is Script {
 
     // PRICEv2 Submodules
     SimplePriceFeedStrategy public simplePriceFeedStrategy;
-    BalancerPoolTokenPrice public balancerPoolTokenPrice;
     ChainlinkPriceFeeds public chainlinkPriceFeeds;
     ERC4626Price public erc4626Price;
     UniswapV2PoolTokenPrice public uniswapV2PoolTokenPrice;
@@ -125,7 +121,6 @@ contract OlympusDeploy is Script {
     BunniPrice public bunniPrice;
 
     // SPPLY Submodules
-    AuraBalancerSupply public auraBalancerSupply;
     BLVaultSupply public blVaultSupply;
     BunniSupply public bunniSupply;
     MigrationOffsetSupply public migrationOffsetSupply;
@@ -267,7 +262,6 @@ contract OlympusDeploy is Script {
 
         // PRICE Submodules
         selectorMap["SimplePriceFeedStrategy"] = this._deploySimplePriceFeedStrategy.selector;
-        selectorMap["BalancerPoolTokenPrice"] = this._deployBalancerPoolTokenPrice.selector;
         selectorMap["ChainlinkPriceFeeds"] = this._deployChainlinkPriceFeeds.selector;
         selectorMap["ERC4626Price"] = this._deployERC4626Price.selector;
         selectorMap["UniswapV2PoolTokenPrice"] = this._deployUniswapV2PoolTokenPrice.selector;
@@ -275,7 +269,6 @@ contract OlympusDeploy is Script {
         selectorMap["BunniPrice"] = this._deployBunniPrice.selector;
 
         // SPPLY Submodules
-        selectorMap["AuraBalancerSupply"] = this._deployAuraBalancerSupply.selector;
         selectorMap["BLVaultSupply"] = this._deployBLVaultSupply.selector;
         selectorMap["BunniSupply"] = this._deployBunniSupply.selector;
         selectorMap["MigrationOffsetSupply"] = this._deployMigrationOffsetSupply.selector;
@@ -375,9 +368,6 @@ contract OlympusDeploy is Script {
         simplePriceFeedStrategy = SimplePriceFeedStrategy(
             envAddress("olympus.submodules.PRICE.SimplePriceFeedStrategy")
         );
-        balancerPoolTokenPrice = BalancerPoolTokenPrice(
-            envAddress("olympus.submodules.PRICE.BalancerPoolTokenPrice")
-        );
         chainlinkPriceFeeds = ChainlinkPriceFeeds(
             envAddress("olympus.submodules.PRICE.ChainlinkPriceFeeds")
         );
@@ -389,9 +379,6 @@ contract OlympusDeploy is Script {
         bunniPrice = BunniPrice(envAddress("olympus.submodules.PRICE.BunniPrice"));
 
         // SPPLY submodules
-        auraBalancerSupply = AuraBalancerSupply(
-            envAddress("olympus.submodules.SPPLY.AuraBalancerSupply")
-        );
         blVaultSupply = BLVaultSupply(envAddress("olympus.submodules.SPPLY.BLVaultSupply"));
         bunniSupply = BunniSupply(envAddress("olympus.submodules.SPPLY.BunniSupply"));
         migrationOffsetSupply = MigrationOffsetSupply(
@@ -1245,24 +1232,6 @@ contract OlympusDeploy is Script {
         return address(simplePriceFeedStrategy);
     }
 
-    function _deployBalancerPoolTokenPrice(bytes memory) public returns (address) {
-        // No additional arguments for BalancerPoolTokenPrice submodule
-
-        // Check that environment variables are loaded
-        if (address(PRICEv2) == address(0)) revert("PRICEv2 address not set");
-        if (address(balancerVault) == address(0)) revert("balancerVault address not set");
-
-        // Deploy BalancerPoolTokenPrice submodule
-        vm.broadcast();
-        balancerPoolTokenPrice = new BalancerPoolTokenPrice(
-            PRICEv2,
-            IBalancerVault(address(balancerVault))
-        );
-        console2.log("BalancerPoolTokenPrice deployed at:", address(balancerPoolTokenPrice));
-
-        return address(balancerPoolTokenPrice);
-    }
-
     function _deployChainlinkPriceFeeds(bytes memory) public returns (address) {
         // No additional arguments for ChainlinkPriceFeeds submodule
 
@@ -1374,33 +1343,6 @@ contract OlympusDeploy is Script {
         console2.log("SupplyConfig deployed at:", address(supplyConfig));
 
         return address(supplyConfig);
-    }
-
-    function _deployAuraBalancerSupply(bytes memory) public returns (address) {
-        // No additional arguments for AuraBalancerSupply submodule
-
-        // Check that the environment variables are loaded
-        if (address(SPPLY) == address(0)) revert("SPPLY address not set");
-        if (address(TRSRY) == address(0)) revert("TRSRY address not set");
-        if (address(balancerVault) == address(0)) revert("balancerVault address not set");
-
-        // Verify that the TRSRY version () is correct
-        (uint8 treasuryMajor, uint8 treasuryMinor) = TRSRY.VERSION();
-        if (treasuryMajor != 1 && treasuryMinor != 1) revert("TRSRY is not v1.1");
-
-        AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](0);
-
-        // Deploy AuraBalancerSupply submodule
-        vm.broadcast();
-        auraBalancerSupply = new AuraBalancerSupply(
-            SPPLY,
-            address(TRSRY),
-            address(balancerVault),
-            pools
-        );
-        console2.log("AuraBalancerSupply deployed at:", address(auraBalancerSupply));
-
-        return address(auraBalancerSupply);
     }
 
     function _deployBLVaultSupply(bytes memory) public returns (address) {

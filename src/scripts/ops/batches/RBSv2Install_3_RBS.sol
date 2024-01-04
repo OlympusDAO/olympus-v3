@@ -13,7 +13,6 @@ import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import "modules/PRICE/OlympusPrice.v2.sol";
 
 // PRICE submodules
-import {BalancerPoolTokenPrice} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {ERC4626Price} from "modules/PRICE/submodules/feeds/ERC4626Price.sol";
@@ -99,7 +98,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
     // New Olympus Contracts
     address priceV2;
-    address balancerPoolTokenPrice;
     address bunniPrice;
     address chainlinkPriceFeeds;
     address erc4626Price;
@@ -183,10 +181,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         veFXSAllocator = envAddress("current", "olympus.legacy.veFXSAllocator");
 
         priceV2 = envAddress("current", "olympus.modules.OlympusPriceV2");
-        balancerPoolTokenPrice = envAddress(
-            "current",
-            "olympus.submodules.PRICE.BalancerPoolTokenPrice"
-        );
         bunniPrice = envAddress("current", "olympus.submodules.PRICE.BunniPrice");
         chainlinkPriceFeeds = envAddress("current", "olympus.submodules.PRICE.ChainlinkPriceFeeds");
         erc4626Price = envAddress("current", "olympus.submodules.PRICE.ERC4626Price");
@@ -417,18 +411,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         );
 
         // 6. Install submodules on PRICEv2
-        //     - Install BalancerPoolTokenPrice submodule
         //     - Install BunniPrice submodule
         //     - Install ChainlinkPriceFeeds submodule
         //     - Install ERC4626Price submodule
         //     - Install UniswapV2PoolTokenPrice submodule
         //     - Install UniswapV3Price submodule
         //     - Install SimplePriceFeedStrategy submodule
-        console2.log("Installing BalancerPoolTokenPrice submodule");
-        addToBatch(
-            priceConfigV2,
-            abi.encodeWithSelector(PriceConfigV2.installSubmodule.selector, balancerPoolTokenPrice)
-        );
         console2.log("Installing BunniPrice submodule");
         addToBatch(
             priceConfigV2,
