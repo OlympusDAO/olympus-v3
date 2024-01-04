@@ -354,7 +354,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @dev                    - The pool is mis-configured
     /// @dev                    - If the pool is not a weighted pool
     ///
-    /// @param outputDecimals_  The number of output decimals
+    /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Balancer pool parameters of type `BalancerWeightedPoolParams`
     /// @return                 Price in the scale of `outputDecimals_`
     function getWeightedPoolTokenPrice(
@@ -445,7 +445,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     ///
     /// @dev                    NOTE: If there is a significant de-peg between the prices of constituent assets, the token price will be inaccurate. See the now-deleted mention of this: https://github.com/balancer/docs/pull/112/files
     ///
-    /// @param outputDecimals_  The number of output decimals
+    /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Balancer pool parameters of type `BalancerStablePoolParams`
     /// @return                 Price in the scale of outputDecimals_
     function getStablePoolTokenPrice(
@@ -566,7 +566,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @dev                    can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
     /// @param lookupToken_     The token to determine the price of
-    /// @param outputDecimals_  The number of output decimals
+    /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Balancer pool parameters of type `BalancerWeightedPoolParams`
     /// @return                 Price in the scale of `outputDecimals_`
     function getTokenPriceFromWeightedPool(
@@ -715,7 +715,7 @@ contract BalancerPoolTokenPrice is PriceSubmodule {
     /// @dev                    can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
     /// @param lookupToken_     The token to determine the price of
-    /// @param outputDecimals_  The number of output decimals
+    /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Balancer pool parameters of type `BalancerStablePoolParams`
     /// @return                 Price in the scale of `outputDecimals_`
     function getTokenPriceFromStablePool(

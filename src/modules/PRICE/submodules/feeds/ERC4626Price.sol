@@ -80,7 +80,7 @@ contract ERC4626Price is PriceSubmodule {
     /// @dev                    - The price of the underlying asset cannot be determined using PRICE
     ///
     /// @param asset_           The address of the ERC4626 asset
-    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @return                 The price of `asset_` in USD (in the scale of `outputDecimals_`)
     function getPriceFromUnderlying(
         address asset_,
