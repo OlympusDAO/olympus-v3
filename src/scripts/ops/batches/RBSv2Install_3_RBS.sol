@@ -75,6 +75,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     address daiEthPriceFeed;
     address daiUsdPriceFeed;
     address fxsUsdPriceFeed;
+    address btcEthPriceFeed;
+    address btcUsdPriceFeed;
 
     // Uniswap V3 Pools
     address daiWethUniV3Pool;
@@ -527,7 +529,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            console2.log("    DAI price: %s (18 dp)", OlympusPrice.getPrice(dai));
+            console2.log("    DAI price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(dai));
         }
 
         // 2. Configure sDAI price feed and moving average data on PRICE
@@ -556,7 +558,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            console2.log("    sDAI price: %s (18 dp)", OlympusPrice.getPrice(sdai));
+            console2.log("    sDAI price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(sdai));
         }
 
         // 3. Configure WETH price feed and moving average data on PRICE
@@ -591,7 +593,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            uint256[] wethObs_ = new uint256[](0);
+            uint256[] memory wethObs_ = new uint256[](0);
 
             console2.log("Adding WETH price feed to PRICE");
             addToBatch(
@@ -613,7 +615,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            console2.log("    wETH price: %s (18 dp)", OlympusPrice.getPrice(weth));
+            console2.log("    wETH price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(weth));
         }
 
         // 4. Configure veFXS price feed and moving average data on PRICE
@@ -655,7 +657,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            console2.log("    veFXS price: %s (18 dp)", OlympusPrice.getPrice(veFXS));
+            console2.log("    veFXS price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(veFXS));
         }
 
         // 5. Configure FXS price feed and moving average data on PRICE
@@ -697,7 +699,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            console2.log("    FXS price: %s (18 dp)", OlympusPrice.getPrice(fxs));
+            console2.log("    FXS price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(fxs));
         }
 
         // 6. Configure OHM on PRICE
@@ -736,7 +738,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            console2.log("    OHM price: %s (9 dp)", OlympusPrice.getPrice(ohm));
+            console2.log("    OHM price: %s (9 dp)", OlympusPricev2(priceV2).getPrice(ohm));
         }
 
         // ==================== SECTION 3: BunniManager Migration ==================== //
