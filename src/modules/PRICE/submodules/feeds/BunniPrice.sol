@@ -105,7 +105,7 @@ contract BunniPrice is PriceSubmodule {
     /// @dev                    - Any of the reserve assets are not defined as assets in PRICE
     ///
     /// @param bunniToken_      The address of the BunniToken contract
-    /// @param outputDecimals_  The number of decimals to use for the output price
+    /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          The encoded parameters for the function call
     /// @return                 The price of a single `bunniToken_` in USD in the scale of `outputDecimals_`
     function getBunniTokenPrice(

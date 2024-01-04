@@ -185,7 +185,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @dev                    - PRICE's priceDecimals or the feed's decimals are out of bounds and would lead to an overflow
     /// @dev                    - The price feed's results are invalid
     ///
-    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Chainlink pool parameters of type `OneFeedParams`
     /// @return                 Price in the scale of `outputDecimals_`
     function getOneFeedPrice(
@@ -228,7 +228,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @dev                    - PRICE's priceDecimals or any of the feed's decimals are out of bounds and would lead to an overflow
     /// @dev                    - Any of the price feeds' results are invalid
     ///
-    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Chainlink pool parameters of type `TwoFeedParams`
     /// @return                 Price in the scale of `outputDecimals_`.
     function getTwoFeedPriceDiv(
@@ -292,7 +292,7 @@ contract ChainlinkPriceFeeds is PriceSubmodule {
     /// @dev                   - PRICE's priceDecimals or any of the feed's decimals are out of bounds and would lead to an overflow
     /// @dev                   - Any of the price feeds' results are invalid
     ///
-    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Chainlink pool parameters of type `TwoFeedParams`
     /// @return                 Price in the scale of `outputDecimals_`.
     function getTwoFeedPriceMul(
