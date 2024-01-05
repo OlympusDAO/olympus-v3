@@ -12,7 +12,6 @@ import {SPPLYv1, Category as SupplyCategory} from "modules/SPPLY/SPPLY.v1.sol";
 /// @dev    Some functions in this policy are gated to addresses with the "supplyconfig_policy" or "supplyconfig_admin" roles
 contract SupplyConfig is Policy, RolesConsumer {
     // ========== ERRORS ========== //
-    error SupplyConfig_InvalidModule(Keycode module_);
 
     // ========== EVENTS ========== //
 

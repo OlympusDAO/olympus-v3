@@ -20,8 +20,6 @@ contract PriceConfigV2 is Policy, RolesConsumer {
 
     // ========== ERRORS ========== //
 
-    error PriceConfigV2_InvalidModule(Keycode module_);
-
     // ========== EVENTS ========== //
 
     // ========== STATE ========== //
