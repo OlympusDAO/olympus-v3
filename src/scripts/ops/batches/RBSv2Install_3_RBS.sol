@@ -70,13 +70,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     address fxs;
 
     // Price Feeds
-    address ohmEthPriceFeed;
-    address ethUsdPriceFeed;
-    address daiEthPriceFeed;
-    address daiUsdPriceFeed;
-    address fxsUsdPriceFeed;
-    address btcEthPriceFeed;
-    address btcUsdPriceFeed;
+    address usdPerEthPriceFeed;
+    address ethPerDaiPriceFeed;
+    address usdPerDaiPriceFeed;
+    address usdPerFxsPriceFeed;
+    address ethPerBtcPriceFeed;
+    address usdPerBtcPriceFeed;
 
     // Uniswap V3 Pools
     address daiWethUniV3Pool;
@@ -139,13 +138,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         veFXS = envAddress("current", "external.tokens.veFXS");
         fxs = envAddress("current", "external.tokens.FXS");
 
-        ohmEthPriceFeed = envAddress("current", "external.chainlink.ohmEthPriceFeed");
-        ethUsdPriceFeed = envAddress("current", "external.chainlink.ethUsdPriceFeed");
-        daiEthPriceFeed = envAddress("current", "external.chainlink.daiEthPriceFeed");
-        daiUsdPriceFeed = envAddress("current", "external.chainlink.daiUsdPriceFeed");
-        fxsUsdPriceFeed = envAddress("current", "external.chainlink.fxsUsdPriceFeed");
-        btcEthPriceFeed = envAddress("current", "external.chainlink.btcEthPriceFeed");
-        btcUsdPriceFeed = envAddress("current", "external.chainlink.btcUsdPriceFeed");
+        usdPerEthPriceFeed = envAddress("current", "external.chainlink.ethUsdPriceFeed");
+        ethPerDaiPriceFeed = envAddress("current", "external.chainlink.daiEthPriceFeed");
+        usdPerDaiPriceFeed = envAddress("current", "external.chainlink.daiUsdPriceFeed");
+        usdPerFxsPriceFeed = envAddress("current", "external.chainlink.fxsUsdPriceFeed");
+        ethPerBtcPriceFeed = envAddress("current", "external.chainlink.btcEthPriceFeed");
+        usdPerBtcPriceFeed = envAddress("current", "external.chainlink.btcUsdPriceFeed");
 
         daiWethUniV3Pool = envAddress("current", "external.uniswapV3.DaiWethPool");
         ohmWethUniV3Pool = envAddress("current", "external.uniswapV3.OhmWethPool");
@@ -460,19 +458,19 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     ChainlinkPriceFeeds.getOneFeedPrice.selector,
                     abi.encode(
                         ChainlinkPriceFeeds.OneFeedParams(
-                            AggregatorV2V3Interface(daiUsdPriceFeed),
+                            AggregatorV2V3Interface(usdPerDaiPriceFeed),
                             DEFAULT_CHAINLINK_UPDATE_THRESHOLD
                         )
                     )
                 );
                 daiFeeds[1] = PRICEv2.Component(
                     toSubKeycode("PRICE.CHAINLINK"),
-                    ChainlinkPriceFeeds.getTwoFeedPriceDiv.selector,
+                    ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
                     abi.encode(
                         ChainlinkPriceFeeds.TwoFeedParams(
-                            AggregatorV2V3Interface(daiEthPriceFeed),
+                            AggregatorV2V3Interface(ethPerDaiPriceFeed),
                             DEFAULT_CHAINLINK_UPDATE_THRESHOLD,
-                            AggregatorV2V3Interface(ethUsdPriceFeed),
+                            AggregatorV2V3Interface(usdPerEthPriceFeed),
                             DEFAULT_CHAINLINK_UPDATE_THRESHOLD
                         )
                     )
@@ -559,7 +557,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 ChainlinkPriceFeeds.getOneFeedPrice.selector,
                 abi.encode(
                     ChainlinkPriceFeeds.OneFeedParams(
-                        AggregatorV2V3Interface(ethUsdPriceFeed),
+                        AggregatorV2V3Interface(usdPerEthPriceFeed),
                         DEFAULT_CHAINLINK_UPDATE_THRESHOLD
                     )
                 )
@@ -569,9 +567,9 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 ChainlinkPriceFeeds.getTwoFeedPriceDiv.selector,
                 abi.encode(
                     ChainlinkPriceFeeds.TwoFeedParams(
-                        AggregatorV2V3Interface(btcEthPriceFeed),
+                        AggregatorV2V3Interface(usdPerBtcPriceFeed),
                         DEFAULT_CHAINLINK_UPDATE_THRESHOLD,
-                        AggregatorV2V3Interface(btcUsdPriceFeed),
+                        AggregatorV2V3Interface(ethPerBtcPriceFeed),
                         DEFAULT_CHAINLINK_UPDATE_THRESHOLD
                     )
                 )
@@ -612,7 +610,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 ChainlinkPriceFeeds.getOneFeedPrice.selector,
                 abi.encode(
                     ChainlinkPriceFeeds.OneFeedParams(
-                        AggregatorV2V3Interface(fxsUsdPriceFeed),
+                        AggregatorV2V3Interface(usdPerFxsPriceFeed),
                         DEFAULT_CHAINLINK_UPDATE_THRESHOLD
                     )
                 )
@@ -654,7 +652,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 ChainlinkPriceFeeds.getOneFeedPrice.selector,
                 abi.encode(
                     ChainlinkPriceFeeds.OneFeedParams(
-                        AggregatorV2V3Interface(fxsUsdPriceFeed),
+                        AggregatorV2V3Interface(usdPerFxsPriceFeed),
                         DEFAULT_CHAINLINK_UPDATE_THRESHOLD
                     )
                 )
