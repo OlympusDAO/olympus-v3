@@ -319,7 +319,6 @@ contract SupplyConfigTest is Test {
         // Create vault managers
         MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
 
-        MockVaultManager[] memory vaultManagers = new MockVaultManager[](0);
         address[] memory vaultManagerAddresses = new address[](0);
 
         // Create new submodule to install
@@ -350,7 +349,6 @@ contract SupplyConfigTest is Test {
         // Create vault managers
         MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
 
-        MockVaultManager[] memory vaultManagers = new MockVaultManager[](0);
         address[] memory vaultManagerAddresses = new address[](0);
 
         // Create new submodule to install
