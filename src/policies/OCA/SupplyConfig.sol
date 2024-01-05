@@ -124,19 +124,12 @@ contract SupplyConfig is Policy, RolesConsumer {
     }
 
     /// @notice Perform an action on a submodule
-    /// @dev    The submodule must be installed and must belong to the SPPLY module, otherwise this function
-    /// @dev    will revert.
+    /// @dev    This function reverts if:
+    /// @dev    - SPPLY.execOnSubmodule() reverts
     function execOnSubmodule(
         SubKeycode subKeycode_,
         bytes calldata data_
     ) external onlyRole("supplyconfig_policy") {
-        bytes20 subKeycode = fromSubKeycode(subKeycode_);
-
-        // Checks the first 5 bytes, which corresponds to the module keycode
-        bytes5 moduleKeycode = bytes5(subKeycode);
-        if (moduleKeycode != bytes5("SPPLY"))
-            revert SupplyConfig_InvalidModule(toKeycode(moduleKeycode));
-
         SPPLY.execOnSubmodule(subKeycode_, data_);
     }
 }

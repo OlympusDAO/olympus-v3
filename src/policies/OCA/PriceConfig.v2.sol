@@ -186,19 +186,12 @@ contract PriceConfigV2 is Policy, RolesConsumer {
     }
 
     /// @notice Perform an action on a submodule
-    /// @dev    The submodule must be installed and must belong to the PRICE module, otherwise this function
-    /// @dev    will revert.
+    /// @dev    This function reverts if:
+    /// @dev    - PRICE.execOnSubmodule() reverts
     function execOnSubmodule(
         SubKeycode subKeycode_,
         bytes calldata data_
     ) external onlyRole("priceconfig_policy") {
-        bytes20 subKeycode = fromSubKeycode(subKeycode_);
-
-        // Checks the first 5 bytes, which corresponds to the module keycode
-        bytes5 moduleKeycode = bytes5(subKeycode);
-        if (moduleKeycode != bytes5("PRICE"))
-            revert PriceConfigV2_InvalidModule(toKeycode(moduleKeycode));
-
         PRICE.execOnSubmodule(subKeycode_, data_);
     }
 }
