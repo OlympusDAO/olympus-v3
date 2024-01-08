@@ -29,7 +29,7 @@ import "src/Kernel.sol";
 import {Operator} from "policies/RBS/Operator.sol";
 import {OlympusHeart} from "policies/RBS/Heart.sol";
 import {BondCallback} from "policies/Bonds/BondCallback.sol";
-import {OlympusPriceConfig} from "policies/RBS/PriceConfig.sol";
+import {OlympusPriceConfig} from "policies/RBS/PriceConfig.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Distributor} from "policies/Distributor/Distributor.sol";
@@ -42,11 +42,13 @@ import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
 import {BLVaultManagerLusd} from "policies/BoostedLiquidity/BLVaultManagerLusd.sol";
 import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
-import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
+import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
 import {Appraiser} from "policies/OCA/Appraiser.sol";
+import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
+import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
 
 // Bophades Modules
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
@@ -61,14 +63,13 @@ import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
 
 // PRICE Submodules
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
-import {BalancerPoolTokenPrice} from "modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {ERC4626Price} from "modules/PRICE/submodules/feeds/ERC4626Price.sol";
 import {UniswapV2PoolTokenPrice} from "modules/PRICE/submodules/feeds/UniswapV2PoolTokenPrice.sol";
 import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 import {BunniPrice} from "modules/PRICE/submodules/feeds/BunniPrice.sol";
 
 // SPPLY Submodules
-import {AuraBalancerSupply} from "modules/SPPLY/submodules/AuraBalancerSupply.sol";
 import {BLVaultSupply} from "modules/SPPLY/submodules/BLVaultSupply.sol";
 import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
@@ -86,7 +87,6 @@ import {IUniswapV3Factory} from "@uniswap/v3-core/contracts/interfaces/IUniswapV
 // Mocks
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "test/mocks/AuraMocks.sol";
-import {MockBalancerPool, MockVault} from "test/mocks/BalancerMocks.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {Faucet} from "test/mocks/Faucet.sol";
 
@@ -114,14 +114,13 @@ contract OlympusDeploy is Script {
 
     // PRICEv2 Submodules
     SimplePriceFeedStrategy public simplePriceFeedStrategy;
-    BalancerPoolTokenPrice public balancerPoolTokenPrice;
     ChainlinkPriceFeeds public chainlinkPriceFeeds;
+    ERC4626Price public erc4626Price;
     UniswapV2PoolTokenPrice public uniswapV2PoolTokenPrice;
     UniswapV3Price public uniswapV3Price;
     BunniPrice public bunniPrice;
 
     // SPPLY Submodules
-    AuraBalancerSupply public auraBalancerSupply;
     BLVaultSupply public blVaultSupply;
     BunniSupply public bunniSupply;
     MigrationOffsetSupply public migrationOffsetSupply;
@@ -129,9 +128,11 @@ contract OlympusDeploy is Script {
 
     // Policies
     Operator public operator;
+    Operator public operatorV2;
     OlympusHeart public heart;
+    OlympusHeart public heartV2;
     BondCallback public callback;
-    OlympusPriceConfig public priceConfig;
+    OlympusPriceConfig public priceConfigV1;
     RolesAdmin public rolesAdmin;
     TreasuryCustodian public treasuryCustodian;
     Distributor public distributor;
@@ -144,10 +145,13 @@ contract OlympusDeploy is Script {
     BLVaultManagerLusd public lusdVaultManager;
     BLVaultLusd public lusdVault;
     Clearinghouse public clearinghouse;
-    CrossChainBridge public bridge;
-    Bookkeeper public bookkeeper;
+    CrossChainBridge public crossChainBridgeV1;
+    CrossChainBridge public crossChainBridgeV1_1;
+    PriceConfigV2 public priceConfigV2;
     BunniManager public bunniManager;
     Appraiser public appraiser;
+    SupplyConfig public supplyConfig;
+    TreasuryConfig public treasuryConfig;
 
     // External contracts
     BunniHub public bunniHub;
@@ -227,7 +231,9 @@ contract OlympusDeploy is Script {
             .selector;
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["Operator"] = this._deployOperator.selector;
+        selectorMap["OperatorV2"] = this._deployOperatorV2.selector;
         selectorMap["OlympusHeart"] = this._deployHeart.selector;
+        selectorMap["OlympusHeartV2"] = this._deployHeartV2.selector;
         selectorMap["BondCallback"] = this._deployBondCallback.selector;
         selectorMap["OlympusPriceConfig"] = this._deployPriceConfig.selector;
         selectorMap["RolesAdmin"] = this._deployRolesAdmin.selector;
@@ -240,23 +246,29 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultLido"] = this._deployBLVaultLido.selector;
         selectorMap["BLVaultManagerLido"] = this._deployBLVaultManagerLido.selector;
         selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
+        selectorMap["CrossChainBridgeV1_1"] = this._deployCrossChainBridgeV1_1.selector;
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
-        selectorMap["Bookkeeper"] = this._deployBookkeeper.selector;
+        selectorMap["PriceConfigV2"] = this._deployPriceConfigV2.selector;
         selectorMap["BunniManager"] = this._deployBunniManagerPolicy.selector;
         selectorMap["Appraiser"] = this._deployAppraiser.selector;
+        selectorMap["SupplyConfig"] = this._deploySupplyConfig.selector;
+        selectorMap["TreasuryConfig"] = this._deployTreasuryConfig.selector;
+
+        // Bunni
+        selectorMap["BunniHub"] = this._deployBunniHub.selector;
+        selectorMap["BunniLens"] = this._deployBunniLens.selector;
 
         // PRICE Submodules
         selectorMap["SimplePriceFeedStrategy"] = this._deploySimplePriceFeedStrategy.selector;
-        selectorMap["BalancerPoolTokenPrice"] = this._deployBalancerPoolTokenPrice.selector;
         selectorMap["ChainlinkPriceFeeds"] = this._deployChainlinkPriceFeeds.selector;
+        selectorMap["ERC4626Price"] = this._deployERC4626Price.selector;
         selectorMap["UniswapV2PoolTokenPrice"] = this._deployUniswapV2PoolTokenPrice.selector;
         selectorMap["UniswapV3Price"] = this._deployUniswapV3Price.selector;
         selectorMap["BunniPrice"] = this._deployBunniPrice.selector;
 
         // SPPLY Submodules
-        selectorMap["AuraBalancerSupply"] = this._deployAuraBalancerSupply.selector;
         selectorMap["BLVaultSupply"] = this._deployBLVaultSupply.selector;
         selectorMap["BunniSupply"] = this._deployBunniSupply.selector;
         selectorMap["MigrationOffsetSupply"] = this._deployMigrationOffsetSupply.selector;
@@ -307,10 +319,10 @@ contract OlympusDeploy is Script {
         kernel = Kernel(envAddress("olympus.Kernel"));
 
         // Bophades Modules
-        PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPrice"));
-        PRICEv2 = OlympusPricev2(envAddress("olympus.modules.OlympusPricev2"));
+        PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPriceV1"));
+        PRICEv2 = OlympusPricev2(envAddress("olympus.modules.OlympusPriceV2"));
         RANGE = OlympusRange(envAddress("olympus.modules.OlympusRangeV2"));
-        TRSRY = OlympusTreasury(envAddress("olympus.modules.OlympusTreasury"));
+        TRSRY = OlympusTreasury(envAddress("olympus.modules.OlympusTreasuryV1_1"));
         MINTR = OlympusMinter(envAddress("olympus.modules.OlympusMinter"));
         INSTR = OlympusInstructions(envAddress("olympus.modules.OlympusInstructions"));
         ROLES = OlympusRoles(envAddress("olympus.modules.OlympusRoles"));
@@ -321,9 +333,12 @@ contract OlympusDeploy is Script {
 
         // Bophades Policies
         operator = Operator(envAddress("olympus.policies.Operator"));
+        operatorV2 = Operator(envAddress("olympus.policies.OperatorV2"));
         heart = OlympusHeart(envAddress("olympus.policies.OlympusHeart"));
+        heartV2 = OlympusHeart(envAddress("olympus.policies.OlympusHeartV2"));
         callback = BondCallback(envAddress("olympus.policies.BondCallback"));
-        priceConfig = OlympusPriceConfig(envAddress("olympus.policies.OlympusPriceConfig"));
+        priceConfigV1 = OlympusPriceConfig(envAddress("olympus.policies.PriceConfigV1"));
+        priceConfigV2 = PriceConfigV2(envAddress("olympus.policies.PriceConfigV2"));
         rolesAdmin = RolesAdmin(envAddress("olympus.policies.RolesAdmin"));
         treasuryCustodian = TreasuryCustodian(envAddress("olympus.policies.TreasuryCustodian"));
         distributor = Distributor(envAddress("olympus.policies.Distributor"));
@@ -333,23 +348,30 @@ contract OlympusDeploy is Script {
         burner = Burner(envAddress("olympus.policies.Burner"));
         lidoVaultManager = BLVaultManagerLido(envAddress("olympus.policies.BLVaultManagerLido"));
         lidoVault = BLVaultLido(envAddress("olympus.policies.BLVaultLido"));
-        bookkeeper = Bookkeeper(envAddress("olympus.policies.Bookkeeper"));
-        bridge = CrossChainBridge(envAddress("olympus.policies.CrossChainBridge"));
+        crossChainBridgeV1 = CrossChainBridge(envAddress("olympus.policies.CrossChainBridgeV1"));
+        crossChainBridgeV1_1 = CrossChainBridge(
+            envAddress("olympus.policies.CrossChainBridgeV1_1")
+        );
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
         appraiser = Appraiser(envAddress("olympus.policies.Appraiser"));
+        supplyConfig = SupplyConfig(envAddress("olympus.policies.SupplyConfig"));
+        treasuryConfig = TreasuryConfig(envAddress("olympus.policies.TreasuryConfig"));
+        bunniManager = BunniManager(envAddress("olympus.policies.BunniManager"));
+
+        // Bunni
+        bunniHub = BunniHub(envAddress("external.Bunni.BunniHub"));
+        bunniLens = BunniLens(envAddress("external.Bunni.BunniLens"));
 
         // PRICE submodules
         simplePriceFeedStrategy = SimplePriceFeedStrategy(
             envAddress("olympus.submodules.PRICE.SimplePriceFeedStrategy")
         );
-        balancerPoolTokenPrice = BalancerPoolTokenPrice(
-            envAddress("olympus.submodules.PRICE.BalancerPoolTokenPrice")
-        );
         chainlinkPriceFeeds = ChainlinkPriceFeeds(
             envAddress("olympus.submodules.PRICE.ChainlinkPriceFeeds")
         );
+        erc4626Price = ERC4626Price(envAddress("olympus.submodules.PRICE.ERC4626Price"));
         uniswapV2PoolTokenPrice = UniswapV2PoolTokenPrice(
             envAddress("olympus.submodules.PRICE.UniswapV2PoolTokenPrice")
         );
@@ -357,9 +379,6 @@ contract OlympusDeploy is Script {
         bunniPrice = BunniPrice(envAddress("olympus.submodules.PRICE.BunniPrice"));
 
         // SPPLY submodules
-        auraBalancerSupply = AuraBalancerSupply(
-            envAddress("olympus.submodules.SPPLY.AuraBalancerSupply")
-        );
         blVaultSupply = BLVaultSupply(envAddress("olympus.submodules.SPPLY.BLVaultSupply"));
         bunniSupply = BunniSupply(envAddress("olympus.submodules.SPPLY.BunniSupply"));
         migrationOffsetSupply = MigrationOffsetSupply(
@@ -368,14 +387,14 @@ contract OlympusDeploy is Script {
         brickedSupply = BrickedSupply(envAddress("olympus.submodules.SPPLY.BrickedSupply"));
 
         // External contracts
-        bunniHub = BunniHub(envAddress("external.UniswapV3.BunniHub"));
-        bunniLens = BunniLens(envAddress("external.UniswapV3.BunniLens"));
+        bunniHub = BunniHub(envAddress("external.Bunni.BunniHub"));
+        bunniLens = BunniLens(envAddress("external.Bunni.BunniLens"));
 
         // Load deployment data
         string memory data = vm.readFile(deployFilePath_);
 
         // Parse deployment sequence and names
-        bytes[] memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes[]));
+        bytes memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes));
         uint256 len = sequence.length;
         console2.log("Contracts to be deployed:", len);
 
@@ -516,7 +535,7 @@ contract OlympusDeploy is Script {
         return address(RANGE);
     }
 
-    function _deployTreasury(bytes memory args) public returns (address) {
+    function _deployTreasury(bytes memory) public returns (address) {
         // No additional arguments for Treasury module
 
         // Deploy Treasury module
@@ -527,7 +546,7 @@ contract OlympusDeploy is Script {
         return address(TRSRY);
     }
 
-    function _deployMinter(bytes memory args) public returns (address) {
+    function _deployMinter(bytes memory) public returns (address) {
         // Only args are contracts in the environment
 
         // Deploy Minter module
@@ -538,7 +557,7 @@ contract OlympusDeploy is Script {
         return address(MINTR);
     }
 
-    function _deployRoles(bytes memory args) public returns (address) {
+    function _deployRoles(bytes memory) public returns (address) {
         // No additional arguments for Roles module
 
         // Deploy Roles module
@@ -549,7 +568,7 @@ contract OlympusDeploy is Script {
         return address(ROLES);
     }
 
-    function _deployBoostedLiquidityRegistry(bytes memory args) public returns (address) {
+    function _deployBoostedLiquidityRegistry(bytes memory) public returns (address) {
         // No additional arguments for OlympusBoostedLiquidityRegistry module
 
         // Deploy OlympusBoostedLiquidityRegistry module
@@ -640,7 +659,76 @@ contract OlympusDeploy is Script {
         return address(operator);
     }
 
-    function _deployBondCallback(bytes memory args) public returns (address) {
+    function _deployOperatorV2(bytes memory args) public returns (address) {
+        // Decode arguments for Operator policy
+        (
+            uint256 cushionDebtBuffer,
+            uint256 cushionDepositInterval,
+            uint256 cushionDuration,
+            uint256 cushionFactor,
+            uint256 regenObserve,
+            uint256 regenThreshold,
+            uint256 regenWait,
+            uint256 reserveFactor
+        ) = abi.decode(
+                args,
+                (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256)
+            );
+
+        // Create config params array
+        // Order is not alphabetical. Copied from the constructor.
+        uint32[8] memory configParams = [
+            uint32(cushionFactor),
+            uint32(cushionDuration),
+            uint32(cushionDebtBuffer),
+            uint32(cushionDepositInterval),
+            uint32(reserveFactor),
+            uint32(regenWait),
+            uint32(regenThreshold),
+            uint32(regenObserve)
+        ];
+
+        // Check that the environment variables are loaded
+        if (address(kernel) == address(0)) revert("Kernel address not set");
+        if (address(appraiser) == address(0)) revert("Appraiser address not set");
+        if (address(bondAuctioneer) == address(0)) revert("BondAuctioneer address not set");
+        if (address(callback) == address(0)) revert("Callback address not set");
+        if (address(ohm) == address(0)) revert("OHM address not set");
+        if (address(reserve) == address(0)) revert("Reserve address not set");
+
+        console2.log("Deploying Operator V2 policy");
+        console2.log("    kernel", address(kernel));
+        console2.log("    appraiser", address(appraiser));
+        console2.log("    bondAuctioneer", address(bondAuctioneer));
+        console2.log("    callback", address(callback));
+        console2.log("    ohm", address(ohm));
+        console2.log("    reserve", address(reserve));
+        console2.log("    wrappedReserve", address(wrappedReserve));
+        console2.log("    cushionDebtBuffer", cushionDebtBuffer);
+        console2.log("    cushionDepositInterval", cushionDepositInterval);
+        console2.log("    cushionDuration", cushionDuration);
+        console2.log("    cushionFactor", cushionFactor);
+        console2.log("    regenObserve", regenObserve);
+        console2.log("    regenThreshold", regenThreshold);
+        console2.log("    regenWait", regenWait);
+        console2.log("    reserveFactor", reserveFactor);
+
+        // Deploy Operator policy
+        vm.broadcast();
+        operatorV2 = new Operator(
+            kernel,
+            appraiser,
+            bondAuctioneer,
+            callback,
+            [address(ohm), address(reserve), address(wrappedReserve)],
+            configParams
+        );
+        console2.log("    Operator V2 deployed at:", address(operatorV2));
+
+        return address(operatorV2);
+    }
+
+    function _deployBondCallback(bytes memory) public returns (address) {
         // No additional arguments for BondCallback policy
 
         // Deploy BondCallback policy
@@ -671,23 +759,62 @@ contract OlympusDeploy is Script {
             maxReward,
             auctionDuration
         );
-        console2.log("OlympusHeart deployed at:", address(heart));
+        console2.log("OlympusHeart V1 deployed at:", address(heart));
 
         return address(heart);
     }
 
-    function _deployPriceConfig(bytes memory args) public returns (address) {
+    function _deployHeartV2(bytes memory args) public returns (address) {
+        // Decode arguments for OlympusHeart policy
+        (uint48 auctionDuration, uint256 maxReward) = abi.decode(args, (uint48, uint256));
+
+        // Check that the environment variables are loaded
+        if (address(kernel) == address(0)) revert("Kernel address not set");
+        if (address(operatorV2) == address(0)) revert("OperatorV2 address not set");
+        if (address(appraiser) == address(0)) revert("Appraiser address not set");
+        if (address(zeroDistributor) == address(0)) revert("ZeroDistributor address not set");
+
+        // Check the version of Operator
+        (uint8 operatorMajor, uint8 operatorMinor) = operatorV2.VERSION();
+        if (operatorMajor != 2) revert("OperatorV2 is not version 2");
+
+        console2.log("Deploying Heart V2 policy");
+        console2.log("    kernel", address(kernel));
+        console2.log("    operatorV2", address(operatorV2));
+        console2.log("    appraiser", address(appraiser));
+        console2.log("    zeroDistributor", address(zeroDistributor));
+        console2.log("    maxReward", maxReward);
+        console2.log("    auctionDuration", auctionDuration);
+
+        // Deploy OlympusHeart policy
+        vm.broadcast();
+        heartV2 = new OlympusHeart(
+            kernel,
+            operatorV2,
+            appraiser,
+            zeroDistributor,
+            maxReward,
+            auctionDuration
+        );
+        console2.log("    Heart V2 deployed at:", address(heartV2));
+
+        return address(heartV2);
+    }
+
+    function _deployPriceConfig(bytes memory) public returns (address) {
         // No additional arguments for PriceConfig policy
+
+        console2.log("Deploying PriceConfig policy");
 
         // Deploy PriceConfig policy
         vm.broadcast();
-        priceConfig = new OlympusPriceConfig(kernel);
-        console2.log("PriceConfig deployed at:", address(priceConfig));
+        priceConfigV1 = new OlympusPriceConfig(kernel);
+        console2.log("    PriceConfig deployed at:", address(priceConfigV1));
 
-        return address(priceConfig);
+        return address(priceConfigV1);
     }
 
-    function _deployRolesAdmin(bytes memory args) public returns (address) {
+    function _deployRolesAdmin(bytes memory) public returns (address) {
         // No additional arguments for RolesAdmin policy
 
         // Deploy RolesAdmin policy
@@ -698,7 +825,7 @@ contract OlympusDeploy is Script {
         return address(rolesAdmin);
     }
 
-    function _deployTreasuryCustodian(bytes memory args) public returns (address) {
+    function _deployTreasuryCustodian(bytes memory) public returns (address) {
         // No additional arguments for TreasuryCustodian policy
 
         // Deploy TreasuryCustodian policy
@@ -721,7 +848,7 @@ contract OlympusDeploy is Script {
         return address(distributor);
     }
 
-    function _deployZeroDistributor(bytes memory args) public returns (address) {
+    function _deployZeroDistributor(bytes memory) public returns (address) {
         // Deploy ZeroDistributor policy
         vm.broadcast();
         zeroDistributor = new ZeroDistributor(staking);
@@ -730,7 +857,7 @@ contract OlympusDeploy is Script {
         return address(distributor);
     }
 
-    function _deployEmergency(bytes memory args) public returns (address) {
+    function _deployEmergency(bytes memory) public returns (address) {
         // No additional arguments for Emergency policy
 
         // Deploy Emergency policy
@@ -741,7 +868,7 @@ contract OlympusDeploy is Script {
         return address(emergency);
     }
 
-    function _deployBondManager(bytes memory args) public returns (address) {
+    function _deployBondManager(bytes memory) public returns (address) {
         // Deploy BondManager policy
         vm.broadcast();
         bondManager = new BondManager(
@@ -756,7 +883,7 @@ contract OlympusDeploy is Script {
         return address(bondManager);
     }
 
-    function _deployBurner(bytes memory args) public returns (address) {
+    function _deployBurner(bytes memory) public returns (address) {
         // No additional arguments for Burner policy
 
         // Deploy Burner policy
@@ -767,7 +894,7 @@ contract OlympusDeploy is Script {
         return address(burner);
     }
 
-    function _deployBLVaultLido(bytes memory args) public returns (address) {
+    function _deployBLVaultLido(bytes memory) public returns (address) {
         // No additional arguments for BLVaultLido policy
 
         // Deploy BLVaultLido policy
@@ -779,7 +906,7 @@ contract OlympusDeploy is Script {
     }
 
     // deploy.json was not being parsed correctly, so I had to hardcode most of the deployment arguments
-    function _deployBLVaultManagerLido(bytes memory args) public returns (address) {
+    function _deployBLVaultManagerLido(bytes memory) public returns (address) {
         console2.log("ohm", address(ohm));
         console2.log("wsteth", address(wsteth));
         console2.log("aura", address(aura));
@@ -859,7 +986,7 @@ contract OlympusDeploy is Script {
         return address(lidoVaultManager);
     }
 
-    function _deployBLVaultLusd(bytes memory args) public returns (address) {
+    function _deployBLVaultLusd(bytes memory) public returns (address) {
         // No additional arguments for BLVaultLusd policy
 
         // Deploy BLVaultLusd policy
@@ -964,29 +1091,124 @@ contract OlympusDeploy is Script {
 
         // Deploy CrossChainBridge policy
         vm.broadcast();
-        bridge = new CrossChainBridge(kernel, lzEndpoint);
-        console2.log("Bridge deployed at:", address(bridge));
+        crossChainBridgeV1 = new CrossChainBridge(kernel, lzEndpoint);
+        console2.log("Cross-Chain Bridge deployed at:", address(crossChainBridgeV1));
 
-        return address(bridge);
+        return address(crossChainBridgeV1);
     }
 
-    function _deployBookkeeper(bytes memory args) public returns (address) {
-        // No additional arguments for Bookkeeper policy
+    function _deployCrossChainBridgeV1_1(bytes memory args) public returns (address) {
+        address lzEndpoint = abi.decode(args, (address));
 
-        // Deploy Bookkeeper policy
+        // Deploy CrossChainBridge policy
         vm.broadcast();
-        bookkeeper = new Bookkeeper(kernel);
-        console2.log("Bookkeeper deployed at:", address(bookkeeper));
+        crossChainBridgeV1_1 = new CrossChainBridge(kernel, lzEndpoint);
+        console2.log("Cross-Chain Bridge deployed at:", address(crossChainBridgeV1_1));
 
-        return address(bookkeeper);
+        return address(crossChainBridgeV1_1);
     }
+
+    function _deployPriceConfigV2(bytes memory) public returns (address) {
+        // No additional arguments for PriceConfigV2 policy
+
+        // Deploy PriceConfigV2 policy
+        vm.broadcast();
+        priceConfigV2 = new PriceConfigV2(kernel);
+        console2.log("PriceConfigV2 deployed at:", address(priceConfigV2));
+
+        return address(priceConfigV2);
+    }
+
+    function _deployTreasuryConfig(bytes memory) public returns (address) {
+        // No additional arguments for TreasuryConfig policy
+
+        // Deploy TreasuryConfig policy
+        vm.broadcast();
+        treasuryConfig = new TreasuryConfig(kernel);
+        console2.log("TreasuryConfig deployed at:", address(treasuryConfig));
+
+        return address(treasuryConfig);
+    }
+
+    // ========== BUNNI MANAGER POLICY ========== //
+
+    function _deployBunniManagerPolicy(bytes memory args) public returns (address) {
+        // Arguments
+        // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
+        (uint48 harvestFrequency, uint16 harvestRewardFee, uint256 harvestRewardMax) = abi.decode(
+            args,
+            (uint48, uint16, uint256)
+        );
+
+        console2.log("    harvestFrequency", harvestFrequency);
+        console2.log("    harvestRewardFee", harvestRewardFee);
+        console2.log("    harvestRewardMax", harvestRewardMax);
+
+        // Check that the environment variables are loaded
+        if (address(kernel) == address(0)) revert("Kernel address not set");
+
+        // Deploy the policy
+        vm.broadcast();
+        bunniManager = new BunniManager(
+            kernel,
+            harvestRewardMax,
+            harvestRewardFee,
+            harvestFrequency
+        );
+        console2.log("BunniManager deployed at:", address(bunniManager));
+
+        // BunniManager/Hub/Lens post-deployment steps (requiring permissions):
+        // - Call BunniManager.setBunniLens
+        // - Create the "bunni_admin" role and assign it
+        // - Activate the BunniManager policy
+
+        return address(bunniManager);
+    }
+
+    function _deployBunniHub(bytes memory args) public returns (address) {
+        // Arguments
+        address uniswapFactory = abi.decode(args, (address));
+
+        console2.log("    uniswapFactory", uniswapFactory);
+
+        // Check that the environment variables are loaded
+        if (address(bunniManager) == address(0)) revert("BunniManager address not set");
+        if (address(uniswapFactory) == address(0)) revert("UniswapFactory address not set");
+
+        // Deploy the BunniHub
+        vm.broadcast();
+        bunniHub = new BunniHub(
+            IUniswapV3Factory(uniswapFactory),
+            address(bunniManager),
+            0 // No protocol fee
+        );
+        console2.log("BunniHub deployed at:", address(bunniHub));
+
+        return address(bunniHub);
+    }
+
+    function _deployBunniLens(bytes memory) public returns (address) {
+        // No additional arguments for BunniLens policy
+
+        // Check that the environment variables are loaded
+        if (address(bunniHub) == address(0)) revert("BunniHub address not set");
+
+        // Deploy the BunniLens
+        vm.broadcast();
+        bunniLens = new BunniLens(bunniHub);
+        console2.log("BunniLens deployed at:", address(bunniLens));
+
+        return address(bunniLens);
+    }
+
+    // ========== PRICE AND SUBMODULES ========== //
 
     function _deployPricev2(bytes memory args) public returns (address) {
         // Decode arguments for PRICEv2 module
         (uint8 decimals, uint32 observationFrequency) = abi.decode(args, (uint8, uint32));
 
-        console2.log("decimals", decimals);
-        console2.log("observationFrequency", observationFrequency);
+        console2.log("    decimals", decimals);
+        console2.log("    observationFrequency", observationFrequency);
 
         // Deploy V2 Price module
         vm.broadcast();
@@ -996,84 +1218,7 @@ contract OlympusDeploy is Script {
         return address(PRICEv2);
     }
 
-    function _deployBunniManagerPolicy(bytes memory args) public returns (address) {
-        // Arguments
-        // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
-        (
-            uint48 harvestFrequency,
-            uint16 harvestRewardFee,
-            uint256 harvestRewardMax,
-            address uniswapFactory
-        ) = abi.decode(args, (uint48, uint16, uint256, address));
-
-        console2.log("harvestFrequency", harvestFrequency);
-        console2.log("harvestRewardFee", harvestRewardFee);
-        console2.log("harvestRewardMax", harvestRewardMax);
-        console2.log("uniswapFactory", uniswapFactory);
-
-        // Check that the environment variables are loaded
-        if (address(kernel) == address(0)) revert("Kernel address not set");
-
-        // Deployment steps
-        vm.broadcast();
-
-        // Deploy the policy
-        bunniManager = new BunniManager(
-            kernel,
-            harvestRewardMax,
-            harvestRewardFee,
-            harvestFrequency
-        );
-        console2.log("BunniManager deployed at:", address(bunniManager));
-
-        // Deploy the BunniHub
-        bunniHub = new BunniHub(
-            IUniswapV3Factory(uniswapFactory),
-            address(bunniManager),
-            0 // No protocol fee
-        );
-        console2.log("BunniHub deployed at:", address(bunniHub));
-
-        // Deploy the BunniLens
-        bunniLens = new BunniLens(bunniHub);
-        console2.log("BunniLens deployed at:", address(bunniLens));
-
-        // Post-deployment steps (requiring permissions):
-        // - Call BunniManager.setBunniLens
-        // - Create the "bunni_admin" role and assign it
-        // - Activate the BunniManager policy
-    }
-
-    function _deploySupply(bytes memory args) public returns (address) {
-        // Arguments
-        // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
-        uint256 initialCrossChainSupply = abi.decode(args, (uint256));
-
-        // TODO fill in the initialCrossChainSupply value
-
-        console2.log("initialCrossChainSupply", initialCrossChainSupply);
-
-        // Check that environment variables are loaded
-        if (address(kernel) == address(0)) revert("Kernel address not set");
-        if (address(ohm) == address(0)) revert("OHM address not set");
-        if (address(gOHM) == address(0)) revert("gOHM address not set");
-
-        address[2] memory tokens = [address(ohm), address(gOHM)];
-
-        // Deployment steps
-        vm.broadcast();
-
-        // Deploy the module
-        SPPLY = new OlympusSupply(kernel, tokens, initialCrossChainSupply);
-
-        console2.log("SPPLY deployed at:", address(SPPLY));
-
-        return address(SPPLY);
-    }
-
-    // ========== PRICE SUBMODULES ========== //
-
-    function _deploySimplePriceFeedStrategy(bytes memory args) public returns (address) {
+    function _deploySimplePriceFeedStrategy(bytes memory) public returns (address) {
         // No additional arguments for SimplePriceFeedStrategy submodule
 
         // Check that environment variables are loaded
@@ -1087,25 +1232,7 @@ contract OlympusDeploy is Script {
         return address(simplePriceFeedStrategy);
     }
 
-    function _deployBalancerPoolTokenPrice(bytes memory args) public returns (address) {
-        // No additional arguments for BalancerPoolTokenPrice submodule
-
-        // Check that environment variables are loaded
-        if (address(PRICEv2) == address(0)) revert("PRICEv2 address not set");
-        if (address(balancerVault) == address(0)) revert("balancerVault address not set");
-
-        // Deploy BalancerPoolTokenPrice submodule
-        vm.broadcast();
-        balancerPoolTokenPrice = new BalancerPoolTokenPrice(
-            PRICEv2,
-            IBalancerVault(address(balancerVault))
-        );
-        console2.log("BalancerPoolTokenPrice deployed at:", address(balancerPoolTokenPrice));
-
-        return address(balancerPoolTokenPrice);
-    }
-
-    function _deployChainlinkPriceFeeds(bytes memory args) public returns (address) {
+    function _deployChainlinkPriceFeeds(bytes memory) public returns (address) {
         // No additional arguments for ChainlinkPriceFeeds submodule
 
         // Check that environment variables are loaded
@@ -1119,7 +1246,21 @@ contract OlympusDeploy is Script {
         return address(chainlinkPriceFeeds);
     }
 
-    function _deployUniswapV2PoolTokenPrice(bytes memory args) public returns (address) {
+    function _deployERC4626Price(bytes memory) public returns (address) {
+        // No additional arguments for ERC4626Price submodules
+
+        // Check that environment variables are loaded
+        if (address(PRICEv2) == address(0)) revert("PRICEv2 address not set");
+
+        // Deploy ERC4626Price submodule
+        vm.broadcast();
+        erc4626Price = new ERC4626Price(PRICEv2);
+        console2.log("ERC4626Price deployed at:", address(erc4626Price));
+
+        return address(erc4626Price);
+    }
+
+    function _deployUniswapV2PoolTokenPrice(bytes memory) public returns (address) {
         // No additional arguments for UniswapV2PoolTokenPrice submodule
 
         // Check that environment variables are loaded
@@ -1133,7 +1274,7 @@ contract OlympusDeploy is Script {
         return address(uniswapV2PoolTokenPrice);
     }
 
-    function _deployUniswapV3Price(bytes memory args) public returns (address) {
+    function _deployUniswapV3Price(bytes memory) public returns (address) {
         // No additional arguments for UniswapV3Price submodule
 
         // Check that environment variables are loaded
@@ -1161,29 +1302,47 @@ contract OlympusDeploy is Script {
         return address(bunniPrice);
     }
 
-    // ========== SPPLY SUBMODULES ========== //
+    // ========== SPPLY AND SUBMODULES ========== //
 
-    function _deployAuraBalancerSupply(bytes memory) public returns (address) {
-        // No additional arguments for AuraBalancerSupply submodule
+    function _deploySupply(bytes memory args) public returns (address) {
+        // Arguments
+        // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
+        uint256 initialCrossChainSupply = abi.decode(args, (uint256));
 
-        // Check that the environment variables are loaded
-        if (address(SPPLY) == address(0)) revert("SPPLY address not set");
-        if (address(TRSRY) == address(0)) revert("TRSRY address not set");
-        if (address(balancerVault) == address(0)) revert("balancerVault address not set");
+        // TODO fill in the initialCrossChainSupply value
 
-        AuraBalancerSupply.Pool[] memory pools = new AuraBalancerSupply.Pool[](0);
+        console2.log("    initialCrossChainSupply", initialCrossChainSupply);
 
-        // Deploy AuraBalancerSupply submodule
+        // Check that environment variables are loaded
+        if (address(kernel) == address(0)) revert("Kernel address not set");
+        if (address(ohm) == address(0)) revert("OHM address not set");
+        if (address(gOHM) == address(0)) revert("gOHM address not set");
+
+        address[2] memory tokens = [address(ohm), address(gOHM)];
+
+        // Deployment steps
         vm.broadcast();
-        auraBalancerSupply = new AuraBalancerSupply(
-            SPPLY,
-            address(TRSRY),
-            address(balancerVault),
-            pools
-        );
-        console2.log("AuraBalancerSupply deployed at:", address(auraBalancerSupply));
 
-        return address(auraBalancerSupply);
+        // Deploy the module
+        SPPLY = new OlympusSupply(kernel, tokens, initialCrossChainSupply);
+
+        console2.log("SPPLY deployed at:", address(SPPLY));
+
+        return address(SPPLY);
+    }
+
+    function _deploySupplyConfig(bytes memory) public returns (address) {
+        // No additional arguments for SupplyConfig submodule
+
+        // Check that environment variables are loaded
+        if (address(kernel) == address(0)) revert("Kernel address not set");
+
+        // Deploy SupplyConfig submodule
+        vm.broadcast();
+        supplyConfig = new SupplyConfig(kernel);
+        console2.log("SupplyConfig deployed at:", address(supplyConfig));
+
+        return address(supplyConfig);
     }
 
     function _deployBLVaultSupply(bytes memory) public returns (address) {
@@ -1224,7 +1383,7 @@ contract OlympusDeploy is Script {
         // Decode arguments for MigrationOffsetSupply submodule
         uint256 migrationOffset = abi.decode(args, (uint256));
 
-        console2.log("migrationOffset", migrationOffset);
+        console2.log("    migrationOffset", migrationOffset);
 
         // Check that the environment variables are loaded
         if (address(SPPLY) == address(0)) revert("SPPLY address not set");
@@ -1242,14 +1401,23 @@ contract OlympusDeploy is Script {
         return address(migrationOffsetSupply);
     }
 
-    function _deployBrickedSupply(bytes memory args) public returns (address) {
+    function _deployBrickedSupply(bytes calldata args) public returns (address) {
         // Decode arguments for BrickedSupply submodule
-        (address[] memory ohmDenominatedTokens, address[] memory gohmDenominatedTokens) = abi
-            .decode(args, (address[], address[]));
+        // Necessary to truncate the first word (32 bytes) of args due to a potential bug in the JSON parser.
+        (address[] memory gohmDenominatedTokens, address[] memory ohmDenominatedTokens) = abi
+            .decode(args[32:], (address[], address[]));
 
         // Check that the environment variables are loaded
         if (address(SPPLY) == address(0)) revert("SPPLY address not set");
         if (address(sOHM) == address(0)) revert("sOHM address not set");
+
+        // Print out all gohmDenominatedTokens and ohmDenominatedTokens
+        for (uint256 i = 0; i < gohmDenominatedTokens.length; i++) {
+            console2.log("    gohmDenominatedToken", gohmDenominatedTokens[i]);
+        }
+        for (uint256 i = 0; i < ohmDenominatedTokens.length; i++) {
+            console2.log("    ohmDenominatedToken", ohmDenominatedTokens[i]);
+        }
 
         // Deploy BrickedSupply submodule
         vm.broadcast();
@@ -1322,7 +1490,7 @@ contract OlympusDeploy is Script {
         operator = Operator(vm.envAddress("OPERATOR"));
         heart = OlympusHeart(vm.envAddress("HEART"));
         callback = BondCallback(vm.envAddress("CALLBACK"));
-        priceConfig = OlympusPriceConfig(vm.envAddress("PRICECONFIG"));
+        priceConfigV1 = OlympusPriceConfig(vm.envAddress("PRICECONFIG"));
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
         treasuryCustodian = TreasuryCustodian(vm.envAddress("TRSRYCUSTODIAN"));
         distributor = Distributor(vm.envAddress("DISTRIBUTOR"));
@@ -1363,7 +1531,7 @@ contract OlympusDeploy is Script {
         require(kernel.isPolicyActive(operator));
         require(kernel.isPolicyActive(heart));
         require(kernel.isPolicyActive(callback));
-        require(kernel.isPolicyActive(priceConfig));
+        require(kernel.isPolicyActive(priceConfigV1));
         require(kernel.isPolicyActive(rolesAdmin));
         require(kernel.isPolicyActive(treasuryCustodian));
         require(kernel.isPolicyActive(distributor));

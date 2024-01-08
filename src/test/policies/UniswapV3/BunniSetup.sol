@@ -31,6 +31,7 @@ import {IBunniToken} from "src/external/bunni/interfaces/IBunniToken.sol";
 import {UniswapV3Factory} from "test/lib/UniswapV3/UniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
 import {UniswapV3Pool} from "test/lib/UniswapV3/UniswapV3Pool.sol";
+import {IUniswapV3PoolState} from "@uniswap/v3-core/contracts/interfaces/pool/IUniswapV3PoolState.sol";
 
 contract BunniSetup is Test {
     using ModuleTestFixtureGenerator for OlympusPricev2;
@@ -222,6 +223,106 @@ contract BunniSetup is Test {
             pool_,
             abi.encodeWithSelector(UniswapV3Pool.observe.selector, observationWindow),
             abi.encode(tickCumulatives, secondsPerLiquidityCumulativeX128s)
+        );
+    }
+
+    function mockPoolTick(
+        address pool_,
+        int24 tick_
+    ) public {
+        vm.mockCall(
+            pool_,
+            abi.encodeWithSelector(IUniswapV3PoolState.slot0.selector),
+            abi.encode(
+                uint160(0),
+                tick_,
+                uint16(0),
+                uint16(0),
+                uint16(0),
+                uint8(0),
+                true
+            )
+        );
+    }
+
+    function mockPoolPosition(
+        address pool_,
+        int24 tickLower_,
+        int24 tickUpper_,
+        uint128 liquidity_,
+        uint256 feeGrowthInside0Last_,
+        uint256 feeGrowthInside1Last_,
+        uint256 cached0_,
+        uint256 cached1_
+    ) public {
+        vm.mockCall(
+            pool_,
+            abi.encodeWithSelector(
+                IUniswapV3PoolState.positions.selector,
+                abi.encodePacked(
+                    address(bunniHub),
+                    tickLower_,
+                    tickUpper_
+                )
+            ),
+            abi.encode(
+                liquidity_,
+                feeGrowthInside0Last_,
+                feeGrowthInside1Last_,
+                cached0_,
+                cached1_
+            )
+        );
+    }
+
+    function mockPoolTicks(
+        address pool_,
+        int24 tick_,
+        uint256 feeGrowthOutside0X128_,
+        uint256 feeGrowthOutside1X128_
+    ) public {
+        vm.mockCall(
+            pool_,
+            abi.encodeWithSelector(
+                IUniswapV3PoolState.ticks.selector,
+                tick_
+            ),
+            abi.encode(
+                uint128(0),
+                int128(0),
+                feeGrowthOutside0X128_,
+                feeGrowthOutside1X128_,
+                uint256(0),
+                uint256(0),
+                uint256(0),
+                uint256(0)
+            )
+        );
+    }
+
+    function mockPoolFeeGrowthGlobal(
+        address pool_,
+        uint256 feeGrowthGlobal0X128_,
+        uint256 feeGrowthGlobal1X128_
+    ) public {
+        vm.mockCall(
+            pool_,
+            abi.encodeWithSelector(
+                IUniswapV3PoolState.feeGrowthGlobal0X128.selector
+            ),
+            abi.encode(
+                feeGrowthGlobal0X128_
+            )
+        );
+
+        vm.mockCall(
+            pool_,
+            abi.encodeWithSelector(
+                IUniswapV3PoolState.feeGrowthGlobal1X128.selector
+            ),
+            abi.encode(
+                feeGrowthGlobal1X128_
+            )
         );
     }
 

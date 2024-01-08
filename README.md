@@ -10,6 +10,7 @@ This requires the following to be installed:
 
 -   jq: `brew install jq`
 -   foundry: [instructions](https://book.getfoundry.sh/getting-started/installation)
+-   lcov: `brew install lcov`
 
 ### Local Dependencies
 
@@ -75,6 +76,39 @@ Pass `--exclude=<FILE>` to ignore specific files from the analysis. For example:
 
 `pnpm run metrics --exclude=src/modules/SPPLY/submodules/BunniSupply.sol src/modules/SPPLY/**/*.sol src/scripts/deploy/DeployV2.sol`
 
+## Testing
+
+Tests have been split into different scripts:
+
+-   `pnpm run test:unit`
+-   `pnpm run test:fork`
+-   `pnpm run test:crosschainfork`
+-   `pnpm run test:coverage`
+
+If tests are failing:
+
+-   Firstly, please ensure that you have read this README and have followed the instructions
+-   Restrict included tests to unit tests. This can be achieved using `pnpm run test:unit`
+-   If you are experiencing a unit test failure, try restricting the test run to the specific test contract. For example: `forge test -vvv --match-contract BunniPriceTest`
+
+This error may occur running test coverage, and is a known issue:
+
+```
+[⠒] Compiling 341 files with 0.8.15
+[⠒] Solc 0.8.15 finished in 119.02s
+Error:
+Compiler run failed:
+Error: Yul exception:Cannot swap Slot TMP[iszero, 0] with Slot RET[abi_encode_tuple_address]: too deep in the stack by 1 slots in [ RET expr_143919_mpos expr_143878_mpos TMP[iszero, 0] _1 _20 expr_2 expr_2 expr_5 expr_11 expr_5 expr_5 expr_10 expr_143945_address expr_143964_mpos expr_5 expr_143945_functionSelector expr_12 expr_143878_mpos expr_143919_mpos RET[abi_encode_tuple_address] ]
+memoryguard was present.
+memoryguard was present.
+```
+
+This error may occur running tests, and is a known issue:
+
+```
+ERROR cheatcodes: non-empty stderr input=["sh", "-c", "./src/test/lib/quabi/jq_bytes.sh '[.ast.nodes[] | if .name == \"KernelAdapter\" then .nodes[] else empty end | if .nodeType == \"FunctionDefinition\" and .kind == \"function\" and ([.modifiers[] | .modifierName.name == \"permissioned\" ] | any ) then .functionSelector else empty end ]' ./out/Kernel.sol/KernelAdapter.json"] stderr="tr: warning: an unescaped backslash at end of string is not portable\n"
+```
+
 ## Deployment
 
 ### Environment
@@ -87,16 +121,25 @@ Copy the `.env.deploy.example` file into one file per chain, e.g. `.env_deploy_g
     - If necessary, add external dependencies (e.g. `sdai = ERC20(envAddress("external.tokens.sDAI"));`)
     - Create a function to handle the deployment of the new contracts (e.g. `_deployBLVaultLusd()`)
     - Add the new contracts to the `selectorMap` with their corresponding keys.
-2. Update the configuration-input JSON file `src/scripts/deployment/deploy.json`
+2. Update the configuration-input JSON file `src/scripts/deployment/savedDeployments/<DEPLOYMENT>.json`
     - Use the corresponding keys for the selectorMap in `#1.3`.
     - Use any necessary configuration parameters.
-    - Create a copy the file under `src/scripts/deploy/savedDeployments/` and give it the same name as internal function created in `#1.2`.
 3. If external dependencies are required, add them in `src/scripts/env.json`, so that they can be used in `DeployV2.sol`.
 4. If necessary, update your `.env` file. It should, at least, have the same variables as in `.env.deploy.example`.
 5. Run `shell/deploy.sh $DEPLOY_FILE_PATH` to run the deployment shell script (e.g. `shell/deploy.sh src/scripts/deploy/savedDeployments/rbs_v1_3.json`).
-    - If you want to broadcast the tx to the network, uncomment the line of the script containing `--broadcast`. Only do so after having tested the deployment.
+    - If you want to broadcast the tx to the network, add `true` as the second command-line argument, e.g. `shell/deploy.sh src/scripts/deploy/savedDeployments/rbs_v1_3.json true`. Only do so after having tested the deployment.
 6. After a successful deployment, update `src/scripts/env.json` with the new contract addresses.
 7. Finally, use [olymsig](https://github.com/OlympusDAO/olymsig) (or [olymsig-testnet](https://github.com/OlympusDAO/olymsig-testnet) if testing the deployment) to plug the newly deployed contracts into `olympus-v3`.
+
+### Fork Testing
+
+If you would like to deploy (or activate) against a persistent fork, you can use the `anvil` tool:
+
+```shell
+anvil --block-time 12 --fork-url <RPL URL> --chain-id 1
+```
+
+Following that, set the `RPC_URL` variable (or variants) to `http://127.0.0.1:8545`
 
 ## How To Verify
 
@@ -137,3 +180,14 @@ Sometimes the automatic etherscan verification fails when deploying a contract. 
 -   Deploy any dependencies (if on testnet)
 -   Deploy BLV contracts
 -   Activate BLV contracts with the BLV registry (using an olymsig script)
+
+## Activation
+
+The `src/scripts/ops/` directory contains "OlyBatch" scripts used for queueing contract calls into the multi-sig.
+
+To run:
+
+1. Ensure that all of the variables specified in `.env.deploy.example` are filled and exist in your `.env`
+2. Run the script in the format: `src/scripts/ops/batch.sh <script name> <function name> <broadcast>`
+    - e.g.: `src/scripts/ops/batch.sh RBSv2Install_1_TRSRY RBSv2Install_1_1 false` to simulate
+    - e.g.: `src/scripts/ops/batch.sh RBSv2Install_1_TRSRY RBSv2Install_1_1 true` to broadcast

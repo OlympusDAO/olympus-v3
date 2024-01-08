@@ -1,0 +1,81 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusPricev2",
+            "args": {
+                "decimals": 18,
+                "observationFrequency": 28800
+            }
+        },
+        {
+            "name": "BunniPrice",
+            "args": {}
+        },
+        {
+            "name": "ChainlinkPriceFeeds",
+            "args": {}
+        },
+        {
+            "name": "ERC4626Price",
+            "args": {}
+        },
+        {
+            "name": "UniswapV2PoolTokenPrice",
+            "args": {}
+        },
+        {
+            "name": "UniswapV3Price",
+            "args": {}
+        },
+        {
+            "name": "SimplePriceFeedStrategy",
+            "args": {}
+        },
+        {
+            "name": "BunniManager",
+            "args": {
+                "harvestFrequency": 86400,
+                "harvestRewardFee": 1000,
+                "harvestRewardMax": 10000000000
+            }
+        },
+        {
+            "name": "BunniHub",
+            "args": {
+                "uniswapFactory": "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+            }
+        },
+        {
+            "name": "BunniLens",
+            "args": {}
+        },
+        {
+            "name": "Appraiser",
+            "args": {}
+        },
+        {
+            "name": "PriceConfigV2",
+            "args": {}
+        },
+        {
+            "name": "OperatorV2",
+            "args": {
+                "cushionDebtBuffer": 100000,
+                "cushionDepositInterval": 14400,
+                "cushionDuration": 259200,
+                "cushionFactor": 3000,
+                "regenObserve": 21,
+                "regenThreshold": 18,
+                "regenWait": 518400,
+                "reserveFactor": 1000
+            }
+        },
+        {
+            "name": "OlympusHeartV2",
+            "args": {
+                "auctionDuration": 1200,
+                "maxReward": 40000000000
+            }
+        }
+    ]
+}

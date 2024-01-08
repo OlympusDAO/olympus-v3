@@ -83,6 +83,14 @@ abstract contract ModuleWithSubmodules is Module {
     /// @notice Mapping of SubKeycode to Submodule address.
     mapping(SubKeycode => Submodule) public getSubmoduleForKeycode;
 
+    /// @notice Install a new submodule
+    /// @dev    This function will revert if:
+    /// @dev    - The new submodule is not a contract
+    /// @dev    - The new submodule does not have the same keycode prefix as this module
+    /// @dev    - The new submodule has the same keycode as an existing submodule
+    /// @dev    - The caller is not permissioned
+    ///
+    /// @param newSubmodule_    The new submodule to install
     function installSubmodule(Submodule newSubmodule_) external permissioned {
         // Validate new submodule and get its subkeycode
         SubKeycode subKeycode = _validateSubmodule(newSubmodule_);
@@ -100,6 +108,15 @@ abstract contract ModuleWithSubmodules is Module {
         newSubmodule_.INIT();
     }
 
+    /// @notice Upgrades an existing submodule
+    /// @dev    This function will revert if:
+    /// @dev    - The new submodule is not a contract
+    /// @dev    - The new submodule does not have the same keycode prefix as this module
+    /// @dev    - The new submodule is the zero address
+    /// @dev    - The new submodule has the same address as an existing submodule
+    /// @dev    - The caller is not permissioned
+    ///
+    /// @param newSubmodule_    The new submodule to install
     function upgradeSubmodule(Submodule newSubmodule_) external permissioned {
         // Validate new submodule and get its subkeycode
         SubKeycode subKeycode = _validateSubmodule(newSubmodule_);
@@ -117,6 +134,19 @@ abstract contract ModuleWithSubmodules is Module {
         newSubmodule_.INIT();
     }
 
+    /// @notice Perform an action on a submodule
+    /// @dev    There is no need to check if the `subKeycode_` belongs to this module,
+    /// @dev    because `installSubmodule()` and `upgradeSubmodule()` (via `_validateSubmodule()`)
+    /// @dev    ensure that the submodule has the same keycode as this module.
+    ///
+    /// @dev    This function will revert if:
+    /// @dev    - The submodule is not installed
+    /// @dev    - The caller is not permissioned
+    /// @dev    - The call to the submodule reverts
+    ///
+    /// @param subKeycode_    The SubKeycode of the submodule to call
+    /// @param callData_      The calldata to send to the submodule
+    /// @return returnData_   The return data from the submodule call
     function execOnSubmodule(
         SubKeycode subKeycode_,
         bytes memory callData_

@@ -10,7 +10,7 @@ import {FullMath} from "libraries/FullMath.sol";
 
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
-import {OlympusPriceConfig} from "policies/RBS/PriceConfig.sol";
+import {OlympusPriceConfig} from "policies/RBS/PriceConfig.v1.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";

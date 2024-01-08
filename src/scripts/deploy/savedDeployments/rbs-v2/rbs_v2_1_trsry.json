@@ -1,0 +1,12 @@
+{
+    "sequence": [
+        {
+            "name": "OlympusTreasury",
+            "args": {}
+        },
+        {
+            "name": "TreasuryConfig",
+            "args": {}
+        }
+    ]
+}
