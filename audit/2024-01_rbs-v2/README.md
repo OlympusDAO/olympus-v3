@@ -445,5 +445,5 @@ pnpm run lint
 Code metrics have been calculated using the following command:
 
 ```shell
-pnpm run metrics src/modules/PRICE/submodules/feeds/BunniPrice.sol src/modules/SPPLY/submodules/BunniSupply.sol src/scripts/deploy/DeployV2.sol src/policies/OCA/**.sol src/policies/RBS/**.sol src/policies/UniswapV3/BunniManager.sol src/policies/Bonds/**.sol src/modules/RANGE/**.sol --exclude=src/policies/RBS/PriceConfig.sol --exclude=src/modules/RANGE/RANGE.v1.sol
+pnpm run metrics --exclude=src/modules/PRICE/submodules/feeds/BalancerPoolTokenPrice.sol --exclude=src/modules/SPPLY/submodules/AuraBalancerSupply.sol src/libraries/Deviation.sol src/libraries/QuickSort.sol src/libraries/UniswapV3/*.sol src/modules/PRICE/OlympusPrice.v2.sol src/modules/PRICE/PRICE.v2.sol src/modules/PRICE/submodules/**/*.sol src/modules/SPPLY/**/*.sol src/modules/TRSRY/**/*.sol src/policies/OCA/**.sol src/policies/RBS/Heart.sol src/policies/RBS/Operator.sol src/policies/UniswapV3/BunniManager.sol src/modules/RANGE/RANGE.v2.sol src/modules/RANGE/OlympusRange.sol
 ```
