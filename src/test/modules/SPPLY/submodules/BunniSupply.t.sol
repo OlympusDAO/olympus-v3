@@ -93,8 +93,8 @@ contract BunniSupplyTest is Test {
 
     // OHM-wETH Uni V3 position data based of owner: 0x245cc372c84b3645bf0ffe6538620b04a217988b, NFT Manager ID: 562564
     // Uncollected fees when the snapshot was taken: 150.56 OHM + 0.624 WETH
-    int24 internal constant OHM_WETH_POSITION_MAX_TICK = 887272;
-    int24 internal constant OHM_WETH_POSITION_MIN_TICK = -887272;
+    int24 internal constant OHM_WETH_POSITION_MAX_TICK = 887270;
+    int24 internal constant OHM_WETH_POSITION_MIN_TICK = -887270;
     int24 internal constant OHM_WETH_POSITION_POOL_TICK = 154454;
     uint128 internal constant OHM_WETH_POSITION_LIQUIDITY = 346355586036686019;
     uint256 internal constant OHM_WETH_FEEGROWTH_GLOBAL0X128 =

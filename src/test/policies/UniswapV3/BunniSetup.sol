@@ -248,7 +248,7 @@ contract BunniSetup is Test {
             pool_,
             abi.encodeWithSelector(
                 IUniswapV3PoolState.positions.selector,
-                abi.encodePacked(address(bunniHub), tickLower_, tickUpper_)
+                keccak256(abi.encodePacked(address(bunniHub), tickLower_, tickUpper_))
             ),
             abi.encode(liquidity_, feeGrowthInside0Last_, feeGrowthInside1Last_, cached0_, cached1_)
         );
