@@ -1309,8 +1309,22 @@ contract BunniSupplyTest is Test {
 
         // Mock the pool state to match the data from when the uncollected fee snapshot was taken
         bunniSetup.mockPoolTick(address(uniswapPool), OHM_WETH_POSITION_POOL_TICK);
-        bunniSetup.mockPoolTicks(address(uniswapPool), OHM_WETH_POSITION_MIN_TICK, OHM_WETH_FEEGROWTH_OUTSIDE0X128, OHM_WETH_FEEGROWTH_OUTSIDE1X128);
-        bunniSetup.mockPoolPosition(address(uniswapPool), OHM_WETH_POSITION_MIN_TICK, OHM_WETH_POSITION_MAX_TICK, OHM_WETH_POSITION_LIQUIDITY, OHM_WETH_FEEGROWTH_INSIDE0X128, OHM_WETH_FEEGROWTH_INSIDE1X128, 0, 0);
+        bunniSetup.mockPoolTicks(
+            address(uniswapPool),
+            OHM_WETH_POSITION_MIN_TICK,
+            OHM_WETH_FEEGROWTH_OUTSIDE0X128,
+            OHM_WETH_FEEGROWTH_OUTSIDE1X128
+        );
+        bunniSetup.mockPoolPosition(
+            address(uniswapPool),
+            OHM_WETH_POSITION_MIN_TICK,
+            OHM_WETH_POSITION_MAX_TICK,
+            OHM_WETH_POSITION_LIQUIDITY,
+            OHM_WETH_FEEGROWTH_INSIDE0X128,
+            OHM_WETH_FEEGROWTH_INSIDE1X128,
+            0,
+            0
+        );
         bunniSetup.mockPoolFeeGrowthGlobal(
             address(uniswapPool),
             OHM_WETH_FEEGROWTH_GLOBAL0X128,

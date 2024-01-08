@@ -226,22 +226,11 @@ contract BunniSetup is Test {
         );
     }
 
-    function mockPoolTick(
-        address pool_,
-        int24 tick_
-    ) public {
+    function mockPoolTick(address pool_, int24 tick_) public {
         vm.mockCall(
             pool_,
             abi.encodeWithSelector(IUniswapV3PoolState.slot0.selector),
-            abi.encode(
-                uint160(0),
-                tick_,
-                uint16(0),
-                uint16(0),
-                uint16(0),
-                uint8(0),
-                true
-            )
+            abi.encode(uint160(0), tick_, uint16(0), uint16(0), uint16(0), uint8(0), true)
         );
     }
 
@@ -259,19 +248,9 @@ contract BunniSetup is Test {
             pool_,
             abi.encodeWithSelector(
                 IUniswapV3PoolState.positions.selector,
-                abi.encodePacked(
-                    address(bunniHub),
-                    tickLower_,
-                    tickUpper_
-                )
+                abi.encodePacked(address(bunniHub), tickLower_, tickUpper_)
             ),
-            abi.encode(
-                liquidity_,
-                feeGrowthInside0Last_,
-                feeGrowthInside1Last_,
-                cached0_,
-                cached1_
-            )
+            abi.encode(liquidity_, feeGrowthInside0Last_, feeGrowthInside1Last_, cached0_, cached1_)
         );
     }
 
@@ -283,10 +262,7 @@ contract BunniSetup is Test {
     ) public {
         vm.mockCall(
             pool_,
-            abi.encodeWithSelector(
-                IUniswapV3PoolState.ticks.selector,
-                tick_
-            ),
+            abi.encodeWithSelector(IUniswapV3PoolState.ticks.selector, tick_),
             abi.encode(
                 uint128(0),
                 int128(0),
@@ -307,22 +283,14 @@ contract BunniSetup is Test {
     ) public {
         vm.mockCall(
             pool_,
-            abi.encodeWithSelector(
-                IUniswapV3PoolState.feeGrowthGlobal0X128.selector
-            ),
-            abi.encode(
-                feeGrowthGlobal0X128_
-            )
+            abi.encodeWithSelector(IUniswapV3PoolState.feeGrowthGlobal0X128.selector),
+            abi.encode(feeGrowthGlobal0X128_)
         );
 
         vm.mockCall(
             pool_,
-            abi.encodeWithSelector(
-                IUniswapV3PoolState.feeGrowthGlobal1X128.selector
-            ),
-            abi.encode(
-                feeGrowthGlobal1X128_
-            )
+            abi.encodeWithSelector(IUniswapV3PoolState.feeGrowthGlobal1X128.selector),
+            abi.encode(feeGrowthGlobal1X128_)
         );
     }
 
