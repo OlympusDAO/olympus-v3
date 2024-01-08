@@ -114,6 +114,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     // Wallets
     address daoWorkingWallet;
 
+    uint32 internal constant DEFAULT_RESERVE_TWAP_OBSERVATION_WINDOW = 30 days;
     uint32 internal constant DEFAULT_TWAP_OBSERVATION_WINDOW = 7 days;
     uint32 internal constant DEFAULT_CHAINLINK_UPDATE_THRESHOLD = 24 hours;
 
@@ -489,7 +490,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             }
 
             uint256 daiLastObsTime_ = argData.readUint(".daiLastObsTime");
-            uint256[] memory daiObs_ = argData.readUintArray(".daiObs"); // 7 days * 24 hours / 8 hours = 21 observations
+            uint256[] memory daiObs_ = argData.readUintArray(".daiObs"); // 30 days * 24 hours / 8 hours = 90 observations
 
             console2.log("Adding DAI price feed to PRICE");
             addToBatch(
@@ -499,7 +500,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     dai,
                     true, // store moving average
                     false, // don't use the moving average as part of price strategy
-                    DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average duration
+                    DEFAULT_RESERVE_TWAP_OBSERVATION_WINDOW, // moving average duration
                     daiLastObsTime_,
                     daiObs_,
                     PRICEv2.Component(
@@ -702,7 +703,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             );
 
             uint256 ohmLastObsTime_ = argData.readUint(".ohmLastObsTime");
-            uint256[] memory ohmObs_ = argData.readUintArray(".ohmObs"); // 7 days * 24 hours / 8 hours = 21 observations
+            uint256[] memory ohmObs_ = argData.readUintArray(".ohmObs"); // 30 days * 24 hours / 8 hours = 90 observations
 
             console2.log("Adding OHM price feed to PRICE");
             addToBatch(
@@ -712,7 +713,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     ohm,
                     true, // store moving average
                     false, // use the moving average as part of price strategy
-                    DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average
+                    DEFAULT_RESERVE_TWAP_OBSERVATION_WINDOW, // moving average
                     ohmLastObsTime_,
                     ohmObs_,
                     PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
@@ -1011,6 +1012,23 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 Appraiser(appraiser).getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM)
             );
             console2.log("    Operator target price (18dp):", Operator(operatorV2).targetPrice());
+        }
+
+        // 8. Warp forward to beyond the next heartbeat and test the output again
+        // This catches any issues with MA storage
+        {
+            uint48 warpBlock = uint48(block.timestamp + OlympusHeart(heart).frequency() + 1);
+            console2.log("Warping forward to block %s", warpBlock);
+            vm.warp(warpBlock);
+
+            console2.log(
+                "    Backing (18dp)",
+                Appraiser(appraiser).getMetric(IAppraiser.Metric.BACKING)
+            );
+            console2.log(
+                "    LBBO (18dp)",
+                Appraiser(appraiser).getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM)
+            );
         }
     }
 
