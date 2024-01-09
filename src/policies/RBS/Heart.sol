@@ -45,6 +45,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice Addresses of assets that use the moving average
     address[] public movingAverageAssets;
 
+    /// @notice Number of moving average assets
+    uint256 public movingAverageAssetsCount;
+
     // Modules
     PRICEv2 internal PRICE;
     MINTRv1 internal MINTR;
@@ -73,14 +76,33 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         appraiser = appraiser_;
         distributor = distributor_;
 
-        movingAverageAssets = movingAverageAssets_;
-
         active = true;
         lastBeat = uint48(block.timestamp);
         auctionDuration = auctionDuration_;
         maxReward = maxReward_;
 
         emit RewardUpdated(maxReward_, auctionDuration_);
+
+        // Add moving average assets
+        uint256 assetsLen = movingAverageAssets_.length;
+        for (uint256 i = 0; i < assetsLen; i++) {
+            address currentAsset = movingAverageAssets_[i];
+
+            // Check for zero address
+            if (currentAsset == address(0)) revert Heart_InvalidParams();
+
+            // Check for duplicates in the existing array
+            uint256 existingAssetsLen = movingAverageAssets.length;
+            for (uint256 j = 0; j < existingAssetsLen; j++) {
+                if (currentAsset == movingAverageAssets[j]) revert Heart_InvalidParams();
+            }
+
+            movingAverageAssets.push(currentAsset);
+
+            emit MovingAverageAssetAdded(currentAsset);
+        }
+
+        movingAverageAssetsCount = assetsLen;
     }
 
     /// @inheritdoc Policy
@@ -227,15 +249,53 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         emit RewardUpdated(maxReward_, auctionDuration_);
     }
 
-    /// @notice     Sets the assets that use the moving average
+    /// @notice     Adds `asset_` to have the moving average refreshed
     /// @dev        This function reverts if:
     ///             - The sender is not the heart admin
-    ///             - The assets array contains duplicates
-    ///             - The assets array contains a zero address
+    ///             - The asset is a duplicate
+    ///             - The asset is the zero address
     ///
-    /// @param      assets_  The assets
-    function setMovingAverageAssets(address[] assets_) external onlyRole("heart_admin") {
-        movingAverageAssets = assets_;
+    /// @param      asset_  The asset to add
+    function addMovingAverageAsset(address asset_) external onlyRole("heart_admin") {
+        if (asset_ == address(0)) revert Heart_InvalidParams();
+
+        uint256 assetsLen = movingAverageAssets.length;
+        for (uint256 i = 0; i < assetsLen; i++) {
+            if (movingAverageAssets[i] == asset_) revert Heart_InvalidParams();
+        }
+
+        movingAverageAssets.push(asset_);
+        movingAverageAssetsCount++;
+
+        emit MovingAverageAssetAdded(asset_);
+    }
+
+    /// @notice     Removes `asset_` from having the moving average refreshed
+    /// @dev        This function reverts if:
+    ///             - The sender is not the heart admin
+    ///             - The asset is not present
+    ///             - The asset is the zero address
+    ///
+    /// @param      asset_  The asset to remove
+    function removeMovingAverageAsset(address asset_) external onlyRole("heart_admin") {
+        if (asset_ == address(0)) revert Heart_InvalidParams();
+
+        uint256 assetsLen = movingAverageAssets.length;
+        bool foundAsset = false;
+        for (uint256 i = 0; i < assetsLen; i++) {
+            if (movingAverageAssets[i] == asset_) {
+                movingAverageAssets[i] = movingAverageAssets[assetsLen - 1];
+                movingAverageAssets.pop();
+                movingAverageAssetsCount--;
+
+                foundAsset = true;
+                break;
+            }
+        }
+
+        if (!foundAsset) revert Heart_InvalidParams();
+
+        emit MovingAverageAssetRemoved(asset_);
     }
 
     //============================================================================================//
