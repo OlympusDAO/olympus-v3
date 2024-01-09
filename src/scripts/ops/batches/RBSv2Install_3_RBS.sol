@@ -725,6 +725,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         }
 
         // Check that the assets with moving average tracking are configured in Heart
+        // These should already have been set a deployment-time (see DeployV2.sol)
         {
             console2.log("Checking Heart tracked assets");
             OlympusPricev2 PRICE = OlympusPricev2(priceV2);
