@@ -298,6 +298,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         emit MovingAverageAssetRemoved(asset_);
     }
 
+    /// @notice    Gets the array of moving average assets
+    function getMovingAverageAssets() external view returns (address[] memory) {
+        return movingAverageAssets;
+    }
+
     //============================================================================================//
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
