@@ -724,6 +724,65 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             console2.log("    OHM price: %s (9 dp)", OlympusPricev2(priceV2).getPrice(ohm));
         }
 
+        // Check that the assets with moving average tracking are configured in Heart
+        {
+            console2.log("Checking Heart tracked assets");
+            OlympusPricev2 PRICE = OlympusPricev2(priceV2);
+
+            // Get the assets from PRICE
+            address[] memory priceAssets = PRICE.getAssets();
+
+            // Determine the number of tracked assets
+            console2.log("    Getting PRICE assets");
+            uint256 trackedAssetsCount = 0;
+            for (uint256 i = 0; i < priceAssets.length; i++) {
+                PRICEv2.Asset memory assetData = PRICE.getAssetData(priceAssets[i]);
+
+                if (!assetData.storeMovingAverage) {
+                    continue;
+                }
+
+                trackedAssetsCount++;
+            }
+
+            // Filter the assets with tracked moving averages
+            address[] memory trackedAssets = new address[](trackedAssetsCount);
+            uint256 trackedAssetsIndex = 0;
+            for (uint256 i = 0; i < priceAssets.length; i++) {
+                PRICEv2.Asset memory assetData = PRICE.getAssetData(priceAssets[i]);
+
+                if (!assetData.storeMovingAverage) {
+                    continue;
+                }
+
+                trackedAssets[trackedAssetsIndex] = priceAssets[i];
+                trackedAssetsIndex++;
+            }
+
+            // Get the assets from Heart
+            console2.log("    Getting Heart tracked assets");
+            address[] memory heartAssets = OlympusHeart(heartV2).getMovingAverageAssets();
+
+            // Check that the assets match
+            console2.log("    Checking that assets match");
+            for (uint256 i = 0; i < heartAssets.length; i++) {
+                bool found = false;
+                console2.log("    Checking asset %s", heartAssets[i]);
+
+                for (uint256 j = 0; j < trackedAssets.length; j++) {
+                    if (heartAssets[i] == trackedAssets[j]) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                assertEq(found, true, "Asset not configured in Heart");
+            }
+            assertEq(heartAssets.length, trackedAssets.length, "Assets do not match");
+
+            console2.log("    Assets match");
+        }
+
         // ==================== SECTION 3: BunniManager Migration ==================== //
 
         // NOTE: Only enable during fork testing
