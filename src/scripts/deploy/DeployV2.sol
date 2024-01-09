@@ -169,6 +169,8 @@ contract OlympusDeploy is Script {
     ERC20 public lusd;
     ERC20 public aura;
     ERC20 public bal;
+    ERC20 public fxs;
+    ERC20 public veFXS;
 
     address public migrationContract;
 
@@ -232,7 +234,7 @@ contract OlympusDeploy is Script {
         selectorMap["OlympusClearinghouseRegistry"] = this._deployClearinghouseRegistry.selector;
         selectorMap["Operator"] = this._deployOperator.selector;
         selectorMap["OperatorV2"] = this._deployOperatorV2.selector;
-        selectorMap["OlympusHeart"] = this._deployHeart.selector;
+        // selectorMap["OlympusHeart"] = this._deployHeart.selector;
         selectorMap["OlympusHeartV2"] = this._deployHeartV2.selector;
         selectorMap["BondCallback"] = this._deployBondCallback.selector;
         selectorMap["OlympusPriceConfig"] = this._deployPriceConfig.selector;
@@ -286,6 +288,9 @@ contract OlympusDeploy is Script {
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
         aura = ERC20(envAddress("external.tokens.AURA"));
         bal = ERC20(envAddress("external.tokens.BAL"));
+        fxs = ERC20(envAddress("external.tokens.FXS"));
+        veFXS = ERC20(envAddress("external.tokens.veFXS"));
+
         migrationContract = envAddress("olympus.legacy.Migration");
         bondAuctioneer = IBondSDA(envAddress("external.bond-protocol.BondFixedTermAuctioneer"));
         bondFixedExpiryAuctioneer = IBondSDA(
@@ -739,30 +744,30 @@ contract OlympusDeploy is Script {
         return address(callback);
     }
 
-    function _deployHeart(bytes memory args) public returns (address) {
-        // Decode arguments for OlympusHeart policy
-        (uint48 auctionDuration, uint256 maxReward) = abi.decode(args, (uint48, uint256));
+    // function _deployHeart(bytes memory args) public returns (address) {
+    //     // Decode arguments for OlympusHeart policy
+    //     (uint48 auctionDuration, uint256 maxReward) = abi.decode(args, (uint48, uint256));
 
-        // Check that the environment variables are loaded
-        if (address(kernel) == address(0)) revert("Kernel address not set");
-        if (address(operator) == address(0)) revert("Operator address not set");
-        if (address(appraiser) == address(0)) revert("Appraiser address not set");
-        if (address(zeroDistributor) == address(0)) revert("ZeroDistributor address not set");
+    //     // Check that the environment variables are loaded
+    //     if (address(kernel) == address(0)) revert("Kernel address not set");
+    //     if (address(operator) == address(0)) revert("Operator address not set");
+    //     if (address(appraiser) == address(0)) revert("Appraiser address not set");
+    //     if (address(zeroDistributor) == address(0)) revert("ZeroDistributor address not set");
 
-        // Deploy OlympusHeart policy
-        vm.broadcast();
-        heart = new OlympusHeart(
-            kernel,
-            operator,
-            appraiser,
-            zeroDistributor,
-            maxReward,
-            auctionDuration
-        );
-        console2.log("OlympusHeart V1 deployed at:", address(heart));
+    //     // Deploy OlympusHeart policy
+    //     vm.broadcast();
+    //     heart = new OlympusHeart(
+    //         kernel,
+    //         operator,
+    //         appraiser,
+    //         zeroDistributor,
+    //         maxReward,
+    //         auctionDuration
+    //     );
+    //     console2.log("OlympusHeart V1 deployed at:", address(heart));
 
-        return address(heart);
-    }
+    //     return address(heart);
+    // }
 
     function _deployHeartV2(bytes memory args) public returns (address) {
         // Decode arguments for OlympusHeart policy
@@ -773,10 +778,20 @@ contract OlympusDeploy is Script {
         if (address(operatorV2) == address(0)) revert("OperatorV2 address not set");
         if (address(appraiser) == address(0)) revert("Appraiser address not set");
         if (address(zeroDistributor) == address(0)) revert("ZeroDistributor address not set");
+        if (address(ohm) == address(0)) revert("OHM address not set");
+        if (address(reserve) == address(0)) revert("Reserve address not set");
+        if (address(fxs) == address(0)) revert("FXS address not set");
+        if (address(veFXS) == address(0)) revert("veFXS address not set");
 
         // Check the version of Operator
         (uint8 operatorMajor, uint8 operatorMinor) = operatorV2.VERSION();
         if (operatorMajor != 2) revert("OperatorV2 is not version 2");
+
+        address[] memory movingAverageAssets = new address[](4);
+        movingAverageAssets[0] = address(ohm);
+        movingAverageAssets[1] = address(reserve);
+        movingAverageAssets[2] = address(fxs);
+        movingAverageAssets[3] = address(veFXS);
 
         console2.log("Deploying Heart V2 policy");
         console2.log("    kernel", address(kernel));
@@ -793,6 +808,7 @@ contract OlympusDeploy is Script {
             operatorV2,
             appraiser,
             zeroDistributor,
+            movingAverageAssets,
             maxReward,
             auctionDuration
         );

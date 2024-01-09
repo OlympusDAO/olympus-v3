@@ -154,12 +154,17 @@ contract HeartTest is Test {
             distributor = new ZeroDistributor(address(staking));
             staking.setDistributor(address(distributor));
 
+            address[] memory movingAverageAssets = new address[](2);
+            movingAverageAssets[0] = address(ohm);
+            movingAverageAssets[1] = address(reserve);
+
             // Deploy heart
             heart = new OlympusHeart(
                 kernel,
                 IOperator(address(operator)),
                 IAppraiser(address(appraiser)),
                 IDistributor(address(distributor)),
+                movingAverageAssets,
                 uint256(10e9), // max reward = 10 reward tokens
                 uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
             );
@@ -347,6 +352,27 @@ contract HeartTest is Test {
         assertEq(ohm.balanceOf(address(this)), startBalance + expectedReward);
         // Mint capabilities are limited to the reward amount when the beat happens.
         assertEq(MINTR.mintApproval(address(heart)), 0);
+    }
+
+    function testReverts_movingAverageAssets_zero() public {
+        address[] memory movingAverageAssets = new address[](3);
+        movingAverageAssets[0] = address(ohm);
+        movingAverageAssets[1] = address(reserve);
+        movingAverageAssets[2] = address(0);
+
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Deploy heart with moving average assets containing a zero address
+        new OlympusHeart(
+            kernel,
+            IOperator(address(operator)),
+            IAppraiser(address(appraiser)),
+            IDistributor(address(distributor)),
+            movingAverageAssets,
+            uint256(10e9), // max reward = 10 reward tokens
+            uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
+        );
     }
 
     // =========  VIEW FUNCTIONS ========= //

@@ -42,6 +42,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice Status of the Heart, false = stopped, true = beating
     bool public active;
 
+    /// @notice Addresses of assets that use the moving average
+    address[] public movingAverageAssets;
+
     // Modules
     PRICEv2 internal PRICE;
     MINTRv1 internal MINTR;
@@ -62,12 +65,15 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         IOperator operator_,
         IAppraiser appraiser_,
         IDistributor distributor_,
+        address[] memory movingAverageAssets_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
         operator = operator_;
         appraiser = appraiser_;
         distributor = distributor_;
+
+        movingAverageAssets = movingAverageAssets_;
 
         active = true;
         lastBeat = uint48(block.timestamp);
@@ -131,9 +137,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         uint48 currentTime = uint48(block.timestamp);
         if (currentTime < lastBeat + frequency()) revert Heart_OutOfCycle();
 
-        // Update the OHM/RESERVE moving average by store each of their prices on the PRICE module
-        PRICE.storePrice(address(operator.ohm()));
-        PRICE.storePrice(address(operator.reserve()));
+        // Store the current price for assets that track and use the moving average (otherwise metrics will fail)
+        uint256 assetsLen = movingAverageAssets.length;
+        for (uint256 i = 0; i < assetsLen; i++) {
+            PRICE.storePrice(movingAverageAssets[i]);
+        }
 
         // Update the liquid backing calculation
         appraiser.storeMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
@@ -217,6 +225,17 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         maxReward = maxReward_;
         auctionDuration = auctionDuration_;
         emit RewardUpdated(maxReward_, auctionDuration_);
+    }
+
+    /// @notice     Sets the assets that use the moving average
+    /// @dev        This function reverts if:
+    ///             - The sender is not the heart admin
+    ///             - The assets array contains duplicates
+    ///             - The assets array contains a zero address
+    ///
+    /// @param      assets_  The assets
+    function setMovingAverageAssets(address[] assets_) external onlyRole("heart_admin") {
+        movingAverageAssets = assets_;
     }
 
     //============================================================================================//
