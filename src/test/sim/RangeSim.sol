@@ -414,12 +414,18 @@ abstract contract RangeSim is Test {
             // Deploy PriceConfig
             priceConfig = new OlympusPriceConfig(kernel);
 
+
+            address[] memory movingAverageAssets = new address[](2);
+            movingAverageAssets[0] = address(ohm);
+            movingAverageAssets[1] = address(reserve);
+
             // Deploy Heart
             heart = new OlympusHeart(
                 kernel,
                 operator,
                 IAppraiser(address(appraiser)),
                 distributor,
+                movingAverageAssets,
                 uint256(0), // no keeper rewards for sim
                 uint48(0) // no keeper rewards for sim
             );
@@ -1060,7 +1066,7 @@ abstract contract RangeSim is Test {
         rangeSetup(key);
 
         // Initialize variables for tracking status
-        
+
         uint32 step = 1 hours;
         uint32 epochs = EPOCHS; // cache
         uint32 duration = EPOCH_DURATION; // cache
@@ -1087,7 +1093,7 @@ abstract contract RangeSim is Test {
                 console2.log("Rebalance liquidity");
                 rebalanceLiquidity(key);
                 lastRebalance = e;
-            } 
+            }
 
             netflow = netflows[key][e] / int256(uint256(steps));
             for (uint32 i; i < steps; ++i) {

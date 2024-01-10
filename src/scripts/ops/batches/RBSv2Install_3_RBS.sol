@@ -433,18 +433,77 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // ==================== SECTION 2: PRICE v2 Configuration ==================== //
 
         // This Policy MS batch:
-        // 1. Configures DAI on PRICE
-        // 2. Configures sDAI on PRICE
-        // 3. Configure WETH on PRICE
+        // 1. Configure WETH on PRICE
+        // 2. Configures DAI on PRICE
+        // 3. Configures sDAI on PRICE
         // 4. Configure veFXS on PRICE
         // 5. Configure FXS on PRICE
         // 6. Configure OHM on PRICE
 
         // 0. Load variables from the JSON file
         // TODO final values need to be added
+        // Caution: the last observation time for the assets needs to be set in a way that it will not be stale (which would cause a revert)
         string memory argData = vm.readFile("./src/scripts/ops/batches/RBSv2Install_3_RBS.json");
 
-        // 1. Configure DAI price feed and moving average data on PRICE
+        // 1. Configure WETH price feed and moving average data on PRICE
+        // - Uses two data sources for redundancy:
+        //   - Chainlink ETH-USD price feed
+        //   - Chainlink BTC-ETH price feed divided by Chainlink BTC-USD price feed (which resolves to USD per ETH)
+        //   - Three Chainlink feeds are used as the likelihood of all three breaking is low
+        // - The price will be the average of the above two
+        // - No moving average tracked or used
+        // - This is first, as DAI relies on it
+        {
+            PRICEv2.Component[] memory wethFeeds = new PRICEv2.Component[](2);
+            wethFeeds[0] = PRICEv2.Component(
+                toSubKeycode("PRICE.CHAINLINK"),
+                ChainlinkPriceFeeds.getOneFeedPrice.selector,
+                abi.encode(
+                    ChainlinkPriceFeeds.OneFeedParams(
+                        AggregatorV2V3Interface(usdPerEthPriceFeed),
+                        DEFAULT_CHAINLINK_UPDATE_THRESHOLD
+                    )
+                )
+            );
+            wethFeeds[1] = PRICEv2.Component(
+                toSubKeycode("PRICE.CHAINLINK"),
+                ChainlinkPriceFeeds.getTwoFeedPriceDiv.selector,
+                abi.encode(
+                    ChainlinkPriceFeeds.TwoFeedParams(
+                        AggregatorV2V3Interface(usdPerBtcPriceFeed),
+                        DEFAULT_CHAINLINK_UPDATE_THRESHOLD,
+                        AggregatorV2V3Interface(ethPerBtcPriceFeed),
+                        DEFAULT_CHAINLINK_UPDATE_THRESHOLD
+                    )
+                )
+            );
+
+            uint256[] memory wethObs_ = new uint256[](0);
+
+            console2.log("Adding WETH price feed to PRICE");
+            addToBatch(
+                priceConfigV2,
+                abi.encodeWithSelector(
+                    PriceConfigV2.addAssetPrice.selector,
+                    weth,
+                    false, // store moving average
+                    false, // use the moving average as part of price strategy
+                    DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average duration
+                    0,
+                    wethObs_,
+                    PRICEv2.Component(
+                        toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                        SimplePriceFeedStrategy.getAveragePrice.selector,
+                        abi.encode(0)
+                    ),
+                    wethFeeds
+                )
+            );
+
+            console2.log("    wETH price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(weth));
+        }
+
+        // 2. Configure DAI price feed and moving average data on PRICE
         // - Uses three data sources for redundancy
         //   - Chainlink DAI-USD price feed
         //   - Chainlink DAI-ETH price feed divided by Chainlink ETH-USD price feed (which resolves to USD per DAI)
@@ -512,10 +571,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
+            // Already added as a moving average asset in Heart
+
             console2.log("    DAI price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(dai));
         }
 
-        // 2. Configure sDAI price feed and moving average data on PRICE
+        // 3. Configure sDAI price feed and moving average data on PRICE
         // - Uses the DAI price to determine the sDAI price
         {
             uint256[] memory sdaiObs_ = new uint256[](0);
@@ -542,63 +603,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             );
 
             console2.log("    sDAI price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(sdai));
-        }
-
-        // 3. Configure WETH price feed and moving average data on PRICE
-        // - Uses two data sources for redundancy:
-        //   - Chainlink ETH-USD price feed
-        //   - Chainlink BTC-ETH price feed divided by Chainlink BTC-USD price feed (which resolves to USD per ETH)
-        //   - Three Chainlink feeds are used as the likelihood of all three breaking is low
-        // - The price will be the average of the above two
-        // - No moving average tracked or used
-        {
-            PRICEv2.Component[] memory wethFeeds = new PRICEv2.Component[](2);
-            wethFeeds[0] = PRICEv2.Component(
-                toSubKeycode("PRICE.CHAINLINK"),
-                ChainlinkPriceFeeds.getOneFeedPrice.selector,
-                abi.encode(
-                    ChainlinkPriceFeeds.OneFeedParams(
-                        AggregatorV2V3Interface(usdPerEthPriceFeed),
-                        DEFAULT_CHAINLINK_UPDATE_THRESHOLD
-                    )
-                )
-            );
-            wethFeeds[1] = PRICEv2.Component(
-                toSubKeycode("PRICE.CHAINLINK"),
-                ChainlinkPriceFeeds.getTwoFeedPriceDiv.selector,
-                abi.encode(
-                    ChainlinkPriceFeeds.TwoFeedParams(
-                        AggregatorV2V3Interface(usdPerBtcPriceFeed),
-                        DEFAULT_CHAINLINK_UPDATE_THRESHOLD,
-                        AggregatorV2V3Interface(ethPerBtcPriceFeed),
-                        DEFAULT_CHAINLINK_UPDATE_THRESHOLD
-                    )
-                )
-            );
-
-            uint256[] memory wethObs_ = new uint256[](0);
-
-            console2.log("Adding WETH price feed to PRICE");
-            addToBatch(
-                priceConfigV2,
-                abi.encodeWithSelector(
-                    PriceConfigV2.addAssetPrice.selector,
-                    weth,
-                    false, // store moving average
-                    false, // use the moving average as part of price strategy
-                    DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average duration
-                    0,
-                    wethObs_,
-                    PRICEv2.Component(
-                        toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                        SimplePriceFeedStrategy.getAveragePrice.selector,
-                        abi.encode(0)
-                    ),
-                    wethFeeds
-                )
-            );
-
-            console2.log("    wETH price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(weth));
         }
 
         // 4. Configure veFXS price feed and moving average data on PRICE
@@ -629,7 +633,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     true, // store moving average
                     true, // use the moving average as part of price strategy
                     DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average duration
-                    fxsLastObsTime_,
+                    fxsLastObsTime_, // needs to be > block.timestamp - observation frequency
                     fxsObs_,
                     PRICEv2.Component(
                         toSubKeycode("PRICE.SIMPLESTRATEGY"),
@@ -671,7 +675,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     true, // store moving average
                     true, // use the moving average as part of price strategy
                     DEFAULT_TWAP_OBSERVATION_WINDOW, // moving average
-                    fxsLastObsTime_,
+                    fxsLastObsTime_, // needs to be > block.timestamp - observation frequency
                     fxsObs_,
                     PRICEv2.Component(
                         toSubKeycode("PRICE.SIMPLESTRATEGY"),
@@ -720,6 +724,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     ohmFeeds
                 )
             );
+
+            // Already added as a moving average asset in Heart
 
             console2.log("    OHM price: %s (9 dp)", OlympusPricev2(priceV2).getPrice(ohm));
         }
@@ -952,9 +958,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 1. Activates Appraiser policy
         // 2. Activates Operator policy
         // 3. Activates Heart policy
-        // 4. Sets operator address on bond callback
-        // 5. Set roles for policy access control
-        // 6. Initializes the operator policy
+        // 4. Add moving average assets to Heart
+        // 5. Check that the assets with moving average tracking are configured in Heart
+        // 6. Sets operator address on bond callback
+        // 7. Set roles for policy access control
+        // 8. Initializes the operator policy
+        // 9. Test the output
 
         // 1. Activate appraiser policy
         console2.log("Activating Appraiser policy");
@@ -981,14 +990,88 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, heartV2)
         );
 
-        // 4. Set operator address on bond callback
+        // 4. Add moving average assets to Heart
+        {
+            console2.log("Adding FXS as a moving average asset in Heart");
+            addToBatch(
+                heartV2,
+                abi.encodeWithSelector(OlympusHeart.addMovingAverageAsset.selector, fxs)
+            );
+
+            console2.log("Adding veFXS as a moving average asset in Heart");
+            addToBatch(
+                heartV2,
+                abi.encodeWithSelector(OlympusHeart.addMovingAverageAsset.selector, veFXS)
+            );
+        }
+
+        // 5. Check that the assets with moving average tracking are configured in Heart
+        {
+            console2.log("Checking Heart tracked assets");
+            OlympusPricev2 PRICE = OlympusPricev2(priceV2);
+
+            // Get the assets from PRICE
+            address[] memory priceAssets = PRICE.getAssets();
+
+            // Determine the number of tracked assets
+            console2.log("    Getting PRICE assets");
+            uint256 trackedAssetsCount = 0;
+            for (uint256 i = 0; i < priceAssets.length; i++) {
+                PRICEv2.Asset memory assetData = PRICE.getAssetData(priceAssets[i]);
+
+                if (!assetData.storeMovingAverage) {
+                    continue;
+                }
+
+                trackedAssetsCount++;
+            }
+
+            // Filter the assets with tracked moving averages
+            address[] memory trackedAssets = new address[](trackedAssetsCount);
+            uint256 trackedAssetsIndex = 0;
+            for (uint256 i = 0; i < priceAssets.length; i++) {
+                PRICEv2.Asset memory assetData = PRICE.getAssetData(priceAssets[i]);
+
+                if (!assetData.storeMovingAverage) {
+                    continue;
+                }
+
+                trackedAssets[trackedAssetsIndex] = priceAssets[i];
+                trackedAssetsIndex++;
+            }
+
+            // Get the assets from Heart
+            console2.log("    Getting Heart tracked assets");
+            address[] memory heartAssets = OlympusHeart(heartV2).getMovingAverageAssets();
+
+            // Check that the assets match
+            console2.log("    Checking that assets match");
+            for (uint256 i = 0; i < heartAssets.length; i++) {
+                bool found = false;
+                console2.log("    Checking asset %s", heartAssets[i]);
+
+                for (uint256 j = 0; j < trackedAssets.length; j++) {
+                    if (heartAssets[i] == trackedAssets[j]) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                assertEq(found, true, "Asset not configured in Heart");
+            }
+            assertEq(heartAssets.length, trackedAssets.length, "Assets do not match");
+
+            console2.log("    Assets match");
+        }
+
+        // 6. Set operator address on bond callback
         console2.log("Setting operator address on bond callback");
         addToBatch(
             bondCallback,
             abi.encodeWithSelector(BondCallback.setOperator.selector, operatorV2)
         );
 
-        // 5. Set roles for policy access control
+        // 7. Set roles for policy access control
         // Operator policy
         //     - Give Heart the operator_operate role
         console2.log("Granting operator_operate role for Operator policy");
@@ -1001,34 +1084,17 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             )
         );
 
-        // 6. Initialize the operator policy
+        // 8. Initialize the operator policy
         console2.log("Initializing Operator policy");
         addToBatch(operatorV2, abi.encodeWithSelector(Operator.initialize.selector));
 
-        // 7. Test the output
+        // 9. Test the output
         {
             console2.log(
                 "    LBBO (18dp)",
                 Appraiser(appraiser).getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM)
             );
             console2.log("    Operator target price (18dp):", Operator(operatorV2).targetPrice());
-        }
-
-        // 8. Warp forward to beyond the next heartbeat and test the output again
-        // This catches any issues with MA storage
-        {
-            uint48 warpBlock = uint48(block.timestamp + OlympusHeart(heart).frequency() + 1);
-            console2.log("Warping forward to block %s", warpBlock);
-            vm.warp(warpBlock);
-
-            console2.log(
-                "    Backing (18dp)",
-                Appraiser(appraiser).getMetric(IAppraiser.Metric.BACKING)
-            );
-            console2.log(
-                "    LBBO (18dp)",
-                Appraiser(appraiser).getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM)
-            );
         }
     }
 
