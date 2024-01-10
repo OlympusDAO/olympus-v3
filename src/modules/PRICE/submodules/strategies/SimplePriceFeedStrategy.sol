@@ -221,7 +221,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @dev            no price being returned at all.
     ///
     /// @dev            If no deviation is detected, the first non-zero price in the array is returned.
-    /// @dev            If there are not enough non-zero array elements to calculate a median (< 3), the first non-zero price in the array (or 0) is returned.
+    /// @dev            If there are not enough non-zero array elements to calculate a median (< 3), this function falls back to `getAveragePriceIfDeviation()`.
     ///
     /// @dev            Will revert if:
     /// @dev            - The number of elements in the `prices_` array is less than 3, since it would represent a mis-configuration.
@@ -246,8 +246,8 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         // Cache first non-zero price since the array is sorted in place
         uint256 firstNonZeroPrice = nonZeroPrices[0];
 
-        // If there are not enough non-zero prices to calculate a median, return the first non-zero price
-        if (nonZeroPrices.length < 3) return firstNonZeroPrice;
+        // If there are not enough non-zero prices to calculate a median, pass it on to `getAveragePriceIfDeviation()`
+        if (nonZeroPrices.length < 3) return getAveragePriceIfDeviation(prices_, params_);
 
         uint256[] memory sortedPrices = nonZeroPrices.sort();
 
@@ -305,7 +305,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
     /// @dev            Otherwise, an asset with any zero price would result in
     /// @dev            no price being returned at all.
     ///
-    /// @dev            If there are not enough non-zero array elements to calculate a median (< 3), the first non-zero price is returned.
+    /// @dev            If there are not enough non-zero array elements to calculate a median (< 3), the values are passed on to `getAveragePrice()`.
     ///
     /// @dev            Will revert if:
     /// @dev            - The number of elements in the `prices_` array is less than 3, since it would represent a mis-configuration.
@@ -321,7 +321,7 @@ contract SimplePriceFeedStrategy is PriceSubmodule {
         uint256 nonZeroPricesLen = nonZeroPrices.length;
         // Can only calculate a median if there are 3+ non-zero prices
         if (nonZeroPricesLen == 0) return 0;
-        if (nonZeroPricesLen < 3) return nonZeroPrices[0];
+        if (nonZeroPricesLen < 3) return getAveragePrice(prices_, "");
 
         // Sort the prices
         uint256[] memory sortedPrices = nonZeroPrices.sort();
