@@ -244,16 +244,17 @@ contract OlympusDeploy is Script {
         string memory data = vm.readFile(deployFilePath);
 
         // Parse deployment sequence and names
-        string[] memory names = new string[](1); // abi.decode(data.parseRaw(".sequence..name"), (string[]));
-        names[0] = "LegacyBurner";
-        uint256 len = names.length;
+        bytes memory sequence = abi.decode(data.parseRaw(".sequence"), (bytes));
+        uint256 len = sequence.length;
+        console2.log("Contracts to be deployed:", len);
 
-        // Iterate through deployment sequence and set deployment args
-        for (uint256 i = 0; i < len; i++) {
-            string memory name = names[i];
+        if (len == 0) {
+            return;
+        } else if (len == 1) {
+            // Only one deployment
+            string memory name = abi.decode(data.parseRaw(".sequence..name"), (string));
             deployments.push(name);
             console2.log("Deploying", name);
-
             // Parse and store args if not kernel
             // Note: constructor args need to be provided in alphabetical order
             // due to changes with forge-std or a struct needs to be used
@@ -261,6 +262,23 @@ contract OlympusDeploy is Script {
                 argsMap[name] = data.parseRaw(
                     string.concat(".sequence[?(@.name == '", name, "')].args")
                 );
+            }
+        } else {
+            // More than one deployment
+            string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
+            for (uint256 i = 0; i < len; i++) {
+                string memory name = names[i];
+                deployments.push(name);
+                console2.log("Deploying", name);
+
+                // Parse and store args if not kernel
+                // Note: constructor args need to be provided in alphabetical order
+                // due to changes with forge-std or a struct needs to be used
+                if (keccak256(bytes(name)) != keccak256(bytes("Kernel"))) {
+                    argsMap[name] = data.parseRaw(
+                        string.concat(".sequence[?(@.name == '", name, "')].args")
+                    );
+                }
             }
         }
     }
@@ -772,11 +790,14 @@ contract OlympusDeploy is Script {
     function _deployReplacementAuthority(bytes memory args) public returns (address) {
         // No additional arguments for ReplacementAuthority policy
 
+        console2.log("legacyBurner", address(legacyBurner));
+        console2.log("MINTR", address(MINTR));
+
         // Deploy ReplacementAuthority policy
         vm.broadcast();
         burnerReplacementAuthority = new OlympusAuthority(
-            0x84C0C005cF574D0e5C602EA7b366aE9c707381E0,
-            0x84C0C005cF574D0e5C602EA7b366aE9c707381E0,
+            0x245cc372C84B3645Bf0Ffe6538620B04a217988B,
+            0x245cc372C84B3645Bf0Ffe6538620B04a217988B,
             address(legacyBurner),
             address(MINTR)
         );

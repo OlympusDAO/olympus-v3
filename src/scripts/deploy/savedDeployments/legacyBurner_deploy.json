@@ -1,10 +1,8 @@
 {
     "sequence": [
         {
-            "name": "LegacyBurner",
-            "args": {
-                "reward": 40000000000
-            }
+            "name": "ReplacementAuthority",
+            "args": {}
         }
     ]
 }
