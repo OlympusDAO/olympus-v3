@@ -958,9 +958,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 1. Activates Appraiser policy
         // 2. Activates Operator policy
         // 3. Activates Heart policy
-        // 4. Sets operator address on bond callback
-        // 5. Set roles for policy access control
-        // 6. Initializes the operator policy
+        // 4. Add moving average assets to Heart
+        // 5. Check that the assets with moving average tracking are configured in Heart
+        // 6. Sets operator address on bond callback
+        // 7. Set roles for policy access control
+        // 8. Initializes the operator policy
+        // 9. Test the output
 
         // 1. Activate appraiser policy
         console2.log("Activating Appraiser policy");
