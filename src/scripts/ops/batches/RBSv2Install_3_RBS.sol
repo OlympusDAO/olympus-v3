@@ -512,6 +512,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
+            // Already added as a moving average asset in Heart
+
             console2.log("    DAI price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(dai));
         }
 
@@ -640,6 +642,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
+            console2.log("Adding as a moving average asset in Heart");
+            addToBatch(
+                heartV2,
+                abi.encodeWithSelector(OlympusHeart.addMovingAverageAsset.selector, veFXS)
+            );
+
             console2.log("    veFXS price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(veFXS));
         }
 
@@ -682,6 +690,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
+            console2.log("Adding as a moving average asset in Heart");
+            addToBatch(
+                heartV2,
+                abi.encodeWithSelector(OlympusHeart.addMovingAverageAsset.selector, fxs)
+            );
+
             console2.log("    FXS price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(fxs));
         }
 
@@ -720,6 +734,8 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     ohmFeeds
                 )
             );
+
+            // Already added as a moving average asset in Heart
 
             console2.log("    OHM price: %s (9 dp)", OlympusPricev2(priceV2).getPrice(ohm));
         }

@@ -169,8 +169,6 @@ contract OlympusDeploy is Script {
     ERC20 public lusd;
     ERC20 public aura;
     ERC20 public bal;
-    ERC20 public fxs;
-    ERC20 public veFXS;
 
     address public migrationContract;
 
@@ -288,8 +286,6 @@ contract OlympusDeploy is Script {
         wsteth = ERC20(envAddress("external.tokens.WSTETH"));
         aura = ERC20(envAddress("external.tokens.AURA"));
         bal = ERC20(envAddress("external.tokens.BAL"));
-        fxs = ERC20(envAddress("external.tokens.FXS"));
-        veFXS = ERC20(envAddress("external.tokens.veFXS"));
 
         migrationContract = envAddress("olympus.legacy.Migration");
         bondAuctioneer = IBondSDA(envAddress("external.bond-protocol.BondFixedTermAuctioneer"));
@@ -780,18 +776,16 @@ contract OlympusDeploy is Script {
         if (address(zeroDistributor) == address(0)) revert("ZeroDistributor address not set");
         if (address(ohm) == address(0)) revert("OHM address not set");
         if (address(reserve) == address(0)) revert("Reserve address not set");
-        if (address(fxs) == address(0)) revert("FXS address not set");
-        if (address(veFXS) == address(0)) revert("veFXS address not set");
 
         // Check the version of Operator
         (uint8 operatorMajor, uint8 operatorMinor) = operatorV2.VERSION();
         if (operatorMajor != 2) revert("OperatorV2 is not version 2");
 
-        address[] memory movingAverageAssets = new address[](4);
+        // Bare minimum required for Heart to function
+        // Will be updated according to the treasury composition during activation
+        address[] memory movingAverageAssets = new address[](2);
         movingAverageAssets[0] = address(ohm);
         movingAverageAssets[1] = address(reserve);
-        movingAverageAssets[2] = address(fxs);
-        movingAverageAssets[3] = address(veFXS);
 
         console2.log("Deploying Heart V2 policy");
         console2.log("    kernel", address(kernel));
