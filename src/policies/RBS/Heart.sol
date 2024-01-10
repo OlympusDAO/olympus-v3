@@ -255,9 +255,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     function addMovingAverageAsset(address asset_) external onlyRole("heart_admin") {
         if (asset_ == address(0)) revert Heart_InvalidParams();
 
-        uint256 assetsLen = movingAverageAssets.length;
+        // Cache the moving average assets to avoid multiple SLOADs
+        address[] memory cachedMovingAverageAssets = movingAverageAssets;
+        uint256 assetsLen = cachedMovingAverageAssets.length;
         for (uint256 i = 0; i < assetsLen; i++) {
-            if (movingAverageAssets[i] == asset_) revert Heart_InvalidParams();
+            if (cachedMovingAverageAssets[i] == asset_) revert Heart_InvalidParams();
         }
 
         movingAverageAssets.push(asset_);
@@ -274,11 +276,13 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     function removeMovingAverageAsset(address asset_) external onlyRole("heart_admin") {
         if (asset_ == address(0)) revert Heart_InvalidParams();
 
-        uint256 assetsLen = movingAverageAssets.length;
+        // Cache the moving average assets to avoid multiple SLOADs
+        address[] memory cachedMovingAverageAssets = movingAverageAssets;
+        uint256 assetsLen = cachedMovingAverageAssets.length;
         bool foundAsset = false;
         for (uint256 i = 0; i < assetsLen; i++) {
-            if (movingAverageAssets[i] == asset_) {
-                movingAverageAssets[i] = movingAverageAssets[assetsLen - 1];
+            if (cachedMovingAverageAssets[i] == asset_) {
+                cachedMovingAverageAssets[i] = cachedMovingAverageAssets[assetsLen - 1];
                 movingAverageAssets.pop();
                 foundAsset = true;
                 break;
