@@ -245,11 +245,14 @@ contract SupplyTest is Test {
     uint256 internal constant LENS_BORROW_AMOUNT = 2e9;
     uint256 internal constant LENS_SUPPLIED_AMOUNT = 5e9;
 
+    address balancerVaultAddress;
+
     function _setUpSubmodules() public {
         // AuraBalancerSupply setup
         {
             MockERC20 dai = new MockERC20("DAI", "DAI", 18);
             MockMultiplePoolBalancerVault balancerVault = new MockMultiplePoolBalancerVault();
+            balancerVaultAddress = address(balancerVault);
             bytes32 poolId = "hello";
 
             address[] memory balancerPoolTokens = new address[](2);
@@ -292,7 +295,11 @@ contract SupplyTest is Test {
             // Mint the OHM in the BLV
             ohm.mint(address(vaultManager), BLV_POOL_SHARE);
 
-            submoduleBLVaultSupply = new BLVaultSupply(moduleSupply, vaultManagers);
+            submoduleBLVaultSupply = new BLVaultSupply(
+                moduleSupply,
+                balancerVaultAddress,
+                vaultManagers
+            );
         }
 
         // Deploy submodules
@@ -1307,7 +1314,11 @@ contract SupplyTest is Test {
             address[] memory vaultManagers = new address[](1);
             vaultManagers[0] = address(vaultManager);
 
-            submoduleBLVaultSupply = new BLVaultSupply(moduleSupply, vaultManagers);
+            submoduleBLVaultSupply = new BLVaultSupply(
+                moduleSupply,
+                balancerVaultAddress,
+                vaultManagers
+            );
 
             vm.startPrank(writer);
             moduleSupply.installSubmodule(submoduleBLVaultSupply);
@@ -1926,7 +1937,11 @@ contract SupplyTest is Test {
             address[] memory vaultManagers = new address[](1);
             vaultManagers[0] = address(vaultManager);
 
-            submoduleBLVaultSupply = new BLVaultSupply(moduleSupply, vaultManagers);
+            submoduleBLVaultSupply = new BLVaultSupply(
+                moduleSupply,
+                balancerVaultAddress,
+                vaultManagers
+            );
 
             vm.startPrank(writer);
             moduleSupply.installSubmodule(submoduleBLVaultSupply);
