@@ -556,7 +556,7 @@ contract HeartTest is Test {
         assertEq(newHeart.movingAverageAssets(0), address(ohm), "ohm");
         assertEq(newHeart.movingAverageAssets(1), address(reserve), "reserve");
         assertEq(newHeart.movingAverageAssets(2), address(wrappedReserve), "wrappedReserve");
-        assertEq(newHeart.movingAverageAssetsCount(), 3, "asset count");
+        assertEq(newHeart.getMovingAverageAssetsCount(), 3, "asset count");
     }
 
     function testReverts_constructor_movingAverageAssets_duplicate() public {
@@ -644,7 +644,7 @@ contract HeartTest is Test {
         assertEq(heart.movingAverageAssets(0), address(ohm), "ohm");
         assertEq(heart.movingAverageAssets(1), address(reserve), "reserve");
         assertEq(heart.movingAverageAssets(2), address(wrappedReserve), "wrappedReserve");
-        assertEq(heart.movingAverageAssetsCount(), 3, "asset count");
+        assertEq(heart.getMovingAverageAssetsCount(), 3, "asset count");
     }
 
     function testReverts_removeMovingAverageAsset_doesNotExist() public {
@@ -686,6 +686,6 @@ contract HeartTest is Test {
 
         // Check that the asset was removed
         assertEq(heart.movingAverageAssets(0), address(ohm));
-        assertEq(heart.movingAverageAssetsCount(), 1, "asset count");
+        assertEq(heart.getMovingAverageAssetsCount(), 1, "asset count");
     }
 }

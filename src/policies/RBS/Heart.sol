@@ -45,9 +45,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice Addresses of assets that use the moving average
     address[] public movingAverageAssets;
 
-    /// @notice Number of moving average assets
-    uint256 public movingAverageAssetsCount;
-
     // Modules
     PRICEv2 internal PRICE;
     MINTRv1 internal MINTR;
@@ -101,8 +98,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
             emit MovingAverageAssetAdded(currentAsset);
         }
-
-        movingAverageAssetsCount = assetsLen;
     }
 
     /// @inheritdoc Policy
@@ -265,8 +260,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         movingAverageAssets.push(asset_);
-        movingAverageAssetsCount++;
-
         emit MovingAverageAssetAdded(asset_);
     }
 
@@ -286,8 +279,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
             if (movingAverageAssets[i] == asset_) {
                 movingAverageAssets[i] = movingAverageAssets[assetsLen - 1];
                 movingAverageAssets.pop();
-                movingAverageAssetsCount--;
-
                 foundAsset = true;
                 break;
             }
@@ -301,6 +292,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice    Gets the array of moving average assets
     function getMovingAverageAssets() external view returns (address[] memory) {
         return movingAverageAssets;
+    }
+
+    /// @notice    Gets the number of moving average assets
+    function getMovingAverageAssetsCount() external view returns (uint256) {
+        return movingAverageAssets.length;
     }
 
     //============================================================================================//
