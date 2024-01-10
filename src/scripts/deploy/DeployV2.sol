@@ -1191,6 +1191,7 @@ contract OlympusDeploy is Script {
 
         // Check that the environment variables are loaded
         if (address(SPPLY) == address(0)) revert("SPPLY address not set");
+        if (address(balancerVault) == address(0)) revert("balancerVault address not set");
         if (address(lidoVaultManager) == address(0)) revert("lidoVaultManager address not set");
         if (address(lusdVaultManager) == address(0)) revert("lusdVaultManager address not set");
 
@@ -1200,7 +1201,7 @@ contract OlympusDeploy is Script {
 
         // Deploy BLVaultSupply submodule
         vm.broadcast();
-        blVaultSupply = new BLVaultSupply(SPPLY, vaultManagers);
+        blVaultSupply = new BLVaultSupply(SPPLY, address(balancerVault), vaultManagers);
         console2.log("BLVaultSupply deployed at:", address(blVaultSupply));
 
         return address(blVaultSupply);
