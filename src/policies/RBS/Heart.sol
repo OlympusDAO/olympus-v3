@@ -155,9 +155,10 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         if (currentTime < lastBeat + frequency()) revert Heart_OutOfCycle();
 
         // Store the current price for assets that track and use the moving average (otherwise metrics will fail)
-        uint256 assetsLen = movingAverageAssets.length;
+        address[] memory cachedMovingAverageAssets = movingAverageAssets;
+        uint256 assetsLen = cachedMovingAverageAssets.length;
         for (uint256 i = 0; i < assetsLen; i++) {
-            PRICE.storePrice(movingAverageAssets[i]);
+            PRICE.storePrice(cachedMovingAverageAssets[i]);
         }
 
         // Update the liquid backing calculation
