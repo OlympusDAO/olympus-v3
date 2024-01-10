@@ -18,6 +18,8 @@ import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 
 import {OlympusPricev2} from "modules/PRICE/OlympusPrice.v2.sol";
 
+import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
+
 contract BLVaultSupplyTest is Test {
     using FullMath for uint256;
     using ModuleTestFixtureGenerator for OlympusSupply;
@@ -33,6 +35,7 @@ contract BLVaultSupplyTest is Test {
 
     address[] internal vaultManagerAddresses;
     MockVaultManager[] internal vaultManagers;
+    MockBalancerVault internal balancerVault;
 
     address internal writer;
 
@@ -73,6 +76,9 @@ contract BLVaultSupplyTest is Test {
 
         // Deploy BLV submodule
         {
+            // Create Balancer Vault
+            balancerVault = new MockBalancerVault();
+
             // Create vault managers
             MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
             vaultManagers.push(vaultManager1);
@@ -81,7 +87,11 @@ contract BLVaultSupplyTest is Test {
             vaultManagerAddresses = new address[](1);
             vaultManagerAddresses[0] = address(vaultManager1);
 
-            submoduleBLVaultSupply = new BLVaultSupply(moduleSupply, vaultManagerAddresses);
+            submoduleBLVaultSupply = new BLVaultSupply(
+                moduleSupply,
+                address(balancerVault),
+                vaultManagerAddresses
+            );
         }
 
         // Initialize
@@ -149,7 +159,7 @@ contract BLVaultSupplyTest is Test {
         // There's no error message, so just check that a revert happens when attempting to call the module
         vm.expectRevert();
 
-        new BLVaultSupply(Module(newLocations[0]), vaultManagerAddresses);
+        new BLVaultSupply(Module(newLocations[0]), address(balancerVault), vaultManagerAddresses);
     }
 
     function test_submodule_parent_notSpply_reverts() public {
@@ -159,7 +169,7 @@ contract BLVaultSupplyTest is Test {
         bytes memory err = abi.encodeWithSignature("Submodule_InvalidParent()");
         vm.expectRevert(err);
 
-        new BLVaultSupply(modulePrice, vaultManagerAddresses);
+        new BLVaultSupply(modulePrice, address(balancerVault), vaultManagerAddresses);
     }
 
     function test_submodule_addressZeroVaultManager() public {
@@ -171,7 +181,7 @@ contract BLVaultSupplyTest is Test {
         vm.expectRevert(err);
 
         // Create a new BLVaultSupply with duplicate vault managers
-        new BLVaultSupply(moduleSupply, vaultManagerAddresses);
+        new BLVaultSupply(moduleSupply, address(balancerVault), vaultManagerAddresses);
     }
 
     function test_submodule_duplicateVaultManagers() public {
@@ -184,7 +194,7 @@ contract BLVaultSupplyTest is Test {
         vm.expectRevert(err);
 
         // Create a new BLVaultSupply with duplicate vault managers
-        new BLVaultSupply(moduleSupply, vaultManagerAddresses);
+        new BLVaultSupply(moduleSupply, address(balancerVault), vaultManagerAddresses);
     }
 
     function test_submodule_emitsEvent() public {
@@ -193,7 +203,11 @@ contract BLVaultSupplyTest is Test {
         emit VaultManagerAdded(vaultManagerAddresses[0]);
 
         // New BLVaultSupply
-        BLVaultSupply submoduleVaultSupply = new BLVaultSupply(moduleSupply, vaultManagerAddresses);
+        BLVaultSupply submoduleVaultSupply = new BLVaultSupply(
+            moduleSupply,
+            address(balancerVault),
+            vaultManagerAddresses
+        );
 
         assertEq(submoduleVaultSupply.getSourceCount(), 1);
     }
@@ -202,7 +216,11 @@ contract BLVaultSupplyTest is Test {
 
     function test_getCollateralizedOhm_noVaultManagers() public {
         // Create a new BLVaultSupply with no vault managers
-        BLVaultSupply newSubmoduleBLVaultSupply = new BLVaultSupply(moduleSupply, new address[](0));
+        BLVaultSupply newSubmoduleBLVaultSupply = new BLVaultSupply(
+            moduleSupply,
+            address(balancerVault),
+            new address[](0)
+        );
 
         assertEq(newSubmoduleBLVaultSupply.getCollateralizedOhm(), 0);
     }
@@ -232,6 +250,7 @@ contract BLVaultSupplyTest is Test {
         // Create a new BLVaultSupply with multiple vault managers
         BLVaultSupply newSubmoduleBLVaultSupply = new BLVaultSupply(
             moduleSupply,
+            address(balancerVault),
             vaultManagerAddresses
         );
 
@@ -272,7 +291,11 @@ contract BLVaultSupplyTest is Test {
 
     function test_getProtocolOwnedLiquidityReserves_noVaultManagers() public {
         // Create a new BLVaultSupply with no vault managers
-        BLVaultSupply newSubmoduleBLVaultSupply = new BLVaultSupply(moduleSupply, new address[](0));
+        BLVaultSupply newSubmoduleBLVaultSupply = new BLVaultSupply(
+            moduleSupply,
+            address(balancerVault),
+            new address[](0)
+        );
 
         SPPLYv1.Reserves[] memory reserves = newSubmoduleBLVaultSupply
             .getProtocolOwnedLiquidityReserves();
@@ -311,6 +334,7 @@ contract BLVaultSupplyTest is Test {
         // Create a new BLVaultSupply with multiple vault managers
         BLVaultSupply newSubmoduleBLVaultSupply = new BLVaultSupply(
             moduleSupply,
+            address(balancerVault),
             vaultManagerAddresses
         );
 

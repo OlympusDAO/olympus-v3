@@ -57,6 +57,8 @@ contract AppraiserTest is Test {
     SupplyConfig internal supplyConfig;
     RolesAdmin internal rolesAdmin;
 
+    address internal balancerVaultAddress;
+
     AuraBalancerSupply internal submoduleAuraBalancerSupply;
 
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
@@ -202,6 +204,7 @@ contract AppraiserTest is Test {
     function _setupSupplySubmodules() internal returns (address) {
         // AuraBalancerSupply setup
         MockMultiplePoolBalancerVault balancerVault = new MockMultiplePoolBalancerVault();
+        balancerVaultAddress = address(balancerVault);
         bytes32 poolId = "hello";
 
         address[] memory balancerPoolTokens = new address[](2);
@@ -858,7 +861,11 @@ contract AppraiserTest is Test {
     function testCorrectness_getMetric_backing_blVault() public {
         // Set up the BLVault submodule with no vault managers
         address[] memory vaultManagers = new address[](0);
-        BLVaultSupply submoduleBLVaultSupply = new BLVaultSupply(SPPLY, vaultManagers);
+        BLVaultSupply submoduleBLVaultSupply = new BLVaultSupply(
+            SPPLY,
+            balancerVaultAddress,
+            vaultManagers
+        );
         supplyConfig.installSubmodule(submoduleBLVaultSupply);
 
         // Cache current metric value and timestamp

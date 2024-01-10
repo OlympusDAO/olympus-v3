@@ -8,6 +8,7 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockGohm} from "test/mocks/OlympusMocks.sol";
 import {MockVaultManager} from "test/mocks/MockBLVaultManager.sol";
+import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
 
 import "src/Submodules.sol";
 import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
@@ -104,6 +105,8 @@ contract SupplyConfigTest is Test {
     RolesAdmin internal rolesAdmin;
     OlympusRoles internal ROLES;
 
+    MockBalancerVault internal balancerVault;
+
     address internal admin;
     address internal policy;
 
@@ -126,6 +129,8 @@ contract SupplyConfigTest is Test {
         reserve = new MockERC20("Reserve", "RSV", 18);
         weth = new MockERC20("Wrapped ETH", "WETH", 18);
         address[2] memory olympusTokens = [address(ohm), address(gohm)];
+
+        balancerVault = new MockBalancerVault();
 
         // Deploy system contracts
         kernel = new Kernel();
@@ -190,7 +195,11 @@ contract SupplyConfigTest is Test {
         vaultManagerAddresses[0] = address(vaultManager1);
 
         // Create new submodule to install
-        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
+        BLVaultSupply supplyBLV = new BLVaultSupply(
+            SPPLY,
+            address(balancerVault),
+            vaultManagerAddresses
+        );
 
         // Confirm submodule is not installed on SPPLY
         address submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
@@ -219,7 +228,11 @@ contract SupplyConfigTest is Test {
         vaultManagerAddresses[0] = address(vaultManager1);
 
         // Create new submodule to install
-        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
+        BLVaultSupply supplyBLV = new BLVaultSupply(
+            SPPLY,
+            address(balancerVault),
+            vaultManagerAddresses
+        );
 
         // Confirm submodule is not installed on SPPLY
         address submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
@@ -245,7 +258,11 @@ contract SupplyConfigTest is Test {
         vaultManagerAddresses[0] = address(vaultManager1);
 
         // Create new submodule to install
-        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
+        BLVaultSupply supplyBLV = new BLVaultSupply(
+            SPPLY,
+            address(balancerVault),
+            vaultManagerAddresses
+        );
 
         // Install new submodule with admin account
         vm.prank(admin);
@@ -287,7 +304,11 @@ contract SupplyConfigTest is Test {
         vaultManagerAddresses[0] = address(vaultManager1);
 
         // Create new submodule to install
-        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
+        BLVaultSupply supplyBLV = new BLVaultSupply(
+            SPPLY,
+            address(balancerVault),
+            vaultManagerAddresses
+        );
 
         // Install new submodule with admin account
         vm.prank(admin);
@@ -322,7 +343,11 @@ contract SupplyConfigTest is Test {
         address[] memory vaultManagerAddresses = new address[](0);
 
         // Create new submodule to install
-        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
+        BLVaultSupply supplyBLV = new BLVaultSupply(
+            SPPLY,
+            address(balancerVault),
+            vaultManagerAddresses
+        );
 
         // Confirm submodule is not installed on SPPLY
         address submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
@@ -352,7 +377,11 @@ contract SupplyConfigTest is Test {
         address[] memory vaultManagerAddresses = new address[](0);
 
         // Create new submodule to install
-        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
+        BLVaultSupply supplyBLV = new BLVaultSupply(
+            SPPLY,
+            address(balancerVault),
+            vaultManagerAddresses
+        );
 
         // Confirm submodule is not installed on SPPLY
         address submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
