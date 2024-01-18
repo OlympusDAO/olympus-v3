@@ -555,6 +555,16 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // 11. Disables the Operator
         // This is to avoid having any bond markets open while TRSRY v1.1 is without funds
         {
+            console2.log("Granting the operator_policy role to the DAO MS");
+            addToBatch(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    bytes32("operator_policy"),
+                    daoMS
+                )
+            );
+
             console2.log("Disabling the Operator");
             addToBatch(operator, abi.encodeWithSelector(Operator.deactivate.selector));
         }
@@ -614,6 +624,16 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         {
             console2.log("Activating the Operator");
             addToBatch(operator, abi.encodeWithSelector(Operator.activate.selector));
+
+            console2.log("Revoking the operator_policy role from the DAO MS");
+            addToBatch(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.revokeRole.selector,
+                    bytes32("operator_policy"),
+                    daoMS
+                )
+            );
         }
 
         // Reporting
