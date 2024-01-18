@@ -21,12 +21,14 @@ import {Category as AssetCategory} from "modules/TRSRY/TRSRY.v1.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {Operator} from "policies/RBS/Operator.sol";
 
 /// @notice     Migrates to TRSRY v1.1
 contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     // Existing Olympus contracts
     address kernel;
     address rolesAdmin;
+    address operator;
     address treasuryV1;
     address treasuryCustodian;
     address treasuryConfig;
@@ -55,6 +57,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
+        operator = envAddress("current", "olympus.policies.Operator");
 
         treasuryV1 = envAddress("current", "olympus.modules.OlympusTreasuryV1");
         treasuryV1_1 = envAddress("current", "olympus.modules.OlympusTreasuryV1_1");
@@ -189,6 +192,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // 8. Add and categorize WETH in TRSRY
         // 9. Add and categorize veFXS in TRSRY
         // 10. Add and categorize FXS in TRSRY
+        // 11. Disables the Operator
 
         console2.log("*** TRSRY v1.1 setup");
 
@@ -548,6 +552,13 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             )
         );
 
+        // 11. Disables the Operator
+        // This is to avoid having any bond markets open while TRSRY v1.1 is without funds
+        {
+            console2.log("Disabling the Operator");
+            addToBatch(operator, abi.encodeWithSelector(Operator.deactivate.selector));
+        }
+
         // Reporting
         console2.log("Testing TRSRY v1.1 (pre-deposit)");
         OlympusTreasury trsry = OlympusTreasury(treasuryV1_1);
@@ -566,6 +577,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     function deposit() public {
         // This DAO MS batch:
         // 1. Deposits assets from the DAO MS into TRSRY v1.1
+        // 2. Activates the Operator
 
         console2.log("*** TRSRY v1.1 deposit");
 
@@ -596,6 +608,12 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 sdai,
                 abi.encodeWithSelector(ERC20.transfer.selector, treasuryV1_1, balance)
             );
+        }
+
+        // 2. Activates the Operator
+        {
+            console2.log("Activating the Operator");
+            addToBatch(operator, abi.encodeWithSelector(Operator.activate.selector));
         }
 
         // Reporting
