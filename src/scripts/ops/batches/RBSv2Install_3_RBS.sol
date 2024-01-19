@@ -140,7 +140,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         weth = envAddress("current", "external.tokens.WETH");
         veFXS = envAddress("current", "external.tokens.veFXS");
         fxs = envAddress("current", "external.tokens.FXS");
-        btrfly = envAddress("current", "external.tokens.BTRFRY");
+        btrfly = envAddress("current", "external.tokens.BTRFLY");
 
         usdPerEthPriceFeed = envAddress("current", "external.chainlink.ethUsdPriceFeed");
         ethPerDaiPriceFeed = envAddress("current", "external.chainlink.daiEthPriceFeed");
