@@ -439,6 +439,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
+            if (priceDecimals > int8(_oracleDecimals)) revert("priceDecimals > _oracleDecimals");
             oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
             bondScale =
                 10 **
@@ -471,6 +472,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             scaleAdjustment = int8(_reserveDecimals) - int8(_ohmDecimals) + (priceDecimals / 2);
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
+            if (priceDecimals > int8(_oracleDecimals)) revert("priceDecimals > _oracleDecimals");
             oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
             bondScale =
                 10 **
