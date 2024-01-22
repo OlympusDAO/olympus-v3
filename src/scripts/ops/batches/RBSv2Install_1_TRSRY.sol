@@ -598,40 +598,40 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // 12. Add and categorize rlBTRFLY
         //      - liquid, volatile, strategic
         //      - liquid as staking is only 16-17 weeks
-        {
-            console2.log("Adding rlBTRFLY to TRSRY");
-            addToBatch(
-                treasuryConfig,
-                abi.encodeWithSelector(TreasuryConfig.addAsset.selector, rlbtrfly, locations)
-            );
-            console2.log("    Categorizing rlBTRFLY as liquid");
-            addToBatch(
-                treasuryConfig,
-                abi.encodeWithSelector(
-                    TreasuryConfig.categorizeAsset.selector,
-                    rlbtrfly,
-                    AssetCategory.wrap("liquid")
-                )
-            );
-            console2.log("    Categorizing rlBTRFLY as volatile");
-            addToBatch(
-                treasuryConfig,
-                abi.encodeWithSelector(
-                    TreasuryConfig.categorizeAsset.selector,
-                    rlbtrfly,
-                    AssetCategory.wrap("volatile")
-                )
-            );
-            console2.log("    Categorizing rlBTRFLY as strategic");
-            addToBatch(
-                treasuryConfig,
-                abi.encodeWithSelector(
-                    TreasuryConfig.categorizeAsset.selector,
-                    rlbtrfly,
-                    AssetCategory.wrap("strategic")
-                )
-            );
-        }
+        // {
+        //     console2.log("Adding rlBTRFLY to TRSRY");
+        //     addToBatch(
+        //         treasuryConfig,
+        //         abi.encodeWithSelector(TreasuryConfig.addAsset.selector, rlbtrfly, locations)
+        //     );
+        //     console2.log("    Categorizing rlBTRFLY as liquid");
+        //     addToBatch(
+        //         treasuryConfig,
+        //         abi.encodeWithSelector(
+        //             TreasuryConfig.categorizeAsset.selector,
+        //             rlbtrfly,
+        //             AssetCategory.wrap("liquid")
+        //         )
+        //     );
+        //     console2.log("    Categorizing rlBTRFLY as volatile");
+        //     addToBatch(
+        //         treasuryConfig,
+        //         abi.encodeWithSelector(
+        //             TreasuryConfig.categorizeAsset.selector,
+        //             rlbtrfly,
+        //             AssetCategory.wrap("volatile")
+        //         )
+        //     );
+        //     console2.log("    Categorizing rlBTRFLY as strategic");
+        //     addToBatch(
+        //         treasuryConfig,
+        //         abi.encodeWithSelector(
+        //             TreasuryConfig.categorizeAsset.selector,
+        //             rlbtrfly,
+        //             AssetCategory.wrap("strategic")
+        //         )
+        //     );
+        // }
 
         // 13. Disables the Operator
         // This is to avoid having any bond markets open while TRSRY v1.1 is without funds
