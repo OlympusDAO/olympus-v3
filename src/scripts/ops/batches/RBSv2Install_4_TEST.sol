@@ -53,6 +53,7 @@ contract RBSv2Install_4_TEST is OlyBatch {
 
         RBSv2Install_2_SPPLY spplyScript = new RBSv2Install_2_SPPLY();
         spplyScript.initTestBatch();
+        spplyScript.disable_crosschainbridge();
         spplyScript.install();
 
         RBSv2Install_3_RBS rbsScript = new RBSv2Install_3_RBS();

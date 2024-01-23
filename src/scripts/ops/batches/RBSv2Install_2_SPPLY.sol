@@ -73,6 +73,24 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         brickedSupply = envAddress("current", "olympus.submodules.SPPLY.BrickedSupply");
     }
 
+    function disable_crosschainbridge() public {
+        // This DAO MS batch:
+        // 1. Deactivates the CrossChainBridge policy
+
+        // 1. Deactivate the CrossChainBridge policy
+        {
+            console2.log("Deactivating CrossChainBridge policy");
+            addToBatch(
+                kernel,
+                abi.encodeWithSelector(
+                    Kernel.executeAction.selector,
+                    Actions.DeactivatePolicy,
+                    crossChainBridgeV1
+                )
+            );
+        }
+    }
+
     /// @notice     This function is separate from the DAO batch, so it can be called externally while testing
     function install() public {
         // This DAO MS batch:
@@ -287,6 +305,10 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
     }
 
     function RBSv2Install_2_1(bool send_) external isDaoBatch(send_) {
+        disable_crosschainbridge();
+    }
+
+    function RBSv2Install_2_2(bool send_) external isDaoBatch(send_) {
         install();
     }
 }
