@@ -103,9 +103,8 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         // 7. Installs the BrickedSupply submodule on the OlympusSupply module
         // 8. Categorizes protocol-owned-treasury supply
         // 9. Categorizes DAO supply
-        // 10. Deactivates the old CrossChainBridge policy
-        // 11. Activates the new CrossChainBridge policy
-        // 12. Set trusted remotes on the new CrossChainBridge policy
+        // 10. Activates the new CrossChainBridge policy
+        // 11. Set trusted remotes on the new CrossChainBridge policy
 
         // 1. Install the OlympusSupply module
         console2.log("Installing OlympusSupply module");
@@ -219,18 +218,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 10. Deactivate the old CrossChainBridge policy
-        console2.log("Deactivating old CrossChainBridge policy");
-        addToBatch(
-            kernel,
-            abi.encodeWithSelector(
-                Kernel.executeAction.selector,
-                Actions.DeactivatePolicy,
-                crossChainBridgeV1
-            )
-        );
-
-        // 11. Activate the new CrossChainBridge policy
+        // 10. Activate the new CrossChainBridge policy
         //  - No need to set the admin role, as it was already set when the first version of the policy was installed
         console2.log("Activating new CrossChainBridge policy");
         addToBatch(
@@ -242,7 +230,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 12. Set trusted remotes on the new CrossChainBridge policy
+        // 11. Set trusted remotes on the new CrossChainBridge policy
         console2.log("Setting Arbitrum bridge as trusted remote on new CrossChainBridge policy");
         addToBatch(
             crossChainBridgeV1_1,
