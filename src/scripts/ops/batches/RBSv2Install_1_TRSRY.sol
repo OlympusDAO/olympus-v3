@@ -104,6 +104,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     function withdraw() public {
         // This DAO MS batch:
         // 1. Transfers all tokens from the old treasury to the DAO MS
+        // 2. Disables the Operator
 
         console2.log("*** TRSRY v1 withdraw");
 
@@ -179,6 +180,23 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, aura, auraBalance));
         // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, daoMS, aura, auraBalance));
         // console2.log("Transfered AURA: %s", auraBalance);
+
+        // 2. Disables the Operator
+        // This is to avoid having any bond markets open while TRSRY v1.1 is without funds
+        {
+            console2.log("Granting the operator_policy role to the DAO MS");
+            addToBatch(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    bytes32("operator_policy"),
+                    daoMS
+                )
+            );
+
+            console2.log("Disabling the Operator");
+            addToBatch(operator, abi.encodeWithSelector(Operator.deactivate.selector));
+        }
     }
 
     /// @notice     This function is separate from the DAO batch, so it can be called externally while testing
@@ -195,7 +213,6 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // 9. Add and categorize veFXS in TRSRY
         // 10. Add and categorize FXS in TRSRY
         // 11. Add and categorize BTRFLY in TRSRY
-        // 12. Disables the Operator
 
         console2.log("*** TRSRY v1.1 setup");
 
@@ -590,23 +607,6 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                     AssetCategory.wrap("strategic")
                 )
             );
-        }
-
-        // 12. Disables the Operator
-        // This is to avoid having any bond markets open while TRSRY v1.1 is without funds
-        {
-            console2.log("Granting the operator_policy role to the DAO MS");
-            addToBatch(
-                rolesAdmin,
-                abi.encodeWithSelector(
-                    RolesAdmin.grantRole.selector,
-                    bytes32("operator_policy"),
-                    daoMS
-                )
-            );
-
-            console2.log("Disabling the Operator");
-            addToBatch(operator, abi.encodeWithSelector(Operator.deactivate.selector));
         }
 
         // Reporting
