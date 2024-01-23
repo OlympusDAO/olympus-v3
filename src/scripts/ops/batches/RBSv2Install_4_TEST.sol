@@ -10,6 +10,13 @@ import {RBSv2Install_1_TRSRY} from "src/scripts/ops/batches/RBSv2Install_1_TRSRY
 import {RBSv2Install_2_SPPLY} from "src/scripts/ops/batches/RBSv2Install_2_SPPLY.sol";
 import {RBSv2Install_3_RBS} from "src/scripts/ops/batches/RBSv2Install_3_RBS.sol";
 
+import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
+import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
+import {BrickedSupply} from "modules/SPPLY/submodules/BrickedSupply.sol";
+import {BLVaultSupply} from "modules/SPPLY/submodules/BLVaultSupply.sol";
+
+import {toCategory as toSupplyCategory, SPPLYv1} from "modules/SPPLY/SPPLY.v1.sol";
+
 // Bophades policies
 import {OlympusHeart} from "policies/RBS/Heart.sol";
 import {Appraiser} from "policies/OCA/Appraiser.sol";
@@ -20,27 +27,92 @@ import {IAppraiser} from "policies/OCA/interfaces/IAppraiser.sol";
 contract RBSv2Install_4_TEST is OlyBatch {
     address heartV2;
     address appraiser;
+    address spply;
+    address migrationOffsetSupply;
+    address brickedSupply;
+    address blVaultSupply;
 
     function loadEnv() internal override {
         heartV2 = envAddress("current", "olympus.policies.OlympusHeartV2");
         appraiser = envAddress("current", "olympus.policies.Appraiser");
+        spply = envAddress("current", "olympus.modules.OlympusSupply");
+        migrationOffsetSupply = envAddress(
+            "current",
+            "olympus.submodules.SPPLY.MigrationOffsetSupply"
+        );
+        brickedSupply = envAddress("current", "olympus.submodules.SPPLY.BrickedSupply");
+        blVaultSupply = envAddress("current", "olympus.submodules.SPPLY.BLVaultSupply");
     }
 
     function RBSv2Install_4(bool send_) external isDaoBatch(send_) {
-        RBSv2Install_1_TRSRY trsry = new RBSv2Install_1_TRSRY();
-        trsry.initTestBatch();
-        trsry.install();
+        RBSv2Install_1_TRSRY trsryScript = new RBSv2Install_1_TRSRY();
+        trsryScript.initTestBatch();
+        trsryScript.withdraw();
+        trsryScript.setup();
+        trsryScript.deposit();
 
-        RBSv2Install_2_SPPLY spply = new RBSv2Install_2_SPPLY();
-        spply.initTestBatch();
-        spply.install();
+        RBSv2Install_2_SPPLY spplyScript = new RBSv2Install_2_SPPLY();
+        spplyScript.initTestBatch();
+        spplyScript.disable_crosschainbridge();
+        spplyScript.install();
 
-        RBSv2Install_3_RBS rbs = new RBSv2Install_3_RBS();
-        rbs.initTestBatch();
-        rbs.install();
+        RBSv2Install_3_RBS rbsScript = new RBSv2Install_3_RBS();
+        rbsScript.initTestBatch();
+        rbsScript.install();
 
         console2.log("\n");
         console2.log("*** Additional testing");
+
+        {
+            console2.log("Testing supply metrics");
+            console2.log(
+                "    Total supply",
+                OlympusSupply(spply).getMetric(SPPLYv1.Metric.TOTAL_SUPPLY)
+            );
+            console2.log(
+                "    Migration offset",
+                MigrationOffsetSupply(migrationOffsetSupply).getProtocolOwnedTreasuryOhm()
+            );
+            console2.log(
+                "    Bricked OHM",
+                BrickedSupply(brickedSupply).getProtocolOwnedTreasuryOhm()
+            );
+            console2.log(
+                "    Minus: protocol-owned-treasury",
+                OlympusSupply(spply).getSupplyByCategory(
+                    toSupplyCategory("protocol-owned-treasury")
+                )
+            );
+            console2.log(
+                "    Minus: dao",
+                OlympusSupply(spply).getSupplyByCategory(toSupplyCategory("dao"))
+            );
+            console2.log(
+                "    Circulating supply",
+                OlympusSupply(spply).getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY)
+            );
+            console2.log(
+                "    Minus: protocol-owned-liquidity",
+                OlympusSupply(spply).getSupplyByCategory(
+                    toSupplyCategory("protocol-owned-liquidity")
+                )
+            );
+            console2.log(
+                "    Minus: protocol-owned-borrowable",
+                OlympusSupply(spply).getSupplyByCategory(
+                    toSupplyCategory("protocol-owned-borrowable")
+                )
+            );
+            console2.log(
+                "    Floating supply",
+                OlympusSupply(spply).getMetric(SPPLYv1.Metric.FLOATING_SUPPLY)
+            );
+            console2.log("    BL OHM", BLVaultSupply(blVaultSupply).getCollateralizedOhm());
+            console2.log(
+                "    Backed supply",
+                OlympusSupply(spply).getMetric(SPPLYv1.Metric.BACKED_SUPPLY)
+            );
+        }
 
         // Warp forward to beyond the next heartbeat and test the output again
         // This catches any issues with MA storage
@@ -55,6 +127,10 @@ contract RBSv2Install_4_TEST is OlyBatch {
             console2.log(
                 "    Backing (18dp)",
                 Appraiser(appraiser).getMetric(IAppraiser.Metric.BACKING)
+            );
+            console2.log(
+                "    Liquid backing (18dp)",
+                Appraiser(appraiser).getMetric(IAppraiser.Metric.LIQUID_BACKING)
             );
             console2.log(
                 "    LBBO (18dp)",

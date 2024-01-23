@@ -68,6 +68,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     address weth;
     address veFXS;
     address fxs;
+    address btrfly;
 
     // Price Feeds
     address usdPerEthPriceFeed;
@@ -79,6 +80,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
     // Uniswap V3 Pools
     address daiWethUniV3Pool;
+    address btrflyWethUniV3Pool;
 
     // Uniswap V3 POL
     address ohmWethUniV3Pool;
@@ -138,6 +140,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         weth = envAddress("current", "external.tokens.WETH");
         veFXS = envAddress("current", "external.tokens.veFXS");
         fxs = envAddress("current", "external.tokens.FXS");
+        btrfly = envAddress("current", "external.tokens.BTRFLY");
 
         usdPerEthPriceFeed = envAddress("current", "external.chainlink.ethUsdPriceFeed");
         ethPerDaiPriceFeed = envAddress("current", "external.chainlink.daiEthPriceFeed");
@@ -147,6 +150,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         usdPerBtcPriceFeed = envAddress("current", "external.chainlink.btcUsdPriceFeed");
 
         daiWethUniV3Pool = envAddress("current", "external.uniswapV3.DaiWethPool");
+        btrflyWethUniV3Pool = envAddress("current", "external.uniswapV3.BtrflyWethPool");
         ohmWethUniV3Pool = envAddress("current", "external.uniswapV3.OhmWethPool");
         ohmWethTokenId = envUint("current", "external.UniswapV3LegacyPOL.OhmWethTokenId");
         ohmWethTickLower = int24(envInt("current", "external.UniswapV3LegacyPOL.OhmWethMinTick"));
@@ -434,11 +438,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
         // This Policy MS batch:
         // 1. Configure WETH on PRICE
-        // 2. Configures DAI on PRICE
-        // 3. Configures sDAI on PRICE
+        // 2. Configure DAI on PRICE
+        // 3. Configure sDAI on PRICE
         // 4. Configure veFXS on PRICE
         // 5. Configure FXS on PRICE
         // 6. Configure OHM on PRICE
+        // 7. Configure BTRFLY on PRICE
 
         // 0. Load variables from the JSON file
         // TODO final values need to be added
@@ -728,6 +733,45 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             // Already added as a moving average asset in Heart
 
             console2.log("    OHM price: %s (9 dp)", OlympusPricev2(priceV2).getPrice(ohm));
+        }
+
+        // 7. Configure BTRFLY on PRICE
+        // - Uses a Uniswap V3 TWAP with the configured observation window
+        // - Does not require an internal moving average, as the Uniswap V3 is resilient
+        {
+            PRICEv2.Component[] memory btrflyFeeds = new PRICEv2.Component[](1);
+            btrflyFeeds[0] = PRICEv2.Component(
+                toSubKeycode("PRICE.UNIV3"),
+                UniswapV3Price.getTokenTWAP.selector,
+                abi.encode(
+                    UniswapV3Price.UniswapV3Params({
+                        pool: IUniswapV3Pool(btrflyWethUniV3Pool),
+                        observationWindowSeconds: twapObservationWindow, // This is shorter, as it is compared against reserves
+                        maxDeviationBps: twapMaxDeviationBps
+                    })
+                )
+            );
+
+            uint256 btrflyLastObsTime_ = 0;
+            uint256[] memory btrflyObs_ = new uint256[](0);
+
+            console2.log("Adding BTRFLY price feed to PRICE");
+            addToBatch(
+                priceConfigV2,
+                abi.encodeWithSelector(
+                    PriceConfigV2.addAssetPrice.selector,
+                    btrfly,
+                    false, // store moving average
+                    false, // use the moving average as part of price strategy
+                    0,
+                    btrflyLastObsTime_,
+                    btrflyObs_,
+                    PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
+                    btrflyFeeds
+                )
+            );
+
+            console2.log("    BTRFLY price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(btrfly));
         }
 
         // ==================== SECTION 3: BunniManager Migration ==================== //

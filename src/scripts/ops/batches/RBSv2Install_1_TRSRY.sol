@@ -21,12 +21,14 @@ import {Category as AssetCategory} from "modules/TRSRY/TRSRY.v1.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
+import {Operator} from "policies/RBS/Operator.sol";
 
 /// @notice     Migrates to TRSRY v1.1
 contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     // Existing Olympus contracts
     address kernel;
     address rolesAdmin;
+    address operator;
     address treasuryV1;
     address treasuryCustodian;
     address treasuryConfig;
@@ -45,6 +47,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     address fxs;
     address veFXS;
     address weth;
+    address btrfly;
 
     // New contracts
     address treasuryV1_1;
@@ -55,6 +58,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     function loadEnv() internal override {
         kernel = envAddress("current", "olympus.Kernel");
         rolesAdmin = envAddress("current", "olympus.policies.RolesAdmin");
+        operator = envAddress("current", "olympus.policies.Operator");
 
         treasuryV1 = envAddress("current", "olympus.modules.OlympusTreasuryV1");
         treasuryV1_1 = envAddress("current", "olympus.modules.OlympusTreasuryV1_1");
@@ -74,6 +78,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         fxs = envAddress("current", "external.tokens.FXS");
         veFXS = envAddress("current", "external.tokens.veFXS");
         weth = envAddress("current", "external.tokens.WETH");
+        btrfly = envAddress("current", "external.tokens.BTRFLY");
 
         daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
 
@@ -84,22 +89,26 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         );
     }
 
-    /// @notice     This function is separate from the DAO batch, so it can be called externally while testing
-    function install() public {
-        // This DAO MS batch:
-        // 1. Transfers all tokens from the old treasury to the new treasury
-        // 2. Records the current debt of the old treasury
-        // 3. Upgrades the OlympusTreasury contract to the new version
-        // 4. Sets debt on the new treasury contract
-        // 5. Installs the new TreasuryCustodian
-        // 6. Set roles for policy access control
-        // 7. Add and categorize DAI in TRSRY
-        // 8. Add and categorize sDAI in TRSRY
-        // 9. Add and categorize WETH in TRSRY
-        // 10. Add and categorize veFXS in TRSRY
-        // 11. Add and categorize FXS in TRSRY
+    function RBSv2Install_1_TRSRY_1(bool send_) public isDaoBatch(send_) {
+        withdraw();
+    }
 
-        // 1. Transfer all tokens from the old treasury to the new treasury
+    function RBSv2Install_1_TRSRY_2(bool send_) public isDaoBatch(send_) {
+        setup();
+    }
+
+    function RBSv2Install_1_TRSRY_3(bool send_) public isDaoBatch(send_) {
+        deposit();
+    }
+
+    function withdraw() public {
+        // This DAO MS batch:
+        // 1. Transfers all tokens from the old treasury to the DAO MS
+        // 2. Disables the Operator
+
+        console2.log("*** TRSRY v1 withdraw");
+
+        // 1. Transfers all tokens from the old treasury to the DAO MS
         // DAI
         {
             uint256 daiBalance = ERC20(dai).balanceOf(treasuryV1);
@@ -117,7 +126,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 treasuryCustodian,
                 abi.encodeWithSelector(
                     TreasuryCustodian.withdrawReservesTo.selector,
-                    treasuryV1_1,
+                    daoMS,
                     dai,
                     daiBalance
                 )
@@ -142,7 +151,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 treasuryCustodian,
                 abi.encodeWithSelector(
                     TreasuryCustodian.withdrawReservesTo.selector,
-                    treasuryV1_1,
+                    daoMS,
                     sdai,
                     sdaiBalance
                 )
@@ -154,25 +163,60 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         // uint256 lusdBalance = ERC20(lusd).balanceOf(treasuryV1);
         // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, lusd, lusdBalance));
-        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, treasuryV1_1, lusd, lusdBalance));
+        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, daoMS, lusd, lusdBalance));
         // console2.log("Transfered LUSD: %s", lusdBalance);
 
         // uint256 wstethBalance = ERC20(wsteth).balanceOf(treasuryV1);
         // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, wsteth, wstethBalance));
-        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, treasuryV1_1, wsteth, wstethBalance));
+        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, daoMS, wsteth, wstethBalance));
         // console2.log("Transfered wstETH: %s", wstethBalance);
 
         // uint256 balBalance = ERC20(bal).balanceOf(treasuryV1);
         // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, bal, balBalance));
-        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, treasuryV1_1, bal, balBalance));
+        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, daoMS, bal, balBalance));
         // console2.log("Transfered BAL: %s", balBalance);
 
         // uint256 auraBalance = ERC20(aura).balanceOf(treasuryV1);
         // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, aura, auraBalance));
-        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, treasuryV1_1, aura, auraBalance));
+        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, daoMS, aura, auraBalance));
         // console2.log("Transfered AURA: %s", auraBalance);
 
-        // 2. Record the current debt of the old treasury
+        // 2. Disables the Operator
+        // This is to avoid having any bond markets open while TRSRY v1.1 is without funds
+        {
+            console2.log("Granting the operator_policy role to the DAO MS");
+            addToBatch(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    bytes32("operator_policy"),
+                    daoMS
+                )
+            );
+
+            console2.log("Disabling the Operator");
+            addToBatch(operator, abi.encodeWithSelector(Operator.deactivate.selector));
+        }
+    }
+
+    /// @notice     This function is separate from the DAO batch, so it can be called externally while testing
+    function setup() public {
+        // This DAO MS batch:
+        // 1. Records the current debt of the old treasury
+        // 2. Upgrades the OlympusTreasury contract to the new version
+        // 3. Sets debt on the new treasury contract
+        // 4. Installs the new TreasuryCustodian
+        // 5. Set roles for policy access control
+        // 6. Add and categorize DAI in TRSRY
+        // 7. Add and categorize sDAI in TRSRY
+        // 8. Add and categorize WETH in TRSRY
+        // 9. Add and categorize veFXS in TRSRY
+        // 10. Add and categorize FXS in TRSRY
+        // 11. Add and categorize BTRFLY in TRSRY
+
+        console2.log("*** TRSRY v1.1 setup");
+
+        // 1. Record the current debt of the old treasury
         OlympusTreasury trsryModule = OlympusTreasury(treasuryV1);
 
         // DAI
@@ -194,7 +238,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             console2.log("    ClearinghouseV1_1 DAI debt: %s", daiClearinghouseV1_1Debt);
 
             uint256 dsrAllocatorDebt = trsryModule.reserveDebt(daiToken, dsrAllocator);
-            // TODO add assertion that this is 0, post-sDAI migration
+            assertEq(dsrAllocatorDebt, 0, "DSRAllocator DAI debt should be 0");
             console2.log("    DSRAllocator DAI debt: %s", dsrAllocatorDebt);
 
             assertEq(
@@ -203,6 +247,8 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 "Clearinghouse DAI debt should equal total debt"
             );
             console2.log("    Total DAI debt matches clearinghouse + DSR allocator debt");
+
+            assertEq(daiToken.balanceOf(treasuryV1), 0, "DAI balance in treasury v1.0 should be 0");
         }
 
         // sDAI
@@ -212,6 +258,12 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             ERC20 sdaiToken = ERC20(sdai);
             uint256 sdaiTotalDebt = trsryModule.totalDebt(sdaiToken);
             assertEq(sdaiTotalDebt, 0, "sDAI debt should be 0");
+
+            assertEq(
+                sdaiToken.balanceOf(treasuryV1),
+                0,
+                "sDAI balance in treasury v1.0 should be 0"
+            );
         }
 
         // FXS
@@ -245,7 +297,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             );
         }
 
-        // 3. Upgrade the OlympusTreasury contract to the new version
+        // 2. Upgrade the OlympusTreasury contract to the new version
         {
             console2.log("Upgrading TRSRY module to new version at %s", treasuryV1_1);
 
@@ -260,7 +312,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             console2.log("    Upgraded OlympusTreasury to new version");
         }
 
-        // 4. Transfer debt over to the new treasury
+        // 3. Transfer debt over to the new treasury
         // TreasuryCustodian.increaseDebt can be used as the existing debt is 0
 
         // DAI
@@ -308,7 +360,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             );
         }
 
-        // 5. Install the new TreasuryConfig
+        // 4. Install the new TreasuryConfig
         {
             console2.log("Installing new TreasuryConfig");
 
@@ -323,7 +375,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             console2.log("    Installed new TreasuryConfig");
         }
 
-        // 6. Set roles for policy access control
+        // 5. Set roles for policy access control
         //  - Give DAO MS the treasuryconfig_policy role
         {
             console2.log("Granting policy role for TreasuryConfig policy");
@@ -337,7 +389,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             );
         }
 
-        // 7. Add and categorize DAI on TreasuryCustodian
+        // 6. Add and categorize DAI on TreasuryCustodian
         //      - liquid, stable, reserves
         //      - Clearinghouse policies use the debt functionality, so don't need to be explicitly added
         address[] memory locations = new address[](2);
@@ -376,7 +428,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             )
         );
 
-        // 8. Add and categorize sDAI on TreasuryCustodian
+        // 7. Add and categorize sDAI on TreasuryCustodian
         //      - liquid, stable, reserves
         console2.log("Adding sDAI to TRSRY");
         addToBatch(
@@ -411,7 +463,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             )
         );
 
-        // 9. Add and categorize WETH
+        // 8. Add and categorize WETH
         //      - liquid, volatile, strategic
         console2.log("Adding WETH to TRSRY");
         addToBatch(
@@ -446,7 +498,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             )
         );
 
-        // 10. Add and categorize veFXS
+        // 9. Add and categorize veFXS
         //      - illiquid, volatile, strategic
         //      - excludes the veFXS allocator balance, since the deployed amount is accounted for in debt
         address[] memory veFXSLocations = new address[](2);
@@ -485,7 +537,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             )
         );
 
-        // 11. Add and categorize FXS
+        // 10. Add and categorize FXS
         //      - illiquid, volatile, strategic
         console2.log("Adding FXS to TRSRY");
         addToBatch(
@@ -520,8 +572,45 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             )
         );
 
+        // 11. Add and categorize BTRFLY
+        //      - liquid, volatile, strategic
+        {
+            console2.log("Adding BTRFLY to TRSRY");
+            addToBatch(
+                treasuryConfig,
+                abi.encodeWithSelector(TreasuryConfig.addAsset.selector, btrfly, locations)
+            );
+            console2.log("    Categorizing BTRFLY as liquid");
+            addToBatch(
+                treasuryConfig,
+                abi.encodeWithSelector(
+                    TreasuryConfig.categorizeAsset.selector,
+                    btrfly,
+                    AssetCategory.wrap("liquid")
+                )
+            );
+            console2.log("    Categorizing BTRFLY as volatile");
+            addToBatch(
+                treasuryConfig,
+                abi.encodeWithSelector(
+                    TreasuryConfig.categorizeAsset.selector,
+                    btrfly,
+                    AssetCategory.wrap("volatile")
+                )
+            );
+            console2.log("    Categorizing BTRFLY as strategic");
+            addToBatch(
+                treasuryConfig,
+                abi.encodeWithSelector(
+                    TreasuryConfig.categorizeAsset.selector,
+                    btrfly,
+                    AssetCategory.wrap("strategic")
+                )
+            );
+        }
+
         // Reporting
-        console2.log("Testing TRSRY");
+        console2.log("Testing TRSRY v1.1 (pre-deposit)");
         OlympusTreasury trsry = OlympusTreasury(treasuryV1_1);
         address[] memory assets = trsry.getAssets();
         for (uint256 i = 0; i < assets.length; i++) {
@@ -535,7 +624,70 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         }
     }
 
-    function RBSv2Install_1_1(bool send_) external isDaoBatch(send_) {
-        install();
+    function deposit() public {
+        // This DAO MS batch:
+        // 1. Deposits assets from the DAO MS into TRSRY v1.1
+        // 2. Activates the Operator
+
+        console2.log("*** TRSRY v1.1 deposit");
+
+        // 1a. DAI
+        {
+            // Get the balance in the DAO MS
+            uint256 balance = ERC20(dai).balanceOf(daoMS);
+            assertGt(balance, 0, "DAO MS should have DAI balance");
+
+            console2.log("Approving withdrawn DAI for transfer to TRSRY v1.1");
+            addToBatch(dai, abi.encodeWithSelector(ERC20.approve.selector, treasuryV1_1, balance));
+
+            console2.log("Depositing withdrawn DAI from DAO MS to TRSRY v1.1: %s", balance);
+            addToBatch(dai, abi.encodeWithSelector(ERC20.transfer.selector, treasuryV1_1, balance));
+        }
+
+        // 1b. sDAI
+        {
+            // Get the balance in the DAO MS
+            uint256 balance = ERC20(sdai).balanceOf(daoMS);
+            assertGt(balance, 0, "DAO MS should have sDAI balance");
+
+            console2.log("Approving withdrawn sDAI for transfer to TRSRY v1.1");
+            addToBatch(sdai, abi.encodeWithSelector(ERC20.approve.selector, treasuryV1_1, balance));
+
+            console2.log("Depositing withdrawn sDAI from DAO MS to TRSRY v1.1: %s", balance);
+            addToBatch(
+                sdai,
+                abi.encodeWithSelector(ERC20.transfer.selector, treasuryV1_1, balance)
+            );
+        }
+
+        // 2. Activates the Operator
+        {
+            console2.log("Activating the Operator");
+            addToBatch(operator, abi.encodeWithSelector(Operator.activate.selector));
+
+            console2.log("Revoking the operator_policy role from the DAO MS");
+            addToBatch(
+                rolesAdmin,
+                abi.encodeWithSelector(
+                    RolesAdmin.revokeRole.selector,
+                    bytes32("operator_policy"),
+                    daoMS
+                )
+            );
+        }
+
+        // Reporting
+        console2.log("Testing TRSRY v1.1 (post-deposit)");
+        OlympusTreasury trsry = OlympusTreasury(treasuryV1_1);
+        address[] memory assets = trsry.getAssets();
+        for (uint256 i = 0; i < assets.length; i++) {
+            address asset = assets[i];
+            console2.log("    Asset: %s", asset);
+            (uint256 totalBalance, ) = trsry.getAssetBalance(asset, TRSRYv1_1.Variant.CURRENT);
+            uint256 debt = trsry.totalDebt(ERC20(asset));
+            console2.log("        Total balance: %s", totalBalance);
+            console2.log("        Balance: %s", totalBalance - debt);
+            console2.log("        Debt: %s", debt);
+        }
     }
 }
