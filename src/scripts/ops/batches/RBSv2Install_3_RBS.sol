@@ -69,7 +69,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     address veFXS;
     address fxs;
     address btrfly;
-    address rlbtrfly;
 
     // Price Feeds
     address usdPerEthPriceFeed;
@@ -142,7 +141,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         veFXS = envAddress("current", "external.tokens.veFXS");
         fxs = envAddress("current", "external.tokens.FXS");
         btrfly = envAddress("current", "external.tokens.BTRFLY");
-        rlbtrfly = envAddress("current", "external.tokens.RLBTRFLY");
 
         usdPerEthPriceFeed = envAddress("current", "external.chainlink.ethUsdPriceFeed");
         ethPerDaiPriceFeed = envAddress("current", "external.chainlink.daiEthPriceFeed");
@@ -446,7 +444,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 5. Configure FXS on PRICE
         // 6. Configure OHM on PRICE
         // 7. Configure BTRFLY on PRICE
-        // 8. Configure rlBTRFLY on PRICE
 
         // 0. Load variables from the JSON file
         // TODO final values need to be added
@@ -776,48 +773,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
 
             console2.log("    BTRFLY price: %s (18 dp)", OlympusPricev2(priceV2).getPrice(btrfly));
         }
-
-        // 8. Configure rlBTRFLY on PRICE
-        // - Uses a Uniswap V3 TWAP with the configured observation window
-        // - Does not require an internal moving average, as the Uniswap V3 is resilient
-        // {
-        //     PRICEv2.Component[] memory btrflyFeeds = new PRICEv2.Component[](1);
-        //     btrflyFeeds[0] = PRICEv2.Component(
-        //         toSubKeycode("PRICE.UNIV3"),
-        //         UniswapV3Price.getTokenTWAP.selector,
-        //         abi.encode(
-        //             UniswapV3Price.UniswapV3Params({
-        //                 pool: IUniswapV3Pool(btrflyWethUniV3Pool),
-        //                 observationWindowSeconds: twapObservationWindow, // This is shorter, as it is compared against reserves
-        //                 maxDeviationBps: twapMaxDeviationBps
-        //             })
-        //         )
-        //     );
-
-        //     uint256 btrflyLastObsTime_ = 0;
-        //     uint256[] memory btrflyObs_ = new uint256[](0);
-
-        //     console2.log("Adding rlBTRFLY price feed to PRICE");
-        //     addToBatch(
-        //         priceConfigV2,
-        //         abi.encodeWithSelector(
-        //             PriceConfigV2.addAssetPrice.selector,
-        //             rlbtrfly,
-        //             false, // store moving average
-        //             false, // use the moving average as part of price strategy
-        //             0,
-        //             btrflyLastObsTime_,
-        //             btrflyObs_,
-        //             PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // no price strategy
-        //             btrflyFeeds
-        //         )
-        //     );
-
-        //     console2.log(
-        //         "    rlBTRFLY price: %s (18 dp)",
-        //         OlympusPricev2(priceV2).getPrice(btrfly)
-        //     );
-        // }
 
         // ==================== SECTION 3: BunniManager Migration ==================== //
 

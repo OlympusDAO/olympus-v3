@@ -48,7 +48,6 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     address veFXS;
     address weth;
     address btrfly;
-    address rlbtrfly;
 
     // New contracts
     address treasuryV1_1;
@@ -80,7 +79,6 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         veFXS = envAddress("current", "external.tokens.veFXS");
         weth = envAddress("current", "external.tokens.WETH");
         btrfly = envAddress("current", "external.tokens.BTRFLY");
-        rlbtrfly = envAddress("current", "external.tokens.RLBTRFLY");
 
         daoWorkingWallet = envAddress("current", "olympus.legacy.workingWallet");
 
@@ -197,8 +195,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // 9. Add and categorize veFXS in TRSRY
         // 10. Add and categorize FXS in TRSRY
         // 11. Add and categorize BTRFLY in TRSRY
-        // 12. Add and categorize rlBTRFLY in TRSRY
-        // 13. Disables the Operator
+        // 12. Disables the Operator
 
         console2.log("*** TRSRY v1.1 setup");
 
@@ -595,45 +592,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             );
         }
 
-        // 12. Add and categorize rlBTRFLY
-        //      - liquid, volatile, strategic
-        //      - liquid as staking is only 16-17 weeks
-        // {
-        //     console2.log("Adding rlBTRFLY to TRSRY");
-        //     addToBatch(
-        //         treasuryConfig,
-        //         abi.encodeWithSelector(TreasuryConfig.addAsset.selector, rlbtrfly, locations)
-        //     );
-        //     console2.log("    Categorizing rlBTRFLY as liquid");
-        //     addToBatch(
-        //         treasuryConfig,
-        //         abi.encodeWithSelector(
-        //             TreasuryConfig.categorizeAsset.selector,
-        //             rlbtrfly,
-        //             AssetCategory.wrap("liquid")
-        //         )
-        //     );
-        //     console2.log("    Categorizing rlBTRFLY as volatile");
-        //     addToBatch(
-        //         treasuryConfig,
-        //         abi.encodeWithSelector(
-        //             TreasuryConfig.categorizeAsset.selector,
-        //             rlbtrfly,
-        //             AssetCategory.wrap("volatile")
-        //         )
-        //     );
-        //     console2.log("    Categorizing rlBTRFLY as strategic");
-        //     addToBatch(
-        //         treasuryConfig,
-        //         abi.encodeWithSelector(
-        //             TreasuryConfig.categorizeAsset.selector,
-        //             rlbtrfly,
-        //             AssetCategory.wrap("strategic")
-        //         )
-        //     );
-        // }
-
-        // 13. Disables the Operator
+        // 12. Disables the Operator
         // This is to avoid having any bond markets open while TRSRY v1.1 is without funds
         {
             console2.log("Granting the operator_policy role to the DAO MS");
