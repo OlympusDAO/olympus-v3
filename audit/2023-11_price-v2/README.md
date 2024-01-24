@@ -122,7 +122,7 @@ Legend:
 -   Rectangle: submodule
 -   Hexagon: external contract
 
-The diagram demonstrates the interactions of the different components when calling `getSupplyByCategory()`:
+The diagram demonstrates the interactions of the different components when calling `getPrice()`:
 
 ```mermaid
 sequenceDiagram

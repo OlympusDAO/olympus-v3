@@ -42,6 +42,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice Status of the Heart, false = stopped, true = beating
     bool public active;
 
+    /// @notice Addresses of assets that use the moving average
+    address[] public movingAverageAssets;
+
     // Modules
     PRICEv2 internal PRICE;
     MINTRv1 internal MINTR;
@@ -62,6 +65,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         IOperator operator_,
         IAppraiser appraiser_,
         IDistributor distributor_,
+        address[] memory movingAverageAssets_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
@@ -75,6 +79,25 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         maxReward = maxReward_;
 
         emit RewardUpdated(maxReward_, auctionDuration_);
+
+        // Add moving average assets
+        uint256 assetsLen = movingAverageAssets_.length;
+        for (uint256 i = 0; i < assetsLen; i++) {
+            address currentAsset = movingAverageAssets_[i];
+
+            // Check for zero address
+            if (currentAsset == address(0)) revert Heart_InvalidParams();
+
+            // Check for duplicates in the existing array
+            uint256 existingAssetsLen = movingAverageAssets.length;
+            for (uint256 j = 0; j < existingAssetsLen; j++) {
+                if (currentAsset == movingAverageAssets[j]) revert Heart_InvalidParams();
+            }
+
+            movingAverageAssets.push(currentAsset);
+
+            emit MovingAverageAssetAdded(currentAsset);
+        }
     }
 
     /// @inheritdoc Policy
@@ -131,9 +154,12 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         uint48 currentTime = uint48(block.timestamp);
         if (currentTime < lastBeat + frequency()) revert Heart_OutOfCycle();
 
-        // Update the OHM/RESERVE moving average by store each of their prices on the PRICE module
-        PRICE.storePrice(address(operator.ohm()));
-        PRICE.storePrice(address(operator.reserve()));
+        // Store the current price for assets that track and use the moving average (otherwise metrics will fail)
+        address[] memory cachedMovingAverageAssets = movingAverageAssets;
+        uint256 assetsLen = cachedMovingAverageAssets.length;
+        for (uint256 i = 0; i < assetsLen; i++) {
+            PRICE.storePrice(cachedMovingAverageAssets[i]);
+        }
 
         // Update the liquid backing calculation
         appraiser.storeMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
@@ -217,6 +243,65 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         maxReward = maxReward_;
         auctionDuration = auctionDuration_;
         emit RewardUpdated(maxReward_, auctionDuration_);
+    }
+
+    /// @notice     Adds `asset_` to have the moving average refreshed
+    /// @dev        This function reverts if:
+    ///             - The sender is not the heart admin
+    ///             - The asset is a duplicate
+    ///             - The asset is the zero address
+    ///
+    /// @param      asset_  The asset to add
+    function addMovingAverageAsset(address asset_) external onlyRole("heart_admin") {
+        if (asset_ == address(0)) revert Heart_InvalidParams();
+
+        // Cache the moving average assets to avoid multiple SLOADs
+        address[] memory cachedMovingAverageAssets = movingAverageAssets;
+        uint256 assetsLen = cachedMovingAverageAssets.length;
+        for (uint256 i = 0; i < assetsLen; i++) {
+            if (cachedMovingAverageAssets[i] == asset_) revert Heart_InvalidParams();
+        }
+
+        movingAverageAssets.push(asset_);
+        emit MovingAverageAssetAdded(asset_);
+    }
+
+    /// @notice     Removes `asset_` from having the moving average refreshed
+    /// @dev        This function reverts if:
+    ///             - The sender is not the heart admin
+    ///             - The asset is not present
+    ///             - The asset is the zero address
+    ///
+    /// @param      asset_  The asset to remove
+    function removeMovingAverageAsset(address asset_) external onlyRole("heart_admin") {
+        if (asset_ == address(0)) revert Heart_InvalidParams();
+
+        // Cache the moving average assets to avoid multiple SLOADs
+        address[] memory cachedMovingAverageAssets = movingAverageAssets;
+        uint256 assetsLen = cachedMovingAverageAssets.length;
+        bool foundAsset = false;
+        for (uint256 i = 0; i < assetsLen; i++) {
+            if (cachedMovingAverageAssets[i] == asset_) {
+                cachedMovingAverageAssets[i] = cachedMovingAverageAssets[assetsLen - 1];
+                movingAverageAssets.pop();
+                foundAsset = true;
+                break;
+            }
+        }
+
+        if (!foundAsset) revert Heart_InvalidParams();
+
+        emit MovingAverageAssetRemoved(asset_);
+    }
+
+    /// @notice    Gets the array of moving average assets
+    function getMovingAverageAssets() external view returns (address[] memory) {
+        return movingAverageAssets;
+    }
+
+    /// @notice    Gets the number of moving average assets
+    function getMovingAverageAssetsCount() external view returns (uint256) {
+        return movingAverageAssets.length;
     }
 
     //============================================================================================//

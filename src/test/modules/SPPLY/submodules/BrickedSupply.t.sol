@@ -186,7 +186,12 @@ contract BrickedSupplyTest is Test {
     }
 
     function test_setOhmDenominatedTokens(address token0_) public {
-        vm.assume(token0_ != address(0) && token0_ != address(ohm) && token0_ != address(sohm));
+        vm.assume(
+            token0_ != address(0) &&
+                token0_ != address(ohm) &&
+                token0_ != address(sohm) &&
+                token0_ != address(gOhm)
+        );
 
         assertEq(submoduleBrickedSupply.ohmDenominatedTokens(0), address(ohm));
         assertEq(submoduleBrickedSupply.ohmDenominatedTokens(1), address(sohm));
@@ -253,7 +258,12 @@ contract BrickedSupplyTest is Test {
     }
 
     function test_setGohmDenominatedTokens(address token0_) public {
-        vm.assume(token0_ != address(0) && token0_ != address(gOhm));
+        vm.assume(
+            token0_ != address(0) &&
+                token0_ != address(gOhm) &&
+                token0_ != address(ohm) &&
+                token0_ != address(sohm)
+        );
 
         assertEq(submoduleBrickedSupply.gohmDenominatedTokens(0), address(gOhm));
 
