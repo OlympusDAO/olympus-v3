@@ -132,6 +132,12 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 )
             );
             console2.log("    Transfered DAI: %s", daiBalance);
+
+            daiBalance = ERC20(dai).balanceOf(treasuryV1);
+            console2.log("    DAI balance in treasury v1.0: %s (18dp)", daiBalance);
+            if (daiBalance > 0) {
+                revert("DAI balance in treasury v1.0 is not 0");
+            }
         }
 
         // sDAI
@@ -157,32 +163,56 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 )
             );
             console2.log("    Transfered sDAI: %s", sdaiBalance);
+
+            sdaiBalance = ERC20(dai).balanceOf(treasuryV1);
+            console2.log("    sDAI balance in treasury v1.0: %s (18dp)", sdaiBalance);
+            if (sdaiBalance > 0) {
+                revert("sDAI balance in treasury v1.0 is not 0");
+            }
         }
 
-        // The following assets exist in TRSRY, but will be swapped for DAI
+        // LUSD
+        {
+            uint256 lusdBalance = ERC20(lusd).balanceOf(treasuryV1);
+            console2.log("LUSD balance in treasury v1.0: %s (18dp)", lusdBalance);
 
-        // uint256 lusdBalance = ERC20(lusd).balanceOf(treasuryV1);
-        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, lusd, lusdBalance));
-        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, daoMS, lusd, lusdBalance));
-        // console2.log("Transfered LUSD: %s", lusdBalance);
+            if (lusdBalance > 0) {
+                revert("LUSD balance in treasury v1.0 is not 0");
+            }
+        }
 
-        // uint256 wstethBalance = ERC20(wsteth).balanceOf(treasuryV1);
-        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, wsteth, wstethBalance));
-        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, daoMS, wsteth, wstethBalance));
-        // console2.log("Transfered wstETH: %s", wstethBalance);
+        // wstETH
+        {
+            uint256 wstethBalance = ERC20(wsteth).balanceOf(treasuryV1);
+            console2.log("wstETH balance in treasury v1.0: %s (18dp)", wstethBalance);
 
-        // uint256 balBalance = ERC20(bal).balanceOf(treasuryV1);
-        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, bal, balBalance));
-        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, daoMS, bal, balBalance));
-        // console2.log("Transfered BAL: %s", balBalance);
+            if (wstethBalance > 0) {
+                revert("wstETH balance in treasury v1.0 is not 0");
+            }
+        }
 
-        // uint256 auraBalance = ERC20(aura).balanceOf(treasuryV1);
-        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.grantWithdrawerApproval.selector, treasuryCustodian, aura, auraBalance));
-        // addToBatch(treasuryCustodian, abi.encodeWithSelector(TreasuryCustodian.withdrawReservesTo.selector, daoMS, aura, auraBalance));
-        // console2.log("Transfered AURA: %s", auraBalance);
+        // Balancer
+        {
+            uint256 balBalance = ERC20(bal).balanceOf(treasuryV1);
+            console2.log("BAL balance in treasury v1.0: %s (18dp)", balBalance);
+
+            if (balBalance > 0) {
+                revert("BAL balance in treasury v1.0 is not 0");
+            }
+        }
+
+        // Aura
+        {
+            uint256 auraBalance = ERC20(aura).balanceOf(treasuryV1);
+            console2.log("AURA balance in treasury v1.0: %s (18dp)", auraBalance);
+
+            if (auraBalance > 0) {
+                revert("AURA balance in treasury v1.0 is not 0");
+            }
+        }
 
         // 2. Disables the Operator
-        // This is to avoid having any bond markets open while TRSRY v1.1 is without funds
+        // This is to avoid having any bond markets open while TRSRY v1 and v1.1 is without funds
         {
             console2.log("Granting the operator_policy role to the DAO MS");
             addToBatch(
