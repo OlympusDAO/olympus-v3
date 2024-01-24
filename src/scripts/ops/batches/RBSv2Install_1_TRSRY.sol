@@ -131,7 +131,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                     daiBalance
                 )
             );
-            console2.log("    Transfered DAI: %s", daiBalance);
+            console2.log("    Transfered DAI: %s (18dp)", daiBalance);
 
             daiBalance = ERC20(dai).balanceOf(treasuryV1);
             console2.log("    DAI balance in treasury v1.0: %s (18dp)", daiBalance);
@@ -162,52 +162,52 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                     sdaiBalance
                 )
             );
-            console2.log("    Transfered sDAI: %s", sdaiBalance);
+            console2.log("    Transfered sDAI: %s (18dp)", sdaiBalance);
 
             sdaiBalance = ERC20(dai).balanceOf(treasuryV1);
-            console2.log("    sDAI balance in treasury v1.0: %s (18dp)", sdaiBalance);
+            console2.log("    sDAI balance in treasury v1: %s (18dp)", sdaiBalance);
             if (sdaiBalance > 0) {
-                revert("sDAI balance in treasury v1.0 is not 0");
+                revert("sDAI balance in treasury v1 is not 0");
             }
         }
 
         // LUSD
         {
             uint256 lusdBalance = ERC20(lusd).balanceOf(treasuryV1);
-            console2.log("LUSD balance in treasury v1.0: %s (18dp)", lusdBalance);
+            console2.log("LUSD balance in treasury v1: %s (18dp)", lusdBalance);
 
             if (lusdBalance > 0) {
-                revert("LUSD balance in treasury v1.0 is not 0");
+                revert("LUSD balance in treasury v1 is not 0");
             }
         }
 
         // wstETH
         {
             uint256 wstethBalance = ERC20(wsteth).balanceOf(treasuryV1);
-            console2.log("wstETH balance in treasury v1.0: %s (18dp)", wstethBalance);
+            console2.log("wstETH balance in treasury v1: %s (18dp)", wstethBalance);
 
             if (wstethBalance > 0) {
-                revert("wstETH balance in treasury v1.0 is not 0");
+                revert("wstETH balance in treasury v1 is not 0");
             }
         }
 
         // Balancer
         {
             uint256 balBalance = ERC20(bal).balanceOf(treasuryV1);
-            console2.log("BAL balance in treasury v1.0: %s (18dp)", balBalance);
+            console2.log("BAL balance in treasury v1: %s (18dp)", balBalance);
 
             if (balBalance > 0) {
-                revert("BAL balance in treasury v1.0 is not 0");
+                revert("BAL balance in treasury v1 is not 0");
             }
         }
 
         // Aura
         {
             uint256 auraBalance = ERC20(aura).balanceOf(treasuryV1);
-            console2.log("AURA balance in treasury v1.0: %s (18dp)", auraBalance);
+            console2.log("AURA balance in treasury v1: %s (18dp)", auraBalance);
 
             if (auraBalance > 0) {
-                revert("AURA balance in treasury v1.0 is not 0");
+                revert("AURA balance in treasury v1 is not 0");
             }
         }
 
