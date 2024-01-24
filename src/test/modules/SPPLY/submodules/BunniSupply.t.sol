@@ -93,8 +93,8 @@ contract BunniSupplyTest is Test {
 
     // OHM-wETH Uni V3 position data based of owner: 0x245cc372c84b3645bf0ffe6538620b04a217988b, NFT Manager ID: 562564
     // Uncollected fees when the snapshot was taken: 150.56 OHM + 0.624 WETH
-    int24 internal constant OHM_WETH_POSITION_MAX_TICK = 887272;
-    int24 internal constant OHM_WETH_POSITION_MIN_TICK = -887272;
+    int24 internal constant OHM_WETH_POSITION_MAX_TICK = 887270;
+    int24 internal constant OHM_WETH_POSITION_MIN_TICK = -887270;
     int24 internal constant OHM_WETH_POSITION_POOL_TICK = 154454;
     uint128 internal constant OHM_WETH_POSITION_LIQUIDITY = 346355586036686019;
     uint256 internal constant OHM_WETH_FEEGROWTH_GLOBAL0X128 =
@@ -1291,6 +1291,50 @@ contract BunniSupplyTest is Test {
 
         // Call
         submoduleBunniSupply.getProtocolOwnedLiquidityReserves();
+    }
+
+    // =========  getUncollectedFees ========= //
+
+    // [X] matches the values that the Uniswap UI and revert.finance show
+
+    function test_getProtocolOwnedLiquidityUncollectedFees() public {
+        // Register one token
+        vm.prank(address(moduleSPPLY));
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            TWAP_MAX_DEVIATION_BPS,
+            TWAP_OBSERVATION_WINDOW
+        );
+
+        // Mock the pool state to match the data from when the uncollected fee snapshot was taken
+        bunniSetup.mockPoolTick(address(uniswapPool), OHM_WETH_POSITION_POOL_TICK);
+        bunniSetup.mockPoolTicks(
+            address(uniswapPool),
+            OHM_WETH_POSITION_MIN_TICK,
+            OHM_WETH_FEEGROWTH_OUTSIDE0X128,
+            OHM_WETH_FEEGROWTH_OUTSIDE1X128
+        );
+        bunniSetup.mockPoolPosition(
+            address(uniswapPool),
+            OHM_WETH_POSITION_MIN_TICK,
+            OHM_WETH_POSITION_MAX_TICK,
+            OHM_WETH_POSITION_LIQUIDITY,
+            OHM_WETH_FEEGROWTH_INSIDE0X128,
+            OHM_WETH_FEEGROWTH_INSIDE1X128,
+            0,
+            0
+        );
+        bunniSetup.mockPoolFeeGrowthGlobal(
+            address(uniswapPool),
+            OHM_WETH_FEEGROWTH_GLOBAL0X128,
+            OHM_WETH_FEEGROWTH_GLOBAL1X128
+        );
+
+        // Determine the amount of reserves in the pool, which should be consistent with the lens value
+        (uint256 ohmFee_, uint256 wethFee_) = _getUncollectedFees(poolTokenKey, bunniLens);
+        assertEq(ohmFee_ / 1e7, 15056); // 150.56 OHM
+        assertEq(wethFee_ / 1e15, 624); // 0.624 WETH
     }
 
     // =========  addBunniToken ========= //

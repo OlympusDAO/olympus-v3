@@ -19,6 +19,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import "src/Kernel.sol";
 
 import {OlympusHeart} from "policies/RBS/Heart.sol";
+import {IHeart} from "policies/RBS/interfaces/IHeart.sol";
 
 import {IOperator} from "policies/RBS/interfaces/IOperator.sol";
 import {IDistributor} from "policies/RBS/interfaces/IDistributor.sol";
@@ -154,12 +155,17 @@ contract HeartTest is Test {
             distributor = new ZeroDistributor(address(staking));
             staking.setDistributor(address(distributor));
 
+            address[] memory movingAverageAssets = new address[](2);
+            movingAverageAssets[0] = address(ohm);
+            movingAverageAssets[1] = address(reserve);
+
             // Deploy heart
             heart = new OlympusHeart(
                 kernel,
                 IOperator(address(operator)),
                 IAppraiser(address(appraiser)),
                 IDistributor(address(distributor)),
+                movingAverageAssets,
                 uint256(10e9), // max reward = 10 reward tokens
                 uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
             );
@@ -389,6 +395,20 @@ contract HeartTest is Test {
     // [X] setAppraiser
     // [X] setRewardAuctionParams
     // [X] cannot call admin functions without permissions
+    // [X] constructor accepts moving average assets
+    //  [X] reverts if zero address
+    //  [X] reverts if duplicates
+    //  [X] success
+    // [X] addMovingAverageAsset
+    //  [X] reverts if asset already exists
+    //  [X] reverts if zero
+    //  [X] reverts if unauthorized
+    //  [X] success
+    // [X] removeMovingAverageAsset
+    //  [X] reverts if asset does not exist
+    //  [X] reverts if zero
+    //  [X] reverts if unauthorized
+    //  [X] success
 
     function testCorrectness_resetBeat() public {
         // Try to beat the heart and expect the revert since not enough time has passed
@@ -511,5 +531,161 @@ contract HeartTest is Test {
 
         vm.expectRevert(err);
         heart.setRewardAuctionParams(uint256(2e9), uint48(12 * 25));
+    }
+
+    function testCorrectness_constructor_movingAverageAssets() public {
+        MockERC20 wrappedReserve = new MockERC20("Wrapped Reserve", "WRSV", 18);
+
+        address[] memory movingAverageAssets = new address[](3);
+        movingAverageAssets[0] = address(ohm);
+        movingAverageAssets[1] = address(reserve);
+        movingAverageAssets[2] = address(wrappedReserve);
+
+        // Deploy heart with moving average assets
+        OlympusHeart newHeart = new OlympusHeart(
+            kernel,
+            IOperator(address(operator)),
+            IAppraiser(address(appraiser)),
+            IDistributor(address(distributor)),
+            movingAverageAssets,
+            uint256(10e9), // max reward = 10 reward tokens
+            uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
+        );
+
+        // Check that the moving average assets are set correctly
+        assertEq(newHeart.movingAverageAssets(0), address(ohm), "ohm");
+        assertEq(newHeart.movingAverageAssets(1), address(reserve), "reserve");
+        assertEq(newHeart.movingAverageAssets(2), address(wrappedReserve), "wrappedReserve");
+        assertEq(newHeart.getMovingAverageAssetsCount(), 3, "asset count");
+    }
+
+    function testReverts_constructor_movingAverageAssets_duplicate() public {
+        address[] memory movingAverageAssets = new address[](3);
+        movingAverageAssets[0] = address(ohm);
+        movingAverageAssets[1] = address(reserve);
+        movingAverageAssets[2] = address(ohm);
+
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Deploy heart with moving average assets containing a duplicate
+        new OlympusHeart(
+            kernel,
+            IOperator(address(operator)),
+            IAppraiser(address(appraiser)),
+            IDistributor(address(distributor)),
+            movingAverageAssets,
+            uint256(10e9), // max reward = 10 reward tokens
+            uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
+        );
+    }
+
+    function testReverts_constructor_movingAverageAssets_zeroAddress() public {
+        address[] memory movingAverageAssets = new address[](3);
+        movingAverageAssets[0] = address(ohm);
+        movingAverageAssets[1] = address(reserve);
+        movingAverageAssets[2] = address(0);
+
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Deploy heart with moving average assets containing a zero address
+        new OlympusHeart(
+            kernel,
+            IOperator(address(operator)),
+            IAppraiser(address(appraiser)),
+            IDistributor(address(distributor)),
+            movingAverageAssets,
+            uint256(10e9), // max reward = 10 reward tokens
+            uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
+        );
+    }
+
+    function testReverts_addMovingAverageAsset_duplicate() public {
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Add a duplicate asset
+        vm.prank(policy);
+        heart.addMovingAverageAsset(address(ohm));
+    }
+
+    function testReverts_addMovingAverageAsset_zeroAddress() public {
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Add a zero address asset
+        vm.prank(policy);
+        heart.addMovingAverageAsset(address(0));
+    }
+
+    function testReverts_addMovingAverageAsset_unauthorized() public {
+        MockERC20 wrappedReserve = new MockERC20("Wrapped Reserve", "WRSV", 18);
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("heart_admin")
+        );
+        vm.expectRevert(err);
+
+        // Add an asset as non-policy
+        vm.prank(alice);
+        heart.addMovingAverageAsset(address(wrappedReserve));
+    }
+
+    function testCorrectness_addMovingAverageAsset() public {
+        MockERC20 wrappedReserve = new MockERC20("Wrapped Reserve", "WRSV", 18);
+
+        // Add an asset
+        vm.prank(policy);
+        heart.addMovingAverageAsset(address(wrappedReserve));
+
+        // Check that the asset was added
+        assertEq(heart.movingAverageAssets(0), address(ohm), "ohm");
+        assertEq(heart.movingAverageAssets(1), address(reserve), "reserve");
+        assertEq(heart.movingAverageAssets(2), address(wrappedReserve), "wrappedReserve");
+        assertEq(heart.getMovingAverageAssetsCount(), 3, "asset count");
+    }
+
+    function testReverts_removeMovingAverageAsset_doesNotExist() public {
+        MockERC20 wrappedReserve = new MockERC20("Wrapped Reserve", "WRSV", 18);
+
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Remove an asset that does not exist
+        vm.prank(policy);
+        heart.removeMovingAverageAsset(address(wrappedReserve));
+    }
+
+    function testReverts_removeMovingAverageAsset_zeroAddress() public {
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Remove a zero address asset
+        vm.prank(policy);
+        heart.removeMovingAverageAsset(address(0));
+    }
+
+    function testReverts_removeMovingAverageAsset_unauthorized() public {
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("heart_admin")
+        );
+        vm.expectRevert(err);
+
+        // Remove an asset as non-policy
+        vm.prank(alice);
+        heart.removeMovingAverageAsset(address(reserve));
+    }
+
+    function testCorrectness_removeMovingAverageAsset() public {
+        // Remove an asset
+        vm.prank(policy);
+        heart.removeMovingAverageAsset(address(reserve));
+
+        // Check that the asset was removed
+        assertEq(heart.movingAverageAssets(0), address(ohm));
+        assertEq(heart.getMovingAverageAssetsCount(), 1, "asset count");
     }
 }

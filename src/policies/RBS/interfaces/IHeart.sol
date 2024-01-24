@@ -9,6 +9,8 @@ interface IHeart {
     event Beat(uint256 timestamp_);
     event RewardIssued(address to_, uint256 rewardAmount_);
     event RewardUpdated(uint256 maxRewardAmount_, uint48 auctionDuration_);
+    event MovingAverageAssetAdded(address asset_);
+    event MovingAverageAssetRemoved(address asset_);
 
     // =========  ERRORS ========= //
 

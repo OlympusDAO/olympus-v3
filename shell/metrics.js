@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 'use strict';
-/** 
+/**
  * @author github.com/tintinweb
  * @license MIT
- * 
+ *
  * Based on:
  *  - https://github.com/Consensys/solidity-metrics/blob/master/src/cli.js
  *  - https://github.com/Consensys/vscode-solidity-metrics/blob/master/src/extension.js
- * 
+ *
  */
 
 const glob = require("glob");
@@ -63,11 +63,11 @@ function getWsGitInfo(rootPath) {
   };
 }
 
-function convertGlobExclusions() {
+function convertGlobExclusions(array) {
   let result = "{";
-  for (let i = 0; i < globExclusions.length; i++) {
-    result += globExclusions[i];
-    if (i < globExclusions.length - 1) {
+  for (let i = 0; i < array.length; i++) {
+    result += array[i];
+    if (i < array.length - 1) {
       result += ",";
     }
   }
@@ -80,46 +80,55 @@ let options = [];
 
 let outputFile = "solidity-metrics.html";
 
+// Get exclusions
 process.argv.slice(1,).forEach(f => {
   if (f.startsWith("--exclude")) {
-    console.log("excluding", f.split("=")[1]);
-    globExclusions.push(f.split("=")[1]);
+    let globExclusion = f.split("=")[1];
+    console.log("excluding", globExclusion);
+    globExclusions.push(globExclusion);
   } else if (f.startsWith("--")) {
     options.push(f);
+  }
+});
+
+// Get inclusions
+let includedFiles = [];
+process.argv.slice(1,).forEach(f => {
+  if (f.endsWith(".sol") && !f.startsWith("--exclude")) {
+    console.log("including", f);
+    glob.sync(f, { ignore: globExclusions }).forEach(f => includedFiles.push(f));
   }
 });
 
 let metrics = new SolidityMetricsContainer("'CLI'", {
   basePath: undefined,
   initDoppelGanger: undefined,
-  inputFileGlobExclusions: convertGlobExclusions(),
-  inputFileGlob: undefined,
+  inputFileGlobExclusions: convertGlobExclusions(globExclusions),
+  inputFileGlob: convertGlobExclusions(includedFiles),
   inputFileGlobLimit: undefined,
-  debug: false,
+  debug: true,
   repoInfo: getWsGitInfo("src/"),
 });
 
-process.argv.slice(1,).forEach(f => {
-  if (f.endsWith(".sol") && !f.startsWith("--exclude")) {
-    console.log("analysing", f);
-    // analyze files
-    glob.sync(f, {
-      ignore: globExclusions,
-    }).forEach(fg => metrics.analyze(fg));
-  }
-});
+// Analyse
+console.log("analysing");
+includedFiles.forEach(f => metrics.analyze(f));
 
 // output
 //console.log(metrics.totals());
 let dotGraphs = {};
 try {
+  console.log("generating dot graphs");
   dotGraphs = metrics.getDotGraphs();
 } catch (error) {
-  console.log(error);
+  console.error(error);
 }
 
+console.log("generating markdown report");
 metrics.generateReportMarkdown().then(md => {
+  console.log("generating HTML report");
   const htmlOutput = exportAsHtml(md, metrics.totals(), dotGraphs);
 
+  console.log("writing report to", outputFile);
   fs.writeFileSync(outputFile, htmlOutput);
 });
