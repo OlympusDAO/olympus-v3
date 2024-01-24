@@ -73,8 +73,8 @@ library VaultReentrancyLib {
         // `manageUserBalance` even gets called), any other error would generate non-zero revertData, so checking for
         // empty data guards against this case too.
 
-        // Reduced to 1k gas to avoid large gas cost predictions when using this function in a non-view function
-        (, bytes memory revertData) = address(vault).staticcall{gas: 1_000}(
+        // We set the gas limit to 10k for the staticcall to avoid wasting gas when it reverts due to storage modification
+        (, bytes memory revertData) = address(vault).staticcall{gas: 10_000}(
             abi.encodeWithSelector(vault.manageUserBalance.selector, 0)
         );
 

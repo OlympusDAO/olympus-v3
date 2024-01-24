@@ -9,6 +9,7 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {MockGohm} from "test/mocks/OlympusMocks.sol";
 import {MockVaultManager} from "test/mocks/MockBLVaultManager.sol";
+import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
 
 import "src/Submodules.sol";
 import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
@@ -182,6 +183,8 @@ contract BookkeeperTest is Test {
     ChainlinkPriceFeeds internal chainlinkPrice;
     SimplePriceFeedStrategy internal strategy;
 
+    MockBalancerVault internal balancerVault;
+
     address internal admin;
     address internal policy;
 
@@ -236,6 +239,8 @@ contract BookkeeperTest is Test {
         TRSRY = new OlympusTreasury(kernel);
         bookkeeper = new Bookkeeper(kernel);
         rolesAdmin = new RolesAdmin(kernel);
+
+        balancerVault = new MockBalancerVault();
 
         // Deploy submodules for PRICE
         chainlinkPrice = new ChainlinkPriceFeeds(PRICE);
@@ -924,7 +929,11 @@ contract BookkeeperTest is Test {
         vaultManagerAddresses[0] = address(vaultManager1);
 
         // Create new submodule to install
-        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
+        BLVaultSupply supplyBLV = new BLVaultSupply(
+            SPPLY,
+            address(balancerVault),
+            vaultManagerAddresses
+        );
 
         // Confirm submodule is not installed on SPPLY
         address submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
@@ -1012,7 +1021,11 @@ contract BookkeeperTest is Test {
         vaultManagerAddresses[0] = address(vaultManager1);
 
         // Create new submodule to install
-        BLVaultSupply supplyBLV = new BLVaultSupply(SPPLY, vaultManagerAddresses);
+        BLVaultSupply supplyBLV = new BLVaultSupply(
+            SPPLY,
+            address(balancerVault),
+            vaultManagerAddresses
+        );
 
         // Install new submodule with admin account
         vm.prank(admin);

@@ -2,6 +2,8 @@
 pragma solidity 0.8.15;
 
 import "modules/SPPLY/SPPLY.v1.sol";
+import {VaultReentrancyLib} from "src/libraries/Balancer/contracts/VaultReentrancyLib.sol";
+import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 
 interface IBLVaultManager {
     function getPoolOhmShare() external view returns (uint256);
@@ -42,13 +44,22 @@ contract BLVaultSupply is SupplySubmodule {
     /// @notice     The addresses of the BLVaultManager contracts
     IBLVaultManager[] public vaultManagers;
 
+    /// @notice     The Balancer vault
+    IVault public balVault;
+
     // ========== CONSTRUCTOR ========== //
 
     /// @notice                 Initialize the BLVaultSupply submodule
     ///
     /// @param parent_          The parent module (SPPLY)
     /// @param vaultManagers_   The addresses of the BLVaultManager contracts
-    constructor(Module parent_, address[] memory vaultManagers_) Submodule(parent_) {
+    constructor(
+        Module parent_,
+        address balVault_,
+        address[] memory vaultManagers_
+    ) Submodule(parent_) {
+        balVault = IVault(balVault_);
+
         uint256 len = vaultManagers_.length;
 
         for (uint256 i = 0; i < len; i++) {
@@ -82,8 +93,14 @@ contract BLVaultSupply is SupplySubmodule {
     // ========== DATA FUNCTIONS ========== //
 
     /// @inheritdoc SupplySubmodule
-    /// @dev        All OHM in the BLVault is collateralized, since it is paired with the user's collateral.
+    /// @dev        All OHM in the BLVault is collateralized, since it is paired with the user's collateral
+    ///
+    /// @dev        As this function accesses `getPoolOhmShare()` on each BLVaultManager, it is susceptible to
+    /// @dev        reentrancy attacks. The Balancer VaultReentrancyLib is used to mitigate this.
     function getCollateralizedOhm() external view override returns (uint256) {
+        // Prevent re-entrancy attacks
+        VaultReentrancyLib.ensureNotInVaultContext(balVault);
+
         // Iterate through BLVaultManagers and total up the pool OHM share as the collateralized supply
         uint256 len = vaultManagers.length;
         uint256 total;
@@ -189,6 +206,18 @@ contract BLVaultSupply is SupplySubmodule {
                 ++i;
             }
         }
+    }
+
+    /// @notice             Set the Balancer vault
+    /// @dev                Reverts if:
+    /// @dev                - The caller is not the parent module
+    /// @dev                - The address is the zero address
+    ///
+    /// @param balVault_    The address of the Balancer vault
+    function setBalancerVault(address balVault_) external onlyParent {
+        if (balVault_ == address(0)) revert BLVaultSupply_InvalidParams();
+
+        balVault = IVault(balVault_);
     }
 
     // =========== HELPER FUNCTIONS =========== //

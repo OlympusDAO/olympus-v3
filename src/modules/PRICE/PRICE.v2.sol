@@ -42,6 +42,11 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
 
     // ========== ERRORS ========== //
 
+    /// @notice             Passed observation frequency is invalid
+    ///
+    /// @param frequency_   The observation frequency that was provided
+    error PRICE_ObservationFrequencyInvalid(uint32 frequency_);
+
     /// @notice         The asset is not approved for use
     ///
     /// @param asset_   The address of the asset
@@ -59,10 +64,21 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param asset_   The address of the asset
     error PRICE_AssetAlreadyApproved(address asset_);
 
+    /// @notice         A price feed call failed when initially configuring an asset
+    ///
+    /// @param asset_   The address of the asset that triggered the submodule call
+    error PRICE_PriceFeedCallFailed(address asset_);
+
     /// @notice         The moving average for an asset was requested when it is not stored
     ///
     /// @param asset_   The address of the asset
     error PRICE_MovingAverageNotStored(address asset_);
+
+    /// @notice                         The moving average for an asset was used, but is stale
+    ///
+    /// @param asset_                   The address of the asset
+    /// @param lastObservationTime_     The timestamp of the last observation
+    error PRICE_MovingAverageStale(address asset_, uint48 lastObservationTime_);
 
     /// @notice                     The last observation time is invalid
     /// @dev                        The last observation time must be less than the latest timestamp
@@ -173,6 +189,12 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param asset_   The asset being updated with duplicate price feeds
     /// @param index_   The index of the price feed that is a duplicate
     error PRICE_DuplicatePriceFeed(address asset_, uint256 index_);
+
+    /// @notice                     An insufficient amount of time has passed since the last stored observation
+    ///
+    /// @param asset_               The address of the asset
+    /// @param lastObservationTime_ The timestamp of the last observation
+    error PRICE_InsufficientTimeElapsed(address asset_, uint48 lastObservationTime_);
 
     // ========== STATE ========== //
 

@@ -7,62 +7,40 @@ import {Deviation} from "libraries/Deviation.sol";
 
 contract DeviationTest is Test {
     function test_isDeviating() public {
-        uint256 value0 = 100;
-        uint256 value1 = 100;
+        uint256 value = 100;
+        uint256 benchmark = 100;
         uint256 deviationBps = 100;
         uint256 deviationMax = 10000;
         assertEq(
-            Deviation.isDeviating(value0, value1, deviationBps, deviationMax),
+            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
             false,
-            "value0 == value1"
+            "value == benchmark"
         );
 
-        value1 = 101;
+        value = 101;
         assertEq(
-            Deviation.isDeviating(value0, value1, deviationBps, deviationMax),
+            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
             false,
-            "value1 > value0, within bounds"
+            "value > benchmark, within bounds"
         );
+        value = 99;
         assertEq(
-            Deviation.isDeviating(value1, value0, deviationBps, deviationMax),
+            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
             false,
-            "value0 < value1, within bounds"
+            "value < benchmark, within bounds"
         );
 
-        value1 = 102;
+        value = 102;
         assertEq(
-            Deviation.isDeviating(value0, value1, deviationBps, deviationMax),
+            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
             true,
-            "value1 > value0, outside bounds"
+            "value > benchmark, outside bounds"
         );
+        value = 98;
         assertEq(
-            Deviation.isDeviating(value1, value0, deviationBps, deviationMax),
+            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
             true,
-            "value0 < value1, outside bounds"
-        );
-
-        value1 = 99;
-        assertEq(
-            Deviation.isDeviating(value0, value1, deviationBps, deviationMax),
-            false,
-            "value1 < value0, within bounds"
-        );
-        assertEq(
-            Deviation.isDeviating(value1, value0, deviationBps, deviationMax),
-            false,
-            "value0 > value1, within bounds"
-        );
-
-        value1 = 98;
-        assertEq(
-            Deviation.isDeviating(value0, value1, deviationBps, deviationMax),
-            true,
-            "value1 < value0, outside bounds"
-        );
-        assertEq(
-            Deviation.isDeviating(value1, value0, deviationBps, deviationMax),
-            true,
-            "value0 > value1, outside bounds"
+            "value < benchmark, outside bounds"
         );
     }
 }

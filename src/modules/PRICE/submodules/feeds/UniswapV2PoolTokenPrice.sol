@@ -186,7 +186,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     /// @dev                    This approach is implemented in order to reduce the susceptibility to manipulation of the pool token price
     /// @dev                    through the pool's reserves.
     ///
-    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          UniswapV2 pool parameters of type `UniswapV2PoolParams`
     /// @return                 Price in the scale of `outputDecimals_`
     function getPoolTokenPrice(
@@ -300,7 +300,7 @@ contract UniswapV2PoolTokenPrice is PriceSubmodule {
     /// @dev                    can also be manipulated. Price feeds are a preferred source of price data. Use this function with caution.
     ///
     /// @param lookupToken_     The token to determine the price of
-    /// @param outputDecimals_  The number of decimals to return the price in
+    /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          UniswapV2 pool parameters of type `UniswapV2PoolParams`
     /// @return                 Price in the scale of `outputDecimals_`
     function getTokenPrice(
