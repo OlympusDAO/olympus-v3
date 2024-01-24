@@ -7,9 +7,6 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
-import {MockGohm} from "test/mocks/OlympusMocks.sol";
-import {MockVaultManager} from "test/mocks/MockBLVaultManager.sol";
-import {MockBalancerVault} from "test/mocks/MockBalancerVault.sol";
 
 import "src/Submodules.sol";
 import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
@@ -100,8 +97,6 @@ contract PriceConfigTest is Test {
     ChainlinkPriceFeeds internal chainlinkPrice;
     SimplePriceFeedStrategy internal strategy;
 
-    MockBalancerVault internal balancerVault;
-
     address internal admin;
     address internal policy;
 
@@ -149,8 +144,6 @@ contract PriceConfigTest is Test {
         ROLES = new OlympusRoles(kernel);
         priceConfig = new PriceConfigV2(kernel);
         rolesAdmin = new RolesAdmin(kernel);
-
-        balancerVault = new MockBalancerVault();
 
         // Deploy submodules for PRICE
         chainlinkPrice = new ChainlinkPriceFeeds(PRICE);
@@ -811,34 +804,6 @@ contract PriceConfigTest is Test {
         // Confirm submodule was installed
         submodule = address(PRICE.getSubmoduleForKeycode(newStrategy.SUBKEYCODE()));
         assertEq(submodule, address(newStrategy));
-    }
-
-    function test_installSubmodule_SPPLY() public {
-        // Create vault managers
-        MockVaultManager vaultManager1 = new MockVaultManager(1000e9);
-        MockVaultManager[] memory vaultManagers = new MockVaultManager[](1);
-        address[] memory vaultManagerAddresses = new address[](1);
-        vaultManagers[0] = vaultManager1;
-        vaultManagerAddresses[0] = address(vaultManager1);
-
-        // Create new submodule to install
-        BLVaultSupply supplyBLV = new BLVaultSupply(
-            SPPLY,
-            address(balancerVault),
-            vaultManagerAddresses
-        );
-
-        // Confirm submodule is not installed on SPPLY
-        address submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
-        assertEq(submodule, address(0));
-
-        // Install new submodule with admin account
-        vm.prank(admin);
-        bookkeeper.installSubmodule(toKeycode("SPPLY"), supplyBLV);
-
-        // Confirm submodule was installed
-        submodule = address(SPPLY.getSubmoduleForKeycode(supplyBLV.SUBKEYCODE()));
-        assertEq(submodule, address(supplyBLV));
     }
 
     function testRevert_upgradeSubmodule_onlyAdmin(address user_) public {

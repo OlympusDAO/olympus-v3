@@ -846,7 +846,7 @@ contract AppraiserTest is Test {
         uint256 TOTAL_DEBT = 1000e9;
         MockIncurDebt incurDebt = new MockIncurDebt(TOTAL_DEBT);
         IncurDebtSupply submoduleIncurDebtSupply = new IncurDebtSupply(SPPLY, address(incurDebt));
-        bookkeeper.installSubmodule(SPPLY.KEYCODE(), submoduleIncurDebtSupply);
+        supplyConfig.installSubmodule(submoduleIncurDebtSupply);
 
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
@@ -866,7 +866,7 @@ contract AppraiserTest is Test {
             balancerVaultAddress,
             vaultManagers
         );
-        bookkeeper.installSubmodule(SPPLY.KEYCODE(), submoduleBLVaultSupply);
+        supplyConfig.installSubmodule(submoduleBLVaultSupply);
 
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
@@ -881,7 +881,7 @@ contract AppraiserTest is Test {
     function testCorrectness_getMetric_backing_silo() public {
         // Set up the SiloSupply submodule
         SiloSupply submoduleSiloSupply = new SiloSupply(SPPLY, address(0), address(0), address(0));
-        bookkeeper.installSubmodule(SPPLY.KEYCODE(), submoduleSiloSupply);
+        supplyConfig.installSubmodule(submoduleSiloSupply);
 
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
