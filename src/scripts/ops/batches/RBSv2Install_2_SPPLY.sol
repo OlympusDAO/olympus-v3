@@ -299,4 +299,11 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
     function RBSv2Install_2_2(bool send_) external isDaoBatch(send_) {
         install();
     }
+
+    function RBSv2Install_2_TEST(bool send_) external {
+        // For testing purposes only
+        initTestBatch();
+        disable_crosschainbridge();
+        install();
+    }
 }

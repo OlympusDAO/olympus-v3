@@ -1083,4 +1083,9 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     function RBSv2Install_3_1(bool send_) external isDaoBatch(send_) {
         install();
     }
+
+    function RBSv2Install_3_TEST(bool send_) external {
+        initTestBatch();
+        install();
+    }
 }

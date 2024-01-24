@@ -690,4 +690,12 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             console2.log("        Debt: %s", debt);
         }
     }
+
+    function RBSv2Install_1_TRSRY_TEST(bool send_) external {
+        // For testing purposes only
+        initTestBatch();
+        withdraw();
+        setup();
+        deposit();
+    }
 }
