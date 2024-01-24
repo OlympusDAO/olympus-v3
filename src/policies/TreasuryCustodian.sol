@@ -3,14 +3,14 @@ pragma solidity 0.8.15;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";
 
 import "src/Kernel.sol";
 
-// Generic contract to allow authorized contracts to interact with treasury
-// Use cases include setting and removing approvals, as well as allocating assets for yield
+/// @notice     Allows authorized callers to interact with the TRSRY module
+/// @notice     This can be used to set and remove approvals, allocate assets for yield and define assets, categories and locations
+/// @dev        Callers must have the "custodian" role in order to interact with this policy
 contract TreasuryCustodian is Policy, RolesConsumer {
     // =========  EVENTS ========= //
 

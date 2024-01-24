@@ -90,6 +90,25 @@ contract BunniSupplyTest is Test {
     // OHM-wETH Uni V3 pool, based on: 0x88051b0eea095007d3bef21ab287be961f3d8598
     // Current tick: 156194
     uint160 internal constant OHM_WETH_SQRTPRICEX96 = 195181081174522229204497247535278;
+
+    // OHM-wETH Uni V3 position data based of owner: 0x245cc372c84b3645bf0ffe6538620b04a217988b, NFT Manager ID: 562564
+    // Uncollected fees when the snapshot was taken: 150.56 OHM + 0.624 WETH
+    int24 internal constant OHM_WETH_POSITION_MAX_TICK = 887272;
+    int24 internal constant OHM_WETH_POSITION_MIN_TICK = -887272;
+    int24 internal constant OHM_WETH_POSITION_POOL_TICK = 154454;
+    uint128 internal constant OHM_WETH_POSITION_LIQUIDITY = 346355586036686019;
+    uint256 internal constant OHM_WETH_FEEGROWTH_GLOBAL0X128 =
+        11205701999445687247298792212672750145;
+    uint256 internal constant OHM_WETH_FEEGROWTH_GLOBAL1X128 =
+        22287716690451654021580462247134799297569;
+    uint256 internal constant OHM_WETH_FEEGROWTH_INSIDE0X128 = 577885472509760262258387687384625;
+    uint256 internal constant OHM_WETH_FEEGROWTH_INSIDE1X128 =
+        3680400243297613902976664298891513135263;
+    uint256 internal constant OHM_WETH_FEEGROWTH_OUTSIDE0X128 =
+        11204976190952130408142737433836235164;
+    uint256 internal constant OHM_WETH_FEEGROWTH_OUTSIDE1X128 =
+        17993877063330825207041302430485256261193;
+
     // NOTE: these numbers are fudged to match the current tick and default observation window from BunniManager
     int56 internal constant OHM_WETH_TICK_CUMULATIVE_0 = -2463078395000;
     int56 internal constant OHM_WETH_TICK_CUMULATIVE_1 = -2462984678600;
@@ -247,6 +266,14 @@ contract BunniSupplyTest is Test {
     ) internal view returns (uint256, uint256) {
         (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
         return (reserve0, reserve1);
+    }
+
+    function _getUncollectedFees(
+        BunniKey memory key_,
+        BunniLens lens_
+    ) internal view returns (uint256, uint256) {
+        (uint256 fee0, uint256 fee1) = lens_.getUncollectedFees(key_);
+        return (fee0, fee1);
     }
 
     function _expectRevert_invalidBunniToken(address token_) internal {

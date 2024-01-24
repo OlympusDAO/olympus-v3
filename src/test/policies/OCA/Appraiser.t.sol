@@ -14,12 +14,13 @@ import {MockIncurDebt} from "test/mocks/MockIncurDebt.sol";
 // Modules and Submodules
 import "src/Submodules.sol";
 import {OlympusSupply, SPPLYv1, Category as SupplyCategory} from "modules/SPPLY/OlympusSupply.sol";
-import {OlympusTreasury, TRSRYv1_1} from "modules/TRSRY/OlympusTreasury.sol";
+import {OlympusTreasury, TRSRYv1_1, Category as AssetCategory} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 
 // Policies
 import {Appraiser} from "policies/OCA/Appraiser.sol";
-import {Bookkeeper, AssetCategory} from "policies/OCA/Bookkeeper.sol";
+import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
+import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 // Submodules
@@ -52,7 +53,8 @@ contract AppraiserTest is Test {
     OlympusRoles internal ROLES;
 
     Appraiser internal appraiser;
-    Bookkeeper internal bookkeeper;
+    TreasuryConfig internal treasuryConfig;
+    SupplyConfig internal supplyConfig;
     RolesAdmin internal rolesAdmin;
 
     address internal balancerVaultAddress;
@@ -114,7 +116,8 @@ contract AppraiserTest is Test {
         // Policies
         {
             appraiser = new Appraiser(kernel);
-            bookkeeper = new Bookkeeper(kernel);
+            treasuryConfig = new TreasuryConfig(kernel);
+            supplyConfig = new SupplyConfig(kernel);
             rolesAdmin = new RolesAdmin(kernel);
         }
 
@@ -138,47 +141,51 @@ contract AppraiserTest is Test {
 
             // Activate policies
             kernel.executeAction(Actions.ActivatePolicy, address(appraiser));
-            kernel.executeAction(Actions.ActivatePolicy, address(bookkeeper));
+            kernel.executeAction(Actions.ActivatePolicy, address(treasuryConfig));
+            kernel.executeAction(Actions.ActivatePolicy, address(supplyConfig));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
 
         // Roles management
         {
-            // Bookkeeper roles
-            rolesAdmin.grantRole("bookkeeper_policy", address(this));
-            rolesAdmin.grantRole("bookkeeper_admin", address(this));
+            // TreasuryConfig roles
+            rolesAdmin.grantRole("treasuryconfig_policy", address(this));
+
+            // SupplyConfig roles
+            rolesAdmin.grantRole("supplyconfig_admin", address(this));
+            rolesAdmin.grantRole("supplyconfig_policy", address(this));
         }
 
         // Configure assets
         {
             // Add assets to Treasury
             address[] memory locations = new address[](0);
-            bookkeeper.addAsset(address(reserve), locations);
-            bookkeeper.addAsset(address(weth), locations);
+            treasuryConfig.addAsset(address(reserve), locations);
+            treasuryConfig.addAsset(address(weth), locations);
 
             locations = new address[](1);
             locations[0] = address(bytes20("POL"));
-            bookkeeper.addAsset(balancerPool, locations);
+            treasuryConfig.addAsset(balancerPool, locations);
 
             // Categorize assets
-            bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("liquid"));
-            bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("stable"));
-            bookkeeper.categorizeAsset(address(reserve), AssetCategory.wrap("reserves"));
-            bookkeeper.categorizeAsset(address(weth), AssetCategory.wrap("liquid"));
-            bookkeeper.categorizeAsset(address(weth), AssetCategory.wrap("volatile"));
-            bookkeeper.categorizeAsset(
+            treasuryConfig.categorizeAsset(address(reserve), AssetCategory.wrap("liquid"));
+            treasuryConfig.categorizeAsset(address(reserve), AssetCategory.wrap("stable"));
+            treasuryConfig.categorizeAsset(address(reserve), AssetCategory.wrap("reserves"));
+            treasuryConfig.categorizeAsset(address(weth), AssetCategory.wrap("liquid"));
+            treasuryConfig.categorizeAsset(address(weth), AssetCategory.wrap("volatile"));
+            treasuryConfig.categorizeAsset(
                 balancerPool,
                 AssetCategory.wrap("protocol-owned-liquidity")
             );
 
             // Categorize supplies
-            bookkeeper.installSubmodule(SPPLY.KEYCODE(), submoduleAuraBalancerSupply);
-            bookkeeper.categorizeSupply(
+            supplyConfig.installSubmodule(submoduleAuraBalancerSupply);
+            supplyConfig.categorizeSupply(
                 address(bytes20("POL")),
                 SupplyCategory.wrap("protocol-owned-liquidity")
             );
-            bookkeeper.categorizeSupply(daoWallet, SupplyCategory.wrap("dao"));
-            bookkeeper.categorizeSupply(
+            supplyConfig.categorizeSupply(daoWallet, SupplyCategory.wrap("dao"));
+            supplyConfig.categorizeSupply(
                 protocolWallet,
                 SupplyCategory.wrap("protocol-owned-treasury")
             );
@@ -839,7 +846,7 @@ contract AppraiserTest is Test {
         uint256 TOTAL_DEBT = 1000e9;
         MockIncurDebt incurDebt = new MockIncurDebt(TOTAL_DEBT);
         IncurDebtSupply submoduleIncurDebtSupply = new IncurDebtSupply(SPPLY, address(incurDebt));
-        bookkeeper.installSubmodule(SPPLY.KEYCODE(), submoduleIncurDebtSupply);
+        supplyConfig.installSubmodule(submoduleIncurDebtSupply);
 
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
@@ -859,7 +866,7 @@ contract AppraiserTest is Test {
             balancerVaultAddress,
             vaultManagers
         );
-        bookkeeper.installSubmodule(SPPLY.KEYCODE(), submoduleBLVaultSupply);
+        supplyConfig.installSubmodule(submoduleBLVaultSupply);
 
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
@@ -874,7 +881,7 @@ contract AppraiserTest is Test {
     function testCorrectness_getMetric_backing_silo() public {
         // Set up the SiloSupply submodule
         SiloSupply submoduleSiloSupply = new SiloSupply(SPPLY, address(0), address(0), address(0));
-        bookkeeper.installSubmodule(SPPLY.KEYCODE(), submoduleSiloSupply);
+        supplyConfig.installSubmodule(submoduleSiloSupply);
 
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
@@ -1067,7 +1074,7 @@ contract AppraiserTest is Test {
 
     function testCorrectness_getMetricCurrentForAllMetrics() public {
         // Categorize assets
-        bookkeeper.categorizeAsset(address(weth), AssetCategory.wrap("illiquid"));
+        treasuryConfig.categorizeAsset(address(weth), AssetCategory.wrap("illiquid"));
 
         // Set OHM observations to be all 10
         uint256[] memory ohmObservations = new uint256[](90);

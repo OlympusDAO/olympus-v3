@@ -32,7 +32,7 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {Operator} from "policies/RBS/Operator.sol";
 import {BondCallback} from "policies/Bonds/BondCallback.sol";
 import {Appraiser, IAppraiser as IAppraiserMetric} from "policies/OCA/Appraiser.sol";
-import {Bookkeeper} from "policies/OCA/Bookkeeper.sol";
+import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 
 import "src/Kernel.sol";
 
@@ -86,7 +86,7 @@ contract BondCallbackTest is Test {
     BondCallback internal callback;
     RolesAdmin internal rolesAdmin;
     Appraiser internal appraiser;
-    Bookkeeper internal bookkeeper;
+    SupplyConfig internal supplyConfig;
 
     // Bond market ids to reference
     uint256 internal regBond;
@@ -166,8 +166,8 @@ contract BondCallbackTest is Test {
             rolesAdmin = new RolesAdmin(kernel);
             /// Deploy bond callback
             callback = new BondCallback(kernel, IBondAggregator(address(aggregator)), ohm);
-            // Deploy new bookkeeper
-            bookkeeper = new Bookkeeper(kernel);
+            // Deploy new SupplyConfig
+            supplyConfig = new SupplyConfig(kernel);
             // Deploy new appraiser
             appraiser = new Appraiser(kernel);
             /// Deploy operator
@@ -214,15 +214,15 @@ contract BondCallbackTest is Test {
             kernel.executeAction(Actions.ActivatePolicy, address(callback));
             kernel.executeAction(Actions.ActivatePolicy, address(appraiser));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-            kernel.executeAction(Actions.ActivatePolicy, address(bookkeeper));
+            kernel.executeAction(Actions.ActivatePolicy, address(supplyConfig));
         }
 
         {
             /// Configure access control
 
-            /// Bookkeeper roles
-            rolesAdmin.grantRole("bookkeeper_policy", policy);
-            rolesAdmin.grantRole("bookkeeper_admin", guardian);
+            /// SupplyConfig roles
+            rolesAdmin.grantRole("supplyconfig_policy", policy);
+            rolesAdmin.grantRole("supplyconfig_admin", guardian);
 
             /// Operator ROLES
             rolesAdmin.grantRole("operator_operate", guardian);
@@ -238,7 +238,7 @@ contract BondCallbackTest is Test {
 
         // Configure SPPLY, so that when the Operator calls Appraiser, it does not fail
         vm.prank(policy);
-        bookkeeper.categorizeSupply(dao, SupplyCategory.wrap("dao"));
+        supplyConfig.categorizeSupply(dao, SupplyCategory.wrap("dao"));
         // Mint OHM into a non-protocol wallet, so that there is circulating supply
         ohm.mint(alice, 1e9);
 

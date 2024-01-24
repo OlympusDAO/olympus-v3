@@ -8,11 +8,11 @@ import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
+import {ROLESv1, OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
+
 import "src/Kernel.sol";
 
 contract TreasuryCustodianTest is Test {
@@ -70,12 +70,14 @@ contract TreasuryCustodianTest is Test {
     function test_requestPermissions() public {
         Permissions[] memory expectedPerms = new Permissions[](6);
         Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+
         expectedPerms[0] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
         expectedPerms[1] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
         expectedPerms[2] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
         expectedPerms[3] = Permissions(TRSRY_KEYCODE, TRSRY.increaseDebtorApproval.selector);
         expectedPerms[4] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseDebtorApproval.selector);
         expectedPerms[5] = Permissions(TRSRY_KEYCODE, TRSRY.setDebt.selector);
+
         Permissions[] memory perms = custodian.requestPermissions();
         // Check: permission storage
         assertEq(perms.length, expectedPerms.length);

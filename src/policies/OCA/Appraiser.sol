@@ -84,6 +84,13 @@ contract Appraiser is IAppraiser, Policy {
         priceScale = 10 ** decimals;
     }
 
+    /// @notice     Returns the current version of the policy
+    /// @dev        This is useful for distinguishing between different versions of the policy
+    function VERSION() external pure returns (uint8 major, uint8 minor) {
+        major = 1;
+        minor = 0;
+    }
+
     //============================================================================================//
     //                                       ASSET VALUES                                         //
     //============================================================================================//

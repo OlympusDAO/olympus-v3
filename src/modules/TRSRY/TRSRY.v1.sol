@@ -52,6 +52,9 @@ abstract contract TRSRYv1 is Module {
     mapping(ERC20 => uint256) public totalDebt;
 
     /// @notice Debt for particular token and debtor address
+    /// @dev    Iterating individual debt balances is not supported, as mappings are not iterable.
+    /// @dev    If an exhaustive list of debt balances is needed, the Debt events can be
+    /// @dev    indexed off-chain and used to calculate debt balances at each block.
     mapping(ERC20 => mapping(address => uint256)) public reserveDebt;
 
     // =========  FUNCTIONS ========= //
