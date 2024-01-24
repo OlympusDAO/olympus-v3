@@ -446,7 +446,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 7. Configure BTRFLY on PRICE
 
         // 0. Load variables from the JSON file
-        // TODO final values need to be added
+        // Caution: the last observation time for the assets needs to be set in a way that it will not be stale (which would cause a revert)
         string memory argData = vm.readFile("./src/scripts/ops/batches/RBSv2Install_3_RBS.json");
 
         // 1. Configure DAI price feed and moving average data on PRICE
