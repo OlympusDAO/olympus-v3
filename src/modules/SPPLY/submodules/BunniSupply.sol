@@ -52,7 +52,7 @@ contract BunniSupply is SupplySubmodule {
     ///
     /// @param token_               The address of the token
     /// @param maximumDeviationBps_ The maximum allowed value
-    /// @param actualDeviationBps_  The maximum deviation from the TWAP in basis points
+    /// @param actualDeviationBps_  The actual deviation from the TWAP in basis points
     error BunniSupply_Params_InvalidTwapMaxDeviationBps(
         address token_,
         uint16 maximumDeviationBps_,
@@ -202,6 +202,7 @@ contract BunniSupply is SupplySubmodule {
 
     /// @inheritdoc SupplySubmodule
     /// @dev        Returns the total of OHM and non-OHM reserves in the submodule
+    /// @dev        This includes both the reserves and uncollected fees belonging to the position.
     ///
     /// @dev        This function accesses the reserves of the registered
     /// @dev        Uniswap V3 pools, and can be susceptible to re-entrancy attacks.
@@ -400,11 +401,19 @@ contract BunniSupply is SupplySubmodule {
         BunniKey memory key_,
         BunniLens lens_
     ) internal view returns (uint256) {
-        (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
-        if (key_.pool.token0() == ohm) {
-            return reserve0;
+        (
+            address token0_,
+            address token1_,
+            uint256 reserve0_,
+            uint256 reserve1_
+        ) = _getReservesWithFees(key_, lens_);
+
+        if (token0_ == ohm) {
+            return reserve0_;
+        } else if (token1_ == ohm) {
+            return reserve1_;
         } else {
-            return reserve1;
+            return 0;
         }
     }
 

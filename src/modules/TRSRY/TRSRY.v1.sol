@@ -213,16 +213,6 @@ abstract contract TRSRYv1_1 is TRSRYv1 {
     /// @return uint256 Current balance of the asset
     function storeBalance(address asset_) external virtual returns (uint256);
 
-    /// @notice             Gets the balance for a category by summing the balance of each asset in the category
-    /// @param  category_   Category to get the balance of
-    /// @param  variant_    Variant of the balance to get (current or last)
-    /// @return uint256     Balance of the category
-    /// @return uint48      Timestamp at which the balance was calculated
-    function getCategoryBalance(
-        Category category_,
-        Variant variant_
-    ) external view virtual returns (uint256, uint48);
-
     // ========== DATA MANAGEMENT ========== //
 
     /// @notice             Adds an asset for tracking by the treasury

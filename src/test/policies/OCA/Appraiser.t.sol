@@ -9,6 +9,7 @@ import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockGohm} from "test/mocks/OlympusMocks.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockMultiplePoolBalancerVault} from "test/mocks/MockBalancerVault.sol";
+import {MockIncurDebt} from "test/mocks/MockIncurDebt.sol";
 
 // Modules and Submodules
 import "src/Submodules.sol";
@@ -26,6 +27,9 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {AuraBalancerSupply} from "src/modules/SPPLY/submodules/AuraBalancerSupply.sol";
 import {IBalancerPool} from "src/external/balancer/interfaces/IBalancerPool.sol";
 import {IAuraRewardPool} from "src/external/aura/interfaces/IAuraRewardPool.sol";
+import {IncurDebtSupply} from "src/modules/SPPLY/submodules/IncurDebtSupply.sol";
+import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
+import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
 
 // Interfaces
 import {IAppraiser} from "policies/OCA/interfaces/IAppraiser.sol";
@@ -52,6 +56,8 @@ contract AppraiserTest is Test {
     TreasuryConfig internal treasuryConfig;
     SupplyConfig internal supplyConfig;
     RolesAdmin internal rolesAdmin;
+
+    address internal balancerVaultAddress;
 
     AuraBalancerSupply internal submoduleAuraBalancerSupply;
 
@@ -198,6 +204,7 @@ contract AppraiserTest is Test {
     function _setupSupplySubmodules() internal returns (address) {
         // AuraBalancerSupply setup
         MockMultiplePoolBalancerVault balancerVault = new MockMultiplePoolBalancerVault();
+        balancerVaultAddress = address(balancerVault);
         bytes32 poolId = "hello";
 
         address[] memory balancerPoolTokens = new address[](2);
@@ -824,6 +831,58 @@ contract AppraiserTest is Test {
     ///     [X]  correctly calculates backing with non-OHM in POL
 
     function testCorrectness_getMetricCurrentTimestamp() public {
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Get metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
+
+        // Assert that metric value is correct
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
+    }
+
+    function testCorrectness_getMetric_backing_incurDebt() public {
+        // Set up the incurDebt submodule, which will return a single-length reserves array
+        uint256 TOTAL_DEBT = 1000e9;
+        MockIncurDebt incurDebt = new MockIncurDebt(TOTAL_DEBT);
+        IncurDebtSupply submoduleIncurDebtSupply = new IncurDebtSupply(SPPLY, address(incurDebt));
+        bookkeeper.installSubmodule(SPPLY.KEYCODE(), submoduleIncurDebtSupply);
+
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Get metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
+
+        // Assert that metric value is correct
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
+    }
+
+    function testCorrectness_getMetric_backing_blVault() public {
+        // Set up the BLVault submodule with no vault managers
+        address[] memory vaultManagers = new address[](0);
+        BLVaultSupply submoduleBLVaultSupply = new BLVaultSupply(
+            SPPLY,
+            balancerVaultAddress,
+            vaultManagers
+        );
+        bookkeeper.installSubmodule(SPPLY.KEYCODE(), submoduleBLVaultSupply);
+
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.BACKING);
+
+        // Get metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.BACKING);
+
+        // Assert that metric value is correct
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
+    }
+
+    function testCorrectness_getMetric_backing_silo() public {
+        // Set up the SiloSupply submodule
+        SiloSupply submoduleSiloSupply = new SiloSupply(SPPLY, address(0), address(0), address(0));
+        bookkeeper.installSubmodule(SPPLY.KEYCODE(), submoduleSiloSupply);
+
         // Cache current metric value and timestamp
         appraiser.storeMetric(IAppraiser.Metric.BACKING);
 

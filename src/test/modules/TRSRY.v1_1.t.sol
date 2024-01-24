@@ -40,27 +40,13 @@ import "src/Kernel.sol";
 //      [X] zero balance in treasury and non-zero balance externally
 //      [X] non-zero balance in treasury and zero balance externally
 //      [X] non-zero balance in treasury and externally
-// [X] getCategoryBalance - returns the balance of a given category
-//      [X] reverts if category does not exist
-//      [X] zero assets
-//      [X] one asset
-//            [X] zero balance in treasury and externally
-//            [X] zero balance in treasury and non-zero balance externally
-//            [X] non-zero balance in treasury and zero balance externally
-//            [X] non-zero balance in treasury and externally
-//      [X] many assets
-//            [X] zero balance in treasury and externally for all assets
-//            [X] zero balance in treasury and non-zero balance externally for some assets
-//            [X] zero balance in treasury and non-zero balance externally for all assets
-//            [X] non-zero balance in treasury and zero balance externally for some assets
-//            [X] non-zero balance in treasury and zero balance externally for all assets
-//            [X] non-zero balance in treasury and externally for some assets
-//            [X] non-zero balance in treasury and externally for all assets
 //
 // Data Management
 // [X] addAsset - adds an asset configuration to the treasury
 //      [X] reverts if asset is already configured
 //      [X] reverts if asset is not a contract
+//      [X] reverts if location is address(0)
+//      [X] reverts if locations are not unique
 //      [X] asset data stored correctly
 //      [X] zero locations prior
 //      [X] one location prior
@@ -84,7 +70,7 @@ import "src/Kernel.sol";
 // [X] addCategoryGroup - adds an asset category group to the treasury
 //      [X] reverts if category group is already configured
 //      [X] category group data stored correctly
-// [X] removeCategoryGroup - removes an asset category group from the treasury
+// [X] removeCategoryGroup - removes an asset category group from the treasury, along with all categories within it
 //      [X] reverts if category group is not configured
 //      [X] category group data removed correctly
 // [X] addCategory - adds an asset category to the treasury
@@ -465,325 +451,6 @@ contract TRSRYv1_1Test is Test {
         assertEq(assetData_.updatedAt, block.timestamp);
     }
 
-    // ========= getCategoryBalance ========= //
-
-    function testCorrectness_getCategoryBalanceRevertsIfCategoryDoesNotExist() public {
-        // Try to get balance of zero address
-        bytes memory err = abi.encodeWithSignature(
-            "TRSRY_InvalidParams(uint256,bytes)",
-            0,
-            abi.encode(toCategory("abcdef"))
-        );
-        vm.expectRevert(err);
-
-        vm.prank(godmode);
-        TRSRY.getCategoryBalance(toCategory("abcdef"), TRSRYv1_1.Variant.CURRENT);
-    }
-
-    function testCorrectness_getCategoryBalanceZeroAssets() public {
-        // Add category
-        vm.startPrank(godmode);
-        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
-        vm.stopPrank();
-
-        // Assert that the balance is zero
-        (uint256 balance, ) = TRSRY.getCategoryBalance(
-            toCategory("test"),
-            TRSRYv1_1.Variant.CURRENT
-        );
-        assertEq(balance, 0);
-    }
-
-    function testCorrectness_getCategoryBalanceOneAssetZeroBalanceInTreasuryAndExternally() public {
-        // Add category
-        vm.startPrank(godmode);
-        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
-
-        // Add asset
-        TRSRY.addAsset(address(weth), new address[](0));
-        TRSRY.categorize(address(weth), toCategory("test"));
-        vm.stopPrank();
-
-        // Assert that the balance is zero
-        (uint256 balance, ) = TRSRY.getCategoryBalance(
-            toCategory("test"),
-            TRSRYv1_1.Variant.CURRENT
-        );
-        assertEq(balance, 0);
-    }
-
-    function testCorrectness_getCategoryBalanceOneAssetZeroBalanceInTreasuryAndNonZeroBalanceExternally()
-        public
-    {
-        address[] memory addr = new address[](1);
-        addr[0] = address(this);
-
-        weth.mint(address(this), 1_000e18);
-
-        // Add category
-        vm.startPrank(godmode);
-        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
-
-        // Add asset
-        TRSRY.addAsset(address(weth), addr);
-        TRSRY.categorize(address(weth), toCategory("test"));
-        vm.stopPrank();
-
-        // Assert that the balance is correct
-        (uint256 balance, ) = TRSRY.getCategoryBalance(
-            toCategory("test"),
-            TRSRYv1_1.Variant.CURRENT
-        );
-        assertEq(balance, 1_000e18);
-    }
-
-    function testCorrectness_getCategoryBalanceOneAssetNonZeroBalanceInTreasuryAndZeroBalanceExternally()
-        public
-    {
-        weth.mint(address(TRSRY), 1_000e18);
-
-        // Add category
-        vm.startPrank(godmode);
-        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
-
-        // Add asset
-        TRSRY.addAsset(address(weth), new address[](0));
-        TRSRY.categorize(address(weth), toCategory("test"));
-        vm.stopPrank();
-
-        // Assert that the balance is correct
-        (uint256 balance, ) = TRSRY.getCategoryBalance(
-            toCategory("test"),
-            TRSRYv1_1.Variant.CURRENT
-        );
-        assertEq(balance, 1_000e18);
-    }
-
-    function testCorrectness_getCategoryBalanceOneAssetNonZeroBalanceInTreasuryAndExternally()
-        public
-    {
-        weth.mint(address(TRSRY), 1_000e18);
-        weth.mint(address(this), 1_000e18);
-
-        address[] memory addr = new address[](1);
-        addr[0] = address(this);
-
-        // Add category
-        vm.startPrank(godmode);
-        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
-
-        // Add asset
-        TRSRY.addAsset(address(weth), addr);
-        TRSRY.categorize(address(weth), toCategory("test"));
-        vm.stopPrank();
-
-        // Assert that the balance is correct
-        (uint256 balance, ) = TRSRY.getCategoryBalance(
-            toCategory("test"),
-            TRSRYv1_1.Variant.CURRENT
-        );
-        assertEq(balance, 2_000e18);
-    }
-
-    function testCorrectness_getCategoryBalanceManyAssetsZeroBalanceInTreasuryAndExternally()
-        public
-    {
-        // Add category
-        vm.startPrank(godmode);
-        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
-
-        // Add assets
-        TRSRY.addAsset(address(weth), new address[](0));
-        TRSRY.addAsset(address(tkn), new address[](0));
-        TRSRY.categorize(address(weth), toCategory("test"));
-        TRSRY.categorize(address(tkn), toCategory("test"));
-        vm.stopPrank();
-
-        // Assert that the balance is zero
-        (uint256 balance, ) = TRSRY.getCategoryBalance(
-            toCategory("test"),
-            TRSRYv1_1.Variant.CURRENT
-        );
-        assertEq(balance, 0);
-    }
-
-    function testCorrectness_getCategoryBalanceManyAssetsZeroBalanceInTreasuryAndNonZeroBalanceExternallyForSomeAssets()
-        public
-    {
-        address[] memory addr = new address[](1);
-        addr[0] = address(this);
-
-        weth.mint(address(this), 1_000e18);
-
-        // Add category
-        vm.startPrank(godmode);
-        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
-
-        // Add assets
-        TRSRY.addAsset(address(weth), addr);
-        TRSRY.addAsset(address(tkn), new address[](0));
-        TRSRY.categorize(address(weth), toCategory("test"));
-        TRSRY.categorize(address(tkn), toCategory("test"));
-        vm.stopPrank();
-
-        // Assert that the balance is correct
-        (uint256 balance, ) = TRSRY.getCategoryBalance(
-            toCategory("test"),
-            TRSRYv1_1.Variant.CURRENT
-        );
-        assertEq(balance, 1_000e18);
-    }
-
-    function testCorrectness_getCategoryBalanceManyAssetsZeroBalanceInTreasuryAndNonZeroBalanceExternallyForAllAssets()
-        public
-    {
-        address[] memory addr = new address[](1);
-        addr[0] = address(this);
-
-        weth.mint(address(this), 1_000e18);
-        tkn.mint(address(this), 1_000e18);
-
-        // Add category
-        vm.startPrank(godmode);
-        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
-
-        // Add assets
-        TRSRY.addAsset(address(weth), addr);
-        TRSRY.addAsset(address(tkn), addr);
-        TRSRY.categorize(address(weth), toCategory("test"));
-        TRSRY.categorize(address(tkn), toCategory("test"));
-        vm.stopPrank();
-
-        // Assert that the balance is correct
-        (uint256 balance, ) = TRSRY.getCategoryBalance(
-            toCategory("test"),
-            TRSRYv1_1.Variant.CURRENT
-        );
-        assertEq(balance, 2_000e18);
-    }
-
-    function testCorrectness_getCategoryBalanceManyAssetsNonZeroBalanceInTreasuryAndZeroBalanceExternallyForSomeAssets()
-        public
-    {
-        weth.mint(address(TRSRY), 1_000e18);
-
-        // Add category
-        vm.startPrank(godmode);
-        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
-
-        // Add assets
-        TRSRY.addAsset(address(weth), new address[](0));
-        TRSRY.addAsset(address(tkn), new address[](0));
-        TRSRY.categorize(address(weth), toCategory("test"));
-        TRSRY.categorize(address(tkn), toCategory("test"));
-        vm.stopPrank();
-
-        // Assert that the balance is correct
-        (uint256 balance, ) = TRSRY.getCategoryBalance(
-            toCategory("test"),
-            TRSRYv1_1.Variant.CURRENT
-        );
-        assertEq(balance, 1_000e18);
-    }
-
-    function testCorrectness_getCategoryBalanceManyAssetsNonZeroBalanceInTreasuryAndZeroBalanceExternallyForAllAssets()
-        public
-    {
-        weth.mint(address(TRSRY), 1_000e18);
-        tkn.mint(address(TRSRY), 1_000e18);
-
-        // Add category
-        vm.startPrank(godmode);
-        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
-
-        // Add assets
-        TRSRY.addAsset(address(weth), new address[](0));
-        TRSRY.addAsset(address(tkn), new address[](0));
-        TRSRY.categorize(address(weth), toCategory("test"));
-        TRSRY.categorize(address(tkn), toCategory("test"));
-        vm.stopPrank();
-
-        // Assert that the balance is correct
-        (uint256 balance, ) = TRSRY.getCategoryBalance(
-            toCategory("test"),
-            TRSRYv1_1.Variant.CURRENT
-        );
-        assertEq(balance, 2_000e18);
-    }
-
-    function testCorrectness_getCategoryBalanceManyAssetsNonZeroBalanceInTreasuryAndExternallyForSomeAssets()
-        public
-    {
-        weth.mint(address(TRSRY), 1_000e18);
-        weth.mint(address(this), 1_000e18);
-
-        tkn.mint(address(TRSRY), 1_000e18);
-
-        address[] memory addr = new address[](1);
-        addr[0] = address(this);
-
-        // Add category
-        vm.startPrank(godmode);
-        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
-
-        // Add assets
-        TRSRY.addAsset(address(weth), addr);
-        TRSRY.addAsset(address(tkn), new address[](0));
-        TRSRY.categorize(address(weth), toCategory("test"));
-        TRSRY.categorize(address(tkn), toCategory("test"));
-        vm.stopPrank();
-
-        // Assert that the balance is correct
-        (uint256 balance, ) = TRSRY.getCategoryBalance(
-            toCategory("test"),
-            TRSRYv1_1.Variant.CURRENT
-        );
-        assertEq(balance, 3_000e18);
-    }
-
-    function testCorrectness_getCategoryBalanceManyAssetsNonZeroBalanceInTreasuryAndExternallyForAllAssets()
-        public
-    {
-        weth.mint(address(TRSRY), 1_000e18);
-        weth.mint(address(this), 1_000e18);
-
-        tkn.mint(address(TRSRY), 1_000e18);
-        tkn.mint(address(this), 1_000e18);
-
-        address[] memory addr = new address[](1);
-        addr[0] = address(this);
-
-        // Add category
-        vm.startPrank(godmode);
-        TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
-
-        // Add assets
-        TRSRY.addAsset(address(weth), addr);
-        TRSRY.addAsset(address(tkn), addr);
-        TRSRY.categorize(address(weth), toCategory("test"));
-        TRSRY.categorize(address(tkn), toCategory("test"));
-        vm.stopPrank();
-
-        // Assert that the balance is correct
-        (uint256 balance, ) = TRSRY.getCategoryBalance(
-            toCategory("test"),
-            TRSRYv1_1.Variant.CURRENT
-        );
-        assertEq(balance, 4_000e18);
-    }
-
     // =================== ASSET DATA MANAGEMENT ===================== //
 
     // -- Test: addAsset -------------------------------
@@ -872,6 +539,38 @@ contract TRSRYv1_1Test is Test {
         TRSRY.addAsset(alice, new address[](0));
     }
 
+    function testRevert_addAsset_LocationZero() public {
+        address[] memory locations = new address[](2);
+        locations[0] = address(0);
+        locations[1] = address(1);
+
+        /// Try to add an address which is not a contract
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_InvalidParams(uint256,bytes)",
+            1,
+            abi.encode(address(0))
+        );
+        vm.expectRevert(err);
+        vm.prank(godmode);
+        TRSRY.addAsset(address(reserve), locations);
+    }
+
+    function testRevert_addAsset_DuplicatedLocation() public {
+        address[] memory locations = new address[](2);
+        locations[0] = address(1);
+        locations[1] = address(1);
+
+        /// Try to add an address which is not a contract
+        bytes memory err = abi.encodeWithSignature(
+            "TRSRY_InvalidParams(uint256,bytes)",
+            1,
+            abi.encode(address(1))
+        );
+        vm.expectRevert(err);
+        vm.prank(godmode);
+        TRSRY.addAsset(address(reserve), locations);
+    }
+
     // -- Test: removeAsset
 
     function testCorrectness_removeAsset_AssetNotConfigured() public {
@@ -906,14 +605,43 @@ contract TRSRYv1_1Test is Test {
         assertEq(assets.length, 0);
     }
 
+    function testCorrectness_removeAsset_multipleLocations() public {
+        address[] memory locations = new address[](2);
+        locations[0] = address(1);
+        locations[1] = address(2);
+
+        // Add an asset
+        vm.prank(godmode);
+        TRSRY.addAsset(address(reserve), locations);
+
+        // Remove the asset
+        vm.prank(godmode);
+        TRSRY.removeAsset(address(reserve));
+
+        // Verify asset data
+        TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, false);
+        assertEq(asset.lastBalance, 0);
+        assertEq(asset.locations.length, 0);
+
+        // Verify asset list
+        address[] memory assets = TRSRY.getAssets();
+        assertEq(assets.length, 0);
+    }
+
     // -- Test: addAssetLocation -------------------------------
 
     function testFuzz_addAssetLocation(address allocator_) public {
         vm.assume(allocator_ != address(0));
+        vm.assume(allocator_ != address(TRSRY));
 
         // Add an asset
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), new address[](0));
+
+        // Mint tokens to the allocator
+        uint256 allocatorReserveBalance = 1e18;
+        reserve.mint(allocator_, allocatorReserveBalance);
 
         // Add a location
         vm.prank(godmode);
@@ -923,7 +651,7 @@ contract TRSRYv1_1Test is Test {
         TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
         assertEq(asset.approved, true);
         assertEq(asset.updatedAt, block.timestamp);
-        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT);
+        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT + allocatorReserveBalance);
         assertEq(asset.locations.length, 1);
         assertEq(asset.locations[0], allocator_);
     }
@@ -931,6 +659,7 @@ contract TRSRYv1_1Test is Test {
     function testFuzz_addAssetLocation_onePreviousLocation(address allocator_) public {
         vm.assume(allocator_ != address(0));
         vm.assume(allocator_ != address(1));
+        vm.assume(allocator_ != address(TRSRY));
 
         address[] memory locations = new address[](1);
         locations[0] = address(1);
@@ -938,12 +667,19 @@ contract TRSRYv1_1Test is Test {
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), locations);
 
+        // Mint tokens to the allocator
+        uint256 allocatorReserveBalance = 1e18;
+        reserve.mint(allocator_, allocatorReserveBalance);
+
         // Add a location
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), allocator_);
 
         // Verify asset list
         TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, true);
+        assertEq(asset.updatedAt, block.timestamp);
+        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT + allocatorReserveBalance);
         assertEq(asset.locations.length, 2);
         assertEq(asset.locations[1], allocator_);
     }
@@ -952,6 +688,7 @@ contract TRSRYv1_1Test is Test {
         vm.assume(allocator_ != address(0));
         vm.assume(allocator_ != address(1));
         vm.assume(allocator_ != address(2));
+        vm.assume(allocator_ != address(TRSRY));
 
         address[] memory locations = new address[](2);
         locations[0] = address(1);
@@ -960,12 +697,19 @@ contract TRSRYv1_1Test is Test {
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), locations);
 
+        // Mint tokens to the allocator
+        uint256 allocatorReserveBalance = 1e18;
+        reserve.mint(allocator_, allocatorReserveBalance);
+
         // Add a location
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), allocator_);
 
         // Verify asset list
         TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, true);
+        assertEq(asset.updatedAt, block.timestamp);
+        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT + allocatorReserveBalance);
         assertEq(asset.locations.length, 3);
         assertEq(asset.locations[2], allocator_);
     }
@@ -978,7 +722,7 @@ contract TRSRYv1_1Test is Test {
         TRSRY.addAssetLocation(address(reserve), address(1));
     }
 
-    function testRevert_addAssetLocation_AddresZero() public {
+    function testRevert_addAssetLocation_AddressZero() public {
         // Add an asset
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), new address[](0));
@@ -987,6 +731,30 @@ contract TRSRYv1_1Test is Test {
         vm.expectRevert();
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), address(0));
+    }
+
+    function testRevert_addAssetLocation_AddressExists() public {
+        address reserveAddress = address(reserve);
+        address addressOne = address(1);
+
+        address[] memory locations = new address[](2);
+        locations[0] = addressOne;
+        locations[1] = address(2);
+
+        // Add an asset
+        vm.prank(godmode);
+        TRSRY.addAsset(reserveAddress, locations);
+
+        /// Try to add addressOne as the location
+        bytes memory err = abi.encodeWithSelector(
+            TRSRYv1_1.TRSRY_InvalidParams.selector,
+            1,
+            abi.encode(addressOne)
+        );
+        vm.expectRevert(err);
+
+        vm.prank(godmode);
+        TRSRY.addAssetLocation(reserveAddress, addressOne);
     }
 
     // -- Test: removeAssetLocation -------------------------------
@@ -998,6 +766,10 @@ contract TRSRYv1_1Test is Test {
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), new address[](0));
 
+        // Mint tokens to the allocator
+        uint256 allocatorReserveBalance = 1e18;
+        reserve.mint(allocator_, allocatorReserveBalance);
+
         // Add a location
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), allocator_);
@@ -1008,6 +780,9 @@ contract TRSRYv1_1Test is Test {
 
         // Verify asset data
         TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, true);
+        assertEq(asset.updatedAt, block.timestamp);
+        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT);
         assertEq(asset.locations.length, 0);
     }
 
@@ -1021,6 +796,10 @@ contract TRSRYv1_1Test is Test {
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), locations);
 
+        // Mint tokens to the allocator
+        uint256 allocatorReserveBalance = 1e18;
+        reserve.mint(allocator_, allocatorReserveBalance);
+
         // Add a location
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), allocator_);
@@ -1031,6 +810,9 @@ contract TRSRYv1_1Test is Test {
 
         // Verify asset data
         TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, true);
+        assertEq(asset.updatedAt, block.timestamp);
+        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT);
         assertEq(asset.locations.length, 1);
         assertEq(asset.locations[0], address(1));
     }
@@ -1047,6 +829,10 @@ contract TRSRYv1_1Test is Test {
         vm.prank(godmode);
         TRSRY.addAsset(address(reserve), locations);
 
+        // Mint tokens to the allocator
+        uint256 allocatorReserveBalance = 1e18;
+        reserve.mint(allocator_, allocatorReserveBalance);
+
         // Add a location
         vm.prank(godmode);
         TRSRY.addAssetLocation(address(reserve), allocator_);
@@ -1057,6 +843,9 @@ contract TRSRYv1_1Test is Test {
 
         // Verify asset data
         TRSRYv1_1.Asset memory asset = TRSRY.getAssetData(address(reserve));
+        assertEq(asset.approved, true);
+        assertEq(asset.updatedAt, block.timestamp);
+        assertEq(asset.lastBalance, INITIAL_TOKEN_AMOUNT);
         assertEq(asset.locations.length, 2);
         assertEq(asset.locations[0], address(1));
         assertEq(asset.locations[1], address(2));
@@ -1112,7 +901,8 @@ contract TRSRYv1_1Test is Test {
 
     function testCorrectness_addCategoryGroupAddsGroup(bytes32 groupName_) public {
         vm.assume(
-            groupName_ != bytes32("liquidity-preference") &&
+            groupName_ != bytes32(0) &&
+                groupName_ != bytes32("liquidity-preference") &&
                 groupName_ != bytes32("value-baskets") &&
                 groupName_ != bytes32("market-sensitivity")
         );
@@ -1141,22 +931,55 @@ contract TRSRYv1_1Test is Test {
 
     function testCorrectness_removeCategoryGroupRemovesGroup(bytes32 groupName_) public {
         vm.assume(
-            groupName_ != bytes32("liquidity-preference") &&
+            groupName_ != bytes32(0) &&
+                groupName_ != bytes32("liquidity-preference") &&
                 groupName_ != bytes32("value-baskets") &&
                 groupName_ != bytes32("market-sensitivity")
         );
 
+        vm.startPrank(godmode);
+
         // Add category group
-        vm.prank(godmode);
         TRSRY.addCategoryGroup(toCategoryGroup(groupName_));
+        TRSRY.addCategory(toCategory("test-1"), toCategoryGroup(groupName_));
+        TRSRY.addCategory(toCategory("test-2"), toCategoryGroup(groupName_));
+
+        // Assert that the category group and its categories were added
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup(groupName_), 0)), "test-1");
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup(groupName_), 1)), "test-2");
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-1"))), groupName_);
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-2"))), groupName_);
+
+        // Add and categorize asset
+        TRSRY.addAsset(address(reserve), new address[](0));
+        TRSRY.categorize(address(reserve), toCategory("test-1"));
+
+        // Assert that the asset was categorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup(groupName_))),
+            "test-1"
+        );
 
         // Remove category group
-        vm.prank(godmode);
         TRSRY.removeCategoryGroup(toCategoryGroup(groupName_));
+
+        // Check that the asset was uncategorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup(groupName_))),
+            bytes32(0)
+        );
+
+        // Check that the categories were removed
+        // categoryToGroup should be bytes32(0)
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-1"))), bytes32(0));
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-2"))), bytes32(0));
+        // Check that groupToCategories was removed
+        vm.expectRevert();
+        TRSRY.groupToCategories(toCategoryGroup(groupName_), 0);
 
         // Check that the category group was removed
         vm.expectRevert();
-        CategoryGroup removedGroup = TRSRY.categoryGroups(3);
+        TRSRY.categoryGroups(3);
     }
 
     // ========= addCategory ========= //
@@ -1211,7 +1034,8 @@ contract TRSRYv1_1Test is Test {
 
     function testCorrectness_addCategoryStoresCorrectlyZeroPrior(bytes32 category_) public {
         vm.assume(
-            category_ != bytes32("liquid") &&
+            category_ != bytes32(0) &&
+                category_ != bytes32("liquid") &&
                 category_ != bytes32("illiquid") &&
                 category_ != bytes32("reserves") &&
                 category_ != bytes32("strategic") &&
@@ -1241,7 +1065,8 @@ contract TRSRYv1_1Test is Test {
 
     function testCorrectness_addCategoryStoresCorrectlyOnePrior(bytes32 category_) public {
         vm.assume(
-            category_ != bytes32("test") &&
+            category_ != bytes32(0) &&
+                category_ != bytes32("test") &&
                 category_ != bytes32("liquid") &&
                 category_ != bytes32("illiquid") &&
                 category_ != bytes32("reserves") &&
@@ -1274,7 +1099,8 @@ contract TRSRYv1_1Test is Test {
 
     function testCorrectness_addCategoryStoresCorrectlyManyPrior(bytes32 category_) public {
         vm.assume(
-            category_ != bytes32("test1") &&
+            category_ != bytes32(0) &&
+                category_ != bytes32("test1") &&
                 category_ != bytes32("test2") &&
                 category_ != bytes32("test3") &&
                 category_ != bytes32("liquid") &&
@@ -1376,21 +1202,44 @@ contract TRSRYv1_1Test is Test {
     }
 
     function testCorrectness_removeCategoryRemovesCategoryInfo() public {
-        // Add category group and category
         vm.startPrank(godmode);
+
+        // Add category group
         TRSRY.addCategoryGroup(toCategoryGroup("test-group"));
-        TRSRY.addCategory(toCategory("test"), toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test-1"), toCategoryGroup("test-group"));
+        TRSRY.addCategory(toCategory("test-2"), toCategoryGroup("test-group"));
+
+        // Assert that the category group and its categories were added
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 0)), "test-1");
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 1)), "test-2");
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-1"))), "test-group");
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-2"))), "test-group");
+
+        // Add and categorize asset
+        TRSRY.addAsset(address(reserve), new address[](0));
+        TRSRY.categorize(address(reserve), toCategory("test-1"));
+
+        // Assert that the asset was categorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup("test-group"))),
+            "test-1"
+        );
 
         // Remove category
-        TRSRY.removeCategory(toCategory("test"));
+        TRSRY.removeCategory(toCategory("test-1"));
 
-        // Assert that the category was removed
-        // categoryToGroup should be bytes32(0)
-        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test"))), bytes32(0));
+        // Check that the asset was uncategorized
+        assertEq(
+            fromCategory(TRSRY.categorization(address(reserve), toCategoryGroup("test-group"))),
+            bytes32(0)
+        );
 
-        // groupToCategories should be empty
+        // Check that the category was removed
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-1"))), bytes32(0));
+        assertEq(fromCategoryGroup(TRSRY.categoryToGroup(toCategory("test-2"))), "test-group");
+        assertEq(fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 0)), "test-2");
         vm.expectRevert();
-        TRSRY.groupToCategories(toCategoryGroup("test-group"), 0);
+        fromCategory(TRSRY.groupToCategories(toCategoryGroup("test-group"), 1));
     }
 
     // ========= categorize ========= //

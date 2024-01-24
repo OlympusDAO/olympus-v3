@@ -435,10 +435,17 @@ contract UniswapV3PriceTest is Test {
         tickCumulatives[1] = tick1;
         mockUniPair.setTickCumulatives(tickCumulatives);
 
+        // Calculate the expected TWAP price
+        int56 timeWeightedTick = (tick1 - tick0) / int56(int32(OBSERVATION_SECONDS));
+        // Adjust for negative rounding
+        if (tick1 < tick0 && (tick1 - tick0) % int56(int32(OBSERVATION_SECONDS)) != 0) {
+            timeWeightedTick--;
+        }
+
         bytes memory err = abi.encodeWithSelector(
             OracleHelper.UniswapV3OracleHelper_TickOutOfBounds.selector,
             address(mockUniPair),
-            (tick1 - tick0) / int56(int32(OBSERVATION_SECONDS)),
+            timeWeightedTick,
             MIN_TICK,
             MAX_TICK
         );
