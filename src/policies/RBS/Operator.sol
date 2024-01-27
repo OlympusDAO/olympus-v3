@@ -246,7 +246,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         Config memory config_ = _config;
 
         // Get liquid backing metric to determine if auto-refills of lower side capacity should be performed
-        uint256 lbbo = appraiser.getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
+        (uint256 lbbo, ) = appraiser.getMetric(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            IAppraiser.Variant.MOVINGAVERAGE
+        );
 
         // Check if walls can regenerate capacity
         if (
@@ -868,7 +871,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IOperator
     function targetPrice() public view override returns (uint256) {
         // Get liquid backing per backed ohm from appraiser
-        uint256 lbbo = appraiser.getMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
+        (uint256 lbbo, ) = appraiser.getMetric(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            IAppraiser.Variant.MOVINGAVERAGE
+        );
 
         // Get moving average of OHM against the reserve
         (uint256 average, ) = PRICE.getPriceIn(

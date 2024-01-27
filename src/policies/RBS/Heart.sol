@@ -45,6 +45,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice Addresses of assets that use the moving average
     address[] public movingAverageAssets;
 
+    /// @notice Metrics to record the moving average of
+    IAppraiser.Metric[] public movingAverageMetrics;
+
     // Modules
     PRICEv2 internal PRICE;
     MINTRv1 internal MINTR;
@@ -159,6 +162,13 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         uint256 assetsLen = cachedMovingAverageAssets.length;
         for (uint256 i = 0; i < assetsLen; i++) {
             PRICE.storePrice(cachedMovingAverageAssets[i]);
+        }
+
+        // Store the current values for metrics that use the moving average
+        IAppraiser.Metric[] memory cachedMovingAverageMetrics = movingAverageMetrics;
+        uint256 metricsLen = cachedMovingAverageMetrics.length;
+        for (uint256 i = 0; i < metricsLen; i++) {
+            appraiser.storeMetricObservation(cachedMovingAverageMetrics[i]);
         }
 
         // Update the liquid backing calculation
