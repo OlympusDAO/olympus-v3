@@ -69,12 +69,66 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     /// @param lastObservation_  The timestamp of the last observation
     error Appraiser_InsufficientTimeElapsed_Asset(address asset_, uint48 lastObservation_);
 
+    /// @notice                 Indicates an invalid lastObservationTime when updating a category value moving average
+    ///
+    /// @param category_           The category that was observed
+    /// @param lastObservationTime_  The timestamp of the last observation
+    /// @param blockTimestamp_   The current block timestamp
+    error Appraiser_ParamsLastObservationTimeInvalid_Category(TreasuryCategory category_, uint48 lastObservationTime_, uint48 blockTimestamp_);
+
+    /// @notice                 Indicates an invalid moving average duration when updating a category value moving average
+    ///
+    /// @param category_           The category that was observed
+    /// @param movingAverageDuration_  The moving average duration
+    /// @param observationFrequency_  The observation frequency
+    error Appraiser_ParamsMovingAverageDurationInvalid_Category(TreasuryCategory category_, uint32 movingAverageDuration_, uint32 observationFrequency_);
+
+    /// @notice                 Indicates an invalid observation count when updating a category value moving average
+    ///
+    /// @param category_           The category that was observed
+    /// @param observationCount_  The number of observations provided
+    /// @param numObservations_  The number of observations expected
+    error Appraiser_ParamsInvalidObservationCount_Category(TreasuryCategory category_, uint256 observationCount_, uint256 numObservations_);
+
+    /// @notice                 Indicates an invalid observation when updating a category value moving average
+    ///
+    /// @param category_           The category that was observed
+    /// @param index_           The index of the invalid observation
+    error Appraiser_ParamsObservationZero_Category(TreasuryCategory category_, uint256 index_);
+
     /// @notice                 Indicates that insufficient time has elapsed since the last treasury category value observation
     ///
     /// @param category_        The treasury category that was observed
     /// @param lastObservation_  The timestamp of the last observation
     error Appraiser_InsufficientTimeElapsed_Category(TreasuryCategory category_, uint48 lastObservation_);
 
+    /// @notice                 Indicates an invalid lastObservationTime when updating a metric value moving average
+    ///
+    /// @param metric_           The metric that was observed
+    /// @param lastObservationTime_  The timestamp of the last observation
+    /// @param blockTimestamp_   The current block timestamp
+    error Appraiser_ParamsLastObservationTimeInvalid_Metric(Metric metric_, uint48 lastObservationTime_, uint48 blockTimestamp_);
+
+    /// @notice                 Indicates an invalid moving average duration when updating a metric value moving average
+    ///
+    /// @param metric_           The metric that was observed
+    /// @param movingAverageDuration_  The moving average duration
+    /// @param observationFrequency_  The observation frequency
+    error Appraiser_ParamsMovingAverageDurationInvalid_Metric(Metric metric_, uint32 movingAverageDuration_, uint32 observationFrequency_);
+
+    /// @notice                 Indicates an invalid observation count when updating a metric value moving average
+    ///
+    /// @param metric_           The metric that was observed
+    /// @param observationCount_  The number of observations provided
+    /// @param numObservations_  The number of observations expected
+    error Appraiser_ParamsInvalidObservationCount_Metric(Metric metric_, uint256 observationCount_, uint256 numObservations_);
+
+    /// @notice                 Indicates an invalid observation when updating a metric value moving average
+    ///
+    /// @param metric_           The metric that was observed
+    /// @param index_           The index of the invalid observation
+    error Appraiser_ParamsObservationZero_Metric(Metric metric_, uint256 index_);
+    
     /// @notice                 Indicates that insufficient time has elapsed since the last metric observation
     ///
     /// @param metric_          The metric that was observed
@@ -726,6 +780,59 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
+    function updateCategoryMovingAverage(
+        TreasuryCategory category_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
+    ) external override onlyRole("appraiser_admin") {
+        MovingAverage storage categoryMA = categoryValueMovingAverage[category_];
+
+        // Remove existing data, if any
+        if (categoryMA.obs.length > 0) delete categoryMA.obs;
+
+        // Ensure last observation time is not in the future
+        if (lastObservationTime_ > block.timestamp)
+            revert Appraiser_ParamsLastObservationTimeInvalid_Category(
+                category_,
+                lastObservationTime_,
+                uint48(block.timestamp)
+            );
+
+        // Validate moving average parameters
+        if (movingAverageDuration_ == 0 || movingAverageDuration_ % observationFrequency != 0)
+            revert Appraiser_ParamsMovingAverageDurationInvalid_Category(
+                category_,
+                movingAverageDuration_,
+                observationFrequency
+            );
+
+        uint16 numObservations = uint16(movingAverageDuration_ / observationFrequency);
+        if (observations_.length != numObservations || numObservations < 2)
+            revert Appraiser_ParamsInvalidObservationCount_Category(
+                category_,
+                observations_.length,
+                numObservations
+            );
+
+        // Set moving average parameters
+        categoryMA.movingAverageDuration = movingAverageDuration_;
+        categoryMA.nextObsIndex = 0;
+        categoryMA.numObservations = numObservations;
+        categoryMA.lastObservationTime = lastObservationTime_;
+        categoryMA.cumulativeObs = 0; // reset to zero before adding new observations
+        for (uint256 i; i < numObservations; ) {
+            if (observations_[i] == 0) revert Appraiser_ParamsObservationZero_Category(category_, i);
+
+            categoryMA.cumulativeObs += observations_[i];
+            categoryMA.obs.push(observations_[i]);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @inheritdoc IAppraiser
     function storeCategoryObservation(TreasuryCategory category_) external override {
         MovingAverage storage categoryMA = categoryValueMovingAverage[category_];
 
@@ -750,6 +857,59 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
 
         // Emit event
         emit CategoryObservation(category_, value, timestamp);
+    }
+
+    /// @inheritdoc IAppraiser
+    function updateMetricMovingAverage(
+        Metric metric_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
+    ) external override onlyRole("appraiser_admin") {
+        MovingAverage storage metricMA = metricMovingAverage[metric_];
+
+        // Remove existing data, if any
+        if (metricMA.obs.length > 0) delete metricMA.obs;
+
+        // Ensure last observation time is not in the future
+        if (lastObservationTime_ > block.timestamp)
+            revert Appraiser_ParamsLastObservationTimeInvalid_Metric(
+                metric_,
+                lastObservationTime_,
+                uint48(block.timestamp)
+            );
+
+        // Validate moving average parameters
+        if (movingAverageDuration_ == 0 || movingAverageDuration_ % observationFrequency != 0)
+            revert Appraiser_ParamsMovingAverageDurationInvalid_Metric(
+                metric_,
+                movingAverageDuration_,
+                observationFrequency
+            );
+
+        uint16 numObservations = uint16(movingAverageDuration_ / observationFrequency);
+        if (observations_.length != numObservations || numObservations < 2)
+            revert Appraiser_ParamsInvalidObservationCount_Metric(
+                metric_,
+                observations_.length,
+                numObservations
+            );
+
+        // Set moving average parameters
+        metricMA.movingAverageDuration = movingAverageDuration_;
+        metricMA.nextObsIndex = 0;
+        metricMA.numObservations = numObservations;
+        metricMA.lastObservationTime = lastObservationTime_;
+        metricMA.cumulativeObs = 0; // reset to zero before adding new observations
+        for (uint256 i; i < numObservations; ) {
+            if (observations_[i] == 0) revert Appraiser_ParamsObservationZero_Metric(metric_, i);
+
+            metricMA.cumulativeObs += observations_[i];
+            metricMA.obs.push(observations_[i]);
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     /// @inheritdoc IAppraiser

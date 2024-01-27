@@ -153,10 +153,36 @@ interface IAppraiser {
     /// @param asset_   The address of the asset to store the observation for
     function storeAssetObservation(address asset_) external;
 
+    /// @notice         Updates the configuration for a category value moving average
+    ///
+    /// @param category_   The category to update the moving average configuration for
+    /// @param movingAverageDuration_ The duration of the moving average
+    /// @param lastObservationTime_ The timestamp of the last observation
+    /// @param observations_ The observations to set
+    function updateCategoryMovingAverage(
+        Category category_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
+    ) external;
+
     /// @notice             Stores observation for category value moving average
     ///
     /// @param category_    The TRSRY category to store the observation for
     function storeCategoryObservation(Category category_) external;
+
+    /// @notice         Updates the configuration for a metric value moving average
+    ///
+    /// @param metric_   The metric to update the moving average configuration for
+    /// @param movingAverageDuration_ The duration of the moving average
+    /// @param lastObservationTime_ The timestamp of the last observation
+    /// @param observations_ The observations to set
+    function updateMetricMovingAverage(
+        Metric metric_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
+    ) external;
 
     /// @notice         Stores observation for metric moving average
     ///
