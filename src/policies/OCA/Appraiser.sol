@@ -13,6 +13,10 @@ import {SPPLYv1, toCategory as toSupplyCategory} from "src/modules/SPPLY/SPPLY.v
 contract Appraiser is IAppraiser, Policy {
     // ========== EVENTS ========== //
 
+    event AssetObservation(address indexed asset, uint256 value, uint48 timestamp);
+    event CategoryObservation(TreasuryCategory indexed category, uint256 value, uint48 timestamp);
+    event MetricObservation(Metric indexed metric, uint256 value, uint48 timestamp);
+
     // ========== ERRORS ========== //
 
     /// @notice                 Indicates that the value of `asset_` could not be calculated
@@ -31,6 +35,24 @@ contract Appraiser is IAppraiser, Policy {
     /// @param params           The parameters that were provided
     error Appraiser_InvalidParams(uint256 index, bytes params);
 
+    /// @notice                 Indicates that insufficient time has elapsed since the last asset value observation
+    ///
+    /// @param asset_           The address of the asset that was observed
+    /// @param lastObservation  The timestamp of the last observation
+    error Appraiser_InsufficientTimeElapsed_Asset(address asset_, uint48 lastObservation);
+
+    /// @notice                 Indicates that insufficient time has elapsed since the last treasury category value observation
+    ///
+    /// @param category_        The treasury category that was observed
+    /// @param lastObservation  The timestamp of the last observation
+    error Appraiser_InsufficientTimeElapsed_Category(TreasuryCategory category_, uint48 lastObservation);
+
+    /// @notice                 Indicates that insufficient time has elapsed since the last metric observation
+    ///
+    /// @param metric_          The metric that was observed
+    /// @param lastObservation  The timestamp of the last observation
+    error Appraiser_InsufficientTimeElapsed_Metric(Metric metric_, uint48 lastObservation);
+
     // ========== STATE ========== //
 
     // Modules
@@ -42,12 +64,18 @@ contract Appraiser is IAppraiser, Policy {
     address internal ohm;
     uint256 internal constant OHM_SCALE = 1e9;
     uint256 internal priceScale;
+    uint32 public observationFrequency;
     uint8 public decimals;
 
     // Cache
     mapping(Metric => Cache) public metricCache;
     mapping(address => Cache) public assetValueCache;
     mapping(TreasuryCategory => Cache) public categoryValueCache;
+
+    // Moving Averages
+    mapping(Metric => MovingAverage) public metricMovingAverage;
+    mapping(address => MovingAverage) public assetValueMovingAverage;
+    mapping(TreasuryCategory => MovingAverage) public categoryValueMovingAverage;
 
     //============================================================================================//
     //                                     POLICY SETUP                                           //
@@ -135,6 +163,8 @@ contract Appraiser is IAppraiser, Policy {
             return (assetValueCache[asset_].value, assetValueCache[asset_].timestamp);
         } else if (variant_ == Variant.CURRENT) {
             return _assetValue(asset_);
+        } else if (variant_ == Variant.MOVINGAVERAGE) {
+            return _assetMovingAverage(asset_);
         } else {
             revert Appraiser_InvalidParams(1, abi.encode(variant_));
         }
@@ -156,6 +186,22 @@ contract Appraiser is IAppraiser, Policy {
         uint256 value = (price * balance) / (10 ** ERC20(asset_).decimals());
 
         return (value, uint48(block.timestamp));
+    }
+
+    /// @notice         Calculates the moving average of protocol holdings of `asset_`
+    ///
+    /// @param asset_   The address of the asset to get the value of
+    /// @return         The moving average of the asset (in terms of `decimals`)
+    /// @return         The last observation timestamp
+    function _assetMovingAverage(address asset_) internal view returns (uint256, uint48) {
+        // Load asset data
+        MovingAverage storage assetMA = assetValueMovingAverage[asset_];
+
+        // Calculate moving average
+        uint256 movingAverage = assetMA.cumulativeObs / assetMA.numObservations;
+
+        // Return moving average and time
+        return (movingAverage, assetMA.lastObservationTime);
     }
 
     /// @inheritdoc IAppraiser
@@ -198,6 +244,8 @@ contract Appraiser is IAppraiser, Policy {
             return (categoryValueCache[category_].value, categoryValueCache[category_].timestamp);
         } else if (variant_ == Variant.CURRENT) {
             return _categoryValue(category_);
+        } else if (variant_ == Variant.MOVINGAVERAGE) {
+            return _categoryMovingAverage(category_);
         } else {
             revert Appraiser_InvalidParams(1, abi.encode(variant_));
         }
@@ -224,6 +272,26 @@ contract Appraiser is IAppraiser, Policy {
         }
 
         return (value, uint48(block.timestamp));
+    }
+
+    /// @notice             Calculates the moving average of the asset holdings in `category_`
+    ///
+    /// @param category_    The TRSRY category to get the value of
+    /// @return             The moving average of the assets in the category (in terms of `decimals`)
+    /// @return             The last observation timestamp
+    function _categoryMovingAverage(TreasuryCategory category_)
+        internal
+        view
+        returns (uint256, uint48)
+    {
+        // Load category data
+        MovingAverage storage categoryMA = categoryValueMovingAverage[category_];
+
+        // Calculate moving average
+        uint256 movingAverage = categoryMA.cumulativeObs / categoryMA.numObservations;
+
+        // Return moving average and time
+        return (movingAverage, categoryMA.lastObservationTime);
     }
 
     //============================================================================================//
@@ -284,9 +352,27 @@ contract Appraiser is IAppraiser, Policy {
             } else {
                 revert Appraiser_InvalidParams(0, abi.encode(metric_));
             }
+        } else if (variant_ == Variant.MOVINGAVERAGE) {
+            return _metricMovingAverage(metric_);
         } else {
             revert Appraiser_InvalidParams(1, abi.encode(variant_));
         }
+    }
+
+    /// @notice         Calculates the moving average value of a metric
+    ///
+    /// @param metric_  The metric to get the value of
+    /// @return         The moving average of the metric (in terms of `decimals`)
+    /// @return         The last observation timestamp
+    function _metricMovingAverage(Metric metric_) internal view returns (uint256, uint48) {
+        // Load metric data
+        MovingAverage storage metricMA = metricMovingAverage[metric_];
+
+        // Calculate moving average
+        uint256 movingAverage = metricMA.cumulativeObs / metricMA.numObservations;
+
+        // Return moving average and time
+        return (movingAverage, metricMA.lastObservationTime);
     }
 
     /// @notice         Calculates the value of backing
@@ -520,6 +606,91 @@ contract Appraiser is IAppraiser, Policy {
     function storeMetric(Metric metric_) external override {
         (uint256 result, uint48 timestamp) = getMetric(metric_, Variant.CURRENT);
         metricCache[metric_] = Cache(result, timestamp);
+    }
+
+    //============================================================================================//
+    //                                       MOVING AVERAGES                                      //
+    //============================================================================================//
+
+    /// @inheritdoc IAppraiser
+    function storeAssetObservation(address asset_) external override {
+        MovingAverage storage assetMA = assetValueMovingAverage[asset_];
+
+        // Check that sufficient time has passed to record a new observation
+        uint48 lastObservationTime = assetMA.lastObservationTime;
+        if (lastObservationTime + observationFrequency > block.timestamp)
+            revert Appraiser_InsufficientTimeElapsed_Asset(asset_, lastObservationTime);
+
+        // Get the current value for the asset
+        (uint256 value, uint48 timestamp) = getAssetValue(asset_, Variant.CURRENT);
+
+        // Store the data in the obs index
+        uint256 oldestPrice = assetMA.obs[assetMA.nextObsIndex];
+        assetMA.obs[assetMA.nextObsIndex] = value;
+
+        // Update the last observation time and increment the next index
+        assetMA.lastObservationTime = timestamp;
+        assetMA.nextObsIndex = (assetMA.nextObsIndex + 1) % assetMA.numObservations;
+
+        // Update the cumulative observation
+        assetMA.cumulativeObs = assetMA.cumulativeObs + value - oldestPrice;
+
+        // Emit event
+        emit AssetObservation(asset_, value, timestamp);
+    }
+
+    /// @inheritdoc IAppraiser
+    function storeCategoryObservation(TreasuryCategory category_) external override {
+        MovingAverage storage categoryMA = categoryValueMovingAverage[category_];
+
+        // Check that sufficient time has passed to record a new observation
+        uint48 lastObservationTime = categoryMA.lastObservationTime;
+        if (lastObservationTime + observationFrequency > block.timestamp)
+            revert Appraiser_InsufficientTimeElapsed_Category(category_, lastObservationTime);
+
+        // Get the current value for the category
+        (uint256 value, uint48 timestamp) = getCategoryValue(category_, Variant.CURRENT);
+
+        // Store the data in the obs index
+        uint256 oldestPrice = categoryMA.obs[categoryMA.nextObsIndex];
+        categoryMA.obs[categoryMA.nextObsIndex] = value;
+
+        // Update the last observation time and increment the next index
+        categoryMA.lastObservationTime = timestamp;
+        categoryMA.nextObsIndex = (categoryMA.nextObsIndex + 1) % categoryMA.numObservations;
+
+        // Update the cumulative observation
+        categoryMA.cumulativeObs = categoryMA.cumulativeObs + value - oldestPrice;
+
+        // Emit event
+        emit CategoryObservation(category_, value, timestamp);
+    }
+
+    /// @inheritdoc IAppraiser
+    function storeMetricObservation(Metric metric_) external override {
+        MovingAverage storage metricMA = metricMovingAverage[metric_];
+
+        // Check that sufficient time has passed to record a new observation
+        uint48 lastObservationTime = metricMA.lastObservationTime;
+        if (lastObservationTime + observationFrequency > block.timestamp)
+            revert Appraiser_InsufficientTimeElapsed_Metric(metric_, lastObservationTime);
+
+        // Get the current value for the metric
+        (uint256 value, uint48 timestamp) = getMetric(metric_, Variant.CURRENT);
+
+        // Store the data in the obs index
+        uint256 oldestPrice = metricMA.obs[metricMA.nextObsIndex];
+        metricMA.obs[metricMA.nextObsIndex] = value;
+
+        // Update the last observation time and increment the next index
+        metricMA.lastObservationTime = timestamp;
+        metricMA.nextObsIndex = (metricMA.nextObsIndex + 1) % metricMA.numObservations;
+
+        // Update the cumulative observation
+        metricMA.cumulativeObs = metricMA.cumulativeObs + value - oldestPrice;
+
+        // Emit event
+        emit MetricObservation(metric_, value, timestamp);
     }
 
     //============================================================================================//

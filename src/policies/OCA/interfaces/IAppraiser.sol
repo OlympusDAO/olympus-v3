@@ -7,7 +7,8 @@ interface IAppraiser {
     // ========== DATA STRUCTURES ========== //
     enum Variant {
         CURRENT,
-        LAST
+        LAST,
+        MOVINGAVERAGE
     }
 
     enum Metric {
@@ -23,6 +24,15 @@ interface IAppraiser {
     struct Cache {
         uint256 value;
         uint48 timestamp;
+    }
+
+    struct MovingAverage {
+        uint32 movingAverageDuration; // the duration of the moving average
+        uint16 nextObsIndex; // the index of obs at which the next observation will be stored
+        uint16 numObservations;
+        uint48 lastObservationTime;
+        uint256 cumulativeObs;
+        uint256[] obs;
     }
 
     //============================================================================================//
@@ -120,4 +130,19 @@ interface IAppraiser {
     ///
     /// @param metric_  The Metric to cache the value of
     function storeMetric(Metric metric_) external;
+
+    /// @notice         Stores observation for asset value moving average
+    ///
+    /// @param asset_   The address of the asset to store the observation for
+    function storeAssetObservation(address asset_) external;
+
+    /// @notice             Stores observation for category value moving average
+    ///
+    /// @param category_    The TRSRY category to store the observation for
+    function storeCategoryObservation(Category category_) external;
+
+    /// @notice         Stores observation for metric moving average
+    ///
+    /// @param metric_ The Metric to store the observation for
+    function storeMetricObservation(Metric metric_) external;
 }
