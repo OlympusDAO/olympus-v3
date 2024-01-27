@@ -585,7 +585,7 @@ contract OlympusDeploy is Script {
 
         // Deploy Appraiser module
         vm.broadcast();
-        appraiser = new Appraiser(kernel);
+        appraiser = new Appraiser(kernel, 8 hours);
         console2.log("Appraiser deployed at:", address(appraiser));
 
         return address(appraiser);

@@ -115,7 +115,7 @@ contract AppraiserTest is Test {
 
         // Policies
         {
-            appraiser = new Appraiser(kernel);
+            appraiser = new Appraiser(kernel, 8 hours);
             treasuryConfig = new TreasuryConfig(kernel);
             supplyConfig = new SupplyConfig(kernel);
             rolesAdmin = new RolesAdmin(kernel);
@@ -353,9 +353,10 @@ contract AppraiserTest is Test {
     }
 
     /// [X]  getAssetValue(address asset_, Variant variant_)
-    ///     [X]  reverts if variant is not LAST or CURRENT
+    ///     [X]  reverts if variant is not LAST, CURRENT, or MOVINGAVERAGE
     ///     [X]  gets latest asset value if variant is LAST
     ///     [X]  gets current asset value if variant is CURRENT
+    ///     []  gets moving average asset value if variant is MOVINGAVERAGE
 
     function testCorrectness_getAssetValueAddressVariantInvalid() public {
         // Cache current asset value and timestamp
@@ -363,7 +364,7 @@ contract AppraiserTest is Test {
 
         // Directly call getAssetValue with invalid variant
         (bool success, ) = address(appraiser).call(
-            abi.encodeWithSignature("getAssetValue(address,uint8)", address(reserve), 2)
+            abi.encodeWithSignature("getAssetValue(address,uint8)", address(reserve), 3)
         );
 
         // Assert call reverts
@@ -438,6 +439,11 @@ contract AppraiserTest is Test {
         assertEq(timestamp, timestampBefore);
         assertEq(value, RESERVE_VALUE_AT_2);
         assertEq(variantTimestamp, uint48(block.timestamp));
+    }
+
+    function testCorrectness_getAssetValueAddressVariantMovingAverage() public {
+        // Store asset values
+        // TODO
     }
 
     /// [X]  getCategoryValue(Category category_)

@@ -148,7 +148,7 @@ contract OperatorTest is Test {
             // Deploy new TreasuryConfig
             treasuryConfig = new TreasuryConfig(kernel);
             // Deploy new appraiser
-            appraiser = new Appraiser(kernel);
+            appraiser = new Appraiser(kernel, 8 hours);
             /// Deploy operator
             operator = new Operator(
                 kernel,

@@ -169,7 +169,7 @@ contract BondCallbackTest is Test {
             // Deploy new SupplyConfig
             supplyConfig = new SupplyConfig(kernel);
             // Deploy new appraiser
-            appraiser = new Appraiser(kernel);
+            appraiser = new Appraiser(kernel, 8 hours);
             /// Deploy operator
             operator = new Operator(
                 kernel,

@@ -6,11 +6,12 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import "src/Kernel.sol";
 import {IAppraiser} from "src/policies/OCA/interfaces/IAppraiser.sol";
+import {ROLESv1, RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import {TRSRYv1_1, Category as TreasuryCategory, toCategory as toTreasuryCategory} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {SPPLYv1, toCategory as toSupplyCategory} from "src/modules/SPPLY/SPPLY.v1.sol";
 
-contract Appraiser is IAppraiser, Policy {
+contract Appraiser is IAppraiser, Policy, RolesConsumer {
     // ========== EVENTS ========== //
 
     event AssetObservation(address indexed asset, uint256 value, uint48 timestamp);
@@ -35,23 +36,50 @@ contract Appraiser is IAppraiser, Policy {
     /// @param params           The parameters that were provided
     error Appraiser_InvalidParams(uint256 index, bytes params);
 
+    /// @notice                 Indicates an invalid lastObservationTime when updating an asset value moving average
+    ///
+    /// @param asset_           The address of the asset that was observed
+    /// @param lastObservationTime_  The timestamp of the last observation
+    /// @param blockTimestamp_   The current block timestamp
+    error Appraiser_ParamsLastObservationTimeInvalid_Asset(address asset_, uint48 lastObservationTime_, uint48 blockTimestamp_);
+
+    /// @notice                 Indicates an invalid moving average duration when updating an asset value moving average
+    ///
+    /// @param asset_           The address of the asset that was observed
+    /// @param movingAverageDuration_  The moving average duration
+    /// @param observationFrequency_  The observation frequency
+    error Appraiser_ParamsMovingAverageDurationInvalid_Asset(address asset_, uint32 movingAverageDuration_, uint32 observationFrequency_);
+
+    /// @notice                 Indicates an invalid observation count when updating an asset value moving average
+    ///
+    /// @param asset_           The address of the asset that was observed
+    /// @param observationCount_  The number of observations provided
+    /// @param numObservations_  The number of observations expected
+    error Appraiser_ParamsInvalidObservationCount_Asset(address asset_, uint256 observationCount_, uint256 numObservations_);
+
+    /// @notice                 Indicates an invalid observation when updating an asset value moving average
+    ///
+    /// @param asset_           The address of the asset that was observed
+    /// @param index_           The index of the invalid observation
+    error Appraiser_ParamsObservationZero_Asset(address asset_, uint256 index_);
+
     /// @notice                 Indicates that insufficient time has elapsed since the last asset value observation
     ///
     /// @param asset_           The address of the asset that was observed
-    /// @param lastObservation  The timestamp of the last observation
-    error Appraiser_InsufficientTimeElapsed_Asset(address asset_, uint48 lastObservation);
+    /// @param lastObservation_  The timestamp of the last observation
+    error Appraiser_InsufficientTimeElapsed_Asset(address asset_, uint48 lastObservation_);
 
     /// @notice                 Indicates that insufficient time has elapsed since the last treasury category value observation
     ///
     /// @param category_        The treasury category that was observed
-    /// @param lastObservation  The timestamp of the last observation
-    error Appraiser_InsufficientTimeElapsed_Category(TreasuryCategory category_, uint48 lastObservation);
+    /// @param lastObservation_  The timestamp of the last observation
+    error Appraiser_InsufficientTimeElapsed_Category(TreasuryCategory category_, uint48 lastObservation_);
 
     /// @notice                 Indicates that insufficient time has elapsed since the last metric observation
     ///
     /// @param metric_          The metric that was observed
-    /// @param lastObservation  The timestamp of the last observation
-    error Appraiser_InsufficientTimeElapsed_Metric(Metric metric_, uint48 lastObservation);
+    /// @param lastObservation_  The timestamp of the last observation
+    error Appraiser_InsufficientTimeElapsed_Metric(Metric metric_, uint48 lastObservation_);
 
     // ========== STATE ========== //
 
@@ -81,7 +109,9 @@ contract Appraiser is IAppraiser, Policy {
     //                                     POLICY SETUP                                           //
     //============================================================================================//
 
-    constructor(Kernel kernel_) Policy(kernel_) {}
+    constructor(Kernel kernel_, uint32 observationFrequency_) Policy(kernel_) {
+        observationFrequency = observationFrequency_;
+    }
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -89,19 +119,22 @@ contract Appraiser is IAppraiser, Policy {
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("SPPLY");
         dependencies[2] = toKeycode("TRSRY");
+        dependencies[3] = toKeycode("ROLES");
 
         PRICE = PRICEv2(getModuleAddress(dependencies[0]));
         SPPLY = SPPLYv1(getModuleAddress(dependencies[1]));
         TRSRY = TRSRYv1_1(getModuleAddress(dependencies[2]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[3]));
 
         (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
         (uint8 SPPLY_MAJOR, ) = SPPLY.VERSION();
         (uint8 TRSRY_MAJOR, uint8 TRSRY_MINOR) = TRSRY.VERSION();
+        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([2, 1, 1]);
-        if (PRICE_MAJOR != 2 || SPPLY_MAJOR != 1 || TRSRY_MAJOR != 1)
+        if (PRICE_MAJOR != 2 || SPPLY_MAJOR != 1 || TRSRY_MAJOR != 1 || ROLES_MAJOR != 1)
             revert Policy_WrongModuleVersion(expected);
 
         // Check TRSRY minor version
@@ -612,6 +645,59 @@ contract Appraiser is IAppraiser, Policy {
     //                                       MOVING AVERAGES                                      //
     //============================================================================================//
 
+    /// @inheritdoc IAppraiser
+    function updateAssetMovingAverage(
+        address asset_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
+    ) external override onlyRole("appraiser_admin") {
+        MovingAverage storage assetMA = assetValueMovingAverage[asset_];
+
+        // Remove existing data, if any
+        if (assetMA.obs.length > 0) delete assetMA.obs;
+
+        // Ensure last observation time is not in the future
+        if (lastObservationTime_ > block.timestamp)
+            revert Appraiser_ParamsLastObservationTimeInvalid_Asset(
+                asset_,
+                lastObservationTime_,
+                uint48(block.timestamp)
+            );
+
+        // Validate moving average parameters
+        if (movingAverageDuration_ == 0 || movingAverageDuration_ % observationFrequency != 0)
+            revert Appraiser_ParamsMovingAverageDurationInvalid_Asset(
+                asset_,
+                movingAverageDuration_,
+                observationFrequency
+            );
+
+        uint16 numObservations = uint16(movingAverageDuration_ / observationFrequency);
+        if (observations_.length != numObservations || numObservations < 2)
+            revert Appraiser_ParamsInvalidObservationCount_Asset(
+                asset_,
+                observations_.length,
+                numObservations
+            );
+
+        // Set moving average parameters
+        assetMA.movingAverageDuration = movingAverageDuration_;
+        assetMA.nextObsIndex = 0;
+        assetMA.numObservations = numObservations;
+        assetMA.lastObservationTime = lastObservationTime_;
+        assetMA.cumulativeObs = 0; // reset to zero before adding new observations
+        for (uint256 i; i < numObservations; ) {
+            if (observations_[i] == 0) revert Appraiser_ParamsObservationZero_Asset(asset_, i);
+
+            assetMA.cumulativeObs += observations_[i];
+            assetMA.obs.push(observations_[i]);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+    
     /// @inheritdoc IAppraiser
     function storeAssetObservation(address asset_) external override {
         MovingAverage storage assetMA = assetValueMovingAverage[asset_];

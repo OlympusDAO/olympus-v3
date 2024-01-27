@@ -131,6 +131,23 @@ interface IAppraiser {
     /// @param metric_  The Metric to cache the value of
     function storeMetric(Metric metric_) external;
 
+    //============================================================================================//
+    //                                       MOVING AVERAGES                                      //
+    //============================================================================================//
+
+    /// @notice         Updates the configuration for an asset value moving average
+    ///
+    /// @param asset_   The address of the asset to update the moving average configuration for
+    /// @param movingAverageDuration_ The duration of the moving average
+    /// @param lastObservationTime_ The timestamp of the last observation
+    /// @param observations_ The observations to set
+    function updateAssetMovingAverage(
+        address asset_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
+    ) external;
+
     /// @notice         Stores observation for asset value moving average
     ///
     /// @param asset_   The address of the asset to store the observation for
