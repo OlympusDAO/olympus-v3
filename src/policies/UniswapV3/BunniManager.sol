@@ -1070,6 +1070,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         TRSRY.addAssetLocation(poolToken_, address(TRSRY));
 
         // Categorize the asset
+        TRSRY.categorize(poolToken_, toTreasuryCategory("liquid"));
+        TRSRY.categorize(poolToken_, toTreasuryCategory("volatile"));
         TRSRY.categorize(poolToken_, toTreasuryCategory("protocol-owned-liquidity"));
     }
 
