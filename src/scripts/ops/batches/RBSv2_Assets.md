@@ -28,14 +28,14 @@ Notes:
 
 This table reflects the asset balances that need to be tracked.
 
-| Asset              | Address                                      | Locations                                                                     |
-| ------------------ | -------------------------------------------- | ----------------------------------------------------------------------------- |
-| DAI                | `0x6b175474e89094c44da98b954eedeac495271d0f` | `TRSRY` <br /> Cooler Clearinghouse(s) via Registry                           |
-| sDAI               | `0x83f20f44975d03b1b09e64809b757c47f942beea` | `TRSRY` <br /> Cooler Clearinghouse(s) via Registry                           |
-| wETH               | `0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2` | `TRSRY`                                                                       |
-| wETH-OHM UniV3 POL | TBD - determined at deploy-time              | `TRSRY` <br /> `BunniHub` (configured by BunniManager)                        |
-| veFXS              | `0xc8418af6358ffdda74e09ca9cc3fe03ca6adc5b0` | `TRSRY` <br /> veFXS Allocator - `0xde7b85f52577b113181921a7aa8fc0c22e309475` |
-| FXS                | `0x3432b6a60d23ca0dfca7761b7ab56459d9c964d0` | `TRSRY` <br /> veFXS Allocator - `0xde7b85f52577b113181921a7aa8fc0c22e309475` |
+| Asset              | Address                                      | Locations                                                                     | Categories                                 |
+| ------------------ | -------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------ |
+| DAI                | `0x6b175474e89094c44da98b954eedeac495271d0f` | `TRSRY` <br /> Cooler Clearinghouse(s) via Registry                           | liquid, stable, reserves                   |
+| sDAI               | `0x83f20f44975d03b1b09e64809b757c47f942beea` | `TRSRY` <br /> Cooler Clearinghouse(s) via Registry                           | liquid, stable, reserves                   |
+| wETH               | `0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2` | `TRSRY`                                                                       | liquid, volatile, strategic                |
+| wETH-OHM UniV3 POL | TBD - determined at deploy-time              | `TRSRY` <br /> `BunniHub` (configured by BunniManager)                        | liquid, volatile, protocol-owned-liquidity |
+| veFXS              | `0xc8418af6358ffdda74e09ca9cc3fe03ca6adc5b0` | `TRSRY` <br /> veFXS Allocator - `0xde7b85f52577b113181921a7aa8fc0c22e309475` | illiquid, volatile, strategic              |
+| FXS                | `0x3432b6a60d23ca0dfca7761b7ab56459d9c964d0` | `TRSRY` <br /> veFXS Allocator - `0xde7b85f52577b113181921a7aa8fc0c22e309475` | liquid, volatile, strategic                |
 
 Notes:
 
