@@ -143,7 +143,10 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
             console2.log("    DAI balance in TRSRY v1 after: %s (18dp)", trsryV1After);
             console2.log("    DAI balance in DAO MS: %s (18dp)", ERC20(dai).balanceOf(daoMS));
-            console2.log("    Difference in DAI balance in DAO MS: %s (18dp)", daoMSAfter - daoMSBefore);
+            console2.log(
+                "    Difference in DAI balance in DAO MS: %s (18dp)",
+                daoMSAfter - daoMSBefore
+            );
 
             if (trsryV1After > 0) {
                 revert("DAI balance in TRSRY v1 is not 0");
@@ -181,7 +184,10 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
             console2.log("    sDAI balance in TRSRY v1 after: %s (18dp)", trsryV1After);
             console2.log("    sDAI balance in DAO MS: %s (18dp)", ERC20(sdai).balanceOf(daoMS));
-            console2.log("    Difference in sDAI balance in DAO MS: %s (18dp)", daoMSAfter - daoMSBefore);
+            console2.log(
+                "    Difference in sDAI balance in DAO MS: %s (18dp)",
+                daoMSAfter - daoMSBefore
+            );
 
             if (trsryV1After > 0) {
                 revert("sDAI balance in TRSRY v1 is not 0");
@@ -302,7 +308,9 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
                 revert("DAI balance in TRSRY v1 is not 0");
             }
 
-            if (daiClearinghouseV1Debt + daiClearinghouseV1_1Debt + dsrAllocatorDebt != daiTotalDebt) {
+            if (
+                daiClearinghouseV1Debt + daiClearinghouseV1_1Debt + dsrAllocatorDebt != daiTotalDebt
+            ) {
                 revert("Clearinghouse DAI debt does not equal total debt");
             }
             console2.log("    Total DAI debt matches clearinghouse + DSR allocator debt");
@@ -382,7 +390,10 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
             console2.log("Setting DAI debt on new TRSRY");
             console2.log("    ClearinghouseV1 DAI debt: %s", daiClearinghouseV1Debt);
             console2.log("    ClearinghouseV1_1 DAI debt: %s", daiClearinghouseV1_1Debt);
-            console2.log("    Total DAI debt: %s", daiClearinghouseV1Debt + daiClearinghouseV1_1Debt);
+            console2.log(
+                "    Total DAI debt: %s",
+                daiClearinghouseV1Debt + daiClearinghouseV1_1Debt
+            );
 
             ERC20 daiToken = ERC20(dai);
             addToBatch(
