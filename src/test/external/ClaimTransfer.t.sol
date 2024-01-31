@@ -139,8 +139,19 @@ contract ClaimTransferTest is Test {
     //============================================================================================//
 
     /// [X]  fractionalizeClaim
+    ///     [X]  reverts if user has no claim
     ///     [X]  fails if user has not pushed wallet change
     ///     [X]  sets fractionalizedTerms
+
+    function testCorrectness_fractionalizeClaimRevertsIfUserHasNoClaim(address user_) public {
+        vm.assume(user_ != alice && user_ != bob);
+
+        bytes memory err = abi.encodeWithSignature("POHM_NoWalletChange()");
+        vm.expectRevert(err);
+
+        vm.prank(user_);
+        claimTransfer.fractionalizeClaim();
+    }
 
     function testCorrectness_cannotFractionalizeWithoutPushingWalletChange() public {
         bytes memory err = abi.encodeWithSignature("POHM_NoWalletChange()");
@@ -177,6 +188,8 @@ contract ClaimTransferTest is Test {
     ///     [X]  sends OHM to user
 
     function testCorrectness_claimRevertsIfUserHasNoClaim(address user_) public {
+        vm.assume(user_ != alice && user_ != bob);
+
         dai.mint(user_, 1_000e18);
 
         vm.startPrank(user_);
