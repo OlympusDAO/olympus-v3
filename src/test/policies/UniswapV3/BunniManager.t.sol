@@ -1438,6 +1438,18 @@ contract BunniManagerTest is Test {
         assertEq(trsryPolAssets.length, 1);
         assertEq(trsryPolAssets[0], address(poolToken));
 
+        address[] memory trsryVolatileAssets = TRSRY.getAssetsByCategory(
+            toTreasuryCategory("volatile")
+        );
+        assertEq(trsryVolatileAssets.length, 1);
+        assertEq(trsryVolatileAssets[0], address(poolToken));
+
+        address[] memory trsryLiquidAssets = TRSRY.getAssetsByCategory(
+            toTreasuryCategory("liquid")
+        );
+        assertEq(trsryLiquidAssets.length, 1);
+        assertEq(trsryLiquidAssets[0], address(poolToken));
+
         // Check that the token has been added to PRICEv2
         PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
         assertTrue(priceAsset.approved);

@@ -446,7 +446,6 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 7. Configure BTRFLY on PRICE
 
         // 0. Load variables from the JSON file
-        // TODO final values need to be added
         // Caution: the last observation time for the assets needs to be set in a way that it will not be stale (which would cause a revert)
         string memory argData = vm.readFile("./src/scripts/ops/batches/RBSv2Install_3_RBS.json");
 
@@ -1147,6 +1146,11 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
     /// @dev        need to be completed in a single transaction/batch in order for
     /// @dev        RBS to upgrade and operate successfully.
     function RBSv2Install_3_1(bool send_) external isDaoBatch(send_) {
+        install();
+    }
+
+    function RBSv2Install_3_TEST(bool send_) external {
+        initTestBatch();
         install();
     }
 }
