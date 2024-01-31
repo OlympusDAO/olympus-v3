@@ -174,7 +174,6 @@ contract Pohm is IPohm, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IPohm
-    /// @dev        This is not the true circulating supply, but it matches that of the previous pOHM contracts
     function getCirculatingSupply() public view returns (uint256) {
         return OHM.totalSupply() - OHM.balanceOf(dao);
     }
