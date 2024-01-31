@@ -438,6 +438,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             priceDecimals = _getPriceDecimals(range.high.cushion.price);
             scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
+            // Avoid wrap-around due to casting
+            if (priceDecimals > int8(_oracleDecimals)) revert Operator_InvalidParams();
+
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
             oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
             bondScale =
@@ -469,6 +472,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // is the priceDecimal value
             priceDecimals = _getPriceDecimals(invCushionPrice);
             scaleAdjustment = int8(_reserveDecimals) - int8(_ohmDecimals) + (priceDecimals / 2);
+
+            // Avoid wrap-around due to casting
+            if (priceDecimals > int8(_oracleDecimals)) revert Operator_InvalidParams();
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
             oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
