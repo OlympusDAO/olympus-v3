@@ -1350,6 +1350,36 @@ contract PriceV2Test is Test {
         assertEq(price_, uint256(2001e18));
     }
 
+    function test_getPrice_maxAge_zero_reverts() public {
+        uint48 maxAge = 0;
+
+        // Add base assets to price module
+        _addBaseAssets(1);
+
+        // Try to call getPrice with a max age of zero and expect revert
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_ParamsMaxAgeInvalid.selector,
+            maxAge
+        );
+        vm.expectRevert(err);
+        price.getPrice(address(weth), maxAge);
+    }
+
+    function test_getPrice_maxAge_greaterThanBlock_reverts(uint48 maxAge_) public {
+        uint48 maxAge = uint48(bound(maxAge_, block.timestamp, type(uint48).max));
+
+        // Add base assets to price module
+        _addBaseAssets(1);
+
+        // Try to call getPrice with a max age of zero and expect revert
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_ParamsMaxAgeInvalid.selector,
+            maxAge
+        );
+        vm.expectRevert(err);
+        price.getPrice(address(weth), maxAge);
+    }
+
     function testRevert_getPrice_maxAge_unconfiguredAsset() public {
         // No base assets
 
@@ -1773,6 +1803,43 @@ contract PriceV2Test is Test {
         // Try with positions reversed
         vm.expectRevert(err);
         price.getPriceIn(address(alpha), address(weth), uint48(60));
+    }
+
+    function test_getPriceIn_maxAge_zero_reverts(uint256 nonce_) public {
+        uint48 maxAge = 0;
+
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_ParamsMaxAgeInvalid.selector,
+            maxAge
+        );
+        vm.expectRevert(err);
+
+        // Get current price of weth in alpha
+        price.getPriceIn(address(weth), address(alpha), maxAge);
+    }
+
+    function test_getPriceIn_maxAge_greaterThanBlock_reverts(
+        uint256 nonce_,
+        uint48 maxAge_
+    ) public {
+        uint48 maxAge = uint48(bound(maxAge_, block.timestamp, type(uint48).max));
+
+        // Add base assets to price module
+        _addBaseAssets(nonce_);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_ParamsMaxAgeInvalid.selector,
+            maxAge
+        );
+        vm.expectRevert(err);
+
+        // Get current price of weth in alpha
+        price.getPriceIn(address(weth), address(alpha), maxAge);
     }
 
     // Cases to check for getPriceIn (asset, base, maxAge):

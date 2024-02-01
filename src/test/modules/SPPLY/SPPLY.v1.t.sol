@@ -1439,6 +1439,28 @@ contract SupplyTest is Test {
         assertEq(supply, 100e9);
     }
 
+    function test_getSupplyByCategory_maxAge_zero_reverts() public {
+        uint48 maxAge = 0;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(SPPLYv1.SPPLY_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Get supply
+        moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), maxAge);
+    }
+
+    function test_getSupplyByCategory_maxAge_greaterThanBlock_reverts(uint48 maxAge_) public {
+        uint48 maxAge = uint48(bound(maxAge_, block.timestamp, type(uint48).max));
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(SPPLYv1.SPPLY_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Get supply
+        moduleSupply.getSupplyByCategory(toCategory("protocol-owned-treasury"), maxAge);
+    }
+
     function test_getSupplyByCategory_maxAge_withinThreshold_withoutCache() public {
         // Add OHM in the treasury
         ohm.mint(address(treasuryAddress), 100e9);
@@ -2146,6 +2168,32 @@ contract SupplyTest is Test {
 
         // Should use the cached value
         assertEq(metric, TOTAL_OHM - 100e9 - 99e9);
+    }
+
+    function test_getMetric_maxAge_zero_reverts() public {
+        uint48 maxAge = 0;
+
+        _setupMetricLocations();
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(SPPLYv1.SPPLY_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Get metric
+        moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, maxAge);
+    }
+
+    function test_getMetric_maxAge_greaterThanBlock_reverts(uint48 maxAge_) public {
+        uint48 maxAge = uint48(bound(maxAge_, block.timestamp, type(uint48).max));
+
+        _setupMetricLocations();
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(SPPLYv1.SPPLY_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Get metric
+        moduleSupply.getMetric(SPPLYv1.Metric.CIRCULATING_SUPPLY, maxAge);
     }
 
     function test_getMetric_maxAge_withinThreshold_withoutCache() public {

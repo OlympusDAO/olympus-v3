@@ -352,6 +352,36 @@ contract AppraiserTest is Test {
         assertEq(timestamp, timestampBefore);
     }
 
+    function test_getAssetValue_maxAge_zero_reverts() public {
+        uint48 maxAge = 0;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_InvalidParams.selector,
+            1,
+            abi.encode(maxAge)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.getAssetValue(address(reserve), maxAge);
+    }
+
+    function test_getAssetValue_maxAge_greaterThanBlock_reverts(uint48 maxAge_) public {
+        uint48 maxAge = uint48(bound(maxAge_, block.timestamp, type(uint48).max));
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_InvalidParams.selector,
+            1,
+            abi.encode(maxAge)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.getAssetValue(address(reserve), maxAge);
+    }
+
     /// [X]  getAssetValue(address asset_, Variant variant_)
     ///     [X]  reverts if variant is not LAST or CURRENT
     ///     [X]  gets latest asset value if variant is LAST
@@ -661,6 +691,36 @@ contract AppraiserTest is Test {
         assertEq(liquidValue, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000);
         assertEq(stableValue, RESERVE_VALUE_AT_2);
         assertEq(reservesValue, RESERVE_VALUE_AT_2);
+    }
+
+    function test_getCategoryValue_maxAge_zero_reverts() public {
+        uint48 maxAge = 0;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_InvalidParams.selector,
+            1,
+            abi.encode(maxAge)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.getCategoryValue(AssetCategory.wrap("liquid"), maxAge);
+    }
+
+    function test_getCategoryValue_maxAge_greaterThanBlock_reverts(uint48 maxAge_) public {
+        uint48 maxAge = uint48(bound(maxAge_, block.timestamp, type(uint48).max));
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_InvalidParams.selector,
+            1,
+            abi.encode(maxAge)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.getCategoryValue(AssetCategory.wrap("liquid"), maxAge);
     }
 
     /// [X]  getCategoryValue(Category category_, Variant variant_)
@@ -980,6 +1040,36 @@ contract AppraiserTest is Test {
 
         // Assert that metric value is correct
         assertEq(value, RESERVE_VALUE_AT_2 + WETH_VALUE_AT_4000 + POL_BACKING_AT_2);
+    }
+
+    function test_getMetric_maxAge_zero_reverts() public {
+        uint48 maxAge = 0;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_InvalidParams.selector,
+            1,
+            abi.encode(maxAge)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.getMetric(IAppraiser.Metric.BACKING, maxAge);
+    }
+
+    function test_getMetric_maxAge_greaterThanBlock_reverts(uint48 maxAge_) public {
+        uint48 maxAge = uint48(bound(maxAge_, block.timestamp, type(uint48).max));
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Appraiser.Appraiser_InvalidParams.selector,
+            1,
+            abi.encode(maxAge)
+        );
+        vm.expectRevert(err);
+
+        // Call
+        appraiser.getMetric(IAppraiser.Metric.BACKING, maxAge);
     }
 
     /// [X]  getMetric(Metric metric_, Variant variant_)
