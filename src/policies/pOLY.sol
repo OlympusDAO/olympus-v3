@@ -8,7 +8,7 @@ import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import "src/Kernel.sol";
 
 // Import interfaces
-import {IPohm, IPreviousPohm} from "policies/interfaces/IPohm.sol";
+import {IPOLY, IPreviousPOLY} from "policies/interfaces/IPOLY.sol";
 import {IgOHM} from "interfaces/IgOHM.sol";
 
 // Import types
@@ -17,7 +17,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 // Import libraries
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
-contract Pohm is IPohm, Policy, RolesConsumer {
+contract pOLY is IPOLY, Policy, RolesConsumer {
     using TransferHelper for ERC20;
 
     // ========= STATE VARIABLES ========= //
@@ -27,7 +27,7 @@ contract Pohm is IPohm, Policy, RolesConsumer {
     TRSRYv1 public TRSRY;
 
     // Olympus Contracts
-    IPreviousPohm public previous;
+    IPreviousPOLY public previous;
 
     // Tokens
     ERC20 public OHM;
@@ -61,7 +61,7 @@ contract Pohm is IPohm, Policy, RolesConsumer {
         address dao_,
         uint256 maximumAllocated_
     ) Policy(kernel_) {
-        previous = IPreviousPohm(previous_);
+        previous = IPreviousPOLY(previous_);
         OHM = ERC20(ohm_);
         gOHM = IgOHM(gohm_);
         DAI = ERC20(dai_);
@@ -99,7 +99,7 @@ contract Pohm is IPohm, Policy, RolesConsumer {
     //                                       CORE FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @inheritdoc IPohm
+    /// @inheritdoc IPOLY
     function claim(address to_, uint256 amount_) external {
         // Calculate OHM amount to mint based on DAI amount, current circulating supply, and previously claimed OHM
         uint256 ohmAmount = _claim(amount_);
@@ -115,16 +115,16 @@ contract Pohm is IPohm, Policy, RolesConsumer {
     //                                   MANAGEMENT FUNCTIONS                                     //
     //============================================================================================//
 
-    /// @inheritdoc IPohm
+    /// @inheritdoc IPOLY
     function pushWalletChange(address newAddress_) external {
-        if (terms[msg.sender].percent == 0) revert POHM_NoClaim();
+        if (terms[msg.sender].percent == 0) revert POLY_NoClaim();
         walletChange[msg.sender] = newAddress_;
         emit WalletChange(msg.sender, newAddress_, false);
     }
 
-    /// @inheritdoc IPohm
+    /// @inheritdoc IPOLY
     function pullWalletChange(address oldAddress_) external {
-        if (walletChange[oldAddress_] != msg.sender) revert POHM_NoWalletChange();
+        if (walletChange[oldAddress_] != msg.sender) revert POLY_NoWalletChange();
 
         walletChange[oldAddress_] = address(0);
 
@@ -141,7 +141,7 @@ contract Pohm is IPohm, Policy, RolesConsumer {
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
 
-    /// @inheritdoc IPohm
+    /// @inheritdoc IPOLY
     function redeemableFor(address account_) public view returns (uint256) {
         // Cache storage variables
         Term memory accountTerms = terms[account_];
@@ -158,7 +158,7 @@ contract Pohm is IPohm, Policy, RolesConsumer {
         return max - accountClaimed;
     }
 
-    /// @inheritdoc IPohm
+    /// @inheritdoc IPOLY
     function redeemableFor(Term memory accountTerms_) public view returns (uint256) {
         // Cache storage variables
         uint256 circulatingSupply = getCirculatingSupply();
@@ -173,23 +173,23 @@ contract Pohm is IPohm, Policy, RolesConsumer {
         return max - accountClaimed;
     }
 
-    /// @inheritdoc IPohm
+    /// @inheritdoc IPOLY
     function getCirculatingSupply() public view returns (uint256) {
         return OHM.totalSupply() - OHM.balanceOf(dao);
     }
 
-    /// @inheritdoc IPohm
+    /// @inheritdoc IPOLY
     function getAccountClaimed(address account_) public view returns (uint256) {
         Term memory accountTerms = terms[account_];
         return gOHM.balanceFrom(accountTerms.gClaimed);
     }
 
-    /// @inheritdoc IPohm
+    /// @inheritdoc IPOLY
     function getAccountClaimed(Term memory accountTerms_) public view returns (uint256) {
         return gOHM.balanceFrom(accountTerms_.gClaimed);
     }
 
-    /// @inheritdoc IPohm
+    /// @inheritdoc IPOLY
     function validateClaim(uint256 amount_, Term memory accountTerms_)
         public
         view
@@ -201,9 +201,9 @@ contract Pohm is IPohm, Policy, RolesConsumer {
         // Make sure user isn't violating claim terms
         uint256 redeemable = redeemableFor(accountTerms_);
         uint256 claimed = getAccountClaimed(accountTerms_);
-        if (redeemable < toSend) revert POHM_ClaimMoreThanVested(redeemable);
+        if (redeemable < toSend) revert POLY_ClaimMoreThanVested(redeemable);
         if ((accountTerms_.max - claimed) < toSend)
-            revert POHM_ClaimMoreThanMax(accountTerms_.max - claimed);
+            revert POLY_ClaimMoreThanMax(accountTerms_.max - claimed);
 
         return toSend;
     }
@@ -212,8 +212,8 @@ contract Pohm is IPohm, Policy, RolesConsumer {
     //                                       ADMIN FUNCTIONS                                      //
     //============================================================================================//
 
-    /// @inheritdoc IPohm
-    function migrate(address[] calldata accounts_) external onlyRole("pohm_admin") {
+    /// @inheritdoc IPOLY
+    function migrate(address[] calldata accounts_) external onlyRole("poly_admin") {
         uint256 length = accounts_.length;
         for (uint256 i; i < length; ) {
             Term memory accountTerm = previous.terms(accounts_[i]);
@@ -225,15 +225,15 @@ contract Pohm is IPohm, Policy, RolesConsumer {
         }
     }
 
-    /// @inheritdoc IPohm
+    /// @inheritdoc IPOLY
     function setTerms(
         address account_,
         uint256 percent_,
         uint256 gClaimed_,
         uint256 max_
-    ) public onlyRole("pohm_admin") {
-        if (terms[account_].percent != 0) revert POHM_AlreadyHasClaim();
-        if (totalAllocated + percent_ > maximumAllocated) revert POHM_AllocationLimitViolation();
+    ) public onlyRole("poly_admin") {
+        if (terms[account_].percent != 0) revert POLY_AlreadyHasClaim();
+        if (totalAllocated + percent_ > maximumAllocated) revert POLY_AllocationLimitViolation();
 
         terms[account_] = Term(percent_, gClaimed_, max_);
         totalAllocated += percent_;

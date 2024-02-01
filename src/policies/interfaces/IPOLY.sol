@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0;
 
-interface IPohm {
+interface IPOLY {
     // ========= ERRORS ========= //
 
-    error POHM_NoClaim();
-    error POHM_AlreadyHasClaim();
-    error POHM_NoWalletChange();
-    error POHM_AllocationLimitViolation();
-    error POHM_ClaimMoreThanVested(uint256 vested_);
-    error POHM_ClaimMoreThanMax(uint256 max_);
+    error POLY_NoClaim();
+    error POLY_AlreadyHasClaim();
+    error POLY_NoWalletChange();
+    error POLY_AllocationLimitViolation();
+    error POLY_ClaimMoreThanVested(uint256 vested_);
+    error POLY_ClaimMoreThanMax(uint256 max_);
 
     // ========= EVENTS ========= //
 
@@ -99,13 +99,13 @@ interface IPohm {
     //                                       ADMIN FUNCTIONS                                      //
     //============================================================================================//
 
-    /// @notice Migrates claim data from old pOHM contracts to this one
-    /// @notice Can only be called by the pohm_admin role
+    /// @notice Migrates claim data from old pOLY contracts to this one
+    /// @notice Can only be called by the poly_admin role
     /// @param  accounts_ Array of accounts to migrate
     function migrate(address[] calldata accounts_) external;
 
     /// @notice Sets the claim terms for an account
-    /// @notice Can only be called by the pohm_admin role
+    /// @notice Can only be called by the poly_admin role
     /// @param  account_ The account to set the terms for
     /// @param  percent_ The percent of the circulating supply the account is entitled to
     /// @param  gClaimed_ The amount of gOHM the account has claimed
@@ -118,6 +118,6 @@ interface IPohm {
     ) external;
 }
 
-interface IPreviousPohm {
-    function terms(address account_) external view returns (IPohm.Term memory);
+interface IPreviousPOLY {
+    function terms(address account_) external view returns (IPOLY.Term memory);
 }

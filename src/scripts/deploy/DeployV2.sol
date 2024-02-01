@@ -44,7 +44,7 @@ import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 import {IBLVaultManagerLido} from "policies/BoostedLiquidity/interfaces/IBLVaultManagerLido.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
-import {Pohm} from "policies/Pohm.sol";
+import {pOLY} from "policies/pOLY.sol";
 
 import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
 
@@ -88,7 +88,7 @@ contract OlympusDeploy is Script {
     BLVaultManagerLusd public lusdVaultManager;
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
-    Pohm public pohm;
+    pOLY public poly;
 
     /// Construction variables
 
@@ -118,7 +118,7 @@ contract OlympusDeploy is Script {
     /// External contracts
     address public staking;
     address public gnosisEasyAuction;
-    address public previousPohm;
+    address public previousPoly;
     ClaimTransfer public claimTransfer;
 
     /// Balancer Contracts
@@ -168,7 +168,7 @@ contract OlympusDeploy is Script {
         selectorMap["CrossChainBridge"] = this._deployCrossChainBridge.selector;
         selectorMap["BLVaultLusd"] = this._deployBLVaultLusd.selector;
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
-        selectorMap["Pohm"] = this._deployPohm.selector;
+        selectorMap["pOLY"] = this._deployPoly.selector;
         selectorMap["ClaimTransfer"] = this._deployClaimTransfer.selector;
 
         // Load environment addresses
@@ -200,7 +200,7 @@ contract OlympusDeploy is Script {
         );
         staking = envAddress("olympus.legacy.Staking");
         gnosisEasyAuction = envAddress("external.gnosis.EasyAuction");
-        previousPohm = envAddress("olympus.legacy.OldPohm");
+        previousPoly = envAddress("olympus.legacy.OldPOLY");
         balancerVault = IVault(envAddress("external.balancer.BalancerVault"));
         balancerHelper = IBalancerHelper(envAddress("external.balancer.BalancerHelper"));
         ohmWstethPool = IBasePool(envAddress("external.balancer.OhmWstethPool"));
@@ -236,16 +236,18 @@ contract OlympusDeploy is Script {
         bridge = CrossChainBridge(envAddress("olympus.policies.CrossChainBridge"));
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
-        pohm = Pohm(envAddress("olympus.policies.POHM"));
-        claimTransfer = ClaimTransfer(envAddress("external.olympus.ClaimTransfer"));
+        poly = pOLY(envAddress("olympus.policies.pOLY"));
+        claimTransfer = ClaimTransfer(envAddress("olympus.claim.ClaimTransfer"));
 
         // Load deployment data
-        string memory data = vm.readFile("./src/scripts/deploy/deploy.json");
+        string memory data = vm.readFile("./src/scripts/deploy/savedDeployments/deploy_poly.json");
+        console2.log("Read file");
 
         // Parse deployment sequence and names
         // string[] memory names = abi.decode(data.parseRaw(".sequence..name"), (string[]));
-        string[] memory names = new string[](1);
-        names[0] = "Pohm";
+        string[] memory names = new string[](2);
+        names[0] = "pOLY";
+        names[1] = "ClaimTransfer";
         uint256 len = names.length;
 
         // Iterate through deployment sequence and set deployment args
@@ -784,32 +786,46 @@ contract OlympusDeploy is Script {
         return address(bridge);
     }
 
-    function _deployPohm(bytes memory args) public returns (address) {
-        // Decode arguments for pOHM policy
+    function _deployPoly(bytes memory args) public returns (address) {
+        // Decode arguments for pOLY policy
         (address dao, uint256 maximumAllocated) = abi.decode(args, (address, uint256));
 
-        // Deploy pOHM policy
+        console2.log("kernel", address(kernel));
+        console2.log("previousPoly", address(previousPoly));
+        console2.log("ohm", address(ohm));
+        console2.log("gohm", address(gohm));
+        console2.log("reserve", address(reserve));
+        console2.log("dao", dao);
+        console2.log("maximumAllocated", maximumAllocated);
+
+        // Deploy pOLY policy
         vm.broadcast();
-        pohm = new Pohm(
+        poly = new pOLY(
             kernel,
-            previousPohm,
+            previousPoly,
             address(ohm),
             address(gohm),
             address(reserve),
             dao,
             maximumAllocated
         );
-        console2.log("pOHM deployed at:", address(pohm));
+        console2.log("pOLY deployed at:", address(poly));
 
-        return address(pohm);
+        return address(poly);
     }
 
     function _deployClaimTransfer(bytes memory args) public returns (address) {
         // Doesn't need extra args
+
+        console2.log("poly", address(poly));
+        console2.log("ohm", address(ohm));
+        console2.log("reserve", address(reserve));
+        console2.log("gohm", address(gohm));
+        
         // Deploy ClaimTransfer contract
         vm.broadcast();
         claimTransfer = new ClaimTransfer(
-            address(pohm),
+            address(poly),
             address(ohm),
             address(reserve),
             address(gohm)

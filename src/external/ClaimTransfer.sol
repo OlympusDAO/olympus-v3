@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 // Import dependencies
-import {IPohm} from "policies/interfaces/IPohm.sol";
+import {IPOLY} from "policies/interfaces/IPOLY.sol";
 import {IgOHM} from "interfaces/IgOHM.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
@@ -10,7 +10,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
 /// @title Olympus Claim Transfer Contract
-/// @dev This contract is used to fractionalize pOHM claims and transfer portions of a user's claim to other addresses
+/// @dev This contract is used to fractionalize pOLY claims and transfer portions of a user's claim to other addresses
 contract ClaimTransfer {
     using TransferHelper for ERC20;
 
@@ -29,7 +29,7 @@ contract ClaimTransfer {
     // ========= STATE VARIABLES ========= //
 
     // Olympus Contracts
-    IPohm public pohm;
+    IPOLY public pOLY;
 
     // Tokens
     ERC20 public OHM;
@@ -41,47 +41,47 @@ contract ClaimTransfer {
     mapping(address => mapping(address => uint256)) public allowance;
 
     constructor(
-        address pohm_,
+        address poly_,
         address ohm_,
         address dai_,
         address gohm_
     ) {
-        pohm = IPohm(pohm_);
+        pOLY = IPOLY(poly_);
         OHM = ERC20(ohm_);
         DAI = ERC20(dai_);
         gOHM = IgOHM(gohm_);
 
-        // Approve pohm to spend DAI
-        DAI.approve(pohm_, type(uint256).max);
+        // Approve pOLY to spend DAI
+        DAI.approve(poly_, type(uint256).max);
     }
 
     // ========= CORE FUNCTIONS ========= //
 
-    /// @notice Convert pOHM claim that can only be fully transfered to a new wallet to a fractionalized claim
+    /// @notice Convert pOLY claim that can only be fully transfered to a new wallet to a fractionalized claim
     function fractionalizeClaim() external {
-        (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(msg.sender);
+        (uint256 percent, uint256 gClaimed, uint256 max) = pOLY.terms(msg.sender);
         fractionalizedTerms[msg.sender] = Term(percent, gClaimed, max);
 
-        pohm.pullWalletChange(msg.sender);
+        pOLY.pullWalletChange(msg.sender);
     }
 
-    /// @notice Claim OHM from the pOHM contract via your fractionalized claim
-    /// @param amount_ Amount of DAI to send to the pOHM contract
+    /// @notice Claim OHM from the pOLY contract via your fractionalized claim
+    /// @param amount_ Amount of DAI to send to the pOLY contract
     function claim(uint256 amount_) external {
         uint256 toSend = (amount_ * 1e9) / 1e18;
 
         // Get fractionalized terms and validate claim
         Term memory terms = fractionalizedTerms[msg.sender];
-        pohm.validateClaim(
+        pOLY.validateClaim(
             amount_,
-            IPohm.Term({percent: terms.percent, gClaimed: terms.gClaimed, max: terms.max})
+            IPOLY.Term({percent: terms.percent, gClaimed: terms.gClaimed, max: terms.max})
         );
 
         // Update fractionalized terms
         fractionalizedTerms[msg.sender].gClaimed += gOHM.balanceTo(toSend);
 
         DAI.transferFrom(msg.sender, address(this), amount_);
-        pohm.claim(msg.sender, amount_);
+        pOLY.claim(msg.sender, amount_);
     }
 
     // ========= TRANSFER FUNCTIONS ========= //

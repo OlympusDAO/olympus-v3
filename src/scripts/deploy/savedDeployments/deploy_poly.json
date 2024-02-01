@@ -1,10 +1,10 @@
 {
     "sequence": [
         {
-            "name": "Pohm",
+            "name": "pOLY",
             "args": {
-                "dao": "0x84C0C005cF574D0e5C602EA7b366aE9c707381E0",
-                "maximumAllocated": 100000
+                "dao": "0x245cc372C84B3645Bf0Ffe6538620B04a217988B",
+                "maximumAllocated": 40000
             }
         },
         {

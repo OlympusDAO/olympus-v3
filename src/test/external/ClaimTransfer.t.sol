@@ -12,11 +12,11 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {Pohm} from "policies/Pohm.sol";
+import {pOLY} from "policies/pOLY.sol";
 import {ClaimTransfer} from "src/external/ClaimTransfer.sol";
 import "src/Kernel.sol";
 
-import {IPohm} from "policies/interfaces/IPohm.sol";
+import {IPOLY} from "policies/interfaces/IPOLY.sol";
 import {IgOHM} from "interfaces/IgOHM.sol";
 
 // Mock gOHM
@@ -51,7 +51,7 @@ contract ClaimTransferTest is Test {
     OlympusRoles internal roles;
 
     RolesAdmin internal rolesAdmin;
-    Pohm internal pohm;
+    pOLY internal poly;
 
     ClaimTransfer internal claimTransfer;
 
@@ -83,7 +83,7 @@ contract ClaimTransferTest is Test {
 
         // Deploy policies
         {
-            pohm = new Pohm(
+            poly = new pOLY(
                 kernel,
                 address(0),
                 address(ohm),
@@ -98,7 +98,7 @@ contract ClaimTransferTest is Test {
         // Deploy claim transfer
         {
             claimTransfer = new ClaimTransfer(
-                address(pohm),
+                address(poly),
                 address(ohm),
                 address(dai),
                 address(gohm)
@@ -113,13 +113,13 @@ contract ClaimTransferTest is Test {
             kernel.executeAction(Actions.InstallModule, address(roles));
 
             // Activate policies
-            kernel.executeAction(Actions.ActivatePolicy, address(pohm));
+            kernel.executeAction(Actions.ActivatePolicy, address(poly));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
 
         // Set roles
         {
-            rolesAdmin.grantRole("pohm_admin", address(this));
+            rolesAdmin.grantRole("poly_admin", address(this));
         }
 
         // Other setup
@@ -127,8 +127,8 @@ contract ClaimTransferTest is Test {
             dai.mint(alice, 10_000_000e18);
             dai.mint(bob, 10_000_000e18);
 
-            pohm.setTerms(alice, 10_000, 0, 100_000e9);
-            pohm.setTerms(bob, 10_000, 0, 100_000e9);
+            poly.setTerms(alice, 10_000, 0, 100_000e9);
+            poly.setTerms(bob, 10_000, 0, 100_000e9);
 
             ohm.mint(address(0), 100_000_000e9);
         }
@@ -146,7 +146,7 @@ contract ClaimTransferTest is Test {
     function testCorrectness_fractionalizeClaimRevertsIfUserHasNoClaim(address user_) public {
         vm.assume(user_ != alice && user_ != bob);
 
-        bytes memory err = abi.encodeWithSignature("POHM_NoWalletChange()");
+        bytes memory err = abi.encodeWithSignature("POLY_NoWalletChange()");
         vm.expectRevert(err);
 
         vm.prank(user_);
@@ -154,7 +154,7 @@ contract ClaimTransferTest is Test {
     }
 
     function testCorrectness_cannotFractionalizeWithoutPushingWalletChange() public {
-        bytes memory err = abi.encodeWithSignature("POHM_NoWalletChange()");
+        bytes memory err = abi.encodeWithSignature("POLY_NoWalletChange()");
         vm.expectRevert(err);
 
         vm.prank(alice);
@@ -168,7 +168,7 @@ contract ClaimTransferTest is Test {
         assertEq(max, 0);
 
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
 
         claimTransfer.fractionalizeClaim();
         vm.stopPrank();
@@ -195,7 +195,7 @@ contract ClaimTransferTest is Test {
         vm.startPrank(user_);
         dai.approve(address(claimTransfer), 1_000e18);
 
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 0);
+        bytes memory err = abi.encodeWithSignature("POLY_ClaimMoreThanVested(uint256)", 0);
         vm.expectRevert(err);
 
         claimTransfer.claim(1_000e18);
@@ -204,13 +204,13 @@ contract ClaimTransferTest is Test {
 
     function testCorrectness_claimRevertsIfClaimMoreThanVested() public {
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
 
         claimTransfer.fractionalizeClaim();
 
         dai.approve(address(claimTransfer), 250_000e18);
 
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 100_000e9);
+        bytes memory err = abi.encodeWithSignature("POLY_ClaimMoreThanVested(uint256)", 100_000e9);
         vm.expectRevert(err);
 
         claimTransfer.claim(250_000e18);
@@ -219,7 +219,7 @@ contract ClaimTransferTest is Test {
 
     function testCorrectness_claimRevertsIfClaimMoreThanMax() public {
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
 
         claimTransfer.fractionalizeClaim();
 
@@ -228,7 +228,7 @@ contract ClaimTransferTest is Test {
         // Set circulating supply to be massive
         ohm.mint(address(0), 100_000_000_000e9);
 
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 100_000e9);
+        bytes memory err = abi.encodeWithSignature("POLY_ClaimMoreThanVested(uint256)", 100_000e9);
         vm.expectRevert(err);
 
         claimTransfer.claim(100_001e18);
@@ -237,7 +237,7 @@ contract ClaimTransferTest is Test {
 
     function testCorrectness_claimIncreasesGClaimed() public {
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
 
         claimTransfer.fractionalizeClaim();
 
@@ -256,7 +256,7 @@ contract ClaimTransferTest is Test {
         assertEq(dai.balanceOf(alice), 10_000_000e18);
 
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
 
         claimTransfer.fractionalizeClaim();
 
@@ -272,7 +272,7 @@ contract ClaimTransferTest is Test {
         assertEq(ohm.balanceOf(alice), 0);
 
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
 
         claimTransfer.fractionalizeClaim();
 
@@ -324,7 +324,7 @@ contract ClaimTransferTest is Test {
 
     function testCorrectness_transferCannotTransferMoreThanPercent() public {
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
         vm.stopPrank();
 
@@ -342,7 +342,7 @@ contract ClaimTransferTest is Test {
         // amount of 50000 OHM. The sender's fractionalized claim is updated to reflect the transfer.
 
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
 
         dai.approve(address(claimTransfer), 10_000e18);
@@ -373,7 +373,7 @@ contract ClaimTransferTest is Test {
 
     function testCorrectness_transferCannotTransferMoreThanUnclaimedPortionOfMax() public {
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
 
         dai.approve(address(claimTransfer), 10_000e18);
@@ -391,7 +391,7 @@ contract ClaimTransferTest is Test {
 
         // Alice claims 50k OHM (max for given circulating supply)
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
 
         dai.approve(address(claimTransfer), 50_000e18);
@@ -405,7 +405,7 @@ contract ClaimTransferTest is Test {
         vm.startPrank(bob);
         dai.approve(address(claimTransfer), 251e18);
 
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 250e9);
+        bytes memory err = abi.encodeWithSignature("POLY_ClaimMoreThanVested(uint256)", 250e9);
         vm.expectRevert(err);
 
         claimTransfer.claim(251e18);
@@ -414,7 +414,7 @@ contract ClaimTransferTest is Test {
 
     function testCorrectness_transferUpdatesFractionalizedTerms() public {
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
         vm.stopPrank();
 
@@ -435,7 +435,7 @@ contract ClaimTransferTest is Test {
 
     function testCorrectness_transferReturnsTrue() public {
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
         assertEq(claimTransfer.transfer(bob, 1_000), true);
         vm.stopPrank();
@@ -452,7 +452,7 @@ contract ClaimTransferTest is Test {
 
     function testCorrectness_transferFromCannotBeCalledWithoutAllowance() public {
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
         vm.stopPrank();
 
@@ -463,7 +463,7 @@ contract ClaimTransferTest is Test {
 
     function testCorrectness_transferFromCannotTransferMoreThanPercent() public {
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
         claimTransfer.approve(address(this), 100_000);
         vm.stopPrank();
@@ -479,7 +479,7 @@ contract ClaimTransferTest is Test {
         // Their max is now 45000 OHM.
 
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
 
         dai.approve(address(claimTransfer), 10_000e18);
@@ -512,7 +512,7 @@ contract ClaimTransferTest is Test {
 
     function testCorrectness_transferFromCannotTransferMoreThanUnclaimedPortionOfMax() public {
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
         claimTransfer.approve(address(this), 10_000);
 
@@ -530,7 +530,7 @@ contract ClaimTransferTest is Test {
 
         // Alice claims 50k OHM (max for given circulating supply)
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
 
         dai.approve(address(claimTransfer), 50_000e18);
@@ -546,7 +546,7 @@ contract ClaimTransferTest is Test {
         vm.startPrank(bob);
         dai.approve(address(claimTransfer), 251e18);
 
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 250e9);
+        bytes memory err = abi.encodeWithSignature("POLY_ClaimMoreThanVested(uint256)", 250e9);
         vm.expectRevert(err);
 
         claimTransfer.claim(251e18);
@@ -555,7 +555,7 @@ contract ClaimTransferTest is Test {
 
     function testCorrectness_transferFromUpdatesFractionalizedTerms() public {
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
         claimTransfer.approve(address(this), 1_000);
         vm.stopPrank();
@@ -575,7 +575,7 @@ contract ClaimTransferTest is Test {
 
     function testCorrectness_transferFromReturnsTrue() public {
         vm.startPrank(alice);
-        pohm.pushWalletChange(address(claimTransfer));
+        poly.pushWalletChange(address(claimTransfer));
         claimTransfer.fractionalizeClaim();
         claimTransfer.approve(address(this), 1_000);
         vm.stopPrank();

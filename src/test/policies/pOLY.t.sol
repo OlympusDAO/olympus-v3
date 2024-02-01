@@ -11,7 +11,7 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {Pohm} from "policies/Pohm.sol";
+import {pOLY} from "policies/pOLY.sol";
 import "src/Kernel.sol";
 
 import {IgOHM} from "interfaces/IgOHM.sol";
@@ -32,7 +32,7 @@ contract MockGohm is IgOHM {
 }
 
 // solhint-disable-next-line max-states-count
-contract PohmTest is Test {
+contract pOLYTest is Test {
     UserFactory public userCreator;
     address internal alice;
     address internal bob;
@@ -48,8 +48,8 @@ contract PohmTest is Test {
     OlympusRoles internal roles;
 
     RolesAdmin internal rolesAdmin;
-    Pohm internal previous;
-    Pohm internal pohm;
+    pOLY internal previous;
+    pOLY internal poly;
 
     function setUp() public {
         userCreator = new UserFactory();
@@ -79,7 +79,7 @@ contract PohmTest is Test {
 
         // Deploy policies
         {
-            previous = new Pohm(
+            previous = new pOLY(
                 kernel,
                 address(0),
                 address(ohm),
@@ -88,7 +88,7 @@ contract PohmTest is Test {
                 address(this),
                 100_000
             );
-            pohm = new Pohm(
+            poly = new pOLY(
                 kernel,
                 address(previous),
                 address(ohm),
@@ -109,13 +109,13 @@ contract PohmTest is Test {
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(previous));
-            kernel.executeAction(Actions.ActivatePolicy, address(pohm));
+            kernel.executeAction(Actions.ActivatePolicy, address(poly));
             kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         }
 
         // Set roles
         {
-            rolesAdmin.grantRole("pohm_admin", address(this));
+            rolesAdmin.grantRole("poly_admin", address(this));
         }
 
         // Arbitrary setup
@@ -123,8 +123,8 @@ contract PohmTest is Test {
             dai.mint(address(alice), 10_000_000e18);
             dai.mint(address(bob), 10_000_000e18);
 
-            pohm.setTerms(alice, 10_000, 0, 100_000e9);
-            pohm.setTerms(bob, 10_000, 0, 100_000e9);
+            poly.setTerms(alice, 10_000, 0, 100_000e9);
+            poly.setTerms(bob, 10_000, 0, 100_000e9);
 
             // Set OHM circulating supply
             ohm.mint(address(0), 100_000_000e9);
@@ -149,58 +149,58 @@ contract PohmTest is Test {
         dai.mint(user_, 1000e18);
 
         vm.startPrank(user_);
-        dai.approve(address(pohm), 1000e18);
+        dai.approve(address(poly), 1000e18);
 
-        bytes memory err = abi.encodeWithSignature("POHM_ClaimMoreThanVested(uint256)", 0);
+        bytes memory err = abi.encodeWithSignature("POLY_ClaimMoreThanVested(uint256)", 0);
         vm.expectRevert(err);
 
-        pohm.claim(user_, 100e18);
+        poly.claim(user_, 100e18);
         vm.stopPrank();
     }
 
     function test_claimRevertsIfClaimMoreThanVested() public {
         vm.startPrank(alice);
 
-        dai.approve(address(pohm), 2_500_000e18); // 2.5%
+        dai.approve(address(poly), 2_500_000e18); // 2.5%
 
         bytes memory err = abi.encodeWithSignature(
-            "POHM_ClaimMoreThanVested(uint256)",
+            "POLY_ClaimMoreThanVested(uint256)",
             100000000000000
         );
         vm.expectRevert(err);
 
-        pohm.claim(alice, 2_500_000e18);
+        poly.claim(alice, 2_500_000e18);
         vm.stopPrank();
     }
 
     function test_claimRevertsIfClaimMoreThanAccountMax() public {
         vm.startPrank(alice);
 
-        dai.approve(address(pohm), 150_000e18);
+        dai.approve(address(poly), 150_000e18);
 
-        // TODO revise, this is actually caught by redeemableFor and the ensuing POHM_ClaimMoreThanVested error
+        // TODO revise, this is actually caught by redeemableFor and the ensuing POLY_ClaimMoreThanVested error
         bytes memory err = abi.encodeWithSignature(
-            "POHM_ClaimMoreThanVested(uint256)",
+            "POLY_ClaimMoreThanVested(uint256)",
             100000000000000
         );
         vm.expectRevert(err);
 
-        pohm.claim(alice, 150_000e18);
+        poly.claim(alice, 150_000e18);
         vm.stopPrank();
     }
 
     function test_claimIncreasesUsersGohmClaimedValue() public {
         vm.startPrank(alice);
 
-        dai.approve(address(pohm), 100_000e18);
+        dai.approve(address(poly), 100_000e18);
 
         // Check gOHM claimed before
-        (, uint256 gClaimed, ) = pohm.terms(alice);
+        (, uint256 gClaimed, ) = poly.terms(alice);
         assertEq(gClaimed, 0);
 
-        pohm.claim(alice, 100_000e18);
+        poly.claim(alice, 100_000e18);
 
-        (, gClaimed, ) = pohm.terms(alice);
+        (, gClaimed, ) = poly.terms(alice);
         assertEq(gClaimed, 1000e18);
         vm.stopPrank();
     }
@@ -208,13 +208,13 @@ contract PohmTest is Test {
     function test_claimTransfersDaiFromUser() public {
         vm.startPrank(alice);
 
-        dai.approve(address(pohm), 100_000e18);
+        dai.approve(address(poly), 100_000e18);
 
         // Check gOHM claimed before
         uint256 daiBalance = dai.balanceOf(alice);
         assertEq(daiBalance, 10_000_000e18);
 
-        pohm.claim(alice, 100_000e18);
+        poly.claim(alice, 100_000e18);
 
         daiBalance = dai.balanceOf(alice);
         assertEq(daiBalance, 9_900_000e18);
@@ -224,13 +224,13 @@ contract PohmTest is Test {
     function test_claimMintsOhmToUser() public {
         vm.startPrank(alice);
 
-        dai.approve(address(pohm), 100_000e18);
+        dai.approve(address(poly), 100_000e18);
 
         // Check gOHM claimed before
         uint256 ohmBalance = ohm.balanceOf(alice);
         assertEq(ohmBalance, 0);
 
-        pohm.claim(alice, 100_000e18);
+        poly.claim(alice, 100_000e18);
 
         ohmBalance = ohm.balanceOf(alice);
         assertEq(ohmBalance, 100_000e9);
@@ -250,10 +250,10 @@ contract PohmTest is Test {
 
         vm.startPrank(user_);
 
-        bytes memory err = abi.encodeWithSignature("POHM_NoClaim()");
+        bytes memory err = abi.encodeWithSignature("POLY_NoClaim()");
         vm.expectRevert(err);
 
-        pohm.pushWalletChange(bob);
+        poly.pushWalletChange(bob);
         vm.stopPrank();
     }
 
@@ -261,12 +261,12 @@ contract PohmTest is Test {
         vm.startPrank(alice);
 
         // Check wallet change before
-        address newWallet = pohm.walletChange(alice);
+        address newWallet = poly.walletChange(alice);
         assertEq(newWallet, address(0));
 
-        pohm.pushWalletChange(bob);
+        poly.pushWalletChange(bob);
 
-        newWallet = pohm.walletChange(alice);
+        newWallet = poly.walletChange(alice);
         assertEq(newWallet, bob);
         vm.stopPrank();
     }
@@ -277,32 +277,32 @@ contract PohmTest is Test {
     ///     [X]  sets the wallet change to the zero address
     ///     [X]  copies terms from old wallet to new wallet
     ///     [X]  deletes terms for old wallet
-    ///     []  old wallet can no longer claim
+    ///     [X]  old wallet can no longer claim
 
     function test_pullWalletCannotBeCalledByUnflaggedWallet(address user_) public {
         vm.assume(user_ != address(0));
         vm.startPrank(user_);
 
-        bytes memory err = abi.encodeWithSignature("POHM_NoWalletChange()");
+        bytes memory err = abi.encodeWithSignature("POLY_NoWalletChange()");
         vm.expectRevert(err);
 
-        pohm.pullWalletChange(alice);
+        poly.pullWalletChange(alice);
         vm.stopPrank();
     }
 
     function test_pullWalletAddsToUsersTerms() public {
         vm.prank(alice);
-        pohm.pushWalletChange(bob);
+        poly.pushWalletChange(bob);
 
-        (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(bob);
+        (uint256 percent, uint256 gClaimed, uint256 max) = poly.terms(bob);
         assertEq(percent, 10_000);
         assertEq(gClaimed, 0);
         assertEq(max, 100_000e9);
 
         vm.prank(bob);
-        pohm.pullWalletChange(alice);
+        poly.pullWalletChange(alice);
 
-        (percent, gClaimed, max) = pohm.terms(bob);
+        (percent, gClaimed, max) = poly.terms(bob);
         assertEq(percent, 20_000);
         assertEq(gClaimed, 0);
         assertEq(max, 200_000e9);
@@ -312,15 +312,15 @@ contract PohmTest is Test {
         vm.assume(newWallet_ != alice && newWallet_ != bob);
 
         vm.prank(alice);
-        pohm.pushWalletChange(newWallet_);
+        poly.pushWalletChange(newWallet_);
 
-        address newWallet = pohm.walletChange(alice);
+        address newWallet = poly.walletChange(alice);
         assertEq(newWallet, newWallet_);
 
         vm.prank(newWallet_);
-        pohm.pullWalletChange(alice);
+        poly.pullWalletChange(alice);
 
-        newWallet = pohm.walletChange(alice);
+        newWallet = poly.walletChange(alice);
         assertEq(newWallet, address(0));
     }
 
@@ -328,14 +328,14 @@ contract PohmTest is Test {
         vm.assume(newWallet_ != alice && newWallet_ != bob);
 
         vm.prank(alice);
-        pohm.pushWalletChange(newWallet_);
+        poly.pushWalletChange(newWallet_);
 
-        (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(alice);
+        (uint256 percent, uint256 gClaimed, uint256 max) = poly.terms(alice);
         assertEq(percent, 10_000);
         assertEq(gClaimed, 0);
         assertEq(max, 100_000e9);
 
-        (uint256 newWalletPercent, uint256 newWalletGClaimed, uint256 newWalletMax) = pohm.terms(
+        (uint256 newWalletPercent, uint256 newWalletGClaimed, uint256 newWalletMax) = poly.terms(
             newWallet_
         );
         assertEq(newWalletPercent, 0);
@@ -343,9 +343,9 @@ contract PohmTest is Test {
         assertEq(newWalletMax, 0);
 
         vm.prank(newWallet_);
-        pohm.pullWalletChange(alice);
+        poly.pullWalletChange(alice);
 
-        (newWalletPercent, newWalletGClaimed, newWalletMax) = pohm.terms(newWallet_);
+        (newWalletPercent, newWalletGClaimed, newWalletMax) = poly.terms(newWallet_);
         assertEq(newWalletPercent, 10_000);
         assertEq(newWalletGClaimed, 0);
         assertEq(newWalletMax, 100_000e9);
@@ -355,17 +355,17 @@ contract PohmTest is Test {
         vm.assume(newWallet_ != alice && newWallet_ != bob);
 
         vm.prank(alice);
-        pohm.pushWalletChange(newWallet_);
+        poly.pushWalletChange(newWallet_);
 
-        (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(alice);
+        (uint256 percent, uint256 gClaimed, uint256 max) = poly.terms(alice);
         assertEq(percent, 10_000);
         assertEq(gClaimed, 0);
         assertEq(max, 100_000e9);
 
         vm.prank(newWallet_);
-        pohm.pullWalletChange(alice);
+        poly.pullWalletChange(alice);
 
-        (percent, gClaimed, max) = pohm.terms(alice);
+        (percent, gClaimed, max) = poly.terms(alice);
         assertEq(percent, 0);
         assertEq(gClaimed, 0);
         assertEq(max, 0);
@@ -375,21 +375,21 @@ contract PohmTest is Test {
         vm.assume(newWallet_ != alice && newWallet_ != bob);
 
         vm.prank(alice);
-        pohm.pushWalletChange(newWallet_);
+        poly.pushWalletChange(newWallet_);
 
         vm.prank(newWallet_);
-        pohm.pullWalletChange(alice);
+        poly.pullWalletChange(alice);
 
         vm.startPrank(alice);
-        dai.approve(address(pohm), 100_000e18);
+        dai.approve(address(poly), 100_000e18);
 
         bytes memory err = abi.encodeWithSignature(
-            "POHM_ClaimMoreThanVested(uint256)",
+            "POLY_ClaimMoreThanVested(uint256)",
             0
         );
         vm.expectRevert(err);
 
-        pohm.claim(alice, 100_000e18);
+        poly.claim(alice, 100_000e18);
         vm.stopPrank();
     }
 
@@ -398,15 +398,15 @@ contract PohmTest is Test {
     //============================================================================================//
 
     /// [X]  migrate
-    ///     [X]  can only be called by address with pohm_admin role
-    ///     [X]  copies terms from previous pOHM contract
+    ///     [X]  can only be called by address with poly_admin role
+    ///     [X]  copies terms from previous pOLY contract
 
-    function test_migrateCanOnlyBeCalledByPohmAdmin(address user_) public {
+    function test_migrateCanOnlyBeCalledByPolyAdmin(address user_) public {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
-            bytes32("pohm_admin")
+            bytes32("poly_admin")
         );
         vm.expectRevert(err);
 
@@ -414,10 +414,10 @@ contract PohmTest is Test {
         users[0] = alice;
 
         vm.prank(user_);
-        pohm.migrate(users);
+        poly.migrate(users);
     }
 
-    function test_migrateCopiesTermsFromPreviousPohmContract(address migratedUser_) public {
+    function test_migrateCopiesTermsFromPreviousPolyContract(address migratedUser_) public {
         vm.assume(migratedUser_ != alice && migratedUser_ != bob);
 
         previous.setTerms(migratedUser_, 10_000, 0, 100_000e9);
@@ -427,7 +427,7 @@ contract PohmTest is Test {
         assertEq(gClaimed, 0);
         assertEq(max, 100_000e9);
 
-        (uint256 newPercent, uint256 newGClaimed, uint256 newMax) = pohm.terms(migratedUser_);
+        (uint256 newPercent, uint256 newGClaimed, uint256 newMax) = poly.terms(migratedUser_);
         assertEq(newPercent, 0);
         assertEq(newGClaimed, 0);
         assertEq(newMax, 0);
@@ -435,61 +435,61 @@ contract PohmTest is Test {
         address[] memory users = new address[](1);
         users[0] = migratedUser_;
 
-        pohm.migrate(users);
+        poly.migrate(users);
 
-        (newPercent, newGClaimed, newMax) = pohm.terms(migratedUser_);
+        (newPercent, newGClaimed, newMax) = poly.terms(migratedUser_);
         assertEq(newPercent, 10_000);
         assertEq(newGClaimed, 0);
         assertEq(newMax, 100_000e9);
     }
 
     /// [X]  setTerms
-    ///     [X]  can only be called by address with pohm_admin role
+    ///     [X]  can only be called by address with poly_admin role
     ///     [X]  can only set terms for account that has no current claim
     ///     [X]  cannot increase total allocation beyond max
     ///     [X]  sets terms for account
     ///     [X]  increases totalAllocated value
 
-    function test_setTermsCanOnlyBeCalledByPohmAdmin(address user_) public {
+    function test_setTermsCanOnlyBeCalledByPolyAdmin(address user_) public {
         vm.assume(user_ != address(this));
 
         bytes memory err = abi.encodeWithSelector(
             ROLESv1.ROLES_RequireRole.selector,
-            bytes32("pohm_admin")
+            bytes32("poly_admin")
         );
         vm.expectRevert(err);
 
         vm.prank(user_);
-        pohm.setTerms(alice, 10_000, 0, 100_000e9);
+        poly.setTerms(alice, 10_000, 0, 100_000e9);
     }
 
     function test_setTermsCanOnlySetTermsForAccountThatHasNoCurrentClaim() public {
-        bytes memory err = abi.encodeWithSignature("POHM_AlreadyHasClaim()");
+        bytes memory err = abi.encodeWithSignature("POLY_AlreadyHasClaim()");
         vm.expectRevert(err);
 
-        pohm.setTerms(alice, 10_000, 0, 100_000e9);
+        poly.setTerms(alice, 10_000, 0, 100_000e9);
     }
 
     function test_setTermsCannotIncreaseTotalAllocationBeyondMax(address user_) public {
         vm.assume(user_ != alice && user_ != bob);
 
-        bytes memory err = abi.encodeWithSignature("POHM_AllocationLimitViolation()");
+        bytes memory err = abi.encodeWithSignature("POLY_AllocationLimitViolation()");
         vm.expectRevert(err);
 
-        pohm.setTerms(user_, 100_000, 0, 100_000e9);
+        poly.setTerms(user_, 100_000, 0, 100_000e9);
     }
 
     function test_setTermsSetsTermsForAccount(address user_) public {
         vm.assume(user_ != alice && user_ != bob);
 
-        (uint256 percent, uint256 gClaimed, uint256 max) = pohm.terms(user_);
+        (uint256 percent, uint256 gClaimed, uint256 max) = poly.terms(user_);
         assertEq(percent, 0);
         assertEq(gClaimed, 0);
         assertEq(max, 0);
 
-        pohm.setTerms(user_, 10_000, 0, 100_000e9);
+        poly.setTerms(user_, 10_000, 0, 100_000e9);
 
-        (percent, gClaimed, max) = pohm.terms(user_);
+        (percent, gClaimed, max) = poly.terms(user_);
         assertEq(percent, 10_000);
         assertEq(gClaimed, 0);
         assertEq(max, 100_000e9);
@@ -498,12 +498,12 @@ contract PohmTest is Test {
     function test_setTermsIncreasesTotalAllocatedValue(address user_) public {
         vm.assume(user_ != alice && user_ != bob);
 
-        uint256 totalAllocated = pohm.totalAllocated();
+        uint256 totalAllocated = poly.totalAllocated();
         assertEq(totalAllocated, 20_000);
 
-        pohm.setTerms(user_, 10_000, 0, 100_000e9);
+        poly.setTerms(user_, 10_000, 0, 100_000e9);
 
-        totalAllocated = pohm.totalAllocated();
+        totalAllocated = poly.totalAllocated();
         assertEq(totalAllocated, 30_000);
     }
 
@@ -516,41 +516,41 @@ contract PohmTest is Test {
     /// [X]  getAccountClaimed
 
     function test_redeemableFor() public {
-        assertEq(pohm.redeemableFor(alice), 100_000e9);
+        assertEq(poly.redeemableFor(alice), 100_000e9);
 
         // Claim 10k
         vm.startPrank(alice);
-        dai.approve(address(pohm), 10_000e18);
-        pohm.claim(alice, 10_000e18);
+        dai.approve(address(poly), 10_000e18);
+        poly.claim(alice, 10_000e18);
         vm.stopPrank();
 
-        assertEq(pohm.redeemableFor(alice), 90_000e9);
+        assertEq(poly.redeemableFor(alice), 90_000e9);
     }
 
     function test_getCirculatingSupply() public {
-        assertEq(pohm.getCirculatingSupply(), 100_000_000e9);
+        assertEq(poly.getCirculatingSupply(), 100_000_000e9);
 
         vm.prank(address(0));
         ohm.transfer(address(this), 10_000_000e9);
 
-        assertEq(pohm.getCirculatingSupply(), 90_000_000e9);
+        assertEq(poly.getCirculatingSupply(), 90_000_000e9);
 
         ohm.mint(address(this), 10_000_000e9);
-        assertEq(pohm.getCirculatingSupply(), 90_000_000e9);
+        assertEq(poly.getCirculatingSupply(), 90_000_000e9);
 
         ohm.mint(address(0), 10_000_000e9);
-        assertEq(pohm.getCirculatingSupply(), 100_000_000e9);
+        assertEq(poly.getCirculatingSupply(), 100_000_000e9);
     }
 
     function test_getAccountClaimed() public {
-        assertEq(pohm.getAccountClaimed(alice), 0);
+        assertEq(poly.getAccountClaimed(alice), 0);
 
         // Claim 100k
         vm.startPrank(alice);
-        dai.approve(address(pohm), 10_000e18);
-        pohm.claim(alice, 10_000e18);
+        dai.approve(address(poly), 10_000e18);
+        poly.claim(alice, 10_000e18);
         vm.stopPrank();
 
-        assertEq(pohm.getAccountClaimed(alice), 10_000e9);
+        assertEq(poly.getAccountClaimed(alice), 10_000e9);
     }
 }
