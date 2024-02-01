@@ -386,10 +386,16 @@ contract OlympusSupply is SPPLYv1 {
     ///
     /// @dev        Will revert if:
     /// @dev        - The category is not approved
+    /// @dev        - The max age is 0 (as that would return a current value)
+    /// @dev        - The max age is >= the block timestamp
     function getSupplyByCategory(
         Category category_,
         uint48 maxAge_
     ) external view override returns (uint256) {
+        // Check that max age is valid
+        if (maxAge_ == 0) revert SPPLYv1.SPPLY_InvalidParams();
+        if (maxAge_ >= uint48(block.timestamp)) revert SPPLYv1.SPPLY_InvalidParams();
+
         // Try to use the last value, must be updated more recently than maxAge
         // getSupplyByCategory checks if category is approved
         (uint256 supply, uint48 timestamp) = getSupplyByCategory(category_, Variant.LAST);
@@ -621,7 +627,13 @@ contract OlympusSupply is SPPLYv1 {
     ///
     /// @dev        Will revert if:
     /// @dev        - The value for `metric_` is invalid
+    /// @dev        - The max age is 0 (as that would return a current value)
+    /// @dev        - The max age is >= the block timestamp
     function getMetric(Metric metric_, uint48 maxAge_) external view override returns (uint256) {
+        // Check that max age is valid
+        if (maxAge_ == 0) revert SPPLY_InvalidParams();
+        if (maxAge_ >= uint48(block.timestamp)) revert SPPLY_InvalidParams();
+
         // Get the cached value of the metric
         (uint256 value, uint48 timestamp) = getMetric(metric_, Variant.LAST);
 
