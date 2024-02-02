@@ -2882,14 +2882,107 @@ contract PriceV2Test is Test {
             obs, // uint256[] memory observations_
             PRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getAveragePrice.selector,
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds //
         );
     }
 
-    function testRevert_addAsset_multiplePriceFeeds_oneSubmoduleCallReturnsZero(uint256 nonce_) public {
+    function testRevert_addAsset_singlePriceFeed_movingAverage_submoduleCallReturnsZero(
+        uint256 nonce_
+    ) public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+        uint256[] memory obs = _makeRandomObservations(weth, feeds[0], nonce_, uint256(2));
+
+        // Mock the price feed to return 0
+        // The Chainlink price feed will revert upon a 0 price, so this circumvents that
+        vm.mockCall(
+            address(ohmUsdPriceFeed),
+            abi.encodeWithSelector(ChainlinkPriceFeeds.getOneFeedPrice.selector),
+            abi.encode(uint256(0))
+        );
+
+        // Try and add the asset
+        vm.startPrank(writer);
+
+        // Reverts as one price feed call will fail due to zero price
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_PriceFeedCallFailed.selector,
+            address(weth)
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(weth), // address asset_
+            true, // bool storeMovingAverage_
+            true, // bool useMovingAverage_
+            uint32(16 hours), // uint32 movingAverageDuration_
+            uint48(block.timestamp), // uint48 lastObservationTime_
+            obs, // uint256[] memory observations_
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
+                abi.encode(0) // no params required
+            ), // Component memory strategy_
+            feeds //
+        );
+    }
+
+    function testRevert_addAsset_singlePriceFeed_noMovingAverage_submoduleCallReturnsZero() public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+        uint256[] memory obs = new uint256[](0);
+
+        // Mock the price feed to return 0
+        // The Chainlink price feed will revert upon a 0 price, so this circumvents that
+        vm.mockCall(
+            address(ohmUsdPriceFeed),
+            abi.encodeWithSelector(ChainlinkPriceFeeds.getOneFeedPrice.selector),
+            abi.encode(uint256(0))
+        );
+
+        // Try and add the asset
+        vm.startPrank(writer);
+
+        // Reverts as one price feed call will fail due to zero price
+        bytes memory err = abi.encodeWithSelector(PRICEv2.PRICE_PriceZero.selector, address(weth));
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(weth), // address asset_
+            false, // bool storeMovingAverage_
+            false, // bool useMovingAverage_
+            uint32(16 hours), // uint32 movingAverageDuration_
+            0, // uint48 lastObservationTime_
+            obs, // uint256[] memory observations_
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
+                abi.encode(0) // no params required
+            ), // Component memory strategy_
+            feeds //
+        );
+    }
+
+    function testRevert_addAsset_multiplePriceFeeds_movingAverage_oneSubmoduleCallReturnsZero(
+        uint256 nonce_
+    ) public {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
             .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
 
@@ -2909,15 +3002,20 @@ contract PriceV2Test is Test {
         );
         uint256[] memory obs = _makeRandomObservations(weth, feeds[0], nonce_, uint256(2));
 
-        // Set the price feed to return 0
-        ohmUsdPriceFeed.setLatestAnswer(int256(0));
+        // Mock the price feed to return 0
+        // The Chainlink price feed will revert upon a 0 price, so this circumvents that
+        vm.mockCall(
+            address(ohmUsdPriceFeed),
+            abi.encodeWithSelector(ChainlinkPriceFeeds.getOneFeedPrice.selector),
+            abi.encode(uint256(0))
+        );
 
         // Try and add the asset
         vm.startPrank(writer);
 
         // Reverts as one price feed call will fail due to zero price
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_PriceFeedCallFailed(address)",
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_PriceFeedCallFailed.selector,
             address(weth)
         );
         vm.expectRevert(err);
@@ -2931,7 +3029,64 @@ contract PriceV2Test is Test {
             obs, // uint256[] memory observations_
             PRICEv2.Component(
                 toSubKeycode("PRICE.SIMPLESTRATEGY"),
-                SimplePriceFeedStrategy.getAveragePrice.selector,
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
+                abi.encode(0) // no params required
+            ), // Component memory strategy_
+            feeds //
+        );
+    }
+
+    function testRevert_addAsset_multiplePriceFeeds_noMovingAverage_oneSubmoduleCallReturnsZero()
+        public
+    {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
+            .TwoFeedParams(ohmEthPriceFeed, uint48(24 hours), ethUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](2);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+        feeds[1] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector, // bytes4 selector
+            abi.encode(ohmFeedTwoParams) // bytes memory params
+        );
+        uint256[] memory obs = new uint256[](0);
+
+        // Mock the price feed to return 0
+        // The Chainlink price feed will revert upon a 0 price, so this circumvents that
+        vm.mockCall(
+            address(ohmUsdPriceFeed),
+            abi.encodeWithSelector(ChainlinkPriceFeeds.getOneFeedPrice.selector),
+            abi.encode(uint256(0))
+        );
+        // TODO the mock isn't working for some reason
+
+        // Try and add the asset
+        vm.startPrank(writer);
+
+        // Reverts as one price feed call will fail due to zero price
+        bytes memory err = abi.encodeWithSelector(
+            PRICEv2.PRICE_PriceFeedCallFailed.selector,
+            address(weth)
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(weth), // address asset_
+            false, // bool storeMovingAverage_
+            false, // bool useMovingAverage_
+            uint32(16 hours), // uint32 movingAverageDuration_
+            uint48(0), // uint48 lastObservationTime_
+            obs, // uint256[] memory observations_
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getFirstNonZeroPrice.selector, // Won't complain if there is only one result
                 abi.encode(0) // no params required
             ), // Component memory strategy_
             feeds //
