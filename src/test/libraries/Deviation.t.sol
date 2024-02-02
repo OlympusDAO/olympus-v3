@@ -44,7 +44,7 @@ contract DeviationTest is Test {
         );
     }
 
-    function test_isDeviating_large() public {
+    function test_isDeviating_smallDeviationBps() public {
         uint256 benchmark = 100_000_000;
         uint256 value = benchmark + 19_999;
         uint256 deviationBps = 1;
@@ -54,6 +54,45 @@ contract DeviationTest is Test {
             Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
             true,
             "value > benchmark, outside bounds"
+        );
+    }
+
+    function test_isDeviating_smallDeviationBps_insideBounds_fuzz(uint256 value_) public {
+        uint256 benchmark = 100_000_000;
+        uint256 value = bound(value_, benchmark, benchmark + 10_000);
+        uint256 deviationBps = 1;
+        uint256 deviationMax = 10_000;
+
+        assertEq(
+            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
+            false,
+            "value > benchmark, inside bounds"
+        );
+    }
+
+    function test_isDeviating_smallDeviationBps_outsideBounds_fuzz(uint256 value_) public {
+        uint256 benchmark = 100_000_000;
+        uint256 value = bound(value_, benchmark + 10_001, benchmark + 50_000);
+        uint256 deviationBps = 1;
+        uint256 deviationMax = 10_000;
+
+        assertEq(
+            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
+            true,
+            "value > benchmark, outside bounds"
+        );
+    }
+
+    function test_isDeviating_largeDeviationBps() public {
+        uint256 benchmark = 100_000_000;
+        uint256 value = benchmark + 19_999;
+        uint256 deviationBps = 9_9999;
+        uint256 deviationMax = 10_000;
+
+        assertEq(
+            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
+            false,
+            "value > benchmark, inside bounds"
         );
     }
 }
