@@ -2889,6 +2889,55 @@ contract PriceV2Test is Test {
         );
     }
 
+    function testRevert_addAsset_multiplePriceFeeds_oneSubmoduleCallReturnsZero(uint256 nonce_) public {
+        ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
+            .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
+
+        ChainlinkPriceFeeds.TwoFeedParams memory ohmFeedTwoParams = ChainlinkPriceFeeds
+            .TwoFeedParams(ohmEthPriceFeed, uint48(24 hours), ethUsdPriceFeed, uint48(24 hours));
+
+        PRICEv2.Component[] memory feeds = new PRICEv2.Component[](2);
+        feeds[0] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getOneFeedPrice.selector, // bytes4 selector
+            abi.encode(ohmFeedOneParams) // bytes memory params
+        );
+        feeds[1] = PRICEv2.Component(
+            toSubKeycode("PRICE.CHAINLINK"), // SubKeycode target
+            ChainlinkPriceFeeds.getTwoFeedPriceMul.selector, // bytes4 selector
+            abi.encode(ohmFeedTwoParams) // bytes memory params
+        );
+        uint256[] memory obs = _makeRandomObservations(weth, feeds[0], nonce_, uint256(2));
+
+        // Set the price feed to return 0
+        ohmUsdPriceFeed.setLatestAnswer(int256(0));
+
+        // Try and add the asset
+        vm.startPrank(writer);
+
+        // Reverts as one price feed call will fail due to zero price
+        bytes memory err = abi.encodeWithSignature(
+            "PRICE_PriceFeedCallFailed(address)",
+            address(weth)
+        );
+        vm.expectRevert(err);
+
+        price.addAsset(
+            address(weth), // address asset_
+            true, // bool storeMovingAverage_
+            true, // bool useMovingAverage_
+            uint32(16 hours), // uint32 movingAverageDuration_
+            uint48(block.timestamp), // uint48 lastObservationTime_
+            obs, // uint256[] memory observations_
+            PRICEv2.Component(
+                toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                SimplePriceFeedStrategy.getAveragePrice.selector,
+                abi.encode(0) // no params required
+            ), // Component memory strategy_
+            feeds //
+        );
+    }
+
     function test_addAsset_strategy_movingAverage_singlePriceFeed(uint256 nonce_) public {
         ChainlinkPriceFeeds.OneFeedParams memory ohmFeedOneParams = ChainlinkPriceFeeds
             .OneFeedParams(ohmUsdPriceFeed, uint48(24 hours));
