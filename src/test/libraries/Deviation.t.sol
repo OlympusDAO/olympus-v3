@@ -43,4 +43,17 @@ contract DeviationTest is Test {
             "value < benchmark, outside bounds"
         );
     }
+
+    function test_isDeviating_large() public {
+        uint256 benchmark = 100_000_000;
+        uint256 value = benchmark + 19_999;
+        uint256 deviationBps = 1;
+        uint256 deviationMax = 10_000;
+
+        assertEq(
+            Deviation.isDeviating(value, benchmark, deviationBps, deviationMax),
+            true,
+            "value > benchmark, outside bounds"
+        );
+    }
 }

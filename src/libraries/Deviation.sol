@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 
+import {FullMath} from "src/libraries/FullMath.sol";
+
 library Deviation {
+    using FullMath for uint256;
+
     // ========== ERRORS ========== //
 
     /// @notice                 The provided deviation is greater than the maximum deviation
@@ -64,6 +68,6 @@ library Deviation {
         uint256 deviationBps_,
         uint256 deviationMax_
     ) internal pure returns (bool) {
-        return (diff_ * deviationMax_) / benchmark_ > deviationBps_;
+        return diff_.mulDivUp(deviationMax_, benchmark_) > deviationBps_;
     }
 }
