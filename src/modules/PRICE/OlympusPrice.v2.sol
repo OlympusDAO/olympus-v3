@@ -174,7 +174,10 @@ contract OlympusPricev2 is PRICEv2 {
             // We handle faulty feeds in the strategy contract.
             if (success_) {
                 prices[i] = abi.decode(data_, (uint256));
-            } else {
+            }
+
+            // If the feed call reverted or the price was zero, we need to mark that a failure has happened
+            if (success_ == false || prices[i] == 0) {
                 successAllFeeds = false;
             }
 
