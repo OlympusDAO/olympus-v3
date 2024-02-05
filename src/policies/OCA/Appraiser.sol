@@ -753,7 +753,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
     
     /// @inheritdoc IAppraiser
-    function storeAssetObservation(address asset_) external override {
+    function storeAssetObservation(address asset_) external override onlyRole("appraiser_store") {
         MovingAverage storage assetMA = assetValueMovingAverage[asset_];
 
         // Check that sufficient time has passed to record a new observation
@@ -833,7 +833,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
-    function storeCategoryObservation(TreasuryCategory category_) external override {
+    function storeCategoryObservation(TreasuryCategory category_) external override onlyRole("appraiser_store") {
         MovingAverage storage categoryMA = categoryValueMovingAverage[category_];
 
         // Check that sufficient time has passed to record a new observation
@@ -913,7 +913,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
-    function storeMetricObservation(Metric metric_) external override {
+    function storeMetricObservation(Metric metric_) external override onlyRole("appraiser_store") {
         MovingAverage storage metricMA = metricMovingAverage[metric_];
 
         // Check that sufficient time has passed to record a new observation
