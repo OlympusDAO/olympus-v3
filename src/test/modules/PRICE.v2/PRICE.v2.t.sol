@@ -2906,7 +2906,7 @@ contract PriceV2Test is Test {
         // Mock the price feed to return 0
         // The Chainlink price feed will revert upon a 0 price, so this circumvents that
         vm.mockCall(
-            address(ohmUsdPriceFeed),
+            address(chainlinkPrice),
             abi.encodeWithSelector(ChainlinkPriceFeeds.getOneFeedPrice.selector),
             abi.encode(uint256(0))
         );
@@ -2952,7 +2952,7 @@ contract PriceV2Test is Test {
         // Mock the price feed to return 0
         // The Chainlink price feed will revert upon a 0 price, so this circumvents that
         vm.mockCall(
-            address(ohmUsdPriceFeed),
+            address(chainlinkPrice),
             abi.encodeWithSelector(ChainlinkPriceFeeds.getOneFeedPrice.selector),
             abi.encode(uint256(0))
         );
@@ -3005,7 +3005,7 @@ contract PriceV2Test is Test {
         // Mock the price feed to return 0
         // The Chainlink price feed will revert upon a 0 price, so this circumvents that
         vm.mockCall(
-            address(ohmUsdPriceFeed),
+            address(chainlinkPrice),
             abi.encodeWithSelector(ChainlinkPriceFeeds.getOneFeedPrice.selector),
             abi.encode(uint256(0))
         );
@@ -3061,11 +3061,10 @@ contract PriceV2Test is Test {
         // Mock the price feed to return 0
         // The Chainlink price feed will revert upon a 0 price, so this circumvents that
         vm.mockCall(
-            address(ohmUsdPriceFeed),
+            address(chainlinkPrice),
             abi.encodeWithSelector(ChainlinkPriceFeeds.getOneFeedPrice.selector),
             abi.encode(uint256(0))
         );
-        // TODO the mock isn't working for some reason
 
         // Try and add the asset
         vm.startPrank(writer);
