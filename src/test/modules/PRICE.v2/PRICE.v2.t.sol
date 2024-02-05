@@ -311,8 +311,8 @@ contract PriceV2Test is Test {
             // Weighted tick needs to be 154257 (if OHM is token0) or -154257 (if OHM is token1) (as if 5,000,000 ETH per OHM because of the decimal difference)
             // Therefore, we need a tick difference of 9255432 (if OHM is token0) or -9255432 (if OHM is token1)
             int56[] memory tickCumulatives = new int56[](2);
-            tickCumulatives[0] = ohmFirst ? int56(100000000) : -int56(100000000);
-            tickCumulatives[1] = ohmFirst ? int56(109255432) : -int56(109255432);
+            tickCumulatives[0] = ohmFirst ? int56(1000000000) : -int56(1000000000);
+            tickCumulatives[1] = ohmFirst ? int56(1092554320) : -int56(1092554320);
             ohmEthUniV3Pool.setTickCumulatives(tickCumulatives);
         }
 
@@ -509,7 +509,7 @@ contract PriceV2Test is Test {
                 );
 
             UniswapV3Price.UniswapV3Params memory ohmFeedThreeParams = UniswapV3Price
-                .UniswapV3Params(ohmEthUniV3Pool, uint32(60 seconds), 0);
+                .UniswapV3Params(ohmEthUniV3Pool, uint32(600 seconds), 0);
 
             PRICEv2.Component[] memory feeds = new PRICEv2.Component[](3);
             feeds[0] = PRICEv2.Component(
@@ -801,7 +801,7 @@ contract PriceV2Test is Test {
         assertEq(feeds[2].selector, UniswapV3Price.getTokenTWAP.selector);
         assertEq(
             feeds[2].params,
-            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, uint32(60 seconds), 0))
+            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, uint32(600 seconds), 0))
         );
     }
 
@@ -1011,7 +1011,7 @@ contract PriceV2Test is Test {
         uint256 expectedPrice = univ3Price.getTokenTWAP(
             address(ohm),
             price.decimals(),
-            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, uint32(60), 0))
+            abi.encode(UniswapV3Price.UniswapV3Params(ohmEthUniV3Pool, uint32(600), 0))
         );
         assertEq(price_, expectedPrice);
     }

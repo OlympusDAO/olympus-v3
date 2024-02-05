@@ -25,10 +25,6 @@ contract UniswapV3Price is PriceSubmodule {
     /// @notice     The maximum number of decimals allowed for a token in order to prevent overflows
     uint8 internal constant BASE_10_MAX_EXPONENT = 30;
 
-    /// @notice     The minimum length of the TWAP observation window in seconds
-    ///             From testing, a value under 19 seconds is rejected by `OracleLibrary.getQuoteAtTick()`
-    uint32 internal constant TWAP_MINIMUM_OBSERVATION_SECONDS = 19;
-
     /// @notice                         The parameters for a Uniswap V3 pool
     /// @param pool                     The address of the pool
     /// @param observationWindowSeconds The length of the TWAP observation window in seconds
@@ -111,7 +107,7 @@ contract UniswapV3Price is PriceSubmodule {
 
     /// @notice                 Obtains the price of `lookupToken_` in USD, using the TWAP from the specified Uniswap V3 oracle.
     /// @dev                    This function will revert if:
-    ///                         - The value of `params.observationWindowSeconds` is less than `TWAP_MINIMUM_OBSERVATION_SECONDS`
+    ///                         - The value of `params.observationWindowSeconds` is less than `UniswapV3OracleHelper.TWAP_MIN_OBSERVATION_WINDOW`
     ///                         - Any token decimals or `outputDecimals_` are high enough to cause an overflow
     ///                         - Any tokens in the pool are not set
     ///                         - `lookupToken_` is not in the pool
@@ -157,7 +153,8 @@ contract UniswapV3Price is PriceSubmodule {
 
     /// @notice                 Obtains the price of `lookupToken_` in USD, using the current Slot0 price from the specified Uniswap V3 oracle.
     /// @dev                    This function will revert if:
-    ///                         - The value of `params.observationWindowSeconds` is less than `TWAP_MINIMUM_OBSERVATION_SECONDS`
+    ///                         - The current price differs from the TWAP by more than `maxDeviationBps_`
+    ///                         - The value of `params.observationWindowSeconds` is less than `UniswapV3OracleHelper.TWAP_MIN_OBSERVATION_WINDOW`
     ///                         - Any token decimals or `outputDecimals_` are high enough to cause an overflow
     ///                         - Any tokens in the pool are not set
     ///                         - `lookupToken_` is not in the pool

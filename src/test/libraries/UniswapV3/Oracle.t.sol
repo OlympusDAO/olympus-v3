@@ -23,7 +23,7 @@ contract OracleTest is Test {
         int56 tickCumulative0_,
         int56 tickCumulative1_
     ) public {
-        uint32 period = 20;
+        uint32 period = 600;
 
         // tickCumulative1 - tickCumulative0 should be < 0
         int56 tickCumulative0 = int56(bound(tickCumulative0_, MIN_TICK, MAX_TICK));
@@ -50,7 +50,7 @@ contract OracleTest is Test {
     }
 
     function test_getTimeWeightedTick(int56 tickCumulative0_, int56 tickCumulative1_) public {
-        uint32 period = 20;
+        uint32 period = 600;
 
         int56 tickCumulative0 = int56(bound(tickCumulative0_, MIN_TICK, MAX_TICK));
         int56 tickCumulative1 = int56(bound(tickCumulative1_, MIN_TICK, MAX_TICK));
