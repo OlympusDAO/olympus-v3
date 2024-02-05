@@ -230,8 +230,14 @@ contract BunniPrice is PriceSubmodule {
 
         // Determine the value of each reserve token in USD
         uint256 totalValue;
-        totalValue += _PRICE().getPrice(token0).mulDiv(reserve0 + fee0, outputScale);
-        totalValue += _PRICE().getPrice(token1).mulDiv(reserve1 + fee1, outputScale);
+        totalValue += _PRICE().getPrice(token0, PRICEv2.Variant.CURRENT).mulDiv(
+            reserve0 + fee0,
+            outputScale
+        );
+        totalValue += _PRICE().getPrice(token1, PRICEv2.Variant.CURRENT).mulDiv(
+            reserve1 + fee1,
+            outputScale
+        );
 
         return totalValue;
     }
