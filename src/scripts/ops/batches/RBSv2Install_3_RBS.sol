@@ -1135,12 +1135,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             addToBatch(
                 appraiser,
                 abi.encodeWithSelector(
-                    Appraiser.updateMetricMovingAverage,
-                    IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM
-                ),
-                movingAverageDuration,
-                lastObsTime_,
-                obs_
+                    Appraiser.updateMetricMovingAverage.selector,
+                    IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+                    movingAverageDuration,
+                    uint48(lastObsTime_),
+                    obs_
+                )
             );
         }
 

@@ -46,7 +46,7 @@ import {PriceConfigV2} from "policies/OCA/PriceConfig.v2.sol";
 import {IBLVaultManager} from "policies/BoostedLiquidity/interfaces/IBLVaultManager.sol";
 import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {BunniManager} from "policies/UniswapV3/BunniManager.sol";
-import {Appraiser} from "policies/OCA/Appraiser.sol";
+import {Appraiser, IAppraiser} from "policies/OCA/Appraiser.sol";
 import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 import {TreasuryConfig} from "policies/OCA/TreasuryConfig.sol";
 
@@ -787,6 +787,10 @@ contract OlympusDeploy is Script {
         movingAverageAssets[0] = address(ohm);
         movingAverageAssets[1] = address(reserve);
 
+        // Metrics to track
+        IAppraiser.Metric[] memory movingAverageMetrics = new IAppraiser.Metric[](1);
+        movingAverageMetrics[0] = IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM;
+
         console2.log("Deploying Heart V2 policy");
         console2.log("    kernel", address(kernel));
         console2.log("    operatorV2", address(operatorV2));
@@ -803,6 +807,7 @@ contract OlympusDeploy is Script {
             appraiser,
             zeroDistributor,
             movingAverageAssets,
+            movingAverageMetrics,
             maxReward,
             auctionDuration
         );

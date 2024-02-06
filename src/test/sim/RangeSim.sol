@@ -426,6 +426,7 @@ abstract contract RangeSim is Test {
                 IAppraiser(address(appraiser)),
                 distributor,
                 movingAverageAssets,
+                new IAppraiser.Metric[](0),
                 uint256(0), // no keeper rewards for sim
                 uint48(0) // no keeper rewards for sim
             );

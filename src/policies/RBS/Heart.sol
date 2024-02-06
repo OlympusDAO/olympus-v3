@@ -116,7 +116,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
             movingAverageMetrics.push(currentMetric);
 
-            emit MovingAverageMetricAdded(currentMetric);
+            emit MovingAverageMetricAdded(uint8(currentMetric));
         }
     }
 
@@ -304,14 +304,13 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     function removeMovingAverageAsset(address asset_) external onlyRole("heart_admin") {
         if (asset_ == address(0)) revert Heart_InvalidParams();
 
-        // Cache the moving average assets to avoid multiple SLOADs
-        address[] memory cachedMovingAverageAssets = movingAverageAssets;
+        address[] storage cachedMovingAverageAssets = movingAverageAssets;
         uint256 assetsLen = cachedMovingAverageAssets.length;
         bool foundAsset = false;
         for (uint256 i = 0; i < assetsLen; i++) {
             if (cachedMovingAverageAssets[i] == asset_) {
                 cachedMovingAverageAssets[i] = cachedMovingAverageAssets[assetsLen - 1];
-                movingAverageAssets.pop();
+                cachedMovingAverageAssets.pop();
                 foundAsset = true;
                 break;
             }
@@ -347,7 +346,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         }
 
         movingAverageMetrics.push(metric_);
-        emit MovingAverageMetricAdded(metric_);
+        emit MovingAverageMetricAdded(uint8(metric_));
     }
 
     /// @notice     Removes `metric_` from having the moving average refreshed
@@ -357,14 +356,13 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     ///
     /// @param      metric_  The metric to remove
     function removeMovingAverageMetric(IAppraiser.Metric metric_) external onlyRole("heart_admin") {
-        // Cache the moving average metrics to avoid multiple SLOADs
-        IAppraiser.Metric[] memory cachedMovingAverageMetrics = movingAverageMetrics;
+        IAppraiser.Metric[] storage cachedMovingAverageMetrics = movingAverageMetrics;
         uint256 metricsLen = cachedMovingAverageMetrics.length;
         bool foundMetric = false;
         for (uint256 i = 0; i < metricsLen; i++) {
             if (cachedMovingAverageMetrics[i] == metric_) {
                 cachedMovingAverageMetrics[i] = cachedMovingAverageMetrics[metricsLen - 1];
-                movingAverageMetrics.pop();
+                cachedMovingAverageMetrics.pop();
                 foundMetric = true;
                 break;
             }
@@ -372,7 +370,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
 
         if (!foundMetric) revert Heart_InvalidParams();
 
-        emit MovingAverageMetricRemoved(metric_);
+        emit MovingAverageMetricRemoved(uint8(metric_));
     }
 
     /// @notice    Gets the array of moving average metrics

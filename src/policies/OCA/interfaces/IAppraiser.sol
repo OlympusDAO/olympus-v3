@@ -213,6 +213,6 @@ interface IAppraiser {
 
     /// @notice         Gets the observation frequency for the moving average
     ///
-    /// @return         uint48      The observation frequency
-    function getObservationFrequency() external view returns (uint48);
+    /// @return         uint32      The observation frequency
+    function getObservationFrequency() external view returns (uint32);
 }

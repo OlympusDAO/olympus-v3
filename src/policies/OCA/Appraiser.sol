@@ -1019,7 +1019,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
-    function getObservationFrequency() external view returns (uint48) {
+    function getObservationFrequency() external view override returns (uint32) {
         return observationFrequency;
     }
 
