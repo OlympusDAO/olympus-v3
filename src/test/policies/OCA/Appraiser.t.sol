@@ -205,6 +205,28 @@ contract AppraiserTest is Test {
             );
         }
 
+        {
+            // Generate moving average values for LBBO
+            uint256[] memory values = new uint256[](30 * 3);
+            for (uint256 i = 0; i < 90; i++) {
+                if (i < 30) {
+                    values[i] = 10e18;
+                } else if (i < 60) {
+                    values[i] = 11e18;
+                } else {
+                    values[i] = 12e18;
+                }
+            }
+
+            // Configure moving average for LBBO on the Appraiser
+            appraiser.updateMetricMovingAverage(
+                IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+                30 days,
+                uint48(block.timestamp),
+                values
+            );
+        }
+
         // Mint tokens
         {
             ohm.mint(address(this), OHM_MINT_BALANCE);
@@ -2102,7 +2124,7 @@ contract AppraiserTest is Test {
         Appraiser.MovingAverage memory ma = appraiser.getMetricMovingAverageData(
             IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM
         );
-        assertEq(ma.obs.length, 0);
+        assertEq(ma.obs.length, 90); // Already set in setUp()
 
         // Create observations
         uint256[] memory observations = new uint256[](90);

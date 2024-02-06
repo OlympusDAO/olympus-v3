@@ -246,10 +246,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         Config memory config_ = _config;
 
         // Get liquid backing metric to determine if auto-refills of lower side capacity should be performed
-        (uint256 lbbo, ) = appraiser.getMetric(
-            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
-            IAppraiser.Variant.MOVINGAVERAGE
-        );
+        uint256 lbbo = _getLBBO();
 
         // Check if walls can regenerate capacity
         if (
@@ -551,6 +548,24 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     }
 
     // =========  INTERNAL FUNCTIONS ========= //
+
+    /// @notice         Gets the liquid backing per backed OHM from the Appraiser policy
+    /// @dev            This function reverts if:
+    ///                 - The metric is zero
+    ///                 - The metric is older than the Appraiser observation frequency (stale)
+    ///
+    /// @return         uint256     The liquid backing per backed OHM
+    function _getLBBO() internal view returns (uint256) {
+        (uint256 lbbo, uint48 lbboTimestamp) = appraiser.getMetric(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            IAppraiser.Variant.MOVINGAVERAGE
+        );
+        if (lbbo == 0) revert Operator_InvalidParams();
+        if (lbboTimestamp < uint48(block.timestamp - appraiser.getObservationFrequency()))
+            revert Operator_InvalidParams();
+
+        return lbbo;
+    }
 
     /// @notice          Update the capacity on the RANGE module.
     /// @param high_     Whether to update the high side or low side capacity (true = high, false = low).
@@ -871,10 +886,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @inheritdoc IOperator
     function targetPrice() public view override returns (uint256) {
         // Get liquid backing per backed ohm from appraiser
-        (uint256 lbbo, ) = appraiser.getMetric(
-            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
-            IAppraiser.Variant.MOVINGAVERAGE
-        );
+        uint256 lbbo = _getLBBO();
 
         // Get moving average of OHM against the reserve
         (uint256 average, ) = PRICE.getPriceIn(

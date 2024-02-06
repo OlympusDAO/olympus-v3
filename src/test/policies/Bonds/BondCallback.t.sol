@@ -234,6 +234,9 @@ contract BondCallbackTest is Test {
             rolesAdmin.grantRole("callback_whitelist", address(operator));
             rolesAdmin.grantRole("callback_whitelist", policy);
             rolesAdmin.grantRole("callback_admin", guardian);
+
+            // Appraiser roles
+            rolesAdmin.grantRole("appraiser_admin", policy);
         }
 
         // Configure SPPLY, so that when the Operator calls Appraiser, it does not fail
@@ -248,6 +251,26 @@ contract BondCallbackTest is Test {
         // Signal that reserve is held as wrappedReserve in TRSRY
         vm.prank(guardian);
         callback.useWrappedVersion(address(reserve), address(wrappedReserve));
+
+        // Initialise metrics on the Appraiser
+        {
+            uint256 liquidBacking = 11e18;
+
+            // Create a dummy moving average history
+            uint256[] memory values = new uint256[](30 * 3);
+            for (uint256 i = 0; i < 90; i++) {
+                values[i] = liquidBacking;
+            }
+
+            // Configure the metric moving average
+            vm.prank(policy);
+            appraiser.updateMetricMovingAverage(
+                IAppraiserMetric.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+                30 days,
+                uint48(block.timestamp),
+                values
+            );
+        }
 
         /// Initialize the operator
         vm.prank(guardian);

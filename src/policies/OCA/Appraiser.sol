@@ -1018,6 +1018,11 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         return metricMovingAverage[metric_];
     }
 
+    /// @inheritdoc IAppraiser
+    function getObservationFrequency() external view returns (uint48) {
+        return observationFrequency;
+    }
+
     //============================================================================================//
     //                                       UTILITY                                              //
     //============================================================================================//

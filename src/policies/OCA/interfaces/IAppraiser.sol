@@ -210,4 +210,9 @@ interface IAppraiser {
     function getMetricMovingAverageData(
         Metric metric_
     ) external view returns (MovingAverage memory);
+
+    /// @notice         Gets the observation frequency for the moving average
+    ///
+    /// @return         uint48      The observation frequency
+    function getObservationFrequency() external view returns (uint48);
 }
