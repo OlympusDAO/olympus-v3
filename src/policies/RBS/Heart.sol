@@ -332,6 +332,59 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         return movingAverageAssets.length;
     }
 
+    /// @notice     Adds `metric_` to have the moving average refreshed
+    /// @dev        This function reverts if:
+    ///             - The sender is not the heart admin
+    ///             - The metric is a duplicate
+    ///
+    /// @param      metric_  The metric to add
+    function addMovingAverageMetric(IAppraiser.Metric metric_) external onlyRole("heart_admin") {
+        // Cache the moving average metrics to avoid multiple SLOADs
+        IAppraiser.Metric[] memory cachedMovingAverageMetrics = movingAverageMetrics;
+        uint256 metricsLen = cachedMovingAverageMetrics.length;
+        for (uint256 i = 0; i < metricsLen; i++) {
+            if (cachedMovingAverageMetrics[i] == metric_) revert Heart_InvalidParams();
+        }
+
+        movingAverageMetrics.push(metric_);
+        emit MovingAverageMetricAdded(metric_);
+    }
+
+    /// @notice     Removes `metric_` from having the moving average refreshed
+    /// @dev        This function reverts if:
+    ///             - The sender is not the heart admin
+    ///             - The metric is not present
+    ///
+    /// @param      metric_  The metric to remove
+    function removeMovingAverageMetric(IAppraiser.Metric metric_) external onlyRole("heart_admin") {
+        // Cache the moving average metrics to avoid multiple SLOADs
+        IAppraiser.Metric[] memory cachedMovingAverageMetrics = movingAverageMetrics;
+        uint256 metricsLen = cachedMovingAverageMetrics.length;
+        bool foundMetric = false;
+        for (uint256 i = 0; i < metricsLen; i++) {
+            if (cachedMovingAverageMetrics[i] == metric_) {
+                cachedMovingAverageMetrics[i] = cachedMovingAverageMetrics[metricsLen - 1];
+                movingAverageMetrics.pop();
+                foundMetric = true;
+                break;
+            }
+        }
+
+        if (!foundMetric) revert Heart_InvalidParams();
+
+        emit MovingAverageMetricRemoved(metric_);
+    }
+
+    /// @notice    Gets the array of moving average metrics
+    function getMovingAverageMetrics() external view returns (IAppraiser.Metric[] memory) {
+        return movingAverageMetrics;
+    }
+
+    /// @notice    Gets the number of moving average metrics
+    function getMovingAverageMetricsCount() external view returns (uint256) {
+        return movingAverageMetrics.length;
+    }
+
     //============================================================================================//
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
