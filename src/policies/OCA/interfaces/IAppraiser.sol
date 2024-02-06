@@ -153,6 +153,15 @@ interface IAppraiser {
     /// @param asset_   The address of the asset to store the observation for
     function storeAssetObservation(address asset_) external;
 
+    /// @notice         Gets the moving average configuration for an asset
+    ///
+    /// @param asset_   The address of the asset to get the moving average configuration for
+    /// @return         The moving average configuration
+    function getAssetMovingAverageData(address asset_)
+        external
+        view
+        returns (MovingAverage memory);
+
     /// @notice         Updates the configuration for a category value moving average
     ///
     /// @param category_   The category to update the moving average configuration for
@@ -171,6 +180,15 @@ interface IAppraiser {
     /// @param category_    The TRSRY category to store the observation for
     function storeCategoryObservation(Category category_) external;
 
+    /// @notice         Gets the moving average configuration for a category
+    ///
+    /// @param category_   The category to get the moving average configuration for
+    /// @return         The moving average configuration
+    function getCategoryMovingAverageData(Category category_)
+        external
+        view
+        returns (MovingAverage memory);
+
     /// @notice         Updates the configuration for a metric value moving average
     ///
     /// @param metric_   The metric to update the moving average configuration for
@@ -188,4 +206,13 @@ interface IAppraiser {
     ///
     /// @param metric_ The Metric to store the observation for
     function storeMetricObservation(Metric metric_) external;
+
+    /// @notice         Gets the moving average configuration for a metric
+    ///
+    /// @param metric_   The metric to get the moving average configuration for
+    /// @return         The moving average configuration
+    function getMetricMovingAverageData(Metric metric_)
+        external
+        view
+        returns (MovingAverage memory);
 }

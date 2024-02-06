@@ -169,7 +169,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
 
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
+        dependencies = new Keycode[](4);
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("SPPLY");
         dependencies[2] = toKeycode("TRSRY");
@@ -780,6 +780,11 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
+    function getAssetMovingAverageData(address asset_) external view override returns (MovingAverage memory) {
+        return assetValueMovingAverage[asset_];
+    }
+
+    /// @inheritdoc IAppraiser
     function updateCategoryMovingAverage(
         TreasuryCategory category_,
         uint32 movingAverageDuration_,
@@ -860,6 +865,11 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
+    function getCategoryMovingAverageData(TreasuryCategory category_) external view override returns (MovingAverage memory) {
+        return categoryValueMovingAverage[category_];
+    }
+
+    /// @inheritdoc IAppraiser
     function updateMetricMovingAverage(
         Metric metric_,
         uint32 movingAverageDuration_,
@@ -937,6 +947,11 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
 
         // Emit event
         emit MetricObservation(metric_, value, timestamp);
+    }
+
+    /// @inheritdoc IAppraiser
+    function getMetricMovingAverageData(Metric metric_) external view override returns (MovingAverage memory) {
+        return metricMovingAverage[metric_];
     }
 
     //============================================================================================//
