@@ -688,4 +688,6 @@ contract HeartTest is Test {
         assertEq(heart.movingAverageAssets(0), address(ohm));
         assertEq(heart.getMovingAverageAssetsCount(), 1, "asset count");
     }
+
+    // TODO - Add tests for moving average metrics
 }

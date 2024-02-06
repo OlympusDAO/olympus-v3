@@ -11,6 +11,8 @@ interface IHeart {
     event RewardUpdated(uint256 maxRewardAmount_, uint48 auctionDuration_);
     event MovingAverageAssetAdded(address asset_);
     event MovingAverageAssetRemoved(address asset_);
+    event MovingAverageMetricAdded(uint8 metric_);
+    event MovingAverageMetricRemoved(uint8 metric_);
 
     // =========  ERRORS ========= //
 

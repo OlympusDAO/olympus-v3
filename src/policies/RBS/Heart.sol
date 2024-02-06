@@ -69,6 +69,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         IAppraiser appraiser_,
         IDistributor distributor_,
         address[] memory movingAverageAssets_,
+        IAppraiser.Metric[] memory movingAverageMetrics_,
         uint256 maxReward_,
         uint48 auctionDuration_
     ) Policy(kernel_) {
@@ -100,6 +101,22 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
             movingAverageAssets.push(currentAsset);
 
             emit MovingAverageAssetAdded(currentAsset);
+        }
+
+        // Add moving average metrics
+        uint256 metricsLen = movingAverageMetrics_.length;
+        for (uint256 i = 0; i < metricsLen; i++) {
+            IAppraiser.Metric currentMetric = movingAverageMetrics_[i];
+
+            // Check for duplicates in the existing array
+            uint256 existingMetricsLen = movingAverageMetrics.length;
+            for (uint256 j = 0; j < existingMetricsLen; j++) {
+                if (currentMetric == movingAverageMetrics[j]) revert Heart_InvalidParams();
+            }
+
+            movingAverageMetrics.push(currentMetric);
+
+            emit MovingAverageMetricAdded(currentMetric);
         }
     }
 
