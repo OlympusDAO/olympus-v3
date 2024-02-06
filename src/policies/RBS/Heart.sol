@@ -168,11 +168,12 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         IAppraiser.Metric[] memory cachedMovingAverageMetrics = movingAverageMetrics;
         uint256 metricsLen = cachedMovingAverageMetrics.length;
         for (uint256 i = 0; i < metricsLen; i++) {
+            // Store the current metric value
+            appraiser.storeMetric(cachedMovingAverageMetrics[i]);
+
+            // Store the moving average
             appraiser.storeMetricObservation(cachedMovingAverageMetrics[i]);
         }
-
-        // Update the liquid backing calculation
-        appraiser.storeMetric(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
 
         // Trigger price range update and market operations
         operator.operate();
