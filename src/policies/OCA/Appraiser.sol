@@ -11,6 +11,11 @@ import {TRSRYv1_1, Category as TreasuryCategory, toCategory as toTreasuryCategor
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {SPPLYv1, toCategory as toSupplyCategory} from "src/modules/SPPLY/SPPLY.v1.sol";
 
+/// @title      Appraiser
+/// @notice     The Appraiser contract calculates and stores the value of assets, treasury categories, and value metrics.
+/// @dev        This contract defines the following roles:
+///             - appraiser_admin: The role that can update moving averages
+///             - appraiser_store: The role that can store observations
 contract Appraiser is IAppraiser, Policy, RolesConsumer {
     // ========== EVENTS ========== //
 
@@ -787,6 +792,9 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
                 ++i;
             }
         }
+
+        // Emit stored event for the new cached value
+        emit AssetObservation(asset_, observations_[numObservations - 1], lastObservationTime_);
     }
 
     /// @inheritdoc IAppraiser
@@ -875,6 +883,13 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
                 ++i;
             }
         }
+
+        // Emit stored event for the new cached value
+        emit CategoryObservation(
+            category_,
+            observations_[numObservations - 1],
+            lastObservationTime_
+        );
     }
 
     /// @inheritdoc IAppraiser
@@ -964,6 +979,9 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
                 ++i;
             }
         }
+
+        // Emit stored event for the new cached value
+        emit MetricObservation(metric_, observations_[numObservations - 1], lastObservationTime_);
     }
 
     /// @inheritdoc IAppraiser
