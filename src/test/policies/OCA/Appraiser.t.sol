@@ -484,7 +484,7 @@ contract AppraiserTest is Test {
         assertEq(success, true);
 
         // Decode return data to value
-        (uint256 value, uint48 time) = abi.decode(data, (uint256,uint48));
+        (uint256 value, uint48 time) = abi.decode(data, (uint256, uint48));
 
         // Assert response is correct
         assertEq(value, 1e18);
@@ -891,7 +891,6 @@ contract AppraiserTest is Test {
             uint48(block.timestamp),
             values
         );
-        
 
         // Directly call getCategoryValue with valid variant
         (bool liquidSuccess, bytes memory liquidData) = address(appraiser).call(
@@ -1177,7 +1176,12 @@ contract AppraiserTest is Test {
                 values[i] = 12e18;
             }
         }
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 30 days, uint48(block.timestamp), values);
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            30 days,
+            uint48(block.timestamp),
+            values
+        );
 
         // Directly call getMetric with variant MOVINGAVERAGE
         (bool success, bytes memory data) = address(appraiser).call(
@@ -1417,7 +1421,10 @@ contract AppraiserTest is Test {
         vm.assume(user_ != address(this));
 
         // Call updateAssetMovingAverage with non-admin user
-        bytes memory err = abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("appraiser_admin"));
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("appraiser_admin")
+        );
         vm.expectRevert(err);
         vm.prank(user_);
         appraiser.updateAssetMovingAverage(
@@ -1428,7 +1435,9 @@ contract AppraiserTest is Test {
         );
     }
 
-    function testCorrectness_updateAssetMovingAverageRevertsIfObsTimeInFuture(uint48 obsTime_) public {
+    function testCorrectness_updateAssetMovingAverageRevertsIfObsTimeInFuture(
+        uint48 obsTime_
+    ) public {
         vm.assume(obsTime_ > block.timestamp + 1 days);
 
         // Call updateAssetMovingAverage with observation time in the future
@@ -1439,12 +1448,7 @@ contract AppraiserTest is Test {
             uint48(block.timestamp)
         );
         vm.expectRevert(err);
-        appraiser.updateAssetMovingAverage(
-            address(reserve),
-            30 days,
-            obsTime_,
-            new uint256[](90)
-        );
+        appraiser.updateAssetMovingAverage(address(reserve), 30 days, obsTime_, new uint256[](90));
     }
 
     function testCorrectness_updateAssetMovingAverageRevertsIfDurationIsZero() public {
@@ -1464,7 +1468,9 @@ contract AppraiserTest is Test {
         );
     }
 
-    function testCorrectness_updateAssetMovingAverageRevertsIfDurationNotDivisibleByFrequency() public {
+    function testCorrectness_updateAssetMovingAverageRevertsIfDurationNotDivisibleByFrequency()
+        public
+    {
         // Call updateAssetMovingAverage with duration not divisible by frequency
         bytes memory err = abi.encodeWithSignature(
             "Appraiser_ParamsMovingAverageDurationInvalid_Asset(address,uint32,uint32)",
@@ -1542,7 +1548,12 @@ contract AppraiserTest is Test {
         }
 
         // Call updateAssetMovingAverage
-        appraiser.updateAssetMovingAverage(address(reserve), 30 days, uint48(block.timestamp), observations);
+        appraiser.updateAssetMovingAverage(
+            address(reserve),
+            30 days,
+            uint48(block.timestamp),
+            observations
+        );
 
         // Assert observations are set
         ma = appraiser.getAssetMovingAverageData(address(reserve));
@@ -1560,7 +1571,12 @@ contract AppraiserTest is Test {
         }
 
         // Call updateAssetMovingAverage
-        appraiser.updateAssetMovingAverage(address(reserve), 30 days, uint48(block.timestamp), observations);
+        appraiser.updateAssetMovingAverage(
+            address(reserve),
+            30 days,
+            uint48(block.timestamp),
+            observations
+        );
 
         // Assert observations are set
         Appraiser.MovingAverage memory ma = appraiser.getAssetMovingAverageData(address(reserve));
@@ -1576,7 +1592,12 @@ contract AppraiserTest is Test {
         }
 
         // Call updateAssetMovingAverage again
-        appraiser.updateAssetMovingAverage(address(reserve), 30 days, uint48(block.timestamp), newObservations);
+        appraiser.updateAssetMovingAverage(
+            address(reserve),
+            30 days,
+            uint48(block.timestamp),
+            newObservations
+        );
 
         // Assert new observations are set
         ma = appraiser.getAssetMovingAverageData(address(reserve));
@@ -1595,7 +1616,10 @@ contract AppraiserTest is Test {
         vm.assume(user_ != address(mockHeart));
 
         // Call storeAssetObservation with non-store user
-        bytes memory err = abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("appraiser_store"));
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("appraiser_store")
+        );
         vm.expectRevert(err);
         vm.prank(user_);
         appraiser.storeAssetObservation(address(reserve));
@@ -1607,7 +1631,12 @@ contract AppraiserTest is Test {
         for (uint256 i = 0; i < 90; i++) {
             values[i] = 10e18;
         }
-        appraiser.updateAssetMovingAverage(address(reserve), 30 days, uint48(block.timestamp), values);
+        appraiser.updateAssetMovingAverage(
+            address(reserve),
+            30 days,
+            uint48(block.timestamp),
+            values
+        );
 
         // Call storeAssetObservation with not enough time passed
         bytes memory err = abi.encodeWithSignature(
@@ -1626,7 +1655,12 @@ contract AppraiserTest is Test {
         for (uint256 i = 0; i < 90; i++) {
             values[i] = 10e18;
         }
-        appraiser.updateAssetMovingAverage(address(reserve), 30 days, uint48(block.timestamp), values);
+        appraiser.updateAssetMovingAverage(
+            address(reserve),
+            30 days,
+            uint48(block.timestamp),
+            values
+        );
 
         // Change price and store
         vm.warp(block.timestamp + 8 hours + 1);
@@ -1658,13 +1692,23 @@ contract AppraiserTest is Test {
         vm.assume(user_ != address(this));
 
         // Call updateCategoryMovingAverage with non-admin user
-        bytes memory err = abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("appraiser_admin"));
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("appraiser_admin")
+        );
         vm.expectRevert(err);
         vm.prank(user_);
-        appraiser.updateCategoryMovingAverage(AssetCategory.wrap("liquid"), 30 days, uint48(block.timestamp), new uint256[](90));
+        appraiser.updateCategoryMovingAverage(
+            AssetCategory.wrap("liquid"),
+            30 days,
+            uint48(block.timestamp),
+            new uint256[](90)
+        );
     }
 
-    function testCorrectness_updateCategoryMovingAverageRevertsIfObsTimeInFuture(uint48 obsTime_) public {
+    function testCorrectness_updateCategoryMovingAverageRevertsIfObsTimeInFuture(
+        uint48 obsTime_
+    ) public {
         vm.assume(obsTime_ > block.timestamp + 1 days);
 
         // Call updateCategoryMovingAverage with observation time in the future
@@ -1675,7 +1719,12 @@ contract AppraiserTest is Test {
             uint48(block.timestamp)
         );
         vm.expectRevert(err);
-        appraiser.updateCategoryMovingAverage(AssetCategory.wrap("liquid"), 30 days, obsTime_, new uint256[](90));
+        appraiser.updateCategoryMovingAverage(
+            AssetCategory.wrap("liquid"),
+            30 days,
+            obsTime_,
+            new uint256[](90)
+        );
     }
 
     function testCorrectness_updateCategoryMovingAverageRevertsIfDurationIsZero() public {
@@ -1687,10 +1736,17 @@ contract AppraiserTest is Test {
             8 hours
         );
         vm.expectRevert(err);
-        appraiser.updateCategoryMovingAverage(AssetCategory.wrap("liquid"), 0, uint48(block.timestamp), new uint256[](90));
+        appraiser.updateCategoryMovingAverage(
+            AssetCategory.wrap("liquid"),
+            0,
+            uint48(block.timestamp),
+            new uint256[](90)
+        );
     }
 
-    function testCorrectness_updateCategoryMovingAverageRevertsIfDurationNotDivisibleByFrequency() public {
+    function testCorrectness_updateCategoryMovingAverageRevertsIfDurationNotDivisibleByFrequency()
+        public
+    {
         // Call updateCategoryMovingAverage with duration not divisible by frequency
         bytes memory err = abi.encodeWithSignature(
             "Appraiser_ParamsMovingAverageDurationInvalid_Category(bytes32,uint32,uint32)",
@@ -1699,7 +1755,12 @@ contract AppraiserTest is Test {
             8 hours
         );
         vm.expectRevert(err);
-        appraiser.updateCategoryMovingAverage(AssetCategory.wrap("liquid"), 26 hours, uint48(block.timestamp), new uint256[](90));
+        appraiser.updateCategoryMovingAverage(
+            AssetCategory.wrap("liquid"),
+            26 hours,
+            uint48(block.timestamp),
+            new uint256[](90)
+        );
     }
 
     function testCorrectness_updateCategoryMovingAverageRevertsIfDurationNotLongEnough() public {
@@ -1711,10 +1772,17 @@ contract AppraiserTest is Test {
             1
         );
         vm.expectRevert(err);
-        appraiser.updateCategoryMovingAverage(AssetCategory.wrap("liquid"), 8 hours, uint48(block.timestamp), new uint256[](1));
+        appraiser.updateCategoryMovingAverage(
+            AssetCategory.wrap("liquid"),
+            8 hours,
+            uint48(block.timestamp),
+            new uint256[](1)
+        );
     }
 
-    function testCorrectness_updateCategoryMovingAverageRevertsIfObservationsIncorrectLength() public {
+    function testCorrectness_updateCategoryMovingAverageRevertsIfObservationsIncorrectLength()
+        public
+    {
         // Call updateCategoryMovingAverage with incorrect length observations
         bytes memory err = abi.encodeWithSignature(
             "Appraiser_ParamsInvalidObservationCount_Category(bytes32,uint256,uint256)",
@@ -1723,7 +1791,12 @@ contract AppraiserTest is Test {
             90
         );
         vm.expectRevert(err);
-        appraiser.updateCategoryMovingAverage(AssetCategory.wrap("liquid"), 30 days, uint48(block.timestamp), new uint256[](1));
+        appraiser.updateCategoryMovingAverage(
+            AssetCategory.wrap("liquid"),
+            30 days,
+            uint48(block.timestamp),
+            new uint256[](1)
+        );
     }
 
     function testCorrectness_updateCategoryMovingAverageRevertsIfAnyObservationsZero() public {
@@ -1734,11 +1807,18 @@ contract AppraiserTest is Test {
             0
         );
         vm.expectRevert(err);
-        appraiser.updateCategoryMovingAverage(AssetCategory.wrap("liquid"), 30 days, uint48(block.timestamp), new uint256[](90));
+        appraiser.updateCategoryMovingAverage(
+            AssetCategory.wrap("liquid"),
+            30 days,
+            uint48(block.timestamp),
+            new uint256[](90)
+        );
     }
 
     function testCorrectness_updateCategoryMovingAverageSetsObservations() public {
-        Appraiser.MovingAverage memory ma = appraiser.getCategoryMovingAverageData(AssetCategory.wrap("liquid"));
+        Appraiser.MovingAverage memory ma = appraiser.getCategoryMovingAverageData(
+            AssetCategory.wrap("liquid")
+        );
         assertEq(ma.obs.length, 0);
 
         // Create observations
@@ -1748,7 +1828,12 @@ contract AppraiserTest is Test {
         }
 
         // Call updateCategoryMovingAverage
-        appraiser.updateCategoryMovingAverage(AssetCategory.wrap("liquid"), 30 days, uint48(block.timestamp), observations);
+        appraiser.updateCategoryMovingAverage(
+            AssetCategory.wrap("liquid"),
+            30 days,
+            uint48(block.timestamp),
+            observations
+        );
 
         // Assert observations are set
         ma = appraiser.getCategoryMovingAverageData(AssetCategory.wrap("liquid"));
@@ -1766,10 +1851,17 @@ contract AppraiserTest is Test {
         }
 
         // Call updateCategoryMovingAverage
-        appraiser.updateCategoryMovingAverage(AssetCategory.wrap("liquid"), 30 days, uint48(block.timestamp), observations);
+        appraiser.updateCategoryMovingAverage(
+            AssetCategory.wrap("liquid"),
+            30 days,
+            uint48(block.timestamp),
+            observations
+        );
 
         // Assert observations are set
-        Appraiser.MovingAverage memory ma = appraiser.getCategoryMovingAverageData(AssetCategory.wrap("liquid"));
+        Appraiser.MovingAverage memory ma = appraiser.getCategoryMovingAverageData(
+            AssetCategory.wrap("liquid")
+        );
         assertEq(ma.obs.length, 90);
         for (uint256 i; i < 90; i++) {
             assertEq(ma.obs[i], 10e18);
@@ -1782,7 +1874,12 @@ contract AppraiserTest is Test {
         }
 
         // Call updateCategoryMovingAverage again
-        appraiser.updateCategoryMovingAverage(AssetCategory.wrap("liquid"), 30 days, uint48(block.timestamp), newObservations);
+        appraiser.updateCategoryMovingAverage(
+            AssetCategory.wrap("liquid"),
+            30 days,
+            uint48(block.timestamp),
+            newObservations
+        );
 
         // Assert new observations are set
         ma = appraiser.getCategoryMovingAverageData(AssetCategory.wrap("liquid"));
@@ -1801,7 +1898,10 @@ contract AppraiserTest is Test {
         vm.assume(user_ != address(mockHeart));
 
         // Call storeCategoryObservation with non-store user
-        bytes memory err = abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("appraiser_store"));
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("appraiser_store")
+        );
         vm.expectRevert(err);
         vm.prank(user_);
         appraiser.storeCategoryObservation(AssetCategory.wrap("liquid"));
@@ -1813,7 +1913,12 @@ contract AppraiserTest is Test {
         for (uint256 i = 0; i < 90; i++) {
             values[i] = 10e18;
         }
-        appraiser.updateCategoryMovingAverage(AssetCategory.wrap("liquid"), 30 days, uint48(block.timestamp), values);
+        appraiser.updateCategoryMovingAverage(
+            AssetCategory.wrap("liquid"),
+            30 days,
+            uint48(block.timestamp),
+            values
+        );
 
         // Call storeCategoryObservation with not enough time passed
         bytes memory err = abi.encodeWithSignature(
@@ -1832,7 +1937,12 @@ contract AppraiserTest is Test {
         for (uint256 i = 0; i < 90; i++) {
             values[i] = 10e18;
         }
-        appraiser.updateCategoryMovingAverage(AssetCategory.wrap("liquid"), 30 days, uint48(block.timestamp), values);
+        appraiser.updateCategoryMovingAverage(
+            AssetCategory.wrap("liquid"),
+            30 days,
+            uint48(block.timestamp),
+            values
+        );
 
         // Change price and store
         vm.warp(block.timestamp + 8 hours + 1);
@@ -1840,7 +1950,9 @@ contract AppraiserTest is Test {
         appraiser.storeCategoryObservation(AssetCategory.wrap("liquid"));
 
         // Assert moving average data is updated
-        Appraiser.MovingAverage memory ma = appraiser.getCategoryMovingAverageData(AssetCategory.wrap("liquid"));
+        Appraiser.MovingAverage memory ma = appraiser.getCategoryMovingAverageData(
+            AssetCategory.wrap("liquid")
+        );
         assertEq(ma.obs[0], RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000);
         assertEq(ma.obs[1], 10e18);
         assertEq(ma.nextObsIndex, 1);
@@ -1863,13 +1975,23 @@ contract AppraiserTest is Test {
         vm.assume(user_ != address(this));
 
         // Call updateMetricMovingAverage with non-admin user
-        bytes memory err = abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("appraiser_admin"));
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("appraiser_admin")
+        );
         vm.expectRevert(err);
         vm.prank(user_);
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 30 days, uint48(block.timestamp), new uint256[](90));
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            30 days,
+            uint48(block.timestamp),
+            new uint256[](90)
+        );
     }
 
-    function testCorrectness_updateMetricMovingAverageRevertsIfObsTimeInFuture(uint48 obsTime_) public {
+    function testCorrectness_updateMetricMovingAverageRevertsIfObsTimeInFuture(
+        uint48 obsTime_
+    ) public {
         vm.assume(obsTime_ > block.timestamp + 1 days);
 
         // Call updateMetricMovingAverage with observation time in the future
@@ -1880,7 +2002,12 @@ contract AppraiserTest is Test {
             uint48(block.timestamp)
         );
         vm.expectRevert(err);
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 30 days, obsTime_, new uint256[](90));
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            30 days,
+            obsTime_,
+            new uint256[](90)
+        );
     }
 
     function testCorrectness_updateMetricMovingAverageRevertsIfDurationIsZero() public {
@@ -1892,10 +2019,17 @@ contract AppraiserTest is Test {
             8 hours
         );
         vm.expectRevert(err);
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 0, uint48(block.timestamp), new uint256[](90));
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            0,
+            uint48(block.timestamp),
+            new uint256[](90)
+        );
     }
 
-    function testCorrectness_updateMetricMovingAverageRevertsIfDurationNotDivisibleByFrequency() public {
+    function testCorrectness_updateMetricMovingAverageRevertsIfDurationNotDivisibleByFrequency()
+        public
+    {
         // Call updateMetricMovingAverage with duration not divisible by frequency
         bytes memory err = abi.encodeWithSignature(
             "Appraiser_ParamsMovingAverageDurationInvalid_Metric(uint8,uint32,uint32)",
@@ -1904,7 +2038,12 @@ contract AppraiserTest is Test {
             8 hours
         );
         vm.expectRevert(err);
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 26 hours, uint48(block.timestamp), new uint256[](90));
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            26 hours,
+            uint48(block.timestamp),
+            new uint256[](90)
+        );
     }
 
     function testCorrectness_updateMetricMovingAverageRevertsIfDurationNotLongEnough() public {
@@ -1916,10 +2055,17 @@ contract AppraiserTest is Test {
             1
         );
         vm.expectRevert(err);
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 8 hours, uint48(block.timestamp), new uint256[](1));
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            8 hours,
+            uint48(block.timestamp),
+            new uint256[](1)
+        );
     }
 
-    function testCorrectness_updateMetricMovingAverageRevertsIfObservationsIncorrectLength() public {
+    function testCorrectness_updateMetricMovingAverageRevertsIfObservationsIncorrectLength()
+        public
+    {
         // Call updateMetricMovingAverage with incorrect length observations
         bytes memory err = abi.encodeWithSignature(
             "Appraiser_ParamsInvalidObservationCount_Metric(uint8,uint256,uint256)",
@@ -1928,7 +2074,12 @@ contract AppraiserTest is Test {
             90
         );
         vm.expectRevert(err);
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 30 days, uint48(block.timestamp), new uint256[](1));
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            30 days,
+            uint48(block.timestamp),
+            new uint256[](1)
+        );
     }
 
     function testCorrectness_updateMetricMovingAverageRevertsIfAnyObservationsZero() public {
@@ -1939,11 +2090,18 @@ contract AppraiserTest is Test {
             0
         );
         vm.expectRevert(err);
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 30 days, uint48(block.timestamp), new uint256[](90));
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            30 days,
+            uint48(block.timestamp),
+            new uint256[](90)
+        );
     }
 
     function testCorrectness_updateMetricMovingAverageSetsObservations() public {
-        Appraiser.MovingAverage memory ma = appraiser.getMetricMovingAverageData(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
+        Appraiser.MovingAverage memory ma = appraiser.getMetricMovingAverageData(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM
+        );
         assertEq(ma.obs.length, 0);
 
         // Create observations
@@ -1953,7 +2111,12 @@ contract AppraiserTest is Test {
         }
 
         // Call updateMetricMovingAverage
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 30 days, uint48(block.timestamp), observations);
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            30 days,
+            uint48(block.timestamp),
+            observations
+        );
 
         // Assert observations are set
         ma = appraiser.getMetricMovingAverageData(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
@@ -1971,10 +2134,17 @@ contract AppraiserTest is Test {
         }
 
         // Call updateMetricMovingAverage
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 30 days, uint48(block.timestamp), observations);
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            30 days,
+            uint48(block.timestamp),
+            observations
+        );
 
         // Assert observations are set
-        Appraiser.MovingAverage memory ma = appraiser.getMetricMovingAverageData(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
+        Appraiser.MovingAverage memory ma = appraiser.getMetricMovingAverageData(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM
+        );
         assertEq(ma.obs.length, 90);
         for (uint256 i; i < 90; i++) {
             assertEq(ma.obs[i], 10e18);
@@ -1987,7 +2157,12 @@ contract AppraiserTest is Test {
         }
 
         // Call updateMetricMovingAverage again
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 30 days, uint48(block.timestamp), newObservations);
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            30 days,
+            uint48(block.timestamp),
+            newObservations
+        );
 
         // Assert new observations are set
         ma = appraiser.getMetricMovingAverageData(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
@@ -2006,7 +2181,10 @@ contract AppraiserTest is Test {
         vm.assume(user_ != address(mockHeart));
 
         // Call storeMetricObservation with non-store user
-        bytes memory err = abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("appraiser_store"));
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("appraiser_store")
+        );
         vm.expectRevert(err);
         vm.prank(user_);
         appraiser.storeMetricObservation(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
@@ -2018,7 +2196,12 @@ contract AppraiserTest is Test {
         for (uint256 i = 0; i < 90; i++) {
             values[i] = 10e18;
         }
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 30 days, uint48(block.timestamp), values);
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            30 days,
+            uint48(block.timestamp),
+            values
+        );
 
         // Call storeMetricObservation with not enough time passed
         bytes memory err = abi.encodeWithSignature(
@@ -2037,7 +2220,12 @@ contract AppraiserTest is Test {
         for (uint256 i = 0; i < 90; i++) {
             values[i] = 10e18;
         }
-        appraiser.updateMetricMovingAverage(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM, 30 days, uint48(block.timestamp), values);
+        appraiser.updateMetricMovingAverage(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
+            30 days,
+            uint48(block.timestamp),
+            values
+        );
 
         // Change price and store
         vm.warp(block.timestamp + 8 hours + 1);
@@ -2049,12 +2237,24 @@ contract AppraiserTest is Test {
         uint256 expectedBackedSupply = OHM_MINT_BALANCE +
             BALANCER_POOL_OHM_BALANCE -
             BALANCER_POOL_OHM_BALANCE.mulDiv(BPT_BALANCE, BALANCER_POOL_TOTAL_SUPPLY);
-        Appraiser.MovingAverage memory ma = appraiser.getMetricMovingAverageData(IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM);
-        assertEq(ma.obs[0], (RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1) * 1e9 / expectedBackedSupply);
+        Appraiser.MovingAverage memory ma = appraiser.getMetricMovingAverageData(
+            IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM
+        );
+        assertEq(
+            ma.obs[0],
+            ((RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1) * 1e9) /
+                expectedBackedSupply
+        );
         assertEq(ma.obs[1], 10e18);
         assertEq(ma.nextObsIndex, 1);
         assertEq(ma.lastObservationTime, uint48(block.timestamp));
-        assertEq(ma.cumulativeObs, 10e18 * 89 + ((RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1) * 1e9 / expectedBackedSupply));
+        assertEq(
+            ma.cumulativeObs,
+            10e18 *
+                89 +
+                (((RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1) * 1e9) /
+                    expectedBackedSupply)
+        );
     }
 }
 

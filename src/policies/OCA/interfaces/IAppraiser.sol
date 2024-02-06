@@ -157,10 +157,7 @@ interface IAppraiser {
     ///
     /// @param asset_   The address of the asset to get the moving average configuration for
     /// @return         The moving average configuration
-    function getAssetMovingAverageData(address asset_)
-        external
-        view
-        returns (MovingAverage memory);
+    function getAssetMovingAverageData(address asset_) external view returns (MovingAverage memory);
 
     /// @notice         Updates the configuration for a category value moving average
     ///
@@ -184,10 +181,9 @@ interface IAppraiser {
     ///
     /// @param category_   The category to get the moving average configuration for
     /// @return         The moving average configuration
-    function getCategoryMovingAverageData(Category category_)
-        external
-        view
-        returns (MovingAverage memory);
+    function getCategoryMovingAverageData(
+        Category category_
+    ) external view returns (MovingAverage memory);
 
     /// @notice         Updates the configuration for a metric value moving average
     ///
@@ -211,8 +207,7 @@ interface IAppraiser {
     ///
     /// @param metric_   The metric to get the moving average configuration for
     /// @return         The moving average configuration
-    function getMetricMovingAverageData(Metric metric_)
-        external
-        view
-        returns (MovingAverage memory);
+    function getMetricMovingAverageData(
+        Metric metric_
+    ) external view returns (MovingAverage memory);
 }

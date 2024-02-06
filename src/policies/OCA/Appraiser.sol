@@ -41,21 +41,33 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     /// @param asset_           The address of the asset that was observed
     /// @param lastObservationTime_  The timestamp of the last observation
     /// @param blockTimestamp_   The current block timestamp
-    error Appraiser_ParamsLastObservationTimeInvalid_Asset(address asset_, uint48 lastObservationTime_, uint48 blockTimestamp_);
+    error Appraiser_ParamsLastObservationTimeInvalid_Asset(
+        address asset_,
+        uint48 lastObservationTime_,
+        uint48 blockTimestamp_
+    );
 
     /// @notice                 Indicates an invalid moving average duration when updating an asset value moving average
     ///
     /// @param asset_           The address of the asset that was observed
     /// @param movingAverageDuration_  The moving average duration
     /// @param observationFrequency_  The observation frequency
-    error Appraiser_ParamsMovingAverageDurationInvalid_Asset(address asset_, uint32 movingAverageDuration_, uint32 observationFrequency_);
+    error Appraiser_ParamsMovingAverageDurationInvalid_Asset(
+        address asset_,
+        uint32 movingAverageDuration_,
+        uint32 observationFrequency_
+    );
 
     /// @notice                 Indicates an invalid observation count when updating an asset value moving average
     ///
     /// @param asset_           The address of the asset that was observed
     /// @param observationCount_  The number of observations provided
     /// @param numObservations_  The number of observations expected
-    error Appraiser_ParamsInvalidObservationCount_Asset(address asset_, uint256 observationCount_, uint256 numObservations_);
+    error Appraiser_ParamsInvalidObservationCount_Asset(
+        address asset_,
+        uint256 observationCount_,
+        uint256 numObservations_
+    );
 
     /// @notice                 Indicates an invalid observation when updating an asset value moving average
     ///
@@ -74,21 +86,33 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     /// @param category_           The category that was observed
     /// @param lastObservationTime_  The timestamp of the last observation
     /// @param blockTimestamp_   The current block timestamp
-    error Appraiser_ParamsLastObservationTimeInvalid_Category(TreasuryCategory category_, uint48 lastObservationTime_, uint48 blockTimestamp_);
+    error Appraiser_ParamsLastObservationTimeInvalid_Category(
+        TreasuryCategory category_,
+        uint48 lastObservationTime_,
+        uint48 blockTimestamp_
+    );
 
     /// @notice                 Indicates an invalid moving average duration when updating a category value moving average
     ///
     /// @param category_           The category that was observed
     /// @param movingAverageDuration_  The moving average duration
     /// @param observationFrequency_  The observation frequency
-    error Appraiser_ParamsMovingAverageDurationInvalid_Category(TreasuryCategory category_, uint32 movingAverageDuration_, uint32 observationFrequency_);
+    error Appraiser_ParamsMovingAverageDurationInvalid_Category(
+        TreasuryCategory category_,
+        uint32 movingAverageDuration_,
+        uint32 observationFrequency_
+    );
 
     /// @notice                 Indicates an invalid observation count when updating a category value moving average
     ///
     /// @param category_           The category that was observed
     /// @param observationCount_  The number of observations provided
     /// @param numObservations_  The number of observations expected
-    error Appraiser_ParamsInvalidObservationCount_Category(TreasuryCategory category_, uint256 observationCount_, uint256 numObservations_);
+    error Appraiser_ParamsInvalidObservationCount_Category(
+        TreasuryCategory category_,
+        uint256 observationCount_,
+        uint256 numObservations_
+    );
 
     /// @notice                 Indicates an invalid observation when updating a category value moving average
     ///
@@ -100,35 +124,50 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     ///
     /// @param category_        The treasury category that was observed
     /// @param lastObservation_  The timestamp of the last observation
-    error Appraiser_InsufficientTimeElapsed_Category(TreasuryCategory category_, uint48 lastObservation_);
+    error Appraiser_InsufficientTimeElapsed_Category(
+        TreasuryCategory category_,
+        uint48 lastObservation_
+    );
 
     /// @notice                 Indicates an invalid lastObservationTime when updating a metric value moving average
     ///
     /// @param metric_           The metric that was observed
     /// @param lastObservationTime_  The timestamp of the last observation
     /// @param blockTimestamp_   The current block timestamp
-    error Appraiser_ParamsLastObservationTimeInvalid_Metric(Metric metric_, uint48 lastObservationTime_, uint48 blockTimestamp_);
+    error Appraiser_ParamsLastObservationTimeInvalid_Metric(
+        Metric metric_,
+        uint48 lastObservationTime_,
+        uint48 blockTimestamp_
+    );
 
     /// @notice                 Indicates an invalid moving average duration when updating a metric value moving average
     ///
     /// @param metric_           The metric that was observed
     /// @param movingAverageDuration_  The moving average duration
     /// @param observationFrequency_  The observation frequency
-    error Appraiser_ParamsMovingAverageDurationInvalid_Metric(Metric metric_, uint32 movingAverageDuration_, uint32 observationFrequency_);
+    error Appraiser_ParamsMovingAverageDurationInvalid_Metric(
+        Metric metric_,
+        uint32 movingAverageDuration_,
+        uint32 observationFrequency_
+    );
 
     /// @notice                 Indicates an invalid observation count when updating a metric value moving average
     ///
     /// @param metric_           The metric that was observed
     /// @param observationCount_  The number of observations provided
     /// @param numObservations_  The number of observations expected
-    error Appraiser_ParamsInvalidObservationCount_Metric(Metric metric_, uint256 observationCount_, uint256 numObservations_);
+    error Appraiser_ParamsInvalidObservationCount_Metric(
+        Metric metric_,
+        uint256 observationCount_,
+        uint256 numObservations_
+    );
 
     /// @notice                 Indicates an invalid observation when updating a metric value moving average
     ///
     /// @param metric_           The metric that was observed
     /// @param index_           The index of the invalid observation
     error Appraiser_ParamsObservationZero_Metric(Metric metric_, uint256 index_);
-    
+
     /// @notice                 Indicates that insufficient time has elapsed since the last metric observation
     ///
     /// @param metric_          The metric that was observed
@@ -366,11 +405,9 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     /// @param category_    The TRSRY category to get the value of
     /// @return             The moving average of the assets in the category (in terms of `decimals`)
     /// @return             The last observation timestamp
-    function _categoryMovingAverage(TreasuryCategory category_)
-        internal
-        view
-        returns (uint256, uint48)
-    {
+    function _categoryMovingAverage(
+        TreasuryCategory category_
+    ) internal view returns (uint256, uint48) {
         // Load category data
         MovingAverage storage categoryMA = categoryValueMovingAverage[category_];
 
@@ -751,7 +788,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
             }
         }
     }
-    
+
     /// @inheritdoc IAppraiser
     function storeAssetObservation(address asset_) external override onlyRole("appraiser_store") {
         MovingAverage storage assetMA = assetValueMovingAverage[asset_];
@@ -780,7 +817,9 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
-    function getAssetMovingAverageData(address asset_) external view override returns (MovingAverage memory) {
+    function getAssetMovingAverageData(
+        address asset_
+    ) external view override returns (MovingAverage memory) {
         return assetValueMovingAverage[asset_];
     }
 
@@ -827,7 +866,8 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         categoryMA.lastObservationTime = lastObservationTime_;
         categoryMA.cumulativeObs = 0; // reset to zero before adding new observations
         for (uint256 i; i < numObservations; ) {
-            if (observations_[i] == 0) revert Appraiser_ParamsObservationZero_Category(category_, i);
+            if (observations_[i] == 0)
+                revert Appraiser_ParamsObservationZero_Category(category_, i);
 
             categoryMA.cumulativeObs += observations_[i];
             categoryMA.obs.push(observations_[i]);
@@ -838,7 +878,9 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
-    function storeCategoryObservation(TreasuryCategory category_) external override onlyRole("appraiser_store") {
+    function storeCategoryObservation(
+        TreasuryCategory category_
+    ) external override onlyRole("appraiser_store") {
         MovingAverage storage categoryMA = categoryValueMovingAverage[category_];
 
         // Check that sufficient time has passed to record a new observation
@@ -865,7 +907,9 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
-    function getCategoryMovingAverageData(TreasuryCategory category_) external view override returns (MovingAverage memory) {
+    function getCategoryMovingAverageData(
+        TreasuryCategory category_
+    ) external view override returns (MovingAverage memory) {
         return categoryValueMovingAverage[category_];
     }
 
@@ -950,7 +994,9 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     }
 
     /// @inheritdoc IAppraiser
-    function getMetricMovingAverageData(Metric metric_) external view override returns (MovingAverage memory) {
+    function getMetricMovingAverageData(
+        Metric metric_
+    ) external view override returns (MovingAverage memory) {
         return metricMovingAverage[metric_];
     }
 
