@@ -1151,6 +1151,45 @@ contract AppraiserTest is Test {
         );
     }
 
+    function testCorrectness_getMetric_liquidBacking_OHM() public {
+        // Define OHM as in illiquid asset
+        address[] memory assetLocations = new address[](0);
+        treasuryConfig.addAsset(address(ohm), assetLocations);
+        treasuryConfig.categorizeAsset(address(ohm), AssetCategory.wrap("illiquid"));
+
+        // Mint OHM into the treasury
+        ohm.mint(address(TRSRY), 100e9);
+
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.LIQUID_BACKING);
+
+        // GFet metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.LIQUID_BACKING);
+        // Assert that metric value is correct (and does not include OHM)
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
+    }
+
+    function testCorrectness_getMetric_liquidBacking_gOHM() public {
+        // Define gOHM as in illiquid asset
+        address[] memory assetLocations = new address[](0);
+        treasuryConfig.addAsset(address(gohm), assetLocations);
+        treasuryConfig.categorizeAsset(address(gohm), AssetCategory.wrap("illiquid"));
+
+        // Mint gOHM into the treasury
+        gohm.mint(address(TRSRY), 100e18);
+
+        // Define a price for gOHM
+        PRICE.setPrice(address(gohm), 10e18);
+
+        // Cache current metric value and timestamp
+        appraiser.storeMetric(IAppraiser.Metric.LIQUID_BACKING);
+
+        // GFet metric value
+        uint256 value = appraiser.getMetric(IAppraiser.Metric.LIQUID_BACKING);
+        // Assert that metric value is correct (and does not include OHM)
+        assertEq(value, RESERVE_VALUE_AT_1 + WETH_VALUE_AT_2000 + POL_BACKING_AT_1);
+    }
+
     function testCorrectness_getMetricPreviousTimestamp_backing_POL() public {
         // Cache current metric value and timestamp
         vm.prank(mockHeart);
