@@ -895,7 +895,7 @@ contract HeartTest is Test {
         assertEq(uint8(metrics[1]), 3, "market value");
         assertEq(metrics.length, 2, "metric count");
     }
-    
+
     //  [X]  getMovingAverageMetricsCount
 
     function testCorrectness_getMovingAverageMetricsCount() public {
