@@ -74,7 +74,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         distributor = distributor_;
 
         active = true;
-        lastBeat = uint48(block.timestamp);
         auctionDuration = auctionDuration_;
         maxReward = maxReward_;
 
@@ -120,6 +119,10 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         bytes memory expected = abi.encode([1, 2, 1]);
         if (MINTR_MAJOR != 1 || PRICE_MAJOR != 2 || ROLES_MAJOR != 1)
             revert Policy_WrongModuleVersion(expected);
+
+        // Sync heartbeat with staking contract
+        // @dev only if both have the same frequency
+        lastBeat = distributor.staking().secondsToNextEpoch() - frequency();
     }
 
     /// @inheritdoc Policy
