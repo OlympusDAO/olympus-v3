@@ -188,6 +188,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
 
     // Storage of protocol variables to avoid extra external calls
     address internal ohm;
+    address internal gohm;
     uint256 internal constant OHM_SCALE = 1e9;
     uint256 internal priceScale;
     uint32 public observationFrequency;
@@ -239,6 +240,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         if (TRSRY_MINOR < 1) revert Policy_WrongModuleVersion(expected);
 
         ohm = address(SPPLY.ohm());
+        gohm = address(SPPLY.gohm());
         decimals = PRICE.decimals();
         priceScale = 10 ** decimals;
     }
@@ -542,7 +544,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         uint256 value;
         uint256 len = assets.length;
         for (uint256 i; i < len; ) {
-            if (assets[i] != ohm) {
+            if (assets[i] != ohm && assets[i] != gohm) {
                 (uint256 assetValue, ) = _assetValue(assets[i]);
                 if (!_inArray(assets[i], polAssets)) {
                     value += assetValue;
@@ -562,7 +564,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         for (uint256 i; i < len; ) {
             uint256 tokens = reserves[i].tokens.length;
             for (uint256 j; j < tokens; ) {
-                if (reserves[i].tokens[j] != ohm) {
+                if (reserves[i].tokens[j] != ohm && reserves[i].tokens[j] != gohm) {
                     // Get current asset price
                     (uint256 price, ) = PRICE.getPrice(
                         reserves[i].tokens[j],
