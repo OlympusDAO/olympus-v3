@@ -245,9 +245,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Cache config in memory
         Config memory config_ = _config;
 
-        // Get liquid backing metric to determine if auto-refills of lower side capacity should be performed
-        uint256 lbbo = _getLBBO();
-
         // Check if walls can regenerate capacity
         if (
             uint48(block.timestamp) >= RANGE.lastActive(true) + uint48(config_.regenWait) &&
@@ -260,7 +257,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (
             (uint48(block.timestamp) >= RANGE.lastActive(false) + uint48(config_.regenWait) &&
                 _status.low.count >= config_.regenThreshold) ||
-            (currentPrice < lbbo && RANGE.capacity(false) < (fullCapacity(false) * 20) / 100)
+            (currentPrice < _getLBBO() && RANGE.capacity(false) < (fullCapacity(false) * 20) / 100)
         ) {
             _regenerate(false);
         }
@@ -560,9 +557,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             IAppraiser.Metric.LIQUID_BACKING_PER_BACKED_OHM,
             IAppraiser.Variant.MOVINGAVERAGE
         );
-        if (lbbo == 0) revert Operator_InvalidParams();
-        if (lbboTimestamp < uint48(block.timestamp - appraiser.getObservationFrequency()))
-            revert Operator_InvalidParams();
+
+        if (
+            lbbo == 0 ||
+            lbboTimestamp < uint48(block.timestamp - appraiser.getObservationFrequency())
+        ) revert Operator_InvalidParams();
 
         return lbbo;
     }
