@@ -330,7 +330,7 @@ contract BondCallbackTest is Test {
         // Whitelist all markets except the last one
         vm.prank(policy);
         callback.whitelist(address(teller), regBond);
-    
+
         vm.prank(policy);
         callback.whitelist(address(teller), regBondNaked);
 
