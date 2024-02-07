@@ -90,6 +90,7 @@ contract BondCallbackTest is Test {
 
     // Bond market ids to reference
     uint256 internal regBond;
+    uint256 internal regBondNaked;
     uint256 internal invBond;
     uint256 internal invBondNaked;
     uint256 internal internalBond;
@@ -311,8 +312,10 @@ contract BondCallbackTest is Test {
         nakedReserve.approve(address(teller), testNakedReserve * 20);
 
         // Create six markets in the bond system
-        // 1. Regular OHM bond (Reserve -> OHM)
+        // 1.1 Regular OHM bond (Reserve held in wrapped form -> OHM)
         regBond = createMarket(reserve, ohm, 0, 1, 3);
+        // 1.2 Regular OHM bond (Reserve held in naked form -> OHM)
+        regBondNaked = createMarket(nakedReserve, ohm, 0, 1, 3);
         // 2.1 Inverse bond (OHM -> Reserve held in wrapped form)
         invBond = createMarket(ohm, reserve, 1, 0, 3);
         // 2.2 Inverse bond (OHM -> Reserve held in naked form)
@@ -327,6 +330,9 @@ contract BondCallbackTest is Test {
         // Whitelist all markets except the last one
         vm.prank(policy);
         callback.whitelist(address(teller), regBond);
+    
+        vm.prank(policy);
+        callback.whitelist(address(teller), regBondNaked);
 
         vm.prank(policy);
         callback.whitelist(address(teller), invBond);
@@ -443,14 +449,15 @@ contract BondCallbackTest is Test {
     function testCorrectness_callback() public {
         /// Ensure the callback handles payouts for the 5 market cases correctly
 
-        /// Case 1: Regular Bond (Reserve -> OHM)
+        /// Case 1.1: Regular Bond (Reserve held in wrapped form -> OHM)
         /// OHM is minted for payout
-        /// Reserve is stored in callback until batched to TRSRY
-        console2.log("Case 1: Regular Bond (Reserve -> OHM)");
+        /// Reserve is wrapped and sent back to TRSRY
+        console2.log("Case 1.1: Regular Bond (Reserve held in wrapped form -> OHM)");
 
         /// Store start balances of teller and callback
         uint256 startBalTeller = ohm.balanceOf(address(teller));
         uint256 startBalCallback = reserve.balanceOf(address(callback));
+        uint256 startBalTRSRY = wrappedReserve.maxWithdraw(address(TRSRY));
 
         /// Mint tokens to the callback to simulate a purchase
         reserve.mint(address(callback), 300);
@@ -461,17 +468,40 @@ contract BondCallbackTest is Test {
 
         /// Expect the balances of the teller and callback to be updated
         assertEq(ohm.balanceOf(address(teller)), startBalTeller + 10);
-        assertEq(reserve.balanceOf(address(callback)), startBalCallback + 300);
+        assertEq(reserve.balanceOf(address(callback)), startBalCallback);
+        assertEq(wrappedReserve.maxWithdraw(address(TRSRY)), startBalTRSRY + 300);
 
-        /// Case 2.1: Inverse Bond (OHM -> Reserve stored in wrapped form)
+        /// Case 1.2: Regular Bond (Reserve held in naked form -> OHM)
+        /// OHM is minted for payout
+        /// Reserve is sent back to TRSRY
+        console2.log("Case 1.2: Regular Bond (Reserve held in naked form -> OHM)");
+
+        /// Store start balances of teller and callback
+        startBalTeller = ohm.balanceOf(address(teller));
+        startBalCallback = nakedReserve.balanceOf(address(callback));
+        startBalTRSRY = nakedReserve.balanceOf(address(TRSRY));
+
+        /// Mint tokens to the callback to simulate a purchase
+        nakedReserve.mint(address(callback), 300);
+
+        /// Call the callback function from the teller
+        vm.prank(address(teller));
+        callback.callback(regBondNaked, 300, 10);
+
+        /// Expect the balances of the teller and callback to be updated
+        assertEq(ohm.balanceOf(address(teller)), startBalTeller + 10);
+        assertEq(nakedReserve.balanceOf(address(callback)), startBalCallback);
+        assertEq(nakedReserve.balanceOf(address(TRSRY)), startBalTRSRY + 300);
+
+        /// Case 2.1: Inverse Bond (OHM -> Reserve held in wrapped form)
         /// wrappedReserve is withdrawn from the TRSRY to pay out teller
         /// OHM received is held in the callback until batched to TRSRY
-        console2.log("Case 2.1: Inverse Bond (OHM -> Reserve stored in wrapped form)");
+        console2.log("Case 2.1: Inverse Bond (OHM -> Reserve held in wrapped form)");
 
         /// Store start balances of TRSRY, teller and callback
         startBalTeller = reserve.balanceOf(address(teller));
         startBalCallback = ohm.balanceOf(address(callback));
-        uint256 startBalTRSRY = wrappedReserve.maxWithdraw(address(TRSRY));
+        startBalTRSRY = wrappedReserve.maxWithdraw(address(TRSRY));
 
         /// Mint tokens to the callback to simulate a purchase
         ohm.mint(address(callback), 10);
@@ -730,7 +760,7 @@ contract BondCallbackTest is Test {
         );
 
         // -- Whitelist 3:
-        console2.log("Case 3: Regular Bond (OHM -> Reserve stored in wrapped form)");
+        console2.log("Case 3: Regular Bond (OHM -> Reserve held in wrapped form)");
         // Cache initial approval
         initApproval = TRSRY.withdrawApproval(address(callback), wrappedReserve);
 
@@ -819,33 +849,15 @@ contract BondCallbackTest is Test {
     }
 
     function testCorrectness_batchToTreasury() public {
-        /// Create an extra market with the other token as the quote token
-        uint256 otherBond = createMarket(other, ohm, 2, 1, 5);
-
-        /// Whitelist new market on the callback
-        vm.prank(policy);
-        callback.whitelist(address(teller), otherBond);
-
         /// Store the initial balances of the TRSRY
         uint256[2] memory startBalances = [
             reserve.balanceOf(address(TRSRY)),
             other.balanceOf(address(TRSRY))
         ];
 
-        /// Send other tokens and reserve tokens to callback to mimic bond purchase
+        /// Send other tokens and reserve tokens to callback
         reserve.mint(address(callback), 30);
         other.mint(address(callback), 10);
-
-        /// Call the callback function from the teller to payout the purchases
-        vm.prank(address(teller));
-        callback.callback(regBond, 30, 1);
-
-        vm.prank(address(teller));
-        callback.callback(otherBond, 10, 200);
-
-        /// Check the balance of the callback and ensure it's updated
-        assertEq(reserve.balanceOf(address(callback)), 30);
-        assertEq(other.balanceOf(address(callback)), 10);
 
         /// Call batch to TRSRY with each token separately
         ERC20[] memory tokens = new ERC20[](1);
@@ -886,16 +898,9 @@ contract BondCallbackTest is Test {
         /// Store updated TRSRY balances
         startBalances = [reserve.balanceOf(address(TRSRY)), other.balanceOf(address(TRSRY))];
 
-        /// Send other tokens and reserve tokens to callback to mimic bond purchase
+        /// Send other tokens and reserve tokens to callback
         reserve.mint(address(callback), 30);
         other.mint(address(callback), 10);
-
-        /// Call the callback function from the teller to payout the purchases
-        vm.prank(address(teller));
-        callback.callback(regBond, 30, 1);
-
-        vm.prank(address(teller));
-        callback.callback(otherBond, 10, 200);
 
         /// Check that the callback balances are updated again
         assertEq(reserve.balanceOf(address(callback)), 30);
