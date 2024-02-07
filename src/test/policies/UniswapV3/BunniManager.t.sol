@@ -458,7 +458,7 @@ contract BunniManagerTest is Test {
 
         vm.mockCallRevert(
             address(PRICE),
-            abi.encodeWithSignature("getPrice(address)", asset_),
+            abi.encodeWithSignature("getPrice(address,uint8)", asset_, PRICEv2.Variant.CURRENT),
             err
         );
     }
