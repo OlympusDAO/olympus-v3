@@ -822,8 +822,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             (address token0Address, address token1Address) = UniswapV3PoolLibrary.getPoolTokens(
                 poolAddress
             );
-            uint256 price0 = PRICE.getPrice(token0Address, PRICEv2.Variant.CURRENT);
-            uint256 price1 = PRICE.getPrice(token1Address, PRICEv2.Variant.CURRENT);
+            (uint256 price0, ) = PRICE.getPrice(token0Address, PRICEv2.Variant.CURRENT);
+            (uint256 price1, ) = PRICE.getPrice(token1Address, PRICEv2.Variant.CURRENT);
             uint256 token0Scale = 10 ** ERC20(token0Address).decimals();
             uint256 token1Scale = 10 ** ERC20(token1Address).decimals();
 
