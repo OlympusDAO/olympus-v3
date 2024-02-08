@@ -720,19 +720,24 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     //============================================================================================//
 
     /// @inheritdoc IAppraiser
-    function storeAssetValue(address asset_) external override {
+    /// @dev        Gated to prevent manipulation of the cached value
+    function storeAssetValue(address asset_) external override onlyRole("appraiser_store") {
         (uint256 value, uint48 timestamp) = getAssetValue(asset_, Variant.CURRENT);
         assetValueCache[asset_] = Cache(value, timestamp);
     }
 
     /// @inheritdoc IAppraiser
-    function storeCategoryValue(TreasuryCategory category_) external override {
+    /// @dev        Gated to prevent manipulation of the cached value
+    function storeCategoryValue(
+        TreasuryCategory category_
+    ) external override onlyRole("appraiser_store") {
         (uint256 value, uint48 timestamp) = getCategoryValue(category_, Variant.CURRENT);
         categoryValueCache[category_] = Cache(value, timestamp);
     }
 
     /// @inheritdoc IAppraiser
-    function storeMetric(Metric metric_) external override {
+    /// @dev        Gated to prevent manipulation of the cached value
+    function storeMetric(Metric metric_) external override onlyRole("appraiser_store") {
         (uint256 result, uint48 timestamp) = getMetric(metric_, Variant.CURRENT);
         metricCache[metric_] = Cache(result, timestamp);
     }
