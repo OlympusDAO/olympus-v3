@@ -744,7 +744,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
         stdDev = FixedPointMathLib.sqrt(stdDev / len);
 
         // Calculate and return annual volatility
-        return stdDev * 33; // annual std dev = period std dev * sqrt(periods per year), in this case there are 365 * 3 = 1095 periods per year. sqrt(1095) = 33.097...
+        return stdDev * FixedPointMathLib.sqrt(1095); // annual std dev = period std dev * sqrt(periods per year), in this case there are 365 * 3 = 1095 periods per year. sqrt(1095) = 33.097...
     }
 
     //============================================================================================//
