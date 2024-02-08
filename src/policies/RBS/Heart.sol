@@ -6,6 +6,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
 
+import {IStaking} from "src/interfaces/IStaking.sol";
 import {IDistributor} from "policies/RBS/interfaces/IDistributor.sol";
 import {IOperator} from "policies/RBS/interfaces/IOperator.sol";
 import {IHeart} from "policies/RBS/interfaces/IHeart.sol";
@@ -121,8 +122,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
             revert Policy_WrongModuleVersion(expected);
 
         // Sync heartbeat with staking contract
-        // @dev only if both have the same frequency
-        lastBeat = distributor.staking().secondsToNextEpoch() - frequency();
+        (uint256 epochLength,, uint256 epochEnd, ) = IStaking(distributor.staking()).epoch();
+        if (frequency() != epochLength) revert Heart_InvalidFrequency();
+        lastBeat = uint48(epochEnd - epochLength);
     }
 
     /// @inheritdoc Policy

@@ -24,4 +24,5 @@ interface IStaking {
     /* ========== VIEW FUNCTIONS ========== */
 
     function secondsToNextEpoch() external view returns (uint256);
+    function epoch() external view returns (uint256, uint256, uint256, uint256);
 }

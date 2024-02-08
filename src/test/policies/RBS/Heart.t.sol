@@ -190,6 +190,9 @@ contract HeartTest is Test {
 
             // Heart ROLES
             rolesAdmin.grantRole("heart_admin", policy);
+
+            // Do initial heart beat
+            heart.beat();
         }
     }
 
@@ -207,6 +210,33 @@ contract HeartTest is Test {
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+    }
+
+    function testRevert_configureDependencies_invalidFrequency() public {
+        // Deploy mock staking with different frequency
+        staking = new MockStakingZD(7 hours, 0, block.timestamp);
+        distributor = new ZeroDistributor(address(staking));
+        staking.setDistributor(address(distributor));
+
+        address[] memory movingAverageAssets = new address[](2);
+        movingAverageAssets[0] = address(ohm);
+        movingAverageAssets[1] = address(reserve);
+
+        // Deploy heart
+        heart = new OlympusHeart(
+            kernel,
+            IOperator(address(operator)),
+            IAppraiser(address(appraiser)),
+            IDistributor(address(distributor)),
+            movingAverageAssets,
+            uint256(10e9), // max reward = 10 reward tokens
+            uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
+        );
+
+        // Since the staking frequency is different, the call to configureDependencies reverts
+        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidFrequency.selector);
+        vm.expectRevert(err);
+        heart.configureDependencies();
     }
 
     function test_requestPermissions() public {
