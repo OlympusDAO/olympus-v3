@@ -92,6 +92,15 @@ contract BunniSupply is SupplySubmodule {
     /// @param token_       The address of the BunniToken contract
     event BunniTokenRemoved(address token_);
 
+    /// @notice             Emitted when the reserve observation is updated
+    event ReserveObservationUpdated(
+        address token,
+        uint256 reserve0,
+        uint256 reserve1,
+        uint256 fee0,
+        uint256 fee1
+    );
+
     // ========== DATA STRUCTURES ========== //
 
     struct TokenData {
@@ -99,6 +108,17 @@ contract BunniSupply is SupplySubmodule {
         BunniLens lens;
         uint16 twapMaxDeviationBps;
         uint32 twapObservationWindow;
+        uint16 nextObservationIndex;
+        uint32 numObservations;
+        uint48 lastObservationTime;
+    }
+
+    // TODO consider shifting into abstract contract to be shared with other submodules
+    struct ReserveObservation {
+        uint256 reserve0;
+        uint256 reserve1;
+        uint256 fee0;
+        uint256 fee1;
     }
 
     // ========== STATE VARIABLES ========== //
@@ -108,6 +128,9 @@ contract BunniSupply is SupplySubmodule {
 
     /// @notice     The number of BunniTokens that are being monitored
     uint256 public bunniTokenCount;
+
+    /// @notice     Stores the reserve observations for each BunniToken
+    mapping(BunniToken => ReserveObservation[]) public reserveObservations;
 
     /// @notice     The address of the OHM token
     /// @dev        Set at deployment-time
@@ -230,6 +253,9 @@ contract BunniSupply is SupplySubmodule {
                 uint256 reserve0,
                 uint256 reserve1
             ) = _getReservesWithFees(key, lens);
+
+            // TODO remove fetching, validation
+            // TODO return MA result
 
             // Validate reserves
             _validateReserves(
@@ -375,6 +401,16 @@ contract BunniSupply is SupplySubmodule {
         bunniTokenCount--;
 
         emit BunniTokenRemoved(token_);
+    }
+
+    // ========== MOVING AVERAGE TRACKING ========== //
+
+    function updateTokenMovingAverage() external onlyParent() {
+        // TODO
+    }
+
+    function storeReserveObservations() external onlyParent() {
+        // TODO
     }
 
     // =========== INTERNAL FUNCTIONS =========== //
