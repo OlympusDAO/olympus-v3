@@ -122,7 +122,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
             revert Policy_WrongModuleVersion(expected);
 
         // Sync heartbeat with staking contract
-        (uint256 epochLength,, uint256 epochEnd, ) = IStaking(distributor.staking()).epoch();
+        (uint256 epochLength, , uint256 epochEnd, ) = IStaking(distributor.staking()).epoch();
         if (frequency() != epochLength) revert Heart_InvalidFrequency();
         lastBeat = uint48(epochEnd - epochLength);
     }
