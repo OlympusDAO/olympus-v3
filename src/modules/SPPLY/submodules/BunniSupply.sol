@@ -88,8 +88,6 @@ contract BunniSupply is SupplySubmodule {
     /// @dev        Set at deployment-time
     address internal immutable ohm;
 
-    uint16 internal constant TWAP_MAX_DEVIATION_BASE = 10_000; // 100%
-
     // ========== CONSTRUCTOR ========== //
 
     /// @notice                 Initialize the submodule
@@ -144,6 +142,8 @@ contract BunniSupply is SupplySubmodule {
     /// @dev        Additionally, the reserves and TWAP are compared to ensure that the reserves
     /// @dev        have not been manipulated.
     function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
+        // TODO revert if last observation is stale
+
         // Iterate through tokens and total up the pool OHM reserves as the POL supply
         uint256 len = bunniTokens.length;
         uint256 total;
@@ -183,6 +183,8 @@ contract BunniSupply is SupplySubmodule {
         override
         returns (SPPLYv1.Reserves[] memory)
     {
+        // TODO revert if last observation is stale
+
         // Iterate through tokens and total up the reserves of each pool
         uint256 len = bunniTokens.length;
         SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
@@ -213,8 +215,6 @@ contract BunniSupply is SupplySubmodule {
                 ++i;
             }
         }
-
-        // TODO add last observation time
 
         return reserves;
     }
@@ -247,8 +247,9 @@ contract BunniSupply is SupplySubmodule {
     function addBunniToken(
         address token_,
         address bunniLens_,
-        uint16 twapMaxDeviationBps_,
-        uint32 twapObservationWindow_
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
     ) external onlyParent {
         if (token_ == address(0) || _inTokenArray(token_))
             revert BunniSupply_Params_InvalidBunniToken(token_);
@@ -334,7 +335,20 @@ contract BunniSupply is SupplySubmodule {
 
     // ========== MOVING AVERAGE TRACKING ========== //
 
-    function updateTokenMovingAverageConfiguration() external onlyParent {
+    /// @notice             Updates the moving average configuration of the token
+    /// @dev                Reverts if:
+    /// @dev                -
+    function _updateTokenMovingAverage(
+        BunniKey memory key_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory token0Observations_,
+        uint256[] memory token1Observations_
+    ) internal {
+        // TODO
+    }
+
+    function updateTokenMovingAverage() external onlyParent {
         // TODO
     }
 
