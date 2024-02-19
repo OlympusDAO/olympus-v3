@@ -32,6 +32,7 @@ import {LiquidityManagement} from "./uniswap/LiquidityManagement.sol";
 /// @dev    - Use solmate ERC20 and SafeTransferLib instead of the local IERC20 and SafeTransferLib
 /// @dev    - updateSwapFees() function added
 /// @dev    - added onlyOwner to all state-changing functions to ensure they are only called by BunniManager
+/// @dev    - modified compound() to collect remaining fees and send them to the owner after compounding
 contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagement {
     uint256 internal constant WAD = 1e18;
     uint256 internal constant MAX_PROTOCOL_FEE = 5e17;
@@ -245,6 +246,28 @@ contract BunniHub is IBunniHub, Owned, Multicall, SelfPermit, LiquidityManagemen
             uint128(amount0),
             uint128(amount1)
         );
+
+        // / -----------------------------------------------------------
+        // / cachedFeesOwed0, cachedFeesOwed1 now store the remainder of
+        // / fee owed which wasn't compounded into the liquidity position
+        // / -----------------------------------------------------------
+
+        if (cachedFeesOwed0 != amount0 || cachedFeesOwed1 != amount1) {
+            // the fees which won't be compounded into the liquidity position will be
+            // collected and sent to the owner of the contract.
+
+            cachedFeesOwed0 -= uint128(amount0);
+            cachedFeesOwed1 -= uint128(amount1);
+
+            // tokens are transferred to msg.sender (owner)
+            (cachedFeesOwed0, cachedFeesOwed1) = key.pool.collect(
+                msg.sender,
+                key.tickLower,
+                key.tickUpper,
+                cachedFeesOwed0,
+                cachedFeesOwed1
+            );
+        }
 
         /// -----------------------------------------------------------
         /// amount0, amount1 now store the fees claimed
