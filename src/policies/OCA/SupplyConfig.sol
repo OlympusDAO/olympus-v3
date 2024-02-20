@@ -97,7 +97,9 @@ contract SupplyConfig is Policy, RolesConsumer {
         SPPLY.removeCategory(category_);
     }
 
-    /// @notice             Categorize an address in a supply category
+    /// @notice             Categorize or uncategorize an address in a supply category
+    /// @dev                To add a location to a category, pass in the address and category
+    /// @dev                To remove a location from all categories, pass in the address and an empty category
     ///
     /// @param location_    The address to categorize
     /// @param category_    The category to add the address to
