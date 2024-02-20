@@ -13,7 +13,6 @@ import {RBSv2Install_3_RBS} from "src/scripts/ops/batches/RBSv2Install_3_RBS.sol
 import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
 import {BrickedSupply} from "modules/SPPLY/submodules/BrickedSupply.sol";
-import {BLVaultSupply} from "modules/SPPLY/submodules/BLVaultSupply.sol";
 
 import {toCategory as toSupplyCategory, SPPLYv1} from "modules/SPPLY/SPPLY.v1.sol";
 
@@ -30,7 +29,6 @@ contract RBSv2Install_4_TEST is OlyBatch {
     address spply;
     address migrationOffsetSupply;
     address brickedSupply;
-    address blVaultSupply;
 
     function loadEnv() internal override {
         heartV2 = envAddress("current", "olympus.policies.OlympusHeartV2");
@@ -41,7 +39,6 @@ contract RBSv2Install_4_TEST is OlyBatch {
             "olympus.submodules.SPPLY.MigrationOffsetSupply"
         );
         brickedSupply = envAddress("current", "olympus.submodules.SPPLY.BrickedSupply");
-        blVaultSupply = envAddress("current", "olympus.submodules.SPPLY.BLVaultSupply");
     }
 
     function RBSv2Install_4(bool send_) external isDaoBatch(send_) {
@@ -107,7 +104,6 @@ contract RBSv2Install_4_TEST is OlyBatch {
                 "    Floating supply",
                 OlympusSupply(spply).getMetric(SPPLYv1.Metric.FLOATING_SUPPLY)
             );
-            console2.log("    BL OHM", BLVaultSupply(blVaultSupply).getCollateralizedOhm());
             console2.log(
                 "    Backed supply",
                 OlympusSupply(spply).getMetric(SPPLYv1.Metric.BACKED_SUPPLY)

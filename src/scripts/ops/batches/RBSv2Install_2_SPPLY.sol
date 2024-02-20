@@ -19,7 +19,6 @@ import {SupplyConfig} from "policies/OCA/SupplyConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 // SPPLY submodules
-import {BLVaultSupply} from "modules/SPPLY/submodules/BLVaultSupply.sol";
 import {BunniSupply} from "modules/SPPLY/submodules/BunniSupply.sol";
 import {MigrationOffsetSupply} from "modules/SPPLY/submodules/MigrationOffsetSupply.sol";
 import {BrickedSupply} from "modules/SPPLY/submodules/BrickedSupply.sol";
@@ -39,7 +38,6 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
     // New Contracts
     address spply;
     address supplyConfig;
-    address blVaultSupply;
     address bunniSupply;
     address migrationOffsetSupply;
     address brickedSupply;
@@ -64,7 +62,6 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
 
         spply = envAddress("current", "olympus.modules.OlympusSupply");
         supplyConfig = envAddress("current", "olympus.policies.SupplyConfig");
-        blVaultSupply = envAddress("current", "olympus.submodules.SPPLY.BLVaultSupply");
         bunniSupply = envAddress("current", "olympus.submodules.SPPLY.BunniSupply");
         migrationOffsetSupply = envAddress(
             "current",
@@ -97,14 +94,13 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
         // 1. Installs the OlympusSupply module
         // 2. Installs the SupplyConfig policy
         // 3. Set roles for policy access control
-        // 4. Installs the BLVaultSupply submodule on the OlympusSupply module
-        // 5. Installs the BunniSupply submodule on the OlympusSupply module
-        // 6. Installs the MigrationOffsetSupply submodule on the OlympusSupply module
-        // 7. Installs the BrickedSupply submodule on the OlympusSupply module
-        // 8. Categorizes protocol-owned-treasury supply
-        // 9. Categorizes DAO supply
-        // 10. Activates the new CrossChainBridge policy
-        // 11. Set trusted remotes on the new CrossChainBridge policy
+        // 4. Installs the BunniSupply submodule on the OlympusSupply module
+        // 5. Installs the MigrationOffsetSupply submodule on the OlympusSupply module
+        // 6. Installs the BrickedSupply submodule on the OlympusSupply module
+        // 7. Categorizes protocol-owned-treasury supply
+        // 8. Categorizes DAO supply
+        // 9. Activates the new CrossChainBridge policy
+        // 10. Set trusted remotes on the new CrossChainBridge policy
 
         // 1. Install the OlympusSupply module
         console2.log("Installing OlympusSupply module");
@@ -155,18 +151,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 4. Install the BLVaultSupply submodule on the OlympusSupply module
-        //  - The Lido and LUSD BLVaultManagers were already added as managers at deployment-time
-        console2.log("Installing BLVaultSupply submodule");
-        addToBatch(
-            supplyConfig,
-            abi.encodeWithSelector(
-                SupplyConfig.installSubmodule.selector,
-                BLVaultSupply(blVaultSupply)
-            )
-        );
-
-        // 5. Install the BunniSupply submodule on the OlympusSupply module
+        // 4. Install the BunniSupply submodule on the OlympusSupply module
         // No configuration needed - will be performed by BunniManager
         {
             console2.log("Installing BunniSupply submodule");
@@ -188,7 +173,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             );
         }
 
-        // 6. Install the MigrationOffsetSupply submodule on the OlympusSupply module
+        // 5. Install the MigrationOffsetSupply submodule on the OlympusSupply module
         // No configuration needed - already done at deployment
         console2.log("Installing MigrationOffsetSupply submodule");
         addToBatch(
@@ -199,7 +184,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 7. Install the BrickedSupply submodule on the OlympusSupply module
+        // 6. Install the BrickedSupply submodule on the OlympusSupply module
         // No configuration needed - already done at deployment
         console2.log("Installing BrickedSupply submodule");
         addToBatch(
@@ -210,7 +195,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 8. Categorize protocol-owned-treasury supply
+        // 7. Categorize protocol-owned-treasury supply
         console2.log("Categorizing DAO MS as protocol-owned-treasury supply");
         addToBatch(
             supplyConfig,
@@ -221,7 +206,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 9. Categorize DAO supply
+        // 8. Categorize DAO supply
         console2.log("Categorizing DAO working wallet as DAO supply");
         addToBatch(
             supplyConfig,
@@ -232,7 +217,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 10. Activate the new CrossChainBridge policy
+        // 9. Activate the new CrossChainBridge policy
         //  - No need to set the admin role, as it was already set when the first version of the policy was installed
         console2.log("Activating new CrossChainBridge policy");
         addToBatch(
@@ -244,7 +229,7 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             )
         );
 
-        // 11. Set trusted remotes on the new CrossChainBridge policy
+        // 10. Set trusted remotes on the new CrossChainBridge policy
         console2.log("Setting Arbitrum bridge as trusted remote on new CrossChainBridge policy");
         addToBatch(
             crossChainBridgeV1_1,
@@ -299,7 +284,6 @@ contract RBSv2Install_2_SPPLY is OlyBatch {
             "    Floating supply",
             OlympusSupply(spply).getMetric(SPPLYv1.Metric.FLOATING_SUPPLY)
         );
-        console2.log("    BL OHM", BLVaultSupply(blVaultSupply).getCollateralizedOhm());
         console2.log(
             "    Backed supply",
             OlympusSupply(spply).getMetric(SPPLYv1.Metric.BACKED_SUPPLY)
