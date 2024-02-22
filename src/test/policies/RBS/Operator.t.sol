@@ -259,6 +259,7 @@ contract OperatorTest is Test {
         // Initialise metrics on the Appraiser
         {
             // Initialize appraiser liquid backing calculation
+            vm.prank(address(heart));
             appraiser.storeMetric(IAppraiserMetric.Metric.LIQUID_BACKING_PER_BACKED_OHM);
 
             // Get the metric value
