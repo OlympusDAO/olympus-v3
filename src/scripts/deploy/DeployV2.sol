@@ -21,6 +21,11 @@ import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiq
 // Cooler Loans
 import {CoolerFactory, Cooler} from "cooler/CoolerFactory.sol";
 
+// Governance
+import {Timelock} from "src/external/governance/Timelock.sol";
+import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDelegator.sol";
+import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
+
 import "src/Kernel.sol";
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
 import {OlympusRange} from "modules/RANGE/OlympusRange.sol";
@@ -94,6 +99,11 @@ contract OlympusDeploy is Script {
     BLVaultLusd public lusdVault;
     CrossChainBridge public bridge;
     Clearinghouse public clearinghouse;
+
+    // Governance
+    Timelock public timelock;
+    GovernorBravoDelegate public governorBravoDelegate;
+    GovernorBravoDelegator public governorBravoDelegator;
 
     /// Construction variables
 
@@ -178,6 +188,11 @@ contract OlympusDeploy is Script {
         selectorMap["BLVaultManagerLusd"] = this._deployBLVaultManagerLusd.selector;
         selectorMap["Clearinghouse"] = this._deployClearinghouse.selector;
 
+        // Governance
+        selectorMap["Timelock"] = this._deployTimelock.selector;
+        selectorMap["GovernorBravoDelegator"] = this._deployGovernorBravoDelegator.selector;
+        selectorMap["GovernorBravoDelegate"] = this._deployGovernorBravoDelegate.selector;
+
         // Load environment addresses
         env = vm.readFile("./src/scripts/env.json");
 
@@ -246,6 +261,15 @@ contract OlympusDeploy is Script {
         lusdVaultManager = BLVaultManagerLusd(envAddress("olympus.policies.BLVaultManagerLusd"));
         lusdVault = BLVaultLusd(envAddress("olympus.policies.BLVaultLusd"));
         clearinghouse = Clearinghouse(envAddress("olympus.policies.Clearinghouse"));
+
+        // Governance
+        timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
+        governorBravoDelegator = GovernorBravoDelegator(
+            payable(envAddress("olympus.governance.GovernorBravoDelegator"))
+        );
+        governorBravoDelegate = GovernorBravoDelegate(
+            envAddress("olympus.governance.GovernorBravoDelegate")
+        );
 
         // Load deployment data
         string memory data = vm.readFile(deployFilePath_);
@@ -849,6 +873,68 @@ contract OlympusDeploy is Script {
 
         return address(CHREG);
     }
+
+    // ========== GOVERNANCE ========== //
+
+    function _deployTimelock(bytes calldata args) public returns (address) {
+        (address admin, uint256 delay) = abi.decode(args, (address, uint256));
+
+        console2.log("Timelock admin:", admin);
+        console2.log("Timelock delay:", delay);
+
+        // Deploy Timelock
+        vm.broadcast();
+        timelock = new Timelock(admin, delay);
+        console2.log("Timelock deployed at:", address(timelock));
+
+        return address(timelock);
+    }
+
+    function _deployGovernorBravoDelegate(bytes calldata args) public returns (address) {
+        // No additional arguments for Governor Bravo Delegate
+
+        // Deploy Governor Bravo Delegate
+        vm.broadcast();
+        governorBravoDelegate = new GovernorBravoDelegate();
+        console2.log("Governor Bravo Delegate deployed at:", address(governorBravoDelegate));
+
+        return address(governorBravoDelegate);
+    }
+
+    function _deployGovernorBravoDelegator(bytes calldata args) public returns (address) {
+        (
+            uint256 activationGracePeriod,
+            uint256 proposalThreshold,
+            address vetoGuardian,
+            uint256 votingDelay,
+            uint256 votingPeriod
+        ) = abi.decode(args, (uint256, uint256, address, uint256, uint256));
+
+        console2.log("Governor Bravo Delegator vetoGuardian:", vetoGuardian);
+        console2.log("Governor Bravo Delegator votingPeriod:", votingPeriod);
+        console2.log("Governor Bravo Delegator votingDelay:", votingDelay);
+        console2.log("Governor Bravo Delegator activationGracePeriod:", activationGracePeriod);
+        console2.log("Governor Bravo Delegator proposalThreshold:", proposalThreshold);
+
+        // Deploy Governor Bravo Delegator
+        vm.broadcast();
+        governorBravoDelegator = new GovernorBravoDelegator(
+            address(timelock),
+            address(gohm),
+            address(kernel),
+            vetoGuardian,
+            address(governorBravoDelegate),
+            votingPeriod,
+            votingDelay,
+            activationGracePeriod,
+            proposalThreshold
+        );
+        console2.log("Governor Bravo Delegator deployed at:", address(governorBravoDelegator));
+
+        return address(governorBravoDelegator);
+    }
+
+    // ========== VERIFICATION ========== //
 
     /// @dev Verifies that the environment variable addresses were set correctly following deployment
     /// @dev Should be called prior to verifyAndPushAuth()
