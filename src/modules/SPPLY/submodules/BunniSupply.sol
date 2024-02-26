@@ -334,14 +334,12 @@ contract BunniSupply is SupplySubmodule {
             revert BunniSupply_Params_InvalidBunniToken(token_);
 
         uint256 len = bunniTokens.length;
-        uint256 bunniTokenIndex = type(uint256).max;
         // Remove the token first
         for (uint256 i; i < len; ) {
             address tokenAddress = address(bunniTokens[i].token);
             if (token_ == tokenAddress) {
                 bunniTokens[i] = bunniTokens[len - 1];
                 bunniTokens.pop();
-                bunniTokenIndex = i;
                 break;
             }
 
