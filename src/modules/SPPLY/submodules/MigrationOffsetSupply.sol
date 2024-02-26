@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.15;
 
 import "modules/SPPLY/SPPLY.v1.sol";

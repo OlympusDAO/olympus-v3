@@ -210,7 +210,7 @@ contract SupplyTest is Test {
 
             // Deploy SPPLY module
             address[2] memory tokens = [address(ohm), address(gohm)];
-            moduleSupply = new OlympusSupply(kernel, tokens, INITIAL_CROSS_CHAIN_SUPPLY);
+            moduleSupply = new OlympusSupply(kernel, tokens, INITIAL_CROSS_CHAIN_SUPPLY, uint32(8 hours));
 
             // Deploy mock module writer
             writer = moduleSupply.generateGodmodeFixture(type(OlympusSupply).name);

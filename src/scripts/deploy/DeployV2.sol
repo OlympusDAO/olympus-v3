@@ -1322,11 +1322,15 @@ contract OlympusDeploy is Script {
     function _deploySupply(bytes memory args) public returns (address) {
         // Arguments
         // The JSON is encoded by the properties in alphabetical order, so the output tuple must be in alphabetical order, irrespective of the order in the JSON file itself
-        uint256 initialCrossChainSupply = abi.decode(args, (uint256));
+        (uint256 initialCrossChainSupply, uint32 observationFrequency) = abi.decode(
+            args,
+            (uint256, uint32)
+        );
 
         // TODO fill in the initialCrossChainSupply value
 
         console2.log("    initialCrossChainSupply", initialCrossChainSupply);
+        console2.log("    observationFrequency", observationFrequency);
 
         // Check that environment variables are loaded
         if (address(kernel) == address(0)) revert("Kernel address not set");
@@ -1339,7 +1343,7 @@ contract OlympusDeploy is Script {
         vm.broadcast();
 
         // Deploy the module
-        SPPLY = new OlympusSupply(kernel, tokens, initialCrossChainSupply);
+        SPPLY = new OlympusSupply(kernel, tokens, initialCrossChainSupply, observationFrequency);
 
         console2.log("SPPLY deployed at:", address(SPPLY));
 

@@ -3,7 +3,8 @@
         {
             "name": "OlympusSupply",
             "args": {
-                "initialCrossChainSupply": 0
+                "initialCrossChainSupply": 0,
+                "observationFrequency": 28800
             }
         },
         {
