@@ -377,6 +377,7 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     /// @dev        - The caller is not permissioned
     /// @dev        - `asset_` is already approved
     /// @dev        - `asset_` is not a contract
+    /// @dev        - `locations_` contains a duplicate location
     /// @dev        - `locations_` contains the zero address
     function addAsset(
         address asset_,
