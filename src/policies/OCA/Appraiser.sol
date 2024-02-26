@@ -601,7 +601,7 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     /// @notice         - Backing
     /// @notice         - Excluding: illiquid assets
     ///
-    /// @return         The value of liquid backing (in terms of `decimals`)
+    /// @return         The value of liquid backing (in terms of `decimals()`)
     function _liquidBacking() internal view returns (uint256) {
         // Get total backing
         uint256 backing = _backing();
@@ -618,9 +618,10 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
     /// @notice         - Liquid backing
     /// @notice         - Divided by: OHM backed supply
     ///
-    /// @return         The value of LBBO (in terms of `decimals`)
+    /// @return         uint256     The value of LBBO (in terms of `decimals()`)
     function _liquidBackingPerBackedOhm() internal view returns (uint256) {
         // Get liquid backing
+        // Scale: PRICE decimals
         uint256 liquidBacking = _liquidBacking();
 
         // Get supply of backed ohm (in OHM decimals)
@@ -629,9 +630,8 @@ contract Appraiser is IAppraiser, Policy, RolesConsumer {
             SPPLYv1.Variant.CURRENT
         );
 
-        // Divide liquid backing by backed supply
-        // and correct scale
-        return liquidBacking.mulDivDown(priceScale, backedSupply) / OHM_SCALE;
+        // Divide liquid backing by backed supply (scaled to `priceSacle`)
+        return liquidBacking.mulDivDown(priceScale, backedSupply.mulDivDown(priceScale, OHM_SCALE));
     }
 
     /// @notice         Calculates the market value of the treasury
