@@ -922,4 +922,6 @@ contract HeartTest is Test {
         // Check that the metric was removed
         assertEq(heart.getMovingAverageMetricsCount(), 2, "metric count");
     }
+
+    // TODO check that SPPLY observations are stored
 }

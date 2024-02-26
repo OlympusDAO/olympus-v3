@@ -1529,103 +1529,10 @@ contract BunniManagerTest is Test {
         assertTrue(polo > 0);
 
         // Check that the token has been added to the BunniSupply submodule
-        (
-            IBunniToken submoduleBunniToken_,
-            BunniLens submoduleBunniLens_,
-            uint16 submoduleTwapMaxDeviation_,
-            uint32 submoduleTwapObservationWindow_
-        ) = supplySubmoduleBunni.bunniTokens(0);
+        (IBunniToken submoduleBunniToken_, BunniLens submoduleBunniLens_) = supplySubmoduleBunni
+            .bunniTokens(0);
         assertEq(address(submoduleBunniToken_), address(poolToken));
         assertEq(address(submoduleBunniLens_), address(bunniLens));
-        assertEq(submoduleTwapMaxDeviation_, TWAP_DEFAULT_MAX_DEVIATION_BPS);
-        assertEq(submoduleTwapObservationWindow_, TWAP_DEFAULT_OBSERVATION_WINDOW);
-    }
-
-    function test_activatePoolToken_twapParameters() public {
-        uint256 amount = 100e6;
-        uint256 USDC_DEPOSIT = amount.mulDiv(OHM_USDC_PRICE, 1e18);
-        uint256 OHM_DEPOSIT = amount.mulDiv(1e9, 1e6); // Adjust for decimal scale
-
-        // Deploy a token so that the ERC20 exists
-        vm.prank(policy);
-        IBunniToken poolToken = bunniManager.deployPoolToken(address(pool));
-
-        // Mint tokens to the TRSRY
-        vm.prank(policy);
-        usdc.mint(treasuryAddress, USDC_DEPOSIT);
-
-        // Deposit
-        vm.prank(policy);
-        bunniManager.deposit(
-            address(pool),
-            ohmAddress,
-            OHM_DEPOSIT,
-            USDC_DEPOSIT,
-            SLIPPAGE_DEFAULT
-        );
-
-        // Set TWAP parameters
-        uint16 twapMaxDeviationBps = 5000;
-        uint32 twapObservationWindow = TWAP_DEFAULT_OBSERVATION_WINDOW + 1;
-
-        bunniSetup.mockPoolObservations(
-            address(pool),
-            twapObservationWindow,
-            OHM_USDC_TICK_CUMULATIVE_0,
-            OHM_USDC_TICK_CUMULATIVE_1
-        );
-
-        // Recognise the emitted event
-        vm.expectEmit(true, true, false, true);
-        emit PoolTokenActivated(address(pool), address(poolToken));
-
-        vm.prank(policy);
-        bunniManager.activatePoolToken(address(pool), twapMaxDeviationBps, twapObservationWindow);
-
-        // Check that the token has been added to TRSRY
-        OlympusTreasury.Asset memory trsryAsset = TRSRY.getAssetData(address(poolToken));
-        assertTrue(trsryAsset.approved);
-        assertEq(trsryAsset.locations.length, 1);
-        assertEq(trsryAsset.locations[0], treasuryAddress);
-        // Check that the token is categorized in TRSRY
-        address[] memory trsryPolAssets = TRSRY.getAssetsByCategory(
-            toTreasuryCategory("protocol-owned-liquidity")
-        );
-        assertEq(trsryPolAssets.length, 1);
-        assertEq(trsryPolAssets[0], address(poolToken));
-
-        // Check that the token has been added to PRICEv2
-        PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
-        assertTrue(priceAsset.approved);
-
-        // Check that the price feed has the correct parameters
-        PRICEv2.Component[] memory priceFeeds = abi.decode(priceAsset.feeds, (PRICEv2.Component[]));
-        BunniPrice.BunniParams memory bunniParams = abi.decode(
-            priceFeeds[0].params,
-            (BunniPrice.BunniParams)
-        );
-        assertEq(bunniParams.bunniLens, address(bunniLens));
-        assertEq(bunniParams.twapMaxDeviationsBps, twapMaxDeviationBps);
-        assertEq(bunniParams.twapObservationWindow, twapObservationWindow);
-
-        // Check that the price is non-zero
-        assertTrue(PRICE.getPrice(address(poolToken)) > 0);
-
-        // Check that the token is included in SPPLY metrics
-        uint256 polo = SPPLY.getSupplyByCategory(toSupplyCategory("protocol-owned-liquidity"));
-        assertTrue(polo > 0);
-
-        // Check that the token has been added to the BunniSupply submodule
-        (
-            IBunniToken submoduleBunniToken_,
-            BunniLens submoduleBunniLens_,
-            uint16 submoduleTwapMaxDeviation_,
-            uint32 submoduleTwapObservationWindow_
-        ) = supplySubmoduleBunni.bunniTokens(0);
-        assertEq(address(submoduleBunniToken_), address(poolToken));
-        assertEq(address(submoduleBunniLens_), address(bunniLens));
-        assertEq(submoduleTwapMaxDeviation_, twapMaxDeviationBps);
-        assertEq(submoduleTwapObservationWindow_, twapObservationWindow);
     }
 
     // [X] deactivatePoolToken
@@ -3756,4 +3663,7 @@ contract BunniManagerTest is Test {
         vm.expectRevert("UNAUTHORIZED");
         bunniHub.deployBunniToken(key);
     }
+
+    // TODO price has MA enabled
+    // TODO supply has MA configured
 }

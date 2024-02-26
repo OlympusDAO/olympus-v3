@@ -137,7 +137,7 @@ contract SupplyConfigTest is Test {
         // Deploy system contracts
         kernel = new Kernel();
         ROLES = new OlympusRoles(kernel);
-        SPPLY = new OlympusSupply(kernel, olympusTokens, 0);
+        SPPLY = new OlympusSupply(kernel, olympusTokens, 0, uint32(8 hours));
         supplyConfig = new SupplyConfig(kernel);
         rolesAdmin = new RolesAdmin(kernel);
 
