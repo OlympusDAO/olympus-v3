@@ -15,6 +15,7 @@ import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
+import {SPPLYv1} from "modules/SPPLY/SPPLY.v1.sol";
 
 import "src/Kernel.sol";
 
@@ -51,6 +52,7 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     // Modules
     PRICEv2 internal PRICE;
     MINTRv1 internal MINTR;
+    SPPLYv1 internal SPPLY;
 
     // Policies
     IOperator public operator;
@@ -126,19 +128,22 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
         dependencies[0] = toKeycode("PRICE");
         dependencies[1] = toKeycode("ROLES");
         dependencies[2] = toKeycode("MINTR");
+        dependencies[3] = toKeycode("SPPLY");
 
         PRICE = PRICEv2(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
         MINTR = MINTRv1(getModuleAddress(dependencies[2]));
+        SPPLY = SPPLYv1(getModuleAddress(dependencies[3]));
 
         (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
         (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
+        (uint8 SPPLY_MAJOR, ) = SPPLY.VERSION();
 
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
-        bytes memory expected = abi.encode([1, 2, 1]);
-        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 2 || ROLES_MAJOR != 1)
+        bytes memory expected = abi.encode([1, 2, 1, 1]);
+        if (MINTR_MAJOR != 1 || PRICE_MAJOR != 2 || ROLES_MAJOR != 1 || SPPLY_MAJOR != 1)
             revert Policy_WrongModuleVersion(expected);
     }
 
@@ -151,10 +156,11 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
     {
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
-        permissions = new Permissions[](3);
+        permissions = new Permissions[](4);
         permissions[0] = Permissions(PRICE.KEYCODE(), PRICE.storePrice.selector);
         permissions[1] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
         permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        permissions[3] = Permissions(SPPLY.KEYCODE(), SPPLY.storeObservations.selector);
     }
 
     /// @notice     Returns the current version of the policy
@@ -191,6 +197,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
             // Store the moving average
             appraiser.storeMetricObservation(cachedMovingAverageMetrics[i]);
         }
+
+        // Store SPPLY observations
+        SPPLY.storeObservations();
 
         // Trigger price range update and market operations
         operator.operate();

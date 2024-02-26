@@ -595,6 +595,24 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     //============================================================================================//
+    //                                       SUPPLY OBSERVATIONS                                  //
+    //============================================================================================//
+
+    /// @inheritdoc SPPLYv1
+    function storeObservations() external override permissioned {
+        // Iterate over all submodules
+        uint256 len = submodules.length;
+        for (uint256 i; i < len; ) {
+            SupplySubmodule submodule = SupplySubmodule(address(_getSubmoduleIfInstalled(submodules[i])));
+            submodule.storeObservations();
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    //============================================================================================//
     //                                       SUPPLY METRICS                                       //
     //============================================================================================//
 

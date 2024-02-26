@@ -490,10 +490,8 @@ contract BunniSupply is SupplySubmodule {
         );
     }
 
-    /// @notice             Store the reserves of all the monitored tokens
-    /// @dev                Assumptions:
-    ///                     - The parent module has checked if sufficient time has passed since the last observation
-    function storeReserveObservations() external onlyParent {
+    /// @inheritdoc           SupplySubmodule
+    function storeObservations() external override onlyParent {
         // Iterate over all tokens
         uint256 len = bunniTokens.length;
         for (uint256 i; i < len; ) {

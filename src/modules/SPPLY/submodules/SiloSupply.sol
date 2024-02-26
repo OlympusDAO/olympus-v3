@@ -176,6 +176,11 @@ contract SiloSupply is SupplySubmodule {
         return 1;
     }
 
+    /// @inheritdoc SupplySubmodule
+    function storeObservations() external virtual override onlyParent {
+        // Do nothing
+    }
+
     // =========== ADMIN FUNCTIONS =========== //
 
     /// @notice         Set the source addresses for Silo lending data

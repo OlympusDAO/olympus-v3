@@ -91,6 +91,8 @@ contract MockUpgradedSubmoduleSupply is SupplySubmodule {
     {
         return new SPPLYv1.Reserves[](0);
     }
+
+    function storeObservations() external virtual override {}
 }
 
 contract SupplyConfigTest is Test {

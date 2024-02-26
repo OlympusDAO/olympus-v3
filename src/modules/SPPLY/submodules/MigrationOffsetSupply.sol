@@ -55,6 +55,11 @@ contract MigrationOffsetSupply is CustomSupply {
         return gOHM.balanceFrom(gOhmOffset);
     }
 
+    /// @inheritdoc SupplySubmodule
+    function storeObservations() external virtual override onlyParent {
+        // Do nothing
+    }
+
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @notice     Set the quantity of gOHM (in native decimals) to offset in the migration contract
