@@ -110,17 +110,13 @@ contract BunniSupply is SupplySubmodule {
     /// @dev        Set at deployment-time
     address internal immutable ohm;
 
-    /// @notice     The frequency at which the reserves are observed
-    uint32 public observationFrequency;
-
     // ========== CONSTRUCTOR ========== //
 
     /// @notice                 Initialize the submodule
     ///
     /// @param parent_          The parent module (SPPLY)
-    constructor(Module parent_, uint32 observationFrequency_) Submodule(parent_) {
+    constructor(Module parent_) Submodule(parent_) {
         ohm = address(SPPLYv1(address(parent_)).ohm());
-        observationFrequency = observationFrequency_;
     }
 
     // ========== SUBMODULE SETUP ========== //
@@ -179,11 +175,7 @@ contract BunniSupply is SupplySubmodule {
             ];
 
             // Check if the moving average is stale
-            if (tokenMovingAverage.lastObservationTime + observationFrequency <= block.timestamp)
-                revert BunniSupply_MovingAverageStale(
-                    address(tokenData.token),
-                    tokenMovingAverage.lastObservationTime
-                );
+            _revertIfMovingAverageStale(address(tokenData.token));
 
             total += _getOhmReserves(key, tokenMovingAverage);
 
@@ -228,11 +220,7 @@ contract BunniSupply is SupplySubmodule {
             ];
 
             // Check if the moving average is stale
-            if (tokenMovingAverage.lastObservationTime + observationFrequency <= block.timestamp)
-                revert BunniSupply_MovingAverageStale(
-                    address(tokenData.token),
-                    tokenMovingAverage.lastObservationTime
-                );
+            _revertIfMovingAverageStale(address(tokenData.token));
 
             // Calculate the moving average of the reserves
             uint256 averageReserve0 = tokenMovingAverage.token0CumulativeObservations /
@@ -400,7 +388,8 @@ contract BunniSupply is SupplySubmodule {
             revert BunniSupply_Params_InvalidLastObservationTime(token_, lastObservationTime_);
 
         // Ensure the duration is aligned
-        if (movingAverageDuration_ == 0 || movingAverageDuration_ & observationFrequency != 0)
+        uint32 observationFrequency = SPPLYv1(address(parent)).observationFrequency();
+        if (movingAverageDuration_ == 0 || movingAverageDuration_ % observationFrequency != 0)
             revert BunniSupply_Params_InvalidMovingAverageDuration(movingAverageDuration_);
 
         // Ensure the number of observations is aligned
@@ -506,7 +495,10 @@ contract BunniSupply is SupplySubmodule {
 
             // Check that sufficient time has passed to record a new observation
             uint48 lastObservationTime = tokenMovingAverage.lastObservationTime;
-            if (lastObservationTime + observationFrequency > block.timestamp)
+            if (
+                lastObservationTime + SPPLYv1(address(parent)).observationFrequency() >
+                block.timestamp
+            )
                 revert BunniSupply_InsufficientTimeElapsed(
                     address(tokenData.token),
                     lastObservationTime
@@ -615,5 +607,15 @@ contract BunniSupply is SupplySubmodule {
             }
         }
         return false;
+    }
+
+    /// @notice     Reverts if the moving average is stale
+    function _revertIfMovingAverageStale(address token_) internal view {
+        TokenMovingAverage storage tokenMovingAverage = tokenMovingAverages[token_];
+        if (
+            tokenMovingAverage.lastObservationTime +
+                SPPLYv1(address(parent)).observationFrequency() <=
+            block.timestamp
+        ) revert BunniSupply_MovingAverageStale(token_, tokenMovingAverage.lastObservationTime);
     }
 }

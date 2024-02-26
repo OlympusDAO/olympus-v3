@@ -164,6 +164,9 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
         uint256[] balances;
     }
 
+    /// @notice    The frequency at which observations are stored
+    uint32 public observationFrequency;
+
     //============================================================================================//
     //                                       CROSS-CHAIN SUPPLY                                   //
     //============================================================================================//
