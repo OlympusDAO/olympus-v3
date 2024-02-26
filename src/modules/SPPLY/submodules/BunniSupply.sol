@@ -2,7 +2,9 @@
 pragma solidity 0.8.15;
 
 // Bophades modules
-import "modules/SPPLY/SPPLY.v1.sol";
+import {SPPLYv1, SupplySubmodule} from "modules/SPPLY/SPPLY.v1.sol";
+import {Module} from "src/Kernel.sol";
+import {Submodule, SubKeycode, toSubKeycode} from "src/Submodules.sol";
 
 // Bunni contracts
 import {BunniLens} from "src/external/bunni/BunniLens.sol";
@@ -15,13 +17,9 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 /// Uniswap V3
 import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
-import {OracleLibrary} from "@uniswap/v3-periphery/contracts/libraries/OracleLibrary.sol";
 
 // Libraries
 import {FullMath} from "libraries/FullMath.sol";
-import {Deviation} from "libraries/Deviation.sol";
-import {UniswapV3OracleHelper} from "libraries/UniswapV3/Oracle.sol";
-import {BunniHelper} from "libraries/UniswapV3/BunniHelper.sol";
 
 /// @title      BunniSupply
 /// @author     0xJem
