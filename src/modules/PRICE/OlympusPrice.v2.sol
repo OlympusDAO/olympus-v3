@@ -177,6 +177,7 @@ contract OlympusPricev2 is PRICEv2 {
         // If moving average is used and it is meant to be included, add to end of prices array
         if (asset.useMovingAverage && includeMovingAverage_) {
             // Check if the moving average is stale
+            // If the observation frequency has passed (including in the current block), it is stale and should be updated
             if (asset.lastObservationTime + observationFrequency <= block.timestamp)
                 revert PRICE_MovingAverageStale(asset_, asset.lastObservationTime);
 

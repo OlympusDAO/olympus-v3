@@ -187,6 +187,9 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
             PRICE.storePrice(cachedMovingAverageAssets[i]);
         }
 
+        // Store SPPLY observations
+        SPPLY.storeObservations();
+
         // Store the current values for metrics that use the moving average
         IAppraiser.Metric[] memory cachedMovingAverageMetrics = movingAverageMetrics;
         uint256 metricsLen = cachedMovingAverageMetrics.length;
@@ -197,9 +200,6 @@ contract OlympusHeart is IHeart, Policy, RolesConsumer, ReentrancyGuard {
             // Store the moving average
             appraiser.storeMetricObservation(cachedMovingAverageMetrics[i]);
         }
-
-        // Store SPPLY observations
-        SPPLY.storeObservations();
 
         // Trigger price range update and market operations
         operator.operate();
