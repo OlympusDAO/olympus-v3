@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0;
 
 /// @notice Read and write to persistent storage at a fraction of the cost.
-/// @author Solmate (https://github.com/Rari-Capital/solmate/blob/main/src/utils/SSTORE2.sol)
+/// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/utils/SSTORE2.sol)
 /// @author Modified from 0xSequence (https://github.com/0xSequence/sstore2/blob/master/contracts/SSTORE2.sol)
 library SSTORE2 {
     uint256 internal constant DATA_OFFSET = 1; // We skip the first byte as it's a STOP opcode to ensure the contract can't be called.
@@ -34,6 +34,7 @@ library SSTORE2 {
             runtimeCode // The bytecode we want the contract to have after deployment. Capped at 1 byte less than the code size limit.
         );
 
+        /// @solidity memory-safe-assembly
         assembly {
             // Deploy a new contract with the generated creation code.
             // We start 32 bytes into the code to avoid copying the byte length.
@@ -79,6 +80,7 @@ library SSTORE2 {
         uint256 start,
         uint256 size
     ) private view returns (bytes memory data) {
+        /// @solidity memory-safe-assembly
         assembly {
             // Get a pointer to some free memory.
             data := mload(0x40)

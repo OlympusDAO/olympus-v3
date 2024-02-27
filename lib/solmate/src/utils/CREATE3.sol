@@ -4,7 +4,7 @@ pragma solidity >=0.8.0;
 import {Bytes32AddressLib} from "./Bytes32AddressLib.sol";
 
 /// @notice Deploy to deterministic addresses without an initcode factor.
-/// @author Solmate (https://github.com/Rari-Capital/solmate/blob/main/src/utils/CREATE3.sol)
+/// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/utils/CREATE3.sol)
 /// @author Modified from 0xSequence (https://github.com/0xSequence/create3/blob/master/contracts/Create3.sol)
 library CREATE3 {
     using Bytes32AddressLib for bytes32;
@@ -42,6 +42,7 @@ library CREATE3 {
         bytes memory proxyChildBytecode = PROXY_BYTECODE;
 
         address proxy;
+        /// @solidity memory-safe-assembly
         assembly {
             // Deploy a new contract with our pre-made bytecode via CREATE2.
             // We start 32 bytes into the code to avoid copying the byte length.

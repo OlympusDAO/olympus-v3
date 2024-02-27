@@ -11,6 +11,7 @@ import {BondFixedTermTeller} from "test/lib/bonds/BondFixedTermTeller.sol";
 import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockPrice} from "test/mocks/MockPrice.sol";
 import {MockOhm} from "test/mocks/MockOhm.sol";
 
@@ -46,17 +47,25 @@ contract OperatorTest is Test {
     BondFixedTermSDA internal auctioneer;
     MockOhm internal ohm;
     MockERC20 internal reserve;
+    MockERC4626 internal wrappedReserve;
 
     Kernel internal kernel;
-    MockPrice internal price;
-    OlympusRange internal range;
-    OlympusTreasury internal treasury;
-    OlympusMinter internal minter;
-    OlympusRoles internal roles;
+    MockPrice internal PRICE;
+    OlympusRange internal RANGE;
+    OlympusTreasury internal TRSRY;
+    OlympusMinter internal MINTR;
+    OlympusRoles internal ROLES;
 
     Operator internal operator;
     BondCallback internal callback;
     RolesAdmin internal rolesAdmin;
+
+    event Swap(
+        ERC20 indexed tokenIn_,
+        ERC20 indexed tokenOut_,
+        uint256 amountIn_,
+        uint256 amountOut_
+    );
 
     function setUp() public {
         vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
@@ -85,6 +94,7 @@ contract OperatorTest is Test {
             /// Deploy mock tokens
             ohm = new MockOhm("Olympus", "OHM", 9);
             reserve = new MockERC20("Reserve", "RSV", 18);
+            wrappedReserve = new MockERC4626(reserve, "wrappedReserve", "sRSV");
         }
 
         {
@@ -92,24 +102,24 @@ contract OperatorTest is Test {
             kernel = new Kernel(); // this contract will be the executor
 
             /// Deploy modules (some mocks)
-            price = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
-            range = new OlympusRange(
+            PRICE = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
+            RANGE = new OlympusRange(
                 kernel,
                 ERC20(ohm),
                 ERC20(reserve),
                 uint256(100),
-                uint256(1000),
-                uint256(2000)
+                [uint256(1000), uint256(2000)],
+                [uint256(1000), uint256(2000)]
             );
-            treasury = new OlympusTreasury(kernel);
-            minter = new OlympusMinter(kernel, address(ohm));
-            roles = new OlympusRoles(kernel);
+            TRSRY = new OlympusTreasury(kernel);
+            MINTR = new OlympusMinter(kernel, address(ohm));
+            ROLES = new OlympusRoles(kernel);
 
             /// Configure mocks
-            price.setMovingAverage(100 * 1e18);
-            price.setLastPrice(100 * 1e18);
-            price.setDecimals(18);
-            price.setLastTime(uint48(block.timestamp));
+            PRICE.setMovingAverage(100 * 1e18);
+            PRICE.setLastPrice(100 * 1e18);
+            PRICE.setDecimals(18);
+            PRICE.setLastTime(uint48(block.timestamp));
         }
 
         {
@@ -121,7 +131,7 @@ contract OperatorTest is Test {
                 kernel,
                 IBondSDA(address(auctioneer)),
                 callback,
-                [ERC20(ohm), ERC20(reserve)],
+                [address(ohm), address(reserve), address(wrappedReserve)],
                 [
                     uint32(2000), // cushionFactor
                     uint32(5 days), // duration
@@ -135,7 +145,7 @@ contract OperatorTest is Test {
                 ]
             );
 
-            /// Deploy roles administrator
+            /// Deploy ROLES administrator
             rolesAdmin = new RolesAdmin(kernel);
             /// Registor operator to create bond markets with a callback
             vm.prank(guardian);
@@ -146,11 +156,11 @@ contract OperatorTest is Test {
             /// Initialize system and kernel
 
             /// Install modules
-            kernel.executeAction(Actions.InstallModule, address(price));
-            kernel.executeAction(Actions.InstallModule, address(range));
-            kernel.executeAction(Actions.InstallModule, address(treasury));
-            kernel.executeAction(Actions.InstallModule, address(minter));
-            kernel.executeAction(Actions.InstallModule, address(roles));
+            kernel.executeAction(Actions.InstallModule, address(PRICE));
+            kernel.executeAction(Actions.InstallModule, address(RANGE));
+            kernel.executeAction(Actions.InstallModule, address(TRSRY));
+            kernel.executeAction(Actions.InstallModule, address(MINTR));
+            kernel.executeAction(Actions.InstallModule, address(ROLES));
 
             /// Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
@@ -160,13 +170,13 @@ contract OperatorTest is Test {
         {
             /// Configure access control
 
-            /// Operator roles
+            /// Operator ROLES
             rolesAdmin.grantRole("operator_operate", address(heart));
             rolesAdmin.grantRole("operator_reporter", address(callback));
             rolesAdmin.grantRole("operator_policy", policy);
             rolesAdmin.grantRole("operator_admin", guardian);
 
-            /// Bond callback roles
+            /// Bond callback ROLES
             rolesAdmin.grantRole("callback_whitelist", address(operator));
             rolesAdmin.grantRole("callback_whitelist", guardian);
             rolesAdmin.grantRole("callback_admin", guardian);
@@ -175,15 +185,23 @@ contract OperatorTest is Test {
         /// Set operator on the callback
         vm.prank(guardian);
         callback.setOperator(operator);
+        // Signal that reserve is held as wrappedReserve in TRSRY
+        vm.prank(guardian);
+        callback.useWrappedVersion(address(reserve), address(wrappedReserve));
 
-        // Mint tokens to users and treasury for testing
+        // Mint tokens to users and TRSRY for testing
         uint256 testOhm = 1_000_000 * 1e9;
         uint256 testReserve = 1_000_000 * 1e18;
 
         ohm.mint(alice, testOhm * 20);
         reserve.mint(alice, testReserve * 20);
 
-        reserve.mint(address(treasury), testReserve * 100);
+        reserve.mint(address(TRSRY), testReserve * 100);
+        // Deposit TRSRY reserves into wrappedReserve
+        vm.startPrank(address(TRSRY));
+        reserve.approve(address(wrappedReserve), testReserve * 100);
+        wrappedReserve.deposit(testReserve * 100, address(TRSRY));
+        vm.stopPrank();
 
         // Approve the operator and bond teller for the tokens to swap
         vm.prank(alice);
@@ -197,13 +215,61 @@ contract OperatorTest is Test {
         reserve.approve(address(teller), testReserve * 20);
     }
 
+    // ======== SETUP DEPENDENCIES ======= //
+
+    function test_configureDependencies() public {
+        Keycode[] memory expectedDeps = new Keycode[](5);
+        expectedDeps[0] = toKeycode("PRICE");
+        expectedDeps[1] = toKeycode("RANGE");
+        expectedDeps[2] = toKeycode("TRSRY");
+        expectedDeps[3] = toKeycode("MINTR");
+        expectedDeps[4] = toKeycode("ROLES");
+
+        Keycode[] memory deps = operator.configureDependencies();
+        // Check: configured dependencies storage
+        assertEq(deps.length, expectedDeps.length);
+        assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
+        assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
+        assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+        assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
+        assertEq(fromKeycode(deps[4]), fromKeycode(expectedDeps[4]));
+    }
+
+    function test_requestPermissions() public {
+        Permissions[] memory expectedPerms = new Permissions[](13);
+        Keycode MINTR_KEYCODE = toKeycode("MINTR");
+        Keycode TRSRY_KEYCODE = toKeycode("TRSRY");
+        Keycode RANGE_KEYCODE = toKeycode("RANGE");
+        expectedPerms[0] = Permissions(RANGE_KEYCODE, RANGE.updateCapacity.selector);
+        expectedPerms[1] = Permissions(RANGE_KEYCODE, RANGE.updateMarket.selector);
+        expectedPerms[2] = Permissions(RANGE_KEYCODE, RANGE.updatePrices.selector);
+        expectedPerms[3] = Permissions(RANGE_KEYCODE, RANGE.regenerate.selector);
+        expectedPerms[4] = Permissions(RANGE_KEYCODE, RANGE.setSpreads.selector);
+        expectedPerms[5] = Permissions(RANGE_KEYCODE, RANGE.setThresholdFactor.selector);
+        expectedPerms[6] = Permissions(TRSRY_KEYCODE, TRSRY.withdrawReserves.selector);
+        expectedPerms[7] = Permissions(TRSRY_KEYCODE, TRSRY.increaseWithdrawApproval.selector);
+        expectedPerms[8] = Permissions(TRSRY_KEYCODE, TRSRY.decreaseWithdrawApproval.selector);
+        expectedPerms[9] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
+        expectedPerms[10] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
+        expectedPerms[11] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        expectedPerms[12] = Permissions(MINTR_KEYCODE, MINTR.decreaseMintApproval.selector);
+        Permissions[] memory perms = operator.requestPermissions();
+        // Check: permission storage
+        assertEq(perms.length, expectedPerms.length);
+        for (uint256 i = 0; i < perms.length; i++) {
+            assertEq(fromKeycode(perms[i].keycode), fromKeycode(expectedPerms[i].keycode));
+            assertEq(perms[i].funcSelector, expectedPerms[i].funcSelector);
+        }
+    }
+
     // =========  HELPER FUNCTIONS ========= //
+
     function knockDownWall(bool high_) internal returns (uint256 amountIn, uint256 amountOut) {
         if (high_) {
             /// Get current capacity of the high wall
             /// Set amount in to put capacity 1 below the threshold for shutting down the wall
-            uint256 startCapacity = range.capacity(true);
-            uint256 highWallPrice = range.price(true, true);
+            uint256 startCapacity = RANGE.capacity(true);
+            uint256 highWallPrice = RANGE.price(true, true);
             amountIn = startCapacity.mulDiv(highWallPrice, 1e9).mulDiv(9999, 10000) + 1;
 
             uint256 expAmountOut = operator.getAmountOut(reserve, amountIn);
@@ -214,8 +280,8 @@ contract OperatorTest is Test {
         } else {
             /// Get current capacity of the low wall
             /// Set amount in to put capacity 1 below the threshold for shutting down the wall
-            uint256 startCapacity = range.capacity(false);
-            uint256 lowWallPrice = range.price(true, false);
+            uint256 startCapacity = RANGE.capacity(false);
+            uint256 lowWallPrice = RANGE.price(false, true);
             amountIn = startCapacity.mulDiv(1e9, lowWallPrice).mulDiv(9999, 10000) + 1;
 
             uint256 expAmountOut = operator.getAmountOut(ohm, amountIn);
@@ -233,7 +299,7 @@ contract OperatorTest is Test {
     /// [X] Splippage check when swapping
     /// [X] Wall breaks when capacity drops below the configured threshold
     /// [X] Not able to swap at the walls when they are down
-    /// [X] Not able to swap at the walls when price is stale
+    /// [X] Not able to swap at the walls when PRICE is stale
 
     function testCorrectness_swapHighWall() public {
         /// Initialize operator
@@ -241,26 +307,31 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Get current capacity of the high wall and starting balance for user
-        uint256 startCapacity = range.capacity(true);
+        uint256 startCapacity = RANGE.capacity(true);
         uint256 amountIn = 100 * 1e18;
         uint256 ohmBalance = ohm.balanceOf(alice);
         uint256 reserveBalance = reserve.balanceOf(alice);
 
         /// Calculate expected difference
-        uint256 highWallPrice = range.price(true, true);
+        uint256 highWallPrice = RANGE.price(true, true);
         uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * highWallPrice);
+        uint256 wrappedReserveBalanceBefore = wrappedReserve.balanceOf(address(TRSRY));
+
+        vm.expectEmit(false, false, false, true);
+        emit Swap(reserve, ohm, amountIn, expAmountOut);
 
         /// Swap at the high wall
         vm.prank(alice);
         uint256 amountOut = operator.swap(reserve, amountIn, expAmountOut);
 
         /// Get updated capacity of the high wall
-        uint256 endCapacity = range.capacity(true);
+        uint256 endCapacity = RANGE.capacity(true);
 
         assertEq(amountOut, expAmountOut);
         assertEq(endCapacity, startCapacity - amountOut);
         assertEq(ohm.balanceOf(alice), ohmBalance + amountOut);
         assertEq(reserve.balanceOf(alice), reserveBalance - amountIn);
+        assertEq(wrappedReserve.balanceOf(address(TRSRY)), wrappedReserveBalanceBefore + amountIn);
     }
 
     function testCorrectness_swapLowWall() public {
@@ -269,26 +340,34 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Get current capacity of the high wall and starting balance for user
-        uint256 startCapacity = range.capacity(false);
+        uint256 startCapacity = RANGE.capacity(false);
         uint256 amountIn = 100 * 1e9;
         uint256 ohmBalance = ohm.balanceOf(alice);
         uint256 reserveBalance = reserve.balanceOf(alice);
 
         /// Calculate expected difference
-        uint256 lowWallPrice = range.price(true, false);
+        uint256 lowWallPrice = RANGE.price(false, true);
         uint256 expAmountOut = amountIn.mulDiv(1e18 * lowWallPrice, 1e9 * 1e18);
+        uint256 wrappedReserveBalanceBefore = wrappedReserve.balanceOf(address(TRSRY));
+
+        vm.expectEmit(false, false, false, true);
+        emit Swap(ohm, reserve, amountIn, expAmountOut);
 
         /// Swap at the high wall
         vm.prank(alice);
         uint256 amountOut = operator.swap(ohm, amountIn, expAmountOut);
 
         /// Get updated capacity of the high wall
-        uint256 endCapacity = range.capacity(false);
+        uint256 endCapacity = RANGE.capacity(false);
 
         assertEq(amountOut, expAmountOut);
         assertEq(endCapacity, startCapacity - amountOut);
         assertEq(ohm.balanceOf(alice), ohmBalance - amountIn);
         assertEq(reserve.balanceOf(alice), reserveBalance + amountOut);
+        assertEq(
+            wrappedReserve.balanceOf(address(TRSRY)),
+            wrappedReserveBalanceBefore - expAmountOut
+        );
     }
 
     function testCorrectness_highWallBreaksAtThreshold() public {
@@ -297,21 +376,21 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
         /// Get initial balances and capacity
         uint256 ohmBalance = ohm.balanceOf(alice);
         uint256 reserveBalance = reserve.balanceOf(alice);
-        uint256 startCapacity = range.capacity(true);
+        uint256 startCapacity = RANGE.capacity(true);
 
         /// Take down wall with helper function
         (uint256 amountIn, uint256 amountOut) = knockDownWall(true);
 
         /// Get updated capacity of the high wall
-        uint256 endCapacity = range.capacity(true);
+        uint256 endCapacity = RANGE.capacity(true);
 
         /// Confirm the wall is down
-        assertTrue(!range.active(true));
+        assertTrue(!RANGE.active(true));
 
         /// Check that capacity and balances are correct
         assertEq(endCapacity, startCapacity - amountOut);
@@ -325,21 +404,21 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm wall is up
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(false));
 
         /// Get initial balances and capacity
         uint256 ohmBalance = ohm.balanceOf(alice);
         uint256 reserveBalance = reserve.balanceOf(alice);
-        uint256 startCapacity = range.capacity(false);
+        uint256 startCapacity = RANGE.capacity(false);
 
         /// Take down wall with helper function
         (uint256 amountIn, uint256 amountOut) = knockDownWall(false);
 
         /// Get updated capacity of the high wall
-        uint256 endCapacity = range.capacity(false);
+        uint256 endCapacity = RANGE.capacity(false);
 
         /// Confirm the wall is down
-        assertTrue(!range.active(false));
+        assertTrue(!RANGE.active(false));
 
         /// Check that capacity and balances are correct
         assertEq(endCapacity, startCapacity - amountOut);
@@ -353,14 +432,14 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
         /// Take down wall with helper function
         knockDownWall(true);
 
         /// Try to swap, expect to fail
         uint256 amountIn = 100 * 1e18;
-        uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * range.price(true, true));
+        uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * RANGE.price(true, true));
 
         bytes memory err = abi.encodeWithSignature("Operator_WallDown()");
         vm.expectRevert(err);
@@ -374,14 +453,14 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm wall is up
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(false));
 
         /// Take down wall with helper function
         knockDownWall(false);
 
         /// Try to swap, expect to fail
         uint256 amountIn = 100 * 1e9;
-        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * RANGE.price(false, true), 1e9 * 1e18);
 
         bytes memory err = abi.encodeWithSignature("Operator_WallDown()");
         vm.expectRevert(err);
@@ -395,14 +474,14 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
-        /// Set timestamp forward so price is stale
-        vm.warp(block.timestamp + 3 * uint256(price.observationFrequency()) + 1);
+        /// Set timestamp forward so PRICE is stale
+        vm.warp(block.timestamp + 3 * uint256(PRICE.observationFrequency()) + 1);
 
         /// Try to swap, expect to fail
         uint256 amountIn = 100 * 1e18;
-        uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * range.price(true, true));
+        uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * RANGE.price(true, true));
 
         bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
         vm.expectRevert(err);
@@ -416,14 +495,14 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm wall is up
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(false));
 
-        /// Set timestamp forward so price is stale
-        vm.warp(block.timestamp + 3 * uint256(price.observationFrequency()) + 1);
+        /// Set timestamp forward so PRICE is stale
+        vm.warp(block.timestamp + 3 * uint256(PRICE.observationFrequency()) + 1);
 
         /// Try to swap, expect to fail
         uint256 amountIn = 100 * 1e9;
-        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * RANGE.price(false, true), 1e9 * 1e18);
 
         bytes memory err = abi.encodeWithSignature("Operator_Inactive()");
         vm.expectRevert(err);
@@ -437,12 +516,12 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm walls are up
-        assertTrue(range.active(true));
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(true));
+        assertTrue(RANGE.active(false));
 
         /// Set amounts for high wall swap with minAmountOut greater than expAmountOut
         uint256 amountIn = 100 * 1e18;
-        uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * range.price(true, true));
+        uint256 expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * RANGE.price(true, true));
         uint256 minAmountOut = expAmountOut + 1;
 
         /// Try to swap at low wall, expect to fail
@@ -457,10 +536,10 @@ contract OperatorTest is Test {
 
         /// Set amounts for low wall swap with minAmountOut greater than expAmountOut
         amountIn = 100 * 1e9;
-        expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
+        expAmountOut = amountIn.mulDiv(1e18 * RANGE.price(false, true), 1e9 * 1e18);
         minAmountOut = expAmountOut + 1;
 
-        /// Try to swap at low wall, expect to fail
+        /// Try to swap at high wall, expect to fail
         err = abi.encodeWithSignature(
             "Operator_AmountLessThanMinimum(uint256,uint256)",
             expAmountOut,
@@ -477,8 +556,8 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm walls are up
-        assertTrue(range.active(true));
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(true));
+        assertTrue(RANGE.active(false));
 
         /// Try to swap with invalid token, expect to fail
         uint256 amountIn = 100 * 1e18;
@@ -494,8 +573,8 @@ contract OperatorTest is Test {
     // =========  CUSHION TESTS ========= //
 
     /// DONE
-    /// [X] Cushions deployed when price set in the range and operate triggered
-    /// [X] Cushions deactivated when price out of range and operate triggered or when wall goes down
+    /// [X] Cushions deployed when PRICE set in the RANGE and operate triggered
+    /// [X] Cushions deactivated when PRICE out of RANGE and operate triggered or when wall goes down
     /// [X] Cushion doesn't deploy when wall is down
     /// [X] Bond purchases update capacity
 
@@ -505,28 +584,28 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm that the cushion is not deployed
-        assertTrue(!auctioneer.isLive(range.market(true)));
+        assertTrue(!auctioneer.isLive(RANGE.market(true)));
 
-        /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        /// Set PRICE on mock oracle into the high cushion
+        PRICE.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
-        uint256 marketId = range.market(true);
+        uint256 marketId = RANGE.market(true);
         assertTrue(auctioneer.isLive(marketId));
 
         Operator.Config memory config = operator.config();
         uint256 marketCapacity = auctioneer.currentCapacity(marketId);
         // console2.log("capacity", marketCapacity);
-        assertEq(marketCapacity, range.capacity(true).mulDiv(config.cushionFactor, 1e4));
+        assertEq(marketCapacity, RANGE.capacity(true).mulDiv(config.cushionFactor, 1e4));
 
-        /// Check that the price is set correctly
+        /// Check that the PRICE is set correctly
         // (, , , , , , , , , , , uint256 scale) = auctioneer.markets(marketId);
-        // uint256 price = auctioneer.marketPrice(marketId);
-        // console2.log("price", price);
+        // uint256 PRICE = auctioneer.marketPrice(marketId);
+        // console2.log("PRICE", PRICE);
         // console2.log("scale", scale);
         uint256 payout = auctioneer.payoutFor(111 * 1e18, marketId, alice);
         assertEq(payout, 1e9);
@@ -538,33 +617,33 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm that the cushion is not deployed
-        assertTrue(!auctioneer.isLive(range.market(true)));
+        assertTrue(!auctioneer.isLive(RANGE.market(true)));
 
-        /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        /// Set PRICE on mock oracle into the high cushion
+        PRICE.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
-        assertTrue(auctioneer.isLive(range.market(true)));
+        assertTrue(auctioneer.isLive(RANGE.market(true)));
 
         Operator.Config memory config = operator.config();
-        uint256 marketCapacity = auctioneer.currentCapacity(range.market(true));
-        assertEq(marketCapacity, range.capacity(true).mulDiv(config.cushionFactor, 1e4));
+        uint256 marketCapacity = auctioneer.currentCapacity(RANGE.market(true));
+        assertEq(marketCapacity, RANGE.capacity(true).mulDiv(config.cushionFactor, 1e4));
 
-        /// Set price on mock oracle below the high cushion
-        price.setLastPrice(105 * 1e18);
+        /// Set PRICE on mock oracle below the high cushion
+        PRICE.setLastPrice(105 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is closed
-        assertTrue(!auctioneer.isLive(range.market(true)));
+        assertTrue(!auctioneer.isLive(RANGE.market(true)));
 
-        marketCapacity = auctioneer.currentCapacity(range.market(true));
+        marketCapacity = auctioneer.currentCapacity(RANGE.market(true));
         assertEq(marketCapacity, 0);
     }
 
@@ -574,33 +653,33 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm that the cushion is not deployed
-        assertTrue(!auctioneer.isLive(range.market(true)));
+        assertTrue(!auctioneer.isLive(RANGE.market(true)));
 
-        /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        /// Set PRICE on mock oracle into the high cushion
+        PRICE.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
-        assertTrue(auctioneer.isLive(range.market(true)));
+        assertTrue(auctioneer.isLive(RANGE.market(true)));
 
         Operator.Config memory config = operator.config();
-        uint256 marketCapacity = auctioneer.currentCapacity(range.market(true));
-        assertEq(marketCapacity, range.capacity(true).mulDiv(config.cushionFactor, 1e4));
+        uint256 marketCapacity = auctioneer.currentCapacity(RANGE.market(true));
+        assertEq(marketCapacity, RANGE.capacity(true).mulDiv(config.cushionFactor, 1e4));
 
-        /// Set price on mock oracle below the high cushion
-        price.setLastPrice(130 * 1e18);
+        /// Set PRICE on mock oracle below the high cushion
+        PRICE.setLastPrice(130 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is closed
-        assertTrue(!auctioneer.isLive(range.market(true)));
+        assertTrue(!auctioneer.isLive(RANGE.market(true)));
 
-        marketCapacity = auctioneer.currentCapacity(range.market(true));
+        marketCapacity = auctioneer.currentCapacity(RANGE.market(true));
         assertEq(marketCapacity, 0);
     }
 
@@ -610,23 +689,23 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm that the cushion is not deployed
-        assertTrue(!auctioneer.isLive(range.market(true)));
+        assertTrue(!auctioneer.isLive(RANGE.market(true)));
 
-        /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        /// Set PRICE on mock oracle into the high cushion
+        PRICE.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
-        assertTrue(auctioneer.isLive(range.market(true)));
+        assertTrue(auctioneer.isLive(RANGE.market(true)));
 
         /// Take down the wall
         knockDownWall(true);
 
         /// Check that the cushion is closed
-        assertTrue(!auctioneer.isLive(range.market(true)));
+        assertTrue(!auctioneer.isLive(RANGE.market(true)));
     }
 
     function testCorrectness_highCushionNotDeployedWhenWallDown() public {
@@ -635,20 +714,20 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm that the cushion is not deployed
-        assertTrue(!auctioneer.isLive(range.market(true)));
+        assertTrue(!auctioneer.isLive(RANGE.market(true)));
 
         /// Take down the wall
         knockDownWall(true);
 
-        /// Set price on mock oracle into the low cushion
-        price.setLastPrice(111 * 1e18);
+        /// Set PRICE on mock oracle into the low cushion
+        PRICE.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is not deployed
-        assertTrue(!auctioneer.isLive(range.market(true)));
+        assertTrue(!auctioneer.isLive(RANGE.market(true)));
     }
 
     function testCorrectness_lowCushionDeployedInSpread() public {
@@ -657,30 +736,30 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm that the cushion is not deployed
-        assertTrue(!auctioneer.isLive(range.market(false)));
+        assertTrue(!auctioneer.isLive(RANGE.market(false)));
 
-        /// Set price on mock oracle into the high cushion
-        price.setLastPrice(89 * 1e18);
+        /// Set PRICE on mock oracle into the high cushion
+        PRICE.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
-        uint256 marketId = range.market(false);
+        uint256 marketId = RANGE.market(false);
         assertTrue(auctioneer.isLive(marketId));
 
         Operator.Config memory config = operator.config();
         uint256 marketCapacity = auctioneer.currentCapacity(marketId);
-        assertEq(marketCapacity, range.capacity(false).mulDiv(config.cushionFactor, 1e4));
+        assertEq(marketCapacity, RANGE.capacity(false).mulDiv(config.cushionFactor, 1e4));
 
-        /// Check that the price is set correctly
+        /// Check that the PRICE is set correctly
         // (, , , , , , , , , , , uint256 scale) = auctioneer.markets(marketId);
-        // uint256 price = auctioneer.marketPrice(marketId);
-        // console2.log("price", price);
+        // uint256 PRICE = auctioneer.marketPrice(marketId);
+        // console2.log("PRICE", PRICE);
         // console2.log("scale", scale);
         uint256 payout = auctioneer.payoutFor(1e9, marketId, alice);
-        assertGe(payout, (89 * 1e18 * 99999) / 100000); // Compare to a range due to slight precision differences
+        assertGe(payout, (89 * 1e18 * 99999) / 100000); // Compare to a RANGE due to slight precision differences
         assertLe(payout, (89 * 1e18 * 100001) / 100000);
     }
 
@@ -690,33 +769,33 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm that the cushion is not deployed
-        assertTrue(!auctioneer.isLive(range.market(false)));
+        assertTrue(!auctioneer.isLive(RANGE.market(false)));
 
-        /// Set price on mock oracle into the high cushion
-        price.setLastPrice(89 * 1e18);
+        /// Set PRICE on mock oracle into the high cushion
+        PRICE.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
-        assertTrue(auctioneer.isLive(range.market(false)));
+        assertTrue(auctioneer.isLive(RANGE.market(false)));
 
         Operator.Config memory config = operator.config();
-        uint256 marketCapacity = auctioneer.currentCapacity(range.market(false));
-        assertEq(marketCapacity, range.capacity(false).mulDiv(config.cushionFactor, 1e4));
+        uint256 marketCapacity = auctioneer.currentCapacity(RANGE.market(false));
+        assertEq(marketCapacity, RANGE.capacity(false).mulDiv(config.cushionFactor, 1e4));
 
-        /// Set price on mock oracle below the high cushion
-        price.setLastPrice(79 * 1e18);
+        /// Set PRICE on mock oracle below the high cushion
+        PRICE.setLastPrice(79 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is closed
-        assertTrue(!auctioneer.isLive(range.market(false)));
+        assertTrue(!auctioneer.isLive(RANGE.market(false)));
 
-        marketCapacity = auctioneer.currentCapacity(range.market(false));
+        marketCapacity = auctioneer.currentCapacity(RANGE.market(false));
         assertEq(marketCapacity, 0);
     }
 
@@ -726,33 +805,33 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm that the cushion is not deployed
-        assertTrue(!auctioneer.isLive(range.market(false)));
+        assertTrue(!auctioneer.isLive(RANGE.market(false)));
 
-        /// Set price on mock oracle into the high cushion
-        price.setLastPrice(89 * 1e18);
+        /// Set PRICE on mock oracle into the high cushion
+        PRICE.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed and capacity is set to the correct amount
-        assertTrue(auctioneer.isLive(range.market(false)));
+        assertTrue(auctioneer.isLive(RANGE.market(false)));
 
         Operator.Config memory config = operator.config();
-        uint256 marketCapacity = auctioneer.currentCapacity(range.market(false));
-        assertEq(marketCapacity, range.capacity(false).mulDiv(config.cushionFactor, 1e4));
+        uint256 marketCapacity = auctioneer.currentCapacity(RANGE.market(false));
+        assertEq(marketCapacity, RANGE.capacity(false).mulDiv(config.cushionFactor, 1e4));
 
-        /// Set price on mock oracle below the high cushion
-        price.setLastPrice(91 * 1e18);
+        /// Set PRICE on mock oracle below the high cushion
+        PRICE.setLastPrice(91 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is closed
-        assertTrue(!auctioneer.isLive(range.market(false)));
+        assertTrue(!auctioneer.isLive(RANGE.market(false)));
 
-        marketCapacity = auctioneer.currentCapacity(range.market(false));
+        marketCapacity = auctioneer.currentCapacity(RANGE.market(false));
         assertEq(marketCapacity, 0);
     }
 
@@ -762,23 +841,23 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm that the cushion is not deployed
-        assertTrue(!auctioneer.isLive(range.market(false)));
+        assertTrue(!auctioneer.isLive(RANGE.market(false)));
 
-        /// Set price on mock oracle into the low cushion
-        price.setLastPrice(89 * 1e18);
+        /// Set PRICE on mock oracle into the low cushion
+        PRICE.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
-        assertTrue(auctioneer.isLive(range.market(false)));
+        assertTrue(auctioneer.isLive(RANGE.market(false)));
 
         /// Take down the wall
         knockDownWall(false);
 
         /// Check that the cushion is closed
-        assertTrue(!auctioneer.isLive(range.market(false)));
+        assertTrue(!auctioneer.isLive(RANGE.market(false)));
     }
 
     function testCorrectness_lowCushionNotDeployedWhenWallDown() public {
@@ -787,20 +866,20 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Confirm that the cushion is not deployed
-        assertTrue(!auctioneer.isLive(range.market(false)));
+        assertTrue(!auctioneer.isLive(RANGE.market(false)));
 
         /// Take down the wall
         knockDownWall(false);
 
-        /// Set price on mock oracle into the low cushion
-        price.setLastPrice(89 * 1e18);
+        /// Set PRICE on mock oracle into the low cushion
+        PRICE.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is not deployed
-        assertTrue(!auctioneer.isLive(range.market(false)));
+        assertTrue(!auctioneer.isLive(RANGE.market(false)));
     }
 
     function test_marketClosesAsExpected1() public {
@@ -809,10 +888,10 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Assert high wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
-        /// Set price below the moving average to almost regenerate high wall
-        price.setLastPrice(99 * 1e18);
+        /// Set PRICE below the moving average to almost regenerate high wall
+        PRICE.setLastPrice(99 * 1e18);
 
         /// Trigger the operator function enough times to almost regenerate the high wall
         for (uint256 i; i < 4; ++i) {
@@ -821,32 +900,32 @@ contract OperatorTest is Test {
         }
 
         /// Ensure market not live yet
-        uint256 currentMarket = range.market(true);
+        uint256 currentMarket = RANGE.market(true);
         assertEq(type(uint256).max, currentMarket);
 
         /// Cause price to spike to trigger high cushion
-        uint256 cushionPrice = range.price(false, true);
-        price.setLastPrice(cushionPrice + 500);
+        uint256 cushionPrice = RANGE.price(true, false);
+        PRICE.setLastPrice(cushionPrice + 500);
         vm.prank(heart);
         operator.operate();
 
         /// Check market is live
-        currentMarket = range.market(true);
+        currentMarket = RANGE.market(true);
         assertTrue(type(uint256).max != currentMarket);
         assertTrue(auctioneer.isLive(currentMarket));
 
-        /// Cause price to go back down to moving average
+        /// Cause PRICE to go back down to moving average
         /// Move time forward past the regen period to trigger high wall regeneration
         vm.warp(block.timestamp + 1 hours);
 
         /// Will trigger regeneration of high wall
         /// Will set the operator market on high side to type(uint256).max
         /// However, the prior market will still be live when it's supposed to be deactivated
-        price.setLastPrice(95 * 1e18);
+        PRICE.setLastPrice(95 * 1e18);
         vm.prank(heart);
         operator.operate();
         /// Get latest market
-        uint256 newMarket = range.market(true);
+        uint256 newMarket = RANGE.market(true);
 
         /// Check market has been updated to non existent market
         assertTrue(type(uint256).max == newMarket);
@@ -860,17 +939,17 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Assert high wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
-        /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        /// Set PRICE on mock oracle into the high cushion
+        PRICE.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Get current market
-        uint256 currentMarket = range.market(true);
+        uint256 currentMarket = RANGE.market(true);
 
         /// Check market has been updated and is live
         assertTrue(type(uint256).max != currentMarket);
@@ -880,7 +959,7 @@ contract OperatorTest is Test {
         knockDownWall(true);
 
         /// Get latest market
-        uint256 newMarket = range.market(true);
+        uint256 newMarket = RANGE.market(true);
 
         /// Check market has been updated to non existent market
         assertTrue(type(uint256).max == newMarket);
@@ -894,20 +973,20 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Get the start capacity of the high side
-        uint256 startCapacity = range.capacity(true);
+        uint256 startCapacity = RANGE.capacity(true);
 
-        /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        /// Set PRICE on mock oracle into the high cushion
+        PRICE.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
-        uint256 id = range.market(true);
+        uint256 id = RANGE.market(true);
         assertTrue(auctioneer.isLive(id));
 
-        /// Set amount to purchase from cushion (which will be at wall price initially)
+        /// Set amount to purchase from cushion (which will be at wall PRICE initially)
         uint256 amountIn = auctioneer.maxAmountAccepted(id, guardian) / 2;
         uint256 minAmountOut = auctioneer.payoutFor(amountIn, id, guardian);
 
@@ -916,10 +995,10 @@ contract OperatorTest is Test {
         (uint256 payout, ) = teller.purchase(alice, guardian, id, amountIn, minAmountOut);
 
         /// Check that the side capacity has been reduced by the amount of the payout
-        assertEq(range.capacity(true), startCapacity - payout);
+        assertEq(RANGE.capacity(true), startCapacity - payout);
 
-        /// Set timestamp forward so that price is stale
-        vm.warp(block.timestamp + uint256(price.observationFrequency()) * 3 + 1);
+        /// Set timestamp forward so that PRICE is stale
+        vm.warp(block.timestamp + uint256(PRICE.observationFrequency()) * 3 + 1);
 
         /// Try to purchase another bond and expect to revert
         amountIn = auctioneer.maxAmountAccepted(id, guardian) / 2;
@@ -936,20 +1015,20 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Get the start capacity of the low side
-        uint256 startCapacity = range.capacity(false);
+        uint256 startCapacity = RANGE.capacity(false);
 
-        /// Set price on mock oracle into the low cushion
-        price.setLastPrice(89 * 1e18);
+        /// Set PRICE on mock oracle into the low cushion
+        PRICE.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
-        uint256 id = range.market(false);
+        uint256 id = RANGE.market(false);
         assertTrue(auctioneer.isLive(id));
 
-        /// Set amount to purchase from cushion (which will be at wall price initially)
+        /// Set amount to purchase from cushion (which will be at wall PRICE initially)
         uint256 amountIn = auctioneer.maxAmountAccepted(id, guardian) / 2;
         uint256 minAmountOut = auctioneer.payoutFor(amountIn, id, guardian);
 
@@ -958,10 +1037,10 @@ contract OperatorTest is Test {
         (uint256 payout, ) = teller.purchase(alice, guardian, id, amountIn, minAmountOut);
 
         /// Check that the side capacity has been reduced by the amount of the payout
-        assertEq(range.capacity(false), startCapacity - payout);
+        assertEq(RANGE.capacity(false), startCapacity - payout);
 
-        /// Set timestamp forward so that price is stale
-        vm.warp(block.timestamp + uint256(price.observationFrequency()) * 3 + 1);
+        /// Set timestamp forward so that PRICE is stale
+        vm.warp(block.timestamp + uint256(PRICE.observationFrequency()) * 3 + 1);
 
         /// Try to purchase another bond and expect to revert
         amountIn = auctioneer.maxAmountAccepted(id, guardian) / 2;
@@ -975,7 +1054,7 @@ contract OperatorTest is Test {
     // =========  REGENERATION TESTS ========= //
 
     /// DONE
-    /// [X] Wall regenerates when price on other side of MA for enough observations
+    /// [X] Wall regenerates when PRICE on other side of MA for enough observations
     /// [X] Wrap around logic works for counting observations
     /// [X] Regen period enforces a minimum time to wait for regeneration
 
@@ -985,28 +1064,28 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Tests the simplest case of regen
-        /// Takes down wall, moves price in regen range,
+        /// Takes down wall, moves PRICE in regen RANGE,
         /// and hits regen count required with consequtive calls
 
         /// Confirm wall is up
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(false));
 
         /// Take down the wall
         knockDownWall(false);
 
         /// Check that the wall is down
-        assertTrue(!range.active(false));
+        assertTrue(!RANGE.active(false));
 
         /// Move time forward past the regen period
         vm.warp(block.timestamp + 1 hours);
 
         /// Get capacity of the low wall and verify under threshold
-        uint256 startCapacity = range.capacity(false);
+        uint256 startCapacity = RANGE.capacity(false);
         uint256 fullCapacity = operator.fullCapacity(false);
-        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(RANGE.thresholdFactor(), 1e4));
 
-        /// Set price above the moving average to regenerate low wall
-        price.setLastPrice(101 * 1e18);
+        /// Set PRICE above the moving average to regenerate low wall
+        PRICE.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
@@ -1015,10 +1094,10 @@ contract OperatorTest is Test {
         }
 
         /// Check that the wall is up
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(false));
 
         /// Check that the capacity has regenerated
-        uint256 endCapacity = range.capacity(false);
+        uint256 endCapacity = RANGE.capacity(false);
         assertEq(endCapacity, fullCapacity);
     }
 
@@ -1028,29 +1107,29 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Tests wrap around logic of regen
-        /// Takes down wall, calls operate a few times with price not in regen range,
-        /// moves price into regen range, and hits regen count required with consequtive calls
+        /// Takes down wall, calls operate a few times with PRICE not in regen RANGE,
+        /// moves PRICE into regen RANGE, and hits regen count required with consequtive calls
         /// that wrap around the count array
 
         /// Confirm wall is up
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(false));
 
         /// Take down the wall
         knockDownWall(false);
 
         /// Check that the wall is down
-        assertTrue(!range.active(false));
+        assertTrue(!RANGE.active(false));
 
         /// Move time forward past the regen period
         vm.warp(block.timestamp + 1 hours);
 
         /// Get capacity of the low wall and verify under threshold
-        uint256 startCapacity = range.capacity(false);
+        uint256 startCapacity = RANGE.capacity(false);
         uint256 fullCapacity = operator.fullCapacity(false);
-        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(RANGE.thresholdFactor(), 1e4));
 
-        /// Set price below the moving average so regeneration doesn't start
-        price.setLastPrice(98 * 1e18);
+        /// Set PRICE below the moving average so regeneration doesn't start
+        PRICE.setLastPrice(98 * 1e18);
 
         /// Trigger the operator function with negative
         for (uint256 i; i < 8; ++i) {
@@ -1059,10 +1138,10 @@ contract OperatorTest is Test {
         }
 
         /// Check that the wall is still down
-        assertTrue(!range.active(false));
+        assertTrue(!RANGE.active(false));
 
-        /// Set price above the moving average to regenerate low wall
-        price.setLastPrice(101 * 1e18);
+        /// Set PRICE above the moving average to regenerate low wall
+        PRICE.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
@@ -1071,10 +1150,10 @@ contract OperatorTest is Test {
         }
 
         /// Check that the wall is up
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(false));
 
         /// Check that the capacity has regenerated
-        uint256 endCapacity = range.capacity(false);
+        uint256 endCapacity = RANGE.capacity(false);
         assertEq(endCapacity, fullCapacity);
     }
 
@@ -1086,24 +1165,24 @@ contract OperatorTest is Test {
         /// Tests that wall does not regenerate before the required count is reached
 
         /// Confirm wall is up
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(false));
 
         /// Take down the wall
         knockDownWall(false);
 
         /// Check that the wall is down
-        assertTrue(!range.active(false));
+        assertTrue(!RANGE.active(false));
 
         /// Move time forward past the regen period
         vm.warp(block.timestamp + 1 hours);
 
         /// Get capacity of the low wall and verify under threshold
-        uint256 startCapacity = range.capacity(false);
+        uint256 startCapacity = RANGE.capacity(false);
         uint256 fullCapacity = operator.fullCapacity(false);
-        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(RANGE.thresholdFactor(), 1e4));
 
-        /// Set price above the moving average to regenerate low wall
-        price.setLastPrice(101 * 1e18);
+        /// Set PRICE above the moving average to regenerate low wall
+        PRICE.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 4; ++i) {
@@ -1112,10 +1191,10 @@ contract OperatorTest is Test {
         }
 
         /// Check that the wall is still down
-        assertTrue(!range.active(false));
+        assertTrue(!RANGE.active(false));
 
         /// Check that the capacity hasn't regenerated
-        uint256 endCapacity = range.capacity(false);
+        uint256 endCapacity = RANGE.capacity(false);
         assertEq(endCapacity, startCapacity);
     }
 
@@ -1131,31 +1210,31 @@ contract OperatorTest is Test {
         /// last observation wraps around to first and therefore only 4/7 of the observations are counted
 
         /// Confirm wall is up
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(false));
 
         /// Take down the wall
         knockDownWall(false);
 
         /// Check that the wall is down
-        assertTrue(!range.active(false));
+        assertTrue(!RANGE.active(false));
 
         /// Move time forward past the regen period
         vm.warp(block.timestamp + 1 hours);
 
         /// Get capacity of the low wall and verify under threshold
-        uint256 startCapacity = range.capacity(false);
+        uint256 startCapacity = RANGE.capacity(false);
         uint256 fullCapacity = operator.fullCapacity(false);
-        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(RANGE.thresholdFactor(), 1e4));
 
-        /// Set price above the moving average to regenerate low wall
-        price.setLastPrice(101 * 1e18);
+        /// Set PRICE above the moving average to regenerate low wall
+        PRICE.setLastPrice(101 * 1e18);
 
         /// Trigger the operator once to get a positive check
         vm.prank(heart);
         operator.operate();
 
-        /// Set price below the moving average to get negative checks
-        price.setLastPrice(99 * 1e18);
+        /// Set PRICE below the moving average to get negative checks
+        PRICE.setLastPrice(99 * 1e18);
 
         /// Trigger the operator function several times with negative checks
         for (uint256 i; i < 3; ++i) {
@@ -1163,8 +1242,8 @@ contract OperatorTest is Test {
             operator.operate();
         }
 
-        /// Set price above the moving average to regenerate low wall
-        price.setLastPrice(101 * 1e18);
+        /// Set PRICE above the moving average to regenerate low wall
+        PRICE.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function several times with positive checks
         for (uint256 i; i < 4; ++i) {
@@ -1173,10 +1252,10 @@ contract OperatorTest is Test {
         }
 
         /// Check that the wall is still down
-        assertTrue(!range.active(false));
+        assertTrue(!RANGE.active(false));
 
         /// Check that the capacity hasn't regenerated
-        uint256 endCapacity = range.capacity(false);
+        uint256 endCapacity = RANGE.capacity(false);
         assertEq(endCapacity, startCapacity);
     }
 
@@ -1187,27 +1266,27 @@ contract OperatorTest is Test {
 
         /// Tests that the wall won't regenerate before the required time has passed,
         /// even with enough observations
-        /// Takes down wall, moves price in regen range,
+        /// Takes down wall, moves PRICE in regen RANGE,
         /// and hits regen count required with consequtive calls
 
         /// Confirm wall is up
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(false));
 
         /// Take down the wall
         knockDownWall(false);
 
         /// Check that the wall is down
-        assertTrue(!range.active(false));
+        assertTrue(!RANGE.active(false));
 
         /// Don't move time forward past the regen period so it won't regen
 
         /// Get capacity of the low wall and verify under threshold
-        uint256 startCapacity = range.capacity(false);
+        uint256 startCapacity = RANGE.capacity(false);
         uint256 fullCapacity = operator.fullCapacity(false);
-        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(RANGE.thresholdFactor(), 1e4));
 
-        /// Set price above the moving average to regenerate low wall
-        price.setLastPrice(101 * 1e18);
+        /// Set PRICE above the moving average to regenerate low wall
+        PRICE.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
@@ -1216,10 +1295,10 @@ contract OperatorTest is Test {
         }
 
         /// Check that the wall is still down
-        assertTrue(!range.active(false));
+        assertTrue(!RANGE.active(false));
 
         /// Check that the capacity hasn't regenerated
-        uint256 endCapacity = range.capacity(false);
+        uint256 endCapacity = RANGE.capacity(false);
         assertEq(endCapacity, startCapacity);
     }
 
@@ -1231,21 +1310,21 @@ contract OperatorTest is Test {
         /// Tests that a manually regenerated wall will close the cushion that is deployed currently
 
         /// Trigger a cushion
-        price.setLastPrice(89 * 1e18);
+        PRICE.setLastPrice(89 * 1e18);
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
-        assertTrue(auctioneer.isLive(range.market(false)));
-        assertEq(range.market(false), 0);
+        assertTrue(auctioneer.isLive(RANGE.market(false)));
+        assertEq(RANGE.market(false), 0);
 
         /// Regenerate the wall manually, expect market to close
         vm.prank(policy);
         operator.regenerate(false);
 
         /// Check that the market is closed
-        assertTrue(!auctioneer.isLive(range.market(false)));
-        assertEq(range.market(false), type(uint256).max);
+        assertTrue(!auctioneer.isLive(RANGE.market(false)));
+        assertEq(RANGE.market(false), type(uint256).max);
     }
 
     function testCorrectness_highWallRegenA() public {
@@ -1254,28 +1333,28 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Tests the simplest case of regen
-        /// Takes down wall, moves price in regen range,
+        /// Takes down wall, moves PRICE in regen RANGE,
         /// and hits regen count required with consequtive calls
 
         /// Confirm wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
         /// Take down the wall
         knockDownWall(true);
 
         /// Check that the wall is down
-        assertTrue(!range.active(true));
+        assertTrue(!RANGE.active(true));
 
         /// Move time forward past the regen period
         vm.warp(block.timestamp + 1 hours);
 
         /// Get capacity of the high wall and verify under threshold
-        uint256 startCapacity = range.capacity(true);
+        uint256 startCapacity = RANGE.capacity(true);
         uint256 fullCapacity = operator.fullCapacity(true);
-        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(RANGE.thresholdFactor(), 1e4));
 
-        /// Set price below the moving average to regenerate high wall
-        price.setLastPrice(99 * 1e18);
+        /// Set PRICE below the moving average to regenerate high wall
+        PRICE.setLastPrice(99 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
@@ -1284,10 +1363,10 @@ contract OperatorTest is Test {
         }
 
         /// Check that the wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
         /// Check that the capacity has regenerated
-        uint256 endCapacity = range.capacity(true);
+        uint256 endCapacity = RANGE.capacity(true);
         assertEq(endCapacity, fullCapacity);
     }
 
@@ -1297,29 +1376,29 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Tests wrap around logic of regen
-        /// Takes down wall, calls operate a few times with price not in regen range,
-        /// moves price into regen range, and hits regen count required with consequtive calls
+        /// Takes down wall, calls operate a few times with PRICE not in regen RANGE,
+        /// moves PRICE into regen RANGE, and hits regen count required with consequtive calls
         /// that wrap around the count array
 
         /// Confirm wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
         /// Take down the wall
         knockDownWall(true);
 
         /// Check that the wall is down
-        assertTrue(!range.active(true));
+        assertTrue(!RANGE.active(true));
 
         /// Move time forward past the regen period
         vm.warp(block.timestamp + 1 hours);
 
         /// Get capacity of the high wall and verify under threshold
-        uint256 startCapacity = range.capacity(true);
+        uint256 startCapacity = RANGE.capacity(true);
         uint256 fullCapacity = operator.fullCapacity(true);
-        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(RANGE.thresholdFactor(), 1e4));
 
-        /// Set price above the moving average so regeneration doesn't start
-        price.setLastPrice(101 * 1e18);
+        /// Set PRICE above the moving average so regeneration doesn't start
+        PRICE.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function with negative
         for (uint256 i; i < 8; ++i) {
@@ -1328,10 +1407,10 @@ contract OperatorTest is Test {
         }
 
         /// Check that the wall is still down
-        assertTrue(!range.active(true));
+        assertTrue(!RANGE.active(true));
 
-        /// Set price below the moving average to regenerate high wall
-        price.setLastPrice(98 * 1e18);
+        /// Set PRICE below the moving average to regenerate high wall
+        PRICE.setLastPrice(98 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
@@ -1340,10 +1419,10 @@ contract OperatorTest is Test {
         }
 
         /// Check that the wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
         /// Check that the capacity has regenerated
-        uint256 endCapacity = range.capacity(true);
+        uint256 endCapacity = RANGE.capacity(true);
         assertEq(endCapacity, fullCapacity);
     }
 
@@ -1355,24 +1434,24 @@ contract OperatorTest is Test {
         /// Tests that wall does not regenerate before the required count is reached
 
         /// Confirm wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
         /// Take down the wall
         knockDownWall(true);
 
         /// Check that the wall is down
-        assertTrue(!range.active(true));
+        assertTrue(!RANGE.active(true));
 
         /// Move time forward past the regen period
         vm.warp(block.timestamp + 1 hours);
 
         /// Get capacity of the high wall and verify under threshold
-        uint256 startCapacity = range.capacity(true);
+        uint256 startCapacity = RANGE.capacity(true);
         uint256 fullCapacity = operator.fullCapacity(true);
-        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(RANGE.thresholdFactor(), 1e4));
 
-        /// Set price below the moving average to regenerate high wall
-        price.setLastPrice(98 * 1e18);
+        /// Set PRICE below the moving average to regenerate high wall
+        PRICE.setLastPrice(98 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 4; ++i) {
@@ -1381,10 +1460,10 @@ contract OperatorTest is Test {
         }
 
         /// Check that the wall is still down
-        assertTrue(!range.active(true));
+        assertTrue(!RANGE.active(true));
 
         /// Check that the capacity hasn't regenerated
-        uint256 endCapacity = range.capacity(true);
+        uint256 endCapacity = RANGE.capacity(true);
         assertEq(endCapacity, startCapacity);
     }
 
@@ -1400,31 +1479,31 @@ contract OperatorTest is Test {
         /// last observation wraps around to first and therefore only 4/7 of the observations are counted
 
         /// Confirm wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
         /// Take down the wall
         knockDownWall(true);
 
         /// Check that the wall is down
-        assertTrue(!range.active(true));
+        assertTrue(!RANGE.active(true));
 
         /// Move time forward past the regen period
         vm.warp(block.timestamp + 1 hours);
 
         /// Get capacity of the high wall and verify under threshold
-        uint256 startCapacity = range.capacity(true);
+        uint256 startCapacity = RANGE.capacity(true);
         uint256 fullCapacity = operator.fullCapacity(true);
-        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(RANGE.thresholdFactor(), 1e4));
 
-        /// Set price below the moving average to regenerate low wall
-        price.setLastPrice(98 * 1e18);
+        /// Set PRICE below the moving average to regenerate low wall
+        PRICE.setLastPrice(98 * 1e18);
 
         /// Trigger the operator once to get a positive check
         vm.prank(heart);
         operator.operate();
 
-        /// Set price above the moving average to get negative checks
-        price.setLastPrice(101 * 1e18);
+        /// Set PRICE above the moving average to get negative checks
+        PRICE.setLastPrice(101 * 1e18);
 
         /// Trigger the operator function several times with negative checks
         for (uint256 i; i < 3; ++i) {
@@ -1432,8 +1511,8 @@ contract OperatorTest is Test {
             operator.operate();
         }
 
-        /// Set price below the moving average to regenerate high wall
-        price.setLastPrice(98 * 1e18);
+        /// Set PRICE below the moving average to regenerate high wall
+        PRICE.setLastPrice(98 * 1e18);
 
         /// Trigger the operator function several times with positive checks
         for (uint256 i; i < 4; ++i) {
@@ -1442,10 +1521,10 @@ contract OperatorTest is Test {
         }
 
         /// Check that the wall is still down
-        assertTrue(!range.active(true));
+        assertTrue(!RANGE.active(true));
 
         /// Check that the capacity hasn't regenerated
-        uint256 endCapacity = range.capacity(true);
+        uint256 endCapacity = RANGE.capacity(true);
         assertEq(endCapacity, startCapacity);
     }
 
@@ -1456,27 +1535,27 @@ contract OperatorTest is Test {
 
         /// Tests that the wall won't regenerate before the required time has passed,
         /// even with enough observations
-        /// Takes down wall, moves price in regen range,
+        /// Takes down wall, moves PRICE in regen RANGE,
         /// and hits regen count required with consequtive calls
 
         /// Confirm wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
         /// Take down the wall
         knockDownWall(true);
 
         /// Check that the wall is down
-        assertTrue(!range.active(true));
+        assertTrue(!RANGE.active(true));
 
         /// Don't move time forward past the regen period so it won't regen
 
         /// Get capacity of the high wall and verify under threshold
-        uint256 startCapacity = range.capacity(true);
+        uint256 startCapacity = RANGE.capacity(true);
         uint256 fullCapacity = operator.fullCapacity(true);
-        assertLe(startCapacity, fullCapacity.mulDiv(range.thresholdFactor(), 1e4));
+        assertLe(startCapacity, fullCapacity.mulDiv(RANGE.thresholdFactor(), 1e4));
 
-        /// Set price below the moving average to regenerate high wall
-        price.setLastPrice(99 * 1e18);
+        /// Set PRICE below the moving average to regenerate high wall
+        PRICE.setLastPrice(99 * 1e18);
 
         /// Trigger the operator function enough times to regenerate the wall
         for (uint256 i; i < 5; ++i) {
@@ -1485,10 +1564,10 @@ contract OperatorTest is Test {
         }
 
         /// Check that the wall is still down
-        assertTrue(!range.active(true));
+        assertTrue(!RANGE.active(true));
 
         /// Check that the capacity hasn't regenerated
-        uint256 endCapacity = range.capacity(true);
+        uint256 endCapacity = RANGE.capacity(true);
         assertEq(endCapacity, startCapacity);
     }
 
@@ -1500,21 +1579,21 @@ contract OperatorTest is Test {
         /// Tests that a manually regenerated wall will close the cushion that is deployed currently
 
         /// Trigger a cushion
-        price.setLastPrice(111 * 1e18);
+        PRICE.setLastPrice(111 * 1e18);
         vm.prank(heart);
         operator.operate();
 
         /// Check that the cushion is deployed
-        assertTrue(auctioneer.isLive(range.market(true)));
-        assertEq(range.market(true), 0);
+        assertTrue(auctioneer.isLive(RANGE.market(true)));
+        assertEq(RANGE.market(true), 0);
 
         /// Regenerate the wall manually, expect market to close
         vm.prank(policy);
         operator.regenerate(true);
 
         /// Check that the market is closed
-        assertTrue(!auctioneer.isLive(range.market(true)));
-        assertEq(range.market(true), type(uint256).max);
+        assertTrue(!auctioneer.isLive(RANGE.market(true)));
+        assertEq(RANGE.market(true), type(uint256).max);
     }
 
     // =========  ACCESS CONTROL TESTS ========= //
@@ -1566,7 +1645,7 @@ contract OperatorTest is Test {
         );
         vm.expectRevert(err);
         vm.prank(alice);
-        operator.setSpreads(1500, 3000);
+        operator.setSpreads(false, 1500, 3000);
 
         /// Try to set cushionFactor as random user, expect revert
         vm.expectRevert(err);
@@ -1654,37 +1733,68 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Get starting bands
-        OlympusRange.Range memory startRange = range.range();
+        OlympusRange.Range memory startRange = RANGE.range();
 
         /// Set spreads larger as admin
         vm.prank(policy);
-        operator.setSpreads(1500, 3000);
+        operator.setSpreads(false, 1500, 3000);
 
         /// Get new bands
-        OlympusRange.Range memory newRange = range.range();
+        OlympusRange.Range memory newRange = RANGE.range();
+
+        /// Spreads not updated
+        assertEq(newRange.high.cushion.spread, 1000);
+        assertEq(newRange.high.wall.spread, 2000);
+        assertEq(newRange.high.cushion.price, startRange.high.cushion.price);
+        assertEq(newRange.high.wall.price, startRange.high.wall.price);
 
         /// Check that the spreads have been set and prices are updated
-        assertEq(newRange.cushion.spread, 1500);
-        assertEq(newRange.wall.spread, 3000);
-        assertLt(newRange.cushion.low.price, startRange.cushion.low.price);
-        assertLt(newRange.wall.low.price, startRange.wall.low.price);
-        assertGt(newRange.cushion.high.price, startRange.cushion.high.price);
-        assertGt(newRange.wall.high.price, startRange.wall.high.price);
+        assertEq(newRange.low.cushion.spread, 1500);
+        assertEq(newRange.low.wall.spread, 3000);
+        assertLt(newRange.low.cushion.price, startRange.low.cushion.price);
+        assertLt(newRange.low.wall.price, startRange.low.wall.price);
 
         /// Set spreads smaller as admin
         vm.prank(policy);
-        operator.setSpreads(500, 1000);
+        operator.setSpreads(false, 500, 1000);
 
         /// Get new bands
-        newRange = range.range();
+        newRange = RANGE.range();
+
+        /// Spreads not updated
+        assertEq(newRange.high.cushion.spread, 1000);
+        assertEq(newRange.high.wall.spread, 2000);
+        assertEq(newRange.high.cushion.price, startRange.high.cushion.price);
+        assertEq(newRange.high.wall.price, startRange.high.wall.price);
 
         /// Check that the spreads have been set and prices are updated
-        assertEq(newRange.cushion.spread, 500);
-        assertEq(newRange.wall.spread, 1000);
-        assertGt(newRange.cushion.low.price, startRange.cushion.low.price);
-        assertGt(newRange.wall.low.price, startRange.wall.low.price);
-        assertLt(newRange.cushion.high.price, startRange.cushion.high.price);
-        assertLt(newRange.wall.high.price, startRange.wall.high.price);
+        assertEq(newRange.low.cushion.spread, 500);
+        assertEq(newRange.low.wall.spread, 1000);
+        assertGt(newRange.low.cushion.price, startRange.low.cushion.price);
+        assertGt(newRange.low.wall.price, startRange.low.wall.price);
+
+        // Reset lower spreads as admin
+        vm.prank(policy);
+        operator.setSpreads(false, 1000, 2000);
+
+        // Set upper spreads as admin
+        vm.prank(policy);
+        operator.setSpreads(true, 500, 1000);
+
+        /// Get new bands
+        newRange = RANGE.range();
+
+        /// Lower spreads not updated
+        assertEq(newRange.low.cushion.spread, 1000);
+        assertEq(newRange.low.wall.spread, 2000);
+        assertEq(newRange.low.cushion.price, startRange.low.cushion.price);
+        assertEq(newRange.low.wall.price, startRange.low.wall.price);
+
+        /// Upper spreads have been set and prices are updated
+        assertEq(newRange.high.cushion.spread, 500);
+        assertEq(newRange.high.wall.spread, 1000);
+        assertLt(newRange.high.cushion.price, startRange.high.cushion.price);
+        assertLt(newRange.high.wall.price, startRange.high.wall.price);
     }
 
     function testCorrectness_setThresholdFactor() public {
@@ -1693,14 +1803,14 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Check that the threshold factor is the same as initialized
-        assertEq(range.thresholdFactor(), 100);
+        assertEq(RANGE.thresholdFactor(), 100);
 
         /// Set threshold factor larger as admin
         vm.prank(policy);
         operator.setThresholdFactor(150);
 
         /// Check that the threshold factor has been updated
-        assertEq(range.thresholdFactor(), 150);
+        assertEq(RANGE.thresholdFactor(), 150);
     }
 
     function testCorrectness_cannotSetSpreadWithInvalidParams() public {
@@ -1712,37 +1822,37 @@ contract OperatorTest is Test {
         bytes memory err = abi.encodeWithSignature("RANGE_InvalidParams()");
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setSpreads(99, 99);
+        operator.setSpreads(false, 99, 99);
 
         /// Set spreads with invalid params as admin (both too high)
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setSpreads(10001, 10001);
+        operator.setSpreads(false, 10001, 10001);
 
         /// Set spreads with invalid params as admin (one high, one low)
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setSpreads(99, 10001);
+        operator.setSpreads(false, 99, 10001);
 
         /// Set spreads with invalid params as admin (one high, one low)
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setSpreads(10001, 99);
+        operator.setSpreads(false, 10001, 99);
 
         /// Set spreads with invalid params as admin (cushion > wall)
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setSpreads(2000, 1000);
+        operator.setSpreads(false, 2000, 1000);
 
         /// Set spreads with invalid params as admin (one in, one high)
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setSpreads(1000, 10001);
+        operator.setSpreads(false, 1000, 10001);
 
         /// Set spreads with invalid params as admin (one in, one low)
         vm.expectRevert(err);
         vm.prank(policy);
-        operator.setSpreads(99, 2000);
+        operator.setSpreads(false, 99, 2000);
     }
 
     function testCorrectness_setCushionFactor() public {
@@ -1960,15 +2070,16 @@ contract OperatorTest is Test {
         /// Confirm that the operator is not initialized yet and walls are down
         assertTrue(!operator.initialized());
         assertTrue(!operator.active());
-        assertTrue(!range.active(true));
-        assertTrue(!range.active(false));
-        assertEq(treasury.withdrawApproval(address(operator), reserve), 0);
-        assertEq(range.price(false, false), 0);
-        assertEq(range.price(true, false), 0);
-        assertEq(range.price(false, true), 0);
-        assertEq(range.price(true, true), 0);
-        assertEq(range.capacity(false), 0);
-        assertEq(range.capacity(true), 0);
+        assertTrue(!RANGE.active(true));
+        assertTrue(!RANGE.active(false));
+        assertEq(TRSRY.withdrawApproval(address(operator), reserve), 0);
+        assertEq(TRSRY.withdrawApproval(address(operator), wrappedReserve), 0);
+        assertEq(RANGE.price(false, false), 0);
+        assertEq(RANGE.price(false, true), 0);
+        assertEq(RANGE.price(true, false), 0);
+        assertEq(RANGE.price(true, true), 0);
+        assertEq(RANGE.capacity(false), 0);
+        assertEq(RANGE.capacity(true), 0);
 
         /// Initialize the operator
         vm.prank(guardian);
@@ -1977,15 +2088,16 @@ contract OperatorTest is Test {
         /// Confirm that the operator is initialized and walls are up
         assertTrue(operator.initialized());
         assertTrue(operator.active());
-        assertTrue(range.active(true));
-        assertTrue(range.active(false));
-        assertEq(treasury.withdrawApproval(address(operator), reserve), range.capacity(false));
-        assertGt(range.price(false, false), 0);
-        assertGt(range.price(true, false), 0);
-        assertGt(range.price(false, true), 0);
-        assertGt(range.price(true, true), 0);
-        assertGt(range.capacity(false), 0);
-        assertGt(range.capacity(true), 0);
+        assertTrue(RANGE.active(true));
+        assertTrue(RANGE.active(false));
+        assertEq(TRSRY.withdrawApproval(address(operator), reserve), 0);
+        assertEq(TRSRY.withdrawApproval(address(operator), wrappedReserve), RANGE.capacity(false));
+        assertGt(RANGE.price(false, false), 0);
+        assertGt(RANGE.price(false, true), 0);
+        assertGt(RANGE.price(true, false), 0);
+        assertGt(RANGE.price(true, true), 0);
+        assertGt(RANGE.capacity(false), 0);
+        assertGt(RANGE.capacity(true), 0);
     }
 
     function testCorrectness_cannotInitializeTwice() public {
@@ -2010,8 +2122,8 @@ contract OperatorTest is Test {
         uint48 newTime = uint48(block.timestamp);
 
         /// Confirm that both sides are currently up
-        assertTrue(range.active(true));
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(true));
+        assertTrue(RANGE.active(false));
 
         /// Confirm that the Regen structs are at the initial state
         Operator.Status memory status = operator.status();
@@ -2022,12 +2134,12 @@ contract OperatorTest is Test {
         assertEq(status.low.nextObservation, uint32(0));
         assertEq(status.low.lastRegen, startTime);
 
-        /// Call operate twice, at different price points, to make the regen counts higher than zero
-        price.setLastPrice(105 * 1e18);
+        /// Call operate twice, at different PRICE points, to make the regen counts higher than zero
+        PRICE.setLastPrice(105 * 1e18);
         vm.prank(heart);
         operator.operate();
 
-        price.setLastPrice(95 * 1e18);
+        PRICE.setLastPrice(95 * 1e18);
         vm.prank(heart);
         operator.operate();
 
@@ -2045,8 +2157,8 @@ contract OperatorTest is Test {
         knockDownWall(false);
 
         /// Confirm that both sides are now down
-        assertTrue(!range.active(true));
-        assertTrue(!range.active(false));
+        assertTrue(!RANGE.active(true));
+        assertTrue(!RANGE.active(false));
 
         /// Try to call regenerate without being guardian and expect revert
         bytes memory err = abi.encodeWithSelector(
@@ -2068,8 +2180,8 @@ contract OperatorTest is Test {
         assertEq(status.high.nextObservation, uint32(2));
         assertEq(status.low.count, uint32(1));
         assertEq(status.low.nextObservation, uint32(2));
-        assertTrue(!range.active(true));
-        assertTrue(!range.active(false));
+        assertTrue(!RANGE.active(true));
+        assertTrue(!RANGE.active(false));
 
         /// Call regenerate as policy and confirm each side is updated
         vm.prank(policy);
@@ -2086,8 +2198,8 @@ contract OperatorTest is Test {
         assertEq(status.low.count, uint32(0));
         assertEq(status.low.nextObservation, uint32(0));
         assertEq(status.low.lastRegen, newTime);
-        assertTrue(range.active(true));
-        assertTrue(range.active(false));
+        assertTrue(RANGE.active(true));
+        assertTrue(RANGE.active(false));
     }
 
     function testCorrectness_cannotPerformMarketOpsWhileInactive() public {
@@ -2138,17 +2250,17 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Assert high wall is up
-        assertTrue(range.active(true));
+        assertTrue(RANGE.active(true));
 
-        /// Set price on mock oracle into the high cushion
-        price.setLastPrice(111 * 1e18);
+        /// Set PRICE on mock oracle into the high cushion
+        PRICE.setLastPrice(111 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Get current market
-        uint256 currentMarket = range.market(true);
+        uint256 currentMarket = RANGE.market(true);
 
         /// Check market has been updated and is live
         assertTrue(type(uint256).max != currentMarket);
@@ -2160,21 +2272,21 @@ contract OperatorTest is Test {
 
         /// Check market has been updated and is not live
         assertTrue(!auctioneer.isLive(currentMarket));
-        assertEq(type(uint256).max, range.market(true));
+        assertEq(type(uint256).max, RANGE.market(true));
 
         /// Reactivate the operator
         vm.prank(policy);
         operator.activate();
 
-        /// Set price on mock oracle into the low cushion
-        price.setLastPrice(89 * 1e18);
+        /// Set PRICE on mock oracle into the low cushion
+        PRICE.setLastPrice(89 * 1e18);
 
         /// Trigger the operate function manually
         vm.prank(heart);
         operator.operate();
 
         /// Get current market
-        currentMarket = range.market(false);
+        currentMarket = RANGE.market(false);
 
         /// Check market has been updated and is live
         assertTrue(type(uint256).max != currentMarket);
@@ -2186,7 +2298,7 @@ contract OperatorTest is Test {
 
         /// Check market has been updated and is not live
         assertTrue(!auctioneer.isLive(currentMarket));
-        assertEq(type(uint256).max, range.market(false));
+        assertEq(type(uint256).max, RANGE.market(false));
     }
 
     // =========  VIEW TESTS ========= //
@@ -2204,12 +2316,14 @@ contract OperatorTest is Test {
         Operator.Config memory config = operator.config();
 
         /// Check that fullCapacity returns the full capacity based on the reserveFactor
-        uint256 resInTreasury = treasury.getReserveBalance(reserve);
+        uint256 resInTreasury = wrappedReserve.previewRedeem(
+            TRSRY.getReserveBalance(wrappedReserve)
+        );
         uint256 lowCapacity = resInTreasury.mulDiv(config.reserveFactor, 1e4);
         uint256 highCapacity = (lowCapacity.mulDiv(
-            1e9 * 10**price.decimals(),
-            1e18 * range.price(true, true)
-        ) * (1e4 + range.spread(true) * 2)) / 1e4;
+            1e9 * 10 ** PRICE.decimals(),
+            1e18 * RANGE.price(true, true)
+        ) * (1e4 + RANGE.spread(true, true) + RANGE.spread(false, true))) / 1e4;
 
         assertEq(operator.fullCapacity(false), lowCapacity);
         assertEq(operator.fullCapacity(true), highCapacity);
@@ -2223,12 +2337,12 @@ contract OperatorTest is Test {
         /// Check that getAmountOut returns the amount of token to receive for different combinations of inputs
         /// Case 1: OHM In, less than capacity
         uint256 amountIn = 100 * 1e9;
-        uint256 expAmountOut = amountIn.mulDiv(1e18 * range.price(true, false), 1e9 * 1e18);
+        uint256 expAmountOut = amountIn.mulDiv(1e18 * RANGE.price(false, true), 1e9 * 1e18);
 
         assertEq(expAmountOut, operator.getAmountOut(ohm, amountIn));
 
         /// Case 2: OHM In, more than capacity
-        amountIn = range.capacity(false).mulDiv(1e9 * 1e18, 1e18 * range.price(true, false)) + 1e9;
+        amountIn = RANGE.capacity(false).mulDiv(1e9 * 1e18, 1e18 * RANGE.price(false, true)) + 1e9;
 
         bytes memory err = abi.encodeWithSignature("Operator_InsufficientCapacity()");
         vm.expectRevert(err);
@@ -2236,12 +2350,12 @@ contract OperatorTest is Test {
 
         /// Case 3: Reserve In, less than capacity
         amountIn = 10000 * 1e18;
-        expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * range.price(true, true));
+        expAmountOut = amountIn.mulDiv(1e9 * 1e18, 1e18 * RANGE.price(true, true));
 
         assertEq(expAmountOut, operator.getAmountOut(reserve, amountIn));
 
         /// Case 4: Reserve In, more than capacity
-        amountIn = range.capacity(true).mulDiv(1e18 * range.price(true, true), 1e9 * 1e18) + 1e18;
+        amountIn = RANGE.capacity(true).mulDiv(1e18 * RANGE.price(true, true), 1e9 * 1e18) + 1e18;
 
         vm.expectRevert(err);
         operator.getAmountOut(reserve, amountIn);
@@ -2257,7 +2371,7 @@ contract OperatorTest is Test {
     // =========  INTERNAL FUNCTION TESTS ========= //
 
     /// DONE
-    /// [X] Range updates from new price data when operate is called (triggers _updateRange)
+    /// [X] Range updates from new PRICE data when operate is called (triggers _updateRange)
 
     function testCorrectness_updateRange() public {
         /// Initialize operator
@@ -2265,47 +2379,47 @@ contract OperatorTest is Test {
         operator.initialize();
 
         /// Store the starting bands
-        OlympusRange.Range memory startRange = range.range();
+        OlympusRange.Range memory startRange = RANGE.range();
 
         /// Update moving average upwards and trigger the operator
-        price.setMovingAverage(105 * 1e18);
+        PRICE.setMovingAverage(105 * 1e18);
         vm.prank(heart);
         operator.operate();
 
         /// Check that the bands have updated
-        assertGt(range.price(false, false), startRange.cushion.low.price);
-        assertGt(range.price(true, false), startRange.wall.low.price);
-        assertGt(range.price(false, true), startRange.cushion.high.price);
-        assertGt(range.price(true, true), startRange.wall.high.price);
+        assertGt(RANGE.price(false, false), startRange.low.cushion.price);
+        assertGt(RANGE.price(false, true), startRange.low.wall.price);
+        assertGt(RANGE.price(true, false), startRange.high.cushion.price);
+        assertGt(RANGE.price(true, true), startRange.high.wall.price);
 
         /// Update moving average downwards and trigger the operator
-        price.setMovingAverage(95 * 1e18);
+        PRICE.setMovingAverage(95 * 1e18);
         vm.prank(heart);
         operator.operate();
 
         /// Check that the bands have updated
-        assertLt(range.price(false, false), startRange.cushion.low.price);
-        assertLt(range.price(true, false), startRange.wall.low.price);
-        assertLt(range.price(false, true), startRange.cushion.high.price);
-        assertLt(range.price(true, true), startRange.wall.high.price);
+        assertLt(RANGE.price(false, false), startRange.low.cushion.price);
+        assertLt(RANGE.price(false, true), startRange.low.wall.price);
+        assertLt(RANGE.price(true, false), startRange.high.cushion.price);
+        assertLt(RANGE.price(true, true), startRange.high.wall.price);
 
-        /// Check that the bands do not get reduced further past the minimum target price
-        price.setMovingAverage(10 * 1e18); // At minimum price to get initial values
+        /// Check that the bands do not get reduced further past the minimum target PRICE
+        PRICE.setMovingAverage(10 * 1e18); // At minimum PRICE to get initial values
         vm.prank(heart);
         operator.operate();
 
         /// Get the current bands
-        OlympusRange.Range memory currentRange = range.range();
+        OlympusRange.Range memory currentRange = RANGE.range();
 
         /// Move moving average below minimum target
-        price.setMovingAverage(5 * 1e18);
+        PRICE.setMovingAverage(5 * 1e18);
         vm.prank(heart);
         operator.operate();
 
         /// Check that the bands have not changed
-        assertEq(currentRange.cushion.low.price, range.price(false, false));
-        assertEq(currentRange.wall.low.price, range.price(true, false));
-        assertEq(currentRange.cushion.high.price, range.price(false, true));
-        assertEq(currentRange.wall.high.price, range.price(true, true));
+        assertEq(currentRange.low.cushion.price, RANGE.price(false, false));
+        assertEq(currentRange.low.wall.price, RANGE.price(false, true));
+        assertEq(currentRange.high.cushion.price, RANGE.price(true, false));
+        assertEq(currentRange.high.wall.price, RANGE.price(true, true));
     }
 }

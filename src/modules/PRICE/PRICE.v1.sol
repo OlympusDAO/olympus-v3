@@ -88,9 +88,10 @@ abstract contract PRICEv1 is Module {
     /// @param  lastObservationTime_ - Unix timestamp of last observation being provided (in seconds).
     /// @dev    This function must be called after the Price module is deployed to activate it and after updating the observationFrequency
     ///         or movingAverageDuration (in certain cases) in order for the Price module to function properly.
-    function initialize(uint256[] memory startObservations_, uint48 lastObservationTime_)
-        external
-        virtual;
+    function initialize(
+        uint256[] memory startObservations_,
+        uint48 lastObservationTime_
+    ) external virtual;
 
     /// @notice Change the moving average window (duration)
     /// @param  movingAverageDuration_ - Moving average duration in seconds, must be a multiple of observation frequency

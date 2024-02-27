@@ -53,8 +53,7 @@ interface IBondFixedTermTeller {
     /// @param tokenId_     ID of the bond token
     /// @return name        Bond token name
     /// @return symbol      Bond token symbol
-    function getTokenNameAndSymbol(uint256 tokenId_)
-        external
-        view
-        returns (string memory, string memory);
+    function getTokenNameAndSymbol(
+        uint256 tokenId_
+    ) external view returns (string memory, string memory);
 }

@@ -2,19 +2,33 @@
 ffi = true
 remappings = [
     'ds-test/=lib/ds-test/src/',
-    'solmate/=lib/solmate/src/',
     'forge-std/=lib/forge-std/src/',
-    'balancer-v2/=lib/balancer-v2/',
-
     'interfaces/=src/interfaces',
     'modules/=src/modules',
     'policies/=src/policies',
     'libraries/=src/libraries',
+    'solmate/=lib/solmate/src/',
+    'balancer-v2/=lib/balancer-v2/',
+    'layer-zero/=lib/solidity-examples/contracts/',
+    '@openzeppelin/=lib/openzeppelin-contracts/',
+    'bonds/=lib/bonds/src/',
+    'test/=src/test/',
+    'clones/=lib/clones-with-immutable-args/src/',
+    'proposal-sim=lib/forge-proposal-simulator/',
+    'proposal-sim/proposals/=lib/forge-proposal-simulator/proposals/',
+    'proposals/=src/proposals/',
+    'openzeppelin/=lib/openzeppelin-contracts/contracts'
 ]
-fs_permissions = [{access = "write", path = "./src/test/sim/out/"}, {access = "write", path = "./deployments/"}]
+fs_permissions = [
+    {access = "write", path = "./src/test/sim/out/"},
+    {access = "write", path = "./deployments/"},
+    {access = "read", path = "./src/scripts/"},
+    {access = "read", path = "./src/proposals/addresses.json"},
+]
 solc_version = "0.8.15"
 optimizer = true
 optimizer_runs = 10
+chain_id = 1
 
 [fuzz]
-runs = 4096
+runs = 256

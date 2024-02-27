@@ -19,9 +19,12 @@ tokens
 ├─ ERC721 — "Modern, minimalist, and gas efficient ERC721 implementation"
 ├─ ERC1155 — "Minimalist and gas efficient standard ERC1155 implementation"
 utils
-├─ SSTORE2 - "Library for cheaper reads and writes to persistent storage"
+├─ SSTORE2 — "Library for cheaper reads and writes to persistent storage"
 ├─ CREATE3 — "Deploy to deterministic addresses without an initcode factor"
-├─ SafeCastLib - "Safe unsigned integer casting lib that reverts on overflow"
+├─ LibString — "Library for creating string representations of uint values"
+├─ SafeCastLib — "Safe unsigned integer casting lib that reverts on overflow"
+├─ SignedWadMath — "Signed integer 18 decimal fixed point arithmetic library"
+├─ MerkleProofLib — "Efficient merkle tree inclusion proof verification library"
 ├─ ReentrancyGuard — "Gas optimized reentrancy protection for smart contracts"
 ├─ FixedPointMathLib — "Arithmetic library with operations for fixed-point numbers"
 ├─ Bytes32AddressLib — "Library for converting between addresses and bytes32 values"
@@ -45,13 +48,13 @@ We **do not give any warranties** and **will not be liable for any loss** incurr
 To install with [**Foundry**](https://github.com/gakonst/foundry):
 
 ```sh
-forge install rari-capital/solmate
+forge install transmissions11/solmate
 ```
 
 To install with [**Hardhat**](https://github.com/nomiclabs/hardhat) or [**Truffle**](https://github.com/trufflesuite/truffle):
 
 ```sh
-npm install @rari-capital/solmate
+npm install solmate
 ```
 
 ## Acknowledgements
