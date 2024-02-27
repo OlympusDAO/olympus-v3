@@ -17,6 +17,7 @@ import {TRSRYv1, TRSRYv1_1, toCategory as toTreasuryCategory} from "modules/TRSR
 import {PRICEv2} from "modules/PRICE/PRICE.v2.sol";
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import {SPPLYv1} from "modules/SPPLY/SPPLY.v1.sol";
+import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 
 // Libraries
 import {BunniHelper} from "libraries/UniswapV3/BunniHelper.sol";
@@ -435,6 +436,9 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev                            - The ERC20 token for `pool_` has already been activated in TRSRY/SPPLY/PRICE
     function activatePoolToken(
         address pool_,
+        uint32 priceMovingAverageDuration_,
+        uint48 priceLastObservationTime_,
+        uint256[] memory priceObservations_,
         uint32 reserveMovingAverageDuration_,
         uint48 reserveLastObservationTime_,
         uint256[] memory reserveToken0Observations_,
@@ -458,7 +462,13 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         ) revert BunniManager_PoolHasNoLiquidity(pool_);
 
         // Register the pool token with TRSRY, PRICE and SPPLY (each will check for prior activation)
-        _addPoolTokenToPRICE(pool_, poolTokenAddress);
+        _addPoolTokenToPRICE(
+            pool_,
+            poolTokenAddress,
+            priceMovingAverageDuration_,
+            priceLastObservationTime_,
+            priceObservations_
+        );
         _addPoolTokenToTRSRY(pool_, poolTokenAddress);
         _addPoolTokenToSPPLY(
             pool_,
@@ -1004,7 +1014,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///
     /// @param pool_                    The pool to register
     /// @param poolToken_               The pool token to register
-    function _addPoolTokenToPRICE(address pool_, address poolToken_) internal {
+    /// @param movingAverageDuration_   The moving average duration
+    /// @param lastObservationTime_     The last observation time
+    /// @param observations_            The observations
+    function _addPoolTokenToPRICE(
+        address pool_,
+        address poolToken_,
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory observations_
+    ) internal {
         PRICEv2.Asset memory assetData = PRICE.getAssetData(poolToken_);
         // Revert if already activated
         if (assetData.approved == true)
@@ -1027,12 +1046,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
             // TODO enable moving average
             PRICE.addAsset(
                 poolToken_, // address asset_
-                false, // bool storeMovingAverage_
-                false, // bool useMovingAverage_
-                uint32(0), // uint32 movingAverageDuration_
-                uint48(0), // uint48 lastObservationTime_
-                new uint256[](0), // uint256[] memory observations_
-                PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
+                true, // bool storeMovingAverage_
+                true, // bool useMovingAverage_
+                movingAverageDuration_, // uint32 movingAverageDuration_
+                lastObservationTime_, // uint48 lastObservationTime_
+                observations_, // uint256[] memory observations_
+                PRICEv2.Component(
+                    toSubKeycode("PRICE.SIMPLESTRATEGY"),
+                    SimplePriceFeedStrategy.getAveragePrice.selector,
+                    abi.encode(0)
+                ), // Average of values
                 feeds // Component[] memory feeds_
             );
         }

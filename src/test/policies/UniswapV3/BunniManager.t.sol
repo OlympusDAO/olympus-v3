@@ -49,6 +49,8 @@ import {ComputeAddress} from "test/libraries/ComputeAddress.sol";
 
 import {toSubKeycode} from "src/Submodules.sol";
 
+import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
+
 import "src/Kernel.sol";
 
 contract BunniManagerTest is Test {
@@ -136,10 +138,13 @@ contract BunniManagerTest is Test {
     mapping(address => mapping(address => uint256)) private tokenBalances;
 
     // Moving average data
-    uint48 internal lastObservationTime;
-    uint32 internal movingAverageDuration = (8 hours) * 3;
-    uint256[] internal token0Observations;
-    uint256[] internal token1Observations;
+    uint32 internal _priceMovingAverageDuration = (8 hours) * 3;
+    uint48 internal _priceLastObservationTime;
+    uint256[] internal _priceObservations;
+    uint32 internal _reserveMovingAverageDuration = (8 hours) * 3;
+    uint48 internal _reserveLastObservationTime;
+    uint256[] internal _reserveToken0Observations;
+    uint256[] internal _reserveToken1Observations;
 
     // Reproduce events
     event BunniLensSet(address indexed newBunniHub_, address indexed newBunniLens_);
@@ -274,6 +279,11 @@ contract BunniManagerTest is Test {
 
             priceSubmoduleBunni = BunniPrice(price_);
             supplySubmoduleBunni = BunniSupply(supply_);
+
+            // Install strategy
+            SimplePriceFeedStrategy strategySubmodule = new SimplePriceFeedStrategy(PRICE);
+            vm.prank(writePRICE);
+            PRICE.installSubmodule(strategySubmodule);
         }
 
         // Mock observations for the Uniswap V3 pool
@@ -294,15 +304,20 @@ contract BunniManagerTest is Test {
 
         // Moving average
         {
-            lastObservationTime = uint48(block.timestamp) - (8 hours); // 3 observations required
-            token0Observations = new uint256[](3);
-            token0Observations[0] = 100e9;
-            token0Observations[1] = 100e9;
-            token0Observations[2] = 100e9;
-            token1Observations = new uint256[](3);
-            token1Observations[0] = 1000e6;
-            token1Observations[1] = 1000e6;
-            token1Observations[2] = 1000e6;
+            _priceLastObservationTime = uint48(block.timestamp) - (8 hours); // 3 observations required
+            _priceObservations = new uint256[](3);
+            _priceObservations[0] = 200e18;
+            _priceObservations[1] = 200e18;
+            _priceObservations[2] = 200e18;
+            _reserveLastObservationTime = uint48(block.timestamp) - (8 hours); // 3 observations required
+            _reserveToken0Observations = new uint256[](3);
+            _reserveToken0Observations[0] = 100e9;
+            _reserveToken0Observations[1] = 100e9;
+            _reserveToken0Observations[2] = 100e9;
+            _reserveToken1Observations = new uint256[](3);
+            _reserveToken1Observations[0] = 1000e6;
+            _reserveToken1Observations[1] = 1000e6;
+            _reserveToken1Observations[2] = 1000e6;
         }
     }
 
@@ -1136,10 +1151,13 @@ contract BunniManagerTest is Test {
         vm.prank(alice);
         bunniManager.activatePoolToken(
             address(pool),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
+            _priceMovingAverageDuration,
+            _priceLastObservationTime,
+            _priceObservations,
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
         );
     }
 
@@ -1152,10 +1170,13 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         newBunniManager.activatePoolToken(
             address(pool),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
+            _priceMovingAverageDuration,
+            _priceLastObservationTime,
+            _priceObservations,
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
         );
     }
 
@@ -1168,11 +1189,14 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         newBunniManager.activatePoolToken(
             address(pool),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
-       );
+            _priceMovingAverageDuration,
+            _priceLastObservationTime,
+            _priceObservations,
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
+        );
     }
 
     function testRevert_activatePoolToken_tokenNotDeployed() public {
@@ -1181,10 +1205,13 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.activatePoolToken(
             address(pool),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
+            _priceMovingAverageDuration,
+            _priceLastObservationTime,
+            _priceObservations,
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
         );
     }
 
@@ -1202,10 +1229,13 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.activatePoolToken(
             address(pool),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
+            _priceMovingAverageDuration,
+            _priceLastObservationTime,
+            _priceObservations,
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
         );
     }
 
@@ -1244,10 +1274,13 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.activatePoolToken(
             address(pool),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
+            _priceMovingAverageDuration,
+            _priceLastObservationTime,
+            _priceObservations,
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
         );
     }
 
@@ -1277,9 +1310,7 @@ contract BunniManagerTest is Test {
         // Prepare parameters for PRICE
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         {
-            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(
-                address(bunniLens)
-            );
+            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(address(bunniLens));
 
             feeds[0] = PRICEv2.Component(
                 toSubKeycode("PRICE.BNI"), // Subkeycode
@@ -1294,8 +1325,8 @@ contract BunniManagerTest is Test {
             address(poolToken), // address asset_
             false, // bool storeMovingAverage_
             false, // bool useMovingAverage_
-            uint32(0), // uint32 movingAverageDuration_
-            uint48(0), // uint48 lastObservationTime_
+            uint32(0), // uint32 _reserveMovingAverageDuration_
+            uint48(0), // uint48 _reserveLastObservationTime_
             new uint256[](0), // uint256[] memory observations_
             PRICEv2.Component(toSubKeycode(bytes20(0)), bytes4(0), abi.encode(0)), // Component memory strategy_
             feeds // Component[] memory feeds_
@@ -1307,10 +1338,13 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.activatePoolToken(
             address(pool),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
+            _priceMovingAverageDuration,
+            _priceLastObservationTime,
+            _priceObservations,
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
         );
     }
 
@@ -1342,10 +1376,10 @@ contract BunniManagerTest is Test {
         supplySubmoduleBunni.addBunniToken(
             address(poolToken),
             address(bunniLens),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
         );
 
         // Expect a revert
@@ -1354,10 +1388,13 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.activatePoolToken(
             address(pool),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
+            _priceMovingAverageDuration,
+            _priceLastObservationTime,
+            _priceObservations,
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
         );
     }
 
@@ -1397,10 +1434,13 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.activatePoolToken(
             address(pool),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
+            _priceMovingAverageDuration,
+            _priceLastObservationTime,
+            _priceObservations,
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
         );
 
         // Check that the token has been added to TRSRY
@@ -1464,10 +1504,13 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.activatePoolToken(
             address(pool),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
+            _priceMovingAverageDuration,
+            _priceLastObservationTime,
+            _priceObservations,
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
         );
 
         // Check that the token has been added to TRSRY
@@ -1535,10 +1578,13 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.activatePoolToken(
             address(pool),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
+            _priceMovingAverageDuration,
+            _priceLastObservationTime,
+            _priceObservations,
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
         );
 
         // Check that the token has been added to TRSRY
@@ -1682,10 +1728,13 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         bunniManager.activatePoolToken(
             address(pool),
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
+            _priceMovingAverageDuration,
+            _priceLastObservationTime,
+            _priceObservations,
+            _reserveMovingAverageDuration,
+            _reserveLastObservationTime,
+            _reserveToken0Observations,
+            _reserveToken1Observations
         );
 
         // Withdraw

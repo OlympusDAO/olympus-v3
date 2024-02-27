@@ -378,11 +378,7 @@ contract BunniPriceTest is Test {
     //  [X] Correctly handles different output decimals
 
     function test_getBunniTokenPrice_zeroBunniLensReverts() public {
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: address(0)
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: address(0)}));
 
         _expectRevert_invalidBunniLens(address(0));
 
@@ -390,11 +386,7 @@ contract BunniPriceTest is Test {
     }
 
     function test_getBunniTokenPrice_invalidBunniLensReverts() public {
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: address(bunniHub)
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: address(bunniHub)}));
 
         _expectRevert_invalidBunniLens(address(bunniHub));
 
@@ -402,11 +394,7 @@ contract BunniPriceTest is Test {
     }
 
     function test_getBunniTokenPrice_zeroBunniTokenReverts() public {
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
 
         _expectRevert_invalidBunniToken(address(0));
 
@@ -414,11 +402,7 @@ contract BunniPriceTest is Test {
     }
 
     function test_getBunniTokenPrice_invalidBunniTokenReverts() public {
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
 
         _expectRevert_invalidBunniToken(address(bunniHub));
 
@@ -444,9 +428,7 @@ contract BunniPriceTest is Test {
         vm.expectRevert(err);
 
         bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: address(newBunniLens)
-            })
+            BunniPrice.BunniParams({bunniLens: address(newBunniLens)})
         );
 
         submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
@@ -466,11 +448,7 @@ contract BunniPriceTest is Test {
         );
         vm.expectRevert(err);
 
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
 
         submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
     }
@@ -489,11 +467,7 @@ contract BunniPriceTest is Test {
             ); // Scale: PRICE_DECIMALS
 
         // Call
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
         uint256 price = submoduleBunniPrice.getBunniTokenPrice(
             poolTokenAddress,
             PRICE_DECIMALS,
@@ -557,11 +531,7 @@ contract BunniPriceTest is Test {
             ); // Scale: PRICE_DECIMALS
 
         // Call
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
         uint256 price = submoduleBunniPrice.getBunniTokenPrice(
             poolTokenAddress,
             PRICE_DECIMALS,
@@ -595,11 +565,7 @@ contract BunniPriceTest is Test {
             ); // Scale: outputDecimals
 
         // Call
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
         uint256 price = submoduleBunniPrice.getBunniTokenPrice(
             poolTokenAddress,
             outputDecimals,
@@ -623,11 +589,7 @@ contract BunniPriceTest is Test {
         vm.expectRevert(err);
 
         // Call
-        bytes memory params = abi.encode(
-            BunniPrice.BunniParams({
-                bunniLens: bunniLensAddress
-            })
-        );
+        bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
         submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
     }
 }

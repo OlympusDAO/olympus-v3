@@ -41,12 +41,18 @@ interface IBunniManager {
     /// @notice         This function will register the pool token with TRSRY, PRICE and SPPLY.
     ///
     /// @param pool_                            The address of the Uniswap V3 pool
+    /// @param priceMovingAverageDuration_      The duration of the moving average for the pool price observations
+    /// @param priceLastObservationTime_        The last observation time for the pool price observations
+    /// @param priceObservations_               The observations for the pool price
     /// @param reserveMovingAverageDuration_    The duration of the moving average for the pool reserve observations
     /// @param reserveLastObservationTime_      The last observation time for the pool reserve observations
     /// @param reserveToken0Observations_       The observations for token0
     /// @param reserveToken1Observations_       The observations for token1
     function activatePoolToken(
         address pool_,
+        uint32 priceMovingAverageDuration_,
+        uint48 priceLastObservationTime_,
+        uint256[] memory priceObservations_,
         uint32 reserveMovingAverageDuration_,
         uint48 reserveLastObservationTime_,
         uint256[] memory reserveToken0Observations_,
