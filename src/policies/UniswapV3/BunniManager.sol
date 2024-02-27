@@ -1043,7 +1043,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         // Add asset
         {
-            // TODO enable moving average
             PRICE.addAsset(
                 poolToken_, // address asset_
                 true, // bool storeMovingAverage_
