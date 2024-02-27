@@ -435,8 +435,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev                            - The ERC20 token for `pool_` has already been activated in TRSRY/SPPLY/PRICE
     function activatePoolToken(
         address pool_,
-        uint16 twapMaxDeviationBps_,
-        uint32 twapObservationWindow_
+        uint32 reserveMovingAverageDuration_,
+        uint48 reserveLastObservationTime_,
+        uint256[] memory reserveToken0Observations_,
+        uint256[] memory reserveToken1Observations_
     ) external override nonReentrant onlyIfActive onlyRole("bunni_admin") bunniHubSet {
         // Get the appropriate BunniKey representing the position
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
@@ -456,9 +458,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         ) revert BunniManager_PoolHasNoLiquidity(pool_);
 
         // Register the pool token with TRSRY, PRICE and SPPLY (each will check for prior activation)
-        _addPoolTokenToPRICE(pool_, poolTokenAddress, twapMaxDeviationBps_, twapObservationWindow_);
+        _addPoolTokenToPRICE(pool_, poolTokenAddress);
         _addPoolTokenToTRSRY(pool_, poolTokenAddress);
-        _addPoolTokenToSPPLY(pool_, poolTokenAddress, twapMaxDeviationBps_, twapObservationWindow_);
+        _addPoolTokenToSPPLY(
+            pool_,
+            poolTokenAddress,
+            reserveMovingAverageDuration_,
+            reserveLastObservationTime_,
+            reserveToken0Observations_,
+            reserveToken1Observations_
+        );
 
         emit PoolTokenActivated(pool_, poolTokenAddress);
     }
@@ -995,14 +1004,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///
     /// @param pool_                    The pool to register
     /// @param poolToken_               The pool token to register
-    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP
-    /// @param twapObservationWindow_   The TWAP observation window
-    function _addPoolTokenToPRICE(
-        address pool_,
-        address poolToken_,
-        uint16 twapMaxDeviationBps_,
-        uint32 twapObservationWindow_
-    ) internal {
+    function _addPoolTokenToPRICE(address pool_, address poolToken_) internal {
         PRICEv2.Asset memory assetData = PRICE.getAssetData(poolToken_);
         // Revert if already activated
         if (assetData.approved == true)
@@ -1011,11 +1013,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Prepare price feeds
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         {
-            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(
-                address(bunniLens),
-                twapMaxDeviationBps_,
-                twapObservationWindow_
-            );
+            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(address(bunniLens));
 
             feeds[0] = PRICEv2.Component(
                 toSubKeycode("PRICE.BNI"), // Subkeycode
@@ -1026,6 +1024,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         // Add asset
         {
+            // TODO enable moving average
             PRICE.addAsset(
                 poolToken_, // address asset_
                 false, // bool storeMovingAverage_
@@ -1082,13 +1081,17 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///
     /// @param pool_                    The pool to register
     /// @param poolToken_               The pool token to register
-    /// @param twapMaxDeviationBps_     The maximum deviation from the TWAP
-    /// @param twapObservationWindow_   The TWAP observation window
+    /// @param movingAverageDuration_   The moving average duration
+    /// @param lastObservationTime_     The last observation time
+    /// @param token0Observations_      The observations for token0
+    /// @param token1Observations_      The observations for token1
     function _addPoolTokenToSPPLY(
         address pool_,
         address poolToken_,
-        uint16 twapMaxDeviationBps_,
-        uint32 twapObservationWindow_
+        uint32 movingAverageDuration_,
+        uint48 lastObservationTime_,
+        uint256[] memory token0Observations_,
+        uint256[] memory token1Observations_
     ) internal {
         bytes memory hasBunniTokenResult = SPPLY.execOnSubmodule(
             toSubKeycode("SPPLY.BNI"),
@@ -1105,8 +1108,10 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 BunniSupply.addBunniToken.selector,
                 poolToken_,
                 address(bunniLens),
-                twapMaxDeviationBps_,
-                twapObservationWindow_
+                movingAverageDuration_,
+                lastObservationTime_,
+                token0Observations_,
+                token1Observations_
             )
         );
     }
