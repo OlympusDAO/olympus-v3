@@ -778,14 +778,8 @@ contract OlympusDeploy is Script {
         if (address(reserve) == address(0)) revert("Reserve address not set");
 
         // Check the version of Operator
-        (uint8 operatorMajor, uint8 operatorMinor) = operatorV2.VERSION();
+        (uint8 operatorMajor, ) = operatorV2.VERSION();
         if (operatorMajor != 2) revert("OperatorV2 is not version 2");
-
-        // Bare minimum required for Heart to function
-        // Will be updated according to the treasury composition during activation
-        address[] memory movingAverageAssets = new address[](2);
-        movingAverageAssets[0] = address(ohm);
-        movingAverageAssets[1] = address(reserve);
 
         // Metrics to track
         IAppraiser.Metric[] memory movingAverageMetrics = new IAppraiser.Metric[](1);
@@ -806,7 +800,6 @@ contract OlympusDeploy is Script {
             operatorV2,
             appraiser,
             zeroDistributor,
-            movingAverageAssets,
             movingAverageMetrics,
             maxReward,
             auctionDuration

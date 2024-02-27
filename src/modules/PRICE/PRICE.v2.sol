@@ -321,6 +321,9 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @param asset_   The address of the asset
     function storePrice(address asset_) external virtual;
 
+    /// @notice         Calculates and stores the current price of assets that track a moving average
+    function storeObservations() external virtual;
+
     // ========== ASSET MANAGEMENT ========== //
 
     /// @notice                         Adds a new asset definition

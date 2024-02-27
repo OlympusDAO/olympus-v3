@@ -365,6 +365,29 @@ contract OlympusPricev2 is PRICEv2 {
         emit PriceStored(asset_, price, currentTime);
     }
 
+    /// @inheritdoc PRICEv2
+    /// @dev        Implements the following logic:
+    /// @dev        - Iterate over all assets
+    /// @dev        - Ignores assets that do not store the moving average
+    /// @dev        - Store the price for each asset using `storePrice()`
+    function storeObservations() public override permissioned {
+        // Iterate through assets and store the price for each
+        uint256 len = assets.length;
+
+        for (uint256 i; i < len; ) {
+            address currentAsset = assets[i];
+            Asset storage asset = _assetData[currentAsset];
+            // Ignore if the moving average is not tracked
+            if (!asset.approved || !asset.storeMovingAverage) continue;
+
+            storePrice(currentAsset);
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     // ========== ASSET MANAGEMENT ========== //
 
     /// @inheritdoc PRICEv2

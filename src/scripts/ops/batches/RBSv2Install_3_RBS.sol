@@ -1001,14 +1001,12 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 1. Activates Appraiser policy
         // 2. Activates Operator policy
         // 3. Activates Heart policy
-        // 4. Add moving average assets to Heart
-        // 5. Check that the assets with moving average tracking are configured in Heart
-        // 6. Add DAO MS to the Appraiser role
-        // 7. Configure metric moving average assets on Heart
-        // 8. Sets operator address on bond callback
-        // 9. Set roles for policy access control
-        // 10. Initializes the operator policy
-        // 11. Test the output
+        // 4. Add DAO MS to the Appraiser role
+        // 5. Configure metric moving average assets on Heart
+        // 6. Sets operator address on bond callback
+        // 7. Set roles for policy access control
+        // 8. Initializes the operator policy
+        // 9. Test the output
 
         // 1. Activate appraiser policy
         console2.log("Activating Appraiser policy");
@@ -1035,81 +1033,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, heartV2)
         );
 
-        // 4. Add moving average assets to Heart
-        {
-            console2.log("Adding FXS as a moving average asset in Heart");
-            addToBatch(
-                heartV2,
-                abi.encodeWithSelector(OlympusHeart.addMovingAverageAsset.selector, fxs)
-            );
-
-            console2.log("Adding veFXS as a moving average asset in Heart");
-            addToBatch(
-                heartV2,
-                abi.encodeWithSelector(OlympusHeart.addMovingAverageAsset.selector, veFXS)
-            );
-        }
-
-        // 5. Check that the assets with moving average tracking are configured in Heart
-        {
-            console2.log("Checking Heart tracked assets");
-            OlympusPricev2 PRICE = OlympusPricev2(priceV2);
-
-            // Get the assets from PRICE
-            address[] memory priceAssets = PRICE.getAssets();
-
-            // Determine the number of tracked assets
-            console2.log("    Getting PRICE assets");
-            uint256 trackedAssetsCount = 0;
-            for (uint256 i = 0; i < priceAssets.length; i++) {
-                PRICEv2.Asset memory assetData = PRICE.getAssetData(priceAssets[i]);
-
-                if (!assetData.storeMovingAverage) {
-                    continue;
-                }
-
-                trackedAssetsCount++;
-            }
-
-            // Filter the assets with tracked moving averages
-            address[] memory trackedAssets = new address[](trackedAssetsCount);
-            uint256 trackedAssetsIndex = 0;
-            for (uint256 i = 0; i < priceAssets.length; i++) {
-                PRICEv2.Asset memory assetData = PRICE.getAssetData(priceAssets[i]);
-
-                if (!assetData.storeMovingAverage) {
-                    continue;
-                }
-
-                trackedAssets[trackedAssetsIndex] = priceAssets[i];
-                trackedAssetsIndex++;
-            }
-
-            // Get the assets from Heart
-            console2.log("    Getting Heart tracked assets");
-            address[] memory heartAssets = OlympusHeart(heartV2).getMovingAverageAssets();
-
-            // Check that the assets match
-            console2.log("    Checking that assets match");
-            for (uint256 i = 0; i < heartAssets.length; i++) {
-                bool found = false;
-                console2.log("    Checking asset %s", heartAssets[i]);
-
-                for (uint256 j = 0; j < trackedAssets.length; j++) {
-                    if (heartAssets[i] == trackedAssets[j]) {
-                        found = true;
-                        break;
-                    }
-                }
-
-                assertEq(found, true, "Asset not configured in Heart");
-            }
-            assertEq(heartAssets.length, trackedAssets.length, "Assets do not match");
-
-            console2.log("    Assets match");
-        }
-
-        // 6. Add DAO MS to the Appraiser role
+        // 4. Add DAO MS to the Appraiser role
         {
             //      - Give DAO MS the appraiser_admin role
             console2.log("Granting appraiser_admin role for Appraiser policy to DAO MS");
@@ -1123,7 +1047,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             );
         }
 
-        // 7. Configure metric moving average assets on Heart
+        // 5. Configure metric moving average assets on Heart
         //  - 30 days
         {
             uint32 movingAverageDuration = 30 days /
@@ -1144,14 +1068,14 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             );
         }
 
-        // 8. Set operator address on bond callback
+        // 6. Set operator address on bond callback
         console2.log("Setting operator address on bond callback");
         addToBatch(
             bondCallback,
             abi.encodeWithSelector(BondCallback.setOperator.selector, operatorV2)
         );
 
-        // 9. Set roles for policy access control
+        // 7. Set roles for policy access control
         // Operator policy
         //     - Give Heart the operator_operate role
         console2.log("Granting operator_operate role for Operator policy to Heart");
@@ -1175,11 +1099,11 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             )
         );
 
-        // 10. Initialize the operator policy
+        // 8. Initialize the operator policy
         console2.log("Initializing Operator policy");
         addToBatch(operatorV2, abi.encodeWithSelector(Operator.initialize.selector));
 
-        // 11. Test the output
+        // 9. Test the output
         {
             console2.log(
                 "    LBBO (18dp)",

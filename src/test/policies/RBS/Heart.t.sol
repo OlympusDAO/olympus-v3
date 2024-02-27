@@ -6,6 +6,7 @@ import {UserFactory} from "test/lib/UserFactory.sol";
 import {console2} from "forge-std/console2.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockGohm} from "test/mocks/OlympusMocks.sol";
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
@@ -13,6 +14,7 @@ import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {ZeroDistributor} from "policies/Distributor/ZeroDistributor.sol";
 import {MockStakingZD} from "test/mocks/MockStakingForZD.sol";
+import {OlympusSupply} from "modules/SPPLY/OlympusSupply.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -94,12 +96,14 @@ contract HeartTest is Test {
     address internal policy;
 
     MockERC20 internal ohm;
+    MockGohm internal gohm;
     MockERC20 internal reserve;
 
     Kernel internal kernel;
     MockPrice internal PRICE;
     OlympusRoles internal ROLES;
     OlympusMinter internal MINTR;
+    OlympusSupply internal SPPLY;
 
     MockOperator internal operator;
     MockAppraiser internal appraiser;
@@ -110,6 +114,7 @@ contract HeartTest is Test {
     ZeroDistributor internal distributor;
 
     uint48 internal constant PRICE_FREQUENCY = uint48(8 hours);
+    uint256 internal constant GOHM_INDEX = 267951435389; // From sOHM, 9 decimals
 
     // MINTR
     event Mint(address indexed policy_, address indexed to_, uint256 amount_);
@@ -131,6 +136,7 @@ contract HeartTest is Test {
         {
             // Deploy token mocks
             ohm = new MockERC20("Olympus", "OHM", 9);
+            gohm = new MockGohm(GOHM_INDEX);
             reserve = new MockERC20("Reserve", "RSV", 18);
         }
         {
@@ -141,6 +147,9 @@ contract HeartTest is Test {
             PRICE = new MockPrice(kernel, uint8(18), uint32(8 hours));
             ROLES = new OlympusRoles(kernel);
             MINTR = new OlympusMinter(kernel, address(ohm));
+
+            address[2] memory tokens = [address(ohm), address(gohm)];
+            SPPLY = new OlympusSupply(kernel, tokens, 0, uint32(8 hours));
 
             // Configure prices on mock price module
             PRICE.setPrice(address(ohm), 100e18);
@@ -159,10 +168,6 @@ contract HeartTest is Test {
             distributor = new ZeroDistributor(address(staking));
             staking.setDistributor(address(distributor));
 
-            address[] memory movingAverageAssets = new address[](2);
-            movingAverageAssets[0] = address(ohm);
-            movingAverageAssets[1] = address(reserve);
-
             IAppraiser.Metric[] memory movingAverageMetrics = new IAppraiser.Metric[](1);
             movingAverageMetrics[0] = IAppraiser.Metric.BACKING;
 
@@ -172,7 +177,6 @@ contract HeartTest is Test {
                 IOperator(address(operator)),
                 IAppraiser(address(appraiser)),
                 IDistributor(address(distributor)),
-                movingAverageAssets,
                 movingAverageMetrics,
                 uint256(10e9), // max reward = 10 reward tokens
                 uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
@@ -188,6 +192,7 @@ contract HeartTest is Test {
             kernel.executeAction(Actions.InstallModule, address(PRICE));
             kernel.executeAction(Actions.InstallModule, address(ROLES));
             kernel.executeAction(Actions.InstallModule, address(MINTR));
+            kernel.executeAction(Actions.InstallModule, address(SPPLY));
 
             // Approve policies
             kernel.executeAction(Actions.ActivatePolicy, address(operator));
@@ -204,10 +209,11 @@ contract HeartTest is Test {
     // ======== SETUP DEPENDENCIES ======= //
 
     function test_configureDependencies() public {
-        Keycode[] memory expectedDeps = new Keycode[](3);
+        Keycode[] memory expectedDeps = new Keycode[](4);
         expectedDeps[0] = toKeycode("PRICE");
         expectedDeps[1] = toKeycode("ROLES");
         expectedDeps[2] = toKeycode("MINTR");
+        expectedDeps[3] = toKeycode("SPPLY");
 
         Keycode[] memory deps = heart.configureDependencies();
         // Check: configured dependencies storage
@@ -215,13 +221,15 @@ contract HeartTest is Test {
         assertEq(fromKeycode(deps[0]), fromKeycode(expectedDeps[0]));
         assertEq(fromKeycode(deps[1]), fromKeycode(expectedDeps[1]));
         assertEq(fromKeycode(deps[2]), fromKeycode(expectedDeps[2]));
+        assertEq(fromKeycode(deps[3]), fromKeycode(expectedDeps[3]));
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](3);
-        expectedPerms[0] = Permissions(PRICE.KEYCODE(), PRICE.storePrice.selector);
+        Permissions[] memory expectedPerms = new Permissions[](4);
+        expectedPerms[0] = Permissions(PRICE.KEYCODE(), PRICE.storeObservations.selector);
         expectedPerms[1] = Permissions(MINTR.KEYCODE(), MINTR.mintOhm.selector);
         expectedPerms[2] = Permissions(MINTR.KEYCODE(), MINTR.increaseMintApproval.selector);
+        expectedPerms[3] = Permissions(SPPLY.KEYCODE(), SPPLY.storeObservations.selector);
 
         Permissions[] memory perms = heart.requestPermissions();
         // Check: permission storage
@@ -407,16 +415,6 @@ contract HeartTest is Test {
     //  [X] reverts if zero address
     //  [X] reverts if duplicates
     //  [X] success
-    // [X] addMovingAverageAsset
-    //  [X] reverts if asset already exists
-    //  [X] reverts if zero
-    //  [X] reverts if unauthorized
-    //  [X] success
-    // [X] removeMovingAverageAsset
-    //  [X] reverts if asset does not exist
-    //  [X] reverts if zero
-    //  [X] reverts if unauthorized
-    //  [X] success
 
     function testCorrectness_resetBeat() public {
         // Try to beat the heart and expect the revert since not enough time has passed
@@ -541,181 +539,9 @@ contract HeartTest is Test {
         heart.setRewardAuctionParams(uint256(2e9), uint48(12 * 25));
     }
 
-    function testCorrectness_constructor_movingAverageAssets() public {
-        MockERC20 wrappedReserve = new MockERC20("Wrapped Reserve", "WRSV", 18);
-
-        address[] memory movingAverageAssets = new address[](3);
-        movingAverageAssets[0] = address(ohm);
-        movingAverageAssets[1] = address(reserve);
-        movingAverageAssets[2] = address(wrappedReserve);
-
-        // Deploy heart with moving average assets
-        OlympusHeart newHeart = new OlympusHeart(
-            kernel,
-            IOperator(address(operator)),
-            IAppraiser(address(appraiser)),
-            IDistributor(address(distributor)),
-            movingAverageAssets,
-            new IAppraiser.Metric[](0),
-            uint256(10e9), // max reward = 10 reward tokens
-            uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
-        );
-
-        // Check that the moving average assets are set correctly
-        assertEq(newHeart.movingAverageAssets(0), address(ohm), "ohm");
-        assertEq(newHeart.movingAverageAssets(1), address(reserve), "reserve");
-        assertEq(newHeart.movingAverageAssets(2), address(wrappedReserve), "wrappedReserve");
-        assertEq(newHeart.getMovingAverageAssetsCount(), 3, "asset count");
-    }
-
-    function testReverts_constructor_movingAverageAssets_duplicate() public {
-        address[] memory movingAverageAssets = new address[](3);
-        movingAverageAssets[0] = address(ohm);
-        movingAverageAssets[1] = address(reserve);
-        movingAverageAssets[2] = address(ohm);
-
-        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
-        vm.expectRevert(err);
-
-        // Deploy heart with moving average assets containing a duplicate
-        new OlympusHeart(
-            kernel,
-            IOperator(address(operator)),
-            IAppraiser(address(appraiser)),
-            IDistributor(address(distributor)),
-            movingAverageAssets,
-            new IAppraiser.Metric[](0),
-            uint256(10e9), // max reward = 10 reward tokens
-            uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
-        );
-    }
-
-    function testReverts_constructor_movingAverageAssets_zeroAddress() public {
-        address[] memory movingAverageAssets = new address[](3);
-        movingAverageAssets[0] = address(ohm);
-        movingAverageAssets[1] = address(reserve);
-        movingAverageAssets[2] = address(0);
-
-        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
-        vm.expectRevert(err);
-
-        // Deploy heart with moving average assets containing a zero address
-        new OlympusHeart(
-            kernel,
-            IOperator(address(operator)),
-            IAppraiser(address(appraiser)),
-            IDistributor(address(distributor)),
-            movingAverageAssets,
-            new IAppraiser.Metric[](0),
-            uint256(10e9), // max reward = 10 reward tokens
-            uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
-        );
-    }
-
-    function testReverts_addMovingAverageAsset_duplicate() public {
-        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
-        vm.expectRevert(err);
-
-        // Add a duplicate asset
-        vm.prank(policy);
-        heart.addMovingAverageAsset(address(ohm));
-    }
-
-    function testReverts_addMovingAverageAsset_zeroAddress() public {
-        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
-        vm.expectRevert(err);
-
-        // Add a zero address asset
-        vm.prank(policy);
-        heart.addMovingAverageAsset(address(0));
-    }
-
-    function testReverts_addMovingAverageAsset_unauthorized() public {
-        MockERC20 wrappedReserve = new MockERC20("Wrapped Reserve", "WRSV", 18);
-
-        bytes memory err = abi.encodeWithSelector(
-            ROLESv1.ROLES_RequireRole.selector,
-            bytes32("heart_admin")
-        );
-        vm.expectRevert(err);
-
-        // Add an asset as non-policy
-        vm.prank(alice);
-        heart.addMovingAverageAsset(address(wrappedReserve));
-    }
-
-    function testCorrectness_addMovingAverageAsset() public {
-        MockERC20 wrappedReserve = new MockERC20("Wrapped Reserve", "WRSV", 18);
-
-        // Add an asset
-        vm.prank(policy);
-        heart.addMovingAverageAsset(address(wrappedReserve));
-
-        // Check that the asset was added
-        assertEq(heart.movingAverageAssets(0), address(ohm), "ohm");
-        assertEq(heart.movingAverageAssets(1), address(reserve), "reserve");
-        assertEq(heart.movingAverageAssets(2), address(wrappedReserve), "wrappedReserve");
-        assertEq(heart.getMovingAverageAssetsCount(), 3, "asset count");
-    }
-
-    function testReverts_removeMovingAverageAsset_doesNotExist() public {
-        MockERC20 wrappedReserve = new MockERC20("Wrapped Reserve", "WRSV", 18);
-
-        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
-        vm.expectRevert(err);
-
-        // Remove an asset that does not exist
-        vm.prank(policy);
-        heart.removeMovingAverageAsset(address(wrappedReserve));
-    }
-
-    function testReverts_removeMovingAverageAsset_zeroAddress() public {
-        bytes memory err = abi.encodeWithSelector(IHeart.Heart_InvalidParams.selector);
-        vm.expectRevert(err);
-
-        // Remove a zero address asset
-        vm.prank(policy);
-        heart.removeMovingAverageAsset(address(0));
-    }
-
-    function testReverts_removeMovingAverageAsset_unauthorized() public {
-        bytes memory err = abi.encodeWithSelector(
-            ROLESv1.ROLES_RequireRole.selector,
-            bytes32("heart_admin")
-        );
-        vm.expectRevert(err);
-
-        // Remove an asset as non-policy
-        vm.prank(alice);
-        heart.removeMovingAverageAsset(address(reserve));
-    }
-
-    function testCorrectness_removeMovingAverageAsset() public {
-        // Remove an asset
-        vm.prank(policy);
-        heart.removeMovingAverageAsset(address(reserve));
-
-        // Check that the asset was removed
-        assertEq(heart.movingAverageAssets(0), address(ohm));
-        assertEq(heart.getMovingAverageAssetsCount(), 1, "asset count");
-
-        // Add two more assets
-        vm.startPrank(policy);
-        heart.addMovingAverageAsset(address(reserve));
-        heart.addMovingAverageAsset(address(1));
-
-        // Remove an asset
-        heart.removeMovingAverageAsset(address(ohm));
-        vm.stopPrank();
-
-        address[] memory assets = heart.getMovingAverageAssets();
-        assertEq(assets[0], address(1), "1");
-        assertEq(assets[1], address(reserve), "reserve");
-    }
-
-    //  []  constructor moving average metrics
-    //      []  reverts if duplicates
-    //      []  adds metrics
+    //  [X]  constructor moving average metrics
+    //      [X]  reverts if duplicates
+    //      [X]  adds metrics
 
     function testReverts_constructor_movingAverageMetrics_duplicate() public {
         IAppraiser.Metric[] memory movingAverageMetrics = new IAppraiser.Metric[](3);
@@ -732,7 +558,6 @@ contract HeartTest is Test {
             IOperator(address(operator)),
             IAppraiser(address(appraiser)),
             IDistributor(address(distributor)),
-            new address[](0),
             movingAverageMetrics,
             uint256(10e9), // max reward = 10 reward tokens
             uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
@@ -751,7 +576,6 @@ contract HeartTest is Test {
             IOperator(address(operator)),
             IAppraiser(address(appraiser)),
             IDistributor(address(distributor)),
-            new address[](0),
             movingAverageMetrics,
             uint256(10e9), // max reward = 10 reward tokens
             uint48(12 * 50) // auction duration = 5 minutes (50 blocks on ETH mainnet)
@@ -924,4 +748,5 @@ contract HeartTest is Test {
     }
 
     // TODO check that SPPLY observations are stored
+    // TODO check that PRICE observations are stored
 }
