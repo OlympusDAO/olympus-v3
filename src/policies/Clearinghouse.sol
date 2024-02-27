@@ -5,8 +5,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {IStaking} from "interfaces/IStaking.sol";
 
-import {CoolerFactory, Cooler} from "cooler/CoolerFactory.sol";
-import {CoolerCallback} from "cooler/CoolerCallback.sol";
+import {CoolerFactory, Cooler} from "src/external/cooler/CoolerFactory.sol";
+import {CoolerCallback} from "src/external/cooler/CoolerCallback.sol";
 
 import "src/Kernel.sol";
 import {TRSRYv1} from "modules/TRSRY/TRSRY.v1.sol";

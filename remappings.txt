@@ -9,7 +9,6 @@ layer-zero/=lib/solidity-examples/contracts/
 bonds/=lib/bonds/src/
 test/=src/test/
 clones/=lib/clones-with-immutable-args/src/
-cooler/=lib/Cooler/src/
 proposal-sim=lib/forge-proposal-simulator/
 proposal-sim/proposals/=lib/forge-proposal-simulator/proposals/
 proposals/=src/proposals/

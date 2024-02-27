@@ -19,7 +19,7 @@ import {IVault, IBasePool, IBalancerHelper} from "policies/BoostedLiquidity/inte
 import {IAuraBooster, IAuraRewardPool, IAuraMiningLib} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
 // Cooler Loans
-import {CoolerFactory, Cooler} from "cooler/CoolerFactory.sol";
+import {CoolerFactory, Cooler} from "src/external/cooler/CoolerFactory.sol";
 
 // Governance
 import {Timelock} from "src/external/governance/Timelock.sol";
