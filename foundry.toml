@@ -18,7 +18,9 @@ remappings = [
     'proposal-sim/proposals/=lib/forge-proposal-simulator/proposals/',
     'proposals/=src/proposals/',
     'openzeppelin/=lib/openzeppelin-contracts/contracts',
-    '@addresses/=lib/forge-proposal-simulator/addresses/'
+    '@addresses/=lib/forge-proposal-simulator/addresses/',
+    '@proposals/=lib/forge-proposal-simulator/proposals/',
+    '@utils/=lib/forge-proposal-simulator/utils/'
 ]
 fs_permissions = [
     {access = "write", path = "./src/test/sim/out/"},
