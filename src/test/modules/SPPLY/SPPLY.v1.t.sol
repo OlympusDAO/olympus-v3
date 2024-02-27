@@ -2528,5 +2528,5 @@ contract SupplyTest is Test {
         assertEq(reserves[3].balances[0], expectedOhm);
     }
 
-    // TODO check that reserves are recorded
+    // TODO check that observations are recorded
 }
