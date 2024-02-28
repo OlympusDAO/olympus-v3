@@ -525,8 +525,14 @@ contract BunniSupply is SupplySubmodule {
                 tokenMovingAverage.numObservations;
 
             // Update the cumulative observations (which makes it easy to calculate the average)
-            tokenMovingAverage.token0CumulativeObservations += reserve0 - oldestReserve0;
-            tokenMovingAverage.token1CumulativeObservations += reserve1 - oldestReserve1;
+            tokenMovingAverage.token0CumulativeObservations =
+                tokenMovingAverage.token0CumulativeObservations +
+                reserve0 -
+                oldestReserve0;
+            tokenMovingAverage.token1CumulativeObservations =
+                tokenMovingAverage.token1CumulativeObservations +
+                reserve1 -
+                oldestReserve1;
 
             emit ReserveObservationUpdated(address(tokenData.token), reserve0, reserve1);
 
