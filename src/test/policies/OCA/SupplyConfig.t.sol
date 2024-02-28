@@ -17,6 +17,8 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 
+import {MockSupplySubmodule} from "test/modules/SPPLY/submodules/MockSupplySubmodule.sol";
+
 // Tests for SupplyConfig v1.0.0
 //
 // SupplyConfig Setup and Permissions
@@ -166,7 +168,7 @@ contract SupplyConfigTest is Test {
     }
 
     function test_requestPermissions() public {
-        Permissions[] memory expectedPerms = new Permissions[](6);
+        Permissions[] memory expectedPerms = new Permissions[](8);
         Keycode SPPLY_KEYCODE = toKeycode("SPPLY");
         // SPPLY Permissions
         expectedPerms[0] = Permissions(SPPLY_KEYCODE, SPPLY.addCategory.selector);
@@ -175,6 +177,8 @@ contract SupplyConfigTest is Test {
         expectedPerms[3] = Permissions(SPPLY_KEYCODE, SPPLY.installSubmodule.selector);
         expectedPerms[4] = Permissions(SPPLY_KEYCODE, SPPLY.upgradeSubmodule.selector);
         expectedPerms[5] = Permissions(SPPLY_KEYCODE, SPPLY.execOnSubmodule.selector);
+        expectedPerms[6] = Permissions(SPPLY_KEYCODE, SPPLY.registerForObservations.selector);
+        expectedPerms[7] = Permissions(SPPLY_KEYCODE, SPPLY.unregisterFromObservations.selector);
 
         Permissions[] memory perms = supplyConfig.requestPermissions();
         assertEq(perms.length, expectedPerms.length);
@@ -505,5 +509,41 @@ contract SupplyConfigTest is Test {
         );
         assertEq(locations.length, 1);
         assertEq(locations[0], address(1));
+    }
+
+    function _installMockSubmodule() internal returns (MockSupplySubmodule) {
+        MockSupplySubmodule mockSubmodule = new MockSupplySubmodule(SPPLY);
+
+        vm.prank(admin);
+        supplyConfig.installSubmodule(mockSubmodule);
+
+        return mockSubmodule;
+    }
+
+    function test_registerForObservations() public {
+        MockSupplySubmodule mockSubmodule = _installMockSubmodule();
+        SubKeycode subKeycode = mockSubmodule.SUBKEYCODE();
+
+        // Call
+        vm.prank(policy);
+        supplyConfig.registerForObservations(subKeycode);
+
+        // Check state
+        assertEq(SPPLY.submodulesForObservationCount(), 1);
+    }
+
+    function test_unregisterFromObservations() public {
+        MockSupplySubmodule mockSubmodule = _installMockSubmodule();
+        SubKeycode subKeycode = mockSubmodule.SUBKEYCODE();
+
+        // Call
+        vm.prank(policy);
+        supplyConfig.registerForObservations(subKeycode);
+
+        vm.prank(policy);
+        supplyConfig.unregisterFromObservations(subKeycode);
+
+        // Check state
+        assertEq(SPPLY.submodulesForObservationCount(), 0);
     }
 }
