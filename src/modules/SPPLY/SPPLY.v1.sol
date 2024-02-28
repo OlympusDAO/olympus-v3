@@ -283,6 +283,16 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     //                                       SUPPLY OBSERVATIONS                                  //
     //============================================================================================//
 
+    /// @notice                 Registers the submodule to be called when storing observations
+    ///
+    /// @param subKeycode_      The submodule to register
+    function registerForObservations(SubKeycode subKeycode_) external virtual;
+
+    /// @notice                 Unregisters the submodule from being called when storing observations
+    ///
+    /// @param subKeycode_      The submodule to unregister
+    function unregisterFromObservations(SubKeycode subKeycode_) external virtual;
+
     /// @notice     Stores reserve observations for the configured submodules
     function storeObservations() external virtual;
 

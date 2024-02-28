@@ -604,6 +604,25 @@ contract OlympusSupply is SPPLYv1 {
     //============================================================================================//
 
     /// @inheritdoc SPPLYv1
+    /// @dev        This functions reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The `subKeycode_` is invalid
+    /// @dev        - A submodule for the `subKeycode_` is not installed
+    /// @dev        - The `subKeycode_` is already registered for observations
+    function registerForObservations(SubKeycode subKeycode_) external override permissioned {
+        // TODO
+    }
+
+    /// @inheritdoc SPPLYv1
+    /// @dev        This functions reverts if:
+    /// @dev        - The caller is not permissioned
+    /// @dev        - The `subKeycode_` is invalid
+    /// @dev        - The `subKeycode_` is not registered for observations
+    function unregisterFromObservations(SubKeycode subKeycode_) external override permissioned {
+        // TODO
+    }
+
+    /// @inheritdoc SPPLYv1
     function storeObservations() external override permissioned {
         // Iterate over all submodules
         uint256 len = submodules.length;

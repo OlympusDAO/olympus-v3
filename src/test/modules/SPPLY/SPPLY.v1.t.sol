@@ -2528,5 +2528,32 @@ contract SupplyTest is Test {
         assertEq(reserves[3].balances[0], expectedOhm);
     }
 
-    // TODO check that observations are recorded
+    // =========  Supply Observations ========= //
+
+    // registerForObservations
+    // [ ] when the caller is not permissioned
+    //  [ ] it reverts
+    // [ ] when the subkeycode is invalid
+    //  [ ] it reverts
+    // [ ] when the submodule is not installed
+    //  [ ] it reverts
+    // [ ] when the submodule is already registered
+    //  [ ] it reverts
+    // [ ] the submodule is registered
+
+    // unregisterFromObservations
+    // [ ] when the caller is not permissioned
+    //  [ ] it reverts
+    // [ ] when the subkeycode is invalid
+    //  [ ] it reverts
+    // [ ] when the submodule is not registered
+    //  [ ] it reverts
+    // [ ] the submodule registration is removed
+
+    // storeObservations
+    // [ ] when the caller is not permissioned
+    //  [ ] it reverts
+    // [ ] given there are no registered submodules
+    //  [ ] it does nothing
+    // [ ] it calls the registered submodules
 }
