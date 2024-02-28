@@ -37,26 +37,4 @@ library BunniHelper {
                 tickUpper: (TickMath.MAX_TICK / tickSpacing) * tickSpacing
             });
     }
-
-    /// @notice         Returns the ratio of token1 to token0 based on the position reserves
-    /// @dev            This function checks only for the reserves in the position, and excludes
-    /// @dev            any uncollected fees. This is to mitigate an attack vector where an attacker
-    /// @dev            performs swaps to adjust the reserves ratio.
-    ///
-    /// @param key_     The BunniKey for the pool
-    /// @param lens_    The BunniLens contract
-    /// @return         The ratio of token1 to token0 in terms of token1 decimals
-    function getReservesRatio(BunniKey memory key_, BunniLens lens_) public view returns (uint256) {
-        IUniswapV3Pool pool = key_.pool;
-        uint8 token0Decimals = ERC20(pool.token0()).decimals();
-
-        (uint112 reserve0, uint112 reserve1) = lens_.getReserves(key_);
-
-        // If the denominator is 0
-        if (reserve0 == 0) {
-            return 0;
-        }
-
-        return uint256(reserve1).mulDiv(10 ** token0Decimals, reserve0);
-    }
 }
