@@ -296,6 +296,15 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                     BunniSupply(bunniSupply)
                 )
             );
+
+            console2.log("Register BunniSupply for observations");
+            addToBatch(
+                supplyConfig,
+                abi.encodeWithSelector(
+                    SupplyConfig.registerForObservations.selector,
+                    BunniSupply(bunniSupply).SUBKEYCODE()
+                )
+            );
         }
 
         console2.log("*** END SIMULATION SETUP ***");
