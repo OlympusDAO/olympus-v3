@@ -24,6 +24,10 @@ import {IBalancerPool} from "src/external/balancer/interfaces/IBalancerPool.sol"
 import {IAuraRewardPool} from "src/external/aura/interfaces/IAuraRewardPool.sol";
 import {BLVaultSupply} from "src/modules/SPPLY/submodules/BLVaultSupply.sol";
 import {SiloSupply} from "src/modules/SPPLY/submodules/SiloSupply.sol";
+import {MockSupplySubmodule} from "test/modules/SPPLY/submodules/MockSupplySubmodule.sol";
+
+import {Module} from "src/Kernel.sol";
+import {ModuleWithSubmodules} from "src/Submodules.sol";
 
 // Tests for OlympusSupply v1.0
 // Module Setup
@@ -163,6 +167,7 @@ contract SupplyTest is Test {
     AuraBalancerSupply internal submoduleAuraBalancerSupply;
     BLVaultSupply internal submoduleBLVaultSupply;
     SiloSupply internal submoduleSiloSupply;
+    MockSupplySubmodule internal submoduleMock;
 
     address internal writer;
 
@@ -339,6 +344,14 @@ contract SupplyTest is Test {
             moduleSupply.installSubmodule(submoduleSiloSupply);
             vm.stopPrank();
         }
+    }
+
+    function _installMockSubmodule() internal {
+        submoduleMock = new MockSupplySubmodule(moduleSupply);
+
+        vm.startPrank(writer);
+        moduleSupply.installSubmodule(submoduleMock);
+        vm.stopPrank();
     }
 
     // =========  TESTS ========= //
@@ -2531,29 +2544,199 @@ contract SupplyTest is Test {
     // =========  Supply Observations ========= //
 
     // registerForObservations
-    // [ ] when the caller is not permissioned
-    //  [ ] it reverts
-    // [ ] when the subkeycode is invalid
-    //  [ ] it reverts
-    // [ ] when the submodule is not installed
-    //  [ ] it reverts
-    // [ ] when the submodule is already registered
-    //  [ ] it reverts
-    // [ ] the submodule is registered
+    // [X] when the caller is not permissioned
+    //  [X] it reverts
+    // [X] when the submodule is not installed
+    //  [X] it reverts
+    // [X] when the submodule is already registered
+    //  [X] it reverts
+    // [X] the submodule is registered
+
+    function test_registerForObservations_notPermissioned_reverts() public {
+        _installMockSubmodule();
+        SubKeycode subKeycode = submoduleMock.SUBKEYCODE();
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        // Register for observations
+        moduleSupply.registerForObservations(subKeycode);
+    }
+
+    function test_registerForObservations_submoduleNotInstalled_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            ModuleWithSubmodules.Module_SubmoduleNotInstalled.selector,
+            toSubKeycode("junk")
+        );
+        vm.expectRevert(err);
+
+        // Register for observations
+        vm.startPrank(writer);
+        moduleSupply.registerForObservations(toSubKeycode("junk"));
+        vm.stopPrank();
+    }
+
+    function test_registerForObservations_submoduleAlreadyRegistered_reverts() public {
+        _installMockSubmodule();
+        SubKeycode subKeycode = submoduleMock.SUBKEYCODE();
+
+        // Register for observations
+        vm.startPrank(writer);
+        moduleSupply.registerForObservations(subKeycode);
+        vm.stopPrank();
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(SPPLYv1.SPPLY_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Register for observations
+        vm.startPrank(writer);
+        moduleSupply.registerForObservations(subKeycode);
+        vm.stopPrank();
+    }
+
+    function test_registerForObservations() public {
+        _installMockSubmodule();
+        SubKeycode subKeycode = submoduleMock.SUBKEYCODE();
+
+        // Register for observations
+        vm.startPrank(writer);
+        moduleSupply.registerForObservations(subKeycode);
+        vm.stopPrank();
+
+        // Check the registration
+        assertEq(
+            fromSubKeycode(moduleSupply.submodulesForObservation(0)),
+            fromSubKeycode(subKeycode)
+        );
+        assertEq(moduleSupply.submodulesForObservationCount(), 1);
+    }
 
     // unregisterFromObservations
-    // [ ] when the caller is not permissioned
-    //  [ ] it reverts
-    // [ ] when the subkeycode is invalid
-    //  [ ] it reverts
-    // [ ] when the submodule is not registered
-    //  [ ] it reverts
-    // [ ] the submodule registration is removed
+    // [X] when the caller is not permissioned
+    //  [X] it reverts
+    // [X] when the submodule is not registered
+    //  [X] it reverts
+    // [X] the submodule registration is removed
+
+    function test_unregisterFromObservations_notPermissioned_reverts() public {
+        _installMockSubmodule();
+        SubKeycode subKeycode = submoduleMock.SUBKEYCODE();
+
+        // Register for observations
+        vm.startPrank(writer);
+        moduleSupply.registerForObservations(subKeycode);
+        vm.stopPrank();
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        // Unregister from observations
+        moduleSupply.unregisterFromObservations(subKeycode);
+    }
+
+    function test_unregisterFromObservations_submoduleNotRegistered_reverts() public {
+        _installMockSubmodule();
+        SubKeycode subKeycode = submoduleMock.SUBKEYCODE();
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(SPPLYv1.SPPLY_InvalidParams.selector);
+        vm.expectRevert(err);
+
+        // Unregister from observations
+        vm.startPrank(writer);
+        moduleSupply.unregisterFromObservations(subKeycode);
+        vm.stopPrank();
+    }
+
+    function test_unregisterFromObservations() public {
+        _installMockSubmodule();
+        SubKeycode subKeycode = submoduleMock.SUBKEYCODE();
+
+        // Register for observations
+        vm.startPrank(writer);
+        moduleSupply.registerForObservations(subKeycode);
+        vm.stopPrank();
+
+        // Unregister from observations
+        vm.startPrank(writer);
+        moduleSupply.unregisterFromObservations(subKeycode);
+        vm.stopPrank();
+
+        // Check the registration
+        assertEq(moduleSupply.submodulesForObservationCount(), 0);
+    }
 
     // storeObservations
-    // [ ] when the caller is not permissioned
-    //  [ ] it reverts
-    // [ ] given there are no registered submodules
-    //  [ ] it does nothing
-    // [ ] it calls the registered submodules
+    // [X] when the caller is not permissioned
+    //  [X] it reverts
+    // [X] given there are no registered submodules
+    //  [X] it does nothing
+    // [X] it calls the registered submodules
+
+    function test_storeObservations_notPermissioned_reverts() public {
+        _installMockSubmodule();
+        SubKeycode subKeycode = submoduleMock.SUBKEYCODE();
+
+        // Register for observations
+        vm.startPrank(writer);
+        moduleSupply.registerForObservations(subKeycode);
+        vm.stopPrank();
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            Module.Module_PolicyNotPermitted.selector,
+            address(this)
+        );
+        vm.expectRevert(err);
+
+        // Store observations
+        moduleSupply.storeObservations();
+    }
+
+    function test_storeObservations_noRegisteredSubmodules_doesNothing() public {
+        _installMockSubmodule();
+
+        // Expect no calls
+        vm.expectCall(
+            address(submoduleMock),
+            abi.encodeCall(submoduleMock.storeObservations, ()),
+            0
+        );
+
+        // Store observations
+        vm.startPrank(writer);
+        moduleSupply.storeObservations();
+        vm.stopPrank();
+    }
+
+    event Observation();
+
+    function test_storeObservations_callsRegisteredSubmodules() public {
+        _installMockSubmodule();
+        SubKeycode subKeycode = submoduleMock.SUBKEYCODE();
+
+        // Register for observations
+        vm.startPrank(writer);
+        moduleSupply.registerForObservations(subKeycode);
+        vm.stopPrank();
+
+        // Expect emit
+        vm.expectEmit(address(submoduleMock));
+        emit Observation();
+
+        // Store observations
+        vm.startPrank(writer);
+        moduleSupply.storeObservations();
+        vm.stopPrank();
+    }
 }

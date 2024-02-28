@@ -167,6 +167,12 @@ abstract contract SPPLYv1 is ModuleWithSubmodules {
     /// @notice    The frequency at which observations are stored
     uint32 public observationFrequency;
 
+    /// @notice    The submodules that are registered for observation
+    SubKeycode[] public submodulesForObservation;
+
+    /// @notice    The count of submodules that are registered for observation
+    uint256 public submodulesForObservationCount;
+
     //============================================================================================//
     //                                       CROSS-CHAIN SUPPLY                                   //
     //============================================================================================//
