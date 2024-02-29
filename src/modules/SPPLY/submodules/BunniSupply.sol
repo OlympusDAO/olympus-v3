@@ -491,16 +491,16 @@ contract BunniSupply is SupplySubmodule {
                 address(tokenData.token)
             ];
 
-            // Check that sufficient time has passed to record a new observation
-            uint48 lastObservationTime = tokenMovingAverage.lastObservationTime;
-            if (
-                lastObservationTime + SPPLYv1(address(parent)).observationFrequency() >
-                block.timestamp
-            )
-                revert BunniSupply_InsufficientTimeElapsed(
-                    address(tokenData.token),
-                    lastObservationTime
-                );
+            // // Check that sufficient time has passed to record a new observation
+            // uint48 lastObservationTime = tokenMovingAverage.lastObservationTime;
+            // if (
+            //     lastObservationTime + SPPLYv1(address(parent)).observationFrequency() >
+            //     block.timestamp
+            // )
+            //     revert BunniSupply_InsufficientTimeElapsed(
+            //         address(tokenData.token),
+            //         lastObservationTime
+            //     );
 
             // Get the oldest observation
             uint256 oldestReserve0 = tokenMovingAverage.token0Observations[
