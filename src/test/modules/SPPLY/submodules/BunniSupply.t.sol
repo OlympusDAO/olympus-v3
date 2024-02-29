@@ -912,23 +912,23 @@ contract BunniSupplyTest is Test {
     //  [X] single token
     //  [X] multiple tokens, single lens
     //  [X] multiple tokens, multiple lenses
-    // [ ] when the last observation time is in the future
-    //  [ ] it reverts
-    // [ ] when the moving average duration is 0
-    //  [ ] it reverts
-    // [ ] when the moving average duration is not a multiple of the observation frequency
-    //  [ ] it reverts
-    // [ ] when the required number of observations is < 2
-    //  [ ] it reverts
-    // [ ] when the number of token0 observations is not equal to the number of required observations
-    //  [ ] it reverts
-    // [ ] when the number of token1 observations is not equal to the number of required observations
-    //  [ ] it reverts
-    // [ ] when a token0 observation is 0
-    //  [ ] it reverts
-    // [ ] when a token1 observation is 0
-    //  [ ] it reverts
-    // [ ] the moving average is updated correctly
+    // [X] when the last observation time is in the future
+    //  [X] it reverts
+    // [X] when the moving average duration is 0
+    //  [X] it reverts
+    // [X] when the moving average duration is not a multiple of the observation frequency
+    //  [X] it reverts
+    // [X] when the required number of observations is < 2
+    //  [X] it reverts
+    // [X] when the number of token0 observations is not equal to the number of required observations
+    //  [X] it reverts
+    // [X] when the number of token1 observations is not equal to the number of required observations
+    //  [X] it reverts
+    // [X] when a token0 observation is 0
+    //  [X] it reverts
+    // [X] when a token1 observation is 0
+    //  [X] it reverts
+    // [X] the moving average is updated correctly
 
     function test_addBunniToken_notParent_reverts() public {
         bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(this));
@@ -1072,6 +1072,189 @@ contract BunniSupplyTest is Test {
         );
     }
 
+    function test_addBunniToken_lastObservationTime_inFuture_reverts() public {
+        lastObservationTime = uint48(block.timestamp) + 1; // Ensures that it is in the future
+
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidLastObservationTime.selector,
+            poolTokenAddress,
+            lastObservationTime
+        );
+        vm.expectRevert(err);
+
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_addBunniToken_movingAverageDuration_zero_reverts() public {
+        movingAverageDuration = 0;
+
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidMovingAverageDuration.selector,
+            movingAverageDuration
+        );
+        vm.expectRevert(err);
+
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_addBunniToken_movingAverageDuration_notMultipleOfObservationFrequency_reverts()
+        public
+    {
+        movingAverageDuration = 9 hours;
+
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidMovingAverageDuration.selector,
+            movingAverageDuration
+        );
+        vm.expectRevert(err);
+
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_addBunniToken_requiredObservations_lessThanTwo_reverts() public {
+        movingAverageDuration = 8 hours;
+        token0Observations = new uint256[](1);
+        token0Observations[0] = RESERVES_OHM;
+        token1Observations = new uint256[](1);
+        token1Observations[0] = RESERVES_USDC;
+
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidObservationsLength.selector,
+            1
+        );
+        vm.expectRevert(err);
+
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_addBunniToken_token0ObservationMismatch_reverts() public {
+        token0Observations = new uint256[](2);
+        token0Observations[0] = 100e9;
+        token0Observations[1] = 115e9;
+
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidObservationsLength.selector,
+            3
+        );
+        vm.expectRevert(err);
+
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_addBunniToken_token1ObservationMismatch_reverts() public {
+        token1Observations = new uint256[](2);
+        token1Observations[0] = 1000e6;
+        token1Observations[1] = 1150e6;
+
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidObservationsLength.selector,
+            3
+        );
+        vm.expectRevert(err);
+
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_addBunniToken_token0ObservationZero_reverts(uint8 index_) public {
+        uint8 index = uint8(bound(index_, 0, 2));
+
+        token0Observations = new uint256[](3);
+        token0Observations[0] = index == 0 ? 0 : RESERVES_OHM;
+        token0Observations[1] = index == 1 ? 0 : RESERVES_OHM;
+        token0Observations[2] = index == 2 ? 0 : RESERVES_OHM;
+
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidObservation.selector,
+            poolTokenAddress,
+            index
+        );
+        vm.expectRevert(err);
+
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_addBunniToken_token1ObservationZero_reverts(uint8 index_) public {
+        uint8 index = uint8(bound(index_, 0, 2));
+
+        token1Observations = new uint256[](3);
+        token1Observations[0] = index == 0 ? 0 : RESERVES_USDC;
+        token1Observations[1] = index == 1 ? 0 : RESERVES_USDC;
+        token1Observations[2] = index == 2 ? 0 : RESERVES_USDC;
+
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidObservation.selector,
+            poolTokenAddress,
+            index
+        );
+        vm.expectRevert(err);
+
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
     function test_addBunniToken() public {
         // Expect an event
         vm.expectEmit(true, true, false, true);
@@ -1094,6 +1277,9 @@ contract BunniSupplyTest is Test {
         assertEq(address(bunniLens_), bunniLensAddress);
 
         assertEq(submoduleBunniSupply.bunniTokenCount(), 1);
+
+        // Check that the moving average was updated
+        assertEq(submoduleBunniSupply.getProtocolOwnedLiquidityOhm(), RESERVES_OHM);
     }
 
     function test_addBunniToken_multipleTokens_singleLens() public {
@@ -1207,7 +1393,7 @@ contract BunniSupplyTest is Test {
     //  [X] single token
     //  [X] multiple tokens, single lens
     //  [X] multiple tokens, multiple lenses
-    //  [ ] it removes the moving average data
+    //  [X] it removes the moving average data
 
     function test_removeBunniToken_notParent_reverts() public {
         bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(this));
@@ -1271,6 +1457,20 @@ contract BunniSupplyTest is Test {
         // Check that the token was removed
         assertEq(submoduleBunniSupply.bunniTokenCount(), 0);
         assertEq(submoduleBunniSupply.getCollateralizedOhm(), 0);
+
+        // Check that the moving average data was removed
+        (
+            ,
+            ,
+            uint32 movingAverageDuration_,
+            uint48 lastObservationTime_,
+            uint256 token0CumulativeObservations_,
+            uint256 token1CumulativeObservations_
+        ) = submoduleBunniSupply.tokenMovingAverages(poolTokenAddress);
+        assertEq(movingAverageDuration_, 0);
+        assertEq(lastObservationTime_, 0);
+        assertEq(token0CumulativeObservations_, 0);
+        assertEq(token1CumulativeObservations_, 0);
     }
 
     function test_removeBunniToken_multipleTokens_singleLens() public {
@@ -1432,31 +1632,416 @@ contract BunniSupplyTest is Test {
 
     // =========  updateTokenMovingAverage ========= //
 
-    // [ ] when the token cannot be found
-    //  [ ] it reverts
-    // [ ] when the last observation time is in the future
-    //  [ ] it reverts
-    // [ ] when the moving average duration is 0
-    //  [ ] it reverts
-    // [ ] when the moving average duration is not a multiple of the observation frequency
-    //  [ ] it reverts
-    // [ ] when the required number of observations is < 2
-    //  [ ] it reverts
-    // [ ] when the number of token0 observations is not equal to the number of required observations
-    //  [ ] it reverts
-    // [ ] when the number of token1 observations is not equal to the number of required observations
-    //  [ ] it reverts
-    // [ ] when a token0 observation is 0
-    //  [ ] it reverts
-    // [ ] when a token1 observation is 0
-    //  [ ] it reverts
-    // [ ] the moving average is updated correctly
+    // [X] when the caller is not the parent
+    //  [X] it reverts
+    // [X] when the token cannot be found
+    //  [X] it reverts
+    // [X] when the last observation time is in the future
+    //  [X] it reverts
+    // [X] when the moving average duration is 0
+    //  [X] it reverts
+    // [X] when the moving average duration is not a multiple of the observation frequency
+    //  [X] it reverts
+    // [X] when the required number of observations is < 2
+    //  [X] it reverts
+    // [X] when the number of token0 observations is not equal to the number of required observations
+    //  [X] it reverts
+    // [X] when the number of token1 observations is not equal to the number of required observations
+    //  [X] it reverts
+    // [X] when a token0 observation is 0
+    //  [X] it reverts
+    // [X] when a token1 observation is 0
+    //  [X] it reverts
+    // [X] the moving average is updated correctly
+
+    function test_updateTokenMovingAverage_notParent_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(this));
+        vm.expectRevert(err);
+
+        // Call the function
+        submoduleBunniSupply.updateTokenMovingAverage(
+            poolTokenAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_updateTokenMovingAverage_tokenNotFound_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidBunniToken.selector,
+            poolTokenAddress
+        );
+        vm.expectRevert(err);
+
+        // Call the function
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.updateTokenMovingAverage(
+            poolTokenAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_updateTokenMovingAverage_lastObservationTime_inFuture_reverts() public {
+        // Add the token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+
+        lastObservationTime = uint48(block.timestamp) + 1; // Ensures that it is in the future
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidLastObservationTime.selector,
+            poolTokenAddress,
+            lastObservationTime
+        );
+        vm.expectRevert(err);
+
+        // Call the function
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.updateTokenMovingAverage(
+            poolTokenAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_updateTokenMovingAverage_movingAverageDuration_zero_reverts() public {
+        // Add the token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+
+        movingAverageDuration = 0;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidMovingAverageDuration.selector,
+            movingAverageDuration
+        );
+        vm.expectRevert(err);
+
+        // Call the function
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.updateTokenMovingAverage(
+            poolTokenAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_updateTokenMovingAverage_movingAverageDuration_notMultipleOfObservationFrequency_reverts()
+        public
+    {
+        // Add the token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+
+        movingAverageDuration = 9 hours;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidMovingAverageDuration.selector,
+            movingAverageDuration
+        );
+        vm.expectRevert(err);
+
+        // Call the function
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.updateTokenMovingAverage(
+            poolTokenAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_updateTokenMovingAverage_requiredObservations_lessThanTwo_reverts() public {
+        // Add the token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+
+        movingAverageDuration = 8 hours;
+        token0Observations = new uint256[](1);
+        token0Observations[0] = RESERVES_OHM;
+        token1Observations = new uint256[](1);
+        token1Observations[0] = RESERVES_USDC;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidObservationsLength.selector,
+            1
+        );
+        vm.expectRevert(err);
+
+        // Call the function
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.updateTokenMovingAverage(
+            poolTokenAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_updateTokenMovingAverage_token0ObservationMismatch_reverts() public {
+        // Add the token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+
+        token0Observations = new uint256[](2);
+        token0Observations[0] = 100e9;
+        token0Observations[1] = 115e9;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidObservationsLength.selector,
+            3
+        );
+        vm.expectRevert(err);
+
+        // Call the function
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.updateTokenMovingAverage(
+            poolTokenAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_updateTokenMovingAverage_token1ObservationMismatch_reverts() public {
+        // Add the token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+
+        token1Observations = new uint256[](2);
+        token1Observations[0] = 1000e6;
+        token1Observations[1] = 1150e6;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidObservationsLength.selector,
+            3
+        );
+        vm.expectRevert(err);
+
+        // Call the function
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.updateTokenMovingAverage(
+            poolTokenAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_updateTokenMovingAverage_token0ObservationZero_reverts(uint8 index_) public {
+        uint8 index = uint8(bound(index_, 0, 2));
+
+        // Add the token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+
+        token0Observations = new uint256[](3);
+        token0Observations[0] = index == 0 ? 0 : RESERVES_OHM;
+        token0Observations[1] = index == 1 ? 0 : RESERVES_OHM;
+        token0Observations[2] = index == 2 ? 0 : RESERVES_OHM;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidObservation.selector,
+            poolTokenAddress,
+            index
+        );
+        vm.expectRevert(err);
+
+        // Call the function
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.updateTokenMovingAverage(
+            poolTokenAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_updateTokenMovingAverage_token1ObservationZero_reverts(uint8 index_) public {
+        uint8 index = uint8(bound(index_, 0, 2));
+
+        // Add the token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+
+        token1Observations = new uint256[](3);
+        token1Observations[0] = index == 0 ? 0 : RESERVES_USDC;
+        token1Observations[1] = index == 1 ? 0 : RESERVES_USDC;
+        token1Observations[2] = index == 2 ? 0 : RESERVES_USDC;
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniSupply.BunniSupply_Params_InvalidObservation.selector,
+            poolTokenAddress,
+            index
+        );
+        vm.expectRevert(err);
+
+        // Call the function
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.updateTokenMovingAverage(
+            poolTokenAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+    }
+
+    function test_updateTokenMovingAverage() public {
+        // Add the token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+
+        // Amend the parameters
+        movingAverageDuration = 2 days;
+        lastObservationTime = uint48(block.timestamp) - 1;
+        token0Observations = new uint256[](6);
+        token0Observations[0] = 101e9;
+        token0Observations[1] = 101e9;
+        token0Observations[2] = 101e9;
+        token0Observations[3] = 101e9;
+        token0Observations[4] = 101e9;
+        token0Observations[5] = 101e9;
+        token1Observations = new uint256[](6);
+        token1Observations[0] = 1010e6;
+        token1Observations[1] = 1010e6;
+        token1Observations[2] = 1010e6;
+        token1Observations[3] = 1010e6;
+        token1Observations[4] = 1010e6;
+        token1Observations[5] = 1010e6;
+
+        // Call the function
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.updateTokenMovingAverage(
+            poolTokenAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+
+        // Check that the moving average was updated
+        (
+            uint16 nextObservationIndex_,
+            uint16 numObservations_,
+            uint32 movingAverageDuration_,
+            uint48 lastObservationTime_,
+            uint256 token0CumulativeObservations_,
+            uint256 token1CumulativeObservations_
+        ) = submoduleBunniSupply.tokenMovingAverages(poolTokenAddress);
+        assertEq(nextObservationIndex_, 0);
+        assertEq(numObservations_, 6);
+        assertEq(movingAverageDuration_, 2 days);
+        assertEq(lastObservationTime_, lastObservationTime);
+        assertEq(token0CumulativeObservations_, 101e9 * 6);
+        assertEq(token1CumulativeObservations_, 1010e6 * 6);
+
+        assertEq(submoduleBunniSupply.getProtocolOwnedLiquidityOhm(), 101e9);
+    }
 
     // =========  storeObservations ========= //
 
+    // [X] when the caller is not the parent
+    //  [X] it reverts
     // [ ] given not enough time has elapsed
     //  [ ] it reverts
     // [X] it stores the current reserves and uncollected fees and updates the moving average
+
+    function test_storeObservations_notParent_reverts() public {
+        // Expect revert
+        bytes memory err = abi.encodeWithSignature("Submodule_OnlyParent(address)", address(this));
+        vm.expectRevert(err);
+
+        // Call the function
+        submoduleBunniSupply.storeObservations();
+    }
 
     function test_storeObservations_singleToken_uncollectedFeesDuzz(
         uint256 usdcSwapAmount_
