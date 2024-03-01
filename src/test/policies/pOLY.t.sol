@@ -6,12 +6,13 @@ import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "test/lib/UserFactory.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockGenesisClaim} from "test/mocks/MockGenesisClaim.sol";
 
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusRoles, ROLESv1} from "modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {pOLY} from "policies/pOLY.sol";
+import {IPOLY, pOLY} from "policies/pOLY.sol";
 import "src/Kernel.sol";
 
 import {IgOHM} from "interfaces/IgOHM.sol";
@@ -48,6 +49,7 @@ contract pOLYTest is Test {
     OlympusRoles internal roles;
 
     RolesAdmin internal rolesAdmin;
+    MockGenesisClaim internal previousGenesis;
     pOLY internal previous;
     pOLY internal poly;
 
@@ -79,8 +81,10 @@ contract pOLYTest is Test {
 
         // Deploy policies
         {
+            previousGenesis = new MockGenesisClaim();
             previous = new pOLY(
                 kernel,
+                address(0),
                 address(0),
                 address(ohm),
                 address(gohm),
@@ -91,6 +95,7 @@ contract pOLYTest is Test {
             poly = new pOLY(
                 kernel,
                 address(previous),
+                address(previousGenesis),
                 address(ohm),
                 address(gohm),
                 address(dai),
@@ -417,30 +422,98 @@ contract pOLYTest is Test {
         poly.migrate(users);
     }
 
-    function test_migrateCopiesTermsFromPreviousPolyContract(address migratedUser_) public {
-        vm.assume(migratedUser_ != alice && migratedUser_ != bob);
+    function test_migrateCopiesTermsFromPreviousPolyContract(
+        address migratedUser1_,
+        address migratedUser2_
+    ) public {
+        vm.assume(migratedUser1_ != alice && migratedUser1_ != bob);
+        vm.assume(migratedUser2_ != alice && migratedUser2_ != bob);
 
-        previous.setTerms(migratedUser_, 10_000, 0, 100_000e9);
+        previous.setTerms(migratedUser1_, 10_000, 0, 100_000e9);
+        previous.setTerms(migratedUser2_, 5_000, 1e18, 50_000e9);
 
-        (uint256 percent, uint256 gClaimed, uint256 max) = previous.terms(migratedUser_);
-        assertEq(percent, 10_000);
-        assertEq(gClaimed, 0);
-        assertEq(max, 100_000e9);
+        (uint256 newPercent1, uint256 newGClaimed1, uint256 newMax1) = poly.terms(migratedUser1_);
+        assertEq(newPercent1, 0);
+        assertEq(newGClaimed1, 0);
+        assertEq(newMax1, 0);
 
-        (uint256 newPercent, uint256 newGClaimed, uint256 newMax) = poly.terms(migratedUser_);
-        assertEq(newPercent, 0);
-        assertEq(newGClaimed, 0);
-        assertEq(newMax, 0);
+        (uint256 newPercent2, uint256 newGClaimed2, uint256 newMax2) = poly.terms(migratedUser2_);
+        assertEq(newPercent2, 0);
+        assertEq(newGClaimed2, 0);
+        assertEq(newMax2, 0);
 
-        address[] memory users = new address[](1);
-        users[0] = migratedUser_;
+        address[] memory users = new address[](2);
+        users[0] = migratedUser1_;
+        users[1] = migratedUser2_;
 
         poly.migrate(users);
 
-        (newPercent, newGClaimed, newMax) = poly.terms(migratedUser_);
-        assertEq(newPercent, 10_000);
-        assertEq(newGClaimed, 0);
-        assertEq(newMax, 100_000e9);
+        (newPercent1, newGClaimed1, newMax1) = poly.terms(migratedUser1_);
+        assertEq(newPercent1, 10_000);
+        assertEq(newGClaimed1, 0);
+        assertEq(newMax1, 100_000e9);
+
+        (newPercent2, newGClaimed2, newMax2) = poly.terms(migratedUser2_);
+        assertEq(newPercent2, 5_000);
+        assertEq(newGClaimed2, 1e18);
+        assertEq(newMax2, 50_000e9);
+    }
+
+    /// [X]  migrateGenesis
+    ///     [X]  can only be called by address with poly_admin role
+    ///     [X]  copies terms from previous GenesisClaim contract
+
+    function test_migrateGenesisCanOnlyBeCalledByPolyAdmin(address user_) public {
+        vm.assume(user_ != address(this));
+
+        bytes memory err = abi.encodeWithSelector(
+            ROLESv1.ROLES_RequireRole.selector,
+            bytes32("poly_admin")
+        );
+        vm.expectRevert(err);
+
+        address[] memory users = new address[](1);
+        users[0] = alice;
+
+        vm.prank(user_);
+        poly.migrateGenesis(users);
+    }
+
+    function test_migrateGenesisCopiesTermsFromPreviousGenesisClaimContract(
+        address migratedUser1_,
+        address migratedUser2_
+    ) public {
+        vm.assume(migratedUser1_ != alice && migratedUser1_ != bob);
+        vm.assume(migratedUser2_ != alice && migratedUser2_ != bob);
+
+        previousGenesis.setTerms(migratedUser1_, 10_000, 100e9, 1e18, 100_000e9);
+        previousGenesis.setTerms(migratedUser2_, 5_000, 5e9, 5e17, 50_000e9);
+
+        (uint256 newPercent1, uint256 newGClaimed1, uint256 newMax1) = poly.terms(migratedUser1_);
+        assertEq(newPercent1, 0);
+        assertEq(newGClaimed1, 0);
+        assertEq(newMax1, 0);
+
+        (uint256 newPercent2, uint256 newGClaimed2, uint256 newMax2) = poly.terms(migratedUser2_);
+        assertEq(newPercent2, 0);
+        assertEq(newGClaimed2, 0);
+        assertEq(newMax2, 0);
+
+        address[] memory users = new address[](2);
+        users[0] = migratedUser1_;
+        users[1] = migratedUser2_;
+
+        poly.migrateGenesis(users);
+
+        (newPercent1, newGClaimed1, newMax1) = poly.terms(migratedUser1_);
+        assertEq(newPercent1, 10_000);
+        assertEq(newGClaimed1, 2e18);
+        assertEq(newMax1, 100_000e9);
+
+        (newPercent2, newGClaimed2, newMax2) = poly.terms(migratedUser2_);
+        assertEq(newPercent2, 5_000);
+        assertEq(newGClaimed2, 55e16);
+        assertEq(newMax2, 50_000e9);
     }
 
     /// [X]  setTerms

@@ -8,7 +8,7 @@ import {ROLESv1, RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import "src/Kernel.sol";
 
 // Import interfaces
-import {IPOLY, IPreviousPOLY} from "policies/interfaces/IPOLY.sol";
+import {IPOLY, IPreviousPOLY, IGenesisClaim} from "policies/interfaces/IPOLY.sol";
 import {IgOHM} from "interfaces/IgOHM.sol";
 
 // Import types
@@ -28,6 +28,7 @@ contract pOLY is IPOLY, Policy, RolesConsumer {
 
     // Olympus Contracts
     IPreviousPOLY public previous;
+    IGenesisClaim public previousGenesis;
 
     // Tokens
     ERC20 public OHM;
@@ -55,6 +56,7 @@ contract pOLY is IPOLY, Policy, RolesConsumer {
     constructor(
         Kernel kernel_,
         address previous_,
+        address previousGenesis_,
         address ohm_,
         address gohm_,
         address dai_,
@@ -62,6 +64,7 @@ contract pOLY is IPOLY, Policy, RolesConsumer {
         uint256 maximumAllocated_
     ) Policy(kernel_) {
         previous = IPreviousPOLY(previous_);
+        previousGenesis = IGenesisClaim(previousGenesis_);
         OHM = ERC20(ohm_);
         gOHM = IgOHM(gohm_);
         DAI = ERC20(dai_);
@@ -218,6 +221,20 @@ contract pOLY is IPOLY, Policy, RolesConsumer {
         for (uint256 i; i < length; ) {
             Term memory accountTerm = previous.terms(accounts_[i]);
             setTerms(accounts_[i], accountTerm.percent, accountTerm.gClaimed, accountTerm.max);
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /// @inheritdoc IPOLY
+    function migrateGenesis(address[] calldata accounts_) external onlyRole("poly_admin") {
+        uint256 length = accounts_.length;
+        for (uint256 i; i < length; ) {
+            GenesisTerm memory accountTerm = previousGenesis.terms(accounts_[i]);
+            uint256 correctGClaimed = accountTerm.gClaimed + gOHM.balanceTo(accountTerm.claimed);
+            setTerms(accounts_[i], accountTerm.percent, correctGClaimed, accountTerm.max);
 
             unchecked {
                 ++i;

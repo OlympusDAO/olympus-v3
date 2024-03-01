@@ -119,6 +119,7 @@ contract OlympusDeploy is Script {
     address public staking;
     address public gnosisEasyAuction;
     address public previousPoly;
+    address public previousGenesis;
     ClaimTransfer public claimTransfer;
 
     /// Balancer Contracts
@@ -201,6 +202,7 @@ contract OlympusDeploy is Script {
         staking = envAddress("olympus.legacy.Staking");
         gnosisEasyAuction = envAddress("external.gnosis.EasyAuction");
         previousPoly = envAddress("olympus.legacy.OldPOLY");
+        previousGenesis = envAddress("olympus.legacy.GenesisClaim");
         balancerVault = IVault(envAddress("external.balancer.BalancerVault"));
         balancerHelper = IBalancerHelper(envAddress("external.balancer.BalancerHelper"));
         ohmWstethPool = IBasePool(envAddress("external.balancer.OhmWstethPool"));
@@ -792,6 +794,7 @@ contract OlympusDeploy is Script {
 
         console2.log("kernel", address(kernel));
         console2.log("previousPoly", address(previousPoly));
+        console2.log("previousGenesis", address(previousGenesis));
         console2.log("ohm", address(ohm));
         console2.log("gohm", address(gohm));
         console2.log("reserve", address(reserve));
@@ -803,6 +806,7 @@ contract OlympusDeploy is Script {
         poly = new pOLY(
             kernel,
             previousPoly,
+            previousGenesis,
             address(ohm),
             address(gohm),
             address(reserve),

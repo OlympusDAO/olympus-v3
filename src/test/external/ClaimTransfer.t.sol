@@ -86,6 +86,7 @@ contract ClaimTransferTest is Test {
             poly = new pOLY(
                 kernel,
                 address(0),
+                address(0),
                 address(ohm),
                 address(gohm),
                 address(dai),

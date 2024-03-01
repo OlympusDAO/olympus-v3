@@ -20,6 +20,13 @@ interface IPOLY {
 
     // ========= DATA STRUCTURES ========= //
 
+    struct GenesisTerm {
+        uint256 percent; // PRECISION = 1_000_000 (i.e. 5000 = 0.5%)
+        uint256 claimed; // Static number
+        uint256 gClaimed; // Rebasing agnostic # of tokens claimed
+        uint256 max; // Maximum nominal OHM amount can claim
+    }
+
     struct Term {
         uint256 percent; // PRECISION = 1_000_000 (i.e. 5000 = 0.5%)
         uint256 gClaimed; // Rebase agnostic # of tokens claimed
@@ -104,6 +111,14 @@ interface IPOLY {
     /// @param  accounts_ Array of accounts to migrate
     function migrate(address[] calldata accounts_) external;
 
+    /// @notice Migrates claim data from the Genesis Claim contract to this one
+    /// @notice Can only be called by the poly_admin role
+    /// @dev    The Genesis Claim contract originally did not count the full claimed amount as staked,
+    ///         only 90% of it, given that there is no longer a staking rate, we can combine the two
+    ///         claim contracts by counting the 10% that wasn't considered staked as staked at the current index
+    /// @param  accounts_ Array of accounts to migrate
+    function migrateGenesis(address[] calldata accounts_) external;
+
     /// @notice Sets the claim terms for an account
     /// @notice Can only be called by the poly_admin role
     /// @param  account_ The account to set the terms for
@@ -120,4 +135,8 @@ interface IPOLY {
 
 interface IPreviousPOLY {
     function terms(address account_) external view returns (IPOLY.Term memory);
+}
+
+interface IGenesisClaim{
+    function terms(address account_) external view returns (IPOLY.GenesisTerm memory);
 }
