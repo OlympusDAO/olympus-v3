@@ -209,6 +209,23 @@
         8950500000000000000,
         8950500000000000000
     ],
+    "ohmWethPriceLastObsTime": 1702380281,
+    "ohmWethPriceObs": [
+        1000000000000000000,
+        1000000000000000000,
+        1000000000000000000
+    ],
+    "ohmWethReserveLastObsTime": 1702380281,
+    "ohmWethReserveToken0Observations": [
+        1000000000000000000,
+        1000000000000000000,
+        1000000000000000000
+    ],
+    "ohmWethReserveToken1Observations": [
+        1000000000000000000,
+        1000000000000000000,
+        1000000000000000000
+    ],
     "lbboLastObsTime": 0,
     "lbboObs": []
 }
