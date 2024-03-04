@@ -304,12 +304,12 @@ contract BunniManagerTest is Test {
 
         // Moving average
         {
-            _priceLastObservationTime = uint48(block.timestamp) - (8 hours); // 3 observations required
+            _priceLastObservationTime = uint48(block.timestamp) - (8 hours) + 1; // Ensures that it is not yet stale
             _priceObservations = new uint256[](3);
             _priceObservations[0] = 200e18;
             _priceObservations[1] = 200e18;
             _priceObservations[2] = 200e18;
-            _reserveLastObservationTime = uint48(block.timestamp) - (8 hours); // 3 observations required
+            _reserveLastObservationTime = uint48(block.timestamp) - (8 hours) + 1; // Ensures that it is not yet stale
             _reserveToken0Observations = new uint256[](3);
             _reserveToken0Observations[0] = 100e9;
             _reserveToken0Observations[1] = 100e9;
@@ -1143,7 +1143,7 @@ contract BunniManagerTest is Test {
     //  [X] reverts if already registered with TRSRY
     //  [X] reverts if already registered with PRICE
     //  [X] reverts if already registered with SPPLY
-    //  [X] success - registers with TRSRY, PRICE, SPPLY
+    //  [X] success - registers with TRSRY, PRICE (including moving average), SPPLY
 
     function testRevert_activatePoolToken_unauthorized() public {
         _expectRevert_unauthorized();
@@ -1602,6 +1602,11 @@ contract BunniManagerTest is Test {
         // Check that the token has been added to PRICEv2
         PRICEv2.Asset memory priceAsset = PRICE.getAssetData(address(poolToken));
         assertTrue(priceAsset.approved);
+        assertTrue(priceAsset.useMovingAverage);
+        assertTrue(priceAsset.storeMovingAverage);
+        assertEq(priceAsset.movingAverageDuration, _priceMovingAverageDuration);
+        assertEq(priceAsset.lastObservationTime, _priceLastObservationTime);
+        assertEq(priceAsset.numObservations, _priceObservations.length);
 
         // Check that the price feed has the correct parameters
         PRICEv2.Component[] memory priceFeeds = abi.decode(priceAsset.feeds, (PRICEv2.Component[]));
@@ -1623,6 +1628,20 @@ contract BunniManagerTest is Test {
             .bunniTokens(0);
         assertEq(address(submoduleBunniToken_), address(poolToken));
         assertEq(address(submoduleBunniLens_), address(bunniLens));
+
+        // Check that the token has moving average data stored
+        (
+            uint16 supplyNextObservationIndex_,
+            uint16 supplyNumObservations_,
+            uint32 supplyMovingAverageDuration_,
+            uint48 supplyLastObservationTime_,
+            ,
+
+        ) = supplySubmoduleBunni.tokenMovingAverages(address(poolToken));
+        assertEq(supplyNextObservationIndex_, 0);
+        assertEq(supplyNumObservations_, _reserveToken0Observations.length);
+        assertEq(supplyMovingAverageDuration_, _reserveMovingAverageDuration);
+        assertEq(supplyLastObservationTime_, _reserveLastObservationTime);
     }
 
     // [X] deactivatePoolToken
@@ -3758,7 +3777,4 @@ contract BunniManagerTest is Test {
         vm.expectRevert("UNAUTHORIZED");
         bunniHub.deployBunniToken(key);
     }
-
-    // TODO price has MA enabled
-    // TODO supply has MA configured
 }
