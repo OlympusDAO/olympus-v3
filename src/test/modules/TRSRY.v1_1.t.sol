@@ -761,6 +761,7 @@ contract TRSRYv1_1Test is Test {
 
     function testFuzz_removeAssetLocation(address allocator_) public {
         vm.assume(allocator_ != address(0));
+        vm.assume(allocator_ != address(TRSRY));
 
         // Add an asset
         vm.prank(godmode);
@@ -789,6 +790,7 @@ contract TRSRYv1_1Test is Test {
     function testFuzz_removeAssetLocation_onePreviousLocation(address allocator_) public {
         vm.assume(allocator_ != address(0));
         vm.assume(allocator_ != address(1));
+        vm.assume(allocator_ != address(TRSRY));
 
         address[] memory locations = new address[](1);
         locations[0] = address(1);
@@ -821,6 +823,7 @@ contract TRSRYv1_1Test is Test {
         vm.assume(allocator_ != address(0));
         vm.assume(allocator_ != address(1));
         vm.assume(allocator_ != address(2));
+        vm.assume(allocator_ != address(TRSRY));
 
         address[] memory locations = new address[](2);
         locations[0] = address(1);
