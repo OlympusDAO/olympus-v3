@@ -577,19 +577,19 @@ contract BunniPriceTest is Test {
         assertEq(price, expectedPrice);
     }
 
-    function test_getBunniTokenPrice_reentrancyReverts() public {
+    function test_getBunniTokenPrice_reentrancy() public {
         // Set the UniV3 pair to be locked, which indicates re-entrancy
         _mockPoolUnlocked(false);
 
-        // Expect revert
-        bytes memory err = abi.encodeWithSelector(
-            BunniLens.BunniLens_Reentrant.selector,
-            address(uniswapPool)
-        );
-        vm.expectRevert(err);
-
         // Call
         bytes memory params = abi.encode(BunniPrice.BunniParams({bunniLens: bunniLensAddress}));
-        submoduleBunniPrice.getBunniTokenPrice(poolTokenAddress, PRICE_DECIMALS, params);
+        uint256 price = submoduleBunniPrice.getBunniTokenPrice(
+            poolTokenAddress,
+            PRICE_DECIMALS,
+            params
+        );
+
+        // Check values
+        assertTrue(price > 0, "should be non-zero");
     }
 }

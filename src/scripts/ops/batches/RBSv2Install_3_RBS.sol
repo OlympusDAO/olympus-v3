@@ -995,13 +995,21 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             // TODO update values for moving averages
 
             uint32 ohmWethPriceMovingAverageDuration = 1 days;
-            uint48 ohmWethPriceLastObservationTime = uint48(argData.readUint(".ohmWethPriceLastObsTime"));
+            uint48 ohmWethPriceLastObservationTime = uint48(
+                argData.readUint(".ohmWethPriceLastObsTime")
+            );
             uint256[] memory ohmWethPriceObservations = argData.readUintArray(".ohmWethPriceObs"); // 1 day * 24 hours / 8 hours = 3 observations
 
             uint32 ohmWethReserveMovingAverageDuration = 1 days;
-            uint48 ohmWethReserveLastObservationTime = uint48(argData.readUint(".ohmWethReserveLastObsTime"));
-            uint256[] memory ohmWethReserveToken0Observations = argData.readUintArray(".ohmWethReserveToken0Observations");
-            uint256[] memory ohmWethReserveToken1Observations = argData.readUintArray(".ohmWethReserveToken1Observations");
+            uint48 ohmWethReserveLastObservationTime = uint48(
+                argData.readUint(".ohmWethReserveLastObsTime")
+            );
+            uint256[] memory ohmWethReserveToken0Observations = argData.readUintArray(
+                ".ohmWethReserveToken0Observations"
+            );
+            uint256[] memory ohmWethReserveToken1Observations = argData.readUintArray(
+                ".ohmWethReserveToken1Observations"
+            );
 
             console2.log("Activating LP token for Uniswap V3 OHM-wETH pool");
             addToBatch(

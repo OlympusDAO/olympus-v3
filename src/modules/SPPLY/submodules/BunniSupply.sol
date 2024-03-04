@@ -157,10 +157,7 @@ contract BunniSupply is SupplySubmodule {
     ///
     /// @dev        This function accesses the reserves of the registered
     /// @dev        Uniswap V3 pools, and can be susceptible to re-entrancy attacks.
-    /// @dev        The BunniLens contract used by this Submodule performs a re-entrancy check.
-    ///
-    /// @dev        Additionally, the reserves and TWAP are compared to ensure that the reserves
-    /// @dev        have not been manipulated.
+    /// @dev        For this reason, the moving averages of the pool reserves are tracked.
     function getProtocolOwnedLiquidityOhm() external view override returns (uint256) {
         // Iterate through tokens and total up the pool OHM reserves as the POL supply
         uint256 len = bunniTokens.length;
@@ -196,11 +193,7 @@ contract BunniSupply is SupplySubmodule {
     /// @dev        This includes both the reserves and uncollected fees belonging to the position.
     ///
     /// @dev        This function accesses the reserves of the registered
-    /// @dev        Uniswap V3 pools, and can be susceptible to re-entrancy attacks.
-    /// @dev        The BunniLens contract used by this Submodule performs a re-entrancy check.
-    ///
-    /// @dev        Additionally, the reserves and TWAP are compared to ensure that the reserves
-    /// @dev        have not been manipulated.
+    /// @dev        For this reason, the moving averages of the pool reserves are tracked.
     function getProtocolOwnedLiquidityReserves()
         external
         view
