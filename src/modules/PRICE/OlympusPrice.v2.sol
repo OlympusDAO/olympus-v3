@@ -334,17 +334,11 @@ contract OlympusPricev2 is PRICEv2 {
     /// @dev        - The asset is not approved
     /// @dev        - The caller is not permissioned
     /// @dev        - The price was not able to be determined
-    /// @dev        - The time elapsed since the last observation is less than the configured observation frequency
     function storePrice(address asset_) public override permissioned {
         Asset storage asset = _assetData[asset_];
 
         // Check if asset is approved
         if (!asset.approved) revert PRICE_AssetNotApproved(asset_);
-
-        // Check that sufficient time has passed to record a new observation
-        uint48 lastObservationTime = asset.lastObservationTime;
-        if (lastObservationTime + observationFrequency > block.timestamp)
-            revert PRICE_InsufficientTimeElapsed(asset_, lastObservationTime);
 
         // Get the current price for the asset
         (uint256 price, uint48 currentTime, ) = _getCurrentPrice(asset_, false);

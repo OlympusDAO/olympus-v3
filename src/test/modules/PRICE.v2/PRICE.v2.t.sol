@@ -1976,13 +1976,8 @@ contract PriceV2Test is Test {
         vm.warp(uint256(start) + 1);
         ethUsdPriceFeed.setLatestAnswer(int256(2001e8));
 
-        bytes memory err = abi.encodeWithSignature(
-            "PRICE_InsufficientTimeElapsed(address,uint48)",
-            address(weth),
-            uint48(start)
-        );
-        vm.expectRevert(err);
-
+        // Call the function
+        // Should not revert
         vm.prank(writer);
         price.storePrice(address(weth));
     }
