@@ -673,6 +673,8 @@ contract OlympusSupply is SPPLYv1 {
     }
 
     /// @inheritdoc SPPLYv1
+    /// @dev        Submodules implementing `storeObservations()` should not check if it is too early to store observations.
+    /// @dev        This is to be handled by the upstream policy. Otherwise, the policy may not be able to store observations.
     function storeObservations() external override permissioned {
         // Iterate over all submodules
         for (uint256 i; i < submodulesForObservationCount; ) {

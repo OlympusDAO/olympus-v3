@@ -57,8 +57,6 @@ contract BunniSupply is SupplySubmodule {
 
     error BunniSupply_Params_InvalidObservation(address token_, uint256 index_);
 
-    error BunniSupply_InsufficientTimeElapsed(address token_, uint48 lastObservationTime_);
-
     error BunniSupply_MovingAverageStale(address token_, uint48 lastObservationTime_);
 
     // ========== EVENTS ========== //
@@ -483,17 +481,6 @@ contract BunniSupply is SupplySubmodule {
             TokenMovingAverage storage tokenMovingAverage = tokenMovingAverages[
                 address(tokenData.token)
             ];
-
-            // // Check that sufficient time has passed to record a new observation
-            // uint48 lastObservationTime = tokenMovingAverage.lastObservationTime;
-            // if (
-            //     lastObservationTime + SPPLYv1(address(parent)).observationFrequency() >
-            //     block.timestamp
-            // )
-            //     revert BunniSupply_InsufficientTimeElapsed(
-            //         address(tokenData.token),
-            //         lastObservationTime
-            //     );
 
             // Get the oldest observation
             uint256 oldestReserve0 = tokenMovingAverage.token0Observations[

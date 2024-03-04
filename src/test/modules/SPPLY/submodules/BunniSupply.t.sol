@@ -2030,8 +2030,8 @@ contract BunniSupplyTest is Test {
 
     // [X] when the caller is not the parent
     //  [X] it reverts
-    // [ ] given not enough time has elapsed
-    //  [ ] it reverts
+    // [X] given not enough time has elapsed
+    //  [X] it succeeds
     // [X] it stores the current reserves and uncollected fees and updates the moving average
 
     function test_storeObservations_notParent_reverts() public {
@@ -2128,6 +2128,33 @@ contract BunniSupplyTest is Test {
 
         // Check that the reserves and OHM values are consistent
         assertEq(reserves[0].balances[0], submoduleBunniSupply.getProtocolOwnedLiquidityOhm());
+    }
+
+    function test_storeObservations_insufficientTimeElapsed() public {
+        // Register one token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+
+        uint48 newTimestamp = uint48(block.timestamp) + 1;
+        vm.warp(newTimestamp);
+
+        // Store the observations
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.storeObservations();
+
+        // Does not revert, and the reserves are updated
+        // Check that the moving average was updated
+        (, , , uint48 lastObservationTime_, , ) = submoduleBunniSupply.tokenMovingAverages(
+            poolTokenAddress
+        );
+        assertEq(lastObservationTime_, newTimestamp);
     }
 
     function test_storeObservations_reentrancy() public {
