@@ -53,23 +53,3 @@ jobs:
 
             - name: Run cross-chain fork tests
               run: pnpm run test:crosschainfork
-
-            # FYI: currently version 1.14
-            - name: Setup lcov
-              uses: hrishikesh-kadam/setup-lcov@v1
-
-            - name: Run Code Coverage
-              run: pnpm run test:coverage
-
-            - name: Add Artifacts
-              uses: actions/upload-artifact@v3
-              with:
-                  name: lcov.info
-                  path: lcov.info
-
-            - name: Report Code Coverage
-              uses: zgosalvez/github-actions-report-lcov@v3
-              with:
-                  coverage-files: lcov.info
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-                  update-comment: true
