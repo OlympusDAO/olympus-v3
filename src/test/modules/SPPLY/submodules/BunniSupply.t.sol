@@ -2043,7 +2043,7 @@ contract BunniSupplyTest is Test {
         submoduleBunniSupply.storeObservations();
     }
 
-    function test_storeObservations_singleToken_uncollectedFeesFuzz(
+    function test_storeObservations_singleToken_uncollectedFeesDuzz(
         uint256 usdcSwapAmount_
     ) public {
         // Swap enough to generate fees, but not enough to trigger a TWAP deviation
@@ -2157,36 +2157,6 @@ contract BunniSupplyTest is Test {
         assertEq(lastObservationTime_, newTimestamp);
     }
 
-    function test_storeObservations_reentrancy() public {
-        // Register one token
-        vm.prank(moduleSPPLY);
-        submoduleBunniSupply.addBunniToken(
-            poolTokenAddress,
-            bunniLensAddress,
-            movingAverageDuration,
-            lastObservationTime,
-            token0Observations,
-            token1Observations
-        );
-
-        uint48 newTimestamp = uint48(block.timestamp) + 1;
-        vm.warp(newTimestamp);
-
-        // Set the UniV3 pair to be locked, which indicates re-entrancy
-        _mockPoolUnlocked(uniswapPool, false);
-
-        // Store the observations
-        vm.prank(moduleSPPLY);
-        submoduleBunniSupply.storeObservations();
-
-        // Does not revert, and the reserves are updated
-        // Check that the moving average was updated
-        (, , , uint48 lastObservationTime_, , ) = submoduleBunniSupply.tokenMovingAverages(
-            poolTokenAddress
-        );
-        assertEq(lastObservationTime_, newTimestamp);
-    }
-
     function test_getUncollectedFees_uncollectedFeesInvariant(uint256 usdcSwapAmount_) public {
         // CASE 1: BEFORE SWAP
         // No fees have been earned, so there shouldn't be any uncollected or cached fees.
@@ -2265,5 +2235,32 @@ contract BunniSupplyTest is Test {
         // Check fee invariant between cached fees and uncollected fees.
         assertEq(cached0_c3, uncollected0_c3, "cached0_c3");
         assertEq(cached1_c3, uncollected1_c3, "cached1_c3");
+    }
+
+    function test_storeObservations_reentrancy() public {
+        // Register one token
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.addBunniToken(
+            poolTokenAddress,
+            bunniLensAddress,
+            movingAverageDuration,
+            lastObservationTime,
+            token0Observations,
+            token1Observations
+        );
+
+        // Set the UniV3 pair to be locked, which indicates re-entrancy
+        _mockPoolUnlocked(uniswapPool, false);
+
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            BunniLens.BunniLens_Reentrant.selector,
+            address(uniswapPool)
+        );
+        vm.expectRevert(err);
+
+        // Store the observations
+        vm.prank(moduleSPPLY);
+        submoduleBunniSupply.storeObservations();
     }
 }

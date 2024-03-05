@@ -680,18 +680,19 @@ contract UniswapV3PriceTest is Test {
         uniSubmodule.getTokenPrice(USDC, PRICE_DECIMALS, params);
     }
 
-    function test_getTokenPrice_reentrancy() public {
+    function testRevert_getTokenPrice_reentrancy() public {
         // Set the UniV3 pair to be locked, which indicates re-entrancy
         mockUniPair.setUnlocked(false);
 
-        // Mock the price of the other token
-        mockAssetPrice(LUSD, 1e18);
+        // Expect revert
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_PoolReentrancy.selector,
+            address(mockUniPair)
+        );
+        vm.expectRevert(err);
 
         bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS, 100);
-        uint256 price = uniSubmodule.getTokenPrice(USDC, PRICE_DECIMALS, params);
-
-        // Check the value
-        assertGt(price, 0);
+        uniSubmodule.getTokenPrice(USDC, PRICE_DECIMALS, params);
     }
 
     function test_getTokenPrice_usesPrice() public {
@@ -772,7 +773,7 @@ contract UniswapV3PriceTest is Test {
         assertEq(price, 6074476658258328000);
     }
 
-    function test_getTokenPrice_deviationOutOfBounds() public {
+    function testRevert_getTokenPrice_deviationOutOfBounds() public {
         // Mock the UNI-wETH pool
         mockUniPair.setToken0(UNI);
         mockUniPair.setToken1(WETH);
@@ -810,9 +811,18 @@ contract UniswapV3PriceTest is Test {
         mockUniPair.setTickCumulatives(tickCumulatives);
         mockUniPair.setTick(int24(-55196));
 
-        uint256 price = uniSubmodule.getTokenPrice(UNI, PRICE_DECIMALS, params);
-
-        // Should not revert
-        assertGt(price, 0);
+        // Calculate the return value
+        // tick = -55196
+        // quote price = 1.0001 ^ tick = 0.0040085566 ETH
+        // quote price = 0.0040085566 * 1500 =~ 6.013436
+        // deviation = (6.01283498 / 6.07447665) - 1 = 1.01%
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_PriceMismatch.selector,
+            address(mockUniPair),
+            4049651105505552, // TWAP price in ETH terms
+            4008556656876033 // Slot0 price in ETH terms
+        );
+        vm.expectRevert(err);
+        uniSubmodule.getTokenPrice(UNI, PRICE_DECIMALS, params);
     }
 }
