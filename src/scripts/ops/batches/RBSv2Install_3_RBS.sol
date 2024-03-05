@@ -992,12 +992,13 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 8. Activate the LP token
         // This will also register the LP token with TRSRY, PRICE and SPPLY
         {
-            // TODO update values for moving averages
-
             uint32 ohmWethPriceMovingAverageDuration = 1 days;
             uint48 ohmWethPriceLastObservationTime = uint48(
                 argData.readUint(".ohmWethPriceLastObsTime")
             );
+            // This loads the price per share for the OHM-wETH position
+            // To calculate: (OHM balance * OHM price + wETH balance * wETH price) / liquidity
+            // See BunniHub._mintShares() for more information
             uint256[] memory ohmWethPriceObservations = argData.readUintArray(".ohmWethPriceObs"); // 1 day * 24 hours / 8 hours = 3 observations
 
             uint32 ohmWethReserveMovingAverageDuration = 1 days;
