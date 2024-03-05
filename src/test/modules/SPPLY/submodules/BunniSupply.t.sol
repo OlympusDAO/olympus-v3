@@ -2043,7 +2043,7 @@ contract BunniSupplyTest is Test {
         submoduleBunniSupply.storeObservations();
     }
 
-    function test_storeObservations_singleToken_uncollectedFeesDuzz(
+    function test_storeObservations_singleToken_uncollectedFeesFuzz(
         uint256 usdcSwapAmount_
     ) public {
         // Swap enough to generate fees, but not enough to trigger a TWAP deviation
