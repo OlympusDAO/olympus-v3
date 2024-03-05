@@ -1,4 +1,3 @@
-/*
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.15;
 
@@ -38,6 +37,7 @@ interface IWsteth {
 
 // solhint-disable-next-line max-states-count
 contract BLVaultLidoTestFork is Test {
+    /*
     using FullMath for uint256;
 
     address internal alice;
@@ -534,5 +534,5 @@ contract BLVaultLidoTestFork is Test {
         // Check state after
         assertTrue(aliceVault.getUserPairShare() > 0);
     }
-}
 */
+}

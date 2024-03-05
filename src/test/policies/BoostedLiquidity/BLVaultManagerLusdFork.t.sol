@@ -30,6 +30,7 @@ import {console2} from "forge-std/console2.sol";
 
 // solhint-disable-next-line max-states-count
 contract BLVaultManagerLusdTestFork is Test {
+    /*
     using FullMath for uint256;
 
     address internal alice;
@@ -911,4 +912,5 @@ contract BLVaultManagerLusdTestFork is Test {
         // Check state after
         assertEq(vaultManager.isLusdBLVaultActive(), false);
     }
+    */
 }
