@@ -117,18 +117,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @param pool_    The address of the Uniswap V3 pool
     error BunniManager_InvalidPoolLiquidity(address pool_);
 
-    /// @notice         Emitted if the pool has already been deployed as a token
-    ///
-    /// @param pool_    The address of the Uniswap V3 pool
-    /// @param token_   The address of the existing BunniToken
-    error BunniManager_TokenDeployed(address pool_, address token_);
-
-    /// @notice         Emitted if the token for the pool has already been activated in modules
-    ///
-    /// @param pool_    The address of the Uniswap V3 pool
-    /// @param module_  The Keycode of the module that has already activated the token
-    error BunniManager_TokenActivated(address pool_, Keycode module_);
-
     /// @notice                 Emitted if the caller does not have sufficient balance to deposit
     ///
     /// @param token_           The address of the token
@@ -302,7 +290,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Check if the pool is already registered
         uint256 poolCount = pools.length;
         for (uint256 i = 0; i < poolCount; i++) {
-            if (pools[i] == pool_) revert BunniManager_TokenDeployed(pool_, address(token));
+            if (pools[i] == pool_) revert BunniManager_InvalidParams();
         }
 
         // Check that both tokens from the pool have prices (else PRICE will revert)
@@ -348,8 +336,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Check if a token for the pool has been deployed already
         {
             IBunniToken existingToken = bunniHub.getBunniToken(key);
-            if (address(existingToken) != address(0))
-                revert BunniManager_TokenDeployed(pool_, address(existingToken));
+            if (address(existingToken) != address(0)) revert BunniManager_InvalidParams();
         }
 
         // Check that both tokens from the pool have prices (else PRICE will revert)
@@ -408,15 +395,13 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
         // Register the pool token with TRSRY, PRICE and SPPLY (each will check for prior activation)
         _addPoolTokenToPRICE(
-            pool_,
             poolTokenAddress,
             priceMovingAverageDuration_,
             priceLastObservationTime_,
             priceObservations_
         );
-        _addPoolTokenToTRSRY(pool_, poolTokenAddress);
+        _addPoolTokenToTRSRY(poolTokenAddress);
         _addPoolTokenToSPPLY(
-            pool_,
             poolTokenAddress,
             reserveMovingAverageDuration_,
             reserveLastObservationTime_,
@@ -956,13 +941,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev                            - Checks if the asset is already registered, and reverts if so
     /// @dev                            - Calls `PRICE.addAsset`
     ///
-    /// @param pool_                    The pool to register
     /// @param poolToken_               The pool token to register
     /// @param movingAverageDuration_   The moving average duration
     /// @param lastObservationTime_     The last observation time
     /// @param observations_            The observations
     function _addPoolTokenToPRICE(
-        address pool_,
         address poolToken_,
         uint32 movingAverageDuration_,
         uint48 lastObservationTime_,
@@ -970,8 +953,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ) internal {
         PRICEv2.Asset memory assetData = PRICE.getAssetData(poolToken_);
         // Revert if already activated
-        if (assetData.approved == true)
-            revert BunniManager_TokenActivated(pool_, toKeycode("PRICE"));
+        if (assetData.approved == true) revert BunniManager_InvalidParams();
 
         // Prepare price feeds
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
@@ -1011,9 +993,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev                - Adds the TRSRY location to the asset
     /// @dev                - Categorizes the asset
     ///
-    /// @param pool_        The pool to register
     /// @param poolToken_   The pool token to register
-    function _addPoolTokenToTRSRY(address pool_, address poolToken_) internal {
+    function _addPoolTokenToTRSRY(address poolToken_) internal {
         TRSRYv1_1.Asset memory assetData = TRSRY.getAssetData(poolToken_);
         // Revert if the asset exists and the location is already registered (which would indicate an inconsistent activation state)
         if (assetData.approved == true) {
@@ -1025,7 +1006,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 }
             }
 
-            if (locationExists) revert BunniManager_TokenActivated(pool_, toKeycode("TRSRY"));
+            if (locationExists) revert BunniManager_InvalidParams();
         } else {
             // Add the asset to TRSRY
             TRSRY.addAsset(poolToken_, new address[](0));
@@ -1045,14 +1026,12 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev                            - Checks if the asset is already registered, and reverts if so
     /// @dev                            - Calls `SPPLY.categorize`
     ///
-    /// @param pool_                    The pool to register
     /// @param poolToken_               The pool token to register
     /// @param movingAverageDuration_   The moving average duration
     /// @param lastObservationTime_     The last observation time
     /// @param token0Observations_      The observations for token0
     /// @param token1Observations_      The observations for token1
     function _addPoolTokenToSPPLY(
-        address pool_,
         address poolToken_,
         uint32 movingAverageDuration_,
         uint48 lastObservationTime_,
@@ -1065,7 +1044,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         );
         bool hasBunniToken = abi.decode(hasBunniTokenResult, (bool));
         // Revert if already activated
-        if (hasBunniToken) revert BunniManager_TokenActivated(pool_, toKeycode("SPPLY"));
+        if (hasBunniToken) revert BunniManager_InvalidParams();
 
         // Register the asset with SPPLY submodule
         SPPLY.execOnSubmodule(

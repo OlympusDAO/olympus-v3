@@ -383,11 +383,7 @@ contract BunniManagerTest is Test {
     }
 
     function _expectRevert_tokenDeployed(address pool_, address token_) internal {
-        bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_TokenDeployed.selector,
-            pool_,
-            token_
-        );
+        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
         vm.expectRevert(err);
     }
 
@@ -405,11 +401,7 @@ contract BunniManagerTest is Test {
     }
 
     function _expectRevert_tokenActivated(address pool_, Keycode module_) internal {
-        bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_TokenActivated.selector,
-            pool_,
-            module_
-        );
+        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
         vm.expectRevert(err);
     }
 
