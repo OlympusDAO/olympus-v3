@@ -490,33 +490,21 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Check that the token has been deployed
         _getPoolToken(key);
 
-        // Move non-OHM tokens from TRSRY to this contract
-        (address token0Address, address token1Address) = UniswapV3PoolLibrary.getPoolTokens(pool_);
-
         // Determine token amounts
-        uint256 token0Amount;
-        uint256 token1Amount;
-        {
-            // Double-check that the given token (used for determining the order) is actually contained in the pool
-            if (tokenA_ != token0Address && tokenA_ != token1Address)
-                revert BunniManager_InvalidParams();
+        (
+            address token0Address,
+            address token1Address,
+            uint256 token0Amount,
+            uint256 token1Amount
+        ) = UniswapV3PoolLibrary.getPoolTokenAmounts(pool_, tokenA_, amountA_, amountB_);
 
-            if (token0Address == tokenA_) {
-                token0Amount = amountA_;
-                token1Amount = amountB_;
-            } else {
-                token0Amount = amountB_;
-                token1Amount = amountA_;
-            }
+        // Move tokens into the policy
+        _transferOrMint(token0Address, token0Amount);
+        _transferOrMint(token1Address, token1Amount);
 
-            // Move tokens into the policy
-            _transferOrMint(token0Address, token0Amount);
-            _transferOrMint(token1Address, token1Amount);
-
-            // Approve BunniHub to use the tokens
-            ERC20(token0Address).approve(address(bunniHub), token0Amount);
-            ERC20(token1Address).approve(address(bunniHub), token1Amount);
-        }
+        // Approve BunniHub to use the tokens
+        ERC20(token0Address).approve(address(bunniHub), token0Amount);
+        ERC20(token1Address).approve(address(bunniHub), token1Amount);
 
         // Construct the parameters
         IBunniHub.DepositParams memory params = IBunniHub.DepositParams({
@@ -564,38 +552,18 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Get the existing token (or revert)
         IBunniToken existingToken = _getPoolToken(key);
 
-        // Determine the minimum amounts
-        uint256 amount0Min;
-        uint256 amount1Min;
-        {
-            (uint256 amount0, uint256 amount1) = UniswapV3Positions.getPositionAmounts(
-                key.pool,
-                key.tickLower,
-                key.tickUpper,
-                address(bunniHub)
-            );
-
-            // Adjust for proportion of total supply
-            uint256 totalSupply = existingToken.totalSupply();
-            amount0 = amount0.mulDiv(shares_, totalSupply);
-            amount1 = amount1.mulDiv(shares_, totalSupply);
-
-            amount0Min = UniswapV3PoolLibrary.getAmountMin(amount0, slippageBps_);
-            amount1Min = UniswapV3PoolLibrary.getAmountMin(amount1, slippageBps_);
-        }
+        // Construct the parameters
+        IBunniHub.WithdrawParams memory params = BunniHelper.getWithdrawParams(
+            shares_,
+            slippageBps_,
+            key,
+            existingToken,
+            address(bunniHub),
+            address(this)
+        );
 
         // Move the tokens into the policy
         _transferOrMint(address(existingToken), shares_);
-
-        // Construct the parameters
-        IBunniHub.WithdrawParams memory params = IBunniHub.WithdrawParams({
-            key: key,
-            recipient: address(this),
-            shares: shares_,
-            amount0Min: amount0Min,
-            amount1Min: amount1Min,
-            deadline: block.timestamp // Ensures that the action be executed in this block or reverted
-        });
 
         // Withdraw
         (, uint256 withdrawnAmount0, uint256 withdrawnAmount1) = bunniHub.withdraw(params);

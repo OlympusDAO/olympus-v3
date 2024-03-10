@@ -1964,7 +1964,7 @@ contract BunniManagerTest is Test {
         bunniManager.deployPoolToken(address(pool));
 
         // Expect a revert
-        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
+        bytes memory err = abi.encodeWithSelector(UniswapV3PoolLibrary.InvalidParams.selector);
         vm.expectRevert(err);
 
         // Deposit

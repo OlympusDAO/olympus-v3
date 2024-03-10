@@ -18,6 +18,8 @@ library UniswapV3PoolLibrary {
     /// @param maxSlippage_     The maximum value for slippage
     error InvalidSlippage(uint16 slippage_, uint16 maxSlippage_);
 
+    error InvalidParams();
+
     // ========  Functions  ========
 
     /// @notice         Determines if `pool_` is a valid Uniswap V3 pool
@@ -54,6 +56,36 @@ library UniswapV3PoolLibrary {
         IUniswapV3Pool pool = IUniswapV3Pool(pool_);
 
         return (pool.token0(), pool.token1());
+    }
+
+    /// @notice         Gets the ordered token amounts for the given Uniswap V3 pool
+    function getPoolTokenAmounts(
+        address pool_,
+        address tokenA_,
+        uint256 amountA_,
+        uint256 amountB_
+    )
+        public
+        view
+        returns (
+            address token0Address,
+            address token1Address,
+            uint256 token0Amount,
+            uint256 token1Amount
+        )
+    {
+        (token0Address, token1Address) = getPoolTokens(pool_);
+        if (tokenA_ != token0Address && tokenA_ != token1Address) revert InvalidParams();
+
+        if (token0Address == tokenA_) {
+            token0Amount = amountA_;
+            token1Amount = amountB_;
+        } else {
+            token0Amount = amountB_;
+            token1Amount = amountA_;
+        }
+
+        return (token0Address, token1Address, token0Amount, token1Amount);
     }
 
     /// @notice             Convenience method to calculate the minimum amount of tokens to receive
