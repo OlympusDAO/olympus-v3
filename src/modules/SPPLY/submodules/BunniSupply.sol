@@ -492,20 +492,12 @@ contract BunniSupply is SupplySubmodule {
             uint16 nextObservationIndex = tokenMovingAverage.nextObservationIndex;
 
             // Get the oldest observation
-            uint256 oldestReserve0 = tokenMovingAverage.token0Observations[
-                nextObservationIndex
-            ];
-            uint256 oldestReserve1 = tokenMovingAverage.token1Observations[
-                nextObservationIndex
-            ];
+            uint256 oldestReserve0 = tokenMovingAverage.token0Observations[nextObservationIndex];
+            uint256 oldestReserve1 = tokenMovingAverage.token1Observations[nextObservationIndex];
 
             // Set the new observation
-            tokenMovingAverage.token0Observations[
-                nextObservationIndex
-            ] = reserve0;
-            tokenMovingAverage.token1Observations[
-                nextObservationIndex
-            ] = reserve1;
+            tokenMovingAverage.token0Observations[nextObservationIndex] = reserve0;
+            tokenMovingAverage.token1Observations[nextObservationIndex] = reserve1;
 
             // Update the observation time and index
             tokenMovingAverage.lastObservationTime = uint48(block.timestamp);
