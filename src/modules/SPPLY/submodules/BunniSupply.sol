@@ -164,9 +164,9 @@ contract BunniSupply is SupplySubmodule {
         uint256 len = bunniTokens.length;
         uint256 total;
         for (uint256 i; i < len; ) {
-            TokenData storage tokenData = bunniTokens[i];
+            TokenData memory tokenData = bunniTokens[i];
             BunniKey memory key = _getBunniKey(tokenData.token);
-            TokenMovingAverage storage tokenMovingAverage = tokenMovingAverages[
+            TokenMovingAverage memory tokenMovingAverage = tokenMovingAverages[
                 address(tokenData.token)
             ];
 
@@ -209,9 +209,9 @@ contract BunniSupply is SupplySubmodule {
         uint256 len = bunniTokens.length;
         SPPLYv1.Reserves[] memory reserves = new SPPLYv1.Reserves[](len);
         for (uint256 i; i < len; ) {
-            TokenData storage tokenData = bunniTokens[i];
+            TokenData memory tokenData = bunniTokens[i];
             BunniKey memory key = _getBunniKey(tokenData.token);
-            TokenMovingAverage storage tokenMovingAverage = tokenMovingAverages[
+            TokenMovingAverage memory tokenMovingAverage = tokenMovingAverages[
                 address(tokenData.token)
             ];
 
@@ -376,8 +376,9 @@ contract BunniSupply is SupplySubmodule {
         TokenMovingAverage storage movingAverage = tokenMovingAverages[token_];
 
         // Remove existing observations
-        if (movingAverage.token0Observations.length > 0) delete movingAverage.token0Observations;
-        if (movingAverage.token1Observations.length > 0) delete movingAverage.token1Observations;
+        // We know this is > 0, since `addBunniToken()` requires >= 2 observations per token.
+        delete movingAverage.token0Observations;
+        delete movingAverage.token1Observations;
 
         // Ensure the last observation time is not in the future
         if (lastObservationTime_ > block.timestamp)
@@ -480,7 +481,7 @@ contract BunniSupply is SupplySubmodule {
         // Iterate over all tokens
         uint256 len = bunniTokens.length;
         for (uint256 i; i < len; ) {
-            TokenData storage tokenData = bunniTokens[i];
+            TokenData memory tokenData = bunniTokens[i];
             BunniLens lens = tokenData.lens;
             BunniKey memory key = _getBunniKey(tokenData.token);
             (, , uint256 reserve0, uint256 reserve1) = _getReservesWithFees(key, lens);
@@ -488,27 +489,28 @@ contract BunniSupply is SupplySubmodule {
             TokenMovingAverage storage tokenMovingAverage = tokenMovingAverages[
                 address(tokenData.token)
             ];
+            uint16 nextObservationIndex = tokenMovingAverage.nextObservationIndex;
 
             // Get the oldest observation
             uint256 oldestReserve0 = tokenMovingAverage.token0Observations[
-                tokenMovingAverage.nextObservationIndex
+                nextObservationIndex
             ];
             uint256 oldestReserve1 = tokenMovingAverage.token1Observations[
-                tokenMovingAverage.nextObservationIndex
+                nextObservationIndex
             ];
 
             // Set the new observation
             tokenMovingAverage.token0Observations[
-                tokenMovingAverage.nextObservationIndex
+                nextObservationIndex
             ] = reserve0;
             tokenMovingAverage.token1Observations[
-                tokenMovingAverage.nextObservationIndex
+                nextObservationIndex
             ] = reserve1;
 
             // Update the observation time and index
             tokenMovingAverage.lastObservationTime = uint48(block.timestamp);
             tokenMovingAverage.nextObservationIndex =
-                (tokenMovingAverage.nextObservationIndex + 1) %
+                (nextObservationIndex + 1) %
                 tokenMovingAverage.numObservations;
 
             // Update the cumulative observations (which makes it easy to calculate the average)
