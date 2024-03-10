@@ -157,8 +157,6 @@ contract BunniManagerTest is Test {
 
     event HarvestRewardParamsSet(uint256 newMaxReward_, uint16 newFee_);
 
-    event PoolTokenRegistered(address indexed pool_, address indexed token_);
-
     event NewBunni(
         IBunniToken indexed token,
         bytes32 indexed bunniKeyHash,
@@ -167,9 +165,11 @@ contract BunniManagerTest is Test {
         int24 tickUpper
     );
 
-    event PoolTokenActivated(address indexed pool_, address indexed token_);
-
-    event PoolTokenDeactivated(address indexed pool_, address indexed token_);
+    event PoolTokenStatusChanged(
+        address indexed pool,
+        address indexed token,
+        bool indexed activated
+    );
 
     event PoolSwapFeesUpdated(address indexed pool_);
 
@@ -344,7 +344,7 @@ contract BunniManagerTest is Test {
 
     function _expectRevert_poolNotFound(address pool_) internal {
         bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_PoolNotFound.selector,
+            BunniManager.BunniManager_Params_InvalidAddress.selector,
             pool_
         );
         vm.expectRevert(err);
@@ -824,10 +824,6 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         newBunniManager.setBunniLens(bunniLensAddress);
 
-        // Recognise the emitted event
-        vm.expectEmit(true, true, false, true);
-        emit PoolTokenRegistered(address(pool), address(deployedToken));
-
         // Register the pool with the new policy
         vm.prank(policy);
         IBunniToken newDeployedToken = newBunniManager.registerPool(address(pool));
@@ -836,7 +832,7 @@ contract BunniManagerTest is Test {
         assertEq(address(newDeployedToken), address(deployedToken));
 
         // Check that the pool is registered
-        uint256 poolCount = newBunniManager.poolCount();
+        uint256 poolCount = newBunniManager.getPoolCount();
         assertEq(poolCount, 1);
         address poolOne = newBunniManager.pools(0);
         assertEq(poolOne, address(pool));
@@ -883,24 +879,16 @@ contract BunniManagerTest is Test {
         vm.prank(policy);
         newBunniManager.setBunniLens(bunniLensAddress);
 
-        // Recognise the emitted event
-        vm.expectEmit(true, true, false, true);
-        emit PoolTokenRegistered(address(pool), address(deployedToken));
-
         // Register the pool with the new policy
         vm.prank(policy);
         newBunniManager.registerPool(address(pool));
-
-        // Recognise the emitted event
-        vm.expectEmit(true, true, false, true);
-        emit PoolTokenRegistered(address(newPool), address(deployedTokenTwo));
 
         // Register the new pool with the new policy
         vm.prank(policy);
         newBunniManager.registerPool(address(newPool));
 
         // Check that the pools are registered
-        uint256 poolCount = newBunniManager.poolCount();
+        uint256 poolCount = newBunniManager.getPoolCount();
         assertEq(poolCount, 2);
         address poolOne = newBunniManager.pools(0);
         assertEq(poolOne, address(pool));
@@ -984,7 +972,7 @@ contract BunniManagerTest is Test {
         assertEq(deployedToken.tickUpper(), 887270);
 
         // Check that the pool is registered
-        uint256 poolCount = bunniManager.poolCount();
+        uint256 poolCount = bunniManager.getPoolCount();
         assertEq(poolCount, 1);
         address poolOne = bunniManager.pools(0);
         assertEq(poolOne, address(pool));
@@ -1022,7 +1010,7 @@ contract BunniManagerTest is Test {
         bunniManager.deployPoolToken(address(newPool));
 
         // Check that the pools are registered
-        uint256 poolCount = bunniManager.poolCount();
+        uint256 poolCount = bunniManager.getPoolCount();
         assertEq(poolCount, 2);
         address poolOne = bunniManager.pools(0);
         assertEq(poolOne, address(pool));
@@ -1060,7 +1048,7 @@ contract BunniManagerTest is Test {
         assertEq(deployedToken.tickUpper(), tick);
 
         // Check that the pool is registered
-        uint256 poolCount = bunniManager.poolCount();
+        uint256 poolCount = bunniManager.getPoolCount();
         assertEq(poolCount, 1);
         address poolOne = bunniManager.pools(0);
         assertEq(poolOne, address(poolTwo));
@@ -1109,7 +1097,7 @@ contract BunniManagerTest is Test {
         assertEq(deployedToken.tickUpper(), tick);
 
         // Check that the pool is registered
-        uint256 poolCount = bunniManager.poolCount();
+        uint256 poolCount = bunniManager.getPoolCount();
         assertEq(poolCount, 1);
         address poolOne = bunniManager.pools(0);
         assertEq(poolOne, address(poolTwo));
@@ -1429,7 +1417,7 @@ contract BunniManagerTest is Test {
 
         // Recognise the emitted event
         vm.expectEmit(true, true, false, true);
-        emit PoolTokenActivated(address(pool), address(poolToken));
+        emit PoolTokenStatusChanged(address(pool), address(poolToken), true);
 
         vm.prank(policy);
         bunniManager.activatePoolToken(
@@ -1499,7 +1487,7 @@ contract BunniManagerTest is Test {
 
         // Recognise the emitted event
         vm.expectEmit(true, true, false, true);
-        emit PoolTokenActivated(address(pool), address(poolToken));
+        emit PoolTokenStatusChanged(address(pool), address(poolToken), true);
 
         vm.prank(policy);
         bunniManager.activatePoolToken(
@@ -1573,7 +1561,7 @@ contract BunniManagerTest is Test {
 
         // Recognise the emitted event
         vm.expectEmit(true, true, false, true);
-        emit PoolTokenActivated(address(pool), address(poolToken));
+        emit PoolTokenStatusChanged(address(pool), address(poolToken), true);
 
         vm.prank(policy);
         bunniManager.activatePoolToken(
@@ -1762,7 +1750,7 @@ contract BunniManagerTest is Test {
 
         // Recognise the emitted event
         vm.expectEmit(true, true, false, false);
-        emit PoolTokenDeactivated(address(pool), address(poolToken));
+        emit PoolTokenStatusChanged(address(pool), address(poolToken), false);
 
         // Deactivate
         vm.prank(policy);
@@ -1798,7 +1786,7 @@ contract BunniManagerTest is Test {
 
         // Recognise the emitted event
         vm.expectEmit(true, true, false, false);
-        emit PoolTokenDeactivated(address(pool), address(poolToken));
+        emit PoolTokenStatusChanged(address(pool), address(poolToken), false);
 
         // Deactivate
         vm.prank(policy);
@@ -1991,7 +1979,7 @@ contract BunniManagerTest is Test {
 
         // Expect a revert
         bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_Params_InvalidUnderlyingToken.selector,
+            BunniManager.BunniManager_Params_InvalidAddress.selector,
             address(wETH)
         );
         vm.expectRevert(err);

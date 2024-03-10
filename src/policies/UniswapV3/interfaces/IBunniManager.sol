@@ -128,6 +128,9 @@ interface IBunniManager {
     /// @return reward  The amount of OHM that would be rewarded from harvesting fees
     function getCurrentHarvestReward() external view returns (uint256 reward);
 
+    /// @notice         Returns the number of registered pools
+    function getPoolCount() external view returns (uint256);
+
     // =========  ADMIN FUNCTIONS ========= //
 
     /// @notice             Sets the BunniLens and BunniHub contracts
