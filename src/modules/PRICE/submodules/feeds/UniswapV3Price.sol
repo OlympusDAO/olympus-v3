@@ -5,7 +5,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // Libraries
 import {UniswapV3OracleHelper as OracleHelper} from "libraries/UniswapV3/Oracle.sol";
-import {Deviation} from "libraries/Deviation.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 // Uniswap V3
