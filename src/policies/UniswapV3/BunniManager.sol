@@ -106,23 +106,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     //                                      ERRORS                                                //
     //============================================================================================//
 
-    /// @notice                 Emitted if the given address is invalid
-    ///
-    /// @param address_         The invalid address
-    error BunniManager_Params_InvalidAddress(address address_);
+    /// @notice                 Emitted if the given parameters were invalid
+    error BunniManager_InvalidParams();
 
     /// @notice   Emitted if the BunniHub has not been set
     error BunniManager_HubNotSet();
 
-    /// @notice         Emitted if the pool has no liquidity (when it should)
+    /// @notice         Emitted if the pool liquidity is invalid for the operation
     ///
     /// @param pool_    The address of the Uniswap V3 pool
-    error BunniManager_PoolHasNoLiquidity(address pool_);
-
-    /// @notice         Emitted if the pool has liquidity (when it should not)
-    ///
-    /// @param pool_    The address of the Uniswap V3 pool
-    error BunniManager_PoolHasLiquidity(address pool_);
+    error BunniManager_InvalidPoolLiquidity(address pool_);
 
     /// @notice         Emitted if the pool has already been deployed as a token
     ///
@@ -152,23 +145,6 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
 
     /// @notice         Emitted if harvest is being called too early
     error BunniManager_HarvestTooEarly(uint48 nextHarvest_);
-
-    /// @notice                 Emitted if the given harvest frequency is invalid
-    ///
-    /// @param minFrequency_    The minimum allowed frequency
-    /// @param newFrequency_    The invalid frequency
-    /// @param maxFrequency_    The maximum allowed frequency
-    error BunniManager_Params_InvalidHarvestFrequency(
-        uint48 minFrequency_,
-        uint48 newFrequency_,
-        uint48 maxFrequency_
-    );
-
-    /// @notice                 Emitted if the given harvest fee multiplier is invalid
-    ///
-    /// @param newMultiplier_   The invalid multiplier
-    /// @param maxMultipier_    The maximum allowed multiplier
-    error BunniManager_Params_InvalidHarvestFee(uint16 newMultiplier_, uint16 maxMultipier_);
 
     //============================================================================================//
     //                                      STATE                                                 //
@@ -418,7 +394,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
 
         // Check that the token has been deployed
-        address poolTokenAddress = address(_getPoolToken(pool_, key));
+        address poolTokenAddress = address(_getPoolToken(key));
 
         // Check that the position has liquidity
         if (
@@ -428,7 +404,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 key.tickUpper,
                 address(bunniHub)
             )
-        ) revert BunniManager_PoolHasNoLiquidity(pool_);
+        ) revert BunniManager_InvalidPoolLiquidity(pool_);
 
         // Register the pool token with TRSRY, PRICE and SPPLY (each will check for prior activation)
         _addPoolTokenToPRICE(
@@ -468,7 +444,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
 
         // Check that the token has been deployed
-        address poolTokenAddress = address(_getPoolToken(pool_, key));
+        address poolTokenAddress = address(_getPoolToken(key));
 
         // Check that the position has NO liquidity
         if (
@@ -478,7 +454,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
                 key.tickUpper,
                 address(bunniHub)
             )
-        ) revert BunniManager_PoolHasLiquidity(pool_);
+        ) revert BunniManager_InvalidPoolLiquidity(pool_);
 
         // De-register the pool token
         _removePoolTokenFromPRICE(poolTokenAddress);
@@ -527,7 +503,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
 
         // Check that the token has been deployed
-        _getPoolToken(pool_, key);
+        _getPoolToken(key);
 
         // Move non-OHM tokens from TRSRY to this contract
         (address token0Address, address token1Address) = UniswapV3PoolLibrary.getPoolTokens(pool_);
@@ -538,7 +514,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         {
             // Double-check that the given token (used for determining the order) is actually contained in the pool
             if (tokenA_ != token0Address && tokenA_ != token1Address)
-                revert BunniManager_Params_InvalidAddress(tokenA_);
+                revert BunniManager_InvalidParams();
 
             if (token0Address == tokenA_) {
                 token0Amount = amountA_;
@@ -601,7 +577,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
 
         // Get the existing token (or revert)
-        IBunniToken existingToken = _getPoolToken(pool_, key);
+        IBunniToken existingToken = _getPoolToken(key);
 
         // Determine the minimum amounts
         uint256 amount0Min;
@@ -731,7 +707,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         // Get the appropriate BunniKey representing the position
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
 
-        return _getPoolToken(pool_, key);
+        return _getPoolToken(key);
     }
 
     /// @inheritdoc IBunniManager
@@ -821,13 +797,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     function setBunniLens(
         address newBunniLens_
     ) external override nonReentrant onlyRole("bunni_admin") {
-        if (address(newBunniLens_) == address(0))
-            revert BunniManager_Params_InvalidAddress(newBunniLens_);
+        if (address(newBunniLens_) == address(0)) revert BunniManager_InvalidParams();
 
         bunniLens = BunniLens(newBunniLens_);
         bunniHub = BunniHub(address(bunniLens.hub()));
-        if (address(bunniHub) == address(0))
-            revert BunniManager_Params_InvalidAddress(newBunniLens_);
+        if (address(bunniHub) == address(0)) revert BunniManager_InvalidParams();
 
         emit BunniLensSet(address(bunniHub), newBunniLens_);
     }
@@ -840,7 +814,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     function setBunniOwner(
         address newOwner_
     ) external override nonReentrant onlyRole("bunni_admin") bunniHubSet {
-        if (address(newOwner_) == address(0)) revert BunniManager_Params_InvalidAddress(newOwner_);
+        if (address(newOwner_) == address(0)) revert BunniManager_InvalidParams();
 
         bunniHub.transferOwnership(newOwner_);
 
@@ -861,8 +835,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     function setHarvestFrequency(
         uint48 newFrequency_
     ) external override nonReentrant onlyRole("bunni_admin") {
-        if (newFrequency_ == 0)
-            revert BunniManager_Params_InvalidHarvestFrequency(1, newFrequency_, type(uint48).max);
+        if (newFrequency_ == 0) revert BunniManager_InvalidParams();
 
         harvestFrequency = newFrequency_;
 
@@ -874,8 +847,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         uint256 newRewardMax_,
         uint16 newRewardFee_
     ) external override nonReentrant onlyRole("bunni_admin") {
-        if (newRewardFee_ > BPS_MAX)
-            revert BunniManager_Params_InvalidHarvestFee(newRewardFee_, BPS_MAX);
+        if (newRewardFee_ > BPS_MAX) revert BunniManager_InvalidParams();
 
         harvestRewardMax = newRewardMax_;
         harvestRewardFee = newRewardFee_;
@@ -891,17 +863,13 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev            This function reverts if:
     /// @dev            - A BunniToken for `key_` cannot be found
     ///
-    /// @param pool_    The address of the pool
     /// @param key_     The BunniKey representing the position
     /// @return         The BunniToken for the pool
-    function _getPoolToken(
-        address pool_,
-        BunniKey memory key_
-    ) internal view returns (IBunniToken) {
+    function _getPoolToken(BunniKey memory key_) internal view returns (IBunniToken) {
         IBunniToken token = bunniHub.getBunniToken(key_);
 
         // Ensure the token exists
-        if (address(token) == address(0)) revert BunniManager_Params_InvalidAddress(pool_);
+        if (address(token) == address(0)) revert BunniManager_InvalidParams();
 
         return token;
     }
@@ -948,8 +916,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     /// @notice     Asserts that the given address is a Uniswap V3 pool
     /// @dev        This is determined by calling `slot0()`
     function _assertIsValidPool(address pool_) internal view {
-        if (!UniswapV3PoolLibrary.isValidPool(pool_))
-            revert BunniManager_Params_InvalidAddress(pool_);
+        if (!UniswapV3PoolLibrary.isValidPool(pool_)) revert BunniManager_InvalidParams();
     }
 
     /// @notice     Adds the token to the list of underlying tokens

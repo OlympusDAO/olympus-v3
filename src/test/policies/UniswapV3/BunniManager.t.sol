@@ -335,18 +335,12 @@ contract BunniManagerTest is Test {
     }
 
     function _expectRevert_invalidAddress(address address_) internal {
-        bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_Params_InvalidAddress.selector,
-            address_
-        );
+        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
         vm.expectRevert(err);
     }
 
     function _expectRevert_poolNotFound(address pool_) internal {
-        bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_Params_InvalidAddress.selector,
-            pool_
-        );
+        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
         vm.expectRevert(err);
     }
 
@@ -1209,7 +1203,7 @@ contract BunniManagerTest is Test {
         bunniManager.deployPoolToken(address(pool));
 
         bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_PoolHasNoLiquidity.selector,
+            BunniManager.BunniManager_InvalidPoolLiquidity.selector,
             address(pool)
         );
         vm.expectRevert(err);
@@ -1699,7 +1693,7 @@ contract BunniManagerTest is Test {
         );
 
         bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_PoolHasLiquidity.selector,
+            BunniManager.BunniManager_InvalidPoolLiquidity.selector,
             address(pool)
         );
         vm.expectRevert(err);
@@ -1978,10 +1972,7 @@ contract BunniManagerTest is Test {
         bunniManager.deployPoolToken(address(pool));
 
         // Expect a revert
-        bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_Params_InvalidAddress.selector,
-            address(wETH)
-        );
+        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
         vm.expectRevert(err);
 
         // Deposit
@@ -3385,12 +3376,7 @@ contract BunniManagerTest is Test {
 
     function test_setHarvestFrequency_zeroFrequencyReverts() public {
         uint48 newFrequency = 0;
-        bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_Params_InvalidHarvestFrequency.selector,
-            1,
-            newFrequency,
-            type(uint48).max
-        );
+        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
         vm.expectRevert(err);
 
         // Call with a zero frequency
@@ -3428,11 +3414,7 @@ contract BunniManagerTest is Test {
 
     function test_setHarvestRewardParameters_feeInvalidReverts() public {
         uint16 newFee = BPS_MAX + 1;
-        bytes memory err = abi.encodeWithSelector(
-            BunniManager.BunniManager_Params_InvalidHarvestFee.selector,
-            newFee,
-            BPS_MAX
-        );
+        bytes memory err = abi.encodeWithSelector(BunniManager.BunniManager_InvalidParams.selector);
         vm.expectRevert(err);
 
         // Call with an invalid fee
