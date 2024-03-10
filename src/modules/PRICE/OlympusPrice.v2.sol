@@ -370,7 +370,7 @@ contract OlympusPricev2 is PRICEv2 {
 
         for (uint256 i; i < len; ) {
             address currentAsset = assets[i];
-            Asset storage asset = _assetData[currentAsset];
+            Asset memory asset = _assetData[currentAsset];
 
             // Only process if the moving average is stored
             if (asset.approved && asset.storeMovingAverage) {
