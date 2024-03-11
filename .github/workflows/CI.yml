@@ -14,7 +14,7 @@ jobs:
         runs-on: ubuntu-latest
 
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   submodules: recursive
 
@@ -39,9 +39,14 @@ jobs:
               run: pnpm run lint:check
               continue-on-error: true
 
-            - name: Run non-fork tests
+            - name: Run unit tests
               run: pnpm run test:unit
               continue-on-error: true
+
+            - name: Run proposal simulation tests
+              run: pnpm run test:proposal
+              env:
+                  FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
 
             - name: Run fork tests
               run: pnpm run test:fork

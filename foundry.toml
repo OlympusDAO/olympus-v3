@@ -20,12 +20,14 @@ remappings = [
 fs_permissions = [
     {access = "write", path = "./src/test/sim/out/"},
     {access = "write", path = "./deployments/"},
-    {access = "read", path = "./src/scripts/"}
+    {access = "read", path = "./src/scripts/"},
+    {access = "read", path = "./src/proposals/addresses.json"},
 ]
 solc_version = "0.8.15"
 optimizer = true
 # Default is 200
 optimizer_runs = 10
+chain_id = 1
 
 [fuzz]
 runs = 256
