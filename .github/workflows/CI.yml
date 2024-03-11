@@ -37,11 +37,9 @@ jobs:
 
             - name: Run lint check
               run: pnpm run lint:check
-              continue-on-error: true
 
             - name: Run unit tests
               run: pnpm run test:unit
-              continue-on-error: true
 
             - name: Run proposal simulation tests
               run: pnpm run test:proposal
@@ -50,17 +48,14 @@ jobs:
 
             - name: Run fork tests
               run: pnpm run test:fork
-              continue-on-error: true
               env:
                   FORK_TEST_RPC_URL: ${{ secrets.FORK_TEST_RPC_URL }}
 
             - name: Run cross-chain fork tests
               run: pnpm run test:crosschainfork
-              continue-on-error: true
 
             - name: Contract Size Check
               run: pnpm run size
-              continue-on-error: true
 
             # FYI: currently version 1.14
             - name: Setup lcov
