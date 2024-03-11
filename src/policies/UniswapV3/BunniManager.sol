@@ -334,10 +334,7 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         BunniKey memory key = BunniHelper.getFullRangeBunniKey(pool_);
 
         // Check if a token for the pool has been deployed already
-        {
-            IBunniToken existingToken = bunniHub.getBunniToken(key);
-            if (address(existingToken) != address(0)) revert BunniManager_InvalidParams();
-        }
+        if (address(bunniHub.getBunniToken(key)) != address(0)) revert BunniManager_InvalidParams();
 
         // Check that both tokens from the pool have prices (else PRICE will revert)
         (address poolToken0, address poolToken1) = UniswapV3PoolLibrary.getPoolTokens(pool_);
@@ -348,13 +345,11 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         _addUnderlyingToken(poolToken0);
         _addUnderlyingToken(poolToken1);
 
-        // Deploy
-        IBunniToken deployedToken = bunniHub.deployBunniToken(key);
-
         // Update the pools variable
         pools.push(pool_);
 
-        return deployedToken;
+        // Deploy
+        return bunniHub.deployBunniToken(key);
     }
 
     // =========  POOL ACTIVATION ========= //
