@@ -252,6 +252,9 @@ abstract contract PRICEv2 is ModuleWithSubmodules {
     /// @return         The asset configuration as an `Asset` struct
     function getAssetData(address asset_) external view virtual returns (Asset memory);
 
+    /// @notice         Indicates whether `asset_` has been registered
+    function isAssetApproved(address asset_) external view virtual returns (bool);
+
     // ========== ASSET PRICES ========== //
 
     /// @notice         Returns the current price of an asset in the system unit of account

@@ -914,19 +914,16 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         uint48 lastObservationTime_,
         uint256[] memory observations_
     ) internal {
-        PRICEv2.Asset memory assetData = PRICE.getAssetData(poolToken_);
         // Revert if already activated
-        if (assetData.approved == true) revert BunniManager_InvalidParams();
+        if (PRICE.isAssetApproved(poolToken_) == true) revert BunniManager_InvalidParams();
 
         // Prepare price feeds
         PRICEv2.Component[] memory feeds = new PRICEv2.Component[](1);
         {
-            BunniPrice.BunniParams memory params = BunniPrice.BunniParams(address(bunniLens));
-
             feeds[0] = PRICEv2.Component(
                 toSubKeycode("PRICE.BNI"), // Subkeycode
                 BunniPrice.getBunniTokenPrice.selector, // Selector
-                abi.encode(params) // Params
+                abi.encode(BunniPrice.BunniParams(address(bunniLens))) // Params
             );
         }
 
@@ -1001,13 +998,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
         uint256[] memory token0Observations_,
         uint256[] memory token1Observations_
     ) internal {
-        bytes memory hasBunniTokenResult = SPPLY.execOnSubmodule(
-            toSubKeycode("SPPLY.BNI"),
-            abi.encodeWithSelector(BunniSupply.hasBunniToken.selector, poolToken_)
-        );
-        bool hasBunniToken = abi.decode(hasBunniTokenResult, (bool));
         // Revert if already activated
-        if (hasBunniToken) revert BunniManager_InvalidParams();
+        if (_isPoolTokenRegisteredInSPPLY(poolToken_)) revert BunniManager_InvalidParams();
 
         // Register the asset with SPPLY submodule
         SPPLY.execOnSubmodule(
@@ -1031,9 +1023,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///
     /// @param poolToken_   The pool token to deregister
     function _removePoolTokenFromPRICE(address poolToken_) internal {
-        PRICEv2.Asset memory assetData = PRICE.getAssetData(poolToken_);
         // Exit if not activated
-        if (assetData.approved == false) return;
+        if (PRICE.isAssetApproved(poolToken_) == false) return;
 
         // Remove the asset
         PRICE.removeAsset(poolToken_);
@@ -1047,9 +1038,8 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///
     /// @param poolToken_   The pool token to deregister
     function _removePoolTokenFromTRSRY(address poolToken_) internal {
-        TRSRYv1_1.Asset memory assetData = TRSRY.getAssetData(poolToken_);
         // Exit if not activated
-        if (assetData.approved == false) return;
+        if (TRSRY.isAssetApproved(poolToken_) == false) return;
 
         // Remove the TRSRY location from the asset
         TRSRY.removeAssetLocation(poolToken_, address(TRSRY));
@@ -1064,19 +1054,25 @@ contract BunniManager is IBunniManager, Policy, RolesConsumer, ReentrancyGuard {
     ///
     /// @param poolToken_   The pool token to deregister
     function _removePoolTokenFromSPPLY(address poolToken_) internal {
-        bytes memory hasBunniTokenResult = SPPLY.execOnSubmodule(
-            toSubKeycode("SPPLY.BNI"),
-            abi.encodeWithSelector(BunniSupply.hasBunniToken.selector, poolToken_)
-        );
-        bool hasBunniToken = abi.decode(hasBunniTokenResult, (bool));
         // Exit if not activated
-        if (!hasBunniToken) return;
+        if (!_isPoolTokenRegisteredInSPPLY(poolToken_)) return;
 
         // Remove the asset
         SPPLY.execOnSubmodule(
             toSubKeycode("SPPLY.BNI"),
             abi.encodeWithSelector(BunniSupply.removeBunniToken.selector, poolToken_)
         );
+    }
+
+    function _isPoolTokenRegisteredInSPPLY(address poolToken_) internal returns (bool) {
+        return
+            abi.decode(
+                SPPLY.execOnSubmodule(
+                    toSubKeycode("SPPLY.BNI"),
+                    abi.encodeWithSelector(BunniSupply.hasBunniToken.selector, poolToken_)
+                ),
+                (bool)
+            );
     }
 
     //============================================================================================//

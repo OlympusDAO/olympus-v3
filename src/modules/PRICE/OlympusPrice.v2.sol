@@ -65,6 +65,11 @@ contract OlympusPricev2 is PRICEv2 {
         return _assetData[asset_];
     }
 
+    /// @inheritdoc PRICEv2
+    function isAssetApproved(address asset_) external view override returns (bool) {
+        return _assetData[asset_].approved;
+    }
+
     // ========== ASSET PRICES ========== //
 
     /// @inheritdoc PRICEv2

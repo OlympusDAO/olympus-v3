@@ -249,6 +249,11 @@ contract OlympusTreasury is TRSRYv1_1, ReentrancyGuard {
     }
 
     /// @inheritdoc TRSRYv1_1
+    function isAssetApproved(address asset_) external view override returns (bool) {
+        return assetData[asset_].approved;
+    }
+
+    /// @inheritdoc TRSRYv1_1
     /// @dev        This function reverts if:
     /// @dev        - `category_` is not a valid category
     function getAssetsByCategory(
