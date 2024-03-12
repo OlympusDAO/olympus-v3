@@ -325,10 +325,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             amountOut = getAmountOut(tokenIn_, amountIn_);
 
             // Decrement wall capacity
-            _updateCapacity(false, amountOut);
-
             // If wall is down after swap, deactive the cushion as well
-            _checkCushion(false);
+            _updateCapacityAndCheckCushion(false, amountOut);
 
             // Transfer OHM from sender
             _ohm.safeTransferFrom(msg.sender, address(this), amountIn_);
@@ -356,10 +354,8 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             amountOut = getAmountOut(tokenIn_, amountIn_);
 
             // Decrement wall capacity
-            _updateCapacity(true, amountOut);
-
             // If wall is down after swap, deactive the cushion as well
-            _checkCushion(true);
+            _updateCapacityAndCheckCushion(true, amountOut);
 
             // Transfer reserves to this contract from sender
             _reserve.safeTransferFrom(msg.sender, address(this), amountIn_);
@@ -396,12 +392,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         _onlyWhileActive();
 
         if (id_ == RANGE.market(true)) {
-            _updateCapacity(true, amountOut_);
-            _checkCushion(true);
+            _updateCapacityAndCheckCushion(true, amountOut_);
         }
         if (id_ == RANGE.market(false)) {
-            _updateCapacity(false, amountOut_);
-            _checkCushion(false);
+            _updateCapacityAndCheckCushion(false, amountOut_);
         }
     }
 
@@ -562,14 +556,6 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         return lbbo;
     }
 
-    /// @notice          Update the capacity on the RANGE module.
-    /// @param high_     Whether to update the high side or low side capacity (true = high, false = low).
-    /// @param reduceBy_ The amount to reduce the capacity by (OHM tokens for high side, Reserve tokens for low side).
-    function _updateCapacity(bool high_, uint256 reduceBy_) internal {
-        // Decrement capacity if a reduceBy amount is provided
-        RANGE.updateCapacity(high_, RANGE.capacity(high_) - reduceBy_);
-    }
-
     /// @notice Update the prices on the RANGE module
     function _updateRangePrices() internal {
         // Get latest target price, expect it to have been updated this same block
@@ -679,9 +665,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         }
     }
 
-    /// @notice      Takes down cushions (if active) when a wall is taken down or if available capacity drops below cushion capacity
-    /// @param high_ Whether to check the high side or low side cushion (true = high, false = low)
-    function _checkCushion(bool high_) internal {
+    /// @notice             Update the capacity on the RANGE module.
+    /// @notice             Takes down cushions (if active) when a wall is taken down or if available capacity drops below cushion capacity
+    /// @param high_        Whether to check the high side or low side cushion (true = high, false = low)
+    /// @param reduceBy_    The amount to reduce the capacity by
+    function _updateCapacityAndCheckCushion(bool high_, uint256 reduceBy_) internal {
+        // Update capacity
+        uint256 newCapacity = RANGE.capacity(high_) - reduceBy_;
+        RANGE.updateCapacity(high_, newCapacity);
+
         // Check if the wall is down, if so ensure the cushion is also down
         // Additionally, if wall is not down, but the wall capacity has dropped below the cushion capacity, take the cushion down
         bool sideActive = RANGE.active(high_);
@@ -690,7 +682,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             !sideActive ||
             (sideActive &&
                 auctioneer.isLive(market) &&
-                RANGE.capacity(high_) < auctioneer.currentCapacity(market))
+                newCapacity < auctioneer.currentCapacity(market))
         ) {
             _deactivate(high_);
         }
