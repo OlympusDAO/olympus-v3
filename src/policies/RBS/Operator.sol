@@ -242,21 +242,18 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Add observations to regeneration counters
         _addObservation(currentPrice);
 
-        // Cache config in memory
-        Config memory config_ = _config;
-
         // Check if walls can regenerate capacity
         if (
-            uint48(block.timestamp) >= RANGE.lastActive(true) + uint48(config_.regenWait) &&
-            _status.high.count >= config_.regenThreshold
+            uint48(block.timestamp) >= RANGE.lastActive(true) + uint48(_config.regenWait) &&
+            _status.high.count >= _config.regenThreshold
         ) {
             _regenerate(true);
         }
         // For the lower side, we can regenerate if the regen count is above the threshold OR
         // if the current price is below LBBO and the capacity is below 20% of the full capacity for the side
         if (
-            (uint48(block.timestamp) >= RANGE.lastActive(false) + uint48(config_.regenWait) &&
-                _status.low.count >= config_.regenThreshold) ||
+            (uint48(block.timestamp) >= RANGE.lastActive(false) + uint48(_config.regenWait) &&
+                _status.low.count >= _config.regenThreshold) ||
             (currentPrice < _getLBBO() && RANGE.capacity(false) < (fullCapacity(false) * 20) / 100)
         ) {
             _regenerate(false);
@@ -431,15 +428,14 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
             uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-            uint256 bondScale =
-                10 **
-                    uint8(
-                        36 +
-                            scaleAdjustment +
-                            int8(_reserveDecimals) -
-                            int8(_ohmDecimals) -
-                            priceDecimals
-                    );
+            uint256 bondScale = 10 **
+                uint8(
+                    36 +
+                        scaleAdjustment +
+                        int8(_reserveDecimals) -
+                        int8(_ohmDecimals) -
+                        priceDecimals
+                );
             initialPrice = currentPrice_.mulDiv(bondScale, oracleScale);
             minimumPrice = range.high.cushion.price.mulDiv(bondScale, oracleScale);
 
@@ -465,17 +461,19 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
             uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-            uint256 bondScale =
-                10 **
-                    uint8(
-                        36 +
-                            scaleAdjustment +
-                            int8(_ohmDecimals) -
-                            int8(_reserveDecimals) -
-                            priceDecimals
-                    );
+            uint256 bondScale = 10 **
+                uint8(
+                    36 +
+                        scaleAdjustment +
+                        int8(_ohmDecimals) -
+                        int8(_reserveDecimals) -
+                        priceDecimals
+                );
 
-            initialPrice = (10 ** (_oracleDecimals * 2) / currentPrice_).mulDiv(bondScale, oracleScale);
+            initialPrice = (10 ** (_oracleDecimals * 2) / currentPrice_).mulDiv(
+                bondScale,
+                oracleScale
+            );
             minimumPrice = invCushionPrice.mulDiv(bondScale, oracleScale);
 
             // Calculate market capacity from the cushion factor
