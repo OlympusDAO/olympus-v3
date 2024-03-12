@@ -416,10 +416,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         // Initialize common variables
         ERC20 quoteToken;
         ERC20 payoutToken;
-        int8 priceDecimals;
         int8 scaleAdjustment;
-        uint256 bondScale;
-        uint256 oracleScale;
         uint256 initialPrice;
         uint256 minimumPrice;
         uint256 marketCapacity;
@@ -432,15 +429,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
             // Price decimals are returned from the perspective of the quote token
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
-            priceDecimals = _getPriceDecimals(range.high.cushion.price);
+            int8 priceDecimals = _getPriceDecimals(range.high.cushion.price);
             scaleAdjustment = int8(_ohmDecimals) - int8(_reserveDecimals) + (priceDecimals / 2);
 
             // Avoid wrap-around due to casting
             if (priceDecimals > int8(_oracleDecimals)) revert Operator_InvalidParams();
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-            bondScale =
+            uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
+            uint256 bondScale =
                 10 **
                     uint8(
                         36 +
@@ -461,21 +458,20 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
 
             // Calculate inverse prices from the oracle feed for the low side
             uint256 invCushionPrice = 10 ** (_oracleDecimals * 2) / range.low.cushion.price;
-            uint256 invCurrentPrice = 10 ** (_oracleDecimals * 2) / currentPrice_;
 
             // Calculate scaleAdjustment for bond market
             // Price decimals are returned from the perspective of the quote token
             // so the operations assume payoutPriceDecimal is zero and quotePriceDecimals
             // is the priceDecimal value
-            priceDecimals = _getPriceDecimals(invCushionPrice);
+            int8 priceDecimals = _getPriceDecimals(invCushionPrice);
             scaleAdjustment = int8(_reserveDecimals) - int8(_ohmDecimals) + (priceDecimals / 2);
 
             // Avoid wrap-around due to casting
             if (priceDecimals > int8(_oracleDecimals)) revert Operator_InvalidParams();
 
             // Calculate oracle scale and bond scale with scale adjustment and format prices for bond market
-            oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-            bondScale =
+            uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
+            uint256 bondScale =
                 10 **
                     uint8(
                         36 +
@@ -485,7 +481,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
                             priceDecimals
                     );
 
-            initialPrice = invCurrentPrice.mulDiv(bondScale, oracleScale);
+            initialPrice = (10 ** (_oracleDecimals * 2) / currentPrice_).mulDiv(bondScale, oracleScale);
             minimumPrice = invCushionPrice.mulDiv(bondScale, oracleScale);
 
             // Calculate market capacity from the cushion factor
@@ -895,9 +891,7 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         );
 
         // Return the max of LBBO and the moving average
-        uint256 target = average < lbbo ? lbbo : average;
-
-        return target;
+        return average < lbbo ? lbbo : average;
     }
 
     /// @inheritdoc IOperator
