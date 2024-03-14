@@ -16,6 +16,7 @@ import "src/Kernel.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {TRSRYv1_1} from "modules/TRSRY/TRSRY.v1.sol";
 import {Category as AssetCategory} from "modules/TRSRY/TRSRY.v1.sol";
+import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 
 // Bophades policies
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
@@ -36,6 +37,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
     address clearinghouseV1_1;
     address veFXSAllocator;
     address dsrAllocator;
+    address roles;
 
     // Tokens
     address dai;
@@ -62,6 +64,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
         treasuryV1 = envAddress("current", "olympus.modules.OlympusTreasuryV1");
         treasuryV1_1 = envAddress("current", "olympus.modules.OlympusTreasuryV1_1");
+        roles = envAddress("current", "olympus.modules.OlympusRoles");
         treasuryCustodian = envAddress("current", "olympus.policies.TreasuryCustodian");
         treasuryConfig = envAddress("current", "olympus.policies.TreasuryConfig");
         clearinghouseV1 = envAddress("current", "olympus.policies.ClearinghouseV1");
@@ -237,18 +240,23 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
         // 2. Disables the Operator
         // This is to avoid having any bond markets open while TRSRY v1 and v1.1 is without funds
         {
-            console2.log("Granting the operator_policy role to the DAO MS");
-            addToBatch(
-                rolesAdmin,
-                abi.encodeWithSelector(
-                    RolesAdmin.grantRole.selector,
-                    bytes32("operator_policy"),
-                    daoMS
-                )
-            );
+            if (!ROLESv1(roles).hasRole(daoMS, bytes32("operator_policy"))) {
+                console2.log("Granting the operator_policy role to the DAO MS");
+                addToBatch(
+                    rolesAdmin,
+                    abi.encodeWithSelector(
+                        RolesAdmin.grantRole.selector,
+                        bytes32("operator_policy"),
+                        daoMS
+                    )
+                );
 
-            console2.log("Disabling the Operator");
-            addToBatch(operator, abi.encodeWithSelector(Operator.deactivate.selector));
+                console2.log("Disabling the Operator");
+                addToBatch(operator, abi.encodeWithSelector(Operator.deactivate.selector));
+            }
+            else {
+                console2.log("DAO MS already has the operator_policy role");
+            }
         }
 
         console2.log("*** Complete\n\n");
