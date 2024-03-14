@@ -1084,8 +1084,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         // 5. Configure metric moving average assets on Heart
         //  - 30 days
         {
-            uint32 movingAverageDuration = 30 days /
-                IAppraiser(appraiser).getObservationFrequency();
+            uint32 movingAverageDuration = uint32(30 days);
             uint256 lastObsTime_ = argData.readUint(".lbboLastObsTime"); // Should be within the last 8 hours
             uint256[] memory obs_ = argData.readUintArray(".lbboObs"); // 30 days * 24 hours / 8 hours = 90 observations
 
