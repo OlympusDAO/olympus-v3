@@ -158,9 +158,9 @@ contract BunniSupplyTest is Test {
             );
             usdcToken = new MockERC20{salt: usdcSalt}("USDC", "USDC", 6);
 
-            // The WETH address needs to be higher than ohm, so generate a salt to ensure that
+            // The WETH address needs to be higher than USDC, so generate a salt to ensure that
             bytes32 wethSalt = ComputeAddress.generateSalt(
-                address(ohmToken),
+                address(usdcToken),
                 true,
                 type(MockERC20).creationCode,
                 abi.encode("Wrapped Ether", "wETH", 18),
