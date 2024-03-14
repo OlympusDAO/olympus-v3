@@ -634,7 +634,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            uint256 fxsLastObsTime_ = argData.readUint(".fxsLastObsTime");
+            uint256 fxsLastObsTime_ = argData.readUint(".fxsLastObsTime"); // Should be within the last 8 hours
             uint256[] memory fxsObs_ = argData.readUintArray(".fxsObs"); // 7 days * 24 hours / 8 hours = 21 observations
 
             console2.log("Adding veFXS price feed to PRICE");
@@ -676,7 +676,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            uint256 fxsLastObsTime_ = argData.readUint(".fxsLastObsTime");
+            uint256 fxsLastObsTime_ = argData.readUint(".fxsLastObsTime"); // Should be within the last 8 hours
             uint256[] memory fxsObs_ = argData.readUintArray(".fxsObs"); // 7 days * 24 hours / 8 hours = 21 observations
 
             console2.log("Adding FXS price feed to PRICE");
@@ -719,7 +719,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
                 )
             );
 
-            uint256 ohmLastObsTime_ = argData.readUint(".ohmLastObsTime");
+            uint256 ohmLastObsTime_ = argData.readUint(".ohmLastObsTime"); // Should be within the last 8 hours
             uint256[] memory ohmObs_ = argData.readUintArray(".ohmObs"); // 30 days * 24 hours / 8 hours = 90 observations
 
             console2.log("Adding OHM price feed to PRICE");
@@ -1004,7 +1004,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
             uint32 ohmWethReserveMovingAverageDuration = 1 days;
             uint48 ohmWethReserveLastObservationTime = uint48(
                 argData.readUint(".ohmWethReserveLastObsTime")
-            );
+            ); // Should be within the last 8 hours
             uint256[] memory ohmWethReserveToken0Observations = argData.readUintArray(
                 ".ohmWethReserveToken0Observations"
             );
@@ -1086,7 +1086,7 @@ contract RBSv2Install_3_RBS is OlyBatch, StdAssertions {
         {
             uint32 movingAverageDuration = 30 days /
                 IAppraiser(appraiser).getObservationFrequency();
-            uint256 lastObsTime_ = argData.readUint(".lbboLastObsTime");
+            uint256 lastObsTime_ = argData.readUint(".lbboLastObsTime"); // Should be within the last 8 hours
             uint256[] memory obs_ = argData.readUintArray(".lbboObs"); // 30 days * 24 hours / 8 hours = 90 observations
 
             console2.log("Configure LBBO moving average on Appraiser");
