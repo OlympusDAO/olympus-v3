@@ -91,7 +91,6 @@ contract ERC4626Price is PriceSubmodule {
         if (outputDecimals_ > BASE_10_MAX_EXPONENT) {
             revert ERC4626_OutputDecimalsOutOfBounds(outputDecimals_, BASE_10_MAX_EXPONENT);
         }
-        uint256 outputScale = 10 ** outputDecimals_;
 
         // We assume that the asset passed conforms to ERC4626
         ERC4626 asset = ERC4626(asset_);
@@ -120,16 +119,10 @@ contract ERC4626Price is PriceSubmodule {
             assetScale = 10 ** assetDecimals;
         }
 
-        // Get the number of underlying tokens per share
-        // Scale: output decimals
-        uint256 underlyingPerShare = asset.convertToAssets(assetScale).mulDiv(
-            outputScale,
-            assetScale
-        );
-
         // Get the price of the underlying asset
         // We assume that getPrice() returns in outputDecimals
         // If the underlying price is not set, PRICE will revert
+        // Scale: output decimals
         (uint256 underlyingPrice, ) = PRICEv2(_PRICE()).getPrice(
             underlying,
             PRICEv2.Variant.CURRENT
@@ -137,7 +130,10 @@ contract ERC4626Price is PriceSubmodule {
 
         // Calculate the price of the asset
         // Scale: output decimals
-        uint256 assetPrice = underlyingPrice.mulDiv(underlyingPerShare, outputScale);
+        uint256 assetPrice = (underlyingPrice).mulDiv(
+            asset.convertToAssets(assetScale),
+            assetScale
+        );
 
         return assetPrice;
     }
