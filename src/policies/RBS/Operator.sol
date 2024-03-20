@@ -70,6 +70,9 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
     /// @dev _wrappedReserveDecimals == _reserveDecimals
     ERC4626 public immutable _wrappedReserve;
 
+    /// @notice The manual target price
+    uint256 public manualTargetPrice;
+
     /// @notice Constants
     uint32 internal constant ONE_HUNDRED_PERCENT = 100e2;
     uint32 internal constant ONE_PERCENT = 1e2;
@@ -864,12 +867,20 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         if (factor_ > ONE_HUNDRED_PERCENT || factor_ < ONE_PERCENT) revert Operator_InvalidParams();
     }
 
+    /// @inheritdoc IOperator
+    function setManualTargetPrice(uint256 price_) external onlyRole("operator_policy") {
+        manualTargetPrice = price_;
+    }
+
     //============================================================================================//
     //                                       VIEW FUNCTIONS                                       //
     //============================================================================================//
 
     /// @inheritdoc IOperator
     function targetPrice() public view override returns (uint256) {
+        // If manual target price is non-zero, return it
+        if (manualTargetPrice > 0) return manualTargetPrice;
+
         // Get liquid backing per backed ohm from appraiser
         uint256 lbbo = _getLBBO();
 
