@@ -885,6 +885,10 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         uint256 lbbo = _getLBBO();
 
         // Get moving average of OHM against the reserve
+        // `average` is OHM in terms of reserve (DAI), while `lbbo` is in terms of USD.
+        // Strictly speaking, `lbbo` should be in terms of reserve (DAI) as well.
+        // However, if DAI were to de-peg, the value of the entire treasury would tank,
+        // so it doesn't really matter anyway.
         (uint256 average, ) = PRICE.getPriceIn(
             address(_ohm),
             address(_reserve),
