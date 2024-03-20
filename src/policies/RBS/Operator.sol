@@ -167,21 +167,15 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         MINTR = MINTRv1(getModuleAddress(dependencies[3]));
         ROLES = ROLESv1(getModuleAddress(dependencies[4]));
 
-        (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
-        (uint8 PRICE_MAJOR, ) = PRICE.VERSION();
-        (uint8 RANGE_MAJOR, ) = RANGE.VERSION();
-        (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
-        (uint8 TRSRY_MAJOR, ) = TRSRY.VERSION();
-
         // Ensure Modules are using the expected major version.
         // Modules should be sorted in alphabetical order.
         bytes memory expected = abi.encode([1, 2, 2, 1, 1]);
         if (
-            MINTR_MAJOR != 1 ||
-            PRICE_MAJOR != 2 ||
-            RANGE_MAJOR != 2 ||
-            ROLES_MAJOR != 1 ||
-            TRSRY_MAJOR != 1
+            _getModuleMajorVersion(MINTR) != 1 ||
+            _getModuleMajorVersion(PRICE) != 2 ||
+            _getModuleMajorVersion(RANGE) != 2 ||
+            _getModuleMajorVersion(ROLES) != 1 ||
+            _getModuleMajorVersion(TRSRY) != 1
         ) revert Policy_WrongModuleVersion(expected);
 
         // Approve MINTR for burning OHM (called here so that it is re-approved on updates)
@@ -701,6 +695,11 @@ contract Operator is IOperator, Policy, RolesConsumer, ReentrancyGuard {
         );
         if (!active || uint48(block.timestamp) > lastObservation + 3 * PRICE.observationFrequency())
             revert Operator_Inactive();
+    }
+
+    function _getModuleMajorVersion(Module module_) internal view returns (uint8) {
+        (uint8 major, ) = module_.VERSION();
+        return major;
     }
 
     //============================================================================================//
