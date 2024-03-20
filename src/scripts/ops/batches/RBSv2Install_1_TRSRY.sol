@@ -253,8 +253,7 @@ contract RBSv2Install_1_TRSRY is OlyBatch, StdAssertions {
 
                 console2.log("Disabling the Operator");
                 addToBatch(operator, abi.encodeWithSelector(Operator.deactivate.selector));
-            }
-            else {
+            } else {
                 console2.log("DAO MS already has the operator_policy role");
             }
         }
